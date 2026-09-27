@@ -13,6 +13,7 @@ import {
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
   sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 } from "./definition-source-common";
 import {
   componentSemanticEventKindSchema,
@@ -88,43 +89,123 @@ export type BlockPropertyValueV2Contract =
 /** Canonical V2 values are closed and kind-discriminated; there is no arbitrary JSON branch. */
 export const blockPropertyValueV2Schema: z.ZodType<BlockPropertyValueV2Contract> = z.lazy(() =>
   z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("text"), value: z.string() }).strict(),
-    z.object({ kind: z.literal("number"), value: z.number().finite() }).strict(),
-    z.object({ kind: z.literal("boolean"), value: z.boolean() }).strict(),
-    z.object({ kind: z.literal("choice"), value: builderKeySchema }).strict(),
-    z.object({ kind: z.literal("rich_text"), value: richTextDocumentV2Schema }).strict(),
-    z.object({ kind: z.literal("url"), value: safeHttpsUrlSchema }).strict(),
-    z.object({ kind: z.literal("asset_reference"), assetId: platformIdSchema }).strict(),
-    z.object({ kind: z.literal("icon"), iconKey: builderKeySchema }).strict(),
-    z.object({ kind: z.literal("theme_token"), tokenKey: builderKeySchema }).strict(),
-    z.object({ kind: z.literal("field_reference"), fieldId: fieldIdSchema }).strict(),
     z
       .object({
-        kind: z.literal("relationship_reference"),
-        relationshipId: containedComponentIdSchema,
-      })
-      .strict(),
-    z.object({ kind: z.literal("action_reference"), actionKey: namespacedKeySchema }).strict(),
-    z.object({ kind: z.literal("page_reference"), pageId: pageIdSchema }).strict(),
-    z.object({ kind: z.literal("query_reference"), queryId: queryIdSchema }).strict(),
-    z.object({ kind: z.literal("pipeline_reference"), pipelineId: pipelineIdSchema }).strict(),
-    z
-      .object({ kind: z.literal("record_type_reference"), recordType: recordTypeReferenceSchema })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("record_reference"),
-        recordType: recordTypeReferenceSchema,
-        recordId: recordIdSchema,
+        kind: sourceProvenanceUnchanged(z.literal("text")),
+        value: sourceProvenanceUnchanged(z.string()),
       })
       .strict(),
     z
       .object({
-        kind: z.literal("group"),
-        properties: z.record(builderKeySchema, blockPropertyValueV2Schema),
+        kind: sourceProvenanceUnchanged(z.literal("number")),
+        value: sourceProvenanceUnchanged(z.number().finite()),
       })
       .strict(),
-    z.object({ kind: z.literal("list"), items: z.array(blockPropertyValueV2Schema) }).strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("boolean")),
+        value: sourceProvenanceUnchanged(z.boolean()),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("choice")),
+        value: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("rich_text")),
+        value: sourceProvenanceUnchanged(richTextDocumentV2Schema, true),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("url")),
+        value: sourceProvenanceUnchanged(safeHttpsUrlSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
+        assetId: sourceProvenanceUnchanged(platformIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("icon")),
+        iconKey: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("theme_token")),
+        tokenKey: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("field_reference")),
+        fieldId: sourceProvenanceUnchanged(fieldIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
+        relationshipId: sourceProvenanceUnchanged(containedComponentIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("action_reference")),
+        actionKey: sourceProvenanceUnchanged(namespacedKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("page_reference")),
+        pageId: sourceProvenanceUnchanged(pageIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("query_reference")),
+        queryId: sourceProvenanceUnchanged(queryIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
+        pipelineId: sourceProvenanceUnchanged(pipelineIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
+        recordType: sourceProvenanceUnchanged(recordTypeReferenceSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("record_reference")),
+        recordType: sourceProvenanceUnchanged(recordTypeReferenceSchema),
+        recordId: sourceProvenanceUnchanged(recordIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("group")),
+        properties: sourceProvenanceUnchanged(
+          z.record(builderKeySchema, blockPropertyValueV2Schema),
+        ),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("list")),
+        items: sourceProvenanceUnchanged(z.array(blockPropertyValueV2Schema)),
+      })
+      .strict(),
   ]),
 );
 
@@ -159,49 +240,122 @@ export type SourceBlockPropertyValueV2Contract =
 export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValueV2Contract> =
   z.lazy(() =>
     z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("text"), value: z.string() }).strict(),
-      z.object({ kind: z.literal("number"), value: z.number().finite() }).strict(),
-      z.object({ kind: z.literal("boolean"), value: z.boolean() }).strict(),
-      z.object({ kind: z.literal("choice"), value: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("rich_text"), value: richTextDocumentV2Schema }).strict(),
-      z.object({ kind: z.literal("url"), value: safeHttpsUrlSchema }).strict(),
-      z.object({ kind: z.literal("asset_reference"), asset_id: platformIdSchema }).strict(),
-      z.object({ kind: z.literal("icon"), icon_key: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("theme_token"), token: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("field_reference"), field: sourceQualifiedFieldSchema }).strict(),
       z
         .object({
-          kind: z.literal("relationship_reference"),
-          relationship: sourceQualifiedRelationshipSchema,
-        })
-        .strict(),
-      z.object({ kind: z.literal("action_reference"), action: namespacedKeySchema }).strict(),
-      z.object({ kind: z.literal("page_reference"), page: builderKeySchema }).strict(),
-      z
-        .object({ kind: z.literal("query_reference"), query: sourceQualifiedQueryReferenceSchema })
-        .strict(),
-      z.object({ kind: z.literal("pipeline_reference"), pipeline: builderKeySchema }).strict(),
-      z
-        .object({
-          kind: z.literal("record_type_reference"),
-          record_type: sourceQualifiedRecordTypeSchema,
+          kind: sourceProvenanceUnchanged(z.literal("text")),
+          value: sourceProvenanceUnchanged(z.string()),
         })
         .strict(),
       z
         .object({
-          kind: z.literal("record_reference"),
-          record_type: sourceQualifiedRecordTypeSchema,
-          record_id: z.uuid(),
+          kind: sourceProvenanceUnchanged(z.literal("number")),
+          value: sourceProvenanceUnchanged(z.number().finite()),
         })
         .strict(),
       z
         .object({
-          kind: z.literal("group"),
-          properties: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
+          kind: sourceProvenanceUnchanged(z.literal("boolean")),
+          value: sourceProvenanceUnchanged(z.boolean()),
         })
         .strict(),
       z
-        .object({ kind: z.literal("list"), items: z.array(sourceBlockPropertyValueV2Schema) })
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("choice")),
+          value: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("rich_text")),
+          value: sourceProvenanceUnchanged(richTextDocumentV2Schema, true),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("url")),
+          value: sourceProvenanceUnchanged(safeHttpsUrlSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
+          asset_id: sourceProvenanceUnchanged(platformIdSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("icon")),
+          icon_key: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("theme_token")),
+          token: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("field_reference")),
+          field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
+          relationship: sourceProvenanceUnchanged(sourceQualifiedRelationshipSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("action_reference")),
+          action: sourceProvenanceUnchanged(namespacedKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("page_reference")),
+          page: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("query_reference")),
+          query: sourceProvenanceUnchanged(sourceQualifiedQueryReferenceSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
+          pipeline: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
+          record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("record_reference")),
+          record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+          record_id: sourceProvenanceUnchanged(z.uuid()),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("group")),
+          properties: sourceProvenanceUnchanged(
+            z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
+          ),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("list")),
+          items: sourceProvenanceUnchanged(z.array(sourceBlockPropertyValueV2Schema)),
+        })
         .strict(),
     ]),
   );
@@ -280,17 +434,17 @@ export type BlockPropertySchemaV2Contract =
     });
 
 const propertySchemaBase = {
-  key: builderKeySchema,
-  label: labelSchema,
-  help: z.string().min(1).max(1_000).optional(),
-  required: z.boolean(),
-  defaultValue: blockPropertyValueV2Schema.optional(),
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  label: sourceProvenanceUnchanged(labelSchema),
+  help: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
+  required: sourceProvenanceUnchanged(z.boolean()),
+  defaultValue: sourceProvenanceUnchanged(blockPropertyValueV2Schema.optional()),
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler derives that input's name, label, requirement, choices and control from the
    * referenced module field. Authored and canonical values of the release are unchanged.
    */
-  derivesFieldInput: z.boolean().optional(),
+  derivesFieldInput: sourceProvenanceUnchanged(z.boolean().optional()),
 };
 
 /**
@@ -418,8 +572,7 @@ export type ComponentSettingFailure = Readonly<{
 
 /** Any authored or canonical value a component setting may hold. */
 export type ComponentSettingValue =
-  | BlockPropertyValueV2Contract
-  | SourceBlockPropertyValueV2Contract;
+  BlockPropertyValueV2Contract | SourceBlockPropertyValueV2Contract;
 
 /**
  * The one component-setting validator: it judges a supplied setting value against its exact
@@ -716,10 +869,7 @@ const readRowActionList = (
     const eventId = settingEventId(action["event_id"]);
     const label = settingText(action["label"]);
     if (eventId === undefined || label === undefined) return [];
-    const capability = settingOptionalChoice(
-      action["capability"],
-      recordsTableActionCapabilities,
-    );
+    const capability = settingOptionalChoice(action["capability"], recordsTableActionCapabilities);
     return [{ eventId, label, ...(capability === undefined ? {} : { capability }) }];
   });
 
@@ -887,9 +1037,9 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("text"),
-          minLength: z.number().int().nonnegative(),
-          maxLength: z.number().int().positive(),
+          kind: sourceProvenanceUnchanged(z.literal("text")),
+          minLength: sourceProvenanceUnchanged(z.number().int().nonnegative()),
+          maxLength: sourceProvenanceUnchanged(z.number().int().positive()),
         })
         .strict()
         .refine((value) => value.maxLength >= value.minLength, {
@@ -899,10 +1049,10 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("number"),
-          integer: z.boolean(),
-          minimum: z.number().finite().optional(),
-          maximum: z.number().finite().optional(),
+          kind: sourceProvenanceUnchanged(z.literal("number")),
+          integer: sourceProvenanceUnchanged(z.boolean()),
+          minimum: sourceProvenanceUnchanged(z.number().finite().optional()),
+          maximum: sourceProvenanceUnchanged(z.number().finite().optional()),
         })
         .strict()
         .refine(
@@ -912,12 +1062,25 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
             value.maximum >= value.minimum,
           { path: ["maximum"], message: "Maximum number cannot be less than minimum" },
         ),
-      z.object({ ...propertySchemaBase, kind: z.literal("boolean") }).strict(),
+      z
+        .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("boolean")) })
+        .strict(),
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("choice"),
-          options: z.array(z.object({ key: builderKeySchema, label: labelSchema }).strict()).min(1),
+          kind: sourceProvenanceUnchanged(z.literal("choice")),
+          options: sourceProvenanceUnchanged(
+            z
+              .array(
+                z
+                  .object({
+                    key: sourceProvenanceUnchanged(builderKeySchema),
+                    label: sourceProvenanceUnchanged(labelSchema),
+                  })
+                  .strict(),
+              )
+              .min(1),
+          ),
         })
         .strict()
         .refine(
@@ -928,54 +1091,67 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("rich_text"),
-          allowedElements: z.array(richTextElementKindV2Schema).min(1),
+          kind: sourceProvenanceUnchanged(z.literal("rich_text")),
+          allowedElements: sourceProvenanceUnchanged(z.array(richTextElementKindV2Schema).min(1)),
         })
         .strict()
         .refine((value) => new Set(value.allowedElements).size === value.allowedElements.length, {
           path: ["allowedElements"],
           message: "Allowed rich-text elements must be unique",
         }),
-      z.object({ ...propertySchemaBase, kind: z.literal("url") }).strict(),
-      z.object({ ...propertySchemaBase, kind: z.literal("asset_reference") }).strict(),
-      z.object({ ...propertySchemaBase, kind: z.literal("icon") }).strict(),
+      z
+        .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("url")) })
+        .strict(),
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("theme_token"),
-          tokenKind: z.enum([
-            "color_pair",
-            "typography",
-            "spacing",
-            "corners",
-            "border",
-            "elevation",
-            "focus",
-            "asset",
-            "density",
-          ]),
+          kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
+        })
+        .strict(),
+      z
+        .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("icon")) })
+        .strict(),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: sourceProvenanceUnchanged(z.literal("theme_token")),
+          tokenKind: sourceProvenanceUnchanged(
+            z.enum([
+              "color_pair",
+              "typography",
+              "spacing",
+              "corners",
+              "border",
+              "elevation",
+              "focus",
+              "asset",
+              "density",
+            ]),
+          ),
         })
         .strict(),
       z
         .object({
           ...propertySchemaBase,
-          kind: z.enum([
-            "field_reference",
-            "relationship_reference",
-            "action_reference",
-            "page_reference",
-            "query_reference",
-            "pipeline_reference",
-            "record_type_reference",
-            "record_reference",
-          ]),
+          kind: sourceProvenanceUnchanged(
+            z.enum([
+              "field_reference",
+              "relationship_reference",
+              "action_reference",
+              "page_reference",
+              "query_reference",
+              "pipeline_reference",
+              "record_type_reference",
+              "record_reference",
+            ]),
+          ),
         })
         .strict(),
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("group"),
-          properties: z.array(blockPropertySchemaV2Schema),
+          kind: sourceProvenanceUnchanged(z.literal("group")),
+          properties: sourceProvenanceUnchanged(z.array(blockPropertySchemaV2Schema)),
         })
         .strict()
         .refine(
@@ -987,10 +1163,10 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
       z
         .object({
           ...propertySchemaBase,
-          kind: z.literal("list"),
-          minimumItems: z.number().int().nonnegative(),
-          maximumItems: z.number().int().positive(),
-          item: blockPropertySchemaV2Schema,
+          kind: sourceProvenanceUnchanged(z.literal("list")),
+          minimumItems: sourceProvenanceUnchanged(z.number().int().nonnegative()),
+          maximumItems: sourceProvenanceUnchanged(z.number().int().positive()),
+          item: sourceProvenanceUnchanged(blockPropertySchemaV2Schema),
         })
         .strict()
         .refine((value) => value.maximumItems >= value.minimumItems, {
@@ -1028,19 +1204,24 @@ export const findFieldInputBinding = (
 
 export const blockSlotDeclarationV2Schema = z
   .object({
-    key: builderKeySchema,
-    label: labelSchema,
-    required: z.boolean(),
-    allowedChildCategories: z.array(blockPaletteGroupSchema).min(1),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    required: sourceProvenanceUnchanged(z.boolean()),
+    allowedChildCategories: sourceProvenanceUnchanged(z.array(blockPaletteGroupSchema).min(1)),
     /**
      * Present on a repeatable slot. The release then owns one child slot per item of the list
      * property named by `items`, each keyed by the item's stable identity read from that item's
      * text property named by `identity`. Absent on a fixed slot, whose `key` is its one slot key.
      */
-    repeats: z
-      .object({ items: builderKeySchema, identity: builderKeySchema })
-      .strict()
-      .optional(),
+    repeats: sourceProvenanceUnchanged(
+      z
+        .object({
+          items: sourceProvenanceUnchanged(builderKeySchema),
+          identity: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict()
+        .optional(),
+    ),
   })
   .strict();
 
@@ -1089,20 +1270,25 @@ export const isRepeatableSlotIdentityV2 = (family: string, identity: string): bo
   builderKeySchema.safeParse(repeatableSlotKeyV2(family, identity)).success;
 
 const blockCapabilitiesV2Base = {
-  responsiveVisibility: z.boolean(),
-  responsiveOrder: z.boolean(),
-  gridWidth: z.boolean(),
-  height: z.enum(["content", "content_or_bounded"]),
-  publicSurface: z.enum(["refused", "allowed"]),
+  responsiveVisibility: sourceProvenanceUnchanged(z.boolean()),
+  responsiveOrder: sourceProvenanceUnchanged(z.boolean()),
+  gridWidth: sourceProvenanceUnchanged(z.boolean()),
+  height: sourceProvenanceUnchanged(z.enum(["content", "content_or_bounded"])),
+  publicSurface: sourceProvenanceUnchanged(z.enum(["refused", "allowed"])),
 };
 
 const blockCapabilitiesV2Schema = z.discriminatedUnion("accessibleName", [
-  z.object({ ...blockCapabilitiesV2Base, accessibleName: z.literal("not_applicable") }).strict(),
   z
     .object({
       ...blockCapabilitiesV2Base,
-      accessibleName: z.enum(["required", "optional"]),
-      accessibleNamePropertyPath: z.array(builderKeySchema).min(1),
+      accessibleName: sourceProvenanceUnchanged(z.literal("not_applicable")),
+    })
+    .strict(),
+  z
+    .object({
+      ...blockCapabilitiesV2Base,
+      accessibleName: sourceProvenanceUnchanged(z.enum(["required", "optional"])),
+      accessibleNamePropertyPath: sourceProvenanceUnchanged(z.array(builderKeySchema).min(1)),
     })
     .strict(),
 ]);
@@ -1127,19 +1313,19 @@ export const componentStateOperationKindSchema = z.enum([
  */
 export const customComponentOwnerV2Schema = z
   .object({
-    kind: z.enum(["application", "module"]),
-    definitionKey: namespacedKeySchema,
-    releaseVersion: semanticVersionSchema,
+    kind: sourceProvenanceUnchanged(z.enum(["application", "module"])),
+    definitionKey: sourceProvenanceUnchanged(namespacedKeySchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
   })
   .strict();
 
 /** One typed value a custom component event carries. A payload field always declares a type. */
 export const customComponentEventPayloadFieldV2Schema = z
   .object({
-    key: builderKeySchema,
-    label: labelSchema,
-    type: workflowValueTypeSchema,
-    required: z.boolean(),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    type: sourceProvenanceUnchanged(workflowValueTypeSchema),
+    required: sourceProvenanceUnchanged(z.boolean()),
   })
   .strict();
 
@@ -1150,9 +1336,9 @@ export const customComponentEventPayloadFieldV2Schema = z
  */
 export const customComponentEventV2Schema = z
   .object({
-    key: builderKeySchema,
-    label: labelSchema,
-    payload: z.array(customComponentEventPayloadFieldV2Schema).max(50),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    payload: sourceProvenanceUnchanged(z.array(customComponentEventPayloadFieldV2Schema).max(50)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1171,18 +1357,20 @@ export const customComponentEventV2Schema = z
  */
 export const customComponentDataContractV2Schema = z
   .object({
-    values: z
-      .array(
-        z
-          .object({
-            key: builderKeySchema,
-            label: labelSchema,
-            type: workflowValueTypeSchema,
-            required: z.boolean(),
-          })
-          .strict(),
-      )
-      .max(200),
+    values: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              label: sourceProvenanceUnchanged(labelSchema),
+              type: sourceProvenanceUnchanged(workflowValueTypeSchema),
+              required: sourceProvenanceUnchanged(z.boolean()),
+            })
+            .strict(),
+        )
+        .max(200),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1227,11 +1415,13 @@ const customComponentHostSchema = z
  */
 export const customComponentBundleV2Schema = z
   .object({
-    digest: z
-      .string()
-      .regex(/^sha384-[A-Za-z0-9+/]{64}$/, "Use a base64 SHA-384 Subresource Integrity digest"),
-    entryFile: customComponentEntryFileSchema,
-    allowedHosts: z.array(customComponentHostSchema).max(50),
+    digest: sourceProvenanceUnchanged(
+      z
+        .string()
+        .regex(/^sha384-[A-Za-z0-9+/]{64}$/, "Use a base64 SHA-384 Subresource Integrity digest"),
+    ),
+    entryFile: sourceProvenanceUnchanged(customComponentEntryFileSchema),
+    allowedHosts: sourceProvenanceUnchanged(z.array(customComponentHostSchema).max(50)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1251,11 +1441,11 @@ export const customComponentBundleV2Schema = z
  */
 export const customComponentReleaseV2Schema = z
   .object({
-    owner: customComponentOwnerV2Schema,
-    events: z.array(customComponentEventV2Schema).max(50),
-    dataContract: customComponentDataContractV2Schema,
-    textAlternative: labelSchema,
-    bundle: customComponentBundleV2Schema,
+    owner: sourceProvenanceUnchanged(customComponentOwnerV2Schema),
+    events: sourceProvenanceUnchanged(z.array(customComponentEventV2Schema).max(50)),
+    dataContract: sourceProvenanceUnchanged(customComponentDataContractV2Schema),
+    textAlternative: sourceProvenanceUnchanged(labelSchema),
+    bundle: sourceProvenanceUnchanged(customComponentBundleV2Schema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1308,28 +1498,28 @@ export const containsCustomComponentReleasesV2 = (
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
   .object({
-    blockId: blockIdSchema,
-    key: namespacedKeySchema,
-    releaseVersion: semanticVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
-    name: labelSchema,
-    icon: iconKeySchema,
-    paletteGroup: blockPaletteGroupSchema,
-    rendererKey: namespacedKeySchema,
-    properties: z.array(blockPropertySchemaV2Schema),
-    slots: z.array(blockSlotDeclarationV2Schema),
-    capabilities: blockCapabilitiesV2Schema,
+    blockId: sourceProvenanceUnchanged(blockIdSchema),
+    key: sourceProvenanceUnchanged(namespacedKeySchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
+    contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    name: sourceProvenanceUnchanged(labelSchema),
+    icon: sourceProvenanceUnchanged(iconKeySchema),
+    paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
+    rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),
+    properties: sourceProvenanceUnchanged(z.array(blockPropertySchemaV2Schema)),
+    slots: sourceProvenanceUnchanged(z.array(blockSlotDeclarationV2Schema)),
+    capabilities: sourceProvenanceUnchanged(blockCapabilitiesV2Schema),
     /** Semantic events the component emits: the only events a flow binding may name for it. */
-    supportedEvents: z.array(componentSemanticEventKindSchema),
+    supportedEvents: sourceProvenanceUnchanged(z.array(componentSemanticEventKindSchema)),
     /** State operations a flow may apply to the component. */
-    supportedStateOperations: z.array(componentStateOperationKindSchema),
+    supportedStateOperations: sourceProvenanceUnchanged(z.array(componentStateOperationKindSchema)),
     /**
      * Present only on a custom component release: the owning application or module release, its
      * typed declared events, data contract, text alternative and bundle manifest. A platform block
      * release carries none, and a custom component release carries no built-in semantic events.
      */
-    customComponent: customComponentReleaseV2Schema.optional(),
+    customComponent: sourceProvenanceUnchanged(customComponentReleaseV2Schema.optional()),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1428,15 +1618,15 @@ export const platformBlockReleaseV2Schema = z
 
 export const applicationCompositionPolicyV2Schema = z
   .object({
-    maximumDepth: z.number().int().positive(),
-    maximumPlacements: z.number().int().positive(),
+    maximumDepth: sourceProvenanceUnchanged(z.number().int().positive()),
+    maximumPlacements: sourceProvenanceUnchanged(z.number().int().positive()),
   })
   .strict();
 
 export const immutablePlatformBlockCatalogueV2Schema = z
   .object({
-    compositionPolicy: applicationCompositionPolicyV2Schema,
-    releases: z.array(platformBlockReleaseV2Schema),
+    compositionPolicy: sourceProvenanceUnchanged(applicationCompositionPolicyV2Schema),
+    releases: sourceProvenanceUnchanged(z.array(platformBlockReleaseV2Schema)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1491,21 +1681,21 @@ export const platformBlockDependenciesV2SchemaForCatalogue = (catalogueInput: un
 
 export const platformBlockDependencyV2Schema = z
   .object({
-    kind: z.literal("platform_block"),
-    blockId: blockIdSchema,
-    releaseVersion: semanticVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
+    kind: sourceProvenanceUnchanged(z.literal("platform_block")),
+    blockId: sourceProvenanceUnchanged(blockIdSchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
+    contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
 export const sourcePlatformBlockDependencyV2Schema = z
   .object({
-    kind: z.literal("platform_block"),
+    kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
-    release_version: semanticVersionSchema,
-    content_fingerprint: fingerprintSchema,
-    catalogue_fingerprint: fingerprintSchema,
+    release_version: sourceProvenanceUnchanged(semanticVersionSchema),
+    content_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogue_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
@@ -1559,24 +1749,27 @@ export const sourcePlatformBlockDependenciesV2Schema = z
 
 /** Placements name only their immutable block identity/version; fingerprints live in the manifest. */
 export const platformBlockReferenceV2Schema = z
-  .object({ blockId: blockIdSchema, releaseVersion: semanticVersionSchema })
+  .object({
+    blockId: sourceProvenanceUnchanged(blockIdSchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
+  })
   .strict();
 
 export const sourcePlatformBlockReferenceV2Schema = z
   .object({
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
-    release_version: semanticVersionSchema,
+    release_version: sourceProvenanceUnchanged(semanticVersionSchema),
   })
   .strict();
 
 const widthV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("content") }).strict(),
-  z.object({ kind: z.literal("fill") }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("fill")) }).strict(),
   z
     .object({
-      kind: z.literal("grid"),
-      startColumn: z.number().int().min(1).max(12),
-      span: z.number().int().min(1).max(12),
+      kind: sourceProvenanceUnchanged(z.literal("grid")),
+      startColumn: sourceProvenanceUnchanged(z.number().int().min(1).max(12)),
+      span: sourceProvenanceUnchanged(z.number().int().min(1).max(12)),
     })
     .strict()
     .refine((value) => value.startColumn + value.span <= 13, {
@@ -1586,13 +1779,13 @@ const widthV2Schema = z.discriminatedUnion("kind", [
 ]);
 
 const sourceWidthV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("content") }).strict(),
-  z.object({ kind: z.literal("fill") }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("fill")) }).strict(),
   z
     .object({
-      kind: z.literal("grid"),
+      kind: sourceProvenanceUnchanged(z.literal("grid")),
       start_column: sourceProvenanceTarget(z.number().int().min(1).max(12), ["startColumn"]),
-      span: z.number().int().min(1).max(12),
+      span: sourceProvenanceUnchanged(z.number().int().min(1).max(12)),
     })
     .strict()
     .refine((value) => value.start_column + value.span <= 13, {
@@ -1602,32 +1795,45 @@ const sourceWidthV2Schema = z.discriminatedUnion("kind", [
 ]);
 
 const heightV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("content") }).strict(),
-  z.object({ kind: z.literal("bounded"), units: positiveFiniteSchema }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("bounded")),
+      units: sourceProvenanceUnchanged(positiveFiniteSchema),
+    })
+    .strict(),
 ]);
 
 export const placementLayoutV2Schema = z
-  .object({ visible: z.boolean(), width: widthV2Schema, height: heightV2Schema })
+  .object({
+    visible: sourceProvenanceUnchanged(z.boolean()),
+    width: sourceProvenanceUnchanged(widthV2Schema),
+    height: sourceProvenanceUnchanged(heightV2Schema),
+  })
   .strict();
 
 export const sourcePlacementLayoutV2Schema = z
-  .object({ visible: z.boolean(), width: sourceWidthV2Schema, height: heightV2Schema })
+  .object({
+    visible: sourceProvenanceUnchanged(z.boolean()),
+    width: sourceProvenanceUnchanged(sourceWidthV2Schema),
+    height: sourceProvenanceUnchanged(heightV2Schema),
+  })
   .strict();
 
 export const responsivePlacementV2Schema = z
   .object({
-    desktop: placementLayoutV2Schema,
-    tablet: placementLayoutV2Schema,
-    phone: placementLayoutV2Schema,
+    desktop: sourceProvenanceUnchanged(placementLayoutV2Schema),
+    tablet: sourceProvenanceUnchanged(placementLayoutV2Schema),
+    phone: sourceProvenanceUnchanged(placementLayoutV2Schema),
   })
   .strict();
 
 /** Missing authored tablet/phone entries inherit from the next wider breakpoint. */
 export const sourceResponsivePlacementV2Schema = z
   .object({
-    desktop: sourcePlacementLayoutV2Schema,
-    tablet: sourcePlacementLayoutV2Schema.optional(),
-    phone: sourcePlacementLayoutV2Schema.optional(),
+    desktop: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema),
+    tablet: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema.optional()),
+    phone: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema.optional()),
   })
   .strict();
 
@@ -1667,93 +1873,149 @@ export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
 export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
   z
     .object({
-      kind: z.literal("color_pair"),
-      light: colorSchema,
-      dark: colorSchema,
-      role: themeColorRoleSchema.optional(),
+      kind: sourceProvenanceUnchanged(z.literal("color_pair")),
+      light: sourceProvenanceUnchanged(colorSchema),
+      dark: sourceProvenanceUnchanged(colorSchema),
+      role: sourceProvenanceUnchanged(themeColorRoleSchema.optional()),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("typography"),
-      family: builderKeySchema,
-      sizeRem: positiveFiniteSchema,
-      lineHeight: positiveFiniteSchema,
-      weight: z.number().int().min(100).max(900),
+      kind: sourceProvenanceUnchanged(z.literal("typography")),
+      family: sourceProvenanceUnchanged(builderKeySchema),
+      sizeRem: sourceProvenanceUnchanged(positiveFiniteSchema),
+      lineHeight: sourceProvenanceUnchanged(positiveFiniteSchema),
+      weight: sourceProvenanceUnchanged(z.number().int().min(100).max(900)),
     })
     .strict(),
-  z.object({ kind: z.literal("spacing"), rem: nonNegativeFiniteSchema }).strict(),
-  z.object({ kind: z.literal("corners"), rem: nonNegativeFiniteSchema }).strict(),
   z
     .object({
-      kind: z.literal("border"),
-      widthRem: nonNegativeFiniteSchema,
-      style: z.enum(["solid", "dashed"]),
-      colorToken: builderKeySchema,
+      kind: sourceProvenanceUnchanged(z.literal("spacing")),
+      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
     })
     .strict(),
-  z.object({ kind: z.literal("elevation"), level: z.number().int().nonnegative() }).strict(),
   z
     .object({
-      kind: z.literal("focus"),
-      colorToken: builderKeySchema,
-      widthRem: positiveFiniteSchema,
+      kind: sourceProvenanceUnchanged(z.literal("corners")),
+      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
     })
     .strict(),
-  z.object({ kind: z.literal("asset"), assetId: platformIdSchema }).strict(),
-  z.object({ kind: z.literal("density"), value: z.enum(["compact", "comfortable"]) }).strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("border")),
+      widthRem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
+      style: sourceProvenanceUnchanged(z.enum(["solid", "dashed"])),
+      colorToken: sourceProvenanceUnchanged(builderKeySchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("elevation")),
+      level: sourceProvenanceUnchanged(z.number().int().nonnegative()),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("focus")),
+      colorToken: sourceProvenanceUnchanged(builderKeySchema),
+      widthRem: sourceProvenanceUnchanged(positiveFiniteSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("asset")),
+      assetId: sourceProvenanceUnchanged(platformIdSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("density")),
+      value: sourceProvenanceUnchanged(z.enum(["compact", "comfortable"])),
+    })
+    .strict(),
 ]);
 
 export const sourceThemeTokenValueV2Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("color_pair"), light: colorSchema, dark: colorSchema }).strict(),
   z
     .object({
-      kind: z.literal("typography"),
-      family: builderKeySchema,
-      size_rem: positiveFiniteSchema,
-      line_height: positiveFiniteSchema,
-      weight: z.number().int().min(100).max(900),
+      kind: sourceProvenanceUnchanged(z.literal("color_pair")),
+      light: sourceProvenanceUnchanged(colorSchema),
+      dark: sourceProvenanceUnchanged(colorSchema),
     })
     .strict(),
-  z.object({ kind: z.literal("spacing"), rem: nonNegativeFiniteSchema }).strict(),
-  z.object({ kind: z.literal("corners"), rem: nonNegativeFiniteSchema }).strict(),
   z
     .object({
-      kind: z.literal("border"),
-      width_rem: nonNegativeFiniteSchema,
-      style: z.enum(["solid", "dashed"]),
-      color_token: builderKeySchema,
+      kind: sourceProvenanceUnchanged(z.literal("typography")),
+      family: sourceProvenanceUnchanged(builderKeySchema),
+      size_rem: sourceProvenanceUnchanged(positiveFiniteSchema),
+      line_height: sourceProvenanceUnchanged(positiveFiniteSchema),
+      weight: sourceProvenanceUnchanged(z.number().int().min(100).max(900)),
     })
     .strict(),
-  z.object({ kind: z.literal("elevation"), level: z.number().int().nonnegative() }).strict(),
   z
     .object({
-      kind: z.literal("focus"),
-      color_token: builderKeySchema,
-      width_rem: positiveFiniteSchema,
+      kind: sourceProvenanceUnchanged(z.literal("spacing")),
+      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
     })
     .strict(),
-  z.object({ kind: z.literal("asset"), asset_id: platformIdSchema }).strict(),
-  z.object({ kind: z.literal("density"), value: z.enum(["compact", "comfortable"]) }).strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("corners")),
+      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("border")),
+      width_rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
+      style: sourceProvenanceUnchanged(z.enum(["solid", "dashed"])),
+      color_token: sourceProvenanceUnchanged(builderKeySchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("elevation")),
+      level: sourceProvenanceUnchanged(z.number().int().nonnegative()),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("focus")),
+      color_token: sourceProvenanceUnchanged(builderKeySchema),
+      width_rem: sourceProvenanceUnchanged(positiveFiniteSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("asset")),
+      asset_id: sourceProvenanceUnchanged(platformIdSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("density")),
+      value: sourceProvenanceUnchanged(z.enum(["compact", "comfortable"])),
+    })
+    .strict(),
 ]);
 
 export const exactPlatformThemeDependencyV2Schema = z
   .object({
-    kind: z.literal("platform_theme"),
-    catalogueThemeId: platformIdSchema,
-    releaseVersion: semanticVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
+    kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
+    catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
+    contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
 export const sourceExactPlatformThemeDependencyV2Schema = z
   .object({
-    kind: z.literal("platform_theme"),
-    catalogue_theme_id: platformIdSchema,
-    release_version: semanticVersionSchema,
-    content_fingerprint: fingerprintSchema,
-    catalogue_fingerprint: fingerprintSchema,
+    kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
+    catalogue_theme_id: sourceProvenanceUnchanged(platformIdSchema),
+    release_version: sourceProvenanceUnchanged(semanticVersionSchema),
+    content_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogue_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
@@ -1786,16 +2048,16 @@ export const themeCatalogueOptionIdSchema = z
  */
 export const applicationThemeSelectionV2Schema = z
   .object({
-    style: themeCatalogueOptionIdSchema,
-    baseColor: themeCatalogueOptionIdSchema,
-    theme: themeCatalogueOptionIdSchema,
-    chartColor: themeCatalogueOptionIdSchema,
-    radius: themeCatalogueOptionIdSchema,
-    menuColor: themeCatalogueOptionIdSchema,
-    menuAccent: themeCatalogueOptionIdSchema,
-    iconLibrary: themeCatalogueOptionIdSchema.optional(),
-    bodyFont: themeCatalogueOptionIdSchema.optional(),
-    headingFont: themeCatalogueOptionIdSchema.optional(),
+    style: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    baseColor: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    theme: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    chartColor: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    radius: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    menuColor: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    menuAccent: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    iconLibrary: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    bodyFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    headingFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
   })
   .strict();
 export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelectionV2Schema>;
@@ -1806,16 +2068,16 @@ export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelecti
  */
 export const sourceApplicationThemeSelectionV2Schema = z
   .object({
-    style: themeCatalogueOptionIdSchema,
-    base_color: themeCatalogueOptionIdSchema,
-    theme: themeCatalogueOptionIdSchema,
-    chart_color: themeCatalogueOptionIdSchema,
-    radius: themeCatalogueOptionIdSchema,
-    menu_color: themeCatalogueOptionIdSchema,
-    menu_accent: themeCatalogueOptionIdSchema,
-    icon_library: themeCatalogueOptionIdSchema.optional(),
-    body_font: themeCatalogueOptionIdSchema.optional(),
-    heading_font: themeCatalogueOptionIdSchema.optional(),
+    style: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    base_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    theme: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    chart_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    radius: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    menu_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    menu_accent: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    icon_library: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    body_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    heading_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
   })
   .strict();
 export type SourceApplicationThemeSelectionV2 = z.infer<
@@ -1847,9 +2109,9 @@ export const canonicalApplicationThemeSelectionV2 = (
  */
 export const applicationThemeV2Schema = z
   .object({
-    base: exactPlatformThemeDependencyV2Schema,
-    selection: applicationThemeSelectionV2Schema.optional(),
-    tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
+    base: sourceProvenanceUnchanged(exactPlatformThemeDependencyV2Schema),
+    selection: sourceProvenanceUnchanged(applicationThemeSelectionV2Schema.optional()),
+    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueV2Schema)),
   })
   .strict();
 
@@ -1861,20 +2123,22 @@ export const applicationThemeV2Schema = z
  */
 export const sourceApplicationThemeV2Schema = z
   .object({
-    base: sourceExactPlatformThemeDependencyV2Schema,
-    selection: sourceApplicationThemeSelectionV2Schema.optional(),
-    token_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
+    base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencyV2Schema),
+    selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionV2Schema.optional()),
+    token_overrides: sourceProvenanceUnchanged(
+      z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
+    ),
   })
   .strict();
 
 /** Complete immutable platform-theme content needed to materialise one V2 Application theme. */
 export const platformThemeReleaseV2Schema = z
   .object({
-    catalogueThemeId: platformIdSchema,
-    releaseVersion: semanticVersionSchema,
-    contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
-    tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
+    catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
+    releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
+    contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueV2Schema)),
   })
   .strict();
 
@@ -1890,9 +2154,9 @@ export const platformThemeReleaseV2Schema = z
  */
 export const platformThemeTokenRoleV2Schema = z
   .object({
-    key: builderKeySchema,
-    kind: themeTokenKindV2Schema,
-    colorRole: themeColorRoleSchema.optional(),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    kind: sourceProvenanceUnchanged(themeTokenKindV2Schema),
+    colorRole: sourceProvenanceUnchanged(themeColorRoleSchema.optional()),
   })
   .strict();
 export type PlatformThemeTokenRoleV2 = z.infer<typeof platformThemeTokenRoleV2Schema>;
@@ -1962,10 +2226,10 @@ export type PlatformThemeTokenRoleKeyV2 = (typeof platformThemeTokenRolesV2)[num
  */
 export const applicationCompositionCatalogueSnapshotV2Schema = z
   .object({
-    contractVersion: z.literal("2.0.0"),
-    fingerprint: fingerprintSchema,
-    platformBlocks: immutablePlatformBlockCatalogueV2Schema,
-    platformTheme: platformThemeReleaseV2Schema,
+    contractVersion: sourceProvenanceUnchanged(z.literal("2.0.0")),
+    fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
+    platformBlocks: sourceProvenanceUnchanged(immutablePlatformBlockCatalogueV2Schema),
+    platformTheme: sourceProvenanceUnchanged(platformThemeReleaseV2Schema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2116,16 +2380,16 @@ export const protectedReadModelDeclarations = Object.freeze({
 
 /** A placement's binding names one declared read model and nothing else. */
 export const protectedReadModelBindingV2Schema = z
-  .object({ key: protectedReadModelKeySchema })
+  .object({ key: sourceProvenanceUnchanged(protectedReadModelKeySchema) })
   .strict();
 export type ProtectedReadModelBindingV2 = z.infer<typeof protectedReadModelBindingV2Schema>;
 
 /** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
 export const protectedReadModelPageRequestSchema = z
   .object({
-    pageSize: z.number().int().min(1).max(100),
-    after: z.uuid().optional(),
-    groupId: z.uuid().optional(),
+    pageSize: sourceProvenanceUnchanged(z.number().int().min(1).max(100)),
+    after: sourceProvenanceUnchanged(z.uuid().optional()),
+    groupId: sourceProvenanceUnchanged(z.uuid().optional()),
   })
   .strict();
 export type ProtectedReadModelPageRequest = z.infer<typeof protectedReadModelPageRequestSchema>;
@@ -2172,16 +2436,18 @@ const sameMembers = (actual: readonly string[], expected: readonly string[]): bo
 export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
   z
     .object({
-      block: platformBlockReferenceV2Schema,
-      viewPermissionKey: namespacedKeySchema.optional(),
-      usePermissionKey: namespacedKeySchema.optional(),
-      visibilityCondition: conditionNodeSchema.optional(),
-      queryId: queryIdSchema.optional(),
-      readModel: protectedReadModelBindingV2Schema.optional(),
-      settings: z.record(builderKeySchema, blockPropertyValueV2Schema),
-      themeOverrides: z.record(builderKeySchema, themeTokenValueV2Schema),
-      responsive: responsivePlacementV2Schema,
-      slots: z.record(builderKeySchema, placementSlotV2Schema),
+      block: sourceProvenanceUnchanged(platformBlockReferenceV2Schema),
+      viewPermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
+      usePermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
+      visibilityCondition: sourceProvenanceUnchanged(conditionNodeSchema.optional()),
+      queryId: sourceProvenanceUnchanged(queryIdSchema.optional()),
+      readModel: sourceProvenanceUnchanged(protectedReadModelBindingV2Schema.optional()),
+      settings: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueV2Schema)),
+      themeOverrides: sourceProvenanceUnchanged(
+        z.record(builderKeySchema, themeTokenValueV2Schema),
+      ),
+      responsive: sourceProvenanceUnchanged(responsivePlacementV2Schema),
+      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, placementSlotV2Schema)),
     })
     .strict(),
 );
@@ -2189,14 +2455,18 @@ export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
 export const placementSlotV2Schema: z.ZodType<PlacementSlotV2> = z.lazy(() =>
   z
     .object({
-      placements: z.record(containedComponentIdSchema, blockPlacementV2Schema),
-      order: z
-        .object({
-          desktop: z.array(containedComponentIdSchema),
-          tablet: z.array(containedComponentIdSchema),
-          phone: z.array(containedComponentIdSchema),
-        })
-        .strict(),
+      placements: sourceProvenanceUnchanged(
+        z.record(containedComponentIdSchema, blockPlacementV2Schema),
+      ),
+      order: sourceProvenanceUnchanged(
+        z
+          .object({
+            desktop: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
+            tablet: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
+            phone: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
+          })
+          .strict(),
+      ),
     })
     .strict()
     .superRefine((value, context) => {
@@ -2214,16 +2484,22 @@ export const placementSlotV2Schema: z.ZodType<PlacementSlotV2> = z.lazy(() =>
 export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z.lazy(() =>
   z
     .object({
-      block: sourcePlatformBlockReferenceV2Schema,
-      view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["viewPermissionKey"]),
+      block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceV2Schema),
+      view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
+        "viewPermissionKey",
+      ]),
       use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
-      visibility_condition: sourceQualifiedConditionSchema.optional(),
+      visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
       query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
-      read_model: protectedReadModelKeySchema.optional(),
-      settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
-      theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
-      responsive: sourceResponsivePlacementV2Schema,
-      slots: z.record(builderKeySchema, sourcePlacementSlotV2Schema),
+      read_model: sourceProvenanceUnchanged(protectedReadModelKeySchema.optional()),
+      settings: sourceProvenanceUnchanged(
+        z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
+      ),
+      theme_overrides: sourceProvenanceUnchanged(
+        z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
+      ),
+      responsive: sourceProvenanceUnchanged(sourceResponsivePlacementV2Schema),
+      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, sourcePlacementSlotV2Schema)),
     })
     .strict(),
 );
@@ -2231,14 +2507,24 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
 export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.lazy(() =>
   z
     .object({
-      placements: z.record(sourceAliasSchema, sourceBlockPlacementV2Schema),
-      order: z
-        .object({
-          desktop: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/desktop/#"])),
-          tablet: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#"])).optional(),
-          phone: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/phone/#"])).optional(),
-        })
-        .strict(),
+      placements: sourceProvenanceUnchanged(
+        z.record(sourceAliasSchema, sourceBlockPlacementV2Schema),
+      ),
+      order: sourceProvenanceUnchanged(
+        z
+          .object({
+            desktop: sourceProvenanceUnchanged(
+              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/desktop/#"])),
+            ),
+            tablet: sourceProvenanceUnchanged(
+              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#"])).optional(),
+            ),
+            phone: sourceProvenanceUnchanged(
+              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/phone/#"])).optional(),
+            ),
+          })
+          .strict(),
+      ),
     })
     .strict()
     .superRefine((value, context) => {
@@ -2257,25 +2543,25 @@ export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.l
 
 export const shellContentSlotV2Schema = z
   .object({
-    slotId: containedComponentIdSchema,
-    key: builderKeySchema,
-    label: labelSchema,
-    required: z.boolean(),
-    allowedChildCategories: z.array(blockPaletteGroupSchema).min(1),
-    parentPlacementId: containedComponentIdSchema,
-    parentSlotKey: builderKeySchema,
+    slotId: sourceProvenanceUnchanged(containedComponentIdSchema),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    required: sourceProvenanceUnchanged(z.boolean()),
+    allowedChildCategories: sourceProvenanceUnchanged(z.array(blockPaletteGroupSchema).min(1)),
+    parentPlacementId: sourceProvenanceUnchanged(containedComponentIdSchema),
+    parentSlotKey: sourceProvenanceUnchanged(builderKeySchema),
   })
   .strict();
 
 export const sourceShellContentSlotV2Schema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["slotId"]),
-    key: builderKeySchema,
-    label: labelSchema,
-    required: z.boolean(),
-    allowed_child_categories: z.array(blockPaletteGroupSchema).min(1),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    required: sourceProvenanceUnchanged(z.boolean()),
+    allowed_child_categories: sourceProvenanceUnchanged(z.array(blockPaletteGroupSchema).min(1)),
     parent_placement: sourceProvenanceTarget(sourceAliasSchema, ["parentPlacementId"]),
-    parent_slot: builderKeySchema,
+    parent_slot: sourceProvenanceUnchanged(builderKeySchema),
   })
   .strict();
 
@@ -2326,11 +2612,11 @@ export const sourcePlacementEntriesV2 = (
 
 export const applicationShellV2Schema = z
   .object({
-    shellId: shellIdSchema,
-    key: builderKeySchema,
-    name: labelSchema,
-    layout: placementSlotV2Schema,
-    contentSlots: z.array(shellContentSlotV2Schema).min(1),
+    shellId: sourceProvenanceUnchanged(shellIdSchema),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    name: sourceProvenanceUnchanged(labelSchema),
+    layout: sourceProvenanceUnchanged(placementSlotV2Schema),
+    contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotV2Schema).min(1)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2383,10 +2669,10 @@ export const applicationShellV2Schema = z
 export const sourceApplicationShellV2Schema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-    key: builderKeySchema,
-    name: labelSchema,
-    layout: sourcePlacementSlotV2Schema,
-    content_slots: z.array(sourceShellContentSlotV2Schema).min(1),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    name: sourceProvenanceUnchanged(labelSchema),
+    layout: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
+    content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotV2Schema).min(1)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2437,23 +2723,35 @@ export const sourceApplicationShellV2Schema = z
   });
 
 export const pageCompositionV2Schema = z.discriminatedUnion("shellKind", [
-  z.object({ shellKind: z.literal("default"), main: placementSlotV2Schema }).strict(),
   z
     .object({
-      shellKind: z.literal("application"),
-      shellId: shellIdSchema,
-      content: z.record(containedComponentIdSchema, placementSlotV2Schema),
+      shellKind: sourceProvenanceUnchanged(z.literal("default")),
+      main: sourceProvenanceUnchanged(placementSlotV2Schema),
+    })
+    .strict(),
+  z
+    .object({
+      shellKind: sourceProvenanceUnchanged(z.literal("application")),
+      shellId: sourceProvenanceUnchanged(shellIdSchema),
+      content: sourceProvenanceUnchanged(
+        z.record(containedComponentIdSchema, placementSlotV2Schema),
+      ),
     })
     .strict(),
 ]);
 
 export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", [
-  z.object({ shell_kind: z.literal("default"), main: sourcePlacementSlotV2Schema }).strict(),
   z
     .object({
-      shell_kind: z.literal("application"),
+      shell_kind: sourceProvenanceUnchanged(z.literal("default")),
+      main: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
+    })
+    .strict(),
+  z
+    .object({
+      shell_kind: sourceProvenanceUnchanged(z.literal("application")),
       shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-      content: z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+      content: sourceProvenanceUnchanged(z.record(sourceAliasSchema, sourcePlacementSlotV2Schema)),
     })
     .strict(),
 ]);
@@ -2462,17 +2760,21 @@ export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", 
 export const guidedFormPageCompositionV2Schema = z.discriminatedUnion("shellKind", [
   z
     .object({
-      shellKind: z.literal("default"),
-      stepContent: z.record(containedComponentIdSchema, placementSlotV2Schema),
+      shellKind: sourceProvenanceUnchanged(z.literal("default")),
+      stepContent: sourceProvenanceUnchanged(
+        z.record(containedComponentIdSchema, placementSlotV2Schema),
+      ),
     })
     .strict(),
   z
     .object({
-      shellKind: z.literal("application"),
-      shellId: shellIdSchema,
-      stepContent: z.record(
-        containedComponentIdSchema,
-        z.record(containedComponentIdSchema, placementSlotV2Schema),
+      shellKind: sourceProvenanceUnchanged(z.literal("application")),
+      shellId: sourceProvenanceUnchanged(shellIdSchema),
+      stepContent: sourceProvenanceUnchanged(
+        z.record(
+          containedComponentIdSchema,
+          z.record(containedComponentIdSchema, placementSlotV2Schema),
+        ),
       ),
     })
     .strict(),
@@ -2481,17 +2783,18 @@ export const guidedFormPageCompositionV2Schema = z.discriminatedUnion("shellKind
 export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("shell_kind", [
   z
     .object({
-      shell_kind: z.literal("default"),
-      step_content: z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+      shell_kind: sourceProvenanceUnchanged(z.literal("default")),
+      step_content: sourceProvenanceUnchanged(
+        z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+      ),
     })
     .strict(),
   z
     .object({
-      shell_kind: z.literal("application"),
+      shell_kind: sourceProvenanceUnchanged(z.literal("application")),
       shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-      step_content: z.record(
-        sourceAliasSchema,
-        z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+      step_content: sourceProvenanceUnchanged(
+        z.record(sourceAliasSchema, z.record(sourceAliasSchema, sourcePlacementSlotV2Schema)),
       ),
     })
     .strict(),

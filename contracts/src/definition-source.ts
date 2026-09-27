@@ -17,10 +17,12 @@ import {
 } from "./module-source-contracts";
 import { moduleValidationContractVersionV3 } from "./module-contracts-v3";
 import {
+  assertSourceProvenanceCoverage,
   sourceConditionSchema,
   sourceProvenanceRegistry,
   sourceQualifiedConditionSchema,
   sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 } from "./definition-source-common";
 import type { SourceProvenanceAnnotation } from "./definition-source-common";
 
@@ -54,9 +56,16 @@ export {
   sourceQualifiedConditionSchema,
   sourceProvenanceRegistry,
   sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 };
 
 export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
+  moduleSourceDocumentSchema,
+  applicationSourceDocumentV2Schema,
+  connectionTypeSourceDocumentSchema,
+]);
+
+assertSourceProvenanceCoverage([
   moduleSourceDocumentSchema,
   applicationSourceDocumentV2Schema,
   connectionTypeSourceDocumentSchema,

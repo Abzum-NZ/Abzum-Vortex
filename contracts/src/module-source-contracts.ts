@@ -18,6 +18,7 @@ import {
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
   sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 } from "./definition-source-common";
 import { parseExactDecimal } from "./exact-decimal";
 import { compileTextInputPattern } from "./text-input-pattern";
@@ -95,10 +96,7 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    if (
-      Array.isArray(entry.value) &&
-      entry.value.length > maximumSourceContainerItems
-    ) {
+    if (Array.isArray(entry.value) && entry.value.length > maximumSourceContainerItems) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -140,12 +138,12 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 // ---------------------------------------------------------------------------
 
 export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("all_records") }).strict(),
-  z.object({ kind: z.literal("ownership") }).strict(),
-  z.object({ kind: z.literal("direct_share") }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("all_records")) }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("ownership")) }).strict(),
+  z.object({ kind: sourceProvenanceUnchanged(z.literal("direct_share")) }).strict(),
   z
     .object({
-      kind: z.literal("relationship"),
+      kind: sourceProvenanceUnchanged(z.literal("relationship")),
       relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, ["relationshipId"]),
       source_permission: sourceProvenanceTarget(namespacedKeySchema, ["sourcePermissionId"]),
     })
@@ -160,7 +158,11 @@ const sourceRecordScopeRouteIdentity = (
     : route.kind;
 
 export const sourcePermissionRecordScopeBaseSchema = z
-  .object({ routes: z.array(sourcePermissionRecordScopeRouteSchema).min(1).max(100) })
+  .object({
+    routes: sourceProvenanceUnchanged(
+      z.array(sourcePermissionRecordScopeRouteSchema).min(1).max(100),
+    ),
+  })
   .strict()
   .superRefine((value, context) => {
     const identities = value.routes.map(sourceRecordScopeRouteIdentity);
@@ -181,34 +183,46 @@ export const sourcePermissionRecordScopeBaseSchema = z
 const sourceSavedConditionParameterBindingSchema = z.discriminatedUnion("source", [
   z
     .object({
-      key: builderKeySchema,
-      source: z.literal("current_organization_account_id"),
+      key: sourceProvenanceUnchanged(builderKeySchema),
+      source: sourceProvenanceUnchanged(z.literal("current_organization_account_id")),
     })
     .strict(),
   z
-    .object({ key: builderKeySchema, source: z.literal("literal"), value: jsonValueSchema })
+    .object({
+      key: sourceProvenanceUnchanged(builderKeySchema),
+      source: sourceProvenanceUnchanged(z.literal("literal")),
+      value: sourceProvenanceUnchanged(jsonValueSchema),
+    })
     .strict(),
 ]);
 
 export const moduleSourcePermissionRecordScopeSchema =
   sourcePermissionRecordScopeBaseSchema.safeExtend({
-    saved_condition: z
-      .object({
-        condition: sourceProvenanceTarget(builderKeySchema, [
-          "conditionId",
-          "publishedRevision",
-          "contractFingerprint",
-        ]),
-        parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
-      })
-      .strict()
-      .optional(),
+    saved_condition: sourceProvenanceUnchanged(
+      z
+        .object({
+          condition: sourceProvenanceTarget(builderKeySchema, [
+            "conditionId",
+            "publishedRevision",
+            "contractFingerprint",
+          ]),
+          parameter_bindings: sourceProvenanceUnchanged(
+            z.array(sourceSavedConditionParameterBindingSchema),
+          ),
+        })
+        .strict()
+        .optional(),
+    ),
   });
 
 export const sourcePermissionFieldPolicySchema = z
   .object({
-    readable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["readableFieldIds/#"])).max(500),
-    changeable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["changeableFieldIds/#"])).max(500),
+    readable_fields: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["readableFieldIds/#"])).max(500),
+    ),
+    changeable_fields: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["changeableFieldIds/#"])).max(500),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -262,9 +276,9 @@ const refineTextInputPattern = (
 };
 
 const sourceSharedActionInputBase = {
-  key: builderKeySchema,
-  label: labelSchema,
-  required: z.boolean(),
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  label: sourceProvenanceUnchanged(labelSchema),
+  required: sourceProvenanceUnchanged(z.boolean()),
 };
 
 export const actionInputSchema = z
@@ -273,42 +287,48 @@ export const actionInputSchema = z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("text"), ["type"]),
-        validation: z
-          .object({
-            minimum_length: z.number().int().min(0).optional(),
-            maximum_length: z.number().int().positive().optional(),
-            pattern: z.string().min(1).max(500).optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              minimum_length: sourceProvenanceUnchanged(z.number().int().min(0).optional()),
+              maximum_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
+              pattern: sourceProvenanceUnchanged(z.string().min(1).max(500).optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("formatted_text"), ["type"]),
-        validation: z
-          .object({
-            allowed_blocks: z
-              .array(z.enum(["paragraph", "heading", "list", "link", "attachment"]))
-              .min(1),
-            maximum_length: z.number().int().positive().optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              allowed_blocks: sourceProvenanceUnchanged(
+                z.array(z.enum(["paragraph", "heading", "list", "link", "attachment"])).min(1),
+              ),
+              maximum_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("number"), ["type"]),
-        validation: z
-          .object({
-            minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
-            maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
+              maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
@@ -321,42 +341,52 @@ export const actionInputSchema = z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("date"), ["type"]),
-        validation: z
-          .object({
-            earliest: z
-              .string()
-              .regex(/^\d{4}-\d{2}-\d{2}$/)
-              .optional(),
-            latest: z
-              .string()
-              .regex(/^\d{4}-\d{2}-\d{2}$/)
-              .optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              earliest: sourceProvenanceUnchanged(
+                z
+                  .string()
+                  .regex(/^\d{4}-\d{2}-\d{2}$/)
+                  .optional(),
+              ),
+              latest: sourceProvenanceUnchanged(
+                z
+                  .string()
+                  .regex(/^\d{4}-\d{2}-\d{2}$/)
+                  .optional(),
+              ),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("date_time"), ["type"]),
-        validation: z
-          .object({
-            earliest: z.string().datetime({ offset: true }).optional(),
-            latest: z.string().datetime({ offset: true }).optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              earliest: sourceProvenanceUnchanged(z.string().datetime({ offset: true }).optional()),
+              latest: sourceProvenanceUnchanged(z.string().datetime({ offset: true }).optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
         type: sourceProvenanceTarget(z.literal("record_reference"), ["type"]),
-        record_types: z
-          .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
-          .min(1)
-          .max(20),
+        record_types: sourceProvenanceUnchanged(
+          z
+            .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
+            .min(1)
+            .max(20),
+        ),
       })
       .strict(),
     z
@@ -399,21 +429,23 @@ export const actionInputSchema = z
 
 const sourceOptionSchema = z
   .object({
-    value: z.string().min(1).max(120),
-    label: labelSchema,
-    required_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["requiredPermissionId"]),
+    value: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+    label: sourceProvenanceUnchanged(labelSchema),
+    required_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
+      "requiredPermissionId",
+    ]),
   })
   .strict();
 const emptySettingsSchema = z.object({}).strict();
 const sourceTextFormatSchema = z.enum(["email_address", "web_address", "uuid"]);
 const sourceTextSettingsSchema = z
   .object({
-    max_length: z.number().int().min(1).max(100_000),
-    format: sourceTextFormatSchema.optional(),
+    max_length: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),
+    format: sourceProvenanceUnchanged(sourceTextFormatSchema.optional()),
   })
   .strict();
 const sourceLongTextSettingsSchema = z
-  .object({ max_length: z.number().int().min(1).max(1_000_000) })
+  .object({ max_length: sourceProvenanceUnchanged(z.number().int().min(1).max(1_000_000)) })
   .strict();
 const formattedTextAllowedBlockSchema = z.enum([
   "paragraph",
@@ -425,15 +457,15 @@ const formattedTextAllowedBlockSchema = z.enum([
 ]);
 const sourceFormattedTextSettingsSchema = z
   .object({
-    allowed_blocks: z.array(formattedTextAllowedBlockSchema).min(1),
-    max_length: z.number().int().positive().optional(),
+    allowed_blocks: sourceProvenanceUnchanged(z.array(formattedTextAllowedBlockSchema).min(1)),
+    max_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
   })
   .strict();
 const sourceWholeNumberSettingsSchema = z
   .object({
     minimum: sourceProvenanceTarget(z.number().int().optional(), ["minimum"]),
     maximum: sourceProvenanceTarget(z.number().int().optional(), ["maximum"]),
-    step: z.number().int().positive().optional(),
+    step: sourceProvenanceUnchanged(z.number().int().positive().optional()),
   })
   .strict()
   .refine(
@@ -454,7 +486,7 @@ const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
 
 const sourceDecimalSettingsSchema = z
   .object({
-    digits_before_decimal: z.number().int().min(1).max(30),
+    digits_before_decimal: sourceProvenanceUnchanged(z.number().int().min(1).max(30)),
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12), ["decimalPlaces"]),
     minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
     maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
@@ -469,8 +501,10 @@ const sourceDecimalSettingsSchema = z
   );
 const sourceMoneySettingsSchema = z
   .object({
-    currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organisation_default"]), ["currencyMode"]),
-    currency: currencyCodeV2Schema.optional(),
+    currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organisation_default"]), [
+      "currencyMode",
+    ]),
+    currency: sourceProvenanceUnchanged(currencyCodeV2Schema.optional()),
     minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
     maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
   })
@@ -494,7 +528,10 @@ const sourceMoneySettingsSchema = z
       });
   });
 const sourceDateSettingsSchema = z
-  .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
+  .object({
+    earliest: sourceProvenanceUnchanged(z.iso.date().optional()),
+    latest: sourceProvenanceUnchanged(z.iso.date().optional()),
+  })
   .strict();
 const sourceDateTimeSettingsSchema = z
   .object({
@@ -505,93 +542,98 @@ const sourceDateTimeSettingsSchema = z
   })
   .strict();
 const sourceChoiceSettingsSchema = z
-  .object({ options: z.array(sourceOptionSchema).min(1).max(200) })
+  .object({ options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)) })
   .strict();
 const sourceSeveralChoicesSettingsSchema = z
   .object({
-    options: z.array(sourceOptionSchema).min(1).max(200),
-    maximum_selections: z.number().int().min(1).max(200).optional(),
+    options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
+    maximum_selections: sourceProvenanceUnchanged(z.number().int().min(1).max(200).optional()),
   })
   .strict();
 const sourceReferenceNumberSettingsSchema = z
   .object({
-    prefix: z.string().max(20).optional(),
-    suffix: z.string().max(20).optional(),
-    digits: z.number().int().min(1).max(20),
-    starting_number: z.number().int().positive().optional(),
+    prefix: sourceProvenanceUnchanged(z.string().max(20).optional()),
+    suffix: sourceProvenanceUnchanged(z.string().max(20).optional()),
+    digits: sourceProvenanceUnchanged(z.number().int().min(1).max(20)),
+    starting_number: sourceProvenanceUnchanged(z.number().int().positive().optional()),
   })
   .strict();
 const sourcePhoneSettingsSchema = z
-  .object({ default_country: z.string().length(2).optional() })
+  .object({ default_country: sourceProvenanceUnchanged(z.string().length(2).optional()) })
   .strict();
 const sourceWebAddressSettingsSchema = z
-  .object({ allowed_schemes: z.array(z.literal("https")).min(1).optional() })
+  .object({
+    allowed_schemes: sourceProvenanceUnchanged(z.array(z.literal("https")).min(1).optional()),
+  })
   .strict();
 
-const sourceTableColumnBase = { key: builderKeySchema, required: z.boolean() };
+const sourceTableColumnBase = {
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  required: sourceProvenanceUnchanged(z.boolean()),
+};
 const sourceTableColumnSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("text"),
-      settings: sourceTextSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("text")),
+      settings: sourceProvenanceUnchanged(sourceTextSettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("whole_number"),
-      settings: sourceWholeNumberSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("whole_number")),
+      settings: sourceProvenanceUnchanged(sourceWholeNumberSettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("decimal_number"),
-      settings: sourceDecimalSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("decimal_number")),
+      settings: sourceProvenanceUnchanged(sourceDecimalSettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("money"),
-      settings: sourceMoneySettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("money")),
+      settings: sourceProvenanceUnchanged(sourceMoneySettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("yes_no"),
-      settings: emptySettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("yes_no")),
+      settings: sourceProvenanceUnchanged(emptySettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("date"),
-      settings: sourceDateSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("date")),
+      settings: sourceProvenanceUnchanged(sourceDateSettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("date_time"),
-      settings: sourceDateTimeSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("date_time")),
+      settings: sourceProvenanceUnchanged(sourceDateTimeSettingsSchema),
     })
     .strict(),
   z
     .object({
       ...sourceTableColumnBase,
-      type: z.literal("choice"),
-      settings: sourceChoiceSettingsSchema,
+      type: sourceProvenanceUnchanged(z.literal("choice")),
+      settings: sourceProvenanceUnchanged(sourceChoiceSettingsSchema),
     })
     .strict(),
 ]);
 const sourceTableSettingsSchema = z
   .object({
-    minimum_rows: z.number().int().min(0),
-    maximum_rows: z.number().int().min(1).max(1_000),
-    columns: z.array(sourceTableColumnSchema).min(1).max(40),
+    minimum_rows: sourceProvenanceUnchanged(z.number().int().min(0)),
+    maximum_rows: sourceProvenanceUnchanged(z.number().int().min(1).max(1_000)),
+    columns: sourceProvenanceUnchanged(z.array(sourceTableColumnSchema).min(1).max(40)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -612,28 +654,39 @@ const sourceTableSettingsSchema = z
 const sourceLinkSettingsSchema = z
   .object({
     target: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["target/**"]),
-    reverse_key: builderKeySchema,
-    on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    reverse_key: sourceProvenanceUnchanged(builderKeySchema),
+    on_parent_delete: sourceProvenanceUnchanged(
+      z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    ),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
   .object({
-    targets: z
-      .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["targets/#/**"]))
-      .min(2)
-      .max(20),
-    on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    targets: sourceProvenanceUnchanged(
+      z
+        .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["targets/#/**"]))
+        .min(2)
+        .max(20),
+    ),
+    on_parent_delete: sourceProvenanceUnchanged(
+      z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    ),
   })
   .strict();
 const sourcePersonLinkSettingsSchema = z
   .object({
-    audience: sourceProvenanceTarget(z.enum([
-      "organisation_accounts",
-      "application_accounts",
-      "organisation_identities_and_external_requesters",
-    ]), ["audience"]),
+    audience: sourceProvenanceTarget(
+      z.enum([
+        "organisation_accounts",
+        "application_accounts",
+        "organisation_identities_and_external_requesters",
+      ]),
+      ["audience"],
+    ),
     application_root_required: sourceProvenanceTarget(z.boolean(), ["applicationRootIdRequired"]),
-    on_person_deactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
+    on_person_deactivation: sourceProvenanceUnchanged(
+      z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
+    ),
   })
   .strict();
 
@@ -642,13 +695,17 @@ const sourceCalculationNumberOperationSchema = z.enum(["add", "subtract", "multi
 const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
   z
     .object({
-      source: z.literal("field"),
-      field: sourceProvenanceTarget(builderKeySchema, ["fieldId", "fieldIds/#", "dependencyFieldIds/#"]),
+      source: sourceProvenanceUnchanged(z.literal("field")),
+      field: sourceProvenanceTarget(builderKeySchema, [
+        "fieldId",
+        "fieldIds/#",
+        "dependencyFieldIds/#",
+      ]),
     })
     .strict(),
   z
     .object({
-      source: z.literal("literal"),
+      source: sourceProvenanceUnchanged(z.literal("literal")),
       value: sourceProvenanceTarget(sourceExactDecimalTextV2Schema, ["value"]),
     })
     .strict(),
@@ -684,9 +741,13 @@ const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue
       ...sourceCalculationNumberOperandSchema.options,
       z
         .object({
-          source: z.literal("numeric"),
-          numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, ["operation"]),
-          operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
+          source: sourceProvenanceUnchanged(z.literal("numeric")),
+          numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, [
+            "operation",
+          ]),
+          operands: sourceProvenanceUnchanged(
+            z.array(sourceCalculationNumberValueSchema).min(2).max(20),
+          ),
         })
         .strict(),
     ])
@@ -708,54 +769,62 @@ const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
   z
     .object({
       operation: sourceProvenanceTarget(z.literal("join_text"), ["kind"]),
-      fields: z.array(sourceProvenanceTarget(builderKeySchema, ["fieldIds/#", "dependencyFieldIds/#"])).min(1).max(20),
-      separator: z.string().max(20),
+      fields: sourceProvenanceUnchanged(
+        z
+          .array(sourceProvenanceTarget(builderKeySchema, ["fieldIds/#", "dependencyFieldIds/#"]))
+          .min(1)
+          .max(20),
+      ),
+      separator: sourceProvenanceUnchanged(z.string().max(20)),
     })
     .strict(),
   z
     .object({
       operation: sourceProvenanceTarget(z.literal("numeric"), ["kind"]),
-      numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, ["operation"]),
-      operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
+      numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, [
+        "operation",
+      ]),
+      operands: sourceProvenanceUnchanged(
+        z.array(sourceCalculationNumberValueSchema).min(2).max(20),
+      ),
     })
     .strict(),
   z
     .object({
       operation: sourceProvenanceTarget(z.literal("condition"), ["kind"]),
-      condition: sourceConditionSchema,
+      condition: sourceProvenanceUnchanged(sourceConditionSchema),
     })
     .strict(),
   z
     .object({
       operation: sourceProvenanceTarget(z.literal("date_offset"), ["kind"]),
       date_field: sourceProvenanceTarget(builderKeySchema, ["dateFieldId", "dependencyFieldIds/#"]),
-      amount: sourceCalculationNumberOperandSchema,
-      unit: z.enum(["days", "weeks", "months", "years"]),
+      amount: sourceProvenanceUnchanged(sourceCalculationNumberOperandSchema),
+      unit: sourceProvenanceUnchanged(z.enum(["days", "weeks", "months", "years"])),
     })
     .strict(),
   z
     .object({
       operation: sourceProvenanceTarget(z.literal("deadline_passed"), ["kind"]),
       due_field: sourceProvenanceTarget(builderKeySchema, ["dueFieldId", "dependencyFieldIds/#"]),
-      status_field: sourceProvenanceTarget(builderKeySchema.optional(), ["statusFieldId", "dependencyFieldIds/#"]),
-      terminal_status_values: z.array(jsonValueSchema).max(20),
+      status_field: sourceProvenanceTarget(builderKeySchema.optional(), [
+        "statusFieldId",
+        "dependencyFieldIds/#",
+      ]),
+      terminal_status_values: sourceProvenanceUnchanged(z.array(jsonValueSchema).max(20)),
     })
     .strict(),
 ]);
 const sourceCalculationSettingsSchema = z
   .object({
-    result_type: z.enum([
-      "text",
-      "whole_number",
-      "decimal_number",
-      "money",
-      "yes_no",
-      "date",
-      "date_time",
+    result_type: sourceProvenanceUnchanged(
+      z.enum(["text", "whole_number", "decimal_number", "money", "yes_no", "date", "date_time"]),
+    ),
+    evaluation: sourceProvenanceUnchanged(z.enum(["read_time", "stored"]).optional()),
+    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
+      "decimalPlaces",
     ]),
-    evaluation: z.enum(["read_time", "stored"]).optional(),
-    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), ["decimalPlaces"]),
-    expression: sourceCalculationExpressionSchema,
+    expression: sourceProvenanceUnchanged(sourceCalculationExpressionSchema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -805,20 +874,16 @@ const sourceCalculationSettingsSchema = z
 const sourceTotalSettingsSchema = z
   .object({
     relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, ["relationshipId"]),
-    operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
-    result_type: z.enum([
-      "text",
-      "whole_number",
-      "decimal_number",
-      "money",
-      "yes_no",
-      "date",
-      "date_time",
-    ]),
+    operation: sourceProvenanceUnchanged(z.enum(["count", "sum", "minimum", "maximum", "average"])),
+    result_type: sourceProvenanceUnchanged(
+      z.enum(["text", "whole_number", "decimal_number", "money", "yes_no", "date", "date_time"]),
+    ),
     field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
-    filter: sourceConditionSchema.optional(),
-    currency: currencyCodeV2Schema.optional(),
-    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), ["decimalPlaces"]),
+    filter: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
+    currency: sourceProvenanceUnchanged(currencyCodeV2Schema.optional()),
+    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
+      "decimalPlaces",
+    ]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -859,28 +924,32 @@ const sourceTotalSettingsSchema = z
   });
 const sourceAttachmentSettingsSchema = z
   .object({
-    allowed_kinds: z
-      .array(
-        z.enum([
-          "image",
-          "document",
-          "spreadsheet",
-          "presentation",
-          "audio",
-          "video",
-          "archive",
-          "text",
-          "other",
-        ]),
-      )
-      .min(1),
-    allowed_extensions: z
-      .array(z.string().regex(/^\.[a-z0-9]+$/))
-      .min(1)
-      .optional(),
-    max_file_size_mb: z.number().positive().max(5_000),
-    multiple: z.boolean(),
-    max_files: z.number().int().min(2).max(100).optional(),
+    allowed_kinds: sourceProvenanceUnchanged(
+      z
+        .array(
+          z.enum([
+            "image",
+            "document",
+            "spreadsheet",
+            "presentation",
+            "audio",
+            "video",
+            "archive",
+            "text",
+            "other",
+          ]),
+        )
+        .min(1),
+    ),
+    allowed_extensions: sourceProvenanceUnchanged(
+      z
+        .array(z.string().regex(/^\.[a-z0-9]+$/))
+        .min(1)
+        .optional(),
+    ),
+    max_file_size_mb: sourceProvenanceUnchanged(z.number().positive().max(5_000)),
+    multiple: sourceProvenanceUnchanged(z.boolean()),
+    max_files: sourceProvenanceUnchanged(z.number().int().min(2).max(100).optional()),
   })
   .strict()
   .superRefine((value, context) => {
@@ -894,16 +963,16 @@ const sourceAttachmentSettingsSchema = z
 
 const sourceFieldBase = {
   id: sourceProvenanceTarget(sourceAliasSchema, ["fieldId"]),
-  key: builderKeySchema,
-  label: labelSchema,
-  help_text: z.string().max(200).optional(),
-  required: z.boolean(),
-  unique: z.boolean(),
-  filterable: z.boolean(),
-  sortable: z.boolean(),
-  search_priority: searchPrioritySchema.optional(),
-  personal_data: personalDataClassSchema,
-  public_display: publicDisplaySchema,
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  label: sourceProvenanceUnchanged(labelSchema),
+  help_text: sourceProvenanceUnchanged(z.string().max(200).optional()),
+  required: sourceProvenanceUnchanged(z.boolean()),
+  unique: sourceProvenanceUnchanged(z.boolean()),
+  filterable: sourceProvenanceUnchanged(z.boolean()),
+  sortable: sourceProvenanceUnchanged(z.boolean()),
+  search_priority: sourceProvenanceUnchanged(searchPrioritySchema.optional()),
+  personal_data: sourceProvenanceUnchanged(personalDataClassSchema),
+  public_display: sourceProvenanceUnchanged(publicDisplaySchema),
 };
 const sourceField = <K extends string, S extends z.ZodType, D extends z.ZodType>(
   type: K,
@@ -913,8 +982,8 @@ const sourceField = <K extends string, S extends z.ZodType, D extends z.ZodType>
   z
     .object({
       ...sourceFieldBase,
-      type: z.literal(type),
-      settings,
+      type: sourceProvenanceUnchanged(z.literal(type)),
+      settings: sourceProvenanceUnchanged(settings),
       default: sourceProvenanceTarget(defaultValue.optional(), ["default/**"], true),
     })
     .strict();
@@ -1143,9 +1212,9 @@ export const moduleSourceFieldSchema = z
 // ---------------------------------------------------------------------------
 
 const moduleSourceActionInputBase = {
-  key: builderKeySchema,
-  label: labelSchema,
-  required: z.boolean(),
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  label: sourceProvenanceUnchanged(labelSchema),
+  required: sourceProvenanceUnchanged(z.boolean()),
 };
 const moduleSourceExactActionInputValidationSchema = z
   .object({
@@ -1167,54 +1236,66 @@ export const moduleSourceActionInputSchema = z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("text"), ["type"]),
-        validation: z
-          .object({
-            minimum_length: z.number().int().min(0).optional(),
-            maximum_length: z.number().int().positive().optional(),
-            pattern: z.string().min(1).max(500).optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              minimum_length: sourceProvenanceUnchanged(z.number().int().min(0).optional()),
+              maximum_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
+              pattern: sourceProvenanceUnchanged(z.string().min(1).max(500).optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("formatted_text"), ["type"]),
-        validation: z
-          .object({
-            allowed_blocks: z.array(formattedTextAllowedBlockSchema).min(1),
-            maximum_length: z.number().int().positive().optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              allowed_blocks: sourceProvenanceUnchanged(
+                z.array(formattedTextAllowedBlockSchema).min(1),
+              ),
+              maximum_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("number"), ["type"]),
-        validation: z
-          .object({
-            minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
-            maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
+              maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("decimal_number"), ["type"]),
-        validation: moduleSourceExactActionInputValidationSchema.optional(),
+        validation: sourceProvenanceUnchanged(
+          moduleSourceExactActionInputValidationSchema.optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("money"), ["type"]),
-        validation: moduleSourceExactActionInputValidationSchema.optional(),
+        validation: sourceProvenanceUnchanged(
+          moduleSourceExactActionInputValidationSchema.optional(),
+        ),
       })
       .strict(),
     z
@@ -1227,33 +1308,42 @@ export const moduleSourceActionInputSchema = z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("date"), ["type"]),
-        validation: z
-          .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              earliest: sourceProvenanceUnchanged(z.iso.date().optional()),
+              latest: sourceProvenanceUnchanged(z.iso.date().optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("date_time"), ["type"]),
-        validation: z
-          .object({
-            earliest: z.iso.datetime({ offset: true }).optional(),
-            latest: z.iso.datetime({ offset: true }).optional(),
-          })
-          .strict()
-          .optional(),
+        validation: sourceProvenanceUnchanged(
+          z
+            .object({
+              earliest: sourceProvenanceUnchanged(z.iso.datetime({ offset: true }).optional()),
+              latest: sourceProvenanceUnchanged(z.iso.datetime({ offset: true }).optional()),
+            })
+            .strict()
+            .optional(),
+        ),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
         type: sourceProvenanceTarget(z.literal("record_reference"), ["type"]),
-        record_types: z
-          .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
-          .min(1)
-          .max(20),
+        record_types: sourceProvenanceUnchanged(
+          z
+            .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
+            .min(1)
+            .max(20),
+        ),
       })
       .strict(),
     z
@@ -1316,11 +1406,15 @@ export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtec
  */
 export const moduleSourceSystemProjectionSchema = z
   .object({
-    protected_view: protectedReadModelKeySchema,
+    protected_view: sourceProvenanceUnchanged(protectedReadModelKeySchema),
     organization_field: sourceProvenanceTarget(builderKeySchema, ["organizationFieldId"]),
     revision_field: sourceProvenanceTarget(builderKeySchema, ["revisionFieldId"]),
-    filterable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"])).max(500),
-    sortable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["sortableFieldIds/#"])).max(500),
+    filterable_fields: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"])).max(500),
+    ),
+    sortable_fields: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["sortableFieldIds/#"])).max(500),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1355,42 +1449,64 @@ const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
 export const moduleSourceRecordTypeSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["recordTypeId", "fromRecordTypeId"]),
-    key: builderKeySchema,
+    key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceTarget(labelSchema, ["singularLabel"]),
     plural_name: sourceProvenanceTarget(labelSchema, ["pluralLabel"]),
     title_field: sourceProvenanceTarget(builderKeySchema, ["titleFieldId"]),
     storage_contract_id: sourceProvenanceTarget(sourceAliasSchema, ["storageContractId"]),
-    storage_scope: sourceProvenanceTarget(z.enum(["organisation_shared", "application_contained"]), ["storageScope"]),
-    system_projection: moduleSourceSystemProjectionSchema.optional(),
-    ownership_mode: sourceProvenanceTarget(moduleSourceRecordOwnershipModeSchema, ["ownershipMode"]),
-    ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), ["ownershipRelationshipId"]),
-    standard_actions: z
-      .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
-      .min(1)
-      .max(6),
-    custom_actions: z.array(sourceProvenanceTarget(sourceAliasSchema, ["customActionIds/#"])).max(100),
-    fields: z.array(moduleSourceFieldSchema).min(1).max(500),
-    relationships: z.array(
+    storage_scope: sourceProvenanceTarget(
+      z.enum(["organisation_shared", "application_contained"]),
+      ["storageScope"],
+    ),
+    system_projection: sourceProvenanceUnchanged(moduleSourceSystemProjectionSchema.optional()),
+    ownership_mode: sourceProvenanceTarget(moduleSourceRecordOwnershipModeSchema, [
+      "ownershipMode",
+    ]),
+    ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), [
+      "ownershipRelationshipId",
+    ]),
+    standard_actions: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceProvenanceTarget(sourceAliasSchema, ["relationshipId"]),
-          key: builderKeySchema,
-          from_field: sourceProvenanceTarget(builderKeySchema, ["fromFieldId"]),
-          to_record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), ["toRecordType/**"]),
-          to_record_types: sourceProvenanceTarget(
-            z.array(sourceQualifiedRecordTypeSchema).min(2).max(20).optional(),
-            ["toRecordTypes/#/**"],
-            true,
-          ),
-          cardinality: z.enum(["one_to_one", "many_to_one", "many_to_many"]),
-          on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
-        })
-        .strict()
-        .refine(
-          (value) => (value.to_record_type !== undefined) !== (value.to_record_types !== undefined),
-          { message: "Declare one target or a polymorphic target list" },
-        ),
-    ).max(500),
+        .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
+        .min(1)
+        .max(6),
+    ),
+    custom_actions: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(sourceAliasSchema, ["customActionIds/#"])).max(100),
+    ),
+    fields: sourceProvenanceUnchanged(z.array(moduleSourceFieldSchema).min(1).max(500)),
+    relationships: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["relationshipId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              from_field: sourceProvenanceTarget(builderKeySchema, ["fromFieldId"]),
+              to_record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
+                "toRecordType/**",
+              ]),
+              to_record_types: sourceProvenanceTarget(
+                z.array(sourceQualifiedRecordTypeSchema).min(2).max(20).optional(),
+                ["toRecordTypes/#/**"],
+                true,
+              ),
+              cardinality: sourceProvenanceUnchanged(
+                z.enum(["one_to_one", "many_to_one", "many_to_many"]),
+              ),
+              on_parent_delete: sourceProvenanceUnchanged(
+                z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+              ),
+            })
+            .strict()
+            .refine(
+              (value) =>
+                (value.to_record_type !== undefined) !== (value.to_record_types !== undefined),
+              { message: "Declare one target or a polymorphic target list" },
+            ),
+        )
+        .max(500),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1485,15 +1601,19 @@ export const moduleSourceRecordTypeSchema = z
 export const moduleSourceActionSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
-    key: namespacedKeySchema,
-    label: labelSchema,
+    key: sourceProvenanceUnchanged(namespacedKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
     record_type: sourceProvenanceTarget(builderKeySchema, ["subjectRecordTypeId"]),
     permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
-    permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
+    permission_alternatives: sourceProvenanceUnchanged(
+      z.array(namespacedKeySchema).min(2).optional(),
+    ),
     shareable: sourceProvenanceTarget(z.boolean(), ["sharing"]),
-    inputs: z.array(moduleSourceActionInputSchema).max(50),
-    precondition: sourceConditionSchema.optional(),
-    tasks: z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
+    inputs: sourceProvenanceUnchanged(z.array(moduleSourceActionInputSchema).max(50)),
+    precondition: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
+    tasks: sourceProvenanceUnchanged(
+      z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
+    ),
     protected_operation: sourceProvenanceTarget(
       moduleSourceProtectedOperationKeySchema.optional(),
       [
@@ -1539,25 +1659,35 @@ export const moduleSourceActionSchema = z
 
 const moduleSourceSharingParameterSchema = z
   .object({
-    key: builderKeySchema,
-    type: z.enum([
-      "text",
-      "number",
-      "decimal_number",
-      "money",
-      "boolean",
-      "date",
-      "date_time",
-      "organization_account_reference",
-    ]),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    type: sourceProvenanceUnchanged(
+      z.enum([
+        "text",
+        "number",
+        "decimal_number",
+        "money",
+        "boolean",
+        "date",
+        "date_time",
+        "organization_account_reference",
+      ]),
+    ),
   })
   .strict();
 const moduleSourceSharingPublicationTestSchema = z
   .object({
-    name: labelSchema,
-    parameters: sourceProvenanceTarget(z.record(builderKeySchema, jsonValueSchema), ["parameters/**"], true),
-    field_values: sourceProvenanceTarget(z.record(builderKeySchema, jsonValueSchema), ["fieldValues/**"], true),
-    expected: z.boolean(),
+    name: sourceProvenanceUnchanged(labelSchema),
+    parameters: sourceProvenanceTarget(
+      z.record(builderKeySchema, jsonValueSchema),
+      ["parameters/**"],
+      true,
+    ),
+    field_values: sourceProvenanceTarget(
+      z.record(builderKeySchema, jsonValueSchema),
+      ["fieldValues/**"],
+      true,
+    ),
+    expected: sourceProvenanceUnchanged(z.boolean()),
   })
   .strict();
 const sourceSharingParameterValueSchema = (
@@ -1581,11 +1711,15 @@ export const moduleSourceSharingConditionSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["conditionId"]),
     source_record_type: sourceProvenanceTarget(builderKeySchema, ["sourceRecordTypeId"]),
-    key: builderKeySchema,
-    parameters: z.array(moduleSourceSharingParameterSchema).max(100),
-    condition: sourceConditionSchema,
-    declared_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["declaredFieldIds/#"])).max(500),
-    publication_tests: z.array(moduleSourceSharingPublicationTestSchema).min(1).max(100),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    parameters: sourceProvenanceUnchanged(z.array(moduleSourceSharingParameterSchema).max(100)),
+    condition: sourceProvenanceUnchanged(sourceConditionSchema),
+    declared_fields: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["declaredFieldIds/#"])).max(500),
+    ),
+    publication_tests: sourceProvenanceUnchanged(
+      z.array(moduleSourceSharingPublicationTestSchema).min(1).max(100),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1610,15 +1744,15 @@ export const moduleSourceSharingConditionSchema = z
 export const moduleSourceQuerySortSchema = z
   .object({
     field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
-    direction: z.enum(["ascending", "descending"]),
+    direction: sourceProvenanceUnchanged(z.enum(["ascending", "descending"])),
   })
   .strict();
 
 export const moduleSourceQueryAggregateSchema = z
   .object({
-    operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
+    operation: sourceProvenanceUnchanged(z.enum(["count", "sum", "minimum", "maximum", "average"])),
     field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
-    alias: builderKeySchema,
+    alias: sourceProvenanceUnchanged(builderKeySchema),
   })
   .strict();
 
@@ -1630,18 +1764,28 @@ export const moduleSourceQueryAggregateSchema = z
 export const moduleSourceQuerySchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
-    key: builderKeySchema,
-    label: labelSchema.optional(),
-    description: z.string().min(1).max(1_000).optional(),
-    record_type: sourceProvenanceTarget(z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]), ["recordType/**"]),
-    inputs: z.array(moduleSourceActionInputSchema).max(50),
-    select: z.array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"])).min(1).max(200),
-    filter: z.union([z.null(), sourceConditionSchema]),
-    group_by: z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
-    aggregates: z.array(moduleSourceQueryAggregateSchema).max(20),
-    sort: z.array(moduleSourceQuerySortSchema).min(1).max(20),
-    page_size: z.number().int().min(1).max(200),
-    relationship_hops: z.number().int().min(0).max(2),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema.optional()),
+    description: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
+    record_type: sourceProvenanceTarget(
+      z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
+      ["recordType/**"],
+    ),
+    inputs: sourceProvenanceUnchanged(z.array(moduleSourceActionInputSchema).max(50)),
+    select: sourceProvenanceUnchanged(
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"]))
+        .min(1)
+        .max(200),
+    ),
+    filter: sourceProvenanceUnchanged(z.union([z.null(), sourceConditionSchema])),
+    group_by: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
+    ),
+    aggregates: sourceProvenanceUnchanged(z.array(moduleSourceQueryAggregateSchema).max(20)),
+    sort: sourceProvenanceUnchanged(z.array(moduleSourceQuerySortSchema).min(1).max(20)),
+    page_size: sourceProvenanceUnchanged(z.number().int().min(1).max(200)),
+    relationship_hops: sourceProvenanceUnchanged(z.number().int().min(0).max(2)),
   })
   .strict();
 
@@ -1665,7 +1809,7 @@ export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...moduleSourceContributionBase,
-      kind: z.literal("field"),
+      kind: sourceProvenanceUnchanged(z.literal("field")),
       record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
       field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
     })
@@ -1673,7 +1817,7 @@ export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...moduleSourceContributionBase,
-      kind: z.literal("action"),
+      kind: sourceProvenanceUnchanged(z.literal("action")),
       contributed_action: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
     })
     .strict(),
@@ -1685,91 +1829,125 @@ export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
 
 const moduleSourceBodySchema = z
   .object({
-    name: z.string().min(1).max(120),
-    description: z.string().min(1).max(1_000),
-    dependencies: z.array(
+    name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+    description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+    dependencies: sourceProvenanceUnchanged(
       z
-        .object({
-          dependency_key: builderKeySchema,
-          module: sourceProvenanceTarget(namespacedKeySchema, ["moduleRootId", "moduleKey", "resolvedVersion"]),
-          version: versionRequirementSchema,
-        })
-        .strict(),
-    ).max(100),
-    record_types: z.array(moduleSourceRecordTypeSchema).min(1).max(100),
-    permissions: z.array(
+        .array(
+          z
+            .object({
+              dependency_key: sourceProvenanceUnchanged(builderKeySchema),
+              module: sourceProvenanceTarget(namespacedKeySchema, [
+                "moduleRootId",
+                "moduleKey",
+                "resolvedVersion",
+              ]),
+              version: sourceProvenanceUnchanged(versionRequirementSchema, true),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).min(1).max(100)),
+    permissions: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
-          key: namespacedKeySchema,
-          label: labelSchema,
-          description: z.string().min(1).max(1_000),
-          record_type: sourceProvenanceTarget(builderKeySchema.optional(), ["recordTypeId"]),
-          action_kind: z.enum([
-            "create",
-            "read",
-            "update",
-            "delete",
-            "restore",
-            "export",
-            "share",
-            "manage",
-            "named",
-          ]),
-          named_action: builderKeySchema.optional(),
-          administrative: z.boolean(),
-          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
-          field_policy: sourcePermissionFieldPolicySchema.optional(),
-        })
-        .strict()
-        .superRefine((value, context) => {
-          if (value.field_policy !== undefined && value.record_type === undefined)
-            context.addIssue({
-              code: "custom",
-              path: ["field_policy"],
-              message: "Only record permissions may declare a field policy",
-            });
-        }),
-    ).max(100),
-    actions: z.array(moduleSourceActionSchema).max(100),
-    events: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              label: sourceProvenanceUnchanged(labelSchema),
+              description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+              record_type: sourceProvenanceTarget(builderKeySchema.optional(), ["recordTypeId"]),
+              action_kind: sourceProvenanceUnchanged(
+                z.enum([
+                  "create",
+                  "read",
+                  "update",
+                  "delete",
+                  "restore",
+                  "export",
+                  "share",
+                  "manage",
+                  "named",
+                ]),
+              ),
+              named_action: sourceProvenanceUnchanged(builderKeySchema.optional()),
+              administrative: sourceProvenanceUnchanged(z.boolean()),
+              record_scope: sourceProvenanceUnchanged(
+                moduleSourcePermissionRecordScopeSchema.optional(),
+              ),
+              field_policy: sourceProvenanceUnchanged(sourcePermissionFieldPolicySchema.optional()),
+            })
+            .strict()
+            .superRefine((value, context) => {
+              if (value.field_policy !== undefined && value.record_type === undefined)
+                context.addIssue({
+                  code: "custom",
+                  path: ["field_policy"],
+                  message: "Only record permissions may declare a field policy",
+                });
+            }),
+        )
+        .max(100),
+    ),
+    actions: sourceProvenanceUnchanged(z.array(moduleSourceActionSchema).max(100)),
+    events: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
-          key: namespacedKeySchema,
-          record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
-          carries: z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
-          personal_or_sensitive_values_allowed: z.literal(false),
-        })
-        .strict(),
-    ).max(100),
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+              carries: sourceProvenanceUnchanged(
+                z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
+              ),
+              personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
     /**
      * The flows this Module owns (architecture decision 1): its save rules are flows with a
      * `BeforeSave` trigger and `transaction` execution, and its record actions and reactions are
      * flows too. Each is authored once, as the same nested task list every flow uses.
      */
-    flows: sourceFlowCollectionSchema,
-    extension_points: z.array(
+    flows: sourceProvenanceUnchanged(sourceFlowCollectionSchema, true),
+    extension_points: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceProvenanceTarget(sourceAliasSchema, ["extensionPointId"]),
-          key: builderKeySchema,
-          record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
-          accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
-        })
-        .strict(),
-    ).max(100),
-    sharing_conditions: z.array(moduleSourceSharingConditionSchema).max(100),
-    queries: z.array(moduleSourceQuerySchema).max(100).default([]),
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["extensionPointId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+              accepts: sourceProvenanceUnchanged(
+                z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
+              ),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    sharing_conditions: sourceProvenanceUnchanged(
+      z.array(moduleSourceSharingConditionSchema).max(100),
+    ),
+    queries: sourceProvenanceUnchanged(z.array(moduleSourceQuerySchema).max(100).default([])),
     // Optional rather than defaulted so an authored source that declares no contributions
     // keeps the exact fingerprint it had before contributions existed.
-    contributions: z.array(moduleSourceContributionSchema).max(100).optional(),
+    contributions: sourceProvenanceUnchanged(
+      z.array(moduleSourceContributionSchema).max(100).optional(),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
     // A system projection record type has no ordinary write path, so every action on it targets a
     // registered protected operation, and no other record type may target a protected operation.
-    const recordTypes = new Map(value.record_types.map((recordType) => [recordType.key, recordType]));
+    const recordTypes = new Map(
+      value.record_types.map((recordType) => [recordType.key, recordType]),
+    );
     for (const [index, action] of value.actions.entries()) {
       const recordType = recordTypes.get(action.record_type);
       if (recordType === undefined) continue;
@@ -1785,7 +1963,8 @@ const moduleSourceBodySchema = z
         context.addIssue({
           code: "custom",
           path: ["actions", index, "tasks"],
-          message: "A system projection record type action targets a registered protected operation",
+          message:
+            "A system projection record type action targets a registered protected operation",
         });
     }
     // Contributions resolve their target by a local dependency key, so a Module that
@@ -1804,9 +1983,9 @@ const moduleSourceBodySchema = z
 export const moduleSourceDocumentSchema = z
   .object({
     ...authoredSourceBase,
-    kind: z.literal("module"),
-    source_contract_version: z.literal(moduleSourceContractVersion),
-    body: z.preprocess(inspectSourceBounds, moduleSourceBodySchema),
+    kind: sourceProvenanceUnchanged(z.literal("module")),
+    source_contract_version: sourceProvenanceUnchanged(z.literal(moduleSourceContractVersion)),
+    body: sourceProvenanceUnchanged(z.preprocess(inspectSourceBounds, moduleSourceBodySchema)),
   })
   .strict();
 
