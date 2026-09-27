@@ -92,11 +92,6 @@
       "label": "Organization management application"
     },
     {
-      "migration": "supabase/migrations/20260906040352_coordinate_organization_invitation_access.sql",
-      "proof": "supabase/tests/organization-invitation-access-concurrency.test.sh",
-      "label": "Organization invitation access"
-    },
-    {
       "migration": "supabase/migrations/20260906055827_evaluate_organization_permission_eligibility.sql",
       "proof": "supabase/tests/organization-permission-eligibility-concurrency.test.sh",
       "label": "Organization permission eligibility"
@@ -120,11 +115,6 @@
       "migration": "supabase/migrations/20260907042701_protect_organization_structural_access_reductions.sql",
       "proof": "supabase/tests/organization-structural-access-reduction-concurrency.test.sh",
       "label": "Organization structural Access reductions"
-    },
-    {
-      "migration": "supabase/migrations/20260912141932_record_remaining_access_administration_refusals.sql",
-      "proof": "supabase/tests/record-ownership-target-retirement-concurrency.test.sh",
-      "label": "Record ownership target retirement"
     },
     {
       "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",

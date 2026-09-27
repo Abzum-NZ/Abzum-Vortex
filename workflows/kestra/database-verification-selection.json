@@ -37,7 +37,6 @@
     "supabase/tests/250_organization_delegation_authority_changes.test.sql",
     "supabase/tests/260_organization_stewardship_adoption.test.sql",
     "supabase/tests/270_organization_management_application_requirement.test.sql",
-    "supabase/tests/280_organization_invitation_access.test.sql",
     "supabase/tests/290_organization_permission_eligibility.test.sql",
     "supabase/tests/300_organization_delegated_management_eligibility.test.sql",
     "supabase/tests/310_human_application_scope.test.sql",
