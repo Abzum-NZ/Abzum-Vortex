@@ -60,6 +60,35 @@ An allow result is evidence for one operation and verified state, not a reusable
 
 Every operation declares which lifecycle, row, field, sharing or public restrictions it needs. Missing or unavailable required policy refuses the final operation; a basic role match is not final authority over a record. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) establishes that closed composition boundary, while [row rules #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [scopes #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [fields #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and the later sharing/interface tasks supply their actual policies. It adds no second operation registry, access-state store or activity writer. Internal evidence is not returned as role labels, permission keys or private record values in a user-facing refusal.
 
+## Named Vortex super administrators
+
+Named Vortex super administrators are active identities in one global Identity
+assignment ledger. The configured system operator bootstraps the first active
+assignment. An active named super administrator may grant or revoke assignments;
+these commands require the current account-bound human request context and recent
+primary authentication. The identity assignment is separate from tenant
+administrator assignments and organisation roles, and copies no permissions.
+
+The central permission and role evaluation recognizes an active named
+super-administrator assignment as a complete authority route for every current
+and future permission and role, including organisation, application, named-action,
+and record-operation decisions. It applies the ordinary lifecycle, target,
+application, record, field, sharing, and public restrictions for each operation.
+The route is evaluated from the live assignment ledger, so revocation removes
+this authority on the next decision without copying grants, changing role
+catalogues, or advancing each organisation's Access version.
+
+Entry remains account-bound. The organisation launcher includes every active
+organisation in an active tenant for a named super administrator. Selecting an
+eligible organisation without a local account provisions one active account in
+the same transaction and records its assignment provenance plus Activity
+evidence. A suspended local account is refused and never reactivated by sign-in.
+After entry, organisation data uses the ordinary active-account request context;
+tenant-administration context never reads organisation records. Activity entries
+identify when the authority route was a named super-administrator assignment.
+This is a rule in the existing access decision, not a second operator or
+permission system.
+
 ## Roles
 
 ### Complete authority paths
@@ -181,7 +210,7 @@ When accepting a supplied template as an assignable local role, the administrato
 
 ### Assignment
 
-An organisation account may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. There is no hidden default administrator permission.
+An organisation account may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. Ordinary organisation accounts have no hidden default administrator permission; named super-administrator authority is a separate Identity assignment.
 
 Delegated organisation administrators may remove existing assignments after their
 role or permissions are withdrawn. This is removal only: it cannot reactivate or
