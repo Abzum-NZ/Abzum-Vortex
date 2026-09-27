@@ -307,7 +307,7 @@ function sourceContractPositions(source: JsonObject): SourceContractPositions {
   const contract =
     source.kind === "module"
       ? moduleSourceDocumentSchema
-      : source.kind === "application" && source.source_contract_version === "2.0.0"
+      : source.kind === "application"
         ? applicationSourceDocumentV2Schema
         : definitionSourceDocumentSchema;
   walkDefinitionContract(contract, source, (schema, _value, path) => {
@@ -575,14 +575,12 @@ function conditionSourceTargets(
   if (node === null || typeof node !== "object" || Array.isArray(node)) return undefined;
   const comparison = asObject(node);
   const valueSuffix = (suffixPath: Path): Path =>
-    source.source_contract_version === "2.0.0" || source.kind === "module"
-      ? suffixPath.map((segment) => {
-          if (segment === "record_type") return "recordTypeId";
-          if (segment === "record_id") return "recordId";
-          if (segment === "organization_account_id") return "organizationAccountId";
-          return segment;
-        })
-      : suffixPath;
+    suffixPath.map((segment) => {
+      if (segment === "record_type") return "recordTypeId";
+      if (segment === "record_id") return "recordId";
+      if (segment === "organization_account_id") return "organizationAccountId";
+      return segment;
+    });
   if (suffix[0] === "operator")
     return [...targets, [...canonicalPath, "kind"], [...canonicalPath, "operator"]];
   if (suffix[0] === "field")
@@ -1702,7 +1700,7 @@ class Resolution {
     const requirements =
       source.kind === "module"
         ? extractModuleSourceIdentityRequirementsV3(source as unknown as ModuleSourceDocument)
-        : source.kind === "application" && source.source_contract_version === "2.0.0"
+        : source.kind === "application"
           ? extractApplicationSourceIdentityRequirementsV2(
               source as unknown as ApplicationSourceDocumentV2,
             )
@@ -2220,7 +2218,8 @@ function actionTaskValue(
   };
 }
 
-function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false): unknown {
+/** Module-owned inputs carry exact decimal and money bounds; Application action inputs keep theirs. */
+function actionInput(input: JsonObject, resolution: Resolution, moduleOwned = false): unknown {
   const validation = input.validation ? asObject(input.validation) : undefined;
   const compiledValidation = validation
     ? input.type === "text"
@@ -2240,7 +2239,7 @@ function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false
               ? { maximumLength: validation.maximum_length }
               : {}),
           }
-        : moduleV2 && (input.type === "decimal_number" || input.type === "money")
+        : moduleOwned && (input.type === "decimal_number" || input.type === "money")
           ? {
               ...(validation.minimum !== undefined
                 ? { minimum: normaliseExactV2(validation.minimum) }
@@ -2270,19 +2269,17 @@ function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false
 
 type ApplicationRecordValuePair = Readonly<{
   record: JsonObject;
-  moduleV2: boolean;
 }>;
 
 type ApplicationActionValuePair = Readonly<{
   action: JsonObject;
-  moduleV2: boolean;
 }>;
 
 type ApplicationModuleValueIndex = Readonly<{
   record: (reference: string) => ApplicationRecordValuePair | undefined;
   recordById: (recordTypeId: string) => ApplicationRecordValuePair | undefined;
   fieldId: (recordTypeId: string, alias: string) => string | undefined;
-  fieldById: (fieldId: string) => Readonly<{ field: JsonObject; moduleV2: boolean }> | undefined;
+  fieldById: (fieldId: string) => Readonly<{ field: JsonObject }> | undefined;
   action: (key: string) => ApplicationActionValuePair | undefined;
   /** The identity of a bound Module's query, from "module_key:query_key"; refused when unknown. */
   query: (reference: string) => string;
@@ -2297,7 +2294,7 @@ function applicationModuleValueIndex(
 ): ApplicationModuleValueIndex {
   const body = asObject(source.body);
   const recordsById = new Map<string, ApplicationRecordValuePair>();
-  const fieldsById = new Map<string, { field: JsonObject; moduleV2: boolean }>();
+  const fieldsById = new Map<string, { field: JsonObject }>();
   const actionsByKey = new Map<string, ApplicationActionValuePair>();
   const queryIdsByReference = new Map<string, string>();
   for (const binding of body.module_bindings as JsonObject[]) {
@@ -2325,26 +2322,25 @@ function applicationModuleValueIndex(
       output.artifact.contentFingerprint !== fingerprintCanonicalValue(content)
     )
       fail("vortex.definition.application_dependency_manifest", "broken_reference");
-    const moduleV2 = "validationContractVersion" in output;
     for (const record of content.recordTypes as JsonObject[]) {
       const recordTypeId = String(record.recordTypeId);
       if (recordsById.has(recordTypeId))
         fail("vortex.definition.application_dependency_manifest", "broken_reference");
-      recordsById.set(recordTypeId, { record, moduleV2 });
+      recordsById.set(recordTypeId, { record });
       for (const field of record.fields as JsonObject[]) {
         const fieldId = String(field.fieldId);
         if (fieldsById.has(fieldId))
           fail("vortex.definition.application_dependency_manifest", "broken_reference");
-        fieldsById.set(fieldId, { field, moduleV2 });
+        fieldsById.set(fieldId, { field });
       }
     }
     for (const action of content.actions as JsonObject[]) {
       const key = String(action.key);
       if (actionsByKey.has(key))
         fail("vortex.definition.application_dependency_manifest", "broken_reference");
-      actionsByKey.set(key, { action, moduleV2 });
+      actionsByKey.set(key, { action });
     }
-    // Only the current Module contract exposes queries; an older release exposes none.
+    // `queries` defaults to empty, so stored canonical content may omit it.
     for (const query of (content.queries ?? []) as JsonObject[])
       queryIdsByReference.set(`${moduleKey}:${String(query.key)}`, String(query.queryId));
   }
@@ -2376,8 +2372,7 @@ function applicationModuleValueIndex(
                 ? fieldIdForRecord(defaultRecordTypeId, reference)
                 : undefined;
       if (fieldId === undefined) return undefined;
-      const pair = fieldsById.get(fieldId);
-      return pair?.moduleV2 ? pair.field : undefined;
+      return fieldsById.get(fieldId)?.field;
     },
   });
   return {
@@ -4000,9 +3995,7 @@ function compileApplication(
       shells: compositionV2.shells,
       pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
         const record = String(pipeline.record_type);
-        const valueContext = valueIndex.record(record)?.moduleV2
-          ? valueIndex.context(record)
-          : undefined;
+        const valueContext = valueIndex.record(record) ? valueIndex.context(record) : undefined;
         return {
           pipelineId: resolution.id(definitionKey, "pipeline", String(pipeline.id), "content"),
           key: pipeline.key,
@@ -4047,9 +4040,7 @@ function compileApplication(
       actions: (body.actions as JsonObject[]).map((action) => {
         const record = String(action.record_type);
         const localField = (alias: string) => resolution.field(record, alias);
-        const subjectContext = valueIndex.record(record)?.moduleV2
-          ? valueIndex.context(record)
-          : undefined;
+        const subjectContext = valueIndex.record(record) ? valueIndex.context(record) : undefined;
         return {
           actionId: resolution.id(definitionKey, "action", String(action.id), "content"),
           key: action.key,
@@ -4081,7 +4072,7 @@ function compileApplication(
                           actionTaskValue(
                             value,
                             pair?.field,
-                            pair?.moduleV2 ? subjectContext : undefined,
+                            pair ? subjectContext : undefined,
                           ),
                         ];
                       }),
@@ -4090,7 +4081,7 @@ function compileApplication(
                 };
               case "record.create": {
                 const target = String(properties.record_type);
-                const targetContext = valueIndex.record(target)?.moduleV2
+                const targetContext = valueIndex.record(target)
                   ? valueIndex.context(target)
                   : undefined;
                 return {
@@ -4518,9 +4509,8 @@ const applicationCompositionResolutionV2 = (
     field: (reference) => qualifiedField(resolution, reference),
     fieldInput: (fieldId) => {
       const pair = valueIndex.fieldById(fieldId);
-      // Only a field of an exactly bound V3 module release can drive an automatic field input; a
-      // V1 module field is refused rather than derived, matching the one module contract (#998).
-      if (pair === undefined || !pair.moduleV2) return undefined;
+      // Only a field of an exactly bound module release can drive an automatic field input.
+      if (pair === undefined) return undefined;
       const field = pair.field;
       const type = String(field.type);
       const settings = field.settings === undefined ? {} : asObject(field.settings);

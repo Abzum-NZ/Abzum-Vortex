@@ -23,6 +23,7 @@ import {
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
   projectRecordDetailData,
+  type PageSubjectReadResult,
   type ProjectedNavigation,
 } from "@vortex/page";
 import {
@@ -76,6 +77,12 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
+  /**
+   * The record a detail or form page is about, when its address names one the viewer could read,
+   * with the revision the viewer was shown. Flows started on the page carry it as evidence for
+   * their record tasks and named actions; the protected record paths decide what it may do.
+   */
+  subject?: Readonly<{ recordId: string; revision: number }>;
   /**
    * The deliberate adoption offer, present only for a caller who may manage installations and
    * only when the application root publishes a release newer than the installed one. Its presence
@@ -226,6 +233,59 @@ const requestState = (
   return { sort, filters, search: first(parameters[`search.${placementId}`]) ?? null };
 };
 
+const requestDependencies = (): HumanOrganizationRequestDependencies => ({
+  identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
+  telemetry,
+});
+
+/** The exact installed runtime context, read once under the person's own verified request scope. */
+const loadInstalledContext = (
+  session: IdentitySession,
+  dependencies: HumanOrganizationRequestDependencies,
+  selection: OrganizationSelectionCandidate,
+) =>
+  createHumanOrganizationRequestService(dependencies).run(
+    session,
+    selection,
+    async (transaction, scope) => {
+      if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
+      return createHumanInstalledRuntimeContextLoader({
+        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+          installedReleaseCatalogue,
+          transaction,
+        ),
+        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+      }).load();
+    },
+  );
+
+/**
+ * The installed release's theme for one application the viewer may open, so a page shown in place
+ * of an addressed page (its not-found experience) renders in that application's own theme. It
+ * reads under the person's own request scope like the page itself; when the read does not settle
+ * the caller keeps the platform default rather than failing the page.
+ */
+export const loadApplicationTheme = async (
+  session: IdentitySession,
+  address: Readonly<{
+    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+    application: PermittedApplication;
+  }>,
+): Promise<ApplicationPageModel["theme"] | undefined> => {
+  try {
+    const loaded = await loadInstalledContext(session, requestDependencies(), {
+      organizationId: address.read.organizationId,
+      applicationRootId: address.application.applicationRootId,
+    });
+    return loaded.kind === "available"
+      ? loaded.value.releaseSet.application.content.theme
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const loadApplicationPage = async (
   session: IdentitySession,
   address: Readonly<{
@@ -237,30 +297,15 @@ export const loadApplicationPage = async (
   }>,
   parameters: SearchParameters,
 ): Promise<ApplicationPageResult> => {
-  const { authorityId } = getIdentityAuthorityConfiguration();
+  const dependencies = requestDependencies();
   const continuationKey = getQueryContinuationKey();
-  const dependencies: HumanOrganizationRequestDependencies = {
-    identityAuthorityId: authorityId,
-    telemetry,
-  };
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
   };
 
   // The installed context is read once, under the person's own verified request scope.
-  const requests = createHumanOrganizationRequestService(dependencies);
-  const loaded = await requests.run(session, selection, async (transaction, scope) => {
-    if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-    return createHumanInstalledRuntimeContextLoader({
-      activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-      releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-        installedReleaseCatalogue,
-        transaction,
-      ),
-      scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-    }).load();
-  });
+  const loaded = await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   const application = context.releaseSet.application;
@@ -295,6 +340,24 @@ export const loadApplicationPage = async (
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const subjects = createPageSubjectReader(dependencies);
+
+  // The page subject: the one record the page's own address names, of the page's declared record
+  // type, read once through the record read path under the viewer's own authority. Nothing here
+  // comes from the browser except the id.
+  const subjectType =
+    (pageDefinition.type === "detail" ||
+      pageDefinition.type === "public" ||
+      pageDefinition.type === "form") &&
+    pageDefinition.recordType?.state === "resolved"
+      ? pageDefinition.recordType
+      : undefined;
+  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  let subjectRead: Promise<PageSubjectReadResult> | undefined;
+  const readSubject = (
+    recordTypeId: string,
+    recordId: string,
+  ): Promise<PageSubjectReadResult> =>
+    (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
@@ -334,19 +397,13 @@ export const loadApplicationPage = async (
     // record read path under the viewer's own authority. A public page shows no more than its
     // declared public fields. Nothing here comes from the browser except the id.
     if (detailContract !== undefined && queryId === undefined) {
-      const subjectType =
-        (pageDefinition.type === "detail" || pageDefinition.type === "public") &&
-        pageDefinition.recordType?.state === "resolved"
-          ? pageDefinition.recordType
-          : undefined;
       const subjectFieldIds =
         pageDefinition.type === "public" ? pageDefinition.publicFieldIds.map(String) : undefined;
-      if (subjectType === undefined) {
+      if (subjectType === undefined || pageDefinition.type === "form") {
         logPlacementFailure(address, placementId, "query_not_bound");
         data[placementId] = { status: "error" };
         continue;
       }
-      const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
       if (!subjectId.success) {
         logPlacementFailure(address, placementId, "subject_not_addressed");
         data[placementId] = { status: "refused", reason: "not_found" };
@@ -355,10 +412,7 @@ export const loadApplicationPage = async (
       const subjectModule = context.releaseSet.modules.find((module) =>
         sameId(String(module.rootId), String(subjectType.moduleRootId)),
       );
-      const subject = await subjects.read(session, selection, {
-        recordTypeId: String(subjectType.recordTypeId),
-        recordId: subjectId.data,
-      });
+      const subject = await readSubject(String(subjectType.recordTypeId), subjectId.data);
       if (subject.kind === "temporarily_unavailable") {
         logPlacementFailure(address, placementId, "subject_unavailable");
         data[placementId] = { status: "error" };
@@ -483,6 +537,16 @@ export const loadApplicationPage = async (
     }
   }
 
+  // A detail or form page offers its subject to the flows it starts; a public page never does.
+  const subjectRow =
+    subjectType !== undefined && pageDefinition.type !== "public" && subjectId.success
+      ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
+      : undefined;
+  const subject =
+    subjectRow?.kind === "read" && subjectRow.row.revision !== undefined
+      ? { recordId: String(subjectRow.row.recordId), revision: subjectRow.row.revision }
+      : undefined;
+
   const permittedKeys = new Set(address.application.pageKeys);
   return {
     kind: "available",
@@ -497,6 +561,7 @@ export const loadApplicationPage = async (
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
+      ...(subject === undefined ? {} : { subject }),
       ...(adoptionTarget !== undefined &&
       adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
         ? {
