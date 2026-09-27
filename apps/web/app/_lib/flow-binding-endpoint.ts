@@ -290,8 +290,8 @@ const bindingInputs = (
 const finishedResult = (
   response: Extract<FlowOrchestratorResponse, { kind: "finished" }>,
 ): FlowBindingEndpointResult => {
-  // Effects that committed before a later stop are never reported as a plain failure: the run is
-  // `partial`. An uncertain effect stays `uncertain` (the same mapping as the form continuation).
+  // Only committed changes contribute to this count, so a successful read step cannot turn a
+  // later refusal into a false `partial` result. An uncertain effect stays `uncertain`.
   const outcome =
     response.outcome === "committed" ||
     response.outcome === "completed" ||

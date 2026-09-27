@@ -219,6 +219,7 @@ export {
   type DrawerProps,
   type FieldInputProps,
   type FormContainerProps,
+  type FormFlowFeedback,
   type LinkInputProps,
   type NumberInputProps,
   type RichTextInputProps,

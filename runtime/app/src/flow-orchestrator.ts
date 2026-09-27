@@ -732,13 +732,17 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       effectKey: { runId: state.runId, taskPath: call.taskPath, iteration: call.iteration },
     });
     const outcome: FlowTaskOutcome = executed.outcome;
-    const outputs: Record<string, JsonValue> =
-      executed.outcome === "committed" ? { result: { ...executed.outputs } } : {};
+    // Read results keep their outputs for later tasks but do not count as committed changes.
+    const operationSucceeded =
+      executed.outcome === "completed" || executed.outcome === "committed";
+    const outputs: Record<string, JsonValue> = operationSucceeded
+      ? { result: { ...executed.outputs } }
+      : {};
     const sensitive = plan.entry.descriptor.sensitiveOutputs ?? [];
-    if (executed.outcome === "committed")
+    if (operationSucceeded)
       run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
     const stored: Record<string, JsonValue> =
-      executed.outcome === "committed"
+      operationSucceeded
         ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
         : {};
     return { result: { outcome, outputs }, stored };
