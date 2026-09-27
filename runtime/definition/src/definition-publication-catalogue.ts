@@ -50,8 +50,8 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
-  contentFingerprint?: string;
-  catalogueFingerprint?: string;
+  contentFingerprint?: string | undefined;
+  catalogueFingerprint?: string | undefined;
 }>;
 
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
