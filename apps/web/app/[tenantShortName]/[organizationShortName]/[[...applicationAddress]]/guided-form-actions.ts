@@ -133,7 +133,10 @@ const requestMetadata = async (loaded: Awaited<ReturnType<typeof loadActionPage>
   );
   if (authority.kind !== "available") return authority;
   if (authority.value === undefined) return { kind: "unavailable" as const };
-  const visiblePlacementIds = getGuidedFormVisiblePlacementIds(loaded.model.page);
+  const visiblePlacementIds = getGuidedFormVisiblePlacementIds(
+    loaded.model.page,
+    loaded.model.shells,
+  );
   if (visiblePlacementIds === undefined) return { kind: "unavailable" as const };
   const steps = authority.value.steps.map((step) => ({
     ...step,
@@ -166,7 +169,7 @@ export async function advanceGuidedFormStepAction(
   const computedIndex = loaded.steps.findIndex((step) => step.stepId === current.computedStepId);
   const stepIndex = loaded.steps.findIndex((step) => step.stepId === input.stepId);
   const step = loaded.steps[stepIndex];
-  if (stepIndex < 0 || step === undefined || step.summary)
+  if (stepIndex < 0 || step === undefined)
     return { kind: "unavailable" };
   if (stepIndex > computedIndex)
     return {
@@ -175,6 +178,20 @@ export async function advanceGuidedFormStepAction(
       computedStepId: current.computedStepId,
       revision: current.revision,
     };
+  if (step.summary) {
+    if (
+      Object.keys(input.values).length !== 0 ||
+      input.requestedStepId === undefined ||
+      input.requestedStepId === step.stepId
+    )
+      return { kind: "unavailable" };
+    return {
+      kind: "unchanged",
+      activeStepId: earlierGuidedStepId(loaded.steps, current.computedStepId, input.requestedStepId),
+      computedStepId: current.computedStepId,
+      revision: current.revision,
+    };
+  }
   const update = validateGuidedFormStep(
     loaded.recordType,
     step.fields,

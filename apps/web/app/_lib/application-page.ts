@@ -751,14 +751,14 @@ export const loadApplicationPage = async (
       recordType,
       shells,
     );
-    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page);
+    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
     const stepFields = getGuidedFormStepFields(
       pageDefinition,
       recordType,
       shells,
       page,
     );
-    const flowId = getGuidedFormFlowId(page, application.content.flowBindings);
+    const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
     if (
       declaredStepFields === undefined ||
       visiblePlacementIds === undefined ||

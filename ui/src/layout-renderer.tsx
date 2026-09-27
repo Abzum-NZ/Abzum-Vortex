@@ -958,7 +958,8 @@ export function PageLayoutRenderer({
           guidedSteps === undefined ? null : (
             <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
               <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
-                Step {activeGuidedStepIndex + 1} of {guidedSteps.length}
+                <span className="block font-medium text-foreground">{activeGuidedStep?.name}</span>
+                <span>Step {activeGuidedStepIndex + 1} of {guidedSteps.length}</span>
               </span>
               <Button
                 type="button"

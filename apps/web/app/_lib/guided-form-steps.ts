@@ -6,8 +6,6 @@ import {
 } from "@vortex/access";
 import {
   organizationAccessDeclarationSchema,
-  platformPermissionCatalogueOwnerId,
-  platformPermissionFor,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -41,6 +39,7 @@ import {
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import { prepareRecordFieldValuesV2 } from "@vortex/record";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -166,7 +165,7 @@ const inputBlock = (placement: Record<string, unknown>): boolean => {
 const fieldForPlacement = (
   placement: Record<string, unknown>,
   recordType: RecordTypeDefinitionV3,
-): GuidedFormStepField | undefined => {
+): Omit<GuidedFormStepField, "placementId"> | undefined => {
   const settings = placement.settings;
   if (!isRecord(settings)) return undefined;
   const name = settings.name;
@@ -180,7 +179,9 @@ const fieldForPlacement = (
       : parsedKey?.success
         ? recordType.fields.find((candidate) => candidate.key === parsedKey.data)
         : undefined;
-  if (field === undefined) return undefined;
+  // Form controls submit under their authored name. A field reference with a different name
+  // cannot be validated or saved as the referenced record field.
+  if (field === undefined || !parsedKey?.success || parsedKey.data !== field.key) return undefined;
   return {
     field,
     fieldKey: field.key,
@@ -385,7 +386,8 @@ const collectStepFields = (
       }
       return true;
     };
-    if (!visit(root) || stepFormIds.size > 1) return undefined;
+    if (!visit(root) || stepFormIds.size > 1 || (candidate.summary && fields.length > 0))
+      return undefined;
     result.push({ stepId: candidate.id, summary: candidate.summary, fields });
   }
   return result;
@@ -401,16 +403,17 @@ export const getGuidedFormStepFields = (
   const visiblePlacementIds =
     visiblePageCandidate === undefined
       ? undefined
-      : getGuidedFormVisiblePlacementIds(visiblePageCandidate);
+      : getGuidedFormVisiblePlacementIds(visiblePageCandidate, shellsCandidate);
   if (visiblePageCandidate !== undefined && visiblePlacementIds === undefined) return undefined;
   return collectStepFields(pageCandidate, recordType, shellsCandidate, visiblePlacementIds);
 };
 
 export const getGuidedFormVisiblePlacementIds = (
   pageCandidate: unknown,
+  shellsCandidate?: unknown,
 ): ReadonlySet<string> | undefined => {
   if (!isRecord(pageCandidate)) return undefined;
-  const roots = guidedStepRoots(pageCandidate);
+  const roots = guidedStepRoots(pageCandidate, shellsCandidate);
   if (roots === undefined) return undefined;
   return new Set(roots.flatMap((entry) => [...placementIdsInTree(entry.root, true)]));
 };
@@ -543,7 +546,7 @@ const pageAccess = (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-        ownerId: platformPermissionCatalogueOwnerId,
+          ownerId: platformPermissionOwnerId,
         permissionId: platform.permissionId,
       },
       recentAuthentication: { kind: "none" },

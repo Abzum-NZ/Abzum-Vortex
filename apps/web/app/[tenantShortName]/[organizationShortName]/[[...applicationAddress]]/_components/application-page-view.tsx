@@ -699,10 +699,14 @@ function ApplicationPageViewContent({
         if (result.kind === "updated" || result.kind === "unchanged") {
           if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
             setNotice({ tone: "problem", text: "Review the fields in this step before continuing." });
-          setQuery((parameters) => {
-            if (result.activeStepId === result.computedStepId) parameters.delete("step");
-            else parameters.set("step", result.activeStepId);
-          });
+          const queryStep =
+            result.activeStepId === result.computedStepId ? null : result.activeStepId;
+          if (searchParams.get("step") === queryStep) router.refresh();
+          else
+            setQuery((parameters) => {
+              if (queryStep === null) parameters.delete("step");
+              else parameters.set("step", queryStep);
+            });
           return;
         }
         if (result.kind === "conflict") {
@@ -717,13 +721,17 @@ function ApplicationPageViewContent({
         setBusy(false);
       }
     },
-    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, setQuery],
+    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, searchParams, setQuery],
   );
 
   const requestGuidedStep = useCallback(
     (requested?: string) => {
       const guidedForm = model.guidedForm;
       if (guidedForm === undefined || busy) return;
+      if (requested !== undefined && guidedForm.activeStepId === guidedSummaryStepId) {
+        void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+        return;
+      }
       requestedStepId.current = requested;
       const boundSummaryFormId =
         guidedForm.activeStepId === guidedSummaryStepId
