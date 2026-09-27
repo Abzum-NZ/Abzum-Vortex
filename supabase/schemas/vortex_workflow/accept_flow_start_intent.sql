@@ -35,6 +35,7 @@ declare
   literal jsonb;
   event_envelope jsonb;
   caller jsonb;
+  resolved_installation jsonb;
   stored vortex_workflow.flow_start_intents%rowtype;
   inserted boolean := false;
   installation_active boolean := false;
@@ -73,20 +74,13 @@ begin
   end if;
 
   context_value := vortex_context.current_context();
-  if context_value ->> 'callerKind' = 'human' then
-    context_value := vortex_access.validated_human_request_context();
-  elsif context_value ->> 'callerKind' = 'system' then
-    if context_value ? 'supportContext'
-      or not exists (
-        select 1 from vortex_access.organization_access_versions as version
-        where version.organization_id = (context_value ->> 'organizationId')::uuid
-          and version.current_version = (context_value ->> 'accessVersion')::bigint
-      ) then
-      raise exception using errcode = '42501', message = 'Flow start authority is unavailable';
-    end if;
-  else
+  -- A record-free start needs a retained proof of the authorized task invocation.
+  -- No such proof exists yet; a request context and caller-chosen UUID cannot stand in for it.
+  if p_source_kind = 'action'
+    or context_value ->> 'callerKind' is distinct from 'human' then
     raise exception using errcode = '42501', message = 'Flow start authority is unavailable';
   end if;
+  context_value := vortex_access.validated_human_request_context();
   if (context_value ->> 'organizationId')::uuid is distinct from p_organization_id
     or (context_value ->> 'applicationRootId')::uuid is distinct from p_application_root_id
     or not exists (
@@ -107,14 +101,11 @@ begin
     and binding.state = 'active'
   for share of binding;
   installation_active := found;
-  if installation_active and exists (
-    select 1 from vortex_module.installation_bindings as binding
-    where binding.organization_id = p_organization_id
-      and binding.application_root_id = p_application_root_id
-      and (binding.state <> 'active'
-        or binding.application_release_revision <> p_application_release_revision)
-  ) then
-    installation_active := false;
+  if installation_active then
+    resolved_installation := vortex_module.read_current_active_installation();
+    installation_active :=
+      (resolved_installation ->> 'applicationReleaseRevision')::bigint
+        = p_application_release_revision;
   end if;
   if installation_active and p_flow_owner_kind = 'module' and not exists (
     select 1 from vortex_module.installation_bindings as binding
@@ -170,7 +161,9 @@ begin
   else
     if published_flow ->> 'execution' is distinct from 'background'
       or coalesce(published_flow #>> '{runAs,kind}', '')
-        not in ('specified_account', 'system') then
+        not in ('specified_account', 'system')
+      or p_inputs <> '{}'::jsonb
+      or p_trigger_values <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Event flow start is invalid';
     end if;
     select start_trigger.value into published_trigger
@@ -240,7 +233,9 @@ begin
     if not found then
       raise exception using errcode = '55000', message = 'Committed flow source is unavailable';
     end if;
-    if (published_trigger ->> 'recordTypeId') is distinct from
+    if event_envelope ->> 'actorId' is distinct from
+        context_value ->> 'organizationAccountId'
+      or (published_trigger ->> 'recordTypeId') is distinct from
         (event_envelope #>> '{descriptor,recordTypeId}')
       or (published_trigger #>> '{event,kind}') is distinct from
         (event_envelope #>> '{descriptor,kind}')
@@ -331,4 +326,4 @@ grant execute on function vortex_workflow.accept_flow_start_intent(
 comment on function vortex_workflow.accept_flow_start_intent(
   uuid, uuid, bigint, text, text, uuid, bigint, text, uuid, text, uuid, text, text, jsonb, jsonb
 ) is
-  'Accepts one exact published flow start under the established request context, pins its declared values and committed source, and returns an identical retry without dispatching it.';
+  'Accepts one exact published Event flow start under the verified human request context and committed occurrence, and returns an identical retry without dispatching it. Action starts refuse until verified invocation evidence exists.';

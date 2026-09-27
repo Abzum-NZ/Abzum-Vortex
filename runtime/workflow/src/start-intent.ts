@@ -40,7 +40,7 @@ export const startIntentCommandSchema = z
         .strict(),
     ]),
     flowId: flowIdSchema,
-    /** An Event occurrence, or the stable identity of one authorized task invocation. */
+    /** An Event occurrence; action invocation proof is reserved for #1398 and #667. */
     source: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("event"), id: z.uuid() }).strict(),
       z.object({ kind: z.literal("action"), id: z.uuid() }).strict(),
@@ -90,16 +90,18 @@ const resultSchema = z.object({
 });
 
 /**
- * The caller owns the transaction. A record writer calls this before its save commits;
- * a record-free binding calls it in its own request transaction. A rollback removes
- * the intent, and dispatch cannot observe it before commit. The database rechecks
- * the exact installed flow and all declared types rather than trusting this command.
+ * The caller owns the transaction. A record writer calls this before its save commits.
+ * A rollback removes the intent, and dispatch cannot observe it before commit.
+ * The database rechecks the exact installed flow and all declared types rather
+ * than trusting this command. Record-free action starts stay unavailable until
+ * their invocation proof is retained.
  */
 export const acceptFlowStartIntent = async (
   transaction: RequestDatabaseTransaction,
   candidate: StartIntentCommand,
 ): Promise<AcceptedStartIntent> => {
   const command = startIntentCommandSchema.parse(candidate);
+  if (command.source.kind === "action") throw new Error("START_INTENT_SOURCE_UNVERIFIED");
   const inputs = JSON.stringify(command.inputs satisfies Record<string, FlowLiteral>);
   const triggerValues = JSON.stringify(command.triggerValues satisfies Record<string, FlowLiteral>);
   if (Buffer.byteLength(inputs) > 65536 || Buffer.byteLength(triggerValues) > 65536)

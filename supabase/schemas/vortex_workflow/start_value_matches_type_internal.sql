@@ -15,6 +15,13 @@ begin
     return false;
   end if;
 
+  -- The published literal contract excludes template syntax at every JSON depth.
+  -- Keep the private writer aligned when it is called without the TypeScript API.
+  if pg_catalog.strpos(p_value::text, '{{') > 0
+    or pg_catalog.strpos(p_value::text, '{%') > 0 then
+    return false;
+  end if;
+
   if p_type = 'json' then
     return true;
   elsif p_type = 'yes_no' then
@@ -28,10 +35,32 @@ begin
       and p_value #>> '{}' ~ '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$';
   elsif p_type in ('text', 'formatted_text') then
     return pg_catalog.jsonb_typeof(p_value) = 'string';
+  elsif p_type = 'date' then
+    if pg_catalog.jsonb_typeof(p_value) <> 'string'
+      or p_value #>> '{}' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+      return false;
+    end if;
+    begin
+      return pg_catalog.to_char((p_value #>> '{}')::date, 'YYYY-MM-DD')
+        = p_value #>> '{}';
+    exception when invalid_datetime_format or datetime_field_overflow then
+      return false;
+    end;
+  elsif p_type = 'date_time' then
+    if pg_catalog.jsonb_typeof(p_value) <> 'string'
+      or p_value #>> '{}' !~
+        '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$' then
+      return false;
+    end if;
+    begin
+      perform (p_value #>> '{}')::timestamptz;
+      return true;
+    exception when invalid_datetime_format or datetime_field_overflow then
+      return false;
+    end;
   elsif p_type in (
     'choice', 'record_reference', 'organization_account_reference',
-    'workflow_run_reference', 'relationship_reference', 'file_reference',
-    'date', 'date_time'
+    'workflow_run_reference', 'relationship_reference', 'file_reference'
   ) then
     return pg_catalog.jsonb_typeof(p_value) = 'string'
       and pg_catalog.length(p_value #>> '{}') > 0;
