@@ -814,7 +814,7 @@ function ApplicationPageViewContent({
         };
         const dispatch = formBlock.submit(
           asComponentBinding(placementId, binding),
-          confirmed.values,
+          { $guidedFormConfirmation: confirmed.proof },
         );
         flowStarted = true;
         await applyDispatch(dispatch, placementId, afterAccepted);

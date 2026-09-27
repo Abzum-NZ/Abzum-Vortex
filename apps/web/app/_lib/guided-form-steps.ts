@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
@@ -43,6 +45,7 @@ import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/module
 import { prepareRecordFieldValuesV2 } from "@vortex/record";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
+import { getQueryContinuationKey } from "./query-continuation-key";
 
 export type GuidedFormStepField = Readonly<{
   field: ModuleFieldV3;
@@ -94,7 +97,7 @@ export type GuidedFormConfirmRequest = Readonly<{
 }>;
 
 export type GuidedFormConfirmResult =
-  | Readonly<{ kind: "confirmed"; values: Readonly<Record<string, JsonValue>> }>
+  | Readonly<{ kind: "confirmed"; proof: string }>
   | Readonly<{ kind: "conflict" | "unavailable" | "temporarily_unavailable" }>;
 
 export type GuidedFormAbandonRequest = Readonly<{
@@ -107,6 +110,69 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+export const guidedFormConfirmationKey = "$guidedFormConfirmation";
+const confirmationLifetimeSeconds = 120;
+const confirmationPurpose = "vortex-guided-form-final-confirmation-v1";
+
+export const guidedFormConfirmationReference = (
+  candidate: unknown,
+): Readonly<{ draftId: string; revision: number; issuedAt: number; signature: string }> | undefined => {
+  if (typeof candidate !== "string") return undefined;
+  const match = /^([0-9a-f-]{36})\.([1-9][0-9]*)\.([0-9]{10})\.([0-9a-f]{64})$/u.exec(candidate);
+  if (match === null) return undefined;
+  const revision = Number(match[2]);
+  const issuedAt = Number(match[3]);
+  if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(issuedAt)) return undefined;
+  return { draftId: match[1]!, revision, issuedAt, signature: match[4]! };
+};
+
+const confirmationSignature = (
+  details: Readonly<{
+    draftId: string;
+    revision: number;
+    issuedAt: number;
+    pageId: string;
+    flowId: string;
+    sessionId: string;
+    identityId: string;
+    organizationId: string;
+    applicationRootId: string;
+    subjectRecordId?: string;
+  }>,
+): Buffer => createHmac("sha256", getQueryContinuationKey().key).update(JSON.stringify([
+  confirmationPurpose,
+  details.draftId.toLowerCase(),
+  details.revision,
+  details.issuedAt,
+  details.pageId.toLowerCase(),
+  details.flowId.toLowerCase(),
+  details.sessionId.toLowerCase(),
+  details.identityId.toLowerCase(),
+  details.organizationId.toLowerCase(),
+  details.applicationRootId.toLowerCase(),
+  details.subjectRecordId?.toLowerCase() ?? null,
+])).digest();
+
+export const issueGuidedFormConfirmation = async (
+  details: Omit<Parameters<typeof confirmationSignature>[0], "issuedAt">,
+): Promise<string | undefined> => {
+  const issuedAt = Math.floor(Date.now() / 1_000);
+  const signature = confirmationSignature({ ...details, issuedAt }).toString("hex");
+  return `${details.draftId.toLowerCase()}.${details.revision}.${issuedAt}.${signature}`;
+};
+
+export const verifiesGuidedFormConfirmation = async (
+  proof: unknown,
+  details: Omit<Parameters<typeof confirmationSignature>[0], "issuedAt" | "draftId" | "revision">,
+): Promise<boolean> => {
+  const reference = guidedFormConfirmationReference(proof);
+  if (reference === undefined) return false;
+  const age = Math.floor(Date.now() / 1_000) - reference.issuedAt;
+  if (age < 0 || age > confirmationLifetimeSeconds) return false;
+  const expected = confirmationSignature({ ...details, ...reference });
+  return timingSafeEqual(Buffer.from(reference.signature, "hex"), expected);
+};
 
 const readGuidedFormContext = async (
   transaction: RequestDatabaseTransaction,
@@ -458,6 +524,49 @@ const collectFormIds = (
   };
   for (const entry of roots) visit(entry.root);
   return result;
+};
+
+export const getGuidedFormControlIds = (
+  pageCandidate: unknown,
+  shellsCandidate?: unknown,
+): Readonly<{ all: ReadonlySet<string>; summary?: string }> | undefined => {
+  if (!isRecord(pageCandidate)) return undefined;
+  const roots = guidedStepRoots(pageCandidate, shellsCandidate);
+  const summary = Array.isArray(pageCandidate.steps)
+    ? pageCandidate.steps.find((step) => isRecord(step) && step.summary === true)
+    : undefined;
+  if (roots === undefined || !isRecord(summary) || typeof summary.id !== "string") return undefined;
+  const summaryRoot = roots.find((entry) => entry.stepId === summary.id);
+  if (summaryRoot === undefined) return undefined;
+  const formIds = (root: unknown): ReadonlySet<string> => {
+    const ids = new Set<string>();
+    const visit = (slot: unknown): void => {
+      if (!isRecord(slot)) return;
+      if (!isRecord(slot.placements)) {
+        for (const child of Object.values(slot)) visit(child);
+        return;
+      }
+      for (const [placementId, candidate] of Object.entries(slot.placements)) {
+        if (!isRecord(candidate)) continue;
+        if (
+          isRecord(candidate.block) &&
+          typeof candidate.block.blockId === "string" &&
+          sameId(candidate.block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+        )
+          ids.add(placementId.toLowerCase());
+        if (isRecord(candidate.slots))
+          for (const child of Object.values(candidate.slots)) visit(child);
+      }
+    };
+    visit(root);
+    return ids;
+  };
+  const summaryIds = formIds(summaryRoot.root);
+  const all = new Set(roots.flatMap((entry) => [...formIds(entry.root)]));
+  const summaryId = [...summaryIds][0];
+  return summaryIds.size === 1 && summaryId !== undefined && all.has(summaryId)
+    ? { all, summary: summaryId }
+    : { all };
 };
 
 const flowForGuidedForm = (

@@ -17,6 +17,7 @@ import {
   createGuidedFormDraftService,
   getGuidedFormVisiblePlacementIds,
   guidedFormDraftScope,
+  issueGuidedFormConfirmation,
   earlierGuidedStepId,
   loadGuidedFormAuthorityForSession,
   validateGuidedFormStep,
@@ -260,10 +261,20 @@ export async function confirmGuidedFormAction(
   const validation = visibleGuidedFormValidation(read.value.draft.validation, loaded.steps);
   if (computeGuidedFormStepId(loaded.steps, validation) !== summary.stepId)
     return { kind: "conflict" };
-  return {
-    kind: "confirmed",
-    values: visibleGuidedFormValues(read.value.draft, loaded.steps),
-  };
+  const proof = await issueGuidedFormConfirmation({
+    draftId: current.draftId,
+    revision: current.revision,
+    pageId: loaded.model.pageId,
+    flowId: current.flowId,
+    sessionId: loaded.session.sessionId,
+    identityId: loaded.session.identityId,
+    organizationId: loaded.selection.organizationId,
+    applicationRootId: loaded.selection.applicationRootId!,
+    ...(loaded.model.subject === undefined
+      ? {}
+      : { subjectRecordId: loaded.model.subject.recordId }),
+  });
+  return proof === undefined ? { kind: "unavailable" } : { kind: "confirmed", proof };
 }
 
 export async function abandonGuidedFormDraftAction(
