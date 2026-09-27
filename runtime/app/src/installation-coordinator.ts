@@ -64,11 +64,11 @@ import { z } from "zod";
  *
  * 1. Align Access: register, update or reactivate the permission registration for the exact target
  *    release when it does not already name it. Registration assigns nothing to anybody.
- * 2. Switch: detach the previously active release (upgrade only), prepare storage for every pinned
- *    Module release, activate the complete binding set through the fixed operation (which also
- *    gates executable lifecycle policies) and append the lifecycle Activity. Any failure rolls the
- *    whole switch back, so the previously active exact release stays selected, and an upgrade then
- *    restores the registration to that still-active release.
+ * 2. Switch: detach the previously active release (upgrade only), promote its prepared storage
+ *    bindings or prepare first-install storage, activate the complete binding set through the fixed
+ *    operation (which also gates executable lifecycle policies) and append the lifecycle Activity.
+ *    Any failure rolls the whole switch back, so the previously active exact release stays
+ *    selected, and an upgrade then restores the registration to that still-active release.
  *
  * A first installation is prepared before it is activated: `prepare` commits the registration and
  * the provisioned (inactive) storage, so the installer can store the initial record-type lifecycle

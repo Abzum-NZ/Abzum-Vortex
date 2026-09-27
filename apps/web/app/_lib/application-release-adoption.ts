@@ -157,5 +157,12 @@ export const adoptApplicationRelease = async (
     applicationReleaseRevision: activation.applicationReleaseRevision,
     expectedActiveReleaseRevision: activation.expectedActiveReleaseRevision,
   });
-  await installationCoordinator.activate(session, activation);
+  try {
+    await installationCoordinator.activate(session, activation);
+  } catch (error) {
+    // A failed switch leaves the previous release active. Remove this exact staged candidate so
+    // its bindings do not remain after the adoption attempt has ended.
+    await installationCoordinator.discardPreparation(session, activation);
+    throw error;
+  }
 };
