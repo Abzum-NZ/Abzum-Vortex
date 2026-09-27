@@ -10,7 +10,7 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 const periodSchema = z
@@ -69,30 +69,39 @@ const usageBucketSchema = z
   .strict();
 
 export const usageProjectionResultSchema = z.discriminatedUnion("outcome", [
-  z.object({
-    outcome: z.literal("completed"),
-    scope: z.enum(["tenant", "organization"]),
-    buckets: z.array(usageBucketSchema).max(100),
-    reconciliation: z.object({
-      state: z.enum(["reconciled", "discrepancy"]),
-      freshness: z.enum(["current", "stale"]),
-      source: z.literal("accepted_events"),
-      observedAt: z.string().datetime({ offset: true }),
-      discrepancyCount: z.number().int().nonnegative(),
-      alerts: z
-        .array(
-          z
-            .object({
-              code: z.literal("usage_rollup_mismatch"),
-              bucketStart: z.string().datetime({ offset: true }),
-            })
-            .strict(),
-        )
-        .max(20),
-    }).strict(),
-    nextCursor: z.string().optional(),
-  }).strict(),
-  z.object({ outcome: z.literal("refused"), reasonCode: z.enum(["request_invalid", "unavailable"]) }).strict(),
+  z
+    .object({
+      outcome: z.literal("completed"),
+      scope: z.enum(["tenant", "organization"]),
+      buckets: z.array(usageBucketSchema).max(100),
+      reconciliation: z
+        .object({
+          state: z.enum(["reconciled", "discrepancy"]),
+          freshness: z.enum(["current", "stale"]),
+          source: z.literal("accepted_events"),
+          observedAt: z.string().datetime({ offset: true }),
+          discrepancyCount: z.number().int().nonnegative(),
+          alerts: z
+            .array(
+              z
+                .object({
+                  code: z.literal("usage_rollup_mismatch"),
+                  bucketStart: z.string().datetime({ offset: true }),
+                })
+                .strict(),
+            )
+            .max(20),
+        })
+        .strict(),
+      nextCursor: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reasonCode: z.enum(["request_invalid", "unavailable"]),
+    })
+    .strict(),
 ]);
 export type UsageProjectionResult = z.infer<typeof usageProjectionResultSchema>;
 
@@ -100,7 +109,7 @@ type ProjectionRow = DatabaseRow & {
   result: unknown;
 };
 type UsageProjectionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 export type UsageProjectionServiceDependencies = Readonly<{
   runtimeTransaction?: UsageProjectionRunner;
@@ -111,7 +120,8 @@ const refusal = (reasonCode: "request_invalid" | "unavailable"): UsageProjection
   reasonCode,
 });
 const onlyResult = (rows: readonly ProjectionRow[]): unknown => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error("USAGE_PROJECTION_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new Error("USAGE_PROJECTION_RESULT_INVALID");
   return rows[0].result;
 };
 
@@ -120,7 +130,9 @@ const onlyResult = (rows: readonly ProjectionRow[]): unknown => {
  * boundary rechecks current tenant-administrator authority; command fields
  * select a bounded view and never assert authority.
  */
-export const createUsageProjectionService = (dependencies: UsageProjectionServiceDependencies = {}) => {
+export const createUsageProjectionService = (
+  dependencies: UsageProjectionServiceDependencies = {},
+) => {
   const run = dependencies.runtimeTransaction ?? withRuntimeTransaction;
   return Object.freeze({
     async read(session: IdentitySession, candidate: unknown): Promise<UsageProjectionResult> {
@@ -129,7 +141,8 @@ export const createUsageProjectionService = (dependencies: UsageProjectionServic
       if (!identity.success || !command.success) return refusal("request_invalid");
       try {
         const value = command.data;
-        const rows = await run((transaction) => transaction.query<ProjectionRow>`
+        const rows = await run(
+          (transaction) => transaction.query<ProjectionRow>`
           select vortex_access.read_usage_projection(
             ${identity.data.identityId}::uuid,
             ${value.tenantId}::uuid,
@@ -141,7 +154,8 @@ export const createUsageProjectionService = (dependencies: UsageProjectionServic
             ${value.pageSize}::integer,
             ${value.cursor ?? null}::text
           ) as result
-        `);
+        `,
+        );
         return usageProjectionResultSchema.parse(onlyResult(rows));
       } catch {
         return refusal("unavailable");

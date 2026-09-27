@@ -64,7 +64,7 @@ export const applicationPreviewRequestSchema = z
   .object({
     kind: z.literal("application"),
     rootId: applicationRootIdSchema,
-    draftRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    draftRevision: revisionSchema,
     pageId: z.string().min(1).max(200).optional(),
     activeStepId: z.string().min(1).max(200).optional(),
     breakpoint: z.enum(applicationPreviewBreakpoints).default("desktop"),
@@ -100,10 +100,7 @@ export type ApplicationPreviewComposition = Readonly<{
 
 /** The simulated effect a substituted flow task would have performed in live rendering. */
 export type ApplicationPreviewSimulatedEffect =
-  | "read"
-  | "change"
-  | "background_start"
-  | "form_interaction";
+  "read" | "change" | "background_start" | "form_interaction";
 
 /**
  * One simulated step of a flow. Each registered task that reads, changes, starts background work

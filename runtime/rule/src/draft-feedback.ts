@@ -1,4 +1,4 @@
-import type { JsonValue, ModuleFieldV3 } from "@vortex/contracts";
+import { isRecord, canonicalJson, type JsonValue, type ModuleFieldV3 } from "@vortex/contracts";
 import {
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRefusal,
@@ -80,9 +80,6 @@ const refuse = (reason: RuleDraftFeedbackProjectionErrorReason): never => {
   throw new RuleDraftFeedbackProjectionError(reason);
 };
 
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 /** Only plain JSON objects fingerprint; a Map, Date or class instance is refused. */
 const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> => {
   if (!isRecord(value)) return false;
@@ -97,24 +94,15 @@ const generatedFieldTypes = new Set<ModuleFieldV3["type"]>([
   "total",
 ]);
 
-/** Locale-independent canonical JSON with recursively sorted object keys. */
-const canonicalize = (value: unknown): string => {
-  if (value === null || typeof value === "boolean" || typeof value === "string")
-    return JSON.stringify(value);
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) refuse("input_refused");
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
-  if (isPlainRecord(value)) {
-    const entries = Object.entries(value);
-    entries.sort(([left], [right]) => codePointCompare(left, right));
-    return `{${entries
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`)
-      .join(",")}}`;
-  }
-  return refuse("input_refused");
-};
+const isPlainJson = (value: unknown): boolean =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "boolean" ||
+  (typeof value === "number" && Number.isFinite(value)) ||
+  (Array.isArray(value) &&
+    Object.keys(value).length === value.length &&
+    value.every(isPlainJson)) ||
+  (isPlainRecord(value) && Object.values(value).every(isPlainJson));
 
 const trustedContext = (value: unknown): RuleDraftFeedbackTrustedContext =>
   isPlainRecord(value) ? (value as RuleDraftFeedbackTrustedContext) : refuse("context_refused");
@@ -132,7 +120,7 @@ export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionI
   if (input.operation !== "create" && input.operation !== "update") refuse("input_refused");
   if (input.operation === "create" && Object.prototype.hasOwnProperty.call(input, "previousValues"))
     refuse("input_refused");
-  const canonical = canonicalize({
+  const payload = {
     fingerprintVersion: ruleDraftFeedbackFingerprintVersion,
     subjectRecordTypeId: input.subjectRecordTypeId,
     operation: input.operation,
@@ -146,7 +134,9 @@ export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionI
     previousValues: input.operation === "update" ? input.previousValues : null,
     inputValuesByRuleId: input.inputValuesByRuleId ?? {},
     trustedContext: trustedContext(input.trustedContext),
-  });
+  };
+  if (!isPlainJson(payload)) refuse("input_refused");
+  const canonical = canonicalJson(payload);
   return `${ruleDraftFeedbackFingerprintVersion}:${canonical}`;
 };
 

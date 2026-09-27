@@ -46,7 +46,8 @@ export const protectedQueryCommandSchema = z
       .min(1)
       .max(200)
       .refine(
-        (fieldIds) => new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length,
+        (fieldIds) =>
+          new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length,
         { message: "Each requested field is named once" },
       ),
     /**
@@ -125,7 +126,6 @@ export const protectedQueryRowActionKindSchema = z.enum(protectedQueryRowActionK
 export type ProtectedQueryRowActionKind = z.infer<typeof protectedQueryRowActionKindSchema>;
 
 /** One row revision is a JavaScript-safe positive integer, exactly as a concurrency number is. */
-const rowRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
 /**
  * The per-row capabilities the Query engine returns, always from the same exact per-row access
@@ -174,7 +174,7 @@ const protectedQueryRowFields = {
 export const protectedQueryRowSchema = z
   .object({
     ...protectedQueryRowFields,
-    revision: rowRevisionSchema.optional(),
+    revision: revisionSchema.optional(),
     capabilities: protectedQueryRowCapabilitiesSchema.optional(),
   })
   .strict();
@@ -187,7 +187,7 @@ export type ProtectedQueryRow = z.infer<typeof protectedQueryRowSchema>;
 export const protectedQueryPageRowSchema = z
   .object({
     ...protectedQueryRowFields,
-    revision: rowRevisionSchema,
+    revision: revisionSchema,
     capabilities: protectedQueryRowCapabilitiesSchema,
   })
   .strict();

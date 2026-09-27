@@ -25,7 +25,7 @@ import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definit
 import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
-import type { RuntimeDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
@@ -112,8 +112,7 @@ const declaresPausedNode = (
   if (node.formId === undefined) return task.type === "interface.confirm";
   if (task.type !== "interface.show_form") return false;
   const form = (task as { properties?: Record<string, unknown> }).properties?.form as
-    | Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }>
-    | undefined;
+    Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }> | undefined;
   // A form chosen by a reference or formula is only known at run time; the stored run pins it.
   if (form?.kind !== "literal") return form !== undefined;
   return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
@@ -171,7 +170,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               tenantId: scope.tenantId,
               operations: createTenantGovernanceService({
                 runtimeTransaction: <Result>(
-                  run: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+                  run: (transaction: RequestDatabaseTransaction) => Promise<Result>,
                 ) => run(transaction),
               }),
             }),
@@ -254,7 +253,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               return { kind: "stale" };
             const flow = installed.flows.get(flowId);
             if (flow === undefined) return { kind: "unavailable" };
-            if (node !== undefined && !declaresPausedNode(flow, node)) return { kind: "unavailable" };
+            if (node !== undefined && !declaresPausedNode(flow, node))
+              return { kind: "unavailable" };
             return { kind: "current", releaseKey: installed.releaseKey };
           },
         }),
@@ -278,10 +278,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }),
     });
 
-    const result = await endpoint.invoke(identity.session, {
-      organizationId: address.read.organizationId,
-      applicationRootId: address.application.applicationRootId,
-    }, body.invocation);
+    const result = await endpoint.invoke(
+      identity.session,
+      {
+        organizationId: address.read.organizationId,
+        applicationRootId: address.application.applicationRootId,
+      },
+      body.invocation,
+    );
     if (result.kind === "refused") return refusedResponse();
     return privateResponse(result, result.kind === "reload" ? 409 : 200);
   } catch {

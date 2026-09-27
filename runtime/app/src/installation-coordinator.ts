@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  sameId,
   applicationRootIdSchema,
   identitySessionSchema,
   moduleInstallationBindingEvidenceSchema,
@@ -79,7 +80,10 @@ import { z } from "zod";
  * which refuses a change that would leave the organisation without a permanent steward.
  */
 
-type InstallerRequests = Pick<ReturnType<typeof createHumanOrganizationRequestService>, "runChange">;
+type InstallerRequests = Pick<
+  ReturnType<typeof createHumanOrganizationRequestService>,
+  "runChange"
+>;
 type InstallerTransaction = Parameters<typeof createModuleInstallationStorageRepository>[0];
 
 export const applicationInstallationCoordinatorErrorCodes = [
@@ -108,14 +112,12 @@ export class ApplicationInstallationCoordinatorError extends Error {
   }
 }
 
-const safeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 /** Prepare one exact release for first installation; nothing becomes active. */
 export const applicationInstallationPreparationRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
   })
   .strict();
 
@@ -127,8 +129,8 @@ export const applicationInstallationActivationRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
-    expectedActiveReleaseRevision: safeRevisionSchema.nullable(),
+    applicationReleaseRevision: revisionSchema,
+    expectedActiveReleaseRevision: revisionSchema.nullable(),
   })
   .strict();
 
@@ -137,7 +139,7 @@ export const applicationInstallationWithdrawalRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
   })
   .strict();
 
@@ -146,7 +148,7 @@ export const applicationInstallationDrainRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
   })
   .strict();
 
@@ -165,8 +167,7 @@ export type ApplicationInstallationDrainRequest = z.infer<
 
 /** An optional reader the deployment may not supply; absence is reported, never assumed. */
 export type OptionalInstallationReader<Value> =
-  | Readonly<{ kind: "available"; value: Value }>
-  | Readonly<{ kind: "unavailable" }>;
+  Readonly<{ kind: "available"; value: Value }> | Readonly<{ kind: "unavailable" }>;
 
 export type ActiveApplicationInstallationSummary = Readonly<{
   organizationId: OrganizationId;
@@ -279,7 +280,7 @@ const installationBindingsSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    registeredReleaseRevision: safeRevisionSchema.nullable(),
+    registeredReleaseRevision: revisionSchema.nullable(),
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
   })
   .strict();
@@ -291,7 +292,7 @@ const accessChangeSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     registrationState: z.enum(["active", "withdrawn"]),
-    registrationRevision: safeRevisionSchema,
+    registrationRevision: revisionSchema,
   })
   .strict();
 
@@ -299,7 +300,7 @@ const installationDrainResultSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     state: z.literal("draining"),
     changed: z.boolean(),
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
@@ -315,8 +316,6 @@ type ExactRelease = Readonly<{
   pins: readonly ModulePin[];
 }>;
 type ReleaseTarget = InstallationReleaseTarget;
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const canonicalModuleRootId = (value: string): ModuleRootId =>
   moduleRootIdSchema.parse(value.toLowerCase());
@@ -673,7 +672,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           permissionId: String(entry.permission.permissionId),
         };
         permissions.set(
-          [permission.applicationRootId, permission.ownerKind, permission.ownerId, permission.permissionId]
+          [
+            permission.applicationRootId,
+            permission.ownerKind,
+            permission.ownerId,
+            permission.permissionId,
+          ]
             .join(":")
             .toLowerCase(),
           permission,
@@ -746,7 +750,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     try {
       if (humanDefinitionAccess !== undefined) {
         releaseSet = await humanDefinitionAccess.readReleaseSet(session, target);
-        preparedTemplates = await humanDefinitionAccess.prepareRegistrationCandidate(target, releaseSet);
+        preparedTemplates = await humanDefinitionAccess.prepareRegistrationCandidate(
+          target,
+          releaseSet,
+        );
       } else if (roleTemplates !== undefined) {
         const context = definitionContext(target);
         releaseSet = await dependencies.definitionReader!.read(context, {
@@ -1285,8 +1292,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           // drain; a detached one is unavailable.
           const drainable =
             active?.bindings ?? releaseBindings.filter((binding) => binding.state === "draining");
-          if (drainable.length === 0)
-            throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+          if (drainable.length === 0) throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
 
           const drained = await drainInstallation(
             transaction,

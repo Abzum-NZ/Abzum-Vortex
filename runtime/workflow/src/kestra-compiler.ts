@@ -3,11 +3,14 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import {
+  isRecord,
   applicationRootIdSchema,
+  canonicalJson,
   flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
   isFlowControlTask,
+  isUuidText,
   organizationIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
@@ -223,9 +226,6 @@ const maximumFlowIdLength = 100;
 const templateDelimiterPattern = /\{\{|\{%/;
 const hasTemplateDelimiter = (value: string): boolean => templateDelimiterPattern.test(value);
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,
   allowed: readonly string[],
@@ -247,7 +247,7 @@ const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =
  */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasOnlyKeys(candidate, [
       "environment",
       "organizationId",
@@ -288,18 +288,6 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 
 // ─── Determinism ─────────────────────────────────────────────────────────────────────────────
 
-/** Canonical JSON with sorted keys and omitted undefined, so equal data always hashes equally. */
-const canonicalJson = (value: JsonValue): string => {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value)
-    .filter(([, member]) => member !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return `{${entries
-    .map(([key, member]) => `${JSON.stringify(key)}:${canonicalJson(member as JsonValue)}`)
-    .join(",")}}`;
-};
-
 /** The fixed UUID namespace one callback node id is derived under. */
 const callbackNodeIdNamespace = "8f7d4f2a-6c31-4b0e-9f5a-2d1c3b4a5e60";
 
@@ -308,11 +296,7 @@ const callbackNodeIdNamespace = "8f7d4f2a-6c31-4b0e-9f5a-2d1c3b4a5e60";
  * flow and task always yield the same UUID, and no two tasks of one flow
  * collide, so retained-run authority can be rebuilt without extra state.
  */
-const deriveNodeId = (
-  identity: KestraFlowIdentity,
-  flowId: string,
-  taskId: string,
-): string => {
+const deriveNodeId = (identity: KestraFlowIdentity, flowId: string, taskId: string): string => {
   const name = [
     identity.environment,
     identity.organizationId,
@@ -323,7 +307,10 @@ const deriveNodeId = (
     taskId,
   ].join("|");
   const namespaceBytes = Buffer.from(callbackNodeIdNamespace.replaceAll("-", ""), "hex");
-  const digest = createHash("sha1").update(namespaceBytes).update(Buffer.from(name, "utf8")).digest();
+  const digest = createHash("sha1")
+    .update(namespaceBytes)
+    .update(Buffer.from(name, "utf8"))
+    .digest();
   const bytes = Buffer.from(digest.subarray(0, 16));
   bytes[6] = (bytes[6]! & 0x0f) | 0x50;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
@@ -475,10 +462,16 @@ const evaluateValue = (
   limits: Record<string, JsonValue> = {},
 ): EvaluatedValue => {
   const taskId = kestraTaskId("e", seed);
-  const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
-    expression: jsonOf(value),
-    ...limits,
-  });
+  const task = protectedCallbackTask(
+    ctx,
+    taskId,
+    derivedNodeId(ctx, taskId),
+    kestraEvaluatorOperationKey,
+    {
+      expression: jsonOf(value),
+      ...limits,
+    },
+  );
   return { tasks: [task], reference: resultReference(ctx, taskId) };
 };
 
@@ -727,7 +720,9 @@ const compileControlTask = (
         if (branch.outcome === "refused") return branch;
         cases[key] = branch.value as unknown as JsonValue;
       }
-      const otherwise = task.default ? compileTaskList(ctx, task.default) : ok<KestraCompiledTask[]>([]);
+      const otherwise = task.default
+        ? compileTaskList(ctx, task.default)
+        : ok<KestraCompiledTask[]>([]);
       if (otherwise.outcome === "refused") return otherwise;
       const sortedCases = Object.fromEntries(
         Object.entries(cases).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
@@ -764,7 +759,11 @@ const compileControlTask = (
       const body = compileTaskList(ctx, task.tasks);
       if (body.outcome === "refused") return body;
       return ok([
-        { id: kestraTaskId("c", task.id), type: "io.kestra.plugin.core.flow.Sequential", tasks: body.value },
+        {
+          id: kestraTaskId("c", task.id),
+          type: "io.kestra.plugin.core.flow.Sequential",
+          tasks: body.value,
+        },
       ]);
     }
     case "parallel": {
@@ -779,7 +778,11 @@ const compileControlTask = (
         });
       }
       return ok([
-        { id: kestraTaskId("c", task.id), type: "io.kestra.plugin.core.flow.Parallel", tasks: branches },
+        {
+          id: kestraTaskId("c", task.id),
+          type: "io.kestra.plugin.core.flow.Parallel",
+          tasks: branches,
+        },
       ]);
     }
     case "run_flow": {
@@ -821,11 +824,17 @@ const compileControlTask = (
     }
     case "wait_for_person": {
       const taskId = kestraTaskId("t", task.id);
-      const request = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, task.id), kestraHumanTaskOperationKey, {
-        form_id: jsonOf(task.formId),
-        assignee: jsonOf(task.assignee),
-        inputs: jsonOf(task.inputs),
-      });
+      const request = protectedCallbackTask(
+        ctx,
+        taskId,
+        derivedNodeId(ctx, task.id),
+        kestraHumanTaskOperationKey,
+        {
+          form_id: jsonOf(task.formId),
+          assignee: jsonOf(task.assignee),
+          inputs: jsonOf(task.inputs),
+        },
+      );
       const onResume = Object.keys(task.inputs)
         .sort()
         .map((name) => ({
@@ -852,7 +861,8 @@ const compileRegisteredTask = (
   const definition = Object.hasOwn(flowTaskRegistry, task.type)
     ? flowTaskRegistry[task.type as FlowTaskTypeKey]
     : undefined;
-  if (definition === undefined || task.version !== definition.version) return stop("unsupported_task");
+  if (definition === undefined || task.version !== definition.version)
+    return stop("unsupported_task");
   if (definition.kestra.mode === "not_compiled") return stop("unsupported_task");
 
   const operationKey = definition.protectedOperationKey ?? `workflow.task.${task.type}`;
@@ -980,8 +990,7 @@ const containsOnlyGeneratedTemplateText = (
   while (cursor < yaml.length) {
     const braces = yaml.indexOf("{{", cursor);
     const blocks = yaml.indexOf("{%", cursor);
-    const next =
-      braces === -1 ? blocks : blocks === -1 ? braces : Math.min(braces, blocks);
+    const next = braces === -1 ? blocks : blocks === -1 ? braces : Math.min(braces, blocks);
     if (next === -1) return true;
     if (yaml.startsWith("{% raw %}", next)) {
       const start = next + "{% raw %}".length;
@@ -1013,9 +1022,9 @@ const LABEL_PLACEHOLDER = "inert_builder_label";
  * compiler neutralises instead of refusing.
  */
 const readBuilderLabels = (definition: unknown): Record<string, string> => {
-  if (!isObject(definition)) return {};
+  if (!isRecord(definition)) return {};
   const labels = definition.labels;
-  if (!isObject(labels)) return {};
+  if (!isRecord(labels)) return {};
   const read: Record<string, string> = {};
   for (const [key, value] of Object.entries(labels))
     if (typeof value === "string") read[key] = value;
@@ -1029,9 +1038,9 @@ const readBuilderLabels = (definition: unknown): Record<string, string> => {
  * inert instead of refusing the whole flow.
  */
 const neutralizeLabelDelimiters = (definition: unknown): unknown => {
-  if (!isObject(definition)) return definition;
+  if (!isRecord(definition)) return definition;
   const labels = definition.labels;
-  if (!isObject(labels)) return definition;
+  if (!isRecord(labels)) return definition;
   const neutralized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(labels))
     neutralized[key] =
@@ -1052,7 +1061,7 @@ const labelIsRenderable = (value: string): boolean => !rawBreakPattern.test(valu
 
 /** True for the retired node-and-edge workflow shape, refused explicitly, never silently dropped. */
 const isLegacyWorkflowDefinition = (definition: unknown): boolean =>
-  isObject(definition) &&
+  isRecord(definition) &&
   !Object.hasOwn(definition, "contractVersion") &&
   Array.isArray(definition.nodes) &&
   Array.isArray(definition.edges) &&
@@ -1099,7 +1108,9 @@ const legacyRequiredOutcomes = (node: WorkflowNode): readonly string[] | undefin
     case "condition":
       return ["matched", "not_matched"];
     case "decision_table":
-      return (node.config as LegacyDecisionTableConfig).decisions.map((decision) => decision.output);
+      return (node.config as LegacyDecisionTableConfig).decisions.map(
+        (decision) => decision.output,
+      );
     case "bounded_loop":
       return ["record", "completed"];
     case "request_form":
@@ -1146,7 +1157,8 @@ const legacyValidateGraph = (definition: WorkflowDefinition): LegacyGraphOutcome
 
   for (const node of definition.nodes) {
     const nodeEdges = outgoing.get(node.nodeId)!;
-    if (node.type === "stop" && nodeEdges.length > 0) return legacyRefused("invalid_outcome_routing");
+    if (node.type === "stop" && nodeEdges.length > 0)
+      return legacyRefused("invalid_outcome_routing");
     const expected = legacyRequiredOutcomes(node);
     if (expected === undefined) continue;
     const actual = nodeEdges.map((edge) => edge.outcome);
@@ -1328,7 +1340,10 @@ const legacyEffectTask = (ctx: LegacyContext, node: WorkflowNode): KestraCompile
     { node_type: node.type, config: jsonOf(node.config) },
   );
 
-const legacySubflowTask = (ctx: LegacyContext, node: WorkflowNode): KestraCompiledTask | undefined => {
+const legacySubflowTask = (
+  ctx: LegacyContext,
+  node: WorkflowNode,
+): KestraCompiledTask | undefined => {
   const child = (node.config as LegacyStartWorkflowConfig).workflowId.toLowerCase();
   const revision = ctx.childFlowRevisions.get(child);
   if (revision === undefined) {
@@ -1438,7 +1453,9 @@ const legacyCompileBranch = (
           type: "io.kestra.plugin.core.flow.Switch",
           value: reference,
           cases: Object.fromEntries(
-            Object.entries(cases).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+            Object.entries(cases).sort(([left], [right]) =>
+              left < right ? -1 : left > right ? 1 : 0,
+            ),
           ),
         },
       ],
@@ -1583,7 +1600,9 @@ const legacyTriggerSummary = (
   identity: KestraFlowIdentity,
   workflowId: string,
   trigger: WorkflowTrigger,
-): Readonly<{ summary: KestraFlowTrigger; yaml: Record<string, JsonValue> | undefined }> | undefined => {
+):
+  | Readonly<{ summary: KestraFlowTrigger; yaml: Record<string, JsonValue> | undefined }>
+  | undefined => {
   if (trigger.condition !== null) return undefined;
   if (trigger.kind === "schedule" && !scheduleIsExpressible(trigger.schedule)) return undefined;
   if (trigger.kind === "schedule")
@@ -1599,7 +1618,12 @@ const legacyTriggerSummary = (
     };
   if (trigger.kind === "incoming_message")
     return {
-      summary: { id: "trigger_incoming_message", kind: "incoming_message", disabled: true, trigger: null },
+      summary: {
+        id: "trigger_incoming_message",
+        kind: "incoming_message",
+        disabled: true,
+        trigger: null,
+      },
       yaml: {
         id: "trigger_incoming_message",
         type: "io.kestra.plugin.core.trigger.Webhook",
@@ -1694,12 +1718,11 @@ const compileLegacyKestraFlow = (
 
 const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number> | undefined => {
   if (candidate === undefined) return new Map();
-  if (!isObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
   const revisions = new Map<string, number>();
   for (const [key, value] of Object.entries(candidate)) {
     const revision = revisionSchema.safeParse(value);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(key.toLowerCase()))
-      return undefined;
+    if (!isUuidText(key)) return undefined;
     if (!revision.success) return undefined;
     revisions.set(key.toLowerCase(), revision.data);
   }
@@ -1719,7 +1742,7 @@ const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number
  */
 export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilation => {
   if (
-    !isObject(inputCandidate) ||
+    !isRecord(inputCandidate) ||
     !hasOnlyKeys(inputCandidate, ["definition", "identity", "childFlowRevisions"])
   )
     return refused("invalid_input");
@@ -1746,7 +1769,9 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   if (rawBreakPattern.test(JSON.stringify(inputCandidate.definition) ?? ""))
     return refused("unsafe_builder_text");
 
-  const parsedDefinition = flowSchema.safeParse(neutralizeLabelDelimiters(inputCandidate.definition));
+  const parsedDefinition = flowSchema.safeParse(
+    neutralizeLabelDelimiters(inputCandidate.definition),
+  );
   if (!parsedDefinition.success) return refused("invalid_definition");
   const definition = parsedDefinition.data;
 
@@ -1879,7 +1904,9 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     triggers: Object.freeze(compiledTriggers),
     tasks: Object.freeze(allTasks),
     nodes: Object.freeze(
-      [...ctx.nodes].sort((left, right) => (left.taskId < right.taskId ? -1 : left.taskId > right.taskId ? 1 : 0)),
+      [...ctx.nodes].sort((left, right) =>
+        left.taskId < right.taskId ? -1 : left.taskId > right.taskId ? 1 : 0,
+      ),
     ),
     labels: Object.freeze(candidateLabels),
     yaml,

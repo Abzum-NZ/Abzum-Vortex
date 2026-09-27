@@ -1,3 +1,4 @@
+import { isRecord } from "@vortex/contracts";
 import "server-only";
 
 import type {
@@ -33,9 +34,6 @@ import type {
 
 const maximumFormValues = 500;
 
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
 /** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{
   values: Readonly<Record<string, unknown>>;
@@ -68,8 +66,7 @@ export type PrivateFormSubmitAdapter = (
 ) => Readonly<Record<string, unknown>> | undefined;
 
 export const createPrivateFormSubmitAdapter =
-  (): PrivateFormSubmitAdapter =>
-  (binding, callerInputs) => {
+  (): PrivateFormSubmitAdapter => (binding, callerInputs) => {
     if (binding.event !== "form_submit") return undefined;
     const submission = readPrivateFormSubmission(callerInputs);
     if (submission === undefined) return undefined;

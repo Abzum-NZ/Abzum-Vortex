@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  isRecord,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
   flowIdSchema,
@@ -115,10 +116,7 @@ export type FlowOrchestratorDependencies = Readonly<{
    * Resolves the flows of the release the organisation runs for a flow id, from trusted
    * installation state. `undefined` refuses the start without saying why.
    */
-  resolveRelease: (
-    organizationId: string,
-    flowId: string,
-  ) => Promise<FlowRelease | undefined>;
+  resolveRelease: (organizationId: string, flowId: string) => Promise<FlowRelease | undefined>;
   /**
    * Checks a flow's invocation permission for the initiator. Required whenever the started flow, or
    * any flow it can reach through Run flow, declares one; such a flow is unavailable to the run when
@@ -257,9 +255,6 @@ const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
   "connection.call": "the durable Kestra runner",
 });
 
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
 const withinPayload = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumPayloadCharacters;
@@ -387,7 +382,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         committedEffects: step.state.committedEffects,
         failure: {
           code: step.result.failure.code,
-          ...(step.result.failure.taskId === undefined ? {} : { taskId: step.result.failure.taskId }),
+          ...(step.result.failure.taskId === undefined
+            ? {}
+            : { taskId: step.result.failure.taskId }),
         },
         outputs: {},
         intents,
@@ -648,13 +645,21 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     ): Promise<NamedActionExecutionResult> {
       try {
         const parsed = z
-          .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
+          .object({
+            session: identitySessionSchema,
+            selection: organizationSelectionCandidateSchema,
+          })
           .safeParse({ session, selection });
         const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
         if (!parsed.success || !command.success || dependencies.actionRecords === undefined)
           return { kind: "unavailable" };
         const flowId = command.data.action.actionId;
-        const prepared = await prepare(parsed.data.session, parsed.data.selection, flowId, "action");
+        const prepared = await prepare(
+          parsed.data.session,
+          parsed.data.selection,
+          flowId,
+          "action",
+        );
         if (prepared === undefined) return { kind: "unavailable" };
         const runId = newRunId();
         return await dependencies.actionRecords.execute(

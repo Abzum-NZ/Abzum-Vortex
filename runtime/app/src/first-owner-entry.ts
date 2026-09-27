@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   administrationReceiptIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
@@ -61,18 +62,14 @@ export class FirstOwnerApplicationEntryError extends Error {
   }
 }
 
-const safeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
-const sameUuid = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 export const firstOwnerApplicationEntryRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: safeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     stewardOrganizationAccountId: organizationAccountIdSchema,
     provisioningReceiptId: administrationReceiptIdSchema,
-    setupRevision: safeRevisionSchema,
+    setupRevision: revisionSchema,
     setupActorId: actorIdSchema,
     correlationId: correlationIdSchema,
     operatingRoleId: roleIdSchema,
@@ -132,9 +129,7 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
       const verifiedSession = identitySessionSchema.safeParse(session);
       const request = firstOwnerApplicationEntryRequestSchema.safeParse(requestCandidate);
       if (!verifiedSession.success || !request.success)
-        throw new FirstOwnerApplicationEntryError(
-          "INVALID_FIRST_OWNER_APPLICATION_ENTRY_REQUEST",
-        );
+        throw new FirstOwnerApplicationEntryError("INVALID_FIRST_OWNER_APPLICATION_ENTRY_REQUEST");
       const value = request.data;
 
       // 1. Prepare and activate exactly the named management-application release.
@@ -190,12 +185,10 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
       const evidenceCandidate = operatingRoleChangeEvidence.candidate;
       if (
         evidenceCandidate.operation !== "accept_new_application_role" ||
-        !sameUuid(evidenceCandidate.roleId, value.operatingRoleId) ||
-        !sameUuid(evidenceCandidate.sourceRoleId, value.operatingRoleSourceId)
+        !sameId(evidenceCandidate.roleId, value.operatingRoleId) ||
+        !sameId(evidenceCandidate.sourceRoleId, value.operatingRoleSourceId)
       )
-        throw new FirstOwnerApplicationEntryError(
-          "FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID",
-        );
+        throw new FirstOwnerApplicationEntryError("FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID");
 
       // 3. Freeze the manifest and let Access establish the exact operating rights once.
       const manifest = initialOperatingRoleGrantManifestSchema.safeParse({
@@ -212,9 +205,7 @@ export const createFirstOwnerApplicationEntryComposition = <InstalledEvents = ne
         operatingRoleChangeEvidence,
       });
       if (!manifest.success)
-        throw new FirstOwnerApplicationEntryError(
-          "FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID",
-        );
+        throw new FirstOwnerApplicationEntryError("FIRST_OWNER_APPLICATION_ENTRY_MANIFEST_INVALID");
 
       const rights = await dependencies.initialOperatingRoleGrant.establish(manifest.data);
       return { installation: activation, rights };

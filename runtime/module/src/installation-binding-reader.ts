@@ -11,11 +11,13 @@ type ActiveInstallationRow = DatabaseRow & { readonly active_installation: unkno
 
 export class ActiveApplicationInstallationError extends Error {
   readonly code: ActiveApplicationInstallationErrorCode;
+  readonly databaseCode: string | undefined;
 
-  constructor(code: ActiveApplicationInstallationErrorCode) {
+  constructor(code: ActiveApplicationInstallationErrorCode, databaseCode?: string) {
     super(code);
     this.name = "ActiveApplicationInstallationError";
     this.code = code;
+    this.databaseCode = databaseCode;
   }
 }
 
@@ -26,17 +28,27 @@ const databaseCode = (error: unknown): string | undefined =>
 
 const mapFailure = (error: unknown): ActiveApplicationInstallationError => {
   if (error instanceof ActiveApplicationInstallationError) return error;
-  switch (databaseCode(error)) {
+  const code = databaseCode(error);
+  switch (code) {
     case "42501":
     case "22023":
-      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_CONTEXT_REFUSED");
+      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_CONTEXT_REFUSED", code);
     case "P0002":
-      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
+      return new ActiveApplicationInstallationError(
+        "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE",
+        code,
+      );
     case "23514":
     case "55000":
-      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE");
+      return new ActiveApplicationInstallationError(
+        "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
+        code,
+      );
     default:
-      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_INSTALLATION_READ_FAILED");
+      return new ActiveApplicationInstallationError(
+        "ACTIVE_APPLICATION_INSTALLATION_READ_FAILED",
+        code,
+      );
   }
 };
 

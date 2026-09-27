@@ -1,14 +1,8 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-} from "react";
-import {
+  canonicalJson,
   flowLiteralSchema,
   jsonValueSchema,
   type CustomComponentReleaseV2,
@@ -95,17 +89,6 @@ const CONFIRMATION_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const canonicalValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(canonicalValue);
-  if (isRecord(value))
-    return Object.fromEntries(
-      Object.keys(value)
-        .sort()
-        .map((key) => [key, canonicalValue(value[key])]),
-    );
-  return value;
-};
 
 /**
  * Validates one untrusted event payload against its declared event. An undeclared field, a missing
@@ -215,9 +198,13 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
   const custom = metadata.customComponent;
   const accessibleName = getAccessibleName(settings, metadata);
   const suppliedValues = values ?? EMPTY_RECORD;
-  const mappedValues = useMemo(() => contractValues(custom, suppliedValues), [custom, suppliedValues]);
+  const mappedValues = useMemo(
+    () => contractValues(custom, suppliedValues),
+    [custom, suppliedValues],
+  );
   const eventBindings = bindings ?? EMPTY_BINDINGS;
-  const tokens = themeTokens ?? EMPTY_RECORD;
+  const suppliedTokens = themeTokens ?? EMPTY_RECORD;
+  const tokens = jsonValueSchema.safeParse(suppliedTokens).success ? suppliedTokens : EMPTY_RECORD;
 
   const declarationMap = useMemo(
     () => new Map((custom?.events ?? []).map((event) => [event.key, event] as const)),
@@ -245,7 +232,7 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
   bindingsRef.current = eventBindings;
 
   const payloadSignature = useMemo(
-    () => JSON.stringify(canonicalValue({ values: mappedValues, themeTokens: tokens })),
+    () => canonicalJson({ values: mappedValues, themeTokens: tokens }),
     [mappedValues, tokens],
   );
 

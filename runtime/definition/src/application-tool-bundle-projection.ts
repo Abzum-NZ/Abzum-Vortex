@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   applicationToolBundleSchema,
   correlationIdSchema,
@@ -204,11 +205,6 @@ export const projectApplicationToolBundle = (
   }),
 });
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const exactReleaseRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 type GateContext = Readonly<{
   evaluate: ApplicationToolAccessEvaluator;
   transaction: RequestDatabaseTransaction;
@@ -233,17 +229,21 @@ const evaluateGate = async (
   for (const candidate of declarations) {
     const parsed = organizationAccessDeclarationSchema.safeParse(candidate);
     if (!parsed.success)
-      throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_EVIDENCE_UNAVAILABLE");
+      throw new ApplicationToolBundleProjectionError(
+        "APPLICATION_TOOL_BUNDLE_EVIDENCE_UNAVAILABLE",
+      );
     const declaration = parsed.data;
     if (
       declaration.target.kind !== "application" ||
-      !sameUuid(declaration.target.applicationRootId, gate.applicationRootId)
+      !sameId(declaration.target.applicationRootId, gate.applicationRootId)
     )
       throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_SCOPE_UNAVAILABLE");
     const evaluated = await gate.evaluate(gate.transaction, gate.scope, declaration);
     const correlation = correlationIdSchema.safeParse(evaluated.correlationId);
     if (!correlation.success || typeof evaluated.allowed !== "boolean")
-      throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_EVIDENCE_UNAVAILABLE");
+      throw new ApplicationToolBundleProjectionError(
+        "APPLICATION_TOOL_BUNDLE_EVIDENCE_UNAVAILABLE",
+      );
     gate.correlations.add(correlation.data.toLowerCase());
     if (evaluated.allowed) anyAllowed = true;
     else allAllowed = false;
@@ -279,7 +279,7 @@ export const createApplicationToolBundleProjectionService = <Command>(
         throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_SOURCE_INVALID");
       const organization = organizationIdSchema.safeParse(fixed.organizationId);
       const applicationRoot = applicationRootIdSchema.safeParse(fixed.applicationRootId);
-      const releaseRevision = exactReleaseRevisionSchema.safeParse(fixed.applicationReleaseRevision);
+      const releaseRevision = revisionSchema.safeParse(fixed.applicationReleaseRevision);
       const source = correlationIdSchema.safeParse(fixed.sourceCorrelationId);
       const bundle = applicationToolBundleSchema.safeParse(fixed.bundle);
       if (
@@ -293,15 +293,17 @@ export const createApplicationToolBundleProjectionService = <Command>(
       )
         throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_SOURCE_INVALID");
       if (
-        !sameUuid(organization.data, scope.organizationId) ||
-        !sameUuid(applicationRoot.data, scopeApplicationRootId)
+        !sameId(organization.data, scope.organizationId) ||
+        !sameId(applicationRoot.data, scopeApplicationRootId)
       )
         throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_SCOPE_UNAVAILABLE");
       const applicationRootId = applicationRoot.data;
       // Exactly one binding per bundle tool: a missing binding or one for a tool this release does
       // not declare means the source was assembled from different evidence.
       if (Object.keys(fixed.tools).length !== bundle.data.tools.length)
-        throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_BINDING_UNAVAILABLE");
+        throw new ApplicationToolBundleProjectionError(
+          "APPLICATION_TOOL_BUNDLE_BINDING_UNAVAILABLE",
+        );
 
       const gate: GateContext = {
         evaluate: dependencies.evaluate,
@@ -327,9 +329,11 @@ export const createApplicationToolBundleProjectionService = <Command>(
         if (
           (tool.operation.kind === "action" || tool.operation.kind === "query") &&
           tool.operation.owner.kind === "application" &&
-          !sameUuid(tool.operation.owner.applicationRootId, applicationRootId)
+          !sameId(tool.operation.owner.applicationRootId, applicationRootId)
         )
-          throw new ApplicationToolBundleProjectionError("APPLICATION_TOOL_BUNDLE_SCOPE_UNAVAILABLE");
+          throw new ApplicationToolBundleProjectionError(
+            "APPLICATION_TOOL_BUNDLE_SCOPE_UNAVAILABLE",
+          );
 
         const discoverAllowed = await evaluateGate(
           gate,

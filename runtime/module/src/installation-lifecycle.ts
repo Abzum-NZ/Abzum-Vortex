@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationInstallationActivationCommandSchema,
   applicationInstallationDetachCommandSchema,
   applicationInstallationLifecycleResultSchema,
@@ -69,9 +70,6 @@ const parseResult = (rows: readonly LifecycleRow[]): ApplicationInstallationLife
   return result.data;
 };
 
-const sameIdentifier = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 const bindingsIncomplete = (): ApplicationInstallationLifecycleError =>
   new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
 
@@ -113,7 +111,7 @@ const requireExecutableLifecyclePolicies = async (
   // activated; anything else is an unusable result rather than a pass.
   if (
     activated.state !== "active" ||
-    !sameIdentifier(activated.applicationRootId, command.applicationRootId) ||
+    !sameId(activated.applicationRootId, command.applicationRootId) ||
     activated.applicationReleaseRevision !== command.applicationReleaseRevision
   )
     throw bindingsIncomplete();
@@ -133,13 +131,10 @@ const requireExecutableLifecyclePolicies = async (
   );
   if (
     !readiness.success ||
-    !sameIdentifier(readiness.data.organizationId, activated.organizationId) ||
-    !sameIdentifier(readiness.data.applicationRootId, activated.applicationRootId) ||
-    !sameIdentifier(
-      readiness.data.organizationLimits.organizationId,
-      readiness.data.organizationId,
-    ) ||
-    !sameIdentifier(readiness.data.readinessEvidence.organizationId, readiness.data.organizationId)
+    !sameId(readiness.data.organizationId, activated.organizationId) ||
+    !sameId(readiness.data.applicationRootId, activated.applicationRootId) ||
+    !sameId(readiness.data.organizationLimits.organizationId, readiness.data.organizationId) ||
+    !sameId(readiness.data.readinessEvidence.organizationId, readiness.data.organizationId)
   )
     throw bindingsIncomplete();
 
@@ -148,9 +143,9 @@ const requireExecutableLifecyclePolicies = async (
     // application-contained one must carry exactly this Application.
     const scopedToThisInstallation =
       policy.applicationRootId === null ||
-      sameIdentifier(policy.applicationRootId, readiness.data.applicationRootId);
+      sameId(policy.applicationRootId, readiness.data.applicationRootId);
     if (
-      !sameIdentifier(policy.organizationId, readiness.data.organizationId) ||
+      !sameId(policy.organizationId, readiness.data.organizationId) ||
       !scopedToThisInstallation ||
       // The ceilings were read and locked in the same transaction as the
       // policies, so the revision they carry is the revision this validation
@@ -189,7 +184,7 @@ const requireReadyUniquenessIndexes = async (
   // activated; anything else is an unusable result rather than a pass.
   if (
     activated.state !== "active" ||
-    !sameIdentifier(activated.applicationRootId, command.applicationRootId) ||
+    !sameId(activated.applicationRootId, command.applicationRootId) ||
     activated.applicationReleaseRevision !== command.applicationReleaseRevision
   )
     throw bindingsIncomplete();
@@ -207,8 +202,8 @@ const requireReadyUniquenessIndexes = async (
   const readiness = indexReadinessSchema.safeParse(rows[0].index_readiness);
   if (
     !readiness.success ||
-    !sameIdentifier(readiness.data.organizationId, activated.organizationId) ||
-    !sameIdentifier(readiness.data.applicationRootId, activated.applicationRootId) ||
+    !sameId(readiness.data.organizationId, activated.organizationId) ||
+    !sameId(readiness.data.applicationRootId, activated.applicationRootId) ||
     readiness.data.applicationReleaseRevision !== command.applicationReleaseRevision
   )
     throw bindingsIncomplete();

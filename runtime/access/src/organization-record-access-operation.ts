@@ -1,10 +1,12 @@
 import "server-only";
 
 import {
+  unavailableError,
+  sameId,
   organizationRecordAccessDecisionSchema,
   organizationRecordAccessDeclarationSchema,
   recordIdSchema,
-  safeOrganizationAccessRefusalSchema,
+  safeOrganizationAccessRefusal,
   selectedOrganizationScopeSchema,
   type OrganizationRecordAccessDecision,
   type OrganizationRecordAccessDeclaration,
@@ -14,6 +16,8 @@ import {
 } from "@vortex/contracts";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import type { DatabaseRow } from "@vortex/db";
+
+const unavailableCode = "ORGANIZATION_RECORD_ACCESS_DECISION_UNAVAILABLE";
 
 type AllowedOrganizationRecordAccessDecision = Extract<
   OrganizationRecordAccessDecision,
@@ -36,10 +40,6 @@ export interface FixedOrganizationRecordAccessAdapter<Command> {
     command: Command,
   ): Promise<OrganizationRecordAccessDecision>;
 }
-
-const unavailable = (): Error => new Error("ORGANIZATION_RECORD_ACCESS_DECISION_UNAVAILABLE");
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
 
 type CurrentEvidenceRow = DatabaseRow & {
   organization_id: unknown;
@@ -81,9 +81,9 @@ const sameRecordBinding = (
   decision: OrganizationRecordAccessDecision["recordBinding"],
   declaration: OrganizationRecordAccessDeclaration["recordBinding"],
 ): boolean =>
-  sameUuid(decision.moduleRootId, declaration.moduleRootId) &&
-  sameUuid(decision.recordTypeId, declaration.recordTypeId) &&
-  sameUuid(decision.storageContractId, declaration.storageContractId) &&
+  sameId(decision.moduleRootId, declaration.moduleRootId) &&
+  sameId(decision.recordTypeId, declaration.recordTypeId) &&
+  sameId(decision.storageContractId, declaration.storageContractId) &&
   decision.storageScope === declaration.storageScope;
 
 const samePermission = (
@@ -91,11 +91,11 @@ const samePermission = (
   right: OrganizationRecordAccessDeclaration["requiredPermissions"][number],
 ): boolean =>
   left.ownerKind === right.ownerKind &&
-  sameUuid(left.ownerId, right.ownerId) &&
-  sameUuid(left.permissionId, right.permissionId) &&
+  sameId(left.ownerId, right.ownerId) &&
+  sameId(left.permissionId, right.permissionId) &&
   left.applicationRootId !== undefined &&
   right.applicationRootId !== undefined &&
-  sameUuid(left.applicationRootId, right.applicationRootId);
+  sameId(left.applicationRootId, right.applicationRootId);
 
 const contributionsBelongToDeclaration = (
   decision: OrganizationRecordAccessDecision,
@@ -108,20 +108,6 @@ const contributionsBelongToDeclaration = (
     ),
   );
 
-const safeRefusal = (
-  refusal: Extract<OrganizationRecordAccessDecision, Readonly<{ outcome: "refused" }>>,
-): SafeOrganizationAccessRefusal =>
-  safeOrganizationAccessRefusalSchema.parse({
-    outcome: "refused",
-    reasonCode:
-      refusal.reasonCode === "authentication_unsatisfied"
-        ? "authentication_required"
-        : refusal.reasonCode === "target_policy_unavailable"
-          ? "target_policy_unavailable"
-          : "access_refused",
-    correlationId: refusal.correlationId,
-  });
-
 const isBoundToRequest = (
   decision: OrganizationRecordAccessDecision,
   scope: SelectedOrganizationScope,
@@ -130,25 +116,25 @@ const isBoundToRequest = (
   current: CurrentEvidenceRow,
 ): boolean =>
   decision.operationKey === declaration.operationKey &&
-  sameUuid(decision.target.applicationRootId, declaration.target.applicationRootId) &&
-  sameUuid(decision.organizationId, scope.organizationId) &&
-  sameUuid(decision.organizationAccountId, scope.organizationAccountId) &&
+  sameId(decision.target.applicationRootId, declaration.target.applicationRootId) &&
+  sameId(decision.organizationId, scope.organizationId) &&
+  sameId(decision.organizationAccountId, scope.organizationAccountId) &&
   decision.accessVersion === scope.accessVersion &&
-  sameUuid(decision.recordId, recordId) &&
+  sameId(decision.recordId, recordId) &&
   sameRecordBinding(decision.recordBinding, declaration.recordBinding) &&
   sameAction(decision.action, declaration.action) &&
   contributionsBelongToDeclaration(decision, declaration) &&
   scope.applicationRootId !== undefined &&
-  sameUuid(scope.applicationRootId, declaration.target.applicationRootId) &&
+  sameId(scope.applicationRootId, declaration.target.applicationRootId) &&
   typeof current.organization_id === "string" &&
-  sameUuid(current.organization_id, decision.organizationId) &&
+  sameId(current.organization_id, decision.organizationId) &&
   typeof current.organization_account_id === "string" &&
-  sameUuid(current.organization_account_id, decision.organizationAccountId) &&
+  sameId(current.organization_account_id, decision.organizationAccountId) &&
   typeof current.application_root_id === "string" &&
-  sameUuid(current.application_root_id, decision.target.applicationRootId) &&
+  sameId(current.application_root_id, decision.target.applicationRootId) &&
   revision(current.access_version) === decision.accessVersion &&
   typeof current.correlation_id === "string" &&
-  sameUuid(current.correlation_id, decision.correlationId) &&
+  sameId(current.correlation_id, decision.correlationId) &&
   timestamp(current.expires_at) !== undefined &&
   timestamp(current.observed_at) !== undefined &&
   Date.parse(timestamp(current.expires_at)!) > Date.parse(timestamp(current.observed_at)!) &&
@@ -170,7 +156,7 @@ export const runOrganizationRecordAccessOperation = async <Command, Result>(
 ): Promise<OrganizationRecordAccessOperationResult<Result>> => {
   const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
   const declaration = organizationRecordAccessDeclarationSchema.safeParse(adapter.declaration);
-  if (!scope.success || !declaration.success) throw unavailable();
+  if (!scope.success || !declaration.success) throw unavailableError(unavailableCode);
 
   let targetRecordId: RecordId;
   let candidate: OrganizationRecordAccessDecision;
@@ -178,7 +164,7 @@ export const runOrganizationRecordAccessOperation = async <Command, Result>(
     targetRecordId = recordIdSchema.parse(adapter.recordId(command));
     candidate = await adapter.evaluate(transaction, command);
   } catch {
-    throw unavailable();
+    throw unavailableError(unavailableCode);
   }
   const decision = organizationRecordAccessDecisionSchema.safeParse(candidate);
   let currentRows: readonly CurrentEvidenceRow[];
@@ -194,7 +180,7 @@ export const runOrganizationRecordAccessOperation = async <Command, Result>(
       from vortex_access.validated_human_request_context() as checked
     `;
   } catch {
-    throw unavailable();
+    throw unavailableError(unavailableCode);
   }
   if (
     !decision.success ||
@@ -202,8 +188,8 @@ export const runOrganizationRecordAccessOperation = async <Command, Result>(
     currentRows[0] === undefined ||
     !isBoundToRequest(decision.data, scope.data, declaration.data, targetRecordId, currentRows[0])
   )
-    throw unavailable();
-  if (decision.data.outcome === "refused") return safeRefusal(decision.data);
+    throw unavailableError(unavailableCode);
+  if (decision.data.outcome === "refused") return safeOrganizationAccessRefusal(decision.data);
 
   return { outcome: "completed", value: await operation(decision.data) };
 };

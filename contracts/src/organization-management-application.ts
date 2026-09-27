@@ -13,7 +13,6 @@ import {
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 import { organizationStewardshipRequirementSchema } from "./organization-stewardship";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const representsSameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
@@ -32,7 +31,7 @@ export const organizationManagementApplicationRequirementSchema =
     .safeExtend({
       managementApplicationRootId: applicationRootIdSchema,
       managementRoleId: roleIdSchema,
-      requiredRoleRevision: javascriptSafeRevisionSchema,
+      requiredRoleRevision: revisionSchema,
     })
     .superRefine((value, context) => {
       if (value.revision < 2)
@@ -45,10 +44,10 @@ export const organizationManagementApplicationRequirementSchema =
 
 const organizationManagementApplicationRequirementChangeFields = {
   organizationId: organizationIdSchema,
-  expectedRequirementRevision: javascriptSafeRevisionSchema,
+  expectedRequirementRevision: revisionSchema,
   applicationRootId: applicationRootIdSchema,
   roleId: roleIdSchema,
-  expectedRoleRevision: javascriptSafeRevisionSchema,
+  expectedRoleRevision: revisionSchema,
   changedBy: actorIdSchema,
   correlationId: correlationIdSchema,
 } as const;
@@ -76,7 +75,7 @@ export const organizationManagementApplicationRequirementChangeResultSchema = z
     outcome: z.literal("changed"),
     operation: organizationManagementApplicationRequirementOperationSchema,
     requirement: organizationManagementApplicationRequirementSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()
@@ -117,9 +116,9 @@ export const initialOperatingRoleGrantManifestSchema = z
     organizationId: organizationIdSchema,
     stewardOrganizationAccountId: organizationAccountIdSchema,
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
     provisioningReceiptId: administrationReceiptIdSchema,
-    setupRevision: javascriptSafeRevisionSchema,
+    setupRevision: revisionSchema,
     setupActorId: actorIdSchema,
     correlationId: correlationIdSchema,
     roleAssignmentId: roleAssignmentIdSchema,
@@ -159,7 +158,8 @@ export const initialOperatingRoleGrantManifestSchema = z
       context.addIssue({
         code: "custom",
         path: ["operatingRoleChangeEvidence", "candidate", "preparedTemplates"],
-        message: "The operating role must derive from the named installed management-application release",
+        message:
+          "The operating role must derive from the named installed management-application release",
       });
     if (
       candidate.permissions.some(
@@ -173,7 +173,8 @@ export const initialOperatingRoleGrantManifestSchema = z
       context.addIssue({
         code: "custom",
         path: ["operatingRoleChangeEvidence", "candidate", "permissions"],
-        message: "An initial operating role may hold only permissions of its management application",
+        message:
+          "An initial operating role may hold only permissions of its management application",
       });
   });
 
@@ -182,14 +183,14 @@ export const initialOperatingRoleGrantResultSchema = z
     outcome: z.enum(["established", "replayed"]),
     organizationId: organizationIdSchema,
     operatingRoleId: roleIdSchema,
-    operatingRoleRevision: javascriptSafeRevisionSchema,
+    operatingRoleRevision: revisionSchema,
     roleAssignmentId: roleAssignmentIdSchema,
-    roleAssignmentRevision: javascriptSafeRevisionSchema,
+    roleAssignmentRevision: revisionSchema,
     managementApplicationRootId: applicationRootIdSchema,
-    managementApplicationReleaseRevision: javascriptSafeRevisionSchema,
-    managementRequiredRoleRevision: javascriptSafeRevisionSchema,
-    setupRevision: javascriptSafeRevisionSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    managementApplicationReleaseRevision: revisionSchema,
+    managementRequiredRoleRevision: revisionSchema,
+    setupRevision: revisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict();
@@ -197,6 +198,4 @@ export const initialOperatingRoleGrantResultSchema = z
 export type InitialOperatingRoleGrantManifest = z.infer<
   typeof initialOperatingRoleGrantManifestSchema
 >;
-export type InitialOperatingRoleGrantResult = z.infer<
-  typeof initialOperatingRoleGrantResultSchema
->;
+export type InitialOperatingRoleGrantResult = z.infer<typeof initialOperatingRoleGrantResultSchema>;

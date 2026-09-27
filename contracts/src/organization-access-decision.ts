@@ -23,7 +23,6 @@ import {
 import { permissionDeclarationSchema, permissionRecordScopeSchema } from "./permissions";
 import { permissionRegistryDefinitionReleaseSchema } from "./permission-registry";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const representsSameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
@@ -280,7 +279,7 @@ export const organizationAccessDecisionEvidenceSchema = z
     target: organizationAccessTargetSchema,
     organizationId: organizationIdSchema,
     organizationAccountId: organizationAccountIdSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     checkedAt: timestampSchema,
     correlationId: correlationIdSchema,
   })
@@ -369,7 +368,7 @@ const organizationRecordMatchedRouteSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("direct_share"),
       directShareId: directShareIdSchema,
-      directShareRevision: javascriptSafeRevisionSchema,
+      directShareRevision: revisionSchema,
       readableFieldIds: z.array(fieldIdSchema).min(1),
       changeableFieldIds: z.array(fieldIdSchema),
     })
@@ -543,3 +542,21 @@ export type OrganizationRecordAccessDecision = z.infer<
 >;
 export type OrganizationAccessDecision = z.infer<typeof organizationAccessDecisionSchema>;
 export type SafeOrganizationAccessRefusal = z.infer<typeof safeOrganizationAccessRefusalSchema>;
+
+/** Project private access refusals to the same safe public reason vocabulary. */
+export const safeOrganizationAccessRefusal = (
+  refusal: Readonly<{
+    reasonCode: string;
+    correlationId: string;
+  }>,
+): SafeOrganizationAccessRefusal =>
+  safeOrganizationAccessRefusalSchema.parse({
+    outcome: "refused",
+    reasonCode:
+      refusal.reasonCode === "authentication_unsatisfied"
+        ? "authentication_required"
+        : refusal.reasonCode === "target_policy_unavailable"
+          ? "target_policy_unavailable"
+          : "access_refused",
+    correlationId: refusal.correlationId,
+  });

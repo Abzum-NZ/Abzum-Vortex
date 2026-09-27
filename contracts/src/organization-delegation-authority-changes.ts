@@ -14,7 +14,6 @@ import {
   rolePermissionEntrySchema,
 } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const trustedChangeFields = {
   changedBy: actorIdSchema,
   correlationId: correlationIdSchema,
@@ -60,7 +59,7 @@ export const organizationDelegationAuthorityChangeCommandSchema = z.discriminate
         operation: z.literal("replace_delegation_scope"),
         organizationId: organizationIdSchema,
         delegationAuthorityId: delegationAuthorityIdSchema,
-        expectedDelegationRevision: javascriptSafeRevisionSchema,
+        expectedDelegationRevision: revisionSchema,
         scope: delegationScopeSchema,
         ...trustedChangeFields,
       })
@@ -70,7 +69,7 @@ export const organizationDelegationAuthorityChangeCommandSchema = z.discriminate
         operation: z.literal("revoke_delegation"),
         organizationId: organizationIdSchema,
         delegationAuthorityId: delegationAuthorityIdSchema,
-        expectedDelegationRevision: javascriptSafeRevisionSchema,
+        expectedDelegationRevision: revisionSchema,
         ...trustedChangeFields,
       })
       .strict(),
@@ -82,7 +81,7 @@ export const organizationDelegationAuthorityChangeResultSchema = z
     outcome: z.literal("changed"),
     operation: z.enum(["grant_delegation", "replace_delegation_scope", "revoke_delegation"]),
     delegation: delegationAuthoritySchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

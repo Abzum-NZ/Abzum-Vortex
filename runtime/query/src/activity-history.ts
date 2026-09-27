@@ -3,6 +3,7 @@ import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
+  sameId,
   activityActorKindSchema,
   activityAggregateDimensionSchema,
   activityHistoryFilterSchema,
@@ -156,8 +157,6 @@ const one = (rows: readonly ResultRow[]): unknown => {
     throw new Error("ACTIVITY_HISTORY_RESULT_INVALID");
   return rows[0].result;
 };
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const pageReadSchema = z
   .object({

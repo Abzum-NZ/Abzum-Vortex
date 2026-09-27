@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  isRecord,
+  sameId,
   accessGrantSchema,
   activityIdSchema,
   clusterIdSchema,
@@ -93,13 +95,8 @@ const forbiddenActionWords = new Set([
   "administer",
 ]);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const positiveRevision = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
-
-const sameUuid = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const sortedLower = (values: readonly string[]): string[] =>
   values.map((value) => value.toLowerCase()).sort();
@@ -128,8 +125,9 @@ const uuidListTermKeys = [
  * exactly, so it is refused rather than silently rounded.
  */
 const canonicalInstant = (value: string): string | undefined => {
-  const match =
-    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(
+    value,
+  );
   if (match === null) return undefined;
   const wholeSecond = Date.parse(`${match[1]}${match[3]}`);
   if (!Number.isFinite(wholeSecond)) return undefined;
@@ -216,7 +214,7 @@ const buildProposal = (
   const recipientRoles = consentRoles.safeParse(recipientAcceptingRoleIds);
   if (!sourceRoles.success || !recipientRoles.success) return undefined;
   if (typeof grantTerms.recipientOrganizationId !== "string") return undefined;
-  const crossOrganization = !sameUuid(grantTerms.recipientOrganizationId, source.organizationId);
+  const crossOrganization = !sameId(grantTerms.recipientOrganizationId, source.organizationId);
   // Export is off unless the proposal names it; the field is always stored explicitly.
   const exportAllowed = grantTerms.exportAllowed === undefined ? false : grantTerms.exportAllowed;
   const parsed = accessGrantSchema.safeParse({
@@ -315,7 +313,8 @@ type ResultRow = DatabaseRow & { result: unknown };
 
 const parseState = (rows: readonly ResultRow[]): RecordShareGrantState => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("INVALID_GRANT_RESULT");
-  const raw: unknown = typeof rows[0].result === "string" ? JSON.parse(rows[0].result) : rows[0].result;
+  const raw: unknown =
+    typeof rows[0].result === "string" ? JSON.parse(rows[0].result) : rows[0].result;
   if (!isRecord(raw)) throw new Error("INVALID_GRANT_RESULT");
   const grant = accessGrantSchema.parse(raw.grant);
   const consentRequest =
@@ -356,8 +355,7 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
   const newActivityId = dependencies.activityId ?? randomUUID;
 
   const identifiers = ():
-    | Readonly<{ grantId: string; consentRequestId: string; activityId: string }>
-    | undefined => {
+    Readonly<{ grantId: string; consentRequestId: string; activityId: string }> | undefined => {
     try {
       return {
         grantId: grantIdSchema.parse(newGrantId()),
@@ -379,9 +377,9 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
     candidate: OrganizationSelectionCandidate,
   ): string => {
     if (
-      !sameUuid(scope.organizationId, candidate.organizationId) ||
+      !sameId(scope.organizationId, candidate.organizationId) ||
       scope.applicationRootId === undefined ||
-      !sameUuid(scope.applicationRootId, candidate.applicationRootId ?? "")
+      !sameId(scope.applicationRootId, candidate.applicationRootId ?? "")
     )
       throw new Error("INVALID_SCOPE_RESULT");
     return scope.applicationRootId;
@@ -441,8 +439,8 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
           state.proposalFingerprint !== fingerprint ||
           state.grant.status === "active" ||
           state.revision !== 1 ||
-          !sameUuid(state.grant.grantId, built.grant.grantId) ||
-          !sameUuid(state.grant.sourceOrganizationId, scope.organizationId)
+          !sameId(state.grant.grantId, built.grant.grantId) ||
+          !sameId(state.grant.sourceOrganizationId, scope.organizationId)
         )
           throw new Error("INVALID_GRANT_RESULT");
         return state;
@@ -498,8 +496,8 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
           state.proposalFingerprint !== fingerprint ||
           state.grant.status === "active" ||
           state.revision !== expectedRevision + 1 ||
-          !sameUuid(state.grant.grantId, grantId.data) ||
-          !sameUuid(state.grant.sourceOrganizationId, scope.organizationId)
+          !sameId(state.grant.grantId, grantId.data) ||
+          !sameId(state.grant.sourceOrganizationId, scope.organizationId)
         )
           throw new Error("INVALID_GRANT_RESULT");
         return state;
@@ -513,8 +511,12 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<RecordShareGrantState>> => {
       if (!isRecord(commandCandidate)) return { kind: "unavailable" };
-      const { grantId: grantIdCandidate, expectedRevision, reason, ...unknownKeys } =
-        commandCandidate;
+      const {
+        grantId: grantIdCandidate,
+        expectedRevision,
+        reason,
+        ...unknownKeys
+      } = commandCandidate;
       const grantId = grantIdSchema.safeParse(
         typeof grantIdCandidate === "string" ? grantIdCandidate.toLowerCase() : grantIdCandidate,
       );
@@ -544,8 +546,8 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
         if (
           state.revision !== expectedRevision + 1 ||
           state.grant.status !== "revoked" ||
-          !sameUuid(state.grant.grantId, grantId.data) ||
-          !sameUuid(state.grant.sourceOrganizationId, scope.organizationId)
+          !sameId(state.grant.grantId, grantId.data) ||
+          !sameId(state.grant.sourceOrganizationId, scope.organizationId)
         )
           throw new Error("INVALID_GRANT_RESULT");
         return state;
@@ -571,9 +573,9 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
           `,
         );
         if (
-          !sameUuid(state.grant.grantId, grantId.data) ||
-          (!sameUuid(state.grant.sourceOrganizationId, scope.organizationId) &&
-            !sameUuid(state.grant.recipientOrganizationId, scope.organizationId))
+          !sameId(state.grant.grantId, grantId.data) ||
+          (!sameId(state.grant.sourceOrganizationId, scope.organizationId) &&
+            !sameId(state.grant.recipientOrganizationId, scope.organizationId))
         )
           throw new Error("INVALID_GRANT_RESULT");
         return state;

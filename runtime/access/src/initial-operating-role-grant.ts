@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  databaseRevision,
+  sameId,
   initialOperatingRoleGrantManifestSchema,
   initialOperatingRoleGrantResultSchema,
   type InitialOperatingRoleGrantManifest,
@@ -9,11 +11,11 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface InitialOperatingRoleGrantDependencies {
@@ -49,9 +51,7 @@ export interface InitialOperatingRoleGrant {
    * Applies the frozen first-owner manifest once. An exact retry of the original
    * manifest replays the stored result; any other manifest is refused.
    */
-  establish(
-    manifest: InitialOperatingRoleGrantManifest,
-  ): Promise<InitialOperatingRoleGrantResult>;
+  establish(manifest: InitialOperatingRoleGrantManifest): Promise<InitialOperatingRoleGrantResult>;
 }
 
 type GrantRow = DatabaseRow & {
@@ -68,15 +68,6 @@ type GrantRow = DatabaseRow & {
   access_version: unknown;
   correlation_id: unknown;
 };
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
 
 const fail = (
   code: InitialOperatingRoleGrantErrorCode,
@@ -117,27 +108,27 @@ const parseResult = (
     outcome: row.outcome,
     organizationId: row.organization_id,
     operatingRoleId: row.operating_role_id,
-    operatingRoleRevision: revision(row.operating_role_revision),
+    operatingRoleRevision: databaseRevision(row.operating_role_revision),
     roleAssignmentId: row.role_assignment_id,
-    roleAssignmentRevision: revision(row.role_assignment_revision),
+    roleAssignmentRevision: databaseRevision(row.role_assignment_revision),
     managementApplicationRootId: row.management_application_root_id,
-    managementApplicationReleaseRevision: revision(
+    managementApplicationReleaseRevision: databaseRevision(
       row.management_application_release_revision,
     ),
-    managementRequiredRoleRevision: revision(row.management_required_role_revision),
-    setupRevision: revision(row.setup_revision),
-    accessVersion: revision(row.access_version),
+    managementRequiredRoleRevision: databaseRevision(row.management_required_role_revision),
+    setupRevision: databaseRevision(row.setup_revision),
+    accessVersion: databaseRevision(row.access_version),
     correlationId: row.correlation_id,
   });
   if (!parsed.success) throw fail("INITIAL_OPERATING_ROLE_GRANT_STORAGE_RESULT_INVALID");
 
   const evidenceRoleId = manifest.operatingRoleChangeEvidence.candidate.roleId;
   if (
-    !sameUuid(parsed.data.organizationId, manifest.organizationId) ||
-    !sameUuid(parsed.data.operatingRoleId, evidenceRoleId) ||
-    !sameUuid(parsed.data.roleAssignmentId, manifest.roleAssignmentId) ||
-    !sameUuid(parsed.data.managementApplicationRootId, manifest.applicationRootId) ||
-    !sameUuid(parsed.data.correlationId, manifest.correlationId) ||
+    !sameId(parsed.data.organizationId, manifest.organizationId) ||
+    !sameId(parsed.data.operatingRoleId, evidenceRoleId) ||
+    !sameId(parsed.data.roleAssignmentId, manifest.roleAssignmentId) ||
+    !sameId(parsed.data.managementApplicationRootId, manifest.applicationRootId) ||
+    !sameId(parsed.data.correlationId, manifest.correlationId) ||
     parsed.data.managementApplicationReleaseRevision !== manifest.applicationReleaseRevision ||
     parsed.data.setupRevision !== manifest.setupRevision
   )

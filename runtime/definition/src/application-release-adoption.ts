@@ -38,13 +38,11 @@ export class ApplicationReleaseAdoptionTargetError extends Error {
   }
 }
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const storedTargetSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    currentReleaseRevision: javascriptSafeRevisionSchema.nullable(),
+    currentReleaseRevision: revisionSchema.nullable(),
     currentReleaseVersion: stableDefinitionReleaseVersionSchema.nullable(),
   })
   .strict();
@@ -80,9 +78,7 @@ export const createDatabaseApplicationReleaseAdoptionTargetRepository = (
       ) as adoption_target
     `;
     if (rows.length !== 1)
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
-      );
+      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     return rows[0]!.adoption_target === null ? undefined : rows[0]!.adoption_target;
   },
 });
@@ -94,9 +90,7 @@ export const createApplicationReleaseAdoptionTargetService = (
    * The published-current release of the addressed application, or undefined when one cannot be
    * proven. A root with no published release offers nothing to adopt.
    */
-  async read(
-    commandCandidate: unknown,
-  ): Promise<ApplicationReleaseAdoptionTarget | undefined> {
+  async read(commandCandidate: unknown): Promise<ApplicationReleaseAdoptionTarget | undefined> {
     const command = applicationReleaseAdoptionTargetCommandSchema.safeParse(commandCandidate);
     if (!command.success)
       throw new ApplicationReleaseAdoptionTargetError(
@@ -119,24 +113,16 @@ export const createApplicationReleaseAdoptionTargetService = (
 
     const parsed = storedTargetSchema.safeParse(candidate);
     if (!parsed.success)
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
-      );
+      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     const target = parsed.data;
-    if (
-      target.applicationRootId.toLowerCase() !== command.data.applicationRootId.toLowerCase()
-    )
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
-      );
+    if (target.applicationRootId.toLowerCase() !== command.data.applicationRootId.toLowerCase())
+      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     // A published root always carries both the pointer and its version; a partial pair is refused
     // rather than offered as a half-known adoption target.
     if (target.currentReleaseRevision === null || target.currentReleaseVersion === null) {
       if (target.currentReleaseRevision === null && target.currentReleaseVersion === null)
         return undefined;
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
-      );
+      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     }
     return Object.freeze({
       organizationId: target.organizationId,

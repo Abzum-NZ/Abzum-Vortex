@@ -7,6 +7,7 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
+  sameId,
   organizationAccountIdSchema,
   organizationIdSchema,
   type FieldId,
@@ -47,8 +48,6 @@ export type ReferenceChoiceInputValues = Readonly<{
 
 const refusal = (reasonCode: ReferenceChoiceRefusalReasonCode): ReferenceChoiceRefusal =>
   Object.freeze({ outcome: "refused", reasonCode });
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const maximumLabelLength = 200;
 
@@ -249,7 +248,10 @@ const encodeAccountContinuation = (
   continuation: AccountContinuation,
   key: QueryContinuationKey,
 ): string => {
-  const payload = Buffer.from(JSON.stringify(accountContinuationSchema.parse(continuation)), "utf8");
+  const payload = Buffer.from(
+    JSON.stringify(accountContinuationSchema.parse(continuation)),
+    "utf8",
+  );
   const nonce = randomBytes(nonceLength);
   const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, { authTagLength: tagLength });
   cipher.setAAD(accountAssociatedData);
@@ -272,12 +274,9 @@ const decodeAccountContinuation = (
     const bytes = Buffer.from(token, "base64url");
     if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== accountTokenVersion)
       throw new AccountContinuationError();
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      secret,
-      bytes.subarray(1, 1 + nonceLength),
-      { authTagLength: tagLength },
-    );
+    const decipher = createDecipheriv("aes-256-gcm", secret, bytes.subarray(1, 1 + nonceLength), {
+      authTagLength: tagLength,
+    });
     decipher.setAAD(accountAssociatedData);
     decipher.setAuthTag(bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength));
     const payload = Buffer.concat([
@@ -347,8 +346,7 @@ const accountChoices = async (
       ${after?.afterOrganizationAccountId ?? null}::uuid
     ) as result
   `;
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw new Error("ACCOUNT_CHOICE_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("ACCOUNT_CHOICE_RESULT_INVALID");
   const page = accountPageSchema.parse(rows[0].result);
 
   const choices: ReferenceChoiceOption[] = page.accounts.map((account) => ({
