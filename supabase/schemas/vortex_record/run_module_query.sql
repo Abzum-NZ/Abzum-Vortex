@@ -233,7 +233,8 @@ begin
 
   prepared_plan := vortex_record.prepare_module_query_internal(
     p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
-    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb)
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'resolution', null
   );
   if prepared_plan ->> 'outcome' is distinct from 'prepared' then
     return prepared_plan;
@@ -243,39 +244,8 @@ begin
   query_item := prepared_plan -> 'query';
   record_type_item := prepared_plan -> 'recordType';
   record_type_id_value := (prepared_plan ->> 'recordTypeId')::uuid;
-  storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
-  physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
-  storage_scope := prepared_plan #>> '{storage,storageScope}';
-  filter_condition := prepared_plan #> '{filter,residualCondition}';
-  if filter_condition = 'null'::jsonb then
-    filter_condition := null;
-  end if;
-  filter_types := coalesce(prepared_plan #> '{filter,residualFieldTypes}', '{}'::jsonb);
-  filter_nulls := coalesce(prepared_plan #> '{filter,residualNullValues}', '{}'::jsonb);
-  parameter_types := coalesce(prepared_plan #> '{filter,residualInputTypes}', '{}'::jsonb);
-  parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
-  filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
-  filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
-  access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
-  access_parameters := coalesce(prepared_plan #> '{access,parameters}', '[]'::jsonb);
-  access_owner_account_id := nullif(prepared_plan #>> '{access,ownerAccountId}', '')::uuid;
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into access_owner_group_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,ownerGroupIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,sharedRecordIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
-  into readable_field_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
-  into filter_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'filterFieldIds') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
-  into filter_expressions
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
 
   -- Grouped and totalled shapes are arrangements (#573); relationship hops have
   -- no declared path in this contract. Neither is run as plain rows.
@@ -289,6 +259,27 @@ begin
   if p_page_size > coalesce((query_item ->> 'pageSize')::integer, 0) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'page_size_invalid');
   end if;
+
+  prepared_plan := vortex_record.prepare_module_query_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'storage', prepared_plan
+  );
+  storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+  physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
+  storage_scope := prepared_plan #>> '{storage,storageScope}';
+  access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
+  access_parameters := coalesce(prepared_plan #> '{access,parameters}', '[]'::jsonb);
+  access_owner_account_id := nullif(prepared_plan #>> '{access,ownerAccountId}', '')::uuid;
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+  into access_owner_group_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,ownerGroupIds}') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+  into access_shared_record_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,sharedRecordIds}') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+  into readable_field_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
   for field_item in
     select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
@@ -418,6 +409,31 @@ begin
   if pg_catalog.cardinality(declared_sort_ids) = 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
   end if;
+
+  prepared_plan := vortex_record.prepare_module_query_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'complete', prepared_plan
+  );
+  if prepared_plan ->> 'outcome' is distinct from 'prepared' then
+    return prepared_plan;
+  end if;
+  filter_condition := prepared_plan #> '{filter,residualCondition}';
+  if filter_condition = 'null'::jsonb then
+    filter_condition := null;
+  end if;
+  filter_types := coalesce(prepared_plan #> '{filter,residualFieldTypes}', '{}'::jsonb);
+  filter_nulls := coalesce(prepared_plan #> '{filter,residualNullValues}', '{}'::jsonb);
+  parameter_types := coalesce(prepared_plan #> '{filter,residualInputTypes}', '{}'::jsonb);
+  parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
+  filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
+  filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+  into filter_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'filterFieldIds') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+  into filter_expressions
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
 
   -- The keyset position, which must fit this exact order. The cursor carries
   -- only the readable sort fields' values and a record identity, so it never

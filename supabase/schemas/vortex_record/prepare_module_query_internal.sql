@@ -4,7 +4,9 @@ create or replace function vortex_record.prepare_module_query_internal(
   p_expected_release_revision bigint,
   p_input_values jsonb,
   p_user_filter jsonb,
-  p_declared_filterable_field_ids jsonb
+  p_declared_filterable_field_ids jsonb,
+  p_stage text default 'complete',
+  p_prior_plan jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -57,7 +59,24 @@ declare
   declared_filterable_ids text[] := array[]::text[];
   parsed_ids text[] := array[]::text[];
   filterable_item jsonb;
+  prepared_plan jsonb;
 begin
+  if p_stage not in ('resolution', 'storage', 'complete') then
+    raise exception using errcode = '22023', message = 'Invalid query preparation stage';
+  end if;
+  if p_prior_plan is not null then
+    prepared_plan := p_prior_plan;
+    resolved := prepared_plan -> 'resolved';
+    context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
+    context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
+    user_filter := prepared_plan -> 'userFilter';
+    if user_filter = 'null'::jsonb then
+      user_filter := null;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+    into declared_filterable_ids
+    from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'declaredFilterableIds') as item(value);
+  else
   if p_input_values is null or pg_catalog.jsonb_typeof(p_input_values) <> 'object'
     or (p_expected_release_revision is not null
       and p_expected_release_revision not between 1 and 9007199254740991) then
@@ -107,9 +126,35 @@ begin
     and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
   end if;
+  end if;
   query_item := resolved -> 'query';
   record_type_item := resolved -> 'recordType';
   record_type_id_value := (resolved ->> 'recordTypeId')::uuid;
+  if prepared_plan is null then
+    prepared_plan := pg_catalog.jsonb_build_object(
+      'outcome', 'prepared',
+      'resolved', resolved,
+      'query', query_item,
+      'recordType', record_type_item,
+      'recordTypeId', record_type_id_value,
+      'userFilter', user_filter,
+      'declaredFilterableIds', pg_catalog.to_jsonb(declared_filterable_ids),
+      'scope', pg_catalog.jsonb_build_object(
+        'organizationId', context_organization_id,
+        'applicationRootId', context_application_root_id
+      )
+    );
+  end if;
+  if p_stage = 'resolution' then
+    return prepared_plan;
+  end if;
+
+  if prepared_plan ? 'storage' then
+    catalogue_row.storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+    select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+    into readable_field_ids
+    from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
+  else
   -- The installed physical table for this exact record type.
   select catalogue.* into catalogue_row
   from vortex_record.storage_catalogue as catalogue
@@ -147,6 +192,39 @@ begin
   select plan.* into access_plan
   from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
   readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
+  prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
+    'storage', pg_catalog.jsonb_build_object(
+      'storageContractId', catalogue_row.storage_contract_id,
+      'storageScope', catalogue_row.storage_scope,
+      'moduleRootId', catalogue_row.module_root_id,
+      'recordTypeId', catalogue_row.record_type_id,
+      'physicalSchemaToken', catalogue_row.physical_schema_token,
+      'physicalTableToken', catalogue_row.physical_table_token,
+      'protectedReadModelKey', catalogue_row.protected_read_model_key
+    ),
+    'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+    'access', pg_catalog.jsonb_build_object(
+      'predicate', coalesce(access_plan.access_predicate, 'true'),
+      'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
+      'ownerAccountId', access_plan.owner_account_id,
+      'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[])),
+      'sharedRecordIds', pg_catalog.to_jsonb(coalesce(access_plan.shared_record_ids, array[]::uuid[]))
+    )
+  );
+  end if;
+  if p_stage = 'storage' then
+    return prepared_plan;
+  end if;
+
+  if fields_by_id = '{}'::jsonb then
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
+    loop
+      fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
+        pg_catalog.lower(field_item ->> 'fieldId'), field_item
+      );
+    end loop;
+  end if;
   -- Filter: the published condition tree over this record type's own fields, and,
   -- when supplied, the user's typed filter ANDed with it so it can only narrow.
   -- Every field the user's tree reads must be one the component declares
@@ -365,34 +443,8 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
     end;
   end if;
-  return pg_catalog.jsonb_build_object(
-    'outcome', 'prepared',
-    'resolved', resolved,
-    'query', query_item,
-    'recordType', record_type_item,
-    'recordTypeId', record_type_id_value,
-    'scope', pg_catalog.jsonb_build_object(
-      'organizationId', context_organization_id,
-      'applicationRootId', context_application_root_id
-    ),
-    'storage', pg_catalog.jsonb_build_object(
-      'storageContractId', catalogue_row.storage_contract_id,
-      'storageScope', catalogue_row.storage_scope,
-      'moduleRootId', catalogue_row.module_root_id,
-      'recordTypeId', catalogue_row.record_type_id,
-      'physicalSchemaToken', catalogue_row.physical_schema_token,
-      'physicalTableToken', catalogue_row.physical_table_token,
-      'protectedReadModelKey', catalogue_row.protected_read_model_key
-    ),
-    'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+  return prepared_plan || pg_catalog.jsonb_build_object(
     'filterFieldIds', pg_catalog.to_jsonb(filter_ids),
-    'access', pg_catalog.jsonb_build_object(
-      'predicate', coalesce(access_plan.access_predicate, 'true'),
-      'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
-      'ownerAccountId', access_plan.owner_account_id,
-      'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[])),
-      'sharedRecordIds', pg_catalog.to_jsonb(coalesce(access_plan.shared_record_ids, array[]::uuid[]))
-    ),
     'filter', pg_catalog.jsonb_build_object(
       'residualCondition', filter_condition,
       'residualFieldTypes', filter_types,
@@ -407,11 +459,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.prepare_module_query_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_module_query_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb,text,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb)
+revoke all on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
 
-comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb) is
+comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
   'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query and release revision, verifies its catalogue storage and read-scan plan, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
