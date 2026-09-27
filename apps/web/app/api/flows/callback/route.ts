@@ -15,7 +15,16 @@ import {
 } from "@vortex/app";
 import { type RequestDatabaseTransaction, type RuntimeDatabaseTransaction } from "@vortex/db";
 import { createTenantGovernanceService } from "@vortex/identity";
-import type { IdentitySession, OrganizationSelectionCandidate, SelectedOrganizationScope, TenantId } from "@vortex/contracts";
+import {
+  applicationRootIdSchema,
+  organizationAccountIdSchema,
+  organizationIdSchema,
+  tenantIdSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
+  type TenantId,
+} from "@vortex/contracts";
 import {
   applicationKestraCallbackKeySecretName,
   createDatabaseProtectedNodeRunStore,
@@ -142,10 +151,10 @@ const createCallbackService = () => {
       if (scope.actor.kind !== "organization_account")
         throw new Error("DURABLE_OPERATION_ACTOR_UNAVAILABLE");
       const selectedScope: SelectedOrganizationScope = {
-        tenantId: scope.tenantId,
-        organizationId: scope.organizationId,
-        organizationAccountId: scope.actor.organizationAccountId,
-        applicationRootId: scope.applicationRootId,
+        tenantId: tenantIdSchema.parse(scope.tenantId),
+        organizationId: organizationIdSchema.parse(scope.organizationId),
+        organizationAccountId: organizationAccountIdSchema.parse(scope.actor.organizationAccountId),
+        applicationRootId: applicationRootIdSchema.parse(scope.applicationRootId),
         accessVersion: scope.accessVersion,
       };
       // The durable actor resolver established this exact request context on this transaction.

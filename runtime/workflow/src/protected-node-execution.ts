@@ -181,8 +181,8 @@ export type ProtectedNodeCallbackResponse = Readonly<{
     | "retryable_failure"
     | "permanent_refusal";
   safeCode: string;
-  nextPollAt?: string;
-  outputs?: Readonly<Record<string, JsonValue>>;
+  nextPollAt?: string | undefined;
+  outputs?: Readonly<Record<string, JsonValue>> | undefined;
 }>;
 
 export type ProtectedNodeRunStatus =
@@ -541,10 +541,10 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           return response;
         },
       });
-      if (execution.kind === "refused")
-        return { outcome: "permanent_refusal", safeCode: "not_authorized" };
-      if (execution.kind === "failed")
-        return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
+      if (execution.kind !== "available")
+        return execution.kind === "refused"
+          ? { outcome: "permanent_refusal", safeCode: "not_authorized" }
+          : { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
       return execution.value;
     },
 
