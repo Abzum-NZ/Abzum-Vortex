@@ -5,7 +5,6 @@ import {
   protectedReadModelKeys,
   readRecordDetailContract,
   readRecordsTableContract,
-  isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
@@ -53,6 +52,7 @@ import {
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+import { isPlatformPermissionKey } from "@vortex/modules";
 import type { z } from "zod";
 import {
   evaluateTypedConditionV2,
@@ -533,6 +533,38 @@ function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFail
       family: schemaFailureFamily[error.code],
       ...(error.location ? { location: error.location } : {}),
     }));
+  });
+}
+
+function pinnedModulePermissionIdRule(
+  context: PreparedValidationContext,
+): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((candidate): DefinitionRuleFailure[] => {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return [];
+    const source = object(candidate);
+    if (source.kind !== "module") return [];
+    if (source.body === null || typeof source.body !== "object" || Array.isArray(source.body))
+      return [];
+    const body = object(source.body);
+    if (!Array.isArray(body.permissions)) return [];
+    const pinnedPermissions = (body.permissions as unknown[]).filter((candidatePermission) =>
+      candidatePermission !== null &&
+      typeof candidatePermission === "object" &&
+      !Array.isArray(candidatePermission) &&
+      Object.prototype.hasOwnProperty.call(candidatePermission, "pinnedPermissionId"),
+    );
+    if (pinnedPermissions.length === 0) return [];
+    return [
+      {
+        ruleCode: "vortex.definition.source_shape",
+        family: "unsupported_choice",
+        location: {
+          documentKind: "module",
+          documentKey: String(source.key),
+          segments: [{ kind: "module", key: String(source.key) }],
+        },
+      },
+    ];
   });
 }
 
@@ -4719,6 +4751,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     requiredContext: ["source"],
     safeLocationFamily: "document",
     run: sourceShapeRule,
+  },
+  {
+    ruleId: "vortex.definition.pinned_module_permission_id",
+    emittedCodes: ["vortex.definition.source_shape"],
+    stage: "edit_save",
+    definitionKinds: ["module"],
+    requiredContext: ["source"],
+    safeLocationFamily: "document",
+    run: pinnedModulePermissionIdRule,
   },
   {
     ruleId: "vortex.definition.local_identity_unique",
