@@ -1,8 +1,28 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
+import {
+  Combobox,
+  ComboboxClear,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "../components/combobox";
+import { Field, FieldLabel } from "../components/field";
+import { RadioGroup, RadioGroupItem } from "../components/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/select";
 import { DefinitionRenderError } from "../definition-error";
-import type { ChoiceInputPayload } from "./projected-data";
+import type { ChoiceInputPayload, ChoiceOption } from "./projected-data";
 import {
   readControlSettings,
   resolveControlContext,
@@ -21,16 +41,16 @@ import { useFormField } from "./form-context";
 
 export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
-/** Lists longer than this offer a search box; shorter lists are scanned directly. */
+/** Lists longer than this use a searchable combobox; shorter lists follow the authored variant. */
 const SEARCHABLE_OPTION_THRESHOLD = 7;
 
+type ComboboxChoice =
+  | Readonly<{ kind: "placeholder"; label: string }>
+  | Readonly<{ kind: "choice"; option: ChoiceOption }>;
+
 /**
- * Select or radio-group choice emitting only its declared `field_changed` event with an exact
- * option key or `null`. Options come from the projection when supplied, otherwise from the
- * authored option list; duplicate option keys and unknown selected keys fail closed. Longer
- * lists, such as permitted record or account reference choices, can be searched by label; the
- * current selection stays visible while searching, and only an offered option key is ever
- * registered or emitted.
+ * Renders only projected or authored choices. Long and projected reference lists use the
+ * searchable combobox; shorter lists keep the authored radio or select presentation.
  */
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, ["field_changed"]);
@@ -48,8 +68,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const options = context.values?.options ?? settings.options("options");
   const error = context.values?.error;
   const note = inactiveNote(context);
-
   const projected = context.values?.value;
+
   if (
     projected !== undefined &&
     projected !== null &&
@@ -57,29 +77,31 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   )
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
-      `Choice value '${projected}' is not an available option`,
+      "Choice value '" + projected + "' is not an available option",
       context.location,
     );
 
   const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
-  // Only an option from the offered set may be registered in the form or submitted.
+  // Only a currently offered option may be registered in the form or submitted.
   const permittedSelected =
-    selected !== null && options.some((option) => option.key === selected)
-      ? selected
-      : null;
+    selected !== null && options.some((option) => option.key === selected) ? selected : null;
+  const selectedOption = options.find((option) => option.key === permittedSelected) ?? null;
   useFormField(fieldKey, props.placementId, permittedSelected);
 
-  const change = (next: string): void => {
+  const change = (next: string | null): void => {
     if (disabled) return;
-    const value = options.some((option) => option.key === next) ? next : null;
+    const value = next !== null && options.some((option) => option.key === next) ? next : null;
     setSelected(value);
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
   };
 
-  const searchable = options.length > SEARCHABLE_OPTION_THRESHOLD;
-  const normalizedSearch = searchable ? searchTerm.trim().toLowerCase() : "";
+  const referenceChoices = context.values?.options !== undefined;
+  const searchable = referenceChoices || options.length > SEARCHABLE_OPTION_THRESHOLD;
+  const radio = variant === "radio" && !searchable;
+  const normalizedSearch = comboboxOpen ? searchTerm.trim().toLowerCase() : "";
   const filteredOptions =
     normalizedSearch.length === 0
       ? options
@@ -88,21 +110,14 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
             option.key === permittedSelected ||
             option.label.toLowerCase().includes(normalizedSearch),
         );
-
+const comboItems: readonly ComboboxChoice[] = [
+    { kind: "placeholder", label: placeholder },
+    ...options.map((option): ComboboxChoice => ({ kind: "choice", option })),
+  ];
+  const selectedComboItem: ComboboxChoice | null =
+    selectedOption === null ? null : { kind: "choice", option: selectedOption };
   const described = describedBy(ids, help, error, note, draftFeedback);
-  const search = searchable ? (
-    <div className="vortex-choice-search-box">
-      <input
-        id={`${ids.control}-search`}
-        type="search"
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-        aria-label={`Search ${label} options`}
-        disabled={disabled}
-        className="vortex-choice-search"
-      />
-    </div>
-  ) : null;
+  const ariaRequired = required || described["aria-required"] === true;
 
   return (
     <div
@@ -114,66 +129,142 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
       data-vortex-searchable={searchable ? "true" : "false"}
       className="vortex-field"
     >
-      {variant === "radio" ? (
-        <fieldset
-          disabled={disabled}
-          {...described}
-          className="vortex-radio-group"
-        >
-          <legend className="vortex-field-label">
+      {radio ? (
+        <fieldset disabled={disabled}>
+          <legend id={ids.label} className="vortex-field-label">
             <FieldLabelText label={label} required={required} />
           </legend>
-          {search}
-          {normalizedSearch.length > 0 && filteredOptions.length === 0 ? (
-            <div className="vortex-choice-empty" role="status">
-              No matching options
-            </div>
-          ) : (
-            filteredOptions.map((option) => {
-              const optionId = `${ids.control}-${option.key}`;
-              return (
-                <div key={option.key} className="vortex-radio-option">
-                  <input
-                    id={optionId}
-                    type="radio"
-                    name={ids.control}
-                    value={option.key}
-                    checked={permittedSelected === option.key}
-                    onChange={() => change(option.key)}
-                    required={required}
-                    aria-invalid={error !== undefined}
-                    className="vortex-radio"
-                  />
-                  <label htmlFor={optionId}>{option.label}</label>
-                </div>
-              );
-            })
-          )}
-        </fieldset>
-      ) : (
-        <>
-          <label htmlFor={ids.control} className="vortex-field-label">
-            <FieldLabelText label={label} required={required} />
-          </label>
-          {search}
-          <select
-            id={ids.control}
-            name={fieldKey}
+          <RadioGroup
+            name={ids.control}
             value={permittedSelected ?? ""}
-            onChange={(event) => change(event.target.value)}
+            onValueChange={(value) => change(typeof value === "string" ? value : null)}
             disabled={disabled}
             required={required}
+            aria-labelledby={ids.label}
+            aria-describedby={described["aria-describedby"]}
+            aria-required={ariaRequired}
             aria-invalid={error !== undefined}
-            {...described}
-            className="vortex-select"
           >
-            <option value="">{placeholder}</option>
-            {filteredOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            {options.map((option) => {
+              const optionId = ids.control + "-" + option.key;
+              return (
+                <Field key={option.key} orientation="horizontal">
+                  <RadioGroupItem
+                    id={optionId}
+                    value={option.key}
+                    aria-invalid={error !== undefined}
+                  />
+                  <FieldLabel htmlFor={optionId}>{option.label}</FieldLabel>
+                </Field>
+              );
+            })}
+          </RadioGroup>
+        </fieldset>
+      ) : searchable ? (
+        <>
+          <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
+            <FieldLabelText label={label} required={required} />
+          </label>
+          <Combobox
+            items={comboItems}
+            value={selectedComboItem}
+            inputValue={comboboxOpen ? searchTerm : (selectedOption?.label ?? "")}
+            onOpenChange={(open) => {
+              setComboboxOpen(open);
+              setSearchTerm("");
+            }}
+            onInputValueChange={setSearchTerm}
+            onValueChange={(item) => change(item?.kind === "choice" ? item.option.key : null)}
+            itemToStringLabel={(item) =>
+              item.kind === "choice" ? item.option.label : item.label
+            }
+            itemToStringValue={(item) => (item.kind === "choice" ? item.option.key : "")}
+            isItemEqualToValue={(item, value) =>
+              item.kind === "choice" && value.kind === "choice"
+                ? item.option.key === value.option.key
+                : item.kind === value.kind
+            }
+            filter={(item, query) => {
+              const normalizedQuery = query.trim().toLowerCase();
+              if (item.kind === "placeholder") return normalizedQuery.length === 0;
+              return (
+                item.option.key === permittedSelected ||
+                item.option.label.toLowerCase().includes(normalizedQuery)
+              );
+            }}
+            name={fieldKey}
+            required={required}
+            disabled={disabled}
+          >
+            <ComboboxInputGroup>
+              <ComboboxInput
+                id={ids.control}
+                placeholder={placeholder}
+                disabled={disabled}
+                aria-labelledby={ids.label}
+                aria-describedby={described["aria-describedby"]}
+                aria-required={ariaRequired}
+                aria-invalid={error !== undefined}
+              />
+              <ComboboxTrigger
+                aria-label={"Show " + label + " options"}
+                disabled={disabled}
+              />
+              <ComboboxClear
+                aria-label={"Clear " + label + " selection"}
+                disabled={disabled || selectedOption === null}
+              />
+            </ComboboxInputGroup>
+            <ComboboxContent>
+              <ComboboxList>
+                {normalizedSearch.length === 0 ? (
+                  <ComboboxItem
+                    key={"placeholder:" + ids.control}
+                    value={comboItems[0]}
+                  >
+                    {placeholder}
+                  </ComboboxItem>
+                ) : null}
+                {filteredOptions.map((option) => (
+                  <ComboboxItem key={option.key} value={{ kind: "choice", option }}>
+                    {option.label}
+                  </ComboboxItem>
+                ))}
+                <ComboboxEmpty role="status">No matching options</ComboboxEmpty>
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+        </>
+      ) : (
+        <>
+          <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
+            <FieldLabelText label={label} required={required} />
+          </label>
+          <Select
+            value={permittedSelected}
+            onValueChange={change}
+            name={fieldKey}
+            required={required}
+            disabled={disabled}
+          >
+            <SelectTrigger
+              id={ids.control}
+              aria-labelledby={ids.label}
+              aria-describedby={described["aria-describedby"]}
+              aria-required={ariaRequired}
+              aria-invalid={error !== undefined}
+              disabled={disabled}
+            >
+              <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option.key} value={option.key}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </>
       )}
       <FieldMessages
