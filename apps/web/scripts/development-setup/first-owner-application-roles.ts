@@ -235,7 +235,10 @@ export const grantFirstOwnerApplicationRoles = async (
 
   const templateCountsByApplication = new Map<string, number>();
   const seenTemplates = new Set<string>();
-  for (const template of templates) {
+  const installedTemplates = templates.filter((template) =>
+    applicationKeyByRootId.has(template.reference.applicationRootId.toLowerCase()),
+  );
+  for (const template of installedTemplates) {
     const identity = templateIdentity(template);
     if (seenTemplates.has(identity))
       throw new Error(`Application role template ${template.key} was returned more than once`);
@@ -253,14 +256,19 @@ export const grantFirstOwnerApplicationRoles = async (
   const rolesByTemplate = new Map<string, OrganizationAdministrationRoleSummary>();
   for (const role of currentRoles) {
     const identity = roleIdentity(role);
-    if (identity === undefined) continue;
+    if (
+      identity === undefined ||
+      role.source.kind !== "application" ||
+      !applicationKeyByRootId.has(role.source.applicationRootId.toLowerCase())
+    )
+      continue;
     if (rolesByTemplate.has(identity))
       throw new Error(`More than one accepted role was found for application template ${identity}`);
     rolesByTemplate.set(identity, role);
   }
 
   let ensuredGrants = 0;
-  for (const template of templates) {
+  for (const template of installedTemplates) {
     const identity = templateIdentity(template);
     let role = rolesByTemplate.get(identity);
     if (role === undefined) {
