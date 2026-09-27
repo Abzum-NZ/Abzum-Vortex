@@ -4,6 +4,7 @@ import {
   connectionInstanceIdSchema,
   connectionInstanceStatusSchema,
   organizationIdSchema,
+  sameId,
   type ConnectionInstanceId,
   type ConnectionInstanceStatus,
   type OrganizationId,
@@ -90,7 +91,7 @@ const refusalForFailure = (error: unknown): ConnectionInstanceReaderRefusalCode 
 
 /** Identifiers are case-insensitive: compare the canonical lower-cased forms. */
 const sameIdentifier = (left: unknown, right: string): boolean =>
-  typeof left === "string" && left.toLowerCase() === right.toLowerCase();
+  typeof left === "string" && sameId(left, right);
 
 /** Validates the two read identifiers as shapes, returning no value when either is malformed. */
 const validateIdentifiers = (
@@ -111,11 +112,13 @@ const validateIdentifiers = (
 const validatePageQuery = (
   organizationId: unknown,
   query: unknown,
-): Readonly<{
-  organization: string;
-  afterConnectionInstanceId: string | null;
-  pageSize: number;
-}> | undefined => {
+):
+  | Readonly<{
+      organization: string;
+      afterConnectionInstanceId: string | null;
+      pageSize: number;
+    }>
+  | undefined => {
   try {
     if (query === null || typeof query !== "object") return undefined;
     const candidate = query as Readonly<{
@@ -215,8 +218,7 @@ export async function listConnectionInstancesForAdministration(
     if (row === undefined) return unavailable("administration_unavailable");
     if (!sameIdentifier(row.organization_id, organization))
       return unavailable("administration_unavailable");
-    if (!Array.isArray(row.connection_instances))
-      return unavailable("administration_unavailable");
+    if (!Array.isArray(row.connection_instances)) return unavailable("administration_unavailable");
 
     const parsed = connectionInstanceStatusSchema
       .array()

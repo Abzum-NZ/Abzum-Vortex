@@ -66,6 +66,7 @@ export const protectedOperationResponseSchema = z
     ]),
     safeCode: builderKeySchema,
     nextPollAt: timestampSchema.optional(),
+    outputs: z.record(builderKeySchema, jsonValueSchema).optional(),
   })
   .strict();
 

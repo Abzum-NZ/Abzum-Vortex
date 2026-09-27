@@ -28,6 +28,7 @@ export {
 } from "./identity-authority-disablement";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
 export {
+  bootstrapVortexSuperAdministrator,
   adoptOrganization,
   adoptTenant,
   closeClusterIdentity,

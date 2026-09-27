@@ -15,11 +15,9 @@ import {
 import { permissionDeclarationSchema } from "./permissions";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const permissionRegistryDefinitionReleaseCommon = {
   definitionKey: namespacedKeySchema,
-  releaseRevision: javascriptSafeRevisionSchema,
+  releaseRevision: revisionSchema,
   releaseVersion: stableDefinitionReleaseVersionSchema,
   validationContractVersion: semanticVersionSchema,
   contentFingerprint: fingerprintSchema,
@@ -147,7 +145,7 @@ export const permissionRegistryMutationCommandSchema = z.discriminatedUnion("ope
     z
       .object({
         operation: z.literal(operation),
-        expectedRevision: javascriptSafeRevisionSchema,
+        expectedRevision: revisionSchema,
         candidate: preparedApplicationPermissionRegistrationSchema,
         changedBy: actorIdSchema,
         correlationId: correlationIdSchema,
@@ -159,7 +157,7 @@ export const permissionRegistryMutationCommandSchema = z.discriminatedUnion("ope
       operation: z.literal("withdraw"),
       organizationId: organizationIdSchema,
       applicationRootId: applicationRootIdSchema,
-      expectedRevision: javascriptSafeRevisionSchema,
+      expectedRevision: revisionSchema,
       changedBy: actorIdSchema,
       correlationId: correlationIdSchema,
     })
@@ -172,8 +170,8 @@ export const permissionRegistryMutationResultSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     registrationState: z.enum(["active", "withdrawn"]),
-    registrationRevision: javascriptSafeRevisionSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    registrationRevision: revisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()
@@ -217,7 +215,7 @@ export const permissionCatalogueEntrySchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema.optional(),
-    registrationRevision: javascriptSafeRevisionSchema,
+    registrationRevision: revisionSchema,
     ownerKind: z.enum(["platform", "application", "module"]),
     ownerId: platformIdSchema,
     permission: permissionDeclarationSchema,
@@ -266,7 +264,7 @@ export const applicationPermissionCatalogueSnapshotSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    registrationRevision: javascriptSafeRevisionSchema,
+    registrationRevision: revisionSchema,
     applicationRelease: permissionRegistryDefinitionReleaseSchema.and(
       z.object({ kind: z.literal("application") }),
     ),
@@ -310,8 +308,8 @@ export const initializePlatformPermissionCatalogueCommandSchema = z
 export const initializePlatformPermissionCatalogueResultSchema = z
   .object({
     organizationId: organizationIdSchema,
-    registrationRevision: javascriptSafeRevisionSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    registrationRevision: revisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
@@ -332,14 +330,14 @@ export const revisePlatformPermissionCatalogueMetadataResultSchema = z
     sourceCatalogueVersion: z.literal("1.0.0"),
     targetCatalogueVersion: z.literal("1.0.1"),
     registrationRevision: z.literal(2),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 
 export const adoptShippedPlatformPermissionCatalogueCommandSchema = z
   .object({
     organizationId: organizationIdSchema,
-    expectedRegistrationRevision: javascriptSafeRevisionSchema,
+    expectedRegistrationRevision: revisionSchema,
     targetCatalogueVersion: semanticVersionSchema,
     targetCatalogueFingerprint: fingerprintSchema,
     changedBy: actorIdSchema,
@@ -352,8 +350,8 @@ export const adoptShippedPlatformPermissionCatalogueResultSchema = z
     organizationId: organizationIdSchema,
     sourceCatalogueVersion: semanticVersionSchema,
     targetCatalogueVersion: semanticVersionSchema,
-    registrationRevision: javascriptSafeRevisionSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    registrationRevision: revisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 

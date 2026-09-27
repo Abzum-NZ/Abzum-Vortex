@@ -246,9 +246,9 @@ begin
     system_expressions := pg_catalog.array_append(system_expressions, pg_catalog.format('%L, %s', system_key,
       case system_key
         when 'created_at' then
-          'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', stored.created_at), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))'
+          'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.created_at))'
         when 'updated_at' then
-          'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', stored.updated_at), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))'
+          'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.updated_at))'
         when 'created_by' then 'pg_catalog.to_jsonb(stored.created_by)'
         when 'updated_by' then 'pg_catalog.to_jsonb(stored.updated_by)'
         else
@@ -566,7 +566,7 @@ begin
             pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'timestamp_with_time_zone' then
             pg_catalog.format(
-              'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', stored.%I), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))',
+              'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.%I))',
               mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'date' then
             pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.to_char(stored.%I, ''YYYY-MM-DD''))',
@@ -709,7 +709,7 @@ begin
       else ' desc nulls last' end);
     sort_key_terms := pg_catalog.array_append(sort_key_terms, case sort_sql_types[sort_index]
       when 'timestamp with time zone' then pg_catalog.format(
-        'pg_catalog.to_char(pg_catalog.timezone(''UTC'', %s), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"'')',
+        'vortex_context.format_timestamp_utc(%s)',
         sort_value_sql[sort_index])
       when 'date' then pg_catalog.format(
         'pg_catalog.to_char(%s, ''YYYY-MM-DD'')', sort_value_sql[sort_index])

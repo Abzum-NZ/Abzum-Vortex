@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  sameId,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
@@ -27,7 +28,6 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 import {
   flowExecutionBindingReadResultSchema,
@@ -162,9 +162,7 @@ export const flowEffectiveActorPurposeSchema = z
  * complete closed context inside a fresh short transaction and never reuses the initiator's.
  */
 export const flowEffectiveActorIdentitySchema = z.discriminatedUnion("kind", [
-  z
-    .object({ kind: z.literal("current_user"), sessionContext: sessionContextSchema })
-    .strict(),
+  z.object({ kind: z.literal("current_user"), sessionContext: sessionContextSchema }).strict(),
   z
     .object({
       kind: z.literal("specified_user"),
@@ -252,9 +250,7 @@ export type FlowEffectiveActorRunActor = z.infer<typeof flowEffectiveActorRunAct
 export type FlowEffectiveActorNodeRequest = z.infer<typeof flowEffectiveActorNodeRequestSchema>;
 export type FlowEffectiveActorRequest = z.input<typeof flowEffectiveActorRequestSchema>;
 export type FlowEffectiveActorState = z.infer<typeof flowEffectiveActorStateSchema>;
-export type FlowEffectiveActorRefusalReason = z.infer<
-  typeof flowEffectiveActorRefusalReasonSchema
->;
+export type FlowEffectiveActorRefusalReason = z.infer<typeof flowEffectiveActorRefusalReasonSchema>;
 export type FlowEffectiveActorPurpose = z.infer<typeof flowEffectiveActorPurposeSchema>;
 export type FlowEffectiveActorIdentity = z.infer<typeof flowEffectiveActorIdentitySchema>;
 export type FlowEffectiveActorDelegationUse = z.infer<typeof flowEffectiveActorDelegationUseSchema>;
@@ -284,11 +280,6 @@ const ownerId = (owner: FlowEffectiveActorPurpose["operation"]["owner"]): string
 /** One canonical identity for an exact protected operation: owner kind, owner identity and id. */
 const operationReferenceKey = (reference: FlowEffectiveActorPurpose["operation"]): string =>
   `${reference.owner.kind}:${ownerId(reference.owner).toLowerCase()}:${reference.operationId.toLowerCase()}`;
-
-const sameId = (left: string | undefined, right: string | undefined): boolean =>
-  left === undefined || right === undefined
-    ? left === right
-    : left.toLowerCase() === right.toLowerCase();
 
 const purposeOf = (node: FlowEffectiveActorNodeRequest): FlowEffectiveActorPurpose => ({
   organizationId: node.organizationId,
@@ -470,7 +461,10 @@ export const resolveFlowEffectiveActor = (
 
   const activity =
     effectiveActor.kind === "specified_user"
-      ? { actorKind: "organization_account" as const, actorId: effectiveActor.organizationAccountId }
+      ? {
+          actorKind: "organization_account" as const,
+          actorId: effectiveActor.organizationAccountId,
+        }
       : { actorKind: "system" as const, actorId: effectiveActor.systemActorId };
 
   // A system-started flow has no human initiator; it needs no initiator delegation-use entry.
@@ -534,7 +528,7 @@ export type FlowEffectiveActorCurrentAuthority = Readonly<{
  * concurrent revoke or replace either commits first and is seen here or waits for this use.
  */
 export type FlowEffectiveActorAuthorityReader = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   resolution: FlowEffectiveActorEffectiveResolution,
 ) => Promise<FlowEffectiveActorCurrentAuthority>;
 
@@ -615,12 +609,12 @@ export const readFlowEffectiveActorCurrentAuthority: FlowEffectiveActorAuthority
  * a database service role, and a specified person's context carries no authentication evidence.
  */
 export type FlowEffectiveActorScopeResolver<Scope> = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   actor: FlowEffectiveActorIdentity,
 ) => Promise<ResolvedRequestContext<Scope>>;
 
 export type FlowEffectiveActorTransactionRunner = <Scope, Result>(
-  resolve: (transaction: RuntimeDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
+  resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 

@@ -14,6 +14,7 @@
     "@vortex/access": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/module": "workspace:*",
     "server-only": "0.0.1",
     "zod": "4.6.5"
   },
