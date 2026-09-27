@@ -150,3 +150,6 @@ grant execute on function vortex_access.resolve_record_field_bounds_internal(jso
 
 comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
   'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the live permission catalogue itself, never from a caller-supplied declaration.';
+
+alter function vortex_access.resolve_record_field_bounds_internal(jsonb)
+  owner to vortex_access_owner;
