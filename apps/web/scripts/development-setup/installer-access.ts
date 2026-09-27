@@ -23,7 +23,9 @@ import type { SetupState } from "./state";
  * therefore uses their own role and assignment authority, through the ordinary protected Access
  * administration operations (the ones the IAM application drives), to create one explicit custom
  * role that holds exactly that permission and assign it to themselves. The role and its assignment
- * stay visible in the organisation's access administration afterwards.
+ * stay visible in the organisation's access administration afterwards. After application
+ * installation, local setup accepts and assigns the installed application roles through those same
+ * protected Access administration operations.
  */
 
 const installPermissionKey = "platform.organization.applications.manage";

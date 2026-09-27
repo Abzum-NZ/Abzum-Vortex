@@ -10,12 +10,14 @@ import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { publishShippedDefinitions } from "./definitions";
 import { installApplications, type InstallFacts } from "./install";
 import { grantStewardInstallerRole } from "./installer-access";
+import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
 import { loadSetupState } from "./state";
 
 /**
  * The development-only setup provisions the disposable organisation, publishes and installs the
- * shipped applications through the protected entry points. The nominated steward grants
- * application roles later through IAM. `pnpm setup:local` runs this command.
+ * shipped applications through the protected entry points, and grants their application roles to
+ * the nominated steward through the same protected Access operations used by IAM.
+ * `pnpm setup:local` runs this command.
  *
  * An interrupted run resumes: provisioning replays by its fixed duplicate key and the steps already
  * recorded in the setup state are skipped. Once every step has completed, a re-run is a no-op. A
@@ -85,27 +87,42 @@ const main = async (): Promise<void> => {
     state,
   });
 
+  let releases: InstallFacts["releases"];
   if (state.setupCompleted) {
-    log(`the setup already completed for account ${provisioned.organizationAccountId}`);
-    return;
+    log(`the applications were already installed for account ${provisioned.organizationAccountId}`);
+    releases = new Map(Object.entries(state.releases));
+  } else {
+    releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
+
+    // 3. The steward creates the application-installation role through Access, then installs the
+    //    releases through the protected App installation coordinator.
+    await grantStewardInstallerRole(
+      {
+        identityAuthorityId,
+        organizationId: system.organizationId,
+        stewardIdentityId,
+        stewardOrganizationAccountId: provisioned.organizationAccountId,
+        manifest,
+        state,
+      },
+      log,
+    );
+    await installApplications(installFacts(releases), log);
   }
 
-  const releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
-
-  // 3. The steward creates the application-installation role through Access, then installs the
-  //    releases. Application roles are granted later through IAM.
-  await grantStewardInstallerRole(
+  // 4. Local development deliberately leaves the nominated first owner able to open the
+  //    applications installed in this organisation, while all grants remain normal Access facts.
+  await grantFirstOwnerApplicationRoles(
     {
       identityAuthorityId,
       organizationId: system.organizationId,
       stewardIdentityId,
       stewardOrganizationAccountId: provisioned.organizationAccountId,
-      manifest,
-      state,
+      applicationKeys: manifest.applicationKeys,
+      releases,
     },
     log,
   );
-  await installApplications(installFacts(releases), log);
   log("done. Sign in with the nominated account and open the organisation.");
 };
 

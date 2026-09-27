@@ -42,6 +42,27 @@ import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalo
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
 
+/** The closed set of protected projections that may declare the standard update action. */
+export const writableSystemProjectionRegistrations = Object.freeze({
+  organization_settings: Object.freeze({
+    moduleKey: "vortex.organisation_administration",
+    protectedView: "organization_runtime_settings",
+    writer: "save_organization_settings_record",
+  }),
+} as const);
+
+export const isRegisteredWritableSystemProjection = (
+  recordTypeKey: string,
+  protectedView: string,
+  moduleKey?: string,
+): boolean =>
+  Object.entries(writableSystemProjectionRegistrations).some(
+    ([key, registration]) =>
+      key === recordTypeKey &&
+      registration.protectedView === protectedView &&
+      (moduleKey === undefined || registration.moduleKey === moduleKey),
+  );
+
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
 const maximumSourceContainerItems = 1_000;
@@ -1531,16 +1552,27 @@ export const moduleSourceRecordTypeSchema = z
       });
     const projection = value.system_projection;
     if (projection === undefined) return;
-    // A system record type is a read-only projection of protected storage that includes the
-    // organisation: its write path is the named protected operation, never a standard record
-    // command. A standard create, update, delete or restore is refused at publication by the
-    // compiler with its own registered code (vortex.definition.system_record_write_refused), so
-    // the source shape deliberately admits the declaration for that refusal to report.
+    // A system projection is read-only by default. Only a projection in the closed writable
+    // registration may declare standard update; create, delete and restore always remain refused.
     if (value.storage_scope !== "organisation_shared")
       context.addIssue({
         code: "custom",
         path: ["storage_scope"],
         message: "A system projection record type is scoped to exactly one organisation",
+      });
+    const mayUpdate = isRegisteredWritableSystemProjection(value.key, projection.protected_view);
+    if (
+      value.standard_actions.some((action) =>
+        action === "create" ||
+        action === "soft_delete" ||
+        action === "restore" ||
+        (action === "update" && !mayUpdate),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["standard_actions"],
+        message: "A system projection standard write action must be in the closed writable registration",
       });
     const fields = new Map(value.fields.map((field) => [field.key, field]));
     const organization = fields.get(projection.organization_field);
@@ -1943,8 +1975,8 @@ const moduleSourceBodySchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    // A system projection record type has no ordinary write path, so every action on it targets a
-    // registered protected operation, and no other record type may target a protected operation.
+    // Every named action on a system projection targets a registered protected operation, and no
+    // other record type may target one; standard update is governed by the closed registry.
     const recordTypes = new Map(
       value.record_types.map((recordType) => [recordType.key, recordType]),
     );
