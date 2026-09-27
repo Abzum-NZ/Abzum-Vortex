@@ -571,8 +571,7 @@ const evaluateValue = (
   const taskId = kestraTaskId("e", seed);
   const runtimeScope = evaluatorRuntimeScope(ctx, value);
   const task = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, taskId), kestraEvaluatorOperationKey, {
-    expression: jsonOf(value),
-    ...limits,
+    properties: { expression: jsonOf(value), ...limits },
   }, "workflow.evaluate", undefined, { runtimeScope });
   return { tasks: [task], reference: resultReference(ctx, taskId) };
 };
@@ -918,9 +917,11 @@ const compileControlTask = (
     case "wait_for_person": {
       const taskId = kestraTaskId("t", task.id);
       const request = protectedCallbackTask(ctx, taskId, derivedNodeId(ctx, task.id), kestraHumanTaskOperationKey, {
-        form_id: jsonOf(task.formId),
-        assignee: jsonOf(task.assignee),
-        inputs: jsonOf(task.inputs),
+        properties: {
+          form_id: jsonOf(task.formId),
+          assignee: jsonOf(task.assignee),
+          inputs: jsonOf(task.inputs),
+        },
       });
       const onResume = Object.keys(task.inputs)
         .sort()
@@ -961,7 +962,7 @@ const compileRegisteredTask = (
         taskId,
         derivedNodeId(ctx, task.id),
         kestraEvaluatorOperationKey,
-        { expression: jsonOf(expression) },
+        { properties: { expression: jsonOf(expression) } },
         "workflow.evaluate",
         undefined,
         { runtimeScope: evaluatorRuntimeScope(ctx, expression) },

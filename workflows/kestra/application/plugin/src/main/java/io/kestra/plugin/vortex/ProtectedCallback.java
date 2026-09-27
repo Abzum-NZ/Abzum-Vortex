@@ -31,8 +31,10 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /** Sends one signed, typed Vortex protected-operation request for a Kestra task attempt. */
 @SuperBuilder
@@ -69,6 +71,9 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         "runtimeScope",
         "allow_refusal"
     );
+    private static final Pattern RESOLVED_INPUT_REFERENCE = Pattern.compile(
+        "\\{\\{ (?:outputs\\.e_[a-z0-9_]+\\.value|currentEachOutput\\(outputs\\.e_[a-z0-9_]+\\)\\.value) \\}\\}"
+    );
 
     @Schema(description = "The compiler-generated protected-operation binding, raw-wrapped as JSON.")
     private Property<String> envelope;
@@ -85,11 +90,12 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
     @Schema(description = "The stable Kestra task-run ID used as the callback duplicate-protection key.")
     private Property<String> duplicateProtectionKey;
 
+    // Keep generated references raw until renderTyped preserves their JSON value types.
     @Schema(description = "Resolved operation inputs produced by the Vortex evaluator.")
-    private Property<Object> resolvedInputs;
+    private Object resolvedInputs;
 
     @Schema(description = "The resolved typed evaluator scope for this protected callback.")
-    private Property<Object> runtimeScope;
+    private Object runtimeScope;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -143,7 +149,7 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         if (response.statusCode() != 200 || responseBody.length > MAXIMUM_BODY_LENGTH) {
             throw refused();
         }
-        return successfulOutput(OBJECT_MAPPER.readTree(responseBody));
+        return successfulOutput(OBJECT_MAPPER.readTree(responseBody), request);
     }
 
     private static ObjectNode parseStaticBinding(String rawEnvelope) throws Exception {
@@ -171,7 +177,14 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         if (properties.has("inputs") || !properties.path("operation").isTextual()) {
             throw refused();
         }
-        Object resolved = renderOptional(runContext, resolvedInputs);
+        Object resolved;
+        if (resolvedInputs instanceof String reference && RESOLVED_INPUT_REFERENCE.matcher(reference).matches()) {
+            resolved = runContext.renderTyped(reference);
+        } else if (resolvedInputs instanceof Map<?, ?> empty && empty.isEmpty()) {
+            resolved = empty;
+        } else {
+            throw refused();
+        }
         JsonNode resolvedNode = resolved == null ? null : OBJECT_MAPPER.valueToTree(resolved);
         if (!(resolvedNode instanceof ObjectNode)) {
             throw refused();
@@ -183,19 +196,60 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         if (runtimeScope == null) {
             return;
         }
-        Object resolved = renderOptional(runContext, runtimeScope);
-        if (resolved == null) {
-            throw refused();
-        }
-        JsonNode scopeNode = OBJECT_MAPPER.valueToTree(resolved);
+        JsonNode scopeNode = OBJECT_MAPPER.valueToTree(runtimeScope);
         if (!(scopeNode instanceof ObjectNode)) {
             throw refused();
         }
+        renderRuntimeScope(runContext, (ObjectNode) scopeNode);
         ObjectNode inputContract = (ObjectNode) request.get("inputs");
         if (inputContract.has("runtimeScope")) {
             throw refused();
         }
         inputContract.set("runtimeScope", scopeNode);
+    }
+
+    private static void renderRuntimeScope(RunContext runContext, ObjectNode scope) throws Exception {
+        JsonNode inputs = scope.get("inputs");
+        JsonNode outputs = scope.get("outputs");
+        if (!(inputs instanceof ObjectNode inputValues) || !(outputs instanceof ObjectNode taskOutputs)
+            || !(scope.get("variables") instanceof ObjectNode)) {
+            throw refused();
+        }
+        Iterator<Map.Entry<String, JsonNode>> inputEntries = inputValues.fields();
+        while (inputEntries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = inputEntries.next();
+            renderScopeValue(runContext, entry.getValue(), "{{ inputs." + entry.getKey() + " }}", null);
+        }
+        Iterator<Map.Entry<String, JsonNode>> tasks = taskOutputs.fields();
+        while (tasks.hasNext()) {
+            Map.Entry<String, JsonNode> task = tasks.next();
+            if (!(task.getValue() instanceof ObjectNode values)) {
+                throw refused();
+            }
+            Iterator<Map.Entry<String, JsonNode>> entries = values.fields();
+            while (entries.hasNext()) {
+                Map.Entry<String, JsonNode> entry = entries.next();
+                String output = "outputs.t_" + task.getKey() + "." + entry.getKey();
+                String loopOutput = "currentEachOutput(outputs.t_" + task.getKey() + ")." + entry.getKey();
+                renderScopeValue(runContext, entry.getValue(), "{{ " + output + " }}", "{{ " + loopOutput + " }}");
+            }
+        }
+    }
+
+    private static void renderScopeValue(
+        RunContext runContext,
+        JsonNode candidate,
+        String reference,
+        String loopReference
+    ) throws Exception {
+        if (!(candidate instanceof ObjectNode value) || !value.path("value").isTextual()) {
+            throw refused();
+        }
+        String token = value.path("value").textValue();
+        if (!reference.equals(token) && !token.equals(loopReference)) {
+            throw refused();
+        }
+        value.set("value", OBJECT_MAPPER.valueToTree(runContext.renderTyped(token)));
     }
 
     private static boolean allowedInputContract(ObjectNode inputContract) {
@@ -222,7 +276,7 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         return true;
     }
 
-    private static Output successfulOutput(JsonNode response) throws Exception {
+    private static Output successfulOutput(JsonNode response, ObjectNode request) throws Exception {
         if (!response.isObject() || !response.path("outcome").isTextual()) {
             throw refused();
         }
@@ -236,8 +290,16 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         }
         boolean hasValue = outputs.has("value");
         boolean hasResult = outputs.has("result");
-        if (!hasValue && !hasResult) {
+        if (hasValue == hasResult) {
             throw refused();
+        }
+        JsonNode maximumItems = request.path("inputs").path("properties").get("maximum_items");
+        if (maximumItems != null) {
+            JsonNode value = outputs.get("value");
+            if (!maximumItems.canConvertToInt() || maximumItems.intValue() < 1
+                || value == null || !value.isArray() || value.size() > maximumItems.intValue()) {
+                throw refused();
+            }
         }
         Object value = hasValue ? OBJECT_MAPPER.convertValue(outputs.get("value"), Object.class) : null;
         Object result = hasResult ? OBJECT_MAPPER.convertValue(outputs.get("result"), Object.class) : null;
@@ -306,11 +368,8 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         if (property == null) {
             throw refused();
         }
-        return runContext.render(property).as(type).orElseThrow(ProtectedCallback::refused);
-    }
-
-    private static Object renderOptional(RunContext runContext, Property<Object> property) {
-        return runContext.render(property).as(Object.class).orElse(null);
+        // A task definition can be reused; runtime identity must be rendered on every attempt.
+        return runContext.render(property.skipCache()).as(type).orElseThrow(ProtectedCallback::refused);
     }
 
     private static IllegalStateException refused() {
