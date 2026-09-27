@@ -1020,7 +1020,11 @@ function ApplicationPageViewContent({
   );
 
   const submitGuidedSummary = useCallback(
-    async (placementId: string, binding: PlacementFlowBinding) => {
+    async (
+      placementId: string,
+      binding: PlacementFlowBinding,
+      submittedValues: Readonly<Record<string, unknown>>,
+    ) => {
       const guidedForm = model.guidedForm;
       if (
         guidedForm === undefined ||
@@ -1053,6 +1057,7 @@ function ApplicationPageViewContent({
           return;
         }
         const afterAccepted = async (): Promise<Notice | undefined> => {
+          unsavedWorkRegistry?.markSaved(placementId, submittedValues);
           const abandoned = await guidedFormActions.abandon({
             address: guidedAddress,
             draftId: guidedForm.draftId,
@@ -1089,6 +1094,7 @@ function ApplicationPageViewContent({
       guidedSubmitInFlight,
       model.guidedForm,
       router,
+      unsavedWorkRegistry,
     ],
   );
 
@@ -1205,7 +1211,7 @@ function ApplicationPageViewContent({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(placementId, submitBinding);
+              else void submitGuidedSummary(placementId, submitBinding, event.values);
             }
             else
               void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
