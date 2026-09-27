@@ -57,16 +57,26 @@ begin
   ) then
     raise exception using errcode = '42501', message = 'Capability policy scope is unavailable';
   end if;
-  actor_identity_id := vortex_identity.tenant_request_actor_id();
-  if effective_organization_id is null or exists (
-    select 1
-    from vortex_identity.tenant_administrator_assignments as assignment
-    where assignment.tenant_id = p_tenant_id
-      and assignment.identity_id = actor_identity_id
-      and assignment.revoked_at is null
-      and assignment.starts_at <= evaluated_at
-      and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
-  ) then
+  -- Tenant-scoped reads require tenant authority. Organisation-scoped
+  -- entitlement reads also serve system actors, which have no person identity.
+  if effective_organization_id is null then
+    actor_identity_id := vortex_identity.tenant_request_actor_id();
+    perform vortex_identity.require_current_tenant_capability(
+      actor_identity_id, p_tenant_id,
+      'platform.tenant.capability_limits.read', evaluated_at
+    );
+  elsif (context ->> 'callerKind') in ('human', 'federated')
+    and vortex_context.is_non_nil_uuid(context ->> 'identityId')
+    and exists (
+      select 1
+      from vortex_identity.tenant_administrator_assignments as assignment
+      where assignment.tenant_id = p_tenant_id
+        and assignment.identity_id = (context ->> 'identityId')::uuid
+        and assignment.revoked_at is null
+        and assignment.starts_at <= evaluated_at
+        and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
+    ) then
+    actor_identity_id := vortex_identity.tenant_request_actor_id();
     perform vortex_identity.require_current_tenant_capability(
       actor_identity_id, p_tenant_id,
       'platform.tenant.capability_limits.read', evaluated_at
