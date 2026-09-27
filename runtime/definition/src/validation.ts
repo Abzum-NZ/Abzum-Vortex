@@ -33,6 +33,8 @@ import {
   flowTaskChildLists,
   flowTaskRegistry,
   type DefinitionCompilationOutput,
+  type ApplicationCompilationOutputV2,
+  type ModuleCompilationOutputV3,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV3,
@@ -91,12 +93,11 @@ const registeredBlockReleases: ReadonlyMap<string, PlatformBlockReleaseV2> = new
   ]),
 );
 
-const isV2ApplicationSource = (source: unknown): boolean =>
+const isApplicationSource = (source: unknown): boolean =>
   source !== null &&
   typeof source === "object" &&
   !Array.isArray(source) &&
-  (source as JsonObject).kind === "application" &&
-  (source as JsonObject).source_contract_version === "2.0.0";
+  (source as JsonObject).kind === "application";
 
 const isModuleSource = (source: unknown): boolean =>
   source !== null &&
@@ -113,7 +114,7 @@ const parseEditSaveSource = (
       schema: z.core.$ZodType;
     }>
   | Readonly<{ success: false; error: z.ZodError }> => {
-  const schema = isV2ApplicationSource(source)
+  const schema = isApplicationSource(source)
     ? applicationSourceDocumentV2Schema
     : isModuleSource(source)
       ? moduleSourceDocumentSchema
@@ -1792,27 +1793,6 @@ const actionFieldByKey = (
   return undefined;
 };
 
-function actionValueType(
-  value: unknown,
-  fields: ReadonlyMap<string, JsonObject>,
-  inputs: ReadonlyMap<string, JsonObject>,
-): string | undefined {
-  const entry = object(value);
-  if (entry.kind === "literal") return literalValueType(actionValueLiteral(value));
-  const reference = actionValueReference(value);
-  if (reference === undefined) return undefined;
-  if (reference.source === "input") {
-    const input = inputs.get(String(reference.name));
-    if (input !== undefined) return semanticFieldType(input.type);
-    return String(reference.name) === "record" ? "record_reference" : undefined;
-  }
-  if (reference.source === "trigger_record")
-    return fieldValueType(actionFieldByKey(fields, String(reference.field)));
-  if (reference.source === "execution_actor") return "organization_account_reference";
-  if (reference.source === "execution_now") return "date_time";
-  return undefined;
-}
-
 function actionValueRecordTypeIds(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
@@ -1885,55 +1865,15 @@ function actionValueCompatibleV2(
   );
 }
 
-function actionValueCompatible(
-  value: unknown,
-  targetField: JsonObject | undefined,
-  fields: ReadonlyMap<string, JsonObject>,
-  inputs: ReadonlyMap<string, JsonObject>,
-  subjectRecordTypeId: string,
-): boolean {
-  const compatible = valueTypesCompatible(
-    actionValueType(value, fields, inputs),
-    fieldValueType(targetField),
-    "value",
-  );
-  const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
-  if (!compatible || expectedRecordTypeIds === undefined) return compatible;
-  if (object(value).kind === "literal") return compatible;
-  const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
-  return (
-    actualRecordTypeIds !== undefined &&
-    actualRecordTypeIds.length > 0 &&
-    actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
-  );
-}
-
 type ApplicationFieldValuePair = Readonly<{
   field: JsonObject;
-  moduleV2: boolean;
 }>;
 
 const applicationFieldType = (pair: ApplicationFieldValuePair | undefined): string | undefined => {
   if (!pair) return undefined;
-  if (pair.moduleV2 && ["formatted_text", "table", "attachment"].includes(String(pair.field.type)))
+  if (["formatted_text", "table", "attachment"].includes(String(pair.field.type)))
     return String(pair.field.type);
-  return pair.moduleV2 ? fieldValueTypeV2(pair.field) : fieldValueType(pair.field);
-};
-
-const crossFormatFieldTypesCompatible = (
-  source: ApplicationFieldValuePair,
-  target: ApplicationFieldValuePair,
-): boolean => {
-  if (
-    fieldDeclaredResultType(source.field) === "whole_number" &&
-    fieldDeclaredResultType(target.field) === "whole_number"
-  )
-    return true;
-  return valueTypesCompatible(
-    applicationFieldType(source),
-    applicationFieldType(target),
-    "cross_format",
-  );
+  return fieldValueTypeV2(pair.field);
 };
 
 const actionValueReferenceEntry = (entry: JsonObject): JsonObject | undefined =>
@@ -1945,31 +1885,17 @@ function applicationActionValueCompatible(
   value: unknown,
   target: ApplicationFieldValuePair | undefined,
   subjectFields: ReadonlyMap<string, JsonObject>,
-  subjectModuleV2: boolean,
+  subjectModuleBound: boolean,
   inputs: ReadonlyMap<string, JsonObject>,
   subjectRecordTypeId: string,
 ): boolean {
   if (!target) return false;
   const entry = object(value);
   if (entry.kind === "literal")
-    return target.moduleV2
-      ? fieldValueMatchesV2(actionValueLiteral(value), target.field, "canonical")
-      : valueTypesCompatible(
-          literalValueType(actionValueLiteral(value)),
-          fieldValueType(target.field),
-          "value",
-        );
+    return fieldValueMatchesV2(actionValueLiteral(value), target.field, "canonical");
   const reference = actionValueReference(value);
-  if (reference?.source === "trigger_record" && subjectModuleV2 !== target.moduleV2) {
-    const sourceField = actionFieldByKey(subjectFields, String(reference.field));
-    if (
-      !sourceField ||
-      !crossFormatFieldTypesCompatible({ field: sourceField, moduleV2: subjectModuleV2 }, target)
-    )
-      return false;
-  }
+  if (reference?.source === "trigger_record" && !subjectModuleBound) return false;
   if (
-    target.moduleV2 &&
     reference?.source === "input" &&
     (inputs.get(String(reference.name))?.type === "formatted_text" ||
       (inputs.get(String(reference.name))?.type === "number" &&
@@ -1977,7 +1903,6 @@ function applicationActionValueCompatible(
   )
     return false;
   if (
-    target.moduleV2 &&
     !valueTypesCompatible(
       actionValueTypeV2(value, subjectFields, inputs),
       applicationFieldType(target),
@@ -1985,9 +1910,7 @@ function applicationActionValueCompatible(
     )
   )
     return false;
-  return target.moduleV2
-    ? actionValueCompatibleV2(value, target.field, subjectFields, inputs, subjectRecordTypeId)
-    : actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
+  return actionValueCompatibleV2(value, target.field, subjectFields, inputs, subjectRecordTypeId);
 }
 
 function applicationConditionUsesLossyInput(
@@ -2023,10 +1946,10 @@ function applicationConditionUsesLossyInput(
 const applicationConditionTypesValid = (
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
-  moduleV2: boolean,
+  moduleBound: boolean,
   inputTypes: ReadonlyMap<string, string> = new Map(),
 ): boolean =>
-  moduleV2
+  moduleBound
     ? !applicationConditionUsesLossyInput(value, fields, inputTypes) &&
       conditionTypesValidV2(value, fields, inputTypes)
     : conditionTypesValid(value, fields, inputTypes);
@@ -2035,7 +1958,7 @@ const applicationInterfaceFieldType = (
   pair: ApplicationFieldValuePair | undefined,
 ): string | undefined => {
   const type = applicationFieldType(pair);
-  if (!pair?.moduleV2) return type;
+  if (!pair) return type;
   if (type === "whole_number" || type === "number") return "number";
   if (type === "boolean") return "boolean";
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
@@ -2049,7 +1972,6 @@ function permissionRecordScopesValid(
   sharingConditions: ReadonlyMap<string, JsonObject> = new Map(),
   savedConditionsAllowed = false,
   availablePermissions: readonly JsonObject[] = permissions,
-  v2SavedConditionIds: ReadonlySet<string> = new Set(),
 ): boolean {
   const permissionsById = new Map(
     availablePermissions.map((permission) => [String(permission.permissionId), permission]),
@@ -2116,7 +2038,6 @@ function permissionRecordScopesValid(
         : [],
     );
     const bindings = array(restriction.parameterBindings);
-    const savedConditionV2 = v2SavedConditionIds.has(String(restriction.conditionId));
     if (
       !savedConditionsAllowed ||
       !saved ||
@@ -2131,13 +2052,11 @@ function permissionRecordScopesValid(
           expected === undefined ||
           (binding.source === "current_organization_account_id"
             ? !["text", "organization_account_reference"].includes(expected)
-            : !(savedConditionV2
-                ? expected === "decimal_number"
-                  ? exactDecimalTextV2Schema.safeParse(binding.value).success
-                  : expected === "money"
-                    ? moneyValueV2Schema.safeParse(binding.value).success
-                    : valueMatchesType(binding.value, expected)
-                : valueMatchesType(binding.value, expected)))
+            : !(expected === "decimal_number"
+                ? exactDecimalTextV2Schema.safeParse(binding.value).success
+                : expected === "money"
+                  ? moneyValueV2Schema.safeParse(binding.value).success
+                  : valueMatchesType(binding.value, expected)))
         );
       })
     )
@@ -2359,7 +2278,6 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         sharingConditions,
         true,
         modulePermissions,
-        new Set(sharingConditions.keys()),
       )
     )
       failures.push(
@@ -2763,12 +2681,9 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             location,
           ),
         );
-      // V1 releases remain readable through their historical contract. New authoring uses V2/V3
-      // publication, where the module specification permits only additive fields and actions.
-      if (
-        "validationContractVersion" in output &&
-        (point.accepts as string[]).some((kind) => kind !== "field" && kind !== "action")
-      )
+      // The module specification permits extension points to accept only additive fields and
+      // actions.
+      if ((point.accepts as string[]).some((kind) => kind !== "field" && kind !== "action"))
         failures.push(
           failure(
             output,
@@ -3047,13 +2962,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
-    const recordValuePairs = new Map<string, ApplicationFieldValuePair["moduleV2"]>(
-      boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).recordTypes).map(
-          (record) => [String(record.recordTypeId), "validationContractVersion" in module] as const,
-        ),
-      ),
-    );
+    const boundRecordTypeIds = new Set(recordTypes.map((record) => String(record.recordTypeId)));
     const allFields = new Map(
       recordTypes.flatMap((record) =>
         array(record.fields).map((field) => [String(field.fieldId), field] as const),
@@ -3066,7 +2975,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             (field) =>
               [
                 String(field.fieldId),
-                { field, moduleV2: "validationContractVersion" in module },
+                { field },
               ] as const,
           ),
         ),
@@ -3132,15 +3041,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const savedConditions = new Map(
       savedConditionEntries.map((condition) => [String(condition.conditionId), condition] as const),
     );
-    const v2SavedConditionIds = new Set(
-      boundModules
-        .filter((module) => "validationContractVersion" in module)
-        .flatMap((module) =>
-          array(object(object(module.canonical).content).sharingConditions).map((condition) =>
-            String(condition.conditionId),
-          ),
-        ),
-    );
     if (savedConditions.size !== savedConditionEntries.length)
       failures.push(
         failure(output, "vortex.definition.application_action_references", "scope_conflict"),
@@ -3153,7 +3053,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         savedConditions,
         true,
         permissionEntries,
-        v2SavedConditionIds,
       )
     )
       failures.push(
@@ -3173,7 +3072,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (action) =>
             [
               String(action.key),
-              { action, moduleV2: "validationContractVersion" in module },
+              { action },
             ] as const,
         ),
       ),
@@ -3446,7 +3345,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     };
     for (const action of array(content.actions)) {
       const subject = records.get(String(action.subjectRecordTypeId));
-      const subjectModuleV2 = recordValuePairs.get(String(action.subjectRecordTypeId)) ?? false;
+      const subjectModuleBound = boundRecordTypeIds.has(String(action.subjectRecordTypeId));
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -3481,7 +3380,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           applicationConditionTypesValid(
             action.precondition,
             fieldMap,
-            subjectModuleV2,
+            subjectModuleBound,
             inputTypes,
           ));
       for (const task of array(action.tasks)) {
@@ -3494,7 +3393,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 value,
                 fieldValuePairs.get(id),
                 fieldMap,
-                subjectModuleV2,
+                subjectModuleBound,
                 inputMap,
                 String(action.subjectRecordTypeId),
               )
@@ -3528,7 +3427,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                   value,
                   fieldValuePairs.get(id),
                   fieldMap,
-                  subjectModuleV2,
+                  subjectModuleBound,
                   inputMap,
                   String(action.subjectRecordTypeId),
                 ),
@@ -3678,7 +3577,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     for (const query of queries.values()) {
       const record = object(query.recordType);
       const recordType = records.get(String(record.recordTypeId));
-      const moduleV2 = recordValuePairs.get(String(record.recordTypeId)) ?? false;
+      const moduleBound = boundRecordTypeIds.has(String(record.recordTypeId));
       const fieldMap = new Map(
         recordType ? array(recordType.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -3714,7 +3613,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         used.some((fieldId) => !fields.has(fieldId)) ||
         !filterFieldsValid ||
         (query.filter !== undefined &&
-          !applicationConditionTypesValid(query.filter, fieldMap, moduleV2)) ||
+          !applicationConditionTypesValid(query.filter, fieldMap, moduleBound)) ||
         !aggregatesValid
       )
         failures.push(
@@ -3880,8 +3779,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     }
     for (const pipeline of array(content.pipelines)) {
       const record = records.get(String(object(pipeline.recordType).recordTypeId));
-      const moduleV2 =
-        recordValuePairs.get(String(object(pipeline.recordType).recordTypeId)) ?? false;
+      const moduleBound = boundRecordTypeIds.has(String(object(pipeline.recordType).recordTypeId));
       const stageField =
         record && array(record.fields).find((field) => field.fieldId === pipeline.stageFieldId);
       if (!stageField || stageField.type !== "choice")
@@ -3923,7 +3821,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (transition.permissionKey && !permissions.has(String(transition.permissionKey))) ||
           (transition.actionKey && !executableActionKeys.has(String(transition.actionKey))) ||
           (transition.gate !== undefined &&
-            !applicationConditionTypesValid(transition.gate, pipelineFields, moduleV2))
+            !applicationConditionTypesValid(transition.gate, pipelineFields, moduleBound))
         )
           failures.push(
             failure(
@@ -4005,10 +3903,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         String(query.key),
         queriesByKey.has(String(query.key)) ? undefined : query,
       );
-    const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
+    const interfaceActionInputType = (type: unknown, moduleBound = false): string | undefined => {
       const value = String(type);
-      if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;
-      if (moduleV2 && value === "formatted_text") return "formatted_text";
+      if (moduleBound && ["decimal_number", "money"].includes(value)) return undefined;
+      if (moduleBound && value === "formatted_text") return "formatted_text";
       if (["text", "formatted_text", "choice"].includes(value)) return "text";
       if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
       if (value === "yes_no") return "boolean";
@@ -4173,7 +4071,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               return (
                 descriptor?.required === input.required &&
                 descriptor?.type ===
-                  interfaceActionInputType(input.type, targetActionPair?.moduleV2 ?? false)
+                  interfaceActionInputType(input.type, targetActionPair !== undefined)
               );
             });
           // The interface supplies the flow's inputs, which the flow passes to the named action by
@@ -4188,7 +4086,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 return (
                   declaration !== undefined &&
                   object(bindingsForInput[0]).type ===
-                    interfaceActionInputType(declaration.type, targetActionPair?.moduleV2 ?? false)
+                    interfaceActionInputType(declaration.type, targetActionPair !== undefined)
                 );
               }) &&
               flowInputs.every(
@@ -4503,7 +4401,8 @@ function publicationCompatibilityRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const output of context.outputs.filter(
-    (candidate) => candidate.kind === "module" || candidate.kind === "application",
+    (candidate): candidate is ModuleCompilationOutputV3 | ApplicationCompilationOutputV2 =>
+      candidate.kind === "module" || candidate.kind === "application",
   )) {
     const key = outputKey(output);
     const history = context.publishedHistories?.find(
@@ -4521,28 +4420,22 @@ function publicationCompatibilityRule(
     try {
       const result = historyEvidence
         ? compareDefinitionVersionImpactWithEvidence({
-            kind: output.kind as "module" | "application",
-            ...("validationContractVersion" in output
-              ? { validationContractVersion: output.validationContractVersion }
-              : {}),
+            kind: output.kind,
+            validationContractVersion: output.validationContractVersion,
             historyEvidence,
             candidate: output.canonical,
           })
         : output.kind === "module" && history?.kind === "module"
           ? compareDefinitionVersionImpact({
               kind: "module",
-              ...("validationContractVersion" in output
-                ? { validationContractVersion: output.validationContractVersion }
-                : {}),
+              validationContractVersion: output.validationContractVersion,
               history: history.history,
               candidate: output.canonical,
             })
           : output.kind === "application" && history?.kind === "application"
             ? compareDefinitionVersionImpact({
                 kind: "application",
-                ...("validationContractVersion" in output
-                  ? { validationContractVersion: "2.0.0" as const }
-                  : {}),
+                validationContractVersion: output.validationContractVersion,
                 history: history.history,
                 candidate: output.canonical,
               })
@@ -4621,12 +4514,7 @@ function semanticAggregateRule(
 function moduleRuleGraphRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const output of context.outputs) {
-    if (
-      output.kind !== "module" ||
-      !("validationContractVersion" in output) ||
-      output.validationContractVersion !== "3.0.0"
-    )
-      continue;
+    if (output.kind !== "module") continue;
     const content = output.canonical.content;
     const allowedRoots = new Set([
       output.canonical.envelope.rootId,
@@ -4664,7 +4552,7 @@ function moduleRuleGraphRule(context: DefinitionSetValidationContext): Definitio
 function applicationCatalogueRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((source, index) => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
-    return parsed.success && isV2ApplicationSource(parsed.data)
+    return parsed.success && isApplicationSource(parsed.data)
       ? validateApplicationSourceCatalogue(parsed.data as ApplicationSourceDocumentV2)
       : [];
   });
@@ -4714,7 +4602,7 @@ function applicationFlowBindingEventRule(
 ): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
-    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocumentV2;
     const body = object(source.body);
     const placedBlocks = placedApplicationBlocks(body);
@@ -4803,7 +4691,7 @@ function applicationControlBindingRule(
 ): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
-    if (!parsed.success || !isV2ApplicationSource(parsed.data)) return [];
+    if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocumentV2;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
@@ -5132,7 +5020,7 @@ export function compileDefinitionSet(
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
     if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isV2ApplicationSource(source))
+    if (isApplicationSource(source))
       return applicationCompilationRequestV2Schema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);
   });

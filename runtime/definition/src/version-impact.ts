@@ -456,7 +456,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
 export const compareDefinitionVersionImpactWithEvidence = (
   input: Readonly<{
     kind: "module" | "application";
-    validationContractVersion?: "2.0.0" | "3.0.0";
+    validationContractVersion: "2.0.0" | "3.0.0";
     historyEvidence: DefinitionPublicationHistoryEvidence;
     candidate: unknown;
   }>,
@@ -465,9 +465,7 @@ export const compareDefinitionVersionImpactWithEvidence = (
     refuseVersionImpact("invalid_history");
   const request = parseVersionImpactRequest({
     kind: input.kind,
-    ...(input.validationContractVersion === undefined
-      ? {}
-      : { validationContractVersion: input.validationContractVersion }),
+    validationContractVersion: input.validationContractVersion,
     history: [],
     candidate: input.candidate,
   });

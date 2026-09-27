@@ -153,14 +153,32 @@ export const resolveIdentitySession = async (): Promise<IdentitySessionResolutio
   return sessionService().resolve(current.data.session.access_token);
 };
 
-export const endIdentitySession = async (): Promise<void> => {
-  let boundary: IdentitySessionClient | undefined;
+/**
+ * Revokes the browser's own provider session (its refresh token) from the given session cookies,
+ * best effort. The scope is this one session only, never the person's other sessions. The caller
+ * clears the cookies itself; local clearing stays authoritative for this browser even when the
+ * provider cannot be reached or the session is already gone (for example after a database reset).
+ * It returns the cookie profile so the caller can delete exactly the session cookies.
+ */
+export const revokeIdentitySession = async (
+  sessionCookies: readonly SessionCookie[],
+): Promise<SessionCookieProfile | undefined> => {
+  let boundary: IdentitySessionClient;
   try {
-    boundary = createIdentitySessionClient(await requestCookies());
+    boundary = createIdentitySessionClient(sessionCookies);
+  } catch {
+    return undefined;
+  }
+  try {
     if (boundary.stage.initialState.kind === "valid")
       await boundary.client.auth.signOut({ scope: "local" });
   } catch {
-    // Local clearing is authoritative for this browser even after a provider failure.
+    // Revocation is best effort; the cookies are cleared regardless.
   }
-  if (boundary) await applyMutations(identitySessionCookieDeletions(boundary.profile));
+  return boundary.profile;
+};
+
+export const endIdentitySession = async (): Promise<void> => {
+  const profile = await revokeIdentitySession(await requestCookies());
+  if (profile) await applyMutations(identitySessionCookieDeletions(profile));
 };

@@ -2,12 +2,8 @@ import "server-only";
 
 import {
   currentPlatformPermissions,
-  historicalPlatformPermissionsV1,
-  historicalPlatformPermissionsV1_0_1,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
-  platformPermissionCatalogueVersionV1,
-  platformPermissionCatalogueVersionV1_0_1,
   platformPermissionCatalogueSchema,
   type PermissionDeclaration,
   type PlatformPermissionCatalogue,
@@ -19,16 +15,10 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
  *
  * The permission identities, keys, labels, descriptions, action kinds and versions live in
  * `@vortex/contracts`, the shared lowest layer, so Definition can validate platform-permission
- * references without importing Access. Access derives each release's catalogue fingerprint here
- * from that same data, exactly as the platform registration revisions expect, so no published
- * fingerprint changes.
+ * references without importing Access. Access derives the current catalogue fingerprint here
+ * from that same data, exactly as the current platform registration revision expects.
  */
-export {
-  platformPermissionCatalogueOwnerId,
-  platformPermissionCatalogueVersion,
-  platformPermissionCatalogueVersionV1,
-  platformPermissionCatalogueVersionV1_0_1,
-};
+export { platformPermissionCatalogueOwnerId, platformPermissionCatalogueVersion };
 
 const buildCatalogue = (
   catalogueVersion: string,
@@ -45,18 +35,6 @@ const buildCatalogue = (
     catalogueFingerprint: fingerprintCanonicalValue(catalogueCore),
   });
 };
-
-/** Immutable historical metadata installed by the original platform initializer. */
-export const platformPermissionCatalogueV1 = buildCatalogue(
-  platformPermissionCatalogueVersionV1,
-  historicalPlatformPermissionsV1,
-);
-
-/** Immutable Group-facing metadata revision. */
-export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
-  platformPermissionCatalogueVersionV1_0_1,
-  historicalPlatformPermissionsV1_0_1,
-);
 
 /**
  * Current additive catalogue, mirroring platform registration revision 6 (1.4.0): its

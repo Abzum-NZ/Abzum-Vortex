@@ -5,21 +5,42 @@ import {
   activityIdSchema,
   administrationDuplicateKeySchema,
   builderKeySchema,
+  configuredTenantAdministrationOperatorContextSchema,
   correlationIdSchema,
   entitlementCheckRequestSchema,
-  identityIdSchema,
   namespacedKeySchema,
-  organizationAccountIdSchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
+  type ConfiguredTenantAdministrationOperatorContext,
   type EntitlementCheckRequest,
 } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import {
+  withRuntimeTransaction,
+  type DatabaseRow,
+  type RequestDatabaseTransaction,
+  type RuntimeDatabaseTransaction,
+} from "@vortex/db";
 
-/** A policy can be assigned to a whole tenant or to one exact organisation. */
+/*
+ * Entitlement limits (#1384, owner decision of 27 Sep 2026):
+ *
+ * - The platform operator publishes capability policies and sets each tenant's
+ *   ceiling. The operator is the configured system operator: it is read from
+ *   trusted server configuration here and is reachable only through the
+ *   runtime role in a transaction without a request context, so it is never a
+ *   customer role and never follows from a tenant or organisation role.
+ * - A tenant administrator allocates or lowers a limit for the whole tenant or
+ *   one organisation, and is refused above the live ceiling. The acting person
+ *   comes from the bound request context, never from the command.
+ * - Organisation administrators have no assignment command at all.
+ * - The effective limit is the lowest of the ceiling and every allocation
+ *   beneath it, and reports which limit applied.
+ */
+
+/** An allocation covers a whole tenant or one exact organisation. */
 export const capabilityPolicySubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("tenant"), tenantId: tenantIdSchema }).strict(),
   z
@@ -37,51 +58,25 @@ export const capabilityPolicyScopeSchema = z
 
 export const capabilityPolicyQuantitySchema = z.number().positive().finite();
 
-/** Which assignment a resolved limit came from, so the narrower scope is visible. */
+/** Which balance scope a resolved limit is counted against. */
 export const capabilityPolicyAppliedScopeSchema = z.enum(["organization", "tenant"]);
 
-/** Authority is explicit and no authority can silently cross its target scope. */
-export const capabilityPolicyAdministratorAuthoritySchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("tenant_administrator"),
-      tenantId: tenantIdSchema,
-      identityId: identityIdSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("organization_administrator"),
-      tenantId: tenantIdSchema,
-      organizationId: organizationIdSchema,
-      organizationAccountId: organizationAccountIdSchema,
-      identityId: identityIdSchema,
-    })
-    .strict(),
+/** Which limit supplied the effective quantity, so the narrower bound is visible. */
+export const capabilityLimitSourceSchema = z.enum([
+  "platform_ceiling",
+  "tenant_allocation",
+  "organization_allocation",
 ]);
 
-const authorityMatchesSubject = (
-  authority: z.infer<typeof capabilityPolicyAdministratorAuthoritySchema>,
-  subject: z.infer<typeof capabilityPolicySubjectSchema>,
-): boolean =>
-  (authority.kind === "tenant_administrator" &&
-    subject.kind === "tenant" &&
-    authority.tenantId.toLowerCase() === subject.tenantId.toLowerCase()) ||
-  (authority.kind === "organization_administrator" &&
-    subject.kind === "organization" &&
-    authority.tenantId.toLowerCase() === subject.tenantId.toLowerCase() &&
-    authority.organizationId.toLowerCase() === subject.organizationId.toLowerCase());
-
 /**
- * Organisation administration is Activity-evidenced. Tenant administration is
- * evidenced by its accepted-administration receipt and has no organisation
- * Activity ledger to append to, so the identifier belongs to exactly one of
- * the two authorities and is never carried unused.
+ * Organisation allocations are also written to that organisation's Activity,
+ * so they carry exactly one Activity identifier; tenant-wide allocations have
+ * no organisation ledger and carry none.
  */
-const activityEvidenceMatchesAuthority = (
-  authority: z.infer<typeof capabilityPolicyAdministratorAuthoritySchema>,
+const activityEvidenceMatchesSubject = (
+  subject: z.infer<typeof capabilityPolicySubjectSchema>,
   activityId: string | undefined,
-): boolean => (authority.kind === "organization_administrator") === (activityId !== undefined);
+): boolean => (subject.kind === "organization") === (activityId !== undefined);
 
 export const capabilityPolicyDefinitionCommandSchema = z
   .object({
@@ -91,70 +86,75 @@ export const capabilityPolicyDefinitionCommandSchema = z
     quantityLimit: capabilityPolicyQuantitySchema,
     expectedRevision: revisionSchema.optional(),
     duplicateKey: administrationDuplicateKeySchema,
-    authority: capabilityPolicyAdministratorAuthoritySchema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      value.authority.kind !== "tenant_administrator" ||
-      value.authority.tenantId.toLowerCase() !== value.tenantId.toLowerCase()
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["authority"],
-        message: "Policy definitions require tenant authority for the same tenant",
-      });
-  });
+  .strict();
 
-export const capabilityPolicyAssignmentCommandSchema = z
+export const capabilityCeilingCommandSchema = z
   .object({
-    assignmentId: platformIdSchema,
+    ceilingId: platformIdSchema,
+    tenantId: tenantIdSchema,
     policyId: platformIdSchema,
     policyRevision: revisionSchema,
-    subject: capabilityPolicySubjectSchema,
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
+    expectedRevision: revisionSchema.optional(),
     duplicateKey: administrationDuplicateKeySchema,
-    activityId: activityIdSchema.optional(),
-    authority: capabilityPolicyAdministratorAuthoritySchema,
   })
   .strict()
   .superRefine((value, context) => {
-    if (!authorityMatchesSubject(value.authority, value.subject))
-      context.addIssue({
-        code: "custom",
-        path: ["authority"],
-        message: "Administrator authority must cover the exact assignment subject",
-      });
-    if (!activityEvidenceMatchesAuthority(value.authority, value.activityId))
-      context.addIssue({
-        code: "custom",
-        path: ["activityId"],
-        message: "Organisation assignments carry exactly one Activity identifier",
-      });
     if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
       context.addIssue({
         code: "custom",
         path: ["expiresAt"],
-        message: "Assignment expiry must be later than its start",
+        message: "Ceiling expiry must be later than its start",
       });
   });
 
-export const capabilityPolicyRevocationCommandSchema = z
+export const capabilityCeilingRevocationCommandSchema = z
   .object({
-    assignmentId: platformIdSchema,
+    ceilingId: platformIdSchema,
+    tenantId: tenantIdSchema,
     expectedRevision: revisionSchema,
     duplicateKey: administrationDuplicateKeySchema,
+  })
+  .strict();
+
+export const capabilityAllocationCommandSchema = z
+  .object({
+    allocationId: platformIdSchema,
+    subject: capabilityPolicySubjectSchema,
+    ...capabilityPolicyScopeSchema.shape,
+    quantityLimit: capabilityPolicyQuantitySchema,
+    expiresAt: timestampSchema.optional(),
+    expectedRevision: revisionSchema.optional(),
+    duplicateKey: administrationDuplicateKeySchema,
     activityId: activityIdSchema.optional(),
-    authority: capabilityPolicyAdministratorAuthoritySchema,
   })
   .strict()
   .superRefine((value, context) => {
-    if (!activityEvidenceMatchesAuthority(value.authority, value.activityId))
+    if (!activityEvidenceMatchesSubject(value.subject, value.activityId))
       context.addIssue({
         code: "custom",
         path: ["activityId"],
-        message: "Organisation revocations carry exactly one Activity identifier",
+        message: "Organisation allocations carry exactly one Activity identifier",
+      });
+  });
+
+export const capabilityAllocationRevocationCommandSchema = z
+  .object({
+    allocationId: platformIdSchema,
+    subject: capabilityPolicySubjectSchema,
+    expectedRevision: revisionSchema,
+    duplicateKey: administrationDuplicateKeySchema,
+    activityId: activityIdSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!activityEvidenceMatchesSubject(value.subject, value.activityId))
+      context.addIssue({
+        code: "custom",
+        path: ["activityId"],
+        message: "Organisation allocation revocations carry exactly one Activity identifier",
       });
   });
 
@@ -166,19 +166,6 @@ export const capabilityPolicyDefinitionSchema = z
     quantityLimit: capabilityPolicyQuantitySchema,
     revision: revisionSchema,
     publishedAt: timestampSchema,
-  })
-  .strict();
-
-export const capabilityPolicyAssignmentSchema = z
-  .object({
-    assignmentId: platformIdSchema,
-    policyId: platformIdSchema,
-    policyRevision: revisionSchema,
-    subject: capabilityPolicySubjectSchema,
-    revision: revisionSchema,
-    startsAt: timestampSchema,
-    expiresAt: timestampSchema.optional(),
-    assignedAt: timestampSchema,
   })
   .strict();
 
@@ -196,14 +183,20 @@ export const effectiveCapabilityPolicySchema = z.discriminatedUnion("outcome", [
       outcome: z.literal("available"),
       ...effectiveCapabilityPolicyRequestSchema.shape,
       appliedScope: capabilityPolicyAppliedScopeSchema,
+      appliedLimit: capabilityLimitSourceSchema,
       policyId: platformIdSchema,
       policyRevision: revisionSchema,
       assignmentId: platformIdSchema,
       assignmentRevision: revisionSchema,
       quantityLimit: capabilityPolicyQuantitySchema,
+      ceilingQuantityLimit: capabilityPolicyQuantitySchema,
       resolvedAt: timestampSchema,
     })
-    .strict(),
+    .strict()
+    .refine((value) => value.quantityLimit <= value.ceilingQuantityLimit, {
+      path: ["quantityLimit"],
+      message: "An effective limit is never above the platform ceiling",
+    }),
   z
     .object({
       outcome: z.literal("refused"),
@@ -228,23 +221,52 @@ export const capabilityPolicyMutationResultSchema = z
   })
   .strict();
 
-export const capabilityPolicyAssignmentResultSchema = z
+export const capabilityCeilingResultSchema = z
   .object({
     outcome: z.enum(["accepted", "replayed"]),
-    assignmentId: platformIdSchema,
+    ceilingId: platformIdSchema,
+    tenantId: tenantIdSchema,
     policyId: platformIdSchema,
     policyRevision: revisionSchema,
-    subject: capabilityPolicySubjectSchema,
+    ...capabilityPolicyScopeSchema.shape,
+    quantityLimit: capabilityPolicyQuantitySchema,
     revision: revisionSchema,
     correlationId: correlationIdSchema,
     acceptedAt: timestampSchema,
   })
   .strict();
 
-export const capabilityPolicyRevocationResultSchema = z
+export const capabilityCeilingRevocationResultSchema = z
   .object({
     outcome: z.enum(["accepted", "replayed"]),
-    assignmentId: platformIdSchema,
+    ceilingId: platformIdSchema,
+    tenantId: tenantIdSchema,
+    revision: revisionSchema,
+    correlationId: correlationIdSchema,
+    acceptedAt: timestampSchema,
+  })
+  .strict();
+
+export const capabilityAllocationResultSchema = z
+  .object({
+    outcome: z.enum(["accepted", "replayed"]),
+    allocationId: platformIdSchema,
+    subject: capabilityPolicySubjectSchema,
+    ...capabilityPolicyScopeSchema.shape,
+    quantityLimit: capabilityPolicyQuantitySchema,
+    ceilingPolicyId: platformIdSchema,
+    ceilingPolicyRevision: revisionSchema,
+    revision: revisionSchema,
+    correlationId: correlationIdSchema,
+    acceptedAt: timestampSchema,
+  })
+  .strict();
+
+export const capabilityAllocationRevocationResultSchema = z
+  .object({
+    outcome: z.enum(["accepted", "replayed"]),
+    allocationId: platformIdSchema,
+    subject: capabilityPolicySubjectSchema,
     revision: revisionSchema,
     correlationId: correlationIdSchema,
     acceptedAt: timestampSchema,
@@ -253,26 +275,27 @@ export const capabilityPolicyRevocationResultSchema = z
 
 export type CapabilityPolicySubject = z.infer<typeof capabilityPolicySubjectSchema>;
 export type CapabilityPolicyAppliedScope = z.infer<typeof capabilityPolicyAppliedScopeSchema>;
-export type CapabilityPolicyAdministratorAuthority = z.infer<
-  typeof capabilityPolicyAdministratorAuthoritySchema
->;
+export type CapabilityLimitSource = z.infer<typeof capabilityLimitSourceSchema>;
 export type CapabilityPolicyDefinitionCommand = z.infer<
   typeof capabilityPolicyDefinitionCommandSchema
 >;
-export type CapabilityPolicyAssignmentCommand = z.infer<
-  typeof capabilityPolicyAssignmentCommandSchema
+export type CapabilityCeilingCommand = z.infer<typeof capabilityCeilingCommandSchema>;
+export type CapabilityCeilingRevocationCommand = z.infer<
+  typeof capabilityCeilingRevocationCommandSchema
 >;
-export type CapabilityPolicyRevocationCommand = z.infer<
-  typeof capabilityPolicyRevocationCommandSchema
+export type CapabilityAllocationCommand = z.infer<typeof capabilityAllocationCommandSchema>;
+export type CapabilityAllocationRevocationCommand = z.infer<
+  typeof capabilityAllocationRevocationCommandSchema
 >;
 export type CapabilityPolicyDefinition = z.infer<typeof capabilityPolicyDefinitionSchema>;
-export type CapabilityPolicyAssignment = z.infer<typeof capabilityPolicyAssignmentSchema>;
 export type CapabilityPolicyMutationResult = z.infer<typeof capabilityPolicyMutationResultSchema>;
-export type CapabilityPolicyAssignmentResult = z.infer<
-  typeof capabilityPolicyAssignmentResultSchema
+export type CapabilityCeilingResult = z.infer<typeof capabilityCeilingResultSchema>;
+export type CapabilityCeilingRevocationResult = z.infer<
+  typeof capabilityCeilingRevocationResultSchema
 >;
-export type CapabilityPolicyRevocationResult = z.infer<
-  typeof capabilityPolicyRevocationResultSchema
+export type CapabilityAllocationResult = z.infer<typeof capabilityAllocationResultSchema>;
+export type CapabilityAllocationRevocationResult = z.infer<
+  typeof capabilityAllocationRevocationResultSchema
 >;
 export type EffectiveCapabilityPolicyRequest = z.infer<
   typeof effectiveCapabilityPolicyRequestSchema
@@ -286,11 +309,13 @@ type EffectivePolicyRow = DatabaseRow & {
   capability_key: unknown;
   unit: unknown;
   applied_scope: unknown;
+  applied_limit: unknown;
   policy_id: unknown;
   policy_revision: unknown;
   assignment_id: unknown;
   assignment_revision: unknown;
   quantity_limit: unknown;
+  ceiling_quantity_limit: unknown;
   resolved_at: unknown;
   reason_code: unknown;
 };
@@ -307,21 +332,49 @@ type DefinitionMutationRow = DatabaseRow & {
   accepted_at: unknown;
 };
 
-type AssignmentMutationRow = DatabaseRow & {
+type CeilingMutationRow = DatabaseRow & {
   outcome: unknown;
   assignment_id: unknown;
+  tenant_id: unknown;
   policy_id: unknown;
   policy_revision: unknown;
-  tenant_id: unknown;
-  organization_id: unknown;
+  capability_key: unknown;
+  unit: unknown;
+  quantity_limit: unknown;
   revision: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
 };
 
-type RevocationMutationRow = DatabaseRow & {
+type CeilingRevocationRow = DatabaseRow & {
   outcome: unknown;
   assignment_id: unknown;
+  tenant_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+
+type AllocationMutationRow = DatabaseRow & {
+  outcome: unknown;
+  assignment_id: unknown;
+  tenant_id: unknown;
+  organization_id: unknown;
+  capability_key: unknown;
+  unit: unknown;
+  quantity_limit: unknown;
+  ceiling_policy_id: unknown;
+  ceiling_policy_revision: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+
+type AllocationRevocationRow = DatabaseRow & {
+  outcome: unknown;
+  assignment_id: unknown;
+  tenant_id: unknown;
+  organization_id: unknown;
   revision: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
@@ -378,114 +431,283 @@ const parseOne = <Row>(rows: readonly Row[], error: string): Row => {
   return rows[0];
 };
 
-export const publishCapabilityPolicyDefinition = async (
+const subjectOf = (tenantId: unknown, organizationId: unknown) =>
+  organizationId == null
+    ? { kind: "tenant", tenantId }
+    : { kind: "organization", tenantId, organizationId };
+
+const databaseCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error
+    ? String((error as { readonly code?: unknown }).code)
+    : undefined;
+
+/** Stable refusal codes for the administration commands. */
+export const capabilityPolicyRefusalCodes = [
+  "CAPABILITY_POLICY_COMMAND_INVALID",
+  "CAPABILITY_POLICY_DUPLICATE_CONFLICT",
+  "CAPABILITY_POLICY_STALE",
+  "CAPABILITY_ALLOCATION_ABOVE_CEILING",
+  "CAPABILITY_POLICY_SCOPE_UNAVAILABLE",
+  "CAPABILITY_POLICY_OPERATOR_NOT_CONFIGURED",
+] as const;
+export type CapabilityPolicyRefusalCode = (typeof capabilityPolicyRefusalCodes)[number];
+
+const refusal = (error: unknown): Error => {
+  switch (databaseCode(error)) {
+    case "22023":
+      return new Error("CAPABILITY_POLICY_COMMAND_INVALID");
+    case "V3001":
+      return new Error("CAPABILITY_POLICY_DUPLICATE_CONFLICT");
+    case "V3102":
+      return new Error("CAPABILITY_POLICY_STALE");
+    case "V3104":
+      return new Error("CAPABILITY_ALLOCATION_ABOVE_CEILING");
+    case "V3101":
+    case "42501":
+    case "23503":
+    case "23505":
+    case "23514":
+      return new Error("CAPABILITY_POLICY_SCOPE_UNAVAILABLE");
+    default:
+      return error instanceof Error ? error : new Error("CAPABILITY_POLICY_UNAVAILABLE");
+  }
+};
+
+const run = async <Row>(operation: () => Promise<readonly Row[]>): Promise<readonly Row[]> => {
+  try {
+    return await operation();
+  } catch (error) {
+    throw refusal(error);
+  }
+};
+
+type RuntimeTransactionRunner = <Result>(
+  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+) => Promise<Result>;
+
+export interface CapabilityPolicyPlatformOperatorDependencies {
+  readonly environment?: Readonly<Record<string, string | undefined>>;
+  readonly runtimeTransaction?: RuntimeTransactionRunner;
+}
+
+/**
+ * The platform operator is the configured system operator, read only from
+ * trusted server configuration. No command, session or role supplies it.
+ */
+const configuredPlatformOperator = (
+  environment: Readonly<Record<string, string | undefined>>,
+): ConfiguredTenantAdministrationOperatorContext | undefined => {
+  const parsed = configuredTenantAdministrationOperatorContextSchema.safeParse({
+    kind: "configured_system_operator",
+    clusterId: environment.VORTEX_CLUSTER_ID,
+    systemActorId: environment.VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID,
+  });
+  return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Platform-operator commands: policy publication and tenant ceilings. Each
+ * runs in its own runtime transaction with no request context, which the
+ * database requires before it accepts the operator.
+ */
+export const createCapabilityPolicyPlatformOperatorService = (
+  dependencies: CapabilityPolicyPlatformOperatorDependencies = {},
+) => {
+  const operator = configuredPlatformOperator(dependencies.environment ?? process.env);
+  const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
+  const requireOperator = (): ConfiguredTenantAdministrationOperatorContext => {
+    if (!operator) throw new Error("CAPABILITY_POLICY_OPERATOR_NOT_CONFIGURED");
+    return operator;
+  };
+
+  return Object.freeze({
+    async publishDefinition(
+      commandCandidate: CapabilityPolicyDefinitionCommand,
+    ): Promise<CapabilityPolicyMutationResult> {
+      const command = capabilityPolicyDefinitionCommandSchema.safeParse(commandCandidate);
+      if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
+      const actor = requireOperator();
+      const value = command.data;
+      const rows = await runtimeTransaction((transaction) =>
+        run(
+          () => transaction.query<DefinitionMutationRow>`
+            select * from vortex_access.publish_capability_policy_definition(
+              ${actor.systemActorId}::uuid, ${value.duplicateKey}::uuid,
+              ${value.tenantId}::uuid, ${value.policyId}::uuid,
+              ${value.capabilityKey}::text, ${value.unit}::text,
+              ${value.quantityLimit}::numeric, ${value.expectedRevision ?? null}::bigint
+            )
+          `,
+        ),
+      );
+      const row = parseOne(rows, "CAPABILITY_POLICY_MUTATION_UNAVAILABLE");
+      const parsed = capabilityPolicyMutationResultSchema.safeParse({
+        outcome: row.outcome,
+        policyId: row.policy_id,
+        tenantId: row.tenant_id,
+        capabilityKey: row.capability_key,
+        unit: row.unit,
+        quantityLimit: quantity(row.quantity_limit),
+        revision: revision(row.revision),
+        correlationId: row.correlation_id,
+        acceptedAt: timestamp(row.accepted_at),
+      });
+      if (!parsed.success) throw new Error("CAPABILITY_POLICY_MUTATION_UNAVAILABLE");
+      return parsed.data;
+    },
+
+    async setCeiling(commandCandidate: CapabilityCeilingCommand): Promise<CapabilityCeilingResult> {
+      const command = capabilityCeilingCommandSchema.safeParse(commandCandidate);
+      if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
+      const actor = requireOperator();
+      const value = command.data;
+      const rows = await runtimeTransaction((transaction) =>
+        run(
+          () => transaction.query<CeilingMutationRow>`
+            select * from vortex_access.set_capability_policy_ceiling(
+              ${actor.systemActorId}::uuid, ${value.duplicateKey}::uuid,
+              ${value.tenantId}::uuid, ${value.ceilingId}::uuid,
+              ${value.policyId}::uuid, ${value.policyRevision}::bigint,
+              ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz,
+              ${value.expectedRevision ?? null}::bigint
+            )
+          `,
+        ),
+      );
+      const row = parseOne(rows, "CAPABILITY_CEILING_UNAVAILABLE");
+      const parsed = capabilityCeilingResultSchema.safeParse({
+        outcome: row.outcome,
+        ceilingId: row.assignment_id,
+        tenantId: row.tenant_id,
+        policyId: row.policy_id,
+        policyRevision: revision(row.policy_revision),
+        capabilityKey: row.capability_key,
+        unit: row.unit,
+        quantityLimit: quantity(row.quantity_limit),
+        revision: revision(row.revision),
+        correlationId: row.correlation_id,
+        acceptedAt: timestamp(row.accepted_at),
+      });
+      if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+      return parsed.data;
+    },
+
+    async revokeCeiling(
+      commandCandidate: CapabilityCeilingRevocationCommand,
+    ): Promise<CapabilityCeilingRevocationResult> {
+      const command = capabilityCeilingRevocationCommandSchema.safeParse(commandCandidate);
+      if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
+      const actor = requireOperator();
+      const value = command.data;
+      const rows = await runtimeTransaction((transaction) =>
+        run(
+          () => transaction.query<CeilingRevocationRow>`
+            select * from vortex_access.revoke_capability_policy_ceiling(
+              ${actor.systemActorId}::uuid, ${value.duplicateKey}::uuid,
+              ${value.tenantId}::uuid, ${value.ceilingId}::uuid,
+              ${value.expectedRevision}::bigint
+            )
+          `,
+        ),
+      );
+      const row = parseOne(rows, "CAPABILITY_CEILING_UNAVAILABLE");
+      const parsed = capabilityCeilingRevocationResultSchema.safeParse({
+        outcome: row.outcome,
+        ceilingId: row.assignment_id,
+        tenantId: row.tenant_id,
+        revision: revision(row.revision),
+        correlationId: row.correlation_id,
+        acceptedAt: timestamp(row.accepted_at),
+      });
+      if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+      return parsed.data;
+    },
+  });
+};
+
+export type CapabilityPolicyPlatformOperatorService = ReturnType<
+  typeof createCapabilityPolicyPlatformOperatorService
+>;
+
+/**
+ * Tenant-administrator allocation for the whole tenant or one organisation,
+ * refused above the live platform ceiling. The acting person and their tenant
+ * administration authority come from the transaction's bound request context.
+ */
+export const setCapabilityLimitAllocation = async (
   transaction: RequestDatabaseTransaction,
-  commandCandidate: CapabilityPolicyDefinitionCommand,
-): Promise<CapabilityPolicyMutationResult> => {
-  const command = capabilityPolicyDefinitionCommandSchema.safeParse(commandCandidate);
+  commandCandidate: CapabilityAllocationCommand,
+): Promise<CapabilityAllocationResult> => {
+  const command = capabilityAllocationCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
-  if (command.data.authority.kind !== "tenant_administrator")
-    throw new Error("CAPABILITY_POLICY_AUTHORITY_INVALID");
   const value = command.data;
-  const rows = await transaction.query<DefinitionMutationRow>`
-    select * from vortex_access.publish_capability_policy_definition(
-      ${value.authority.identityId}::uuid, ${value.duplicateKey}::uuid,
-      ${value.tenantId}::uuid, ${value.policyId}::uuid,
-      ${value.capabilityKey}::text, ${value.unit}::text,
-      ${value.quantityLimit}::numeric, ${value.expectedRevision ?? null}::bigint
-    )
-  `;
-  const row = parseOne(rows, "CAPABILITY_POLICY_MUTATION_UNAVAILABLE");
-  const parsed = capabilityPolicyMutationResultSchema.safeParse({
+  const organizationId =
+    value.subject.kind === "organization" ? value.subject.organizationId : null;
+  const rows = await run(
+    () => transaction.query<AllocationMutationRow>`
+      select * from vortex_access.set_capability_limit_allocation(
+        ${value.duplicateKey}::uuid, ${value.subject.tenantId}::uuid,
+        ${organizationId}::uuid, ${value.allocationId}::uuid,
+        ${value.capabilityKey}::text, ${value.unit}::text,
+        ${value.quantityLimit}::numeric, ${value.expiresAt ?? null}::timestamptz,
+        ${value.expectedRevision ?? null}::bigint, ${value.activityId ?? null}::uuid
+      )
+    `,
+  );
+  const row = parseOne(rows, "CAPABILITY_ALLOCATION_UNAVAILABLE");
+  const parsed = capabilityAllocationResultSchema.safeParse({
     outcome: row.outcome,
-    policyId: row.policy_id,
-    tenantId: row.tenant_id,
+    allocationId: row.assignment_id,
+    subject: subjectOf(row.tenant_id, row.organization_id),
     capabilityKey: row.capability_key,
     unit: row.unit,
     quantityLimit: quantity(row.quantity_limit),
+    ceilingPolicyId: row.ceiling_policy_id,
+    ceilingPolicyRevision: revision(row.ceiling_policy_revision),
     revision: revision(row.revision),
     correlationId: row.correlation_id,
     acceptedAt: timestamp(row.accepted_at),
   });
-  if (!parsed.success) throw new Error("CAPABILITY_POLICY_MUTATION_UNAVAILABLE");
+  if (!parsed.success) throw new Error("CAPABILITY_ALLOCATION_UNAVAILABLE");
   return parsed.data;
 };
 
-export const assignCapabilityPolicy = async (
+export const revokeCapabilityLimitAllocation = async (
   transaction: RequestDatabaseTransaction,
-  commandCandidate: CapabilityPolicyAssignmentCommand,
-): Promise<CapabilityPolicyAssignmentResult> => {
-  const command = capabilityPolicyAssignmentCommandSchema.safeParse(commandCandidate);
+  commandCandidate: CapabilityAllocationRevocationCommand,
+): Promise<CapabilityAllocationRevocationResult> => {
+  const command = capabilityAllocationRevocationCommandSchema.safeParse(commandCandidate);
   if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
   const value = command.data;
-  const rows = await transaction.query<AssignmentMutationRow>`
-    select * from vortex_access.assign_capability_policy(
-      ${value.authority.identityId}::uuid,
-      ${value.authority.kind === "organization_administrator"
-        ? value.authority.organizationAccountId
-        : null}::uuid,
-      ${value.duplicateKey}::uuid, ${value.subject.tenantId}::uuid,
-      ${value.subject.kind === "organization" ? value.subject.organizationId : null}::uuid,
-      ${value.assignmentId}::uuid, ${value.policyId}::uuid,
-      ${value.policyRevision}::bigint, ${value.startsAt}::timestamptz,
-      ${value.expiresAt ?? null}::timestamptz, ${value.activityId ?? null}::uuid
-    )
-  `;
-  const row = parseOne(rows, "CAPABILITY_POLICY_ASSIGNMENT_UNAVAILABLE");
-  const parsed = capabilityPolicyAssignmentResultSchema.safeParse({
+  const organizationId =
+    value.subject.kind === "organization" ? value.subject.organizationId : null;
+  const rows = await run(
+    () => transaction.query<AllocationRevocationRow>`
+      select * from vortex_access.revoke_capability_limit_allocation(
+        ${value.duplicateKey}::uuid, ${value.subject.tenantId}::uuid,
+        ${organizationId}::uuid, ${value.allocationId}::uuid,
+        ${value.expectedRevision}::bigint, ${value.activityId ?? null}::uuid
+      )
+    `,
+  );
+  const row = parseOne(rows, "CAPABILITY_ALLOCATION_UNAVAILABLE");
+  const parsed = capabilityAllocationRevocationResultSchema.safeParse({
     outcome: row.outcome,
-    assignmentId: row.assignment_id,
-    policyId: row.policy_id,
-    policyRevision: revision(row.policy_revision),
-    subject:
-      row.organization_id == null
-        ? { kind: "tenant", tenantId: row.tenant_id }
-        : { kind: "organization", tenantId: row.tenant_id, organizationId: row.organization_id },
+    allocationId: row.assignment_id,
+    subject: subjectOf(row.tenant_id, row.organization_id),
     revision: revision(row.revision),
     correlationId: row.correlation_id,
     acceptedAt: timestamp(row.accepted_at),
   });
-  if (!parsed.success) throw new Error("CAPABILITY_POLICY_ASSIGNMENT_UNAVAILABLE");
-  return parsed.data;
-};
-
-export const revokeCapabilityPolicyAssignment = async (
-  transaction: RequestDatabaseTransaction,
-  commandCandidate: CapabilityPolicyRevocationCommand,
-): Promise<CapabilityPolicyRevocationResult> => {
-  const command = capabilityPolicyRevocationCommandSchema.safeParse(commandCandidate);
-  if (!command.success) throw new Error("CAPABILITY_POLICY_COMMAND_INVALID");
-  const value = command.data;
-  const rows = await transaction.query<RevocationMutationRow>`
-    select * from vortex_access.revoke_capability_policy_assignment(
-      ${value.authority.identityId}::uuid,
-      ${value.authority.kind === "organization_administrator"
-        ? value.authority.organizationAccountId
-        : null}::uuid,
-      ${value.duplicateKey}::uuid, ${value.authority.tenantId}::uuid,
-      ${value.authority.kind === "organization_administrator"
-        ? value.authority.organizationId
-        : null}::uuid,
-      ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint,
-      ${value.activityId ?? null}::uuid
-    )
-  `;
-  const row = parseOne(rows, "CAPABILITY_POLICY_REVOCATION_UNAVAILABLE");
-  const parsed = capabilityPolicyRevocationResultSchema.safeParse({
-    outcome: row.outcome,
-    assignmentId: row.assignment_id,
-    revision: revision(row.revision),
-    correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
-  });
-  if (!parsed.success) throw new Error("CAPABILITY_POLICY_REVOCATION_UNAVAILABLE");
+  if (!parsed.success) throw new Error("CAPABILITY_ALLOCATION_UNAVAILABLE");
   return parsed.data;
 };
 
 /**
  * Resolves only the tenant and organisation the request context already
- * established, and reports which assignment scope supplied the limit so the
- * organisation-over-tenant choice stays visible. #650 owns admission.
+ * established. The limit is the lowest of the platform ceiling and the tenant
+ * and organisation allocations beneath it; the result names which one applied
+ * and carries the ceiling. #650 owns admission.
  */
 export const resolveEffectiveCapabilityPolicy = async (
   transaction: RequestDatabaseTransaction,
@@ -497,8 +719,8 @@ export const resolveEffectiveCapabilityPolicy = async (
   try {
     rows = await transaction.query<EffectivePolicyRow>`
       select outcome, tenant_id, organization_id, capability_key, unit, applied_scope,
-        policy_id, policy_revision, assignment_id, assignment_revision,
-        quantity_limit, resolved_at, reason_code
+        applied_limit, policy_id, policy_revision, assignment_id, assignment_revision,
+        quantity_limit, ceiling_quantity_limit, resolved_at, reason_code
       from vortex_access.resolve_effective_capability_policy(
         ${request.data.tenantId}::uuid,
         ${request.data.organizationId ?? null}::uuid,
@@ -520,11 +742,13 @@ export const resolveEffectiveCapabilityPolicy = async (
     ...(row.outcome === "available"
       ? {
           appliedScope: row.applied_scope,
+          appliedLimit: row.applied_limit,
           policyId: row.policy_id,
           policyRevision: revision(row.policy_revision),
           assignmentId: row.assignment_id,
           assignmentRevision: revision(row.assignment_revision),
           quantityLimit: quantity(row.quantity_limit),
+          ceilingQuantityLimit: quantity(row.ceiling_quantity_limit),
         }
       : { reasonCode: row.reason_code }),
     resolvedAt: timestamp(row.resolved_at),
