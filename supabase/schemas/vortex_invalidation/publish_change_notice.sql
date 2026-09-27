@@ -79,8 +79,7 @@ begin
     'changeKind', p_change_kind,
     'dataVersion', p_data_version,
     'sequence', p_sequence,
-    'occurredAt', pg_catalog.to_char(operation_at at time zone 'UTC',
-      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'occurredAt', vortex_context.format_timestamp_utc(operation_at),
     'correlationId', p_correlation_id
   )
   || case when p_record_id is null then '{}'::jsonb
