@@ -9,6 +9,15 @@ import { revokeIdentitySession } from "../_lib/session-server";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
 
+const allowsSessionEnd = (request: NextRequest, siteUrl: string): boolean => {
+  const configuredOrigin = new URL(siteUrl).origin;
+  const fetchSite = request.headers.get("sec-fetch-site");
+  const origin = request.headers.get("origin");
+  if (origin !== null && origin !== configuredOrigin) return false;
+  if (fetchSite === "same-origin" || fetchSite === "none") return true;
+  return origin === configuredOrigin && (fetchSite === null || fetchSite === "same-site");
+};
+
 export function GET(request: NextRequest): NextResponse {
   // The destination is a fixed path on the configured site URL, never on `request.url`: Next dev
   // reports a loopback request as localhost while the configured origin is 127.0.0.1, and the
@@ -33,6 +42,10 @@ export function GET(request: NextRequest): NextResponse {
   // A fixed safe redirect remains available when configuration is unavailable.
   if (siteUrl === undefined) return response;
   try {
+    // Browser cross-site navigations and form submissions cannot clear this browser's session.
+    // Internal session-expiry redirects are same-origin navigations; direct visits use "none".
+    if (!allowsSessionEnd(request, siteUrl))
+      return new NextResponse(null, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
     const profile = identitySessionCookieProfile(siteUrl);
     for (const mutation of identitySessionCookieDeletions(profile))
@@ -44,9 +57,7 @@ export function GET(request: NextRequest): NextResponse {
 
   // Attempt to revoke this browser's provider refresh token after the redirect is sent, so a slow
   // or unreachable provider never delays or fails local sign-out. The attempt is limited to this
-  // browser's own session:
-  // a request another site triggers can do no more than the cookie clearing above already does,
-  // which is to sign this browser out.
+  // browser's own session and only runs for an allowed navigation.
   const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
   try {
     after(() => revokeIdentitySession(sessionCookies).then(() => undefined));
