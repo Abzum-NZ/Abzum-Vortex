@@ -270,14 +270,20 @@ export const createInstallationRuntimeBundleRepository = (
       }
     },
     readIndex,
-    async readParts(keyCandidate, sections) {
+    async readParts(
+      keyCandidate: InstallationRuntimeBundleKey,
+      sections: readonly InstallationRuntimeBundleSection[],
+    ) {
       const key = installationRuntimeBundleKeySchema.safeParse(keyCandidate);
       if (!key.success)
         throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const index = await readIndex(key.data);
       return readPartsWithIndex(key.data, sections, index);
     },
-    async readSections(keyCandidate, sections = installationRuntimeBundleSections) {
+    async readSections(
+      keyCandidate: InstallationRuntimeBundleKey,
+      sections: readonly InstallationRuntimeBundleSection[] = installationRuntimeBundleSections,
+    ) {
       const key = installationRuntimeBundleKeySchema.safeParse(keyCandidate);
       if (!key.success)
         throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");

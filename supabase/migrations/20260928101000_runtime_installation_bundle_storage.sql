@@ -4,6 +4,7 @@ begin;
 
 grant usage on schema extensions to vortex_module_owner;
 grant execute on function extensions.digest(bytea, text) to vortex_module_owner;
+grant usage on schema vortex_identity to vortex_module_owner;
 
 set local role vortex_module_owner;
 
