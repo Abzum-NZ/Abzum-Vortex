@@ -10,9 +10,24 @@ const Select = SelectPrimitive.Root;
 
 function SelectPortal({ container, ...props }: SelectPrimitive.Portal.Props) {
   const styleRoot = useVortexStylePortalRoot();
+  const [anchor, setAnchor] = React.useState<HTMLSpanElement | null>(null);
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  const needsAnchor = styleRoot === null && container === undefined;
+  const containingRoot = needsAnchor ? anchor?.closest("[data-vortex-style-root]") : null;
   return (
-    <SelectPrimitive.Portal container={container ?? styleRoot?.element ?? undefined} {...props} />
+    <>
+      {needsAnchor && <span ref={setAnchor} hidden aria-hidden="true" />}
+      {(!needsAnchor || anchor !== null) && (
+        <SelectPrimitive.Portal
+          container={
+            container ??
+            styleRoot?.element ??
+            (containingRoot instanceof HTMLElement ? containingRoot : undefined)
+          }
+          {...props}
+        />
+      )}
+    </>
   );
 }
 
@@ -67,7 +82,7 @@ function SelectContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
