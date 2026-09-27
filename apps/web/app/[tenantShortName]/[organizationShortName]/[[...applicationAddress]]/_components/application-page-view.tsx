@@ -372,7 +372,8 @@ function ApplicationPageViewContent({
     async (placementIds: readonly string[]): Promise<void> => {
       const pageKey = currentPageKey;
       const requestScope = placementRequestsRef.current;
-      if (pageKey === undefined) return;
+      // A callback retained by an earlier page must not start a read in the new page's scope.
+      if (pageKey === undefined || requestScope.key !== navigationKey) return;
 
       const requests = new Map<string, ComponentRequestGeneration>();
       for (const placementId of new Set(placementIds)) {
@@ -415,7 +416,7 @@ function ApplicationPageViewContent({
             batch.map(([, request]) => request.componentId),
           );
         } catch {
-          continue;
+          result = { kind: "temporarily_unavailable" };
         }
         if (placementRequestsRef.current.key !== requestScope.key) return;
 
@@ -493,7 +494,7 @@ function ApplicationPageViewContent({
           : current;
       });
     },
-    [application, currentPageKey, currentSearch, model.data, model.editFormBaselines],
+    [application, currentPageKey, currentSearch, model.data, model.editFormBaselines, navigationKey],
   );
   const refreshTargetsForSource = useCallback(
     (sourcePlacementId: string): readonly string[] => {
@@ -522,6 +523,12 @@ function ApplicationPageViewContent({
       }
     return baselines;
   }, [model.editFormBaselines, navigationKey, refreshedPlacementData]);
+
+  useEffect(() => {
+    setBusy(false);
+    setNotice(undefined);
+    setFormFeedback({});
+  }, [navigationKey]);
 
   useEffect(() => {
     if (!hasUnsavedWork) return;
@@ -737,6 +744,8 @@ function ApplicationPageViewContent({
       afterAccepted?: () => Promise<Notice | undefined>,
       sourcePlacementId?: string,
     ) => {
+      const isCurrentNavigation = (): boolean =>
+        placementRequestsRef.current.key === navigationKey;
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -760,6 +769,7 @@ function ApplicationPageViewContent({
       let settles = true;
       try {
         const result = await dispatch;
+        if (!isCurrentNavigation()) return;
         if (result === undefined) {
           settles = false;
           return;
@@ -786,6 +796,7 @@ function ApplicationPageViewContent({
               resultNotice = unavailableNotice;
             }
           }
+          if (!isCurrentNavigation()) return;
           showResult(resultNotice);
           const refreshSource = sourcePlacementId ?? formPlacementId;
           if (
@@ -809,12 +820,12 @@ function ApplicationPageViewContent({
         }
         showResult(unavailableNotice);
       } catch {
-        showResult(unavailableNotice);
+        if (isCurrentNavigation()) showResult(unavailableNotice);
       } finally {
-        if (settles) setBusy(false);
+        if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
-    [refreshPlacements, refreshTargetsForSource, router],
+    [navigationKey, refreshPlacements, refreshTargetsForSource, router],
   );
 
   /**
