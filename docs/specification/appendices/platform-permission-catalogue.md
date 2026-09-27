@@ -1,74 +1,90 @@
-# Platform administration permission catalogue
+# Platform administration permission declarations
 
-[Access rules](../04-access-and-permissions.md) · [Permission contracts](data-contracts.md#permission-and-role-contracts) · [Registry implementation #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32)
+[Access rules](../04-access-and-permissions.md) · [Permission contracts](data-contracts.md#permission-and-role-contracts)
 
 ## Purpose and ownership
 
-This initial closed catalogue contains only genuine platform administration permissions needed by [protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30), [roles #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). The platform invariant is protecting organisation account, role and runtime administration before an application-specific catalogue exists. It contains no business-application permissions, customer roles or business-record grants.
+The current platform administration permission catalogue is version `1.4.0` and contains 22 permissions. Its permanent owner remains `ownerKind = platform` with owner ID `cabe121e-0baf-4084-9471-cce915d460a8`. Changing where a declaration is authored does not change its permission ID, key, authority meaning or stored meaning fingerprint. Registering a platform permission makes it available in one organisation; it does not assign that permission to a person or Group.
 
-Current catalogue version: `1.1.0`; immutable predecessor versions: `1.0.1` (Group-facing display metadata) and `1.0.0` (initial). Every permission key below is a permanent internal identifier that never changes between catalogue versions, and every key uses current Group vocabulary. There is no Team permission key at any version. Permanent owner kind: `platform`. Permanent owner identifier: `cabe121e-0baf-4084-9471-cce915d460a8`. This identifies a permission-catalogue owner, not a customer Module/Application root or global administrator role. Registering it in one organisation creates availability there only and assigns no person or Group.
+Organisation Administration owns the 14 permissions that protect its system record types and management operations. The system core declaration owns the eight platform permissions that have no corresponding system record type: connections, security, support and application building. The permission's owning source is declaration metadata. It does not replace the permanent platform permission owner.
 
-The UUIDs below are newly allocated permanent identities, not derived from labels. Do not regenerate them during deployment. All entries have `administrative: true`, no `recordTypeId` and no `namedAction`; `actionKind` is the final `read` or `manage` key segment. The exact initial labels and descriptions follow. Display metadata can change through a catalogue version without changing identity or silently expanding permission meaning.
+## Owner decisions
 
-## Initial catalogue
+These decisions were recorded on 27 September 2026 and define the declaration and registration design:
 
-This is the immutable initial `1.0.0` metadata, including its historical terminology. The current user-facing concept is **Groups**. [Compatibility #283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) publishes Group-facing display metadata in a forward catalogue revision while preserving the UUIDs, permanent internal keys and authority meaning below. Do not rewrite this historical snapshot or manufacture a permission-continuity break for a terminology-only change. A permanent key is part of a permission's authority-bearing meaning fingerprint, so a key is never renamed between versions: the two collective-principal permissions use `groups` keys from this initial catalogue onward, and their meaning fingerprints are identical at every version. Only the initial display metadata below still carried the pre-#283 Team wording, which the `1.0.1` revision corrected. [Privileged role policy](groups-and-privileged-access.md) is separately governed organisation role state, not a changed permission meaning.
+1. Keep `ownerKind = platform` and owner `cabe121e-0baf-4084-9471-cce915d460a8`. Move only the authoring location. Record the owning system module as metadata. Keep all permission identities and meaning fingerprints unchanged.
+2. Add `pinnedPermissionId` for a declared permission's permanent identity. Accept it only in platform system-module sources.
+3. Keep permissions without a system record type in the platform system core declaration: connections, security, support and builder permissions.
+4. Register platform permissions from declared data when an organisation is created, independently of module installation.
+5. Seed a declaration table through a migration and have one generic registration function read it. Do not keep catalogue JSON in SQL function bodies.
+6. Preserve `registration_kind = 'platform'`, the `platform_catalogue` source kind and registration revisions 1-6 as history. Registration revision 7 is the first table-driven revision.
+7. Mark the steward minimum in declared data with `stewardMinimum`. Store it as `steward_minimum` in the seeded declaration data, and guard against silently removing the flag or a flagged permission.
 
-| Permanent permission identifier | Key | Label | Description |
-| --- | --- | --- | --- |
-| `687d5649-62ee-43dd-b684-b8af3a5394c1` | `platform.organization.permissions.read` | View available permissions | View the selected organisation's registered permission catalogue without receiving use or assignment authority. |
-| `ca5f56d4-5382-4bf8-9a91-fbfdc77642b2` | `platform.organization.roles.read` | View roles | View the selected organisation's live roles and registered application role templates. |
-| `87c96495-c806-4692-9bc2-250ddb10613c` | `platform.organization.roles.manage` | Manage roles | Create, change or retire roles only within the actor's explicit delegated scope. |
-| `290ae49f-4cab-4159-9c20-6e664f07d50b` | `platform.organization.groups.read` | View teams | View the selected organisation's Teams and membership administration data. |
-| `6185dc64-464b-4776-97dc-c64a6f299550` | `platform.organization.groups.manage` | Manage teams | Manage Teams and memberships subject to delegated scope and permanent-steward safeguards. |
-| `9901c0dc-8bac-45c7-be0b-3642cb839bb1` | `platform.organization.assignments.read` | View access assignments | View the selected organisation's role and delegation assignments and their effective scope. |
-| `156d01f3-8f80-45fb-8fc8-b31c47dbb1df` | `platform.organization.assignments.manage` | Manage access assignments | Grant, change or revoke use and delegation assignments only within the actor's explicit delegated scope. |
-| `02c772e5-2921-4300-ad90-4f5772a7fa46` | `platform.organization.accounts.read` | View organisation accounts | View the selected organisation's safe account-administration information. |
-| `630a980c-0ff5-40b1-a329-7326a2122395` | `platform.organization.accounts.manage` | Manage organisation accounts | Change organisation-account lifecycle through the protected operation without changing global identity or removing the final permanent steward. |
-| `9300e501-6d56-41b1-b203-3361dbace9bc` | `platform.organization.invitations.read` | View invitations | View safe invitation administration metadata without the raw invitation secret or its stored fingerprint. |
-| `c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb` | `platform.organization.invitations.manage` | Manage invitations | Create or revoke invitations through the protected operation; role assignment additionally requires the actor's assignment authority. |
-| `6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5` | `platform.organization.runtime_settings.read` | View organisation display settings | View the organisation's default language, time zone, currency, date and number display settings. |
-| `c658c254-2884-414a-9012-512c0cfe4b34` | `platform.organization.runtime_settings.manage` | Manage organisation display settings | Change the organisation's validated default display settings through the protected revision-checked operation. |
+## Declaration ownership and registration
 
-## Group-facing metadata revision
+The declaration sources and aggregate used by runtime packages are:
 
-Version `1.0.1` changes only these display fields from the initial catalogue. All thirteen permission identifiers, permanent keys, action kinds, administrative flags and authority-bearing meaning fingerprints remain unchanged; the complete catalogue fingerprint changes because its version and display metadata change.
+| Purpose | Source |
+| --- | --- |
+| Organisation Administration's 14 platform permissions | `modules/src/organisation-administration/module.ts` |
+| The eight permissions without a system record type; declaration only, not an installable module | `modules/src/system-core/platform-permissions.ts` |
+| Aggregate platform permission declarations consumed by runtime packages | `modules/src/platform-permissions.ts` in `@vortex/modules` |
+| Permission declaration schema only | `contracts/src/permissions.ts` in `@vortex/contracts` |
 
-| Permanent key | Label at `1.0.1` | Description at `1.0.1` |
-| --- | --- | --- |
-| `platform.organization.groups.read` | View groups | View the selected organisation's Groups and membership administration data. |
-| `platform.organization.groups.manage` | Manage groups | Manage Groups and memberships subject to delegated scope and permanent-steward safeguards. |
+`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/modules`. The `pinnedPermissionId` field preserves an existing permanent ID in platform system-module sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
 
-The historical initializer still creates only exact version `1.0.0`, and calling it again does not silently upgrade an organisation. A separate owner-only revision operation binds the exact organisation, expected initial registration revision and fixed `1.0.0` to `1.0.1` transition. It appends a complete immutable revision, preserves the old snapshot and moves the current registration pointer atomically. It never accepts caller-authored permission metadata or changes grants. A successful transition increments Access once; an exact replay, refusal or rollback does not increment it. After the explicit transition, initializer replay recognises and returns the exact current revision without downgrading or duplicating it.
+`sha256:809b4b3ad29ff61ab5ea73c06504909540b8111a2b3c2e1310559a7e9dc2e31e`
 
-## Current catalogue: additive administration revision
+At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. Revisions 1-6 remain immutable history; revision 7 is the first revision registered from the seeded declarations. The SQL registration functions do not embed catalogue JSON.
 
-Version `1.1.0` is the current catalogue. It adds one permission to the `1.0.1` display metadata and changes nothing else; the thirteen earlier identifiers, permanent keys, action kinds, administrative flags and authority-bearing meaning fingerprints are unchanged.
+### Steward minimum and guard
 
-| Permanent permission identifier | Key | Label | Description |
-| --- | --- | --- | --- |
-| `7ecd3304-f16c-47d4-94db-0964980091ba` | `platform.organization.applications.manage` | Manage applications | Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority. |
+Exactly the 13 permissions marked `Yes` in the inventory below form the steward's guarded minimum. A migration is refused if it removes the `steward_minimum` field, clears the flag from a protected permission or deletes a flagged declaration. Changing the set requires an explicit, reviewed specification change. The flag describes the required minimum, not every permission a steward may also hold: `platform.organization.connections.manage` is separately added to the current steward setup, but is not part of the guarded 13-permission set.
 
-Every current key, label and description uses Group vocabulary, and no current reader, caller or user-facing surface presents a Team concept. There is no second Team permission concept and no live Team-to-Group permission transition to perform.
+## Permission inventory
 
-A generic owner-only adoption operation moves an organisation from its exact current shipped catalogue to the exact next shipped one. It binds the organisation, the expected current registration revision and the exact target version and catalogue fingerprint, and never accepts caller-authored permission metadata. It appends a complete immutable revision, preserves the old snapshot, carries each unchanged permission's continuity forward, records a new continuity for an added permission and moves the current registration pointer atomically. A successful adoption increments Access once; an exact replay of the current revision returns the same evidence without incrementing it. Continuity and identity stay coherent across all three versions because the permission identifiers, keys, action kinds, administrative flags and therefore meaning fingerprints of the thirteen initial permissions are identical at `1.0.0`, `1.0.1` and `1.1.0`: `1.0.1` changes display metadata only and `1.1.0` only adds one permission. A future revision that changed a permanent key or any other authority-bearing meaning could not be adopted this way: the affected continuities would break and the permanent-steward safeguard would refuse the transition until the owning role was explicitly reviewed and accepted again.
+Action kinds and permanent identifiers below match the shipped `1.4.0` catalogue. The owning source identifies the declaration location; every permission retains its platform owner.
 
-This is the bounded prerequisite in [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283), not a general catalogue editor or a public granting operation. Later [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33)/[#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) compositions must use explicit current registration evidence; display metadata changes preserve existing accepted authority and do not supply assignment authority.
+| Permanent permission ID | Key | Action kind | Owning source | Steward minimum |
+| --- | --- | --- | --- | --- |
+| `687d5649-62ee-43dd-b684-b8af3a5394c1` | `platform.organization.permissions.read` | `read` | Organisation Administration | Yes |
+| `ca5f56d4-5382-4bf8-9a91-fbfdc77642b2` | `platform.organization.roles.read` | `read` | Organisation Administration | Yes |
+| `87c96495-c806-4692-9bc2-250ddb10613c` | `platform.organization.roles.manage` | `manage` | Organisation Administration | Yes |
+| `290ae49f-4cab-4159-9c20-6e664f07d50b` | `platform.organization.groups.read` | `read` | Organisation Administration | Yes |
+| `6185dc64-464b-4776-97dc-c64a6f299550` | `platform.organization.groups.manage` | `manage` | Organisation Administration | Yes |
+| `9901c0dc-8bac-45c7-be0b-3642cb839bb1` | `platform.organization.assignments.read` | `read` | Organisation Administration | Yes |
+| `156d01f3-8f80-45fb-8fc8-b31c47dbb1df` | `platform.organization.assignments.manage` | `manage` | Organisation Administration | Yes |
+| `02c772e5-2921-4300-ad90-4f5772a7fa46` | `platform.organization.accounts.read` | `read` | Organisation Administration | Yes |
+| `630a980c-0ff5-40b1-a329-7326a2122395` | `platform.organization.accounts.manage` | `manage` | Organisation Administration | Yes |
+| `9300e501-6d56-41b1-b203-3361dbace9bc` | `platform.organization.invitations.read` | `read` | Organisation Administration | Yes |
+| `c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb` | `platform.organization.invitations.manage` | `manage` | Organisation Administration | Yes |
+| `6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5` | `platform.organization.runtime_settings.read` | `read` | Organisation Administration | Yes |
+| `c658c254-2884-414a-9012-512c0cfe4b34` | `platform.organization.runtime_settings.manage` | `manage` | Organisation Administration | Yes |
+| `7ecd3304-f16c-47d4-94db-0964980091ba` | `platform.organization.applications.manage` | `manage` | Organisation Administration | No |
+| `ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d` | `platform.organization.connections.manage` | `manage` | System core | No |
+| `e85c2232-2ed7-4ce8-b1e5-7e2ad8e2b847` | `platform.security.identities.disable` | `manage` | System core | No |
+| `014d2898-1969-4434-805c-eeb0f0e6f797` | `platform.support.access.request` | `manage` | System core | No |
+| `07e4653c-d358-489f-8067-46e085d99478` | `platform.organization.support.approve` | `manage` | System core | No |
+| `0548c061-b1a9-48e5-a04a-eb1d0dae0644` | `platform.organization.definition_drafts.manage` | `manage` | System core | No |
+| `dfdd5aba-2b85-4169-b570-92be284e7b5c` | `platform.organization.definition_releases.manage` | `manage` | System core | No |
+| `d1be247f-094d-47c1-a38d-762290868c91` | `platform.organization.custom_code.manage` | `manage` | System core | No |
+| `eaade6fd-7390-44d2-a7ef-343324c7384a` | `platform.organization.system_applications.manage` | `manage` | System core | No |
+
+## History
+
+The shipped `1.4.0` catalogue currently mirrors platform registration revision 6. The current declarations preserve the permanent identities and meanings recorded by earlier revisions. Revisions 1-6 remain as history, and revision 7 registers the current declared set from the seeded table at organisation creation. This replaces the separate per-version adoption path; it does not change which permissions are available or assigned.
 
 ## Registration is not assignment
 
 ```mermaid
 flowchart LR
-    CAT[Versioned platform catalogue] --> REG[Explicit registration in one organisation]
-    REG --> AVAIL[Available exact administration permissions]
-    BOOT[Explicit trusted steward appointment] --> ASSIGN[Minimum direct management assignment]
-    AVAIL --> ASSIGN
+    DECL[System module and system core declarations] --> SEED[Seeded declaration table]
+    SEED --> REGISTER[Generic registration at organisation creation]
+    REGISTER --> AVAILABLE[Platform permissions available in the organisation]
+    STEWARD[Explicit steward appointment] --> ASSIGN[Guarded steward minimum assignment]
+    AVAILABLE --> ASSIGN
     ASSIGN --> USE[Protected administration operation]
     USE --> CHECK[Central permission and delegation checks]
 ```
 
-The initial steward handoff explicitly assigns this management snapshot plus the separate organisation-wide delegation authority in [stewardship](../04-access-and-permissions.md#initial-organisation-stewardship). Delegation permits governing future registered permissions in the same organisation, but neither it nor these thirteen permissions permits reading business records. Later catalogue additions do not enter the steward's personal use-permission snapshot automatically.
-
-The full [IAM setup](iam-application.md#setup-and-removal) separately accepts the exact application operating role needed to enter IAM and use its management journey. That permission declaration comes from the governed application release, not this core catalogue. It grants no rights to unrelated applications and must be included in the last-steward availability safeguard once IAM is active.
-
-Tenant structural capabilities remain separately scoped by [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and cannot satisfy these organisation permissions. Later genuine platform operations add reviewed catalogue entries under their owning tasks. Ordinary applications declare their own permissions through normal Vortex definitions.
+Registration makes declared permissions available in one organisation. It does not assign them. The trusted organisation-creation path explicitly appoints the initial steward and grants the guarded minimum. Application permissions and business-record permissions continue to come from their own module and application declarations. Tenant structural capabilities remain separately scoped and do not satisfy organisation platform permissions.

@@ -112,7 +112,7 @@ A page or platform screen cannot ship a meaningful operation that exists only as
 
 ### Page and nested placement permissions
 
-Every page retains its required access permission. A page in a system application may additionally require an exact [platform administration permission](appendices/platform-permission-catalogue.md); it is enforced exactly like any other declared page requirement, and hidden navigation never replaces the server check. A nested placement may add
+Every page retains its required access permission. A page in a system application may additionally require an exact [platform administration permission](appendices/platform-permission-catalogue.md#declaration-ownership-and-registration); declared permissions are registered for each organisation at creation independently of module installation, and hidden navigation never replaces the server check. A nested placement may add
 an explicit view permission and use permission. Without an explicit view
 permission it inherits the page and every enclosing placement's view gates;
 an explicit permission can only narrow that inherited access. A refused parent
