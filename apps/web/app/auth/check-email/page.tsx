@@ -16,8 +16,8 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
       title="Check your inbox"
       description={
         isRecovery
-          ? "If the address is connected to an account, a password recovery link is on its way."
-          : "Open the confirmation link we sent before signing in."
+          ? "If the address is connected to an account, a one-time recovery code and instructions are on their way."
+          : "Enter the email address and six-digit code from your confirmation message before signing in."
       }
       footer={
         <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
