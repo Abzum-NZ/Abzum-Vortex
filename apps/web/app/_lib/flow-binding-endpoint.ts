@@ -423,6 +423,9 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             });
             return continuationResult(outcome, installation.installationRevision);
           }
+          // A form answer must pass through the paused-target adapter, which resolves every
+          // reference-choice key before the flow sees the submitted values.
+          if (request.answer.kind === "submit") return refused;
           const expectation: FlowRunExpectation = {
             releaseKey: installation.releaseKey,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
