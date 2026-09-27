@@ -36,6 +36,8 @@ begin
 end
 $function$;
 
+alter function vortex_module.expire_preview_installations(integer) owner to vortex_module_owner;
+
 revoke all on function vortex_module.expire_preview_installations(integer)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_module.expire_preview_installations(integer)

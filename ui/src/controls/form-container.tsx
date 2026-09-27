@@ -22,10 +22,12 @@ import {
 } from "./draft-feedback";
 import {
   createFormFieldRegistry,
+  equalFormValue,
   FormScopeContext,
   useFormScope,
   type FormScope,
 } from "./form-context";
+import { useUnsavedWorkRegistry } from "./unsaved-work";
 import type { FormPayload } from "./projected-data";
 
 /**
@@ -82,17 +84,33 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const titleId = useId();
   const feedbackId = useId();
+  const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
   const [generation, setGeneration] = useState(0);
   const [registry] = useState(() => createFormFieldRegistry(context.location));
+  const unsavedWorkRegistry = useUnsavedWorkRegistry();
+  const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
+  const resetBaseline = useCallback(() => {
+    baselineRef.current = registry.values();
+  }, [registry]);
+  const setSavedBaseline = useCallback(
+    (values: Readonly<Record<string, unknown>>): boolean => {
+      baselineRef.current = values;
+      return !equalFormValue(registry.values(), values);
+    },
+    [registry],
+  );
   // Rechecks settled feedback only while a result is supplied; without one a
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
     if (supplied) setFeedbackTick((current) => current + 1);
-  }, [supplied]);
+    const baseline = baselineRef.current;
+    if (baseline !== undefined)
+      unsavedWorkRegistry?.setDirty(formId, !equalFormValue(registry.values(), baseline));
+  }, [formId, registry, supplied, unsavedWorkRegistry]);
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores
@@ -129,6 +147,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     eventsRef.current?.form_ready?.({ event: "form_ready" });
   }, [context.inactive]);
 
+  useEffect(() => {
+    resetBaseline();
+    return unsavedWorkRegistry?.registerForm(formId, resetBaseline, setSavedBaseline);
+  }, [formId, generation, resetBaseline, setSavedBaseline, unsavedWorkRegistry]);
+
   const resetRef = useRef(false);
   useEffect(() => {
     if (!resetRef.current) return;
@@ -159,6 +182,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const onReset = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (context.inactive) return;
+    baselineRef.current = undefined;
+    unsavedWorkRegistry?.setDirty(formId, false);
     resetRef.current = true;
     setGeneration((current) => current + 1);
     events?.form_reset?.({ event: "form_reset" });
@@ -169,7 +194,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
   if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
     return (
-      <p role="alert" data-vortex-control="form-container" data-vortex-placement-id={props.placementId}>
+      <p
+        role="alert"
+        data-vortex-control="form-container"
+        data-vortex-placement-id={props.placementId}
+      >
         Record unavailable.
       </p>
     );

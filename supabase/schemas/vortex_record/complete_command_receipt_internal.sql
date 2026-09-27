@@ -33,6 +33,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.complete_command_receipt_internal(text,uuid,uuid,bigint,text) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.complete_command_receipt_internal(
   text, uuid, uuid, bigint, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

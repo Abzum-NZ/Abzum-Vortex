@@ -117,6 +117,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.create_record_storage_table_internal(uuid,uuid,uuid,text,text) owner to vortex_record_owner;
+
 revoke all on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;
