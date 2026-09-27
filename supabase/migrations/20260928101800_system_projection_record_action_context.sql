@@ -1,4 +1,7 @@
 -- Keep action resolution aligned with the registered protected-view and action contract used by reads.
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.resolve_record_action_context_internal(
@@ -218,4 +221,7 @@ comment on function vortex_record.resolve_record_action_context_internal(uuid, t
   'Private installed-record action resolver: validates catalogue, release, field, and protected system-projection evidence before returning action metadata.';
 
 
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
