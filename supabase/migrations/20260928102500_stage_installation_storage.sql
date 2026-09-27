@@ -197,6 +197,15 @@ begin
     raise exception using errcode = '55000',
       message = 'Active Application installation is mixed';
   end if;
+  if exists (
+    select 1 from vortex_module.installation_bindings as binding
+    where binding.organization_id = permission_decision.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state = 'draining'
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation is draining';
+  end if;
 
   if active_application_release_revision is not null then
     if p_application_release_revision <= active_application_release_revision then
@@ -634,10 +643,23 @@ begin
       binding_storage_contract_ids := locked_binding.storage_contract_ids;
     end if;
 
-    select provision.* into strict storage_provision
-    from vortex_record.read_exact_module_storage_provision(
-      pin.target_root_id, pin.target_release_revision
-    ) as provision;
+    if all_staged then
+      -- Staged bindings are invisible to storage adoption's dependent count.
+      -- Recheck the mappings under Record's lineage locks through the switch.
+      select provision.* into strict storage_provision
+      from vortex_record.provision_exact_module_storage(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+      if storage_provision.changed then
+        raise exception using errcode = '40001',
+          message = 'Staged Application installation storage changed';
+      end if;
+    else
+      select provision.* into strict storage_provision
+      from vortex_record.read_exact_module_storage_provision(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+    end if;
 
     if binding_storage_contract_ids <> storage_provision.storage_contract_ids then
       raise exception using errcode = '40001',

@@ -150,6 +150,15 @@ begin
     raise exception using errcode = '55000',
       message = 'Active Application installation is mixed';
   end if;
+  if exists (
+    select 1 from vortex_module.installation_bindings as binding
+    where binding.organization_id = permission_decision.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state = 'draining'
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation is draining';
+  end if;
 
   if active_application_release_revision is not null then
     if p_application_release_revision <= active_application_release_revision then

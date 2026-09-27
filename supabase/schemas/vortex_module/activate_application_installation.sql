@@ -241,10 +241,23 @@ begin
       binding_storage_contract_ids := locked_binding.storage_contract_ids;
     end if;
 
-    select provision.* into strict storage_provision
-    from vortex_record.read_exact_module_storage_provision(
-      pin.target_root_id, pin.target_release_revision
-    ) as provision;
+    if all_staged then
+      -- Staged bindings are invisible to storage adoption's dependent count.
+      -- Recheck the mappings under Record's lineage locks through the switch.
+      select provision.* into strict storage_provision
+      from vortex_record.provision_exact_module_storage(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+      if storage_provision.changed then
+        raise exception using errcode = '40001',
+          message = 'Staged Application installation storage changed';
+      end if;
+    else
+      select provision.* into strict storage_provision
+      from vortex_record.read_exact_module_storage_provision(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+    end if;
 
     if binding_storage_contract_ids <> storage_provision.storage_contract_ids then
       raise exception using errcode = '40001',
