@@ -20,7 +20,7 @@ executes there. Measure sign-in and protected-page request durations after deliv
 do not remove access checks, add authority caches or change database pooling merely
 to compensate for an avoidable cross-region connection. The measured repair is
 tracked in [#347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347) and its
-[acceptance plan](../build-plan/testing-sign-in-performance.md).
+[#347 sign-in performance work](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347).
 
 ```mermaid
 flowchart LR
@@ -95,7 +95,7 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
-The shared [Activity foundation](../build-plan/issue-252-activity-foundation.md) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
+The shared [Activity foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
 
 The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, return the minimum safe organisation launcher, and resolve one exact active organisation-account scope for Access. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls owner-only Identity operations and owns the atomic account-scope plus current-version composition; it never reads Identity relations. Invitation activation/reactivation and the required organisation Access-version change commit or roll back together. The former standalone runtime version read and rich organisation-account list are revoked. `vortex_runtime` receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity access; it receives Access schema usage and execution only for the exact live human-context validator. Trigger functions remain non-executable by runtime roles.
 
@@ -125,7 +125,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
+- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
@@ -344,9 +344,9 @@ explicitly pinned shared Modules, without a general cross-organisation definitio
 lookup. Ordinary discovery does not require installation-management permission
 and grants no record access. It refuses a detached target. Unrelated detached
 history does not invalidate a complete current installation. See the
-[active installation read plan](../build-plan/issue-43-active-installation-read.md).
+[active installation read plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43).
 
-The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md)
+The [Application lifecycle permission](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact
 application and additionally checks delegated management of its complete affected
@@ -407,7 +407,7 @@ The provisioner accepts the declared current Module source/validation pair and
 uses its exact-value field storage model and graph definitions consistently.
 Rule changes do not create a separate record table or relabel a published release.
 Remove obsolete pair selectors with [Module consolidation #548](https://github.com/Abzum-NZ/Abzum-Vortex/issues/548);
-the [storage owner](../build-plan/issue-45-module3-storage-compatibility.md) retains
+the [storage owner](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) retains
 the existing allocation and installation responsibilities.
 
 An unchanged retry of the original first-provision command may return the same
@@ -567,11 +567,11 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
-Implement [permission-safe query caching #39](../build-plan/issue-39-permission-safe-query-caching.md)
-with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
-in Phase 5, before [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
+Implement [permission-safe query caching #39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39)
+with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
+Native dependencies govern its order relative to [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
 No dormant Phase 3 cache framework or duplicate version counter is required.
-The [application runtime #64](../build-plan/issue-64-application-runtime.md) owns
+The [application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns
 its later immutable-definition and resolved-application cache integration.
 
 ### Grant cache invalidation

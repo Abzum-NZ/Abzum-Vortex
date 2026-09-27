@@ -160,7 +160,7 @@ A complete organisation archive is not a spreadsheet import. It contains version
 
 Restore is an operator-controlled disaster-recovery or migration process. It validates supported archive content and integrity, maps identifiers, replays privacy removals, and restores organisation-scoped ownership and access rules before making the restored organisation available. Restored operations use the ordinary protected boundaries described in [functional quality](20-quality-and-acceptance.md#functional-quality).
 
-Definition copy, publication storage, consumer read and restore preserve the exact current Frontend Flow graph, resolved dependencies and immutable publication identity. They use the current contract; maintaining obsolete representation readers or conversion paths is not required.
+Under the one flow contract, definition copy, publication storage, consumer read and restore preserve the exact published flow definition, including its ordered tasks, resolved dependencies and immutable publication identity. Maintaining obsolete graph readers or conversion paths is not required.
 
 ## Acceptance examples
 

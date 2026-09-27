@@ -324,7 +324,7 @@ export function extractApplicationSourceIdentityRequirementsV2(
 
 /** Selects the permanent-identity vocabulary from exact stored source metadata. */
 export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
-  source.kind === "application" && source.source_contract_version === "2.0.0"
+  source.kind === "application"
     ? extractApplicationSourceIdentityRequirementsV2(source)
     : source.kind === "module"
       ? extractModuleSourceIdentityRequirementsV3(source)

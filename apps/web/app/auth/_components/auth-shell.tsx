@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@vortex/ui/components/card";
+import { VortexFontStylesheets } from "@vortex/ui";
 
 type AuthShellProps = Readonly<{
   eyebrow: string;
@@ -20,6 +21,7 @@ type AuthShellProps = Readonly<{
 export function AuthShell({ eyebrow, title, description, children, footer }: AuthShellProps) {
   return (
     <main className="flex min-h-svh items-center justify-center p-6">
+      <VortexFontStylesheets />
       <section aria-labelledby="auth-title" className="w-full max-w-lg">
         <Card>
           <CardHeader>

@@ -12,8 +12,7 @@ Development is carried out by an orchestrated fleet of autonomous coding agents 
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Entry point for every provider |
 | [Agent coordination](docs/build-plan/agent-coordination.md) | Current roles, development acceptance and ownership |
-| [Fleet operations](docs/build-plan/agent-fleet.md) | Strict pickup, bounded assignment, model routing, board updates and recovery |
-| [Orchestration diagram](docs/build-plan/fleet-orchestration.html) | Implementation, reviewer fixes, closure and next-task handoff |
+| [Fleet operations](docs/build-plan/agent-fleet.md) | Dependency-ready pickup, bounded assignment, model routing, board updates and recovery |
 | [Roadmap](docs/build-plan/README.md) | Phase order and Phase 6 visible-application objective |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, Pickup Order and status |
 | [Platform specification](docs/specification/README.md) | Product functionality and architecture |
@@ -23,7 +22,7 @@ Development is carried out by an orchestrated fleet of autonomous coding agents 
 
 ## Development workflow
 
-The GPT 5.6 Sol orchestrator selects the lowest unfinished pickup in the earliest incomplete roadmap phase, confirms a bounded scope and assigns the cheapest capable implementer. A separate Opus 5 or GPT 5.6 Sol reviewer fixes findings itself, re-reviews, integrates the reviewed change through permitted repository operations, updates/closes the assigned issue and reports. The orchestrator reconciles the board/dependencies, releases the agent, cleans the completed worktree and takes the next ordered task.
+One Claude Opus 5.5 session orchestrates planning and architecture, with GPT-6 Sol as its handover. It selects bounded, dependency-ready leaves across phases and fills independent implementation lanes with GPT-6 Luna (Extra High) by default. Space Bunny, DeepSeek 4.1 Flash and Claude Sonnet 5 High are overflow choices when Codex capacity is short. A separate GPT-6 Sol (Extra High) session reviews, fixes findings, re-reviews, integrates the reviewed change through permitted repository operations, updates/closes its assigned issue and reports. Claude Opus 5.5 (Medium) reviews only when Codex is capacity-limited. The orchestrator reconciles the board and dependencies, releases settled agents, safely cleans completed worktrees and refills available lanes.
 
 No tests, database review/execution, hosted verification, proof receipts, Kestra orchestration or Testing/Production deployment is part of this development workflow. Existing tooling and archived runbooks do not introduce extra gates. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
 
@@ -53,7 +52,7 @@ Application workflow steps use protected Vortex operations. Kestra's operational
 | `testing/` | Shared fixtures and existing cross-package utilities |
 | `workflows/kestra/` | Operational flows, scripts and delivery documentation |
 | `tooling/` | Workspace checks and development tools |
-| `docs/` | Specification, roadmap, fleet policy and historical evidence |
+| `docs/` | Specification, roadmap, fleet policy and architecture decisions |
 
 A Vortex module is an application definition; a workspace package is source code. Packages use each other's public interfaces and nothing depends upward; the workspace [boundary checker](tooling/boundaries/check.mjs) records those dependency and environment rules.
 
@@ -70,7 +69,7 @@ The development server binds to `127.0.0.1`. Authentication and protected data o
 
 ### Local development setup
 
-A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs every shipped application and gives one nominated first owner their access. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
+A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation with a nominated steward, then publishes and installs every shipped application. The steward grants application roles later through IAM. The command runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
 
 1. Start the local stack and build a fresh database (this deletes local data, including local sign-ups):
 
@@ -100,8 +99,8 @@ What the setup does, in order, through the protected entry points only (no table
 | Publish | The IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
 | Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
 | Install | Organisation Administration, Tenant Administration, CRM, Service Desk and Operations, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
-| Grant | The App first-owner composition installs IAM and calls the Access-owned initial operating-role grant once with the provisioning receipt: the nominated account receives the IAM reviewer role (`iam_reviewer`) as a standing assignment. |
-| Administration and application roles | The steward accepts and assigns to themselves `iam_administrator`, `organisation_administrator` and `tenant_administrator` through the ordinary Access administration operations, so the owner can administer the organisation from IAM, plus `crm_manager`, `service_manager` and `operations_operator` so the owner can open CRM, Service Desk and Operations. |
+| Administration access | The nominated steward opens IAM, Organisation Administration and Tenant Administration through the platform permissions established at provisioning; setup grants no application operating role. |
+| Later application roles | Through IAM's protected Access operations, the steward accepts application role templates and assigns roles to accounts or Groups within their delegated scope, including CRM access. |
 
 The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application.
 

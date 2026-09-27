@@ -28,7 +28,7 @@ The requesting service supplies the tenant, optional organisation attribution, n
 
 The decision contains the policy revision used. A service never infers entitlement from a commercial record, payment-provider message or banner. Security and record access are separate checks: an entitlement can refuse an operation but can never grant data access.
 
-Every protected Frontend Flow node that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. Running as a specified account or system actor, or holding execution delegation, never copies, widens or bypasses the tenant entitlement; sequential nodes meter only their own committed operations.
+Every protected flow task that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. Running as a specified account or system actor, or holding execution delegation, never copies, widens or bypasses the tenant entitlement; sequential tasks meter only their own committed operations.
 
 ```mermaid
 sequenceDiagram
@@ -56,6 +56,26 @@ Metering is generic evidence. It may support capacity planning, fair-use control
 Corrections are explicit later events or protected reconciliation operations; history is not edited in place. The exact reservation strategy for scarce concurrent resources is delivered with the entitlement service and must preserve the same allow/refuse boundary.
 
 ## Administration and presentation
+
+Entitlement limits have two levels of authority (owner decision, 27 September 2026):
+
+- **Ceiling.** Only the Vortex platform operator defines entitlement policies and sets each tenant's ceiling for a capability. The platform operator is the Vortex super administrator of the [application packages appendix](appendices/application-packages.md), acting through the configured system operator: trusted server configuration reached only by the runtime, in a transaction that carries no person's request context. It is never a customer role and never follows from a tenant role, organisation role, delegation or session.
+- **Allocation.** A tenant administrator may allocate or lower a limit for the whole tenant or for one of its organisations, and may revoke that allocation. An allocation above the tenant's current ceiling is refused.
+- **Organisation administrators** can see the limit that applies to their organisation but cannot assign or change any limit, including their own.
+- **Resolution.** The effective limit for a tenant or organisation is the lowest of the platform ceiling, the tenant allocation and, for an organisation, its own allocation. The decision reports which of these applied and the ceiling itself. An allocation counts only while a ceiling is in force, so an allocation, including one made before the ceiling was lowered, can never raise a limit.
+
+```mermaid
+flowchart TB
+    PO[Platform operator] -->|defines policy, sets ceiling| CEIL[Tenant ceiling]
+    TA[Tenant administrator] -->|allocates or lowers, never above the ceiling| TALLOC[Tenant allocation]
+    TA -->|allocates or lowers, never above the ceiling| OALLOC[Organisation allocation]
+    CEIL --> MIN[Effective limit = lowest applicable]
+    TALLOC --> MIN
+    OALLOC --> MIN
+    OA[Organisation administrator] -. view only .-> MIN
+```
+
+Every policy publication, ceiling change and allocation change is a protected operation with activity evidence: an accepted, duplicate-protected receipt and an append-only change record of the actor, scope, quantity and time. An organisation allocation is also written to that organisation's [activity history](14-activity-privacy-and-retention.md). Entitlement limits never grant data access.
 
 Entitlement policy administration is a protected platform operation with activity evidence. Its user interface is a platform-supplied administration application, with platform-owned protected-operation bindings as for [system applications](07-applications-pages-and-themes.md#system-applications), built from ordinary [application primitives](07-applications-pages-and-themes.md), not a special hardcoded screen.
 

@@ -16,9 +16,10 @@ type ButtonMode = "action" | "submit" | "reset";
 
 /**
  * Native button activated by pointer, Enter or Space. An action button emits only its declared
- * `action` event. Submit and reset buttons must sit inside a form container and emit nothing
- * themselves: the form emits its one `form_submit` or `form_reset` event, so Enter in a field and
- * a Submit button share a single submission path.
+ * `action` event; inside a form container that event carries the form's current typed field
+ * values, so the bound flow receives what the person entered. Submit and reset buttons must sit
+ * inside a form container and emit nothing themselves: the form emits its one `form_submit` or
+ * `form_reset` event, so Enter in a field and a Submit button share a single submission path.
  */
 export function Button(props: ButtonProps): ReactElement {
   const settings = readControlSettings(props, {
@@ -75,7 +76,11 @@ export function Button(props: ButtonProps): ReactElement {
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
         onClick={() => {
           if (mode !== "action" || disabled || runningNow.current) return;
-          const outcome: unknown = context.events?.action?.({ event: "action", intent: "activate" });
+          const outcome: unknown = context.events?.action?.({
+            event: "action",
+            intent: "activate",
+            ...(form === undefined ? {} : { values: form.values() }),
+          });
           if (
             typeof outcome === "object" &&
             outcome !== null &&

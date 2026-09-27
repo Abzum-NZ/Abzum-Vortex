@@ -17,17 +17,16 @@ const brandPermission = (permission: ShippedPermission): PermissionDeclaration =
  *
  * This data lives in Contracts, the lowest shared layer, so both Definition (validation and
  * compilation) and Access (runtime decisions) can consume the same keys and identities without
- * either importing the other. Access derives each release's fingerprint from this data. Every key
- * is a permanent internal identifier that never changes between catalogue versions, and no release
- * is ever removed.
+ * either importing the other. Access derives the catalogue fingerprint from this data. Every key
+ * is a permanent internal identifier that never changes between catalogue versions; earlier
+ * catalogue releases stay recorded in the platform registration revisions, not in code.
  */
 export const platformPermissionCatalogueOwnerId =
   "cabe121e-0baf-4084-9471-cce915d460a8" as PlatformId;
-export const platformPermissionCatalogueVersionV1 = "1.0.0";
-export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
 export const platformPermissionCatalogueVersion = "1.4.0";
 
-const historicalPermissionsV1: readonly ShippedPermission[] = [
+/** The current additive catalogue, mirroring platform registration revision 6 (`1.4.0`). */
+const currentPermissions: readonly ShippedPermission[] = [
   {
     permissionId: "687d5649-62ee-43dd-b684-b8af3a5394c1",
     key: "platform.organization.permissions.read",
@@ -57,17 +56,17 @@ const historicalPermissionsV1: readonly ShippedPermission[] = [
   {
     permissionId: "290ae49f-4cab-4159-9c20-6e664f07d50b",
     key: "platform.organization.groups.read",
-    label: "View teams",
-    description: "View the selected organisation's Teams and membership administration data.",
+    label: "View groups",
+    description: "View the selected organisation's Groups and membership administration data.",
     actionKind: "read",
     administrative: true,
   },
   {
     permissionId: "6185dc64-464b-4776-97dc-c64a6f299550",
     key: "platform.organization.groups.manage",
-    label: "Manage teams",
+    label: "Manage groups",
     description:
-      "Manage Teams and memberships subject to delegated scope and permanent-steward safeguards.",
+      "Manage Groups and memberships subject to delegated scope and permanent-steward safeguards.",
     actionKind: "manage",
     administrative: true,
   },
@@ -142,36 +141,6 @@ const historicalPermissionsV1: readonly ShippedPermission[] = [
     actionKind: "manage",
     administrative: true,
   },
-];
-
-/**
- * Group-facing display metadata. Only labels and descriptions change. A permission's
- * permanent key is part of its authority-bearing meaning fingerprint, so a key never
- * changes between catalogue versions: every version below uses the same Group keys and
- * the same meaning fingerprints, and no organisation can experience a continuity break
- * from this terminology change.
- */
-const historicalPermissionsV1_0_1: readonly ShippedPermission[] = historicalPermissionsV1.map(
-  (permission) => {
-    if (permission.key === "platform.organization.groups.read")
-      return {
-        ...permission,
-        label: "View groups",
-        description: "View the selected organisation's Groups and membership administration data.",
-      };
-    if (permission.key === "platform.organization.groups.manage")
-      return {
-        ...permission,
-        label: "Manage groups",
-        description:
-          "Manage Groups and memberships subject to delegated scope and permanent-steward safeguards.",
-      };
-    return permission;
-  },
-);
-
-const currentPermissions: readonly ShippedPermission[] = [
-  ...historicalPermissionsV1_0_1,
   {
     permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
     key: "platform.organization.applications.manage",
@@ -254,14 +223,6 @@ const currentPermissions: readonly ShippedPermission[] = [
     administrative: true,
   },
 ];
-
-/** The immutable `1.0.0` metadata: the initial platform catalogue release. */
-export const historicalPlatformPermissionsV1: readonly PermissionDeclaration[] =
-  historicalPermissionsV1.map(brandPermission);
-
-/** The immutable `1.0.1` Group-facing metadata revision; identities and meanings are unchanged. */
-export const historicalPlatformPermissionsV1_0_1: readonly PermissionDeclaration[] =
-  historicalPermissionsV1_0_1.map(brandPermission);
 
 /** The current additive catalogue, mirroring platform registration revision 6 (`1.4.0`). */
 export const currentPlatformPermissions: readonly PermissionDeclaration[] =

@@ -568,11 +568,13 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.crm.organisations:crm_companies"
-                                                                                                     }
+                                                                                                     },
+        "button_new_company": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.company.create", "settings": {"label": {"kind": "text", "value": "New company"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_1"
+                                                                                                  "content_1",
+            "button_new_company"
                                                                                               ]
                                                                               }
                                                                     }
@@ -663,11 +665,13 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.crm.people:crm_contacts"
-                                                                                                     }
+                                                                                                     },
+        "button_new_contact": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.contact.create", "settings": {"label": {"kind": "text", "value": "New contact"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_2"
+                                                                                                  "content_2",
+            "button_new_contact"
                                                                                               ]
                                                                               }
                                                                     }
@@ -772,11 +776,13 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.crm.people:crm_leads"
-                                                                                                     }
+                                                                                                     },
+        "button_new_lead": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.lead.create", "settings": {"label": {"kind": "text", "value": "New lead"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_3"
+                                                                                                  "content_3",
+            "button_new_lead"
                                                                                               ]
                                                                               }
                                                                     }
@@ -2689,12 +2695,14 @@
                                                                                                                   "slots":  {
 
                                                                                                                             }
-                                                                                                              }
+                                                                                                              },
+        "button_edit_company": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.company.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
                                                                                                   "detail_crm_company",
-                                                                                                  "form_crm_company_merge"
+                                                                                                  "form_crm_company_merge",
+            "button_edit_company"
                                                                                               ]
                                                                               }
                                                                     }
@@ -2817,11 +2825,13 @@
                                                                                                                   "slots":  {
 
                                                                                                                             }
-                                                                                                              }
+                                                                                                              },
+        "button_edit_contact": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.contact.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_contact"
+                                                                                                  "detail_crm_contact",
+            "button_edit_contact"
                                                                                               ]
                                                                               }
                                                                     }
@@ -2944,11 +2954,13 @@
                                                                                                                "slots":  {
 
                                                                                                                          }
-                                                                                                           }
+                                                                                                           },
+        "button_edit_lead": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.lead.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_crm_lead"
+                                                                                                  "detail_crm_lead",
+            "button_edit_lead"
                                                                                               ]
                                                                               }
                                                                     }
@@ -3735,6 +3747,48 @@
         "record_type": "vortex.crm.activities:activity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_new_company",
+      "key": "vortex.app.events.vortex_app_crm_new_company",
+      "record_type": "vortex.crm.organisations:company",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_new_contact",
+      "key": "vortex.app.events.vortex_app_crm_new_contact",
+      "record_type": "vortex.crm.people:contact",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_new_lead",
+      "key": "vortex.app.events.vortex_app_crm_new_lead",
+      "record_type": "vortex.crm.people:lead",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_edit_company",
+      "key": "vortex.app.events.vortex_app_crm_edit_company",
+      "record_type": "vortex.crm.organisations:company",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_edit_contact",
+      "key": "vortex.app.events.vortex_app_crm_edit_contact",
+      "record_type": "vortex.crm.people:contact",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_edit_lead",
+      "key": "vortex.app.events.vortex_app_crm_edit_lead",
+      "record_type": "vortex.crm.people:lead",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
     }
                             ],
                  "public_addresses":  [
@@ -4781,7 +4835,235 @@
                              }
                          ],
                          "outputs": {}
-                     }
+                     },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_company",
+      "key": "navigate_new_company",
+      "description": "Opens the company creation form.",
+      "labels": {
+        "name": "New company"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_company_create"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_contact",
+      "key": "navigate_new_contact",
+      "description": "Opens the contact creation form.",
+      "labels": {
+        "name": "New contact"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_contact_create"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_lead",
+      "key": "navigate_new_lead",
+      "description": "Opens the lead creation form.",
+      "labels": {
+        "name": "New lead"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_lead_create"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_edit_company",
+      "key": "navigate_edit_company",
+      "description": "Opens the current company in the edit form.",
+      "labels": {
+        "name": "Edit"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.crm.organisations:company"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_company_edit"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_edit_contact",
+      "key": "navigate_edit_contact",
+      "description": "Opens the current contact in the edit form.",
+      "labels": {
+        "name": "Edit"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.crm.people:contact"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_contact_edit"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_edit_lead",
+      "key": "navigate_edit_lead",
+      "description": "Opens the current lead in the edit form.",
+      "labels": {
+        "name": "Edit"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.crm.people:lead"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_lead_edit"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
                  ],
                  "flow_bindings":  [
                      {
@@ -5008,7 +5290,70 @@
                                  "name": "record_id"
                              }
                          }
-                     }
+                     },
+    {
+      "id": "binding_new_company",
+      "control": "button_new_company",
+      "event_id": "event_new_company",
+      "event": "action",
+      "flow": "navigate_new_company",
+      "inputs": {}
+    },
+    {
+      "id": "binding_new_contact",
+      "control": "button_new_contact",
+      "event_id": "event_new_contact",
+      "event": "action",
+      "flow": "navigate_new_contact",
+      "inputs": {}
+    },
+    {
+      "id": "binding_new_lead",
+      "control": "button_new_lead",
+      "event_id": "event_new_lead",
+      "event": "action",
+      "flow": "navigate_new_lead",
+      "inputs": {}
+    },
+    {
+      "id": "binding_edit_company",
+      "control": "button_edit_company",
+      "event_id": "event_edit_company",
+      "event": "action",
+      "flow": "navigate_edit_company",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
+    },
+    {
+      "id": "binding_edit_contact",
+      "control": "button_edit_contact",
+      "event_id": "event_edit_contact",
+      "event": "action",
+      "flow": "navigate_edit_contact",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
+    },
+    {
+      "id": "binding_edit_lead",
+      "control": "button_edit_lead",
+      "event_id": "event_edit_lead",
+      "event": "action",
+      "flow": "navigate_edit_lead",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
+    }
                  ]
              }
 }
