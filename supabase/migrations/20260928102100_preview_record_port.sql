@@ -148,7 +148,7 @@ revoke all on function vortex_module.read_preview_record_installation_internal(u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_module.read_preview_record_installation_internal(uuid)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_module.read_preview_record_installation_internal(uuid) is
   'Private owner-only preview installation reader for the protected Record port, restricted to the exact human identity, organisation account and Application context until expiry.';
 
@@ -194,7 +194,7 @@ revoke all on function vortex_record.read_current_preview_installation_internal(
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.read_current_preview_installation_internal()
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.read_current_preview_installation_internal() is
   'Resolves the transaction-local preview address only after the module ledger validates the same human identity, organisation account and Application context and confirms the preview is unexpired.';
 
@@ -234,7 +234,7 @@ revoke all on function vortex_record.preview_scoped_command_id_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.preview_scoped_command_id_internal(uuid)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.preview_scoped_command_id_internal(uuid) is
   'Derives a deterministic receipt identity inside one validated preview installation so retries stay isolated from live and other preview record commands.';
 
@@ -303,7 +303,7 @@ revoke all on function vortex_record.preview_record_field_bounds_internal(uuid, 
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb) is
   'Field bounds for a record already proven to use the exact owner-only preview storage identity; generated and derived fields remain non-changeable.';
 

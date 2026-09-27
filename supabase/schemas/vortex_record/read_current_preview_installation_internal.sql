@@ -36,6 +36,6 @@ revoke all on function vortex_record.read_current_preview_installation_internal(
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.read_current_preview_installation_internal()
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.read_current_preview_installation_internal() is
   'Resolves the transaction-local preview address only after the module ledger validates the same human identity, organisation account and Application context and confirms the preview is unexpired.';

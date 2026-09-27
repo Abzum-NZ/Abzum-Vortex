@@ -66,6 +66,6 @@ revoke all on function vortex_module.read_preview_record_installation_internal(u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_module.read_preview_record_installation_internal(uuid)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_module.read_preview_record_installation_internal(uuid) is
   'Private owner-only preview installation reader for the protected Record port, restricted to the exact human identity, organisation account and Application context until expiry.';

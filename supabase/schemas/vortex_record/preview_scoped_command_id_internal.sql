@@ -34,6 +34,6 @@ revoke all on function vortex_record.preview_scoped_command_id_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.preview_scoped_command_id_internal(uuid)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.preview_scoped_command_id_internal(uuid) is
   'Derives a deterministic receipt identity inside one validated preview installation so retries stay isolated from live and other preview record commands.';

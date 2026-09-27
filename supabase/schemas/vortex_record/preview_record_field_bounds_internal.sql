@@ -63,6 +63,6 @@ revoke all on function vortex_record.preview_record_field_bounds_internal(uuid, 
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_module_owner;
 grant execute on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
-  to vortex_record_owner, vortex_record_adapter;
+  to vortex_record_adapter;
 comment on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb) is
   'Field bounds for a record already proven to use the exact owner-only preview storage identity; generated and derived fields remain non-changeable.';
