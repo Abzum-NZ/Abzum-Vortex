@@ -40,7 +40,6 @@ declare
   filter_parameters jsonb := '[]'::jsonb;
   filter_expression_pairs text[] := array[]::text[];
   filter_values_sql text := '''{}''::jsonb';
-  filter_values jsonb;
   group_ids text[] := array[]::text[];
   aggregate_items jsonb := '[]'::jsonb;
   aggregate_item jsonb;
@@ -58,13 +57,6 @@ declare
   candidate_sql text;
   selected_sql text;
   summary_sql text;
-  summary_values jsonb := '[]'::jsonb;
-  row_values jsonb;
-  readable_values jsonb;
-  scan_record record;
-  scanned_candidates integer := 0;
-  total_row_count integer := 0;
-  passes boolean;
   expression_pairs text[] := array[]::text[];
   group_value_pairs text[] := array[]::text[];
   group_by_terms text[] := array[]::text[];
@@ -564,72 +556,55 @@ begin
       access_sql,
       filter_predicate
     );
-    for scan_record in execute scan_sql
-      using context_organization_id, context_application_root_id, null::text[], null::uuid,
-        summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-        access_shared_record_ids, filter_parameters, access_parameters
-    loop
-      scanned_candidates := scanned_candidates + 1;
-      if scanned_candidates > summary_candidate_limit then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'dataset_limit_exceeded');
-      end if;
-      readable_values := vortex_record.read_record(record_type_id_value, scan_record.record_id);
-      if readable_values ->> 'outcome' <> 'allowed' then
-        continue;
-      end if;
-      readable_values := readable_values -> 'values';
-      if exists (
-        select 1 from pg_catalog.unnest(filter_ids) as required(id)
-        where not (readable_values ? required.id)
-      ) then
-        continue;
-      end if;
-      if filter_condition is not null then
-        select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
-          case filter_types ->> referenced.id
-            when 'record_reference' then pg_catalog.to_jsonb(
-              pg_catalog.lower(readable_values -> referenced.id ->> 'recordId'))
-            when 'organization_account_reference' then pg_catalog.to_jsonb(
-              pg_catalog.lower(readable_values -> referenced.id ->> 'organizationAccountId'))
-            else readable_values -> referenced.id
-          end), '{}'::jsonb)
-        into filter_values
-        from pg_catalog.unnest(filter_ids) as referenced(id);
-        begin
-          passes := vortex_access.evaluate_query_condition_internal(
-            filter_condition, filter_types, filter_values,
-            parameter_types, parameter_values, false
-          );
-        exception when invalid_parameter_value then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
-        end;
-        if passes is not true then
-          continue;
-        end if;
-      end if;
-      row_values := '{}'::jsonb;
-      foreach field_id in array summary_field_ids loop
-        if readable_values ? field_id then
-          row_values := row_values || pg_catalog.jsonb_build_object(field_id, readable_values -> field_id);
-        end if;
-      end loop;
-      summary_values := summary_values || pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object('values', row_values)
-      );
-      total_row_count := total_row_count + 1;
-    end loop;
-    candidate_sql := 'select item.value -> ''values'' as projected_values from pg_catalog.jsonb_array_elements($11) as item(value)';
+    candidate_sql := scan_sql;
   end if;
 
   -- A compiled predicate may be a superset. The fast path still evaluates the
   -- complete condition over values the exact plan proves readable; the raw
   -- candidate count remains the ceiling, before any totals are returned.
-  selected_sql := case when fast_path and filter_condition is not null then
-    'select candidate.projected_values from candidate where
-       vortex_access.evaluate_query_condition_internal(
-         $12, $13, candidate.filter_values, $14, $15, false
-       )'
-    else 'select candidate.projected_values from candidate' end;
+  if fast_path then
+    selected_sql := case when filter_condition is not null then
+      'select candidate.projected_values from candidate where
+         vortex_access.evaluate_query_condition_internal(
+           $12, $13, candidate.filter_values, $14, $15, false
+         )'
+      else 'select candidate.projected_values from candidate' end;
+  else
+    -- Materialize each read once. The raw candidate count gates the reads, and
+    -- every filter and aggregate uses only the fields this read returned.
+    selected_sql := pg_catalog.format(
+      'with readable as materialized (
+         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
+         from candidate
+         where (select value from candidate_count) <= %s
+       )
+       select (
+         select coalesce(pg_catalog.jsonb_object_agg(field.id, readable.result -> ''values'' -> field.id), ''{}''::jsonb)
+         from pg_catalog.unnest($17::text[]) as field(id)
+         where readable.result -> ''values'' ? field.id
+       ) as projected_values
+       from readable
+       where readable.result ->> ''outcome'' = ''allowed''
+         and not exists (
+           select 1 from pg_catalog.unnest($16::text[]) as required(id)
+           where not (readable.result -> ''values'' ? required.id)
+         )
+         and ($12::jsonb is null or vortex_access.evaluate_query_condition_internal(
+           $12, $13,
+           (select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
+             case $13 ->> referenced.id
+               when ''record_reference'' then pg_catalog.to_jsonb(
+                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
+               when ''organization_account_reference'' then pg_catalog.to_jsonb(
+                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
+               else readable.result -> ''values'' -> referenced.id
+             end), ''{}''::jsonb)
+            from pg_catalog.unnest($16::text[]) as referenced(id)),
+           $14, $15, false
+         ))',
+      record_type_id_value::text, summary_candidate_limit
+    );
+  end if;
 
   -- Omitted grouping fields are withheld on that row, so they form no group;
   -- a readable JSON null remains a legitimate null group.
@@ -716,17 +691,16 @@ begin
     );
   end if;
 
-  execute summary_sql into result_value
-    using context_organization_id, context_application_root_id, null::text[], null::uuid,
-      summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-      access_shared_record_ids, filter_parameters, access_parameters, summary_values,
-      filter_condition, filter_types, parameter_types, parameter_values;
-  if result_value ->> 'outcome' = 'refused' then
-    return result_value;
-  end if;
-  if not fast_path then
-    result_value := pg_catalog.jsonb_set(result_value, '{totalRowCount}', pg_catalog.to_jsonb(total_row_count));
-  end if;
+  begin
+    execute summary_sql into result_value
+      using context_organization_id, context_application_root_id, null::text[], null::uuid,
+        summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
+        access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
+        filter_condition, filter_types, parameter_types, parameter_values,
+        filter_ids, summary_field_ids;
+  exception when invalid_parameter_value then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+  end;
   return result_value;
 end
 $function$;
