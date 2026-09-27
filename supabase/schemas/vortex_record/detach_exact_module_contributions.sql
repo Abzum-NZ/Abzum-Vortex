@@ -188,6 +188,8 @@ exception
 end
 $function$;
 
+alter function vortex_record.detach_exact_module_contributions(uuid,bigint,jsonb,boolean) owner to vortex_record_owner;
+
 revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;

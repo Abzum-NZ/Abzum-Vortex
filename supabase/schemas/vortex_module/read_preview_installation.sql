@@ -43,6 +43,8 @@ begin
 end
 $function$;
 
+alter function vortex_module.read_preview_installation(uuid) owner to vortex_module_owner;
+
 revoke all on function vortex_module.read_preview_installation(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_module.read_preview_installation(uuid)
