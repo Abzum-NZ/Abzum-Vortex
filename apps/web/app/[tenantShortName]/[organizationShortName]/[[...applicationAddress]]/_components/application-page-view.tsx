@@ -449,7 +449,11 @@ export function ApplicationPageView({
     const inputs: Record<string, unknown> = {};
     // A placement may hold bindings (a form submits) without holding projected data, so both key
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
-    const placementIds = new Set([...Object.keys(model.data), ...Object.keys(model.bindings)]);
+    const placementIds = new Set([
+      ...Object.keys(model.data),
+      ...Object.keys(model.bindings),
+      ...Object.keys(formFeedback),
+    ]);
     for (const placementId of placementIds) {
       const data = model.data[placementId];
       const bindings = model.bindings[placementId] ?? [];
@@ -549,6 +553,12 @@ export function ApplicationPageView({
       if (resetBinding !== undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset" || busy) return;
+          setFormFeedback((current) => {
+            if (!Object.hasOwn(current, placementId)) return current;
+            const next = { ...current };
+            delete next[placementId];
+            return next;
+          });
           void applyDispatch(formBlock.reset(asComponentBinding(placementId, resetBinding)));
         };
       if (data === undefined) {
