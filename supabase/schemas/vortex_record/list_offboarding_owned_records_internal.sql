@@ -216,11 +216,6 @@ revoke all on function vortex_record.list_offboarding_owned_records_internal(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
 
-revoke all on function vortex_record.list_offboarding_owned_records_internal(
-  uuid, text, uuid, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
-
 comment on function vortex_record.list_offboarding_owned_records_internal(
   uuid, text, uuid, uuid, uuid, integer
 ) is

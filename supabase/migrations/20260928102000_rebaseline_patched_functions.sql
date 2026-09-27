@@ -4663,10 +4663,11 @@ revoke all on function vortex_record.list_offboarding_owned_records_internal(
   uuid, text, uuid, uuid, uuid, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
-revoke all on function vortex_record.list_offboarding_owned_records_internal(
-  uuid, text, uuid, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+
+-- The owner has no final EXECUTE grant. Lend it for CREATE OR REPLACE and revoke it below.
+grant execute on function vortex_record.list_offboarding_owned_records(
+  uuid, text, uuid, text, uuid, uuid, integer
+) to vortex_record_adapter;
 
 create or replace function vortex_record.list_offboarding_owned_records(
   p_source_organization_account_id uuid,
@@ -4714,16 +4715,6 @@ comment on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer
 ) is
   'Protected account-offboarding inventory: accounts.manage once and per-record exact transfer disclosure for the application-contained and organisation-shared sections.';
-revoke all on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-grant execute on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) to vortex_request;
-grant execute on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) to vortex_record_adapter;
 revoke all on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer
 ) from public, anon, authenticated, service_role, vortex_runtime,

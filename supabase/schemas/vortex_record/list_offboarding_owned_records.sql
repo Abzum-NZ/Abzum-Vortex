@@ -51,19 +51,6 @@ grant execute on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer
 ) to vortex_request;
 
-grant execute on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) to vortex_record_adapter;
-
-revoke all on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-
-grant execute on function vortex_record.list_offboarding_owned_records(
-  uuid, text, uuid, text, uuid, uuid, integer
-) to vortex_request;
-
 comment on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer
 ) is
