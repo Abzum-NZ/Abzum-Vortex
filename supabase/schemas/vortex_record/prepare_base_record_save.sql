@@ -146,6 +146,9 @@ begin
       or meta #>> '{recordType,key}' <> 'organization_settings'
       or meta #>> '{recordType,systemProjection,protectedView}' <>
         'organization_runtime_settings'
+      or not coalesce(
+        (meta #> '{recordType,standardActions}') ? 'update', false
+      )
       or not exists (
         select 1
         from vortex_definition.roots as root
@@ -156,6 +159,19 @@ begin
       or p_record_id is distinct from
         (meta -> 'context' ->> 'organizationId')::uuid then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+
+    -- Do not execute application before-save rules for this projection until
+    -- the platform settings-manage permission has passed its own current check.
+    if not vortex_access.organization_runtime_settings_manage_is_current() then
+      perform vortex_record.append_base_save_activity_internal(
+        p_activity_id, 'update', organization_id_value,
+        array[]::uuid[], 'refused'
+      );
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused_recorded',
+        'correlationId', correlation_id_value
+      );
     end if;
 
     -- The one writable system projection is prepared through its protected

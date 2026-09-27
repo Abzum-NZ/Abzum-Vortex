@@ -10,6 +10,7 @@ import {
   recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
+  writableSystemProjectionRegistrations,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -102,16 +103,6 @@ type StoredResult =
 
 const recordedRefusal = Symbol("recordedRecordSaveRefusal");
 const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
-
-/**
- * System projections stay read-only by default. This closed registration is the only protected
- * projection that Record may prepare and persist through the generic save service.
- */
-const writableSystemProjectionRegistrations = Object.freeze({
-  organization_settings: Object.freeze({
-    protectedView: "organization_runtime_settings",
-  }),
-});
 
 const writableSystemProjection = (
   recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
@@ -575,9 +566,11 @@ const persist = async (
   parentMutations: readonly RelationshipTotalParentMutation[] = [],
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
+    const registration = writableSystemProjection(recordType);
     if (
       command.operation !== "update" ||
-      writableSystemProjection(recordType) === undefined ||
+      registration === undefined ||
+      registration.writer !== "save_organization_settings_record" ||
       command.recordId === undefined ||
       command.expectedConcurrencyNumber === undefined
     )

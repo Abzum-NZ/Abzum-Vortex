@@ -17,6 +17,8 @@ as $function$
 declare
   meta jsonb;
   loaded jsonb;
+  read_decision jsonb;
+  read_bounds jsonb;
   record_type_value jsonb;
   field_item jsonb;
   field_id text;
@@ -57,6 +59,7 @@ begin
   if record_type_value ->> 'key' is distinct from 'organization_settings'
     or record_type_value #>> '{systemProjection,protectedView}' is distinct from
       'organization_runtime_settings'
+    or not coalesce((record_type_value -> 'standardActions') ? 'update', false)
     or not exists (
       select 1
       from vortex_definition.roots as root
@@ -92,6 +95,46 @@ begin
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict',
       'concurrencyNumber', loaded -> 'concurrencyNumber',
+      'correlationId', correlation_id_value
+    );
+  end if;
+
+  read_decision := vortex_access.evaluate_organization_record_access_internal(
+    loaded -> 'declaration', p_record_id, loaded -> 'facts'
+  );
+  if read_decision ->> 'outcome' is distinct from 'allowed' then
+    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'record_unavailable',
+      'correlationId', correlation_id_value
+    );
+  end if;
+  read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
+  read_bounds := read_bounds || pg_catalog.jsonb_build_object(
+    'readableFieldIds', vortex_record.organization_settings_readable_field_ids_internal(
+      p_record_type_id, read_decision, read_bounds -> 'readableFieldIds'
+    )
+  );
+  if exists (
+    select 1
+    from (
+      select supplied.key
+      from pg_catalog.jsonb_object_keys(p_submitted_values) as supplied(key)
+      union
+      select supplied.key
+      from pg_catalog.jsonb_object_keys(p_final_values) as supplied(key)
+    ) as supplied
+    where not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements_text(
+        read_bounds -> 'readableFieldIds'
+      ) as readable(field_id)
+      where pg_catalog.lower(readable.field_id) = pg_catalog.lower(supplied.key)
+    )
+  ) then
+    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'field_refused',
       'correlationId', correlation_id_value
     );
   end if;
@@ -147,7 +190,8 @@ begin
     field_value := p_final_values -> field_id;
     if field_key in ('organization_id', 'revision')
       or field_type in (
-        'reference_number', 'table', 'link', 'link_to_one_of_several', 'total', 'attachment'
+        'reference_number', 'table', 'link', 'link_to_one_of_several', 'total',
+        'attachment', 'calculation'
       )
       or not vortex_record.canonical_record_value_matches(
         field_value, field_type, database_type

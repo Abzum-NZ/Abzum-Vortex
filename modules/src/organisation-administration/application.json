@@ -966,7 +966,7 @@
                     },
                     "text": {
                       "kind": "text",
-                      "value": "The organisation's current runtime localisation settings are read live from protected Access data below. Change them or the organisation default application with the forms below: each runs under your own authority in protected Access, is checked against the settings revision you supply, and is refused if you lack the authority. These settings are never copied into ordinary records."
+                      "value": "View the organisation's runtime settings. Select the settings record to edit it through the protected record save."
                     }
                   },
                   "theme_overrides": {},
@@ -986,9 +986,18 @@
                 "settings_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
+                    "release_version": "1.3.0"
                   },
                   "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_open_organization_settings"
+                        }
+                      }
+                    },
                     "title": {
                       "kind": "text",
                       "value": "Current runtime settings"
@@ -1091,8 +1100,32 @@
                   },
                   "slots": {},
                   "query": "vortex.organisation_administration:organization_settings"
-                },
-                "form_update_runtime_settings": {
+                }
+              },
+              "order": {
+                "desktop": [
+                  "settings_text",
+                  "settings_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_edit_organisation_runtime_settings",
+        "key": "edit_organisation_runtime_settings",
+        "name": "Edit runtime settings",
+        "type": "form",
+        "record_type": "vortex.organisation_administration:organization_settings",
+        "permission": "platform.organization.runtime_settings.manage",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "form_organization_settings": {
                   "block": {
                     "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                     "release_version": "1.0.0"
@@ -1100,7 +1133,7 @@
                   "settings": {
                     "title": {
                       "kind": "text",
-                      "value": "Update runtime settings"
+                      "value": "Edit runtime settings"
                     }
                   },
                   "theme_overrides": {},
@@ -1118,64 +1151,19 @@
                   "slots": {
                     "content": {
                       "placements": {
-                        "input_update_runtime_settings_expected_revision": {
+                        "input_organization_settings_language": {
                           "block": {
-                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "expected_revision"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expected revision"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "integer": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "min_value": {
-                              "kind": "number",
-                              "value": 1
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_update_runtime_settings_language": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "language"
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.language"
                             },
                             "label": {
                               "kind": "text",
                               "value": "Language"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
                             }
                           },
                           "theme_overrides": {},
@@ -1192,23 +1180,19 @@
                           },
                           "slots": {}
                         },
-                        "input_update_runtime_settings_time_zone": {
+                        "input_organization_settings_time_zone": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "time_zone"
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.time_zone"
                             },
                             "label": {
                               "kind": "text",
                               "value": "Time zone"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
                             }
                           },
                           "theme_overrides": {},
@@ -1225,23 +1209,19 @@
                           },
                           "slots": {}
                         },
-                        "input_update_runtime_settings_currency": {
+                        "input_organization_settings_currency": {
                           "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "currency"
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.currency"
                             },
                             "label": {
                               "kind": "text",
                               "value": "Currency"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
                             }
                           },
                           "theme_overrides": {},
@@ -1258,80 +1238,19 @@
                           },
                           "slots": {}
                         },
-                        "input_update_runtime_settings_date_format": {
+                        "input_organization_settings_date_format": {
                           "block": {
-                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "date_format"
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.date_format"
                             },
                             "label": {
                               "kind": "text",
                               "value": "Date format"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "options": {
-                              "kind": "list",
-                              "items": [
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "short"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Short"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "medium"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Medium"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "long"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Long"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "full"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Full"
-                                    }
-                                  }
-                                }
-                              ]
                             }
                           },
                           "theme_overrides": {},
@@ -1348,80 +1267,19 @@
                           },
                           "slots": {}
                         },
-                        "input_update_runtime_settings_number_format": {
+                        "input_organization_settings_number_format": {
                           "block": {
-                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                             "release_version": "1.0.0"
                           },
                           "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "number_format"
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.number_format"
                             },
                             "label": {
                               "kind": "text",
                               "value": "Number format"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "options": {
-                              "kind": "list",
-                              "items": [
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "auto"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Automatic grouping"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "always"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Always group"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "min2"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Group from two digits"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "never"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Never group"
-                                    }
-                                  }
-                                }
-                              ]
                             }
                           },
                           "theme_overrides": {},
@@ -1438,7 +1296,36 @@
                           },
                           "slots": {}
                         },
-                        "button_update_runtime_settings": {
+                        "input_organization_settings_default_application_root_id": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:organization_settings.default_application_root_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Default application"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "submit_organization_settings": {
                           "block": {
                             "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                             "release_version": "1.0.0"
@@ -1446,11 +1333,11 @@
                           "settings": {
                             "label": {
                               "kind": "text",
-                              "value": "Update runtime settings"
+                              "value": "Save settings"
                             },
                             "action_kind": {
                               "kind": "choice",
-                              "value": "action"
+                              "value": "submit"
                             },
                             "variant": {
                               "kind": "choice",
@@ -1474,157 +1361,13 @@
                       },
                       "order": {
                         "desktop": [
-                          "input_update_runtime_settings_expected_revision",
-                          "input_update_runtime_settings_language",
-                          "input_update_runtime_settings_time_zone",
-                          "input_update_runtime_settings_currency",
-                          "input_update_runtime_settings_date_format",
-                          "input_update_runtime_settings_number_format",
-                          "button_update_runtime_settings"
-                        ]
-                      }
-                    }
-                  }
-                },
-                "form_set_default_application": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Set default application"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_set_default_application_expected_revision": {
-                          "block": {
-                            "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "expected_revision"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expected revision"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "integer": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "min_value": {
-                              "kind": "number",
-                              "value": 1
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_set_default_application_default_application_root_id": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "default_application_root_id"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Default application root id"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": false
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "button_set_default_application": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Set default application"
-                            },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "action"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        }
-                      },
-                      "order": {
-                        "desktop": [
-                          "input_set_default_application_expected_revision",
-                          "input_set_default_application_default_application_root_id",
-                          "button_set_default_application"
+                          "input_organization_settings_language",
+                          "input_organization_settings_time_zone",
+                          "input_organization_settings_currency",
+                          "input_organization_settings_date_format",
+                          "input_organization_settings_number_format",
+                          "input_organization_settings_default_application_root_id",
+                          "submit_organization_settings"
                         ]
                       }
                     }
@@ -1633,10 +1376,7 @@
               },
               "order": {
                 "desktop": [
-                  "settings_text",
-                  "settings_region",
-                  "form_update_runtime_settings",
-                  "form_set_default_application"
+                  "form_organization_settings"
                 ]
               }
             }
@@ -2172,132 +1912,6 @@
     "flows": [
       {
         "contractVersion": "1.0.0",
-        "id": "flow_update_runtime_settings",
-        "key": "update_runtime_settings",
-        "labels": {
-          "name": "Update runtime settings"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          },
-          "language": {
-            "type": "text",
-            "required": true
-          },
-          "time_zone": {
-            "type": "text",
-            "required": true
-          },
-          "currency": {
-            "type": "text",
-            "required": true
-          },
-          "date_format": {
-            "type": "choice",
-            "required": true
-          },
-          "number_format": {
-            "type": "choice",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.update_runtime_settings"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "contractVersion": "1.0.0",
-        "id": "flow_set_default_application",
-        "key": "set_default_application",
-        "labels": {
-          "name": "Set default application"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          },
-          "default_application_root_id": {
-            "type": "text",
-            "required": false
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.set_default_application"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "contractVersion": "1.0.0",
         "id": "flow_record_organisation_notice",
         "key": "record_organisation_notice",
         "labels": {
@@ -2668,59 +2282,132 @@
         },
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_open_organization_settings",
+        "key": "open_organization_settings",
+        "labels": {
+          "name": "Open organisation settings"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:organization_settings"
+            ]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "navigate",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "edit_organisation_runtime_settings"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_save_organization_settings_record",
+        "key": "save_organization_settings_record",
+        "labels": {
+          "name": "Save organisation settings"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.organisation_administration:organization_settings"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration:organization_settings"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.organisation_administration:organization_settings"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
-      {
-        "id": "binding_update_runtime_settings",
-        "control": "button_update_runtime_settings",
-        "event_id": "event_organisation_settings_action",
-        "event": "action",
-        "flow": "flow_update_runtime_settings",
-        "inputs": {
-          "expected_revision": {
-            "kind": "caller",
-            "name": "expected_revision"
-          },
-          "language": {
-            "kind": "caller",
-            "name": "language"
-          },
-          "time_zone": {
-            "kind": "caller",
-            "name": "time_zone"
-          },
-          "currency": {
-            "kind": "caller",
-            "name": "currency"
-          },
-          "date_format": {
-            "kind": "caller",
-            "name": "date_format"
-          },
-          "number_format": {
-            "kind": "caller",
-            "name": "number_format"
-          }
-        }
-      },
-      {
-        "id": "binding_set_default_application",
-        "control": "button_set_default_application",
-        "event_id": "event_organisation_settings_action",
-        "event": "action",
-        "flow": "flow_set_default_application",
-        "inputs": {
-          "expected_revision": {
-            "kind": "caller",
-            "name": "expected_revision"
-          },
-          "default_application_root_id": {
-            "kind": "caller",
-            "name": "default_application_root_id"
-          }
-        }
-      },
       {
         "id": "binding_notice_form_submit",
         "control": "notice_form",
@@ -2837,6 +2524,36 @@
           "expected_revision": {
             "kind": "caller",
             "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_open_organization_settings",
+        "control": "settings_region",
+        "event_id": "event_open_organization_settings",
+        "event": "row_clicked",
+        "flow": "flow_open_organization_settings",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_save_organization_settings_record",
+        "control": "form_organization_settings",
+        "event_id": "event_submit_organization_settings_record",
+        "event": "form_submit",
+        "flow": "flow_save_organization_settings_record",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          },
+          "record": {
+            "kind": "caller",
+            "name": "record"
           }
         }
       }

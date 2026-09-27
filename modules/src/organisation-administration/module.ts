@@ -1787,7 +1787,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           storage_contract_id: "srt_org_admin_settings",
           storage_scope: "organisation_shared",
           ownership_mode: "none",
-          standard_actions: ["read"],
+          standard_actions: ["read", "update"],
           custom_actions: ["act_update_organization_settings", "act_set_default_application"],
           system_projection: {
             protected_view: "organization_runtime_settings",

@@ -13,10 +13,7 @@ as $function$
 declare
   context_value jsonb;
   context_organization_id uuid;
-  context_account_id uuid;
-  context_access_version bigint;
   context_correlation_id uuid;
-  decision record;
   saved record;
   default_application_root_id_value uuid;
 begin
@@ -48,32 +45,9 @@ begin
   end if;
 
   context_value := vortex_access.validated_human_request_context();
-  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
-  context_access_version := (context_value ->> 'accessVersion')::bigint;
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
 
-  select evaluated.* into strict decision
-  from vortex_access.evaluate_organization_permission_eligibility(
-    pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.runtime_settings.update',
-      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
-      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', 'c658c254-2884-414a-9012-512c0cfe4b34'
-      ),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-    )
-  ) as evaluated;
-  if decision.outcome is distinct from 'eligible'
-    or decision.operation_key is distinct from
-      'platform.organization.runtime_settings.update'
-    or decision.organization_id is distinct from context_organization_id
-    or decision.organization_account_id is distinct from context_account_id
-    or decision.access_version is distinct from context_access_version
-    or decision.correlation_id is distinct from context_correlation_id then
+  if not vortex_access.organization_runtime_settings_manage_is_current() then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
 

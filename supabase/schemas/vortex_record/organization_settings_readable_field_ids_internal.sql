@@ -20,6 +20,8 @@ declare
   catalogue_entry vortex_access.permission_catalogue_entries%rowtype;
   invariant_field_ids text[] := array[]::text[];
   extension_field_ids text[] := array[]::text[];
+  eligible_extension_field_ids text[] := array[]::text[];
+  permitted_extension_field_ids text[] := array[]::text[];
   readable_field_ids text[] := array[]::text[];
 begin
   if p_record_type_id is null
@@ -155,24 +157,43 @@ begin
       continue;
     end if;
 
-    if contribution_route ->> 'kind' = 'direct_share' then
-      select coalesce(pg_catalog.array_agg(extension.field_id), array[]::text[])
-      into extension_field_ids
-      from pg_catalog.unnest(extension_field_ids) as extension(field_id)
-      where exists (
-        select 1
-        from pg_catalog.jsonb_array_elements_text(
-          contribution_route -> 'readableFieldIds'
-        ) as shared(field_id)
-        where pg_catalog.lower(shared.field_id) = extension.field_id
-      );
-    elsif contribution_route ->> 'kind' not in ('all_records', 'ownership', 'relationship') then
+    if coalesce(contribution_route ->> 'kind', '') not in (
+      'all_records', 'ownership', 'relationship', 'direct_share'
+    ) then
       continue;
     end if;
-    exit;
+
+    -- An extension is readable only when this exact registered read permission
+    -- declares it. A direct-share route can narrow that set further, and every
+    -- eligible matched route contributes without erasing earlier routes.
+    select coalesce(
+      pg_catalog.array_agg(extension.field_id order by extension.field_id),
+      array[]::text[]
+    )
+    into permitted_extension_field_ids
+    from pg_catalog.unnest(extension_field_ids) as extension(field_id)
+    where exists (
+      select 1
+      from pg_catalog.jsonb_array_elements_text(
+        catalogue_entry.field_policy -> 'readableFieldIds'
+      ) as declared(field_id)
+      where pg_catalog.lower(declared.field_id) = extension.field_id
+    )
+      and (
+        contribution_route ->> 'kind' <> 'direct_share'
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements_text(
+            contribution_route -> 'readableFieldIds'
+          ) as shared(field_id)
+          where pg_catalog.lower(shared.field_id) = extension.field_id
+        )
+      );
+    eligible_extension_field_ids :=
+      eligible_extension_field_ids || permitted_extension_field_ids;
   end loop;
 
-  if pg_catalog.cardinality(extension_field_ids) = 0 then
+  if pg_catalog.cardinality(eligible_extension_field_ids) = 0 then
     return p_base_readable_field_ids;
   end if;
 
@@ -180,7 +201,7 @@ begin
   into readable_field_ids
   from (
     select distinct field_id
-    from pg_catalog.unnest(readable_field_ids || extension_field_ids) as fields(field_id)
+    from pg_catalog.unnest(readable_field_ids || eligible_extension_field_ids) as fields(field_id)
   ) as fields;
   return pg_catalog.to_jsonb(readable_field_ids);
 end
