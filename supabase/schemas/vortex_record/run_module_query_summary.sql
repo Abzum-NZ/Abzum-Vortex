@@ -269,7 +269,13 @@ begin
 
   -- The plan is exact only when every candidate is readable and every field
   -- used by grouping, aggregates or filtering is readable on every candidate.
+  -- Derived filter fields can lose their projection on an individual record
+  -- when an input is withheld, so they still require the per-record path.
   fast_path := pg_catalog.cardinality(readable_field_ids) > 0
+    and not exists (
+      select 1 from pg_catalog.unnest(filter_ids) as required(id)
+      where fields_by_id -> required.id ->> 'type' in ('calculation', 'total')
+    )
     and not exists (
       select 1 from pg_catalog.unnest(group_ids || filter_ids) as required(id)
       where required.id <> all (readable_field_ids)
@@ -615,6 +621,9 @@ begin
     candidate_sql := 'select item.value -> ''values'' as projected_values from pg_catalog.jsonb_array_elements($11) as item(value)';
   end if;
 
+  -- A compiled predicate may be a superset. The fast path still evaluates the
+  -- complete condition over values the exact plan proves readable; the raw
+  -- candidate count remains the ceiling, before any totals are returned.
   selected_sql := case when fast_path and filter_condition is not null then
     'select candidate.projected_values from candidate where
        vortex_access.evaluate_query_condition_internal(
