@@ -3667,14 +3667,20 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       for (const placement of placements) {
         const bound =
           placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
-        if (bound === undefined) continue;
-        const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
-        const table = readRecordsTableContract(settings);
-        const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
         const block = object(placement.block);
         const blockKey = registeredBlockReleases.get(
           `${String(block.blockId)}:${String(block.releaseVersion)}`,
         )?.key;
+        if (bound === undefined) {
+          if (blockKey === "platform.display.calendar")
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+          continue;
+        }
+        const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
+        const table = readRecordsTableContract(settings);
+        const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
         if (blockKey === "platform.display.calendar") {
           const settingFieldId = (value: unknown): string | undefined => {
             const property = object(value);
