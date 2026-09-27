@@ -1,4 +1,5 @@
 import {
+  PLATFORM_SERVICE_OPERATIONS,
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
@@ -7,6 +8,7 @@ import {
   flowTaskChildLists,
   flowTaskRegistry,
   parseExactDecimal,
+  platformOperationKey,
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
@@ -321,7 +323,7 @@ const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefi
   return undefined;
 };
 
-const declaredAnswerType = (
+const declaredOutputFieldType = (
   state: FlowRunState,
   activation: Activation,
   flow: FlowDefinition,
@@ -329,6 +331,14 @@ const declaredAnswerType = (
   path: readonly string[],
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
+  if (task?.type === "operation.call" && path.length === 1) {
+    const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.operation;
+    const key = operation?.kind === "literal" ? operation.literal.value : undefined;
+    const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
+      (candidate) => platformOperationKey(candidate.key) === key,
+    );
+    if (entry?.descriptor.effect === "read") return entry.descriptor.outputs[path[0]!]?.type;
+  }
   if (task?.type !== "interface.show_form") return undefined;
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs;
   if (inputs?.kind !== "map") return undefined;
@@ -387,7 +397,7 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
             return undefined;
           selected = (selected as Record<string, unknown>)[name];
         }
-        const type = declaredAnswerType(state, activation, flow, reference.task, reference.path);
+        const type = declaredOutputFieldType(state, activation, flow, reference.task, reference.path);
         return type !== undefined && valueMatchesType(type, selected)
           ? typed(type, selected as JsonValue)
           : undefined;

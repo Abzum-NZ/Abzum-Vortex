@@ -128,8 +128,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
             aria-required={ariaRequired}
             aria-invalid={error !== undefined}
           >
-            {options.map((option) => {
-              const optionId = ids.control + "-" + option.key;
+            {options.map((option, index) => {
+              const optionId = `${ids.control}-option-${index}`;
               return (
                 <Field key={option.key} orientation="horizontal">
                   <RadioGroupItem
