@@ -32,11 +32,12 @@ import {
  * permanent flow identity in the resolution snapshot. A record type is written `key` (owned by the
  * same definition) or `definition.key:key` (owned by a declared dependency). A field named by a
  * task is written `<record type reference>.<field alias>`, so no field is ever guessed from
- * context. Flow structure, limits and value grammar are not restated here: the compiled flow is
- * parsed by `flowSchema`, which owns them.
+ * context. Flow structure, limits and value grammar are not restated here: the canonical
+ * `flowSchema` owns them for both source and compiled definitions.
  *
- * Nothing in a source flow carries release evidence. Exact releases of the definitions a flow
- * depends on are recorded once, in the compilation's dependency manifest.
+ * This shared grammar includes the bounded named-field path on a JSON task output. Nothing in a
+ * source flow carries release evidence. Exact releases of the definitions a flow depends on are
+ * recorded once, in the compilation's dependency manifest.
  */
 export const flowSourceContractVersion = "1.0.0" as const;
 

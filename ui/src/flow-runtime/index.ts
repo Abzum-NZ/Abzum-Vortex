@@ -34,6 +34,7 @@ export {
   type FlowAnswer,
   type FlowApplicationAddress,
   type FlowInstallationContext,
+  type FlowSubjectContext,
   type FlowInvokeClient,
   type FlowInvokeClientOptions,
   type FlowResumeEvidence,

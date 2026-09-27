@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createEventDispatcherWakeup, eventDispatcherWakeupLimits } from "@vortex/event";
+import {
+  authenticateEventDispatcher,
+  createEventDispatcherWakeup,
+  eventDispatcherWakeupLimits,
+} from "@vortex/event";
+import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 
 // One protected wake-up endpoint serves both callers: a database webhook hint
 // and a scheduled Kestra recovery tick. Both authenticate with the same
@@ -30,17 +35,13 @@ const credentialRefusals: ReadonlySet<string> = new Set([
 ]);
 
 const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
-  const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (declaredLength > eventDispatcherWakeupLimits.maximumRequestBodyLength)
-    return { ok: false, status: 413 };
-  let text: string;
-  try {
-    text = await request.text();
-  } catch {
-    return { ok: false, status: 400 };
-  }
-  if (text.length > eventDispatcherWakeupLimits.maximumRequestBodyLength)
-    return { ok: false, status: 413 };
+  const read = await readBoundedRequestText(
+    request,
+    eventDispatcherWakeupLimits.maximumRequestBodyLength,
+  );
+  if (read.kind === "too_large") return { ok: false, status: 413 };
+  if (read.kind === "unreadable") return { ok: false, status: 400 };
+  const text = read.text;
   if (text.length === 0) return { ok: true };
   try {
     return { ok: true, body: JSON.parse(text) };
@@ -50,6 +51,13 @@ const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const authentication = authenticateEventDispatcher(request.headers.get("authorization"));
+  if (authentication.outcome === "refused")
+    return privateResponse(
+      { outcome: "refused", reason: authentication.reason },
+      credentialRefusals.has(authentication.reason) ? 401 : 503,
+    );
+
   const body = await readBody(request);
   if (!body.ok) return privateResponse({ outcome: "invalid_request" }, body.status);
 

@@ -1,6 +1,6 @@
 # Fleet operations
 
-Read [agent coordination](agent-coordination.md) first. This procedure governs the main orchestrator (one session of Claude Opus 5.5, GPT-6 Sol as handover), GPT-6 Luna implementers and GPT-6 Sol reviewers. [Visual workflow](fleet-orchestration.html).
+Read [agent coordination](agent-coordination.md) first. This procedure governs the main orchestrator (one session of Claude Opus 5.5, GPT-6 Sol as handover), GPT-6 Luna implementers and GPT-6 Sol reviewers.
 
 ## Ready-work dispatch algorithm
 
@@ -26,11 +26,11 @@ Phase labels and Pickup Order are preserved as planning/reporting metadata, whil
 | Planning, architecture and complex design decisions | Claude Opus 5.5 (High) |
 | All final reviews, fixes and re-reviews | GPT-6 Sol (Codex - Extra High), a separate session from the implementer; Claude Opus 5.5 (Medium) only when Codex is capacity-limited |
 
-Choose the cheapest capable model. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. GLM and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If both qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
+Choose the cheapest capable model within the assigned role. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. OpenCode and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
 
 Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. One capacity response does not settle the attempt: retry the same terminal several times at about 20-second spacing and record each actual provider response. Only after repeated confirmed capacity failures preserve the branch/worktree, settle that attempt and move implementation to the next cheapest suitable authorized workhorse or an offered fallback, without waiting for user direction. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
 
-Model roles (owner decision, 27 September 2026): GPT-6 Luna at Extra High effort is the regular workhorse and fills the implementer lanes; overflow goes to OpenCode Space Bunny, DeepSeek 4.1 Flash (when funded) or Claude Sonnet 5 High only when Codex capacity is short. The one-provider cap below does not apply to Luna. Use only `deepseek/deepseek-flash` for DeepSeek, never DeepSeek Pro. GLM handles suitable mechanical work when capacity is available; persistent GLM concurrency failures route the same preserved leaf to DeepSeek Flash or GPT-6 Luna. Claude Sonnet 5 High is an alternative. Unknown usage telemetry is not proof that an installed provider cannot execute; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. GPT-6 Sol is reserved for review and fixing; Opus 5.5 for planning, architecture and orchestration.
+Model roles (owner decision, 27 September 2026): GPT-6 Luna at Extra High effort is the regular workhorse and fills the implementer lanes; overflow goes to OpenCode Space Bunny, DeepSeek 4.1 Flash (when funded) or Claude Sonnet 5 High only when Codex capacity is short. Use only `deepseek/deepseek-flash` for DeepSeek, never DeepSeek Pro. Unknown usage telemetry is not proof that an installed provider cannot execute; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. GPT-6 Sol is reserved for review and fixing; Opus 5.5 for planning, architecture and orchestration.
 
 Verify actual model/effort in launch/session; planned labels are not execution facts. Resolve provider and model identifiers from the current Orca runtime configuration at dispatch, confirm the actual session identity, and record it in the checkpoint. Never label another version as the requested model. Reassignment updates planned agent, estimate, actual worktree display name, issue metadata and parent row together. Retain an existing branch name accurately when appropriate.
 
@@ -40,10 +40,10 @@ Launch each provider through its normal supported path and judge readiness by ac
 
 | Provider | Normal launch | Readiness and recovery |
 | --- | --- | --- |
-| Antigravity Gemini 3.8 Flash | `agy-trusted.cmd` | Ready when the session reports `agentWait: None`. The sign-in banner is cosmetic; it is not a blocker, a capacity result or a permission denial. |
-| OpenCode DeepSeek 4.1 Flash or GLM 5.3 Flash | Orca's OpenCode agent, configured to run `opencode-orca-headless.cmd` | Every turn uses native ARM64 `opencode run` and continues the same session. The terminal shows a plain line prompt and an `OC` title that says working or ready. Confirm the actual selected model and turn start. If it returns to the shell prompt without a handoff, check the configured agent command before relaunching. |
+| Antigravity, only when separately assigned | `agy-trusted.cmd` | Ready when the session reports `agentWait: None`. The sign-in banner is cosmetic; it is not a blocker, a capacity result or a permission denial. This launch note does not add a model to the implementation routing above. |
+| OpenCode Space Bunny or DeepSeek 4.1 Flash | Orca's OpenCode agent, configured to run `opencode-orca-headless.cmd` | Every turn uses native ARM64 `opencode run` and continues the same session. The terminal shows a plain line prompt and an `OC` title that says working or ready. Confirm the actual selected model and turn start. If it returns to the shell prompt without a handoff, check the configured agent command before relaunching. |
 
-A GLM concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same worker several times at about 20-second spacing rather than relaunching it or reclassifying it as a permission problem. After repeated confirmed capacity failures, preserve work, settle the old owner and reassign the leaf to DeepSeek Flash or GPT-6 Luna when suitable. If an OpenCode worker returns to the shell prompt without a handoff, preserve its leaf and confirm `C:\Users\vijay\.orca\bin\opencode-orca-headless.cmd` is still the agent command in Orca Settings > Agents > OpenCode. Relaunch that leaf once and reassign it if the relaunch fails again. Run `C:\Users\vijay\.orca\bin\opencode-fix-arch.cmd` only after an OpenCode upgrade or reinstall, after settling and preserving every active OpenCode worker, because the repair stops all OpenCode processes. Then relaunch or reassign every interrupted leaf, verify actual starts and reconcile owner/session/board metadata. Do not use historical Herdr instructions.
+A confirmed OpenCode concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same worker several times at about 20-second spacing rather than relaunching it or reclassifying it as a permission problem. After repeated confirmed capacity failures, preserve work, settle the old owner and reassign the leaf to another authorized workhorse. If an OpenCode worker returns to the shell prompt without a handoff, preserve its leaf and confirm `C:\Users\vijay\.orca\bin\opencode-orca-headless.cmd` is still the agent command in Orca Settings > Agents > OpenCode. Relaunch that leaf once and reassign it if the relaunch fails again. Run `C:\Users\vijay\.orca\bin\opencode-fix-arch.cmd` only after an OpenCode upgrade or reinstall, after settling and preserving every active OpenCode worker, because the repair stops all OpenCode processes. Then relaunch or reassign every interrupted leaf, verify actual starts and reconcile owner/session/board metadata. Do not use historical Herdr instructions.
 
 ## Metadata
 
@@ -134,14 +134,14 @@ hosted verification, Kestra or deployment. Do not change permissions or protecti
 Board row: <Project item ID and Status/Current owner/start field IDs>.
 When your task starts, set your own issue row to In progress with the UTC start.
 Report functionality, candidate commit/PR, acceptance mapping and limitations.
-Set your own issue row to In review, then request Opus 5.5/GPT-6 Sol review handoff.
+Set your own issue row to In review, then request GPT-6 Sol (Extra High) review handoff; Opus 5.5 (Medium) reviews only when Codex is capacity-limited.
 No issue closure, merge, or edits to any other board row.
 ```
 
 ## Reviewer brief and completion
 
 ```text
-You are the independent Opus 5.5 / GPT-6 Sol review-and-fix owner of #<issue>.
+You are the independent GPT-6 Sol (Extra High) review-and-fix owner of #<issue>, or Claude Opus 5.5 (Medium) only when Codex is capacity-limited.
 Candidate/worktree/branch: <actual>. Issue/spec: <links>. Implementer settled.
 Board row: <Project item ID and Status/Current owner/finish field IDs>. Record yourself as Current owner now.
 First read the complete live GitHub issue, every comment and linked spec.

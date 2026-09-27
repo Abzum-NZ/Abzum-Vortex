@@ -16,12 +16,14 @@ import {
   createVortexStyleRootProps,
   resolvePlacementTheme,
   resolveVortexStyleSelection,
+  VortexFontStylesheets,
   VortexStyleRoot,
   VortexStyleStylesheet,
   type ApplicationThemeV2,
   type PlacementThemeScope,
   type ThemeMode,
 } from "./theme";
+import { IconLibraryProvider } from "./icons";
 import {
   DefinitionRenderError,
   validateAccessibleName,
@@ -566,6 +568,10 @@ function PlacementView({
       className={combinedClassName}
       style={combinedStyle}
     >
+      {/* A re-themed placement may paint another font; its links join the application's. */}
+      {placementTheme.style === undefined ? null : (
+        <VortexFontStylesheets tokens={placementTheme.scope.inherited} />
+      )}
       {visible ? (
         <Component
           {...parsedInputs}
@@ -897,38 +903,42 @@ export function PageLayoutRenderer({
       {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
     >
       <VortexStyleStylesheet style={vortexStyle.style} />
+      <VortexFontStylesheets tokens={applicationTokens} />
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
-      <DateFormatProvider locale={locale} timeZone={timeZone}>
-        {breakpoint === undefined ? (
-          // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
-          // same server HTML adapts at every width before any script runs. The browser provider
-          // then adopts each slot's declared child order for the visitor's breakpoint.
-          <>
-            <style>{computeResponsiveLayoutCss(liveLayoutScope, resolved.slot)}</style>
-            <LayoutBreakpointProvider>
-              <PlacementSlotView
-                slot={resolved.slot}
-                breakpoint="desktop"
-                responsive
-                {...sharedProps}
-                {...(className === undefined ? {} : { className })}
-                {...(style === undefined ? {} : { style })}
-              />
-            </LayoutBreakpointProvider>
-          </>
-        ) : (
-          // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
-          <PlacementSlotView
-            slot={resolved.slot}
-            breakpoint={breakpoint}
-            {...sharedProps}
-            {...(className === undefined ? {} : { className })}
-            {...(style === undefined ? {} : { style })}
-          />
-        )}
-      </DateFormatProvider>
+      {/* Every icon below draws with the icon library the resolved theme selected. */}
+      <IconLibraryProvider library={applicationTheme?.selection?.iconLibrary}>
+        <DateFormatProvider locale={locale} timeZone={timeZone}>
+          {breakpoint === undefined ? (
+            // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
+            // same server HTML adapts at every width before any script runs. The browser provider
+            // then adopts each slot's declared child order for the visitor's breakpoint.
+            <>
+              <style>{computeResponsiveLayoutCss(liveLayoutScope, resolved.slot)}</style>
+              <LayoutBreakpointProvider>
+                <PlacementSlotView
+                  slot={resolved.slot}
+                  breakpoint="desktop"
+                  responsive
+                  {...sharedProps}
+                  {...(className === undefined ? {} : { className })}
+                  {...(style === undefined ? {} : { style })}
+                />
+              </LayoutBreakpointProvider>
+            </>
+          ) : (
+            // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
+            <PlacementSlotView
+              slot={resolved.slot}
+              breakpoint={breakpoint}
+              {...sharedProps}
+              {...(className === undefined ? {} : { className })}
+              {...(style === undefined ? {} : { style })}
+            />
+          )}
+        </DateFormatProvider>
+      </IconLibraryProvider>
     </VortexStyleRoot>
   );
 }

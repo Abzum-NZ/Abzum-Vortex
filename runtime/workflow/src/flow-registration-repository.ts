@@ -24,7 +24,7 @@ import {
  * #947: storage-bound repository for inactive workflow flow registrations.
  *
  * A part A candidate is compiled by `compileKestraFlow` from one exact published
- * WorkflowDefinition and its installation identity. This repository persists
+ * durable flow and its installation identity. This repository persists
  * that candidate through the protected `register_workflow_flow_candidate`
  * function, which derives nothing from the candidate's diagnostic labels: the
  * namespace and flow id must equal the ones derived from the permanent identity,

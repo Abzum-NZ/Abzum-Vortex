@@ -37,4 +37,4 @@ Search/files, durable workflows, connections, sharing/federation and MCP follow 
 
 ## Completion
 
-A fresh Opus 5 or GPT 5.6 Sol reviewer inspects the integrated source path, fixes findings and re-reviews. Reviewed source integration and assigned issue closure complete this work under the fleet policy. No browser proof, screenshot, test, database/hosted verification, Testing deployment or Kestra receipt is required. Product use of definition validation, publication and installation is functionality to implement, not an agent verification exercise.
+A fresh GPT-6 Sol (Extra High) reviewer inspects the integrated source path, fixes findings and re-reviews. Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Reviewed source integration and assigned issue closure complete this work under the fleet policy. No browser proof, screenshot, test, database/hosted verification, Testing deployment or Kestra receipt is required. Product use of definition validation, publication and installation is functionality to implement, not an agent verification exercise.

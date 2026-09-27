@@ -1,0 +1,300 @@
+{
+  "schemaVersion": "1.0.0",
+  "registry": {
+    "package": "shadcn",
+    "packageVersion": "4.21.0"
+  },
+  "defaults": {
+    "bodyFont": "inter",
+    "headingFont": "inherit"
+  },
+  "headingInherit": "inherit",
+  "fonts": [
+    {
+      "id": "inter",
+      "label": "Inter",
+      "family": "Inter Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/inter",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "inter/font.css",
+      "preload": "inter/inter-latin-wght-normal.woff2"
+    },
+    {
+      "id": "noto-sans",
+      "label": "Noto Sans",
+      "family": "Noto Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/noto-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "noto-sans/font.css",
+      "preload": "noto-sans/noto-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "nunito-sans",
+      "label": "Nunito Sans",
+      "family": "Nunito Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/nunito-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "nunito-sans/font.css",
+      "preload": "nunito-sans/nunito-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "figtree",
+      "label": "Figtree",
+      "family": "Figtree Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/figtree",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "figtree/font.css",
+      "preload": "figtree/figtree-latin-wght-normal.woff2"
+    },
+    {
+      "id": "roboto",
+      "label": "Roboto",
+      "family": "Roboto Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/roboto",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "roboto/font.css",
+      "preload": "roboto/roboto-latin-wght-normal.woff2"
+    },
+    {
+      "id": "raleway",
+      "label": "Raleway",
+      "family": "Raleway Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/raleway",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "raleway/font.css",
+      "preload": "raleway/raleway-latin-wght-normal.woff2"
+    },
+    {
+      "id": "dm-sans",
+      "label": "DM Sans",
+      "family": "DM Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/dm-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "dm-sans/font.css",
+      "preload": "dm-sans/dm-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "public-sans",
+      "label": "Public Sans",
+      "family": "Public Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/public-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "public-sans/font.css",
+      "preload": "public-sans/public-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "outfit",
+      "label": "Outfit",
+      "family": "Outfit Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/outfit",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "outfit/font.css",
+      "preload": "outfit/outfit-latin-wght-normal.woff2"
+    },
+    {
+      "id": "jetbrains-mono",
+      "label": "JetBrains Mono",
+      "family": "JetBrains Mono Variable",
+      "category": "monospace",
+      "package": "@fontsource-variable/jetbrains-mono",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "jetbrains-mono/font.css",
+      "preload": "jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2"
+    },
+    {
+      "id": "geist",
+      "label": "Geist",
+      "family": "Geist Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/geist",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "geist/font.css",
+      "preload": "geist/geist-latin-wght-normal.woff2"
+    },
+    {
+      "id": "geist-mono",
+      "label": "Geist Mono",
+      "family": "Geist Mono Variable",
+      "category": "monospace",
+      "package": "@fontsource-variable/geist-mono",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "geist-mono/font.css",
+      "preload": "geist-mono/geist-mono-latin-wght-normal.woff2"
+    },
+    {
+      "id": "lora",
+      "label": "Lora",
+      "family": "Lora Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/lora",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "lora/font.css",
+      "preload": "lora/lora-latin-wght-normal.woff2"
+    },
+    {
+      "id": "merriweather",
+      "label": "Merriweather",
+      "family": "Merriweather Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/merriweather",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "merriweather/font.css",
+      "preload": "merriweather/merriweather-latin-wght-normal.woff2"
+    },
+    {
+      "id": "playfair-display",
+      "label": "Playfair Display",
+      "family": "Playfair Display Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/playfair-display",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "playfair-display/font.css",
+      "preload": "playfair-display/playfair-display-latin-wght-normal.woff2"
+    },
+    {
+      "id": "noto-serif",
+      "label": "Noto Serif",
+      "family": "Noto Serif Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/noto-serif",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "noto-serif/font.css",
+      "preload": "noto-serif/noto-serif-latin-wght-normal.woff2"
+    },
+    {
+      "id": "roboto-slab",
+      "label": "Roboto Slab",
+      "family": "Roboto Slab Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/roboto-slab",
+      "packageVersion": "5.3.0",
+      "licence": "Apache-2.0",
+      "stylesheet": "roboto-slab/font.css",
+      "preload": "roboto-slab/roboto-slab-latin-wght-normal.woff2"
+    },
+    {
+      "id": "oxanium",
+      "label": "Oxanium",
+      "family": "Oxanium Variable",
+      "category": "display",
+      "package": "@fontsource-variable/oxanium",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "oxanium/font.css",
+      "preload": "oxanium/oxanium-latin-wght-normal.woff2"
+    },
+    {
+      "id": "manrope",
+      "label": "Manrope",
+      "family": "Manrope Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/manrope",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "manrope/font.css",
+      "preload": "manrope/manrope-latin-wght-normal.woff2"
+    },
+    {
+      "id": "space-grotesk",
+      "label": "Space Grotesk",
+      "family": "Space Grotesk Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/space-grotesk",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "space-grotesk/font.css",
+      "preload": "space-grotesk/space-grotesk-latin-wght-normal.woff2"
+    },
+    {
+      "id": "montserrat",
+      "label": "Montserrat",
+      "family": "Montserrat Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/montserrat",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "montserrat/font.css",
+      "preload": "montserrat/montserrat-latin-wght-normal.woff2"
+    },
+    {
+      "id": "ibm-plex-sans",
+      "label": "IBM Plex Sans",
+      "family": "IBM Plex Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/ibm-plex-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "ibm-plex-sans/font.css",
+      "preload": "ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "source-sans-3",
+      "label": "Source Sans 3",
+      "family": "Source Sans 3 Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/source-sans-3",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "source-sans-3/font.css",
+      "preload": "source-sans-3/source-sans-3-latin-wght-normal.woff2"
+    },
+    {
+      "id": "instrument-sans",
+      "label": "Instrument Sans",
+      "family": "Instrument Sans Variable",
+      "category": "sans-serif",
+      "package": "@fontsource-variable/instrument-sans",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "instrument-sans/font.css",
+      "preload": "instrument-sans/instrument-sans-latin-wght-normal.woff2"
+    },
+    {
+      "id": "eb-garamond",
+      "label": "EB Garamond",
+      "family": "EB Garamond Variable",
+      "category": "serif",
+      "package": "@fontsource-variable/eb-garamond",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "eb-garamond/font.css",
+      "preload": "eb-garamond/eb-garamond-latin-wght-normal.woff2"
+    },
+    {
+      "id": "instrument-serif",
+      "label": "Instrument Serif",
+      "family": "Instrument Serif",
+      "category": "serif",
+      "package": "@fontsource/instrument-serif",
+      "packageVersion": "5.3.0",
+      "licence": "OFL-1.1",
+      "stylesheet": "instrument-serif/font.css",
+      "preload": "instrument-serif/instrument-serif-latin-400-normal.woff2"
+    }
+  ]
+}

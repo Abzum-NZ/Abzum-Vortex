@@ -15,6 +15,8 @@ export type FormScope = Readonly<{
   inactive: boolean;
   /** Registers one field's current typed value; returns its unregistration. */
   register: (fieldKey: string, field: FormField) => () => void;
+  /** The current typed value of every registered field, by field key. */
+  values: () => Readonly<Record<string, TypedFieldValue>>;
   /** Located draft feedback for one field key, or nothing when none applies now. */
   draftFeedbackFor: (fieldKey: string) => FormFieldDraftFeedback | undefined;
   /** Reports that a field's value or registration changed, so settled feedback is rechecked. */
