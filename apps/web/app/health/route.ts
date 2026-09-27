@@ -4,11 +4,7 @@ import {
   correlationIdSchema,
   countersForOutcome,
 } from "@vortex/contracts";
-import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/app";
-
-const telemetry = createAppTelemetryCollector({
-  downstream: createOperationsAlertSink(),
-});
+import { appTelemetry as telemetry } from "../_lib/server-composition";
 
 /**
  * Health answers a fixed safe status and has no failure outcome of its own. Measuring it
