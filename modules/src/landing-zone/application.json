@@ -1,0 +1,583 @@
+{
+  "source_contract_version": "2.0.0",
+  "root_alias": "app_landing_zone",
+  "key": "vortex.app.landing_zone",
+  "kind": "application",
+  "body": {
+    "name": "Landing Zone",
+    "description": "A personal start page for permitted applications and privately owned tiles.",
+    "icon": "grid",
+    "home_page": "home",
+    "module_bindings": [
+      {
+        "module": "vortex.landing_zone",
+        "version": { "selection": "exact", "version": "1.0.0" },
+        "purpose": "primary"
+      }
+    ],
+    "permissions": [
+      {
+        "id": "app_permission_open",
+        "key": "application.landing_zone.open",
+        "label": "Open Landing Zone",
+        "description": "Allows opening the Landing Zone application.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      }
+    ],
+    "roles": [
+      {
+        "id": "role_landing_zone_user",
+        "key": "landing_zone_user",
+        "name": "Landing Zone user",
+        "home_page": "home",
+        "permissions": [
+          "application.landing_zone.open",
+          "vortex.landing_zone.tile.create",
+          "vortex.landing_zone.tile.read",
+          "vortex.landing_zone.tile.update",
+          "vortex.landing_zone.tile.delete"
+        ]
+      }
+    ],
+    "navigation": [
+      {
+        "id": "nav_landing_home",
+        "type": "page",
+        "label": "Home",
+        "page": "home",
+        "permission": "application.landing_zone.open"
+      },
+      {
+        "id": "nav_landing_favourites",
+        "type": "page",
+        "label": "Favourites",
+        "page": "favourites",
+        "permission": "application.landing_zone.open"
+      },
+      {
+        "id": "nav_landing_bookmarks",
+        "type": "page",
+        "label": "Bookmarks",
+        "page": "bookmarks",
+        "permission": "application.landing_zone.open"
+      },
+      {
+        "id": "nav_landing_add_bookmark",
+        "type": "page",
+        "label": "Add bookmark",
+        "page": "bookmark_entry",
+        "permission": "application.landing_zone.open"
+      },
+      {
+        "id": "nav_landing_all_applications",
+        "type": "page",
+        "label": "All applications",
+        "page": "all_applications",
+        "permission": "application.landing_zone.open"
+      }
+    ],
+    "queries": [],
+    "workflows": [],
+    "pipelines": [],
+    "connection_bindings": [],
+    "interfaces": [],
+    "actions": [],
+    "events": [],
+    "public_addresses": [],
+    "platform_block_dependencies": [],
+    "shells": [
+      {
+        "id": "shell_landing_zone",
+        "key": "landing_zone_shell",
+        "name": "Landing Zone shell",
+        "layout": {
+          "placements": {
+            "shell_root": {
+              "block": {
+                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                "release_version": "1.0.0"
+              },
+              "settings": {
+                "direction": { "kind": "choice", "value": "column" },
+                "gap": { "kind": "choice", "value": "medium" }
+              },
+              "theme_overrides": {},
+              "responsive": {
+                "desktop": {
+                  "visible": true,
+                  "width": { "kind": "fill" },
+                  "height": { "kind": "content" }
+                }
+              },
+              "slots": {
+                "header": {
+                  "placements": {
+                    "shell_heading": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "text": { "kind": "text", "value": "Landing Zone" },
+                        "level": { "kind": "choice", "value": "one" }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": { "kind": "fill" },
+                          "height": { "kind": "content" }
+                        }
+                      },
+                      "slots": {}
+                    }
+                  },
+                  "order": { "desktop": ["shell_heading"] }
+                },
+                "content": {
+                  "placements": {
+                    "shell_body": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "direction": { "kind": "choice", "value": "row" },
+                        "gap": { "kind": "choice", "value": "medium" }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": { "kind": "fill" },
+                          "height": { "kind": "content" }
+                        }
+                      },
+                      "slots": {
+                        "menu": {
+                          "placements": {
+                            "shell_navigation": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "title": { "kind": "text", "value": "Landing Zone" }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": { "kind": "fill" },
+                                  "height": { "kind": "content" }
+                                }
+                              },
+                              "slots": {}
+                            }
+                          },
+                          "order": { "desktop": ["shell_navigation"] }
+                        },
+                        "content": {
+                          "placements": {
+                            "shell_page_body": {
+                              "block": {
+                                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "direction": { "kind": "choice", "value": "row" },
+                                "gap": { "kind": "choice", "value": "medium" }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": { "kind": "fill" },
+                                  "height": { "kind": "content" }
+                                }
+                              },
+                              "slots": {
+                                "menu": {
+                                  "placements": {},
+                                  "order": { "desktop": [] }
+                                },
+                                "content": {
+                                  "placements": {},
+                                  "order": { "desktop": [] }
+                                }
+                              }
+                            }
+                          },
+                          "order": { "desktop": ["shell_page_body"] }
+                        }
+                      }
+                    }
+                  },
+                  "order": { "desktop": ["shell_body"] }
+                }
+              }
+            }
+          },
+          "order": { "desktop": ["shell_root"] }
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Main content",
+            "required": true,
+            "allowed_child_categories": ["content", "data", "figures", "record", "actions", "input", "layout"],
+            "parent_placement": "shell_page_body",
+            "parent_slot": "content"
+          },
+          {
+            "id": "slot_rail",
+            "key": "rail",
+            "label": "Optional rail",
+            "required": false,
+            "allowed_child_categories": ["content", "data", "figures", "record", "actions", "input", "layout"],
+            "parent_placement": "shell_page_body",
+            "parent_slot": "menu"
+          }
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "page_landing_home",
+        "key": "home",
+        "name": "Home",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "home_favourites_filter": {
+                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
+                  "settings": {
+                    "label": { "kind": "text", "value": "Search favourites" },
+                    "placeholder": { "kind": "text", "value": "Search favourites" },
+                    "match_key": { "kind": "text", "value": "label" },
+                    "match_mode": { "kind": "choice", "value": "contains" },
+                    "case_sensitive": { "kind": "boolean", "value": false },
+                    "empty_message": { "kind": "text", "value": "No favourites match your search." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "home_favourites": {
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "query": "vortex.landing_zone:landing_zone_favourites",
+                          "settings": {
+                            "title": { "kind": "text", "value": "Favourites" },
+                            "label_key": { "kind": "text", "value": "label" },
+                            "address_key": { "kind": "text", "value": "external_address" },
+                            "description_key": { "kind": "text", "value": "description" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+                        }
+                      },
+                      "order": { "desktop": ["home_favourites"] }
+                    }
+                  }
+                },
+                "home_applications_filter": {
+                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
+                  "settings": {
+                    "label": { "kind": "text", "value": "Search applications" },
+                    "placeholder": { "kind": "text", "value": "Search applications" },
+                    "match_key": { "kind": "text", "value": "name" },
+                    "match_mode": { "kind": "choice", "value": "contains" },
+                    "case_sensitive": { "kind": "boolean", "value": false },
+                    "empty_message": { "kind": "text", "value": "No applications match your search." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "home_applications": {
+                          "block": { "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33", "release_version": "1.0.0" },
+                          "settings": {
+                            "title": { "kind": "text", "value": "All applications" },
+                            "name_key": { "kind": "text", "value": "name" },
+                            "icon_key": { "kind": "text", "value": "icon" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": { "side_panel": { "placements": {}, "order": { "desktop": [] } } }
+                        }
+                      },
+                      "order": { "desktop": ["home_applications"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["home_favourites_filter", "home_applications_filter"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_favourites",
+        "key": "favourites",
+        "name": "Favourites",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "favourites_filter": {
+                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
+                  "settings": {
+                    "label": { "kind": "text", "value": "Search favourites" },
+                    "placeholder": { "kind": "text", "value": "Search favourites" },
+                    "match_key": { "kind": "text", "value": "label" },
+                    "match_mode": { "kind": "choice", "value": "contains" },
+                    "case_sensitive": { "kind": "boolean", "value": false },
+                    "empty_message": { "kind": "text", "value": "No favourites match your search." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "favourites_tiles": {
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "query": "vortex.landing_zone:landing_zone_favourites",
+                          "settings": {
+                            "title": { "kind": "text", "value": "Favourites" },
+                            "label_key": { "kind": "text", "value": "label" },
+                            "address_key": { "kind": "text", "value": "external_address" },
+                            "description_key": { "kind": "text", "value": "description" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+                        }
+                      },
+                      "order": { "desktop": ["favourites_tiles"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["favourites_filter"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_bookmarks",
+        "key": "bookmarks",
+        "name": "Bookmarks",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "bookmarks_filter": {
+                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
+                  "settings": {
+                    "label": { "kind": "text", "value": "Search bookmarks" },
+                    "placeholder": { "kind": "text", "value": "Search bookmarks" },
+                    "match_key": { "kind": "text", "value": "label" },
+                    "match_mode": { "kind": "choice", "value": "contains" },
+                    "case_sensitive": { "kind": "boolean", "value": false },
+                    "empty_message": { "kind": "text", "value": "No bookmarks match your search." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "bookmarks_tiles": {
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "query": "vortex.landing_zone:landing_zone_tiles",
+                          "settings": {
+                            "title": { "kind": "text", "value": "Bookmarks" },
+                            "label_key": { "kind": "text", "value": "label" },
+                            "address_key": { "kind": "text", "value": "external_address" },
+                            "description_key": { "kind": "text", "value": "description" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+                        }
+                      },
+                      "order": { "desktop": ["bookmarks_tiles"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["bookmarks_filter"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_bookmark_entry",
+        "key": "bookmark_entry",
+        "name": "Add bookmark",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "bookmark_entry_form": {
+                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
+                  "settings": { "title": { "kind": "text", "value": "Bookmark details" } },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "bookmark_entry_label": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": {
+                            "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.label" },
+                            "help_text": { "kind": "text", "value": "Optional label for external bookmarks. Internal application, page, and record names are resolved live." }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_target_kind": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.target_kind" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_application_key": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.application_key" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_page_key": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.page_key" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_record_type": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_type" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_record_id": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_id" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_external_address": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.external_address" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "bookmark_entry_description": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": {
+                            "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.description" },
+                            "help_text": { "kind": "text", "value": "Optional description shown with the bookmark." }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        }
+                      },
+                      "order": { "desktop": ["bookmark_entry_label", "bookmark_entry_target_kind", "bookmark_entry_application_key", "bookmark_entry_page_key", "bookmark_entry_record_type", "bookmark_entry_record_id", "bookmark_entry_external_address", "bookmark_entry_description"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["bookmark_entry_form"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_all_applications",
+        "key": "all_applications",
+        "name": "All applications",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "all_applications_filter": {
+                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
+                  "settings": {
+                    "label": { "kind": "text", "value": "Search applications" },
+                    "placeholder": { "kind": "text", "value": "Search applications" },
+                    "match_key": { "kind": "text", "value": "name" },
+                    "match_mode": { "kind": "choice", "value": "contains" },
+                    "case_sensitive": { "kind": "boolean", "value": false },
+                    "empty_message": { "kind": "text", "value": "No applications match your search." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "all_applications": {
+                          "block": { "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33", "release_version": "1.0.0" },
+                          "settings": {
+                            "title": { "kind": "text", "value": "All applications" },
+                            "name_key": { "kind": "text", "value": "name" },
+                            "icon_key": { "kind": "text", "value": "icon" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": { "side_panel": { "placements": {}, "order": { "desktop": [] } } }
+                        }
+                      },
+                      "order": { "desktop": ["all_applications"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["all_applications_filter"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      }
+    ],
+    "flows": [],
+    "flow_bindings": []
+  }
+}
