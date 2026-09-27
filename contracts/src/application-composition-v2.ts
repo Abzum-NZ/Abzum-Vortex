@@ -2276,6 +2276,7 @@ export const protectedReadModelKeys = [
   "tenants",
   "tenant_administrators",
   "installed_applications",
+  "landing_zone_applications",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
@@ -2366,6 +2367,12 @@ export const protectedReadModelDeclarations = Object.freeze({
   // that fact, not a reader that does not exist.
   installed_applications: Object.freeze({
     label: "Installed applications",
+    ownerReader: "unavailable",
+    filters: Object.freeze([] as const),
+    resultContract: "ProtectedReadModelResolution",
+  }),
+  landing_zone_applications: Object.freeze({
+    label: "Landing Zone applications",
     ownerReader: "unavailable",
     filters: Object.freeze([] as const),
     resultContract: "ProtectedReadModelResolution",
