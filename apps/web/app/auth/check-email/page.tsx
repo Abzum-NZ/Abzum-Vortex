@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@vortex/ui/icons";
 import { AuthShell } from "../_components/auth-shell";
 
 type CheckEmailPageProps = Readonly<{
@@ -25,10 +26,10 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
       }
     >
       <div
-        className="flex size-12 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground"
+        className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground"
         aria-hidden="true"
       >
-        ✓
+        <Icon name="check" className="size-6" />
       </div>
     </AuthShell>
   );

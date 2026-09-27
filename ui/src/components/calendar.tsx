@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { DayPicker, getDefaultClassNames, type DayButton, type Locale } from "react-day-picker";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 
 import { Button, buttonVariants } from "./button";
@@ -116,16 +116,17 @@ function Calendar({
         Root: ({ className, rootRef, ...props }) => {
           return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />;
         },
-        Chevron: ({ className, orientation, ...props }) => {
+        // The icon's size comes from its class, so react-day-picker's numeric size is not passed on.
+        Chevron: ({ className, orientation, style }) => {
           if (orientation === "left") {
-            return <ChevronLeftIcon className={cn("size-4", className)} {...props} />;
+            return <Icon name="chevron-left" className={cn("size-4", className)} style={style} />;
           }
 
           if (orientation === "right") {
-            return <ChevronRightIcon className={cn("size-4", className)} {...props} />;
+            return <Icon name="chevron-right" className={cn("size-4", className)} style={style} />;
           }
 
-          return <ChevronDownIcon className={cn("size-4", className)} {...props} />;
+          return <Icon name="chevron-down" className={cn("size-4", className)} style={style} />;
         },
         DayButton: ({ ...props }) => <CalendarDayButton locale={locale} {...props} />,
         WeekNumber: ({ children, ...props }) => {

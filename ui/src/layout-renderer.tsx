@@ -22,6 +22,7 @@ import {
   type PlacementThemeScope,
   type ThemeMode,
 } from "./theme";
+import { IconLibraryProvider } from "./icons";
 import {
   DefinitionRenderError,
   validateAccessibleName,
@@ -900,35 +901,38 @@ export function PageLayoutRenderer({
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
-      <DateFormatProvider locale={locale} timeZone={timeZone}>
-        {breakpoint === undefined ? (
-          // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
-          // same server HTML adapts at every width before any script runs. The browser provider
-          // then adopts each slot's declared child order for the visitor's breakpoint.
-          <>
-            <style>{computeResponsiveLayoutCss(liveLayoutScope, resolved.slot)}</style>
-            <LayoutBreakpointProvider>
-              <PlacementSlotView
-                slot={resolved.slot}
-                breakpoint="desktop"
-                responsive
-                {...sharedProps}
-                {...(className === undefined ? {} : { className })}
-                {...(style === undefined ? {} : { style })}
-              />
-            </LayoutBreakpointProvider>
-          </>
-        ) : (
-          // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
-          <PlacementSlotView
-            slot={resolved.slot}
-            breakpoint={breakpoint}
-            {...sharedProps}
-            {...(className === undefined ? {} : { className })}
-            {...(style === undefined ? {} : { style })}
-          />
-        )}
-      </DateFormatProvider>
+      {/* Every icon below draws with the icon library the resolved theme selected. */}
+      <IconLibraryProvider library={applicationTheme?.selection?.iconLibrary}>
+        <DateFormatProvider locale={locale} timeZone={timeZone}>
+          {breakpoint === undefined ? (
+            // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
+            // same server HTML adapts at every width before any script runs. The browser provider
+            // then adopts each slot's declared child order for the visitor's breakpoint.
+            <>
+              <style>{computeResponsiveLayoutCss(liveLayoutScope, resolved.slot)}</style>
+              <LayoutBreakpointProvider>
+                <PlacementSlotView
+                  slot={resolved.slot}
+                  breakpoint="desktop"
+                  responsive
+                  {...sharedProps}
+                  {...(className === undefined ? {} : { className })}
+                  {...(style === undefined ? {} : { style })}
+                />
+              </LayoutBreakpointProvider>
+            </>
+          ) : (
+            // Explicit preview breakpoint: one breakpoint rendered with inline geometry.
+            <PlacementSlotView
+              slot={resolved.slot}
+              breakpoint={breakpoint}
+              {...sharedProps}
+              {...(className === undefined ? {} : { className })}
+              {...(style === undefined ? {} : { style })}
+            />
+          )}
+        </DateFormatProvider>
+      </IconLibraryProvider>
     </VortexStyleRoot>
   );
 }

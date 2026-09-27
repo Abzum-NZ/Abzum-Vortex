@@ -6,6 +6,7 @@ export * from "./projected-navigation";
 export * from "./platform-theme-catalogue";
 export * from "./platform-connection-type-catalogue";
 export * from "./shadcn-theme-catalogue";
+export * from "./shadcn-icon-libraries";
 export * from "./platform-service-operation-catalogue";
 export * from "./platform-permission-catalogue";
 export * from "./application-flow-bindings";

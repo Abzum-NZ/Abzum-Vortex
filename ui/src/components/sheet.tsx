@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 import { Button } from "./button";
-import { XIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -73,7 +73,7 @@ function SheetContent({
             data-slot="sheet-close"
             render={<Button variant="ghost" className="cn-sheet-close" size="icon-sm" />}
           >
-            <XIcon />
+            <Icon name="close" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
         )}

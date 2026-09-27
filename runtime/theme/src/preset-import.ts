@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   findShadcnThemeCatalogueOption,
+  isShadcnIconLibrary,
   shadcnThemeCatalogueDimensionKeys,
   sourceApplicationThemeSelectionV2Schema,
   type ShadcnThemeCatalogueDimensionKey,
@@ -48,13 +49,13 @@ export type ShadcnPresetImportFailure = Readonly<{
     | "MISSING_THEME_RELEASE"
     | "MISSING_STYLE_ASSET"
     | "INVALID_THEME_SELECTION";
-  dimension?: ShadcnThemeCatalogueDimensionKey | undefined;
+  dimension?: ShadcnThemeCatalogueDimensionKey | "iconLibrary" | undefined;
   value?: string | undefined;
   message: string;
 }>;
 
 export type ShadcnPresetDimensionNotYetImportable = Readonly<{
-  dimension: "font" | "fontHeading" | "iconLibrary";
+  dimension: "font" | "fontHeading";
   value: string;
   status: "not_yet_importable";
   message: string;
@@ -158,12 +159,6 @@ const notYetImportableDimensions = (
       value: decoded.fontHeading,
       status: "not_yet_importable" as const,
       message: `The fontHeading value "${decoded.fontHeading}" has no application theme selection dimension yet.`,
-    }),
-    Object.freeze({
-      dimension: "iconLibrary" as const,
-      value: decoded.iconLibrary,
-      status: "not_yet_importable" as const,
-      message: `The iconLibrary value "${decoded.iconLibrary}" has no application theme selection dimension yet.`,
     }),
   ]);
 
@@ -276,6 +271,14 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     selectedOptions[dimension] = option.id;
   }
 
+  if (!isShadcnIconLibrary(decoded.iconLibrary))
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "iconLibrary",
+      value: decoded.iconLibrary,
+      message: `The preset iconLibrary value "${decoded.iconLibrary}" is not available in the pinned icon catalogue.`,
+    });
+
   if (failures.length > 0) {
     return {
       status: "refused",
@@ -296,6 +299,7 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     radius: selectedOptions.radius,
     menu_color: selectedOptions.menuColor,
     menu_accent: selectedOptions.menuAccent,
+    icon_library: decoded.iconLibrary,
   });
   if (!parsedSelection.success) {
     return {

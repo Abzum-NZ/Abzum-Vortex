@@ -402,6 +402,18 @@ export {
   type VortexStyleSelection,
 } from "./theme";
 
+// Semantic icons drawn by the selected shadcn/create icon library (#1278)
+export {
+  Icon,
+  IconLibraryProvider,
+  loadIconAdapter,
+  VORTEX_ICON_LIBRARIES,
+  VORTEX_ICON_NAMES,
+  type VortexIconAdapter,
+  type VortexIconName,
+  type VortexIconProps,
+} from "./icons";
+
 // Browser Flow Runtime (#1013)
 export {
   FLOW_INTENT_KINDS,

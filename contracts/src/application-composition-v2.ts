@@ -1769,8 +1769,11 @@ export const themeCatalogueOptionIdSchema = z
  * One catalogue option id per shadcn/create dimension that #1274 publishes. A selection is
  * strict: every dimension appears exactly once and no other key is admitted. Runtime/theme
  * resolves the selected options into the complete token set and the style id, refusing an unknown
- * id, a refused option or a missing dimension. Fonts and icons are separate dimensions owned by
- * #1277 and #1278 and are absent until those releases land.
+ * id, a refused option or a missing dimension. Fonts are a separate dimension owned by #1277.
+ *
+ * The icon library (#1278) names one of the shadcn/create icon libraries
+ * (contracts/src/shadcn-icon-libraries.ts). It is optional so selections recorded before the icon
+ * catalogue keep their meaning: an absent icon library is the catalogue default.
  */
 export const applicationThemeSelectionV2Schema = z
   .object({
@@ -1781,6 +1784,7 @@ export const applicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menuColor: themeCatalogueOptionIdSchema,
     menuAccent: themeCatalogueOptionIdSchema,
+    iconLibrary: themeCatalogueOptionIdSchema.optional(),
   })
   .strict();
 export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelectionV2Schema>;
@@ -1798,6 +1802,7 @@ export const sourceApplicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menu_color: themeCatalogueOptionIdSchema,
     menu_accent: themeCatalogueOptionIdSchema,
+    icon_library: themeCatalogueOptionIdSchema.optional(),
   })
   .strict();
 export type SourceApplicationThemeSelectionV2 = z.infer<
@@ -1815,6 +1820,7 @@ export const canonicalApplicationThemeSelectionV2 = (
   radius: source.radius,
   menuColor: source.menu_color,
   menuAccent: source.menu_accent,
+  ...(source.icon_library === undefined ? {} : { iconLibrary: source.icon_library }),
 });
 
 /**
