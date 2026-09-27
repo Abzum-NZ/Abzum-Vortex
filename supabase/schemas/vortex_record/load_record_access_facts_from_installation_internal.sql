@@ -127,14 +127,15 @@ begin
     );
 
   declaration := case
-    when required_permissions is null then null
+    when required_permissions is null
+      and not (p_installation ? 'previewInstallationId') then null
     else pg_catalog.jsonb_build_object(
       'operationKey', 'record.' || p_action_kind,
       'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
       'target', pg_catalog.jsonb_build_object(
         'kind', 'application', 'applicationRootId', context_application_root_id
       ),
-      'requiredPermissions', required_permissions,
+      'requiredPermissions', coalesce(required_permissions, '[]'::jsonb),
       'recordBinding', pg_catalog.jsonb_build_object(
         'moduleRootId', target_module_root_id,
         'recordTypeId', p_record_type_id,
@@ -142,7 +143,10 @@ begin
         'storageScope', target_scope
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', case when p_installation ? 'previewInstallationId'
+          then 'preview_owner' else 'permission' end
+      )
     )
   end;
 
@@ -418,7 +422,11 @@ begin
     'definitionRevision', target_definition_revision,
     'moduleReleaseRevision', target_release_revision,
     'fieldValues', target_fact -> 'fieldValues'
-  );
+  ) || case when p_installation ? 'previewInstallationId'
+    then pg_catalog.jsonb_build_object(
+      'previewInstallationId', p_installation -> 'previewInstallationId'
+    )
+    else '{}'::jsonb end;
 exception
   when no_data_found then
     raise exception using errcode = '55000',
@@ -442,4 +450,4 @@ grant execute on function vortex_record.load_record_access_facts_from_installati
 comment on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb
 ) is
-  'Private adapter fact loader over one exact trusted installation, resolving definitions from the cached installation access plan.';
+  'Private adapter fact loader over one exact trusted installation or owner-validated preview, resolving definitions from the cached installation access plan.';

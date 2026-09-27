@@ -14,6 +14,7 @@ declare
   organization_id_value uuid;
   application_root_id_value uuid;
   application_release_revision_value bigint;
+  preview_installation_id_value uuid;
   binding_item jsonb;
   release_content jsonb;
   release_revision_value bigint;
@@ -25,6 +26,7 @@ declare
   permission_item jsonb;
   module_root_value uuid;
   record_type_id_value uuid;
+  release_storage_contract_value uuid;
   storage_contract_value uuid;
   type_meta jsonb := '{}'::jsonb;
   relationship_by_id jsonb := '{}'::jsonb;
@@ -50,6 +52,8 @@ begin
     or (p_installation ->> 'organizationId') is null
     or (p_installation ->> 'applicationRootId') is null
     or (p_installation ->> 'applicationReleaseRevision') is null
+    or (p_installation ? 'previewInstallationId'
+      and pg_catalog.jsonb_typeof(p_installation -> 'storageIdentities') is distinct from 'array')
     or exists (
       select 1
       from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as item(value)
@@ -66,6 +70,11 @@ begin
   application_root_id_value := (p_installation ->> 'applicationRootId')::uuid;
   application_release_revision_value :=
     (p_installation ->> 'applicationReleaseRevision')::bigint;
+  preview_installation_id_value := case
+    when p_installation ? 'previewInstallationId'
+      then (p_installation ->> 'previewInstallationId')::uuid
+    else null
+  end;
   if organization_id_value = none_uuid
     or application_root_id_value = none_uuid
     or application_release_revision_value not between 1 and 9007199254740991 then
@@ -76,7 +85,9 @@ begin
   plan_key_value := 'sha256:' || pg_catalog.encode(
     pg_catalog.sha256(pg_catalog.convert_to(
       organization_id_value::text || '|' || application_root_id_value::text || '|'
-        || application_release_revision_value::text || '|' || coalesce((
+        || application_release_revision_value::text || '|'
+        || case when preview_installation_id_value is null then ''
+          else preview_installation_id_value::text || '|' end || coalesce((
           select pg_catalog.string_agg(
             (item.value ->> 'moduleRootId') || ':'
               || (item.value ->> 'moduleReleaseRevision') || ':'
@@ -98,7 +109,7 @@ begin
   -- change under it. A detached binding is not counted there, so a detached
   -- pin set is resolved afresh on every call and still refuses a retired
   -- mapping exactly as before.
-  cacheable := not exists (
+  cacheable := preview_installation_id_value is null and not exists (
     select 1
     from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as item(value)
     where (item.value ->> 'state') is distinct from 'active'
@@ -144,7 +155,23 @@ begin
       from pg_catalog.jsonb_array_elements(release_content -> 'recordTypes') as item(value)
     loop
       record_type_id_value := (record_type_item ->> 'recordTypeId')::uuid;
-      storage_contract_value := (record_type_item ->> 'storageContractId')::uuid;
+      release_storage_contract_value := (record_type_item ->> 'storageContractId')::uuid;
+      if preview_installation_id_value is null then
+        storage_contract_value := release_storage_contract_value;
+      else
+        select (binding.value ->> 'previewStorageContractId')::uuid
+        into strict storage_contract_value
+        from pg_catalog.jsonb_array_elements(p_installation -> 'storageIdentities')
+          as binding(value)
+        where (binding.value ->> 'moduleRootId')::uuid = module_root_value
+          and (binding.value ->> 'moduleReleaseRevision')::bigint = release_revision_value
+          and (binding.value ->> 'recordTypeId')::uuid = record_type_id_value
+          and (binding.value ->> 'releaseStorageContractId')::uuid = release_storage_contract_value;
+        if not found then
+          raise exception using errcode = '55000',
+            message = 'Preview Record storage disagrees with its exact Module release';
+        end if;
+      end if;
 
       select catalogue.* into catalogue_row
       from vortex_record.storage_catalogue as catalogue
@@ -165,13 +192,13 @@ begin
         or (catalogue_row.physical_schema_token = 'system_projection'
           and catalogue_row.protected_read_model_key
             is distinct from (record_type_item #>> '{systemProjection,protectedView}'))
-        or not exists (
+        or (preview_installation_id_value is null and not exists (
           select 1
           from vortex_record.release_provisions as provision
           where provision.module_root_id = module_root_value
             and provision.release_revision = release_revision_value
-            and storage_contract_value = any (provision.storage_contract_ids)
-        ) then
+            and release_storage_contract_value = any (provision.storage_contract_ids)
+        )) then
         raise exception using errcode = '55000',
           message = 'Record storage disagrees with the installed definition';
       end if;
@@ -344,11 +371,19 @@ begin
     end loop;
   end loop;
 
-  select release.compilation_output #> '{canonical,content}'
-  into strict release_content
-  from vortex_definition.releases as release
-  where release.root_id = application_root_id_value
-    and release.release_revision = application_release_revision_value;
+  if preview_installation_id_value is null then
+    select release.compilation_output #> '{canonical,content}'
+    into strict release_content
+    from vortex_definition.releases as release
+    where release.root_id = application_root_id_value
+      and release.release_revision = application_release_revision_value;
+  else
+    release_content := p_installation #> '{candidate,compilation,canonical,content}';
+    if pg_catalog.jsonb_typeof(release_content) is distinct from 'object' then
+      raise exception using errcode = '55000',
+        message = 'Preview Application candidate is unavailable';
+    end if;
+  end if;
 
   for permission_item in
     select item.value
@@ -383,7 +418,11 @@ begin
     'relationships', relationship_by_id,
     'sharingConditions', condition_list,
     'permissions', permission_by_id
-  );
+  ) || case when preview_installation_id_value is not null
+    then pg_catalog.jsonb_build_object(
+      'previewInstallationId', preview_installation_id_value
+    )
+    else '{}'::jsonb end;
 
   if not cacheable then
     return plan;
