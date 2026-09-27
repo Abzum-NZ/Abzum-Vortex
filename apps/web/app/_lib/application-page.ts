@@ -835,7 +835,14 @@ export const loadApplicationPage = async (
     const fieldLabels = fieldLabelsOf(bound.module);
 
     if (isCalendarBlock && calendarContract !== undefined) {
-      const organizationSettings = await readOrganizationSettings();
+      let organizationSettings: Awaited<ReturnType<typeof readOrganizationSettings>>;
+      try {
+        organizationSettings = await readOrganizationSettings();
+      } catch {
+        logPlacementFailure(address, placementId, "calendar_time_zone_unavailable");
+        data[placementId] = { status: "error" };
+        continue;
+      }
       if (
         organizationSettings.kind !== "available" ||
         organizationSettings.value.outcome !== "available"
@@ -987,8 +994,9 @@ export const loadApplicationPage = async (
           ),
         };
       });
+      const truncated = queryResult.value.nextContinuationToken !== undefined;
       data[placementId] =
-        items.length === 0
+        items.length === 0 && !truncated
           ? { status: "empty" }
           : {
               status: "ready",
@@ -999,7 +1007,7 @@ export const loadApplicationPage = async (
                 windowStart: window.startDate,
                 windowEnd: window.endDate,
                 timeZone,
-                truncated: queryResult.value.nextContinuationToken !== undefined,
+                truncated,
                 items,
               },
             };

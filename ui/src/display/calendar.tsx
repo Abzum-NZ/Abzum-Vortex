@@ -155,7 +155,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     refusedMessage,
     errorMessage,
     events,
-  } = resolveDisplayContext<CalendarPayload>(props, (calendar) => calendar.items.length === 0, "No items in this period");
+  } = resolveDisplayContext<CalendarPayload>(
+    props,
+    (calendar) => calendar.items.length === 0 && !calendar.truncated,
+    "No items in this period",
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -282,12 +286,12 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
             <div
               className={values.view === "week" ? "grid grid-cols-1 gap-2 sm:grid-cols-7" : "grid grid-cols-7 gap-1"}
               data-vortex-calendar-view={values.view}
-              role="grid"
+              role="group"
               aria-label={`${values.view} calendar`}
             >
               {values.view === "month"
                 ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
-                    <div key={weekday} className="px-1 py-2 text-center text-sm font-medium text-muted-foreground" role="columnheader">
+                    <div key={weekday} className="px-1 py-2 text-center text-sm font-medium text-muted-foreground">
                       {weekday}
                     </div>
                   ))
@@ -300,7 +304,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 return (
                   <div
                     key={day}
-                    role="gridcell"
+                    role="group"
                     aria-label={dayLabel(day)}
                     className={`min-h-24 overflow-hidden rounded-md border p-1 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
                   >
