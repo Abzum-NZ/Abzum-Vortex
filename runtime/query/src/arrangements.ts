@@ -7,9 +7,11 @@ import {
   parseExactDecimal,
   type JsonValue,
 } from "@vortex/contracts";
+import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
   arrangementCommandSchema,
   arrangementRowLimit,
+  summaryArrangementResultSchema,
   type AggregateDescriptor,
   type AggregateResult,
   type ArrangementField,
@@ -22,11 +24,11 @@ import {
   type CalendarArrangementDescriptor,
   type CalendarArrangementResult,
   type CalendarItem,
-  type SummaryArrangementDescriptor,
-  type SummaryArrangementResult,
+  summaryArrangementCommandSchema,
   type TableArrangementDescriptor,
   type TableArrangementResult,
 } from "./arrangement-contracts";
+import type { createProtectedQueryService } from "./protected-query-service";
 import { aggregateSupportsFieldType, computeAggregates } from "./exact-aggregation";
 
 type FieldType = ArrangementField["type"];
@@ -413,30 +415,6 @@ const arrangeCalendar = (
   };
 };
 
-const arrangeSummary = (
-  { plan, rows, fieldTypes }: Plan,
-  descriptor: SummaryArrangementDescriptor,
-): SummaryArrangementResult => {
-  const groupByFieldIds = descriptor.groupByFieldIds.map(lower);
-  return {
-    outcome: "completed",
-    arrangement: "summary",
-    plan,
-    groupByFieldIds: groupByFieldIds as SummaryArrangementResult["groupByFieldIds"],
-    totalRowCount: rows.length,
-    groups:
-      groupByFieldIds.length === 0
-        ? []
-        : groupRows(rows, groupByFieldIds, fieldTypes).map((group) => ({
-            groupKey: group.groupKey,
-            groupValues: group.groupValues as ArrangementRow["values"],
-            rowCount: group.rows.length,
-            aggregates: computeAggregates(group.rows, descriptor.aggregates, fieldTypes),
-          })),
-    aggregates: computeAggregates(rows, descriptor.aggregates, fieldTypes),
-  };
-};
-
 const calendarZone = (timeZone: string): Intl.DateTimeFormat | undefined => {
   try {
     return new Intl.DateTimeFormat("en-US", {
@@ -455,8 +433,9 @@ const calendarZone = (timeZone: string): Intl.DateTimeFormat | undefined => {
 };
 
 /**
- * Shapes one complete authorised query result into a table, board, calendar or
- * summary. Every row, count, group and total comes from the same rows, in the
+ * Shapes one complete authorised query result into a table, board or calendar.
+ * Summary arrangements use the database-backed protected Query service. Every
+ * row, count, group and total comes from the same rows, in the
  * plan's order, before any page is cut; outputs carry only declared fields and
  * are ordered deterministically. A malformed command, an undeclared or
  * unsuitable field, an inconsistent result or an oversized result returns one
@@ -480,7 +459,6 @@ export const arrangeDataset = (commandCandidate: unknown): ArrangementResult => 
   let zone: Intl.DateTimeFormat | undefined;
   switch (descriptor.type) {
     case "table":
-    case "summary":
       if (!validateUse(declared, fieldTypes, descriptor.groupByFieldIds, descriptor.aggregates))
         return refusal("descriptor_invalid");
       break;
@@ -518,7 +496,41 @@ export const arrangeDataset = (commandCandidate: unknown): ArrangementResult => 
       return arrangeBoard(plan, descriptor);
     case "calendar":
       return arrangeCalendar(plan, descriptor, zone!);
-    case "summary":
-      return arrangeSummary(plan, descriptor);
   }
+};
+
+type ProtectedSummaryService = Pick<ReturnType<typeof createProtectedQueryService>, "summarise">;
+type ProtectedSummaryArguments = Parameters<ProtectedSummaryService["summarise"]>;
+
+/** Routes a summary arrangement to the protected database-backed Query service. */
+export const arrangeSummary = async (
+  queries: ProtectedSummaryService,
+  caller: ProtectedSummaryArguments[0],
+  selection: ProtectedSummaryArguments[1],
+  commandCandidate: unknown,
+): Promise<HumanOrganizationRequestResult<ArrangementResult>> => {
+  const command = summaryArrangementCommandSchema.safeParse(commandCandidate);
+  if (!command.success)
+    return { kind: "available", value: refusal("request_invalid") };
+
+  const result = await queries.summarise(caller, selection, command.data);
+  if (result.kind !== "available") return result;
+  if (result.value.outcome === "refused")
+    return { kind: "available", value: refusal(result.value.reasonCode) };
+
+  const mapped = summaryArrangementResultSchema.safeParse({
+    outcome: "completed",
+    arrangement: "summary",
+    plan: {
+      moduleRootId: result.value.moduleRootId,
+      moduleReleaseVersion: result.value.moduleReleaseVersion,
+      queryId: result.value.queryId,
+    },
+    groupByFieldIds: result.value.groupByFieldIds,
+    totalRowCount: result.value.totalRowCount,
+    groups: result.value.groups,
+    aggregates: result.value.aggregates,
+  });
+  if (!mapped.success) throw new Error("PROTECTED_QUERY_SUMMARY_RESULT_INVALID");
+  return { kind: "available", value: mapped.data };
 };

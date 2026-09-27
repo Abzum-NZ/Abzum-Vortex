@@ -902,6 +902,7 @@ The response is `completed`, `already_completed`, `waiting`, `retryable_failure`
 | One durable wait               | 90 days                                            |
 | Default interactive query page | 50 records                                         |
 | Maximum interactive query page | 200 records                                        |
+| Summary candidate rows         | 100,000; a larger candidate set is refused without partial groups or totals |
 | Interface page                 | 100 records by default; maximum 500 when published |
 | Export page                    | 1,000 records per background batch                 |
 

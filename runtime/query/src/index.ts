@@ -12,6 +12,11 @@ export {
   protectedQueryRefusalSchema,
   protectedQueryPageSchema,
   protectedQueryResultSchema,
+  protectedQuerySummaryCommandSchema,
+  protectedQuerySummaryAggregateResultSchema,
+  protectedQuerySummaryGroupSchema,
+  protectedQuerySummaryCompletedSchema,
+  protectedQuerySummaryResultSchema,
   type ProtectedQueryCommand,
   type ProtectedQuerySort,
   type ProtectedQueryRow,
@@ -22,6 +27,11 @@ export {
   type ProtectedQueryRefusal,
   type ProtectedQueryPage,
   type ProtectedQueryResult,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryCompleted,
+  type ProtectedQuerySummaryAggregateResult,
+  type ProtectedQuerySummaryGroup,
+  type ProtectedQuerySummaryResult,
 } from "./protected-query-contracts";
 
 export {
@@ -53,7 +63,8 @@ export {
   type TableArrangementDescriptor,
   type BoardArrangementDescriptor,
   type CalendarArrangementDescriptor,
-  type SummaryArrangementDescriptor,
+  summaryArrangementCommandSchema,
+  type SummaryArrangementCommand,
   type AggregateDescriptor,
   type AggregateValue,
   type AggregateResult,
@@ -70,7 +81,7 @@ export {
   type ArrangementResult,
 } from "./arrangement-contracts";
 
-export { arrangeDataset } from "./arrangements";
+export { arrangeDataset, arrangeSummary } from "./arrangements";
 
 export {
   createUsageProjectionService,
