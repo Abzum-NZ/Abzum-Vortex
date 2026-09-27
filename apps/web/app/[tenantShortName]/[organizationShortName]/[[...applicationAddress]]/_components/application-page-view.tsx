@@ -7,6 +7,7 @@ import {
   createFlowRuntime,
   createFormBlockRuntime,
   createFullPlatformComponentRegistry,
+  equalFormValue,
   PageLayoutRenderer,
   useFlowIntentHost,
   type ControlSemanticEvent,
@@ -65,8 +66,14 @@ const outcomeNotices: Readonly<Record<string, Notice>> = {
   refused: { tone: "problem", text: "You do not have permission to do that." },
   conflict: { tone: "problem", text: "This changed since you opened it. Refresh and review it." },
   validation: { tone: "problem", text: "Check the values and try again." },
-  partial: { tone: "problem", text: "Only part of this was saved. Refresh and review what changed." },
-  uncertain: { tone: "problem", text: "The result is not certain yet. Refresh before trying again." },
+  partial: {
+    tone: "problem",
+    text: "Only part of this was saved. Refresh and review what changed.",
+  },
+  uncertain: {
+    tone: "problem",
+    text: "The result is not certain yet. Refresh before trying again.",
+  },
   background_pending: { tone: "info", text: "Started. It will finish in the background." },
   failed: { tone: "problem", text: "That did not work. Try again." },
 };
@@ -443,8 +450,22 @@ export function ApplicationPageView({
       if (submitBinding !== undefined)
         events.form_submit = (event: ControlSemanticEvent) => {
           if (event.event !== "form_submit" || busy) return;
+          const baseline = model.editFormBaselines[placementId];
+          const values =
+            baseline === undefined
+              ? event.values
+              : Object.fromEntries(
+                  Object.entries(event.values).filter(
+                    ([name, value]) =>
+                      Object.hasOwn(baseline, name) && !equalFormValue(value, baseline[name]),
+                  ),
+                );
+          if (baseline !== undefined && Object.keys(values).length === 0) {
+            setNotice({ tone: "info", text: "No changes to save." });
+            return;
+          }
           void applyDispatch(
-            formBlock.submit(asComponentBinding(placementId, submitBinding), event.values),
+            formBlock.submit(asComponentBinding(placementId, submitBinding), values),
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
@@ -474,7 +495,19 @@ export function ApplicationPageView({
       };
     }
     return inputs;
-  }, [applyDispatch, busy, formBlock, model.bindings, model.data, router, runBinding, selection, setQuery, subject]);
+  }, [
+    applyDispatch,
+    busy,
+    formBlock,
+    model.bindings,
+    model.data,
+    model.editFormBaselines,
+    router,
+    runBinding,
+    selection,
+    setQuery,
+    subject,
+  ]);
 
   return (
     <>
