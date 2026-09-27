@@ -181,7 +181,6 @@
       }
     ],
     "queries":  [],
-    "workflows": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
@@ -191,6 +190,20 @@
         "id": "event_organisation_settings_action",
         "key": "vortex.app.organisation_administration.settings_action",
         "record_type": "vortex.organisation_administration:organisation_notice",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_organization_settings",
+        "key": "vortex.app.organisation_administration.open_organization_settings",
+        "record_type": "vortex.organisation_administration:organization_settings",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_submit_organization_settings_record",
+        "key": "vortex.app.organisation_administration.submit_organization_settings_record",
+        "record_type": "vortex.organisation_administration:organization_settings",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },

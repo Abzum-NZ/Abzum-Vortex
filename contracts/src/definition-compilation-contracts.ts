@@ -63,8 +63,6 @@ export const sourceIdentityKindSchema = z.enum([
   "block_placement",
   "page",
   "guided_step",
-  "workflow",
-  "workflow_node",
   "pipeline",
   "connection_binding",
   "interface",

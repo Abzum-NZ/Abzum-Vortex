@@ -68,8 +68,6 @@ export const versionImpactComponentKinds = [
   "block_registration",
   "pipeline",
   "pipeline_stage",
-  "workflow",
-  "workflow_node",
   "connection_binding",
   "interface",
   "public_address",
