@@ -87,19 +87,35 @@ Each authentic source alias has the Definition root, current compiler lookup sco
 
 A tenant-administrator assignment names one tenant and one verified identity. It
 has a permanent assignment identifier, positive revision, a canonical unique
-nonempty set of structural capabilities, start and optional expiry, trusted
+nonempty set of tenant permission keys, start and optional expiry, trusted
 creation/change actor and correlation evidence, and complete revocation evidence
 when revoked. It grants no organisation membership, application entry, local role
 authority or record permission. [Protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 owns its service implementation; [IAM](iam-application.md) owns its later
-user-facing grant journey.
+user-facing grant journey. Tenant-role presets flatten to these exact permission
+keys; assignments do not store a second role identifier or ledger. Every active
+tenant-administrator assignment receives the capability-limits read permission
+by default. The Tenant limits manager preset contains both capability-limits
+permissions.
 
-Only these structural capabilities are permitted:
+Only these tenant permissions are permitted, in canonical lexical order:
 
+- `platform.tenant.administrators.manage`
+- `platform.tenant.administrators.read`
+- `platform.tenant.capability_limits.allocate`
+- `platform.tenant.capability_limits.read`
 - `platform.tenant.hierarchy.read`
 - `platform.tenant.organizations.create`
+- `platform.tenant.organizations.lifecycle`
 - `platform.tenant.organizations.rename`
 - `platform.tenant.organizations.reparent`
+
+`platform.tenant.capability_limits.allocate` is separate from tenant-administrator
+management and is required to set, lower or revoke an allocation. Tenant-wide
+reads use `platform.tenant.capability_limits.read`. Organisation-scoped reads
+remain available to an organisation administrator for that organisation's
+effective limit. Named Vortex super administrators inherit both tenant
+permissions through the current tenant-capability decision.
 
 ### Named Vortex super-administrator assignment
 

@@ -78,7 +78,9 @@ $function$;
 alter function vortex_record.is_record_type_lifecycle_policy(jsonb) owner to vortex_record_owner;
 
 revoke all on function vortex_record.is_record_type_lifecycle_policy(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_record.is_record_type_lifecycle_policy(jsonb)
+  to vortex_record_owner;
 
 comment on function vortex_record.is_record_type_lifecycle_policy(jsonb) is
   'Closed shape check for one complete stored record-type lifecycle policy; guards both the protected save and the stored row.';
