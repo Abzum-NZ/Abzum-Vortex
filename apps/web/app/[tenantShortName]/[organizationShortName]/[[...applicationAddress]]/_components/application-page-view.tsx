@@ -272,6 +272,7 @@ function ApplicationPageViewContent({
         navigationKey: string;
         data: Readonly<Record<string, PageDataState>>;
         editFormBaselines: Readonly<Record<string, EditFormBaseline | null>>;
+        subject?: ApplicationPageModel["subject"] | null;
       }>
     | undefined
   >(undefined);
@@ -317,7 +318,6 @@ function ApplicationPageViewContent({
   const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   const application = model.invocation;
-  const subject = model.subject;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
   const serverDataRef = useRef(model.data);
   const serverDataGenerationRef = useRef(0);
@@ -348,6 +348,11 @@ function ApplicationPageViewContent({
     };
   }
   const navigationKey = placementRequestsRef.current.key;
+  const subject =
+    refreshedPlacementData?.navigationKey === navigationKey &&
+    refreshedPlacementData.subject !== undefined
+      ? refreshedPlacementData.subject ?? undefined
+      : model.subject;
   const currentPageKey = model.pages.find(
     (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
   )?.key;
@@ -386,6 +391,7 @@ function ApplicationPageViewContent({
 
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
+      const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
       const requestEntries = [...requests.entries()];
       for (let offset = 0; offset < requestEntries.length; offset += 500) {
         if (placementRequestsRef.current.key !== requestScope.key) return;
@@ -430,6 +436,11 @@ function ApplicationPageViewContent({
               : null;
           loadedData.set(key, data ?? { status: "error" });
           loadedBaselines.set(key, baseline);
+          const displayKey =
+            Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+            request.componentId;
+          if (Object.hasOwn(model.editFormBaselines, displayKey) || baseline !== null)
+            loadedSubjects.set(key, result.kind === "available" ? result.subject : null);
         }
       }
 
@@ -439,6 +450,7 @@ function ApplicationPageViewContent({
         placementId: string;
         data: PageDataState;
         editFormBaseline: EditFormBaseline | null;
+        subject?: ApplicationPageModel["subject"] | null;
       }[] = [];
       for (const [key, request] of requests) {
         if (
@@ -455,6 +467,7 @@ function ApplicationPageViewContent({
           placementId: displayKey,
           data: loadedData.get(key) ?? { status: "error" },
           editFormBaseline: loadedBaselines.get(key) ?? null,
+          ...(loadedSubjects.has(key) ? { subject: loadedSubjects.get(key) } : {}),
         });
       }
       if (accepted.length === 0) return;
@@ -465,20 +478,22 @@ function ApplicationPageViewContent({
         const editFormBaselines = {
           ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
         };
+        let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
         let changed = false;
         for (const entry of accepted) {
           if (!isCurrentComponentRequestGeneration(liveScope.generations.get(entry.key), entry.request))
             continue;
           data[entry.placementId] = entry.data;
           editFormBaselines[entry.placementId] = entry.editFormBaseline;
+          if (entry.subject !== undefined) subject = entry.subject;
           changed = true;
         }
         return changed
-          ? { navigationKey: requestScope.key, data, editFormBaselines }
+          ? { navigationKey: requestScope.key, data, editFormBaselines, subject }
           : current;
       });
     },
-    [application, currentPageKey, currentSearch, model.data],
+    [application, currentPageKey, currentSearch, model.data, model.editFormBaselines],
   );
   const refreshTargetsForSource = useCallback(
     (sourcePlacementId: string): readonly string[] => {
