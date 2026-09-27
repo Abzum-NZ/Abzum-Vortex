@@ -47,7 +47,6 @@ export const loadPermittedApplicationsAtAddress = async (
 export type SelectedOrganizationResult =
   | Readonly<{ kind: "available"; entry: OrganizationLauncherEntry }>
   | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "suspended_super_administrator_account" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 export const loadSelectedOrganization = async (

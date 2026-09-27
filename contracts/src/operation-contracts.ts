@@ -31,7 +31,6 @@ import {
   semanticVersionSchema,
   tenantIdSchema,
   timestampSchema,
-  vortexSuperAdministratorAssignmentIdSchema,
 } from "./identifiers";
 import { installedEventDescriptorSchema } from "./module-contracts";
 import type { StandardInstalledEventKind } from "./module-contracts";
@@ -964,13 +963,6 @@ export const activityEntrySchema = z
     source: protectedOperationChannelSchema,
     correlationId: correlationIdSchema,
     outcome: z.enum(["completed", "refused", "failed"]),
-    authority: z
-      .object({
-        kind: z.literal("vortex_super_administrator"),
-        assignmentId: vortexSuperAdministratorAssignmentIdSchema,
-      })
-      .strict()
-      .optional(),
   })
   .strict();
 
