@@ -2,7 +2,7 @@ import { registerHooks } from "node:module";
 import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * Generates every platform catalogue release fingerprint from the one catalogue source.
@@ -25,9 +25,17 @@ const catalogueDirectory = path.join(root, "contracts", "src", "catalogue");
 const generatedFile = path.join(catalogueDirectory, "catalogue-fingerprints.generated.json");
 
 // The shared derivation is TypeScript that imports its siblings without a file extension, as the
-// workspace's bundler resolution allows. Resolve those the same way for this script.
+// workspace's bundler resolution allows. Resolve those the same way for this script. Its only
+// runtime use of @vortex/contracts is the canonical JSON helper; resolve that to the narrow source
+// module so Node does not load unrelated catalogue JSON through the package barrel.
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier === "@vortex/contracts") {
+      return nextResolve(
+        pathToFileURL(path.join(root, "contracts", "src", "canonical-json.ts")).href,
+        context,
+      );
+    }
     if (/^\.\.?\//.test(specifier) && path.extname(specifier) === "") {
       try {
         return nextResolve(`${specifier}.ts`, context);
