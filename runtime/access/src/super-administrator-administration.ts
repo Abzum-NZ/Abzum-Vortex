@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  databaseRevision,
+  databaseTimestamp,
   grantVortexSuperAdministratorCommandSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
@@ -35,15 +37,6 @@ type MutationOperation =
   | "grant_vortex_super_administrator"
   | "revoke_vortex_super_administrator";
 
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
 const mutation = (
   operation: MutationOperation,
   row: MutationRow | undefined,
@@ -59,9 +52,9 @@ const mutation = (
         operation,
         assignmentId: row.assignment_id,
         identityId: row.identity_id,
-        revision: revision(row.revision),
+        revision: databaseRevision(row.revision),
         correlationId: row.correlation_id,
-        acceptedAt: timestamp(row.accepted_at),
+        acceptedAt: databaseTimestamp(row.accepted_at),
       });
 
 export type VortexSuperAdministratorAdministrationDependencies =
@@ -96,16 +89,16 @@ export const createVortexSuperAdministratorAdministrationService = (
         const entries = rows.slice(0, query.data.limit).map((row) => ({
           assignmentId: row.assignment_id,
           identityId: row.identity_id,
-          revision: revision(row.revision),
-          grantedAt: timestamp(row.granted_at),
+          revision: databaseRevision(row.revision),
+          grantedAt: databaseTimestamp(row.granted_at),
           grantedByKind: row.granted_by_kind,
           grantedById: row.granted_by_id,
-          changedAt: timestamp(row.changed_at),
+          changedAt: databaseTimestamp(row.changed_at),
           changedByKind: row.changed_by_kind,
           changedById: row.changed_by_id,
           grantCorrelationId: row.grant_correlation_id,
           changeCorrelationId: row.change_correlation_id,
-          ...(row.revoked_at == null ? {} : { revokedAt: timestamp(row.revoked_at) }),
+          ...(row.revoked_at == null ? {} : { revokedAt: databaseTimestamp(row.revoked_at) }),
           ...(row.revoked_by_kind == null ? {} : { revokedByKind: row.revoked_by_kind }),
           ...(row.revoked_by_id == null ? {} : { revokedById: row.revoked_by_id }),
           ...(row.revocation_correlation_id == null
