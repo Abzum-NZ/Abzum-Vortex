@@ -256,9 +256,6 @@ importers:
       '@vortex/app':
         specifier: workspace:*
         version: link:../../runtime/app
-      '@vortex/connection':
-        specifier: workspace:*
-        version: link:../../runtime/connection
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
@@ -277,9 +274,6 @@ importers:
       '@vortex/identity':
         specifier: workspace:*
         version: link:../../runtime/identity
-      '@vortex/interface':
-        specifier: workspace:*
-        version: link:../../runtime/interface
       '@vortex/module':
         specifier: workspace:*
         version: link:../../runtime/module
@@ -295,15 +289,6 @@ importers:
       '@vortex/record':
         specifier: workspace:*
         version: link:../../runtime/record
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../../runtime/rule
-      '@vortex/search':
-        specifier: workspace:*
-        version: link:../../runtime/search
-      '@vortex/theme':
-        specifier: workspace:*
-        version: link:../../runtime/theme
       '@vortex/ui':
         specifier: workspace:*
         version: link:../../ui

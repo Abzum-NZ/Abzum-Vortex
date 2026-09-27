@@ -5,6 +5,7 @@ import {
   eventDispatcherWakeupLimits,
 } from "@vortex/event";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
+import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 
 // One protected wake-up endpoint serves both callers: a database webhook hint
 // and a scheduled Kestra recovery tick. Both authenticate with the same
@@ -13,14 +14,6 @@ const wakeup = createEventDispatcherWakeup({ consumers: [] });
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const privateResponse = (body: unknown, status: number): NextResponse => {
-  const response = NextResponse.json(body, { status });
-  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
-  response.headers.set("Expires", "0");
-  response.headers.set("Pragma", "no-cache");
-  return response;
-};
 
 type ReadBodyResult =
   | Readonly<{ ok: true; body?: unknown }>
