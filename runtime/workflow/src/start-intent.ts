@@ -102,6 +102,8 @@ export const acceptFlowStartIntent = async (
 ): Promise<AcceptedStartIntent> => {
   const command = startIntentCommandSchema.parse(candidate);
   if (command.source.kind === "action") throw new Error("START_INTENT_SOURCE_UNVERIFIED");
+  if (Object.keys(command.inputs).length > 0 || Object.keys(command.triggerValues).length > 0)
+    throw new Error("START_INTENT_EVENT_VALUES_UNVERIFIED");
   const inputs = JSON.stringify(command.inputs satisfies Record<string, FlowLiteral>);
   const triggerValues = JSON.stringify(command.triggerValues satisfies Record<string, FlowLiteral>);
   if (Buffer.byteLength(inputs) > 65536 || Buffer.byteLength(triggerValues) > 65536)

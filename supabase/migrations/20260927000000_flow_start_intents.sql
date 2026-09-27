@@ -341,10 +341,11 @@ begin
     if published_flow ->> 'execution' is distinct from 'background'
       or coalesce(published_flow #>> '{runAs,kind}', '')
         not in ('specified_account', 'system')
-      or published_flow ? 'invocationPermissionId'
-      or p_inputs <> '{}'::jsonb
-      or p_trigger_values <> '{}'::jsonb then
+      or published_flow ? 'invocationPermissionId' then
       raise exception using errcode = '22023', message = 'Event flow start is invalid';
+    end if;
+    if p_inputs <> '{}'::jsonb or p_trigger_values <> '{}'::jsonb then
+      raise exception using errcode = '22023', message = 'Event start values are unverified';
     end if;
     select start_trigger.value into published_trigger
     from pg_catalog.jsonb_array_elements(published_flow -> 'triggers') as start_trigger(value)
