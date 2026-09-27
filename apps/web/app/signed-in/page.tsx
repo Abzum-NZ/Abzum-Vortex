@@ -13,7 +13,9 @@ import {
 import { signOut } from "../auth/actions";
 import { AuthShell } from "../auth/_components/auth-shell";
 import { SubmitButton } from "../auth/_components/submit-button";
+import { continueSessionOrEnd, SESSION_ENDED_PATH } from "../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
+import { organizationAddressPath } from "../_lib/address-paths";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 
 export const dynamic = "force-dynamic";
@@ -38,11 +40,6 @@ const retryOnceWhenTemporarilyUnavailable = async <Result extends Readonly<{ kin
     console.error(`[signed-in] ${read} read still temporarily unavailable after one retry`);
   return second;
 };
-
-const organizationAddressPath = (entry: {
-  tenantShortName: string;
-  organizationShortName: string;
-}) => `/${encodeURIComponent(entry.tenantShortName)}/${encodeURIComponent(entry.organizationShortName)}`;
 
 /**
  * Closed launcher projection of the person's current organisation entries. Each tile's identity is
@@ -77,21 +74,20 @@ const organizationTileValues = (
 async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   "use server";
   if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
-  const identity = await resolveIdentitySession();
+  const identity = continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
-  if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
-    redirect("/auth/session-ended");
-  if (identity.kind !== "active") redirect("/auth/session-ended");
 
   const current = await loadOrganizationLauncher(identity.session);
   if (current.kind !== "available") redirect("/signed-in");
   const entry = current.entries.find((candidate) => candidate.organizationId === event.recordId);
   if (entry === undefined) redirect("/signed-in");
-  redirect(organizationAddressPath(entry));
+  redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
 }
 
 export default async function SignedInPage() {
-  const result = await retryOnceWhenTemporarilyUnavailable("session", resolveIdentitySession);
+  const result = continueSessionOrEnd(
+    await retryOnceWhenTemporarilyUnavailable("session", resolveIdentitySession),
+  );
   if (result.kind === "temporarily_unavailable")
     return (
       <AuthShell
@@ -104,9 +100,6 @@ export default async function SignedInPage() {
         </Link>
       </AuthShell>
     );
-  if (result.kind === "invalid_session_state" || result.kind === "expired_or_revoked")
-    redirect("/auth/session-ended");
-  if (result.kind !== "active") redirect("/auth/session-ended");
 
   const launcher = await retryOnceWhenTemporarilyUnavailable("organisations", () =>
     loadOrganizationLauncher(result.session),
@@ -123,9 +116,10 @@ export default async function SignedInPage() {
         </Link>
       </AuthShell>
     );
-  if (launcher.kind !== "available") redirect("/auth/session-ended");
+  if (launcher.kind !== "available") redirect(SESSION_ENDED_PATH);
   const onlyEntry = launcher.entries[0];
-  if (launcher.entries.length === 1 && onlyEntry) redirect(organizationAddressPath(onlyEntry));
+  if (launcher.entries.length === 1 && onlyEntry)
+    redirect(organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName));
 
   return (
     <AuthShell

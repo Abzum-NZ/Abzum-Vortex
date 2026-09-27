@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { ComponentProps, ReactElement } from "react";
 import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/contracts";
 import { createFullPlatformComponentRegistry, PageLayoutRenderer } from "@vortex/ui";
 
@@ -15,9 +15,12 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
 export function ApplicationExperiencePage({
   page,
   shells,
+  theme,
 }: Readonly<{
   page: PageDefinitionV2;
   shells: readonly ApplicationShellV2[];
+  /** The application's installed release theme; absent keeps the platform default. */
+  theme?: ComponentProps<typeof PageLayoutRenderer>["theme"];
 }>): ReactElement {
   return (
     <PageLayoutRenderer
@@ -25,6 +28,7 @@ export function ApplicationExperiencePage({
       registry={platformComponentRegistry}
       shells={shells}
       pageId={page.pageId}
+      theme={theme}
     />
   );
 }

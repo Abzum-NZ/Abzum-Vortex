@@ -21,6 +21,12 @@ export type ApplicationAddressResult =
        * that application. A refused page and a missing page of it both carry the same page.
        */
       experience?: ApplicationExperience;
+      /**
+       * The addressed read and its one application, present with the experience, so the page can
+       * be rendered in that application's installed theme.
+       */
+      read?: Extract<PermittedApplicationsRead, { kind: "available" }>;
+      application?: PermittedApplication;
     }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{
@@ -85,7 +91,11 @@ export const resolveApplicationAddress = async (
     // Experiences are carried only for an application the viewer may open, so an unknown or
     // refused application falls back to the neutral page and discloses nothing about itself.
     const experience = addressed.experiences.find((entry) => entry.state === "not_found");
-    return experience === undefined ? { kind: "unavailable" } : { kind: "unavailable", experience };
+    if (experience === undefined) return { kind: "unavailable" };
+    const application = read.applications.find((entry) => entry.key === applicationKey);
+    return application === undefined
+      ? { kind: "unavailable", experience }
+      : { kind: "unavailable", experience, read, application };
   }
   if (resolved.application === null) return { kind: "organization_launcher", read };
   return {

@@ -48,7 +48,12 @@ export type TypedFieldValue =
  * decides what an event does; no component saves, queries or calls an application service.
  */
 export type ControlSemanticEvent =
-  | Readonly<{ event: "action"; intent: "activate" | "dismiss" }>
+  | Readonly<{
+      event: "action";
+      intent: "activate" | "dismiss";
+      /** An action button inside a form reports the form's current typed field values. */
+      values?: Readonly<Record<string, TypedFieldValue>>;
+    }>
   | Readonly<{ event: "field_changed"; fieldKey: string; value: TypedFieldValue }>
   | Readonly<{ event: "form_ready" }>
   | Readonly<{ event: "form_reset" }>

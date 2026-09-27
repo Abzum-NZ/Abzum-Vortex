@@ -2,6 +2,9 @@ import {
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
+  flowMaximumTaskOutputPathDepth,
+  flowJsonMemberType,
+  flowTaskChildLists,
   flowTaskRegistry,
   parseExactDecimal,
   type FlowDefinition,
@@ -107,7 +110,7 @@ type Activation = Readonly<{
 /** What the suspended run is waiting for, so a resume of the wrong kind is refused. */
 type Awaiting =
   | Readonly<{ kind: "protected_task"; taskId: string; taskType: string; allowRefusal: boolean }>
-  | Readonly<{ kind: "form"; taskId: string }>
+  | Readonly<{ kind: "form"; taskId: string; answerTypes?: Readonly<Record<string, string>> }>
   | Readonly<{ kind: "confirm"; taskId: string }>;
 
 export type FlowInterfaceIntent = Readonly<{
@@ -300,6 +303,51 @@ const failed = (code: FlowFailureCode, outcome: FlowFailureOutcome, taskId?: str
 
 const declaredNull = (type: string): FlowRuntimeValue => typed(type, null);
 
+const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefined => {
+  for (const task of tasks) {
+    if (task.id === taskId) return task;
+    for (const child of flowTaskChildLists(task)) {
+      const found = findTask(child.tasks, taskId);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+};
+
+const declaredAnswerType = (
+  state: FlowRunState,
+  activation: Activation,
+  flow: FlowDefinition,
+  taskId: string,
+  path: readonly string[],
+): string | undefined => {
+  const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
+  if (task?.type !== "interface.show_form") return undefined;
+  const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs;
+  if (inputs?.kind !== "map") return undefined;
+  let member: FlowValue = inputs;
+  for (const name of path) {
+    if (member.kind === "map" && Object.hasOwn(member.entries, name)) {
+      member = member.entries[name]!;
+      continue;
+    }
+    const object =
+      member.kind === "literal" && member.literal.type === "json"
+        ? member.literal.value
+        : undefined;
+    if (
+      object === null ||
+      typeof object !== "object" ||
+      Array.isArray(object) ||
+      !Object.hasOwn(object, name)
+    )
+      return undefined;
+    const value = object[name]!;
+    member = { kind: "literal", literal: { type: flowJsonMemberType(value), value } };
+  }
+  return evaluateValue(member, state, activation, flow, taskId).type;
+};
+
 const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefinition): FlowFormulaScope => ({
   now: state.now,
   reference: (reference: FlowReference) => {
@@ -313,8 +361,30 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
         );
       case "variable":
         return activation.variables[reference.name];
-      case "task_output":
-        return activation.outputs[reference.task]?.[reference.key];
+      case "task_output": {
+        const output = activation.outputs[reference.task]?.[reference.key];
+        if (output === undefined || reference.path === undefined) return output;
+        if (
+          output.type !== "json" ||
+          reference.path.length > flowMaximumTaskOutputPathDepth
+        )
+          return undefined;
+        let selected: unknown = output.value;
+        for (const name of reference.path) {
+          if (
+            selected === null ||
+            typeof selected !== "object" ||
+            Array.isArray(selected) ||
+            !Object.hasOwn(selected, name)
+          )
+            return undefined;
+          selected = (selected as Record<string, unknown>)[name];
+        }
+        const type = declaredAnswerType(state, activation, flow, reference.task, reference.path);
+        return type !== undefined && valueMatchesType(type, selected)
+          ? typed(type, selected as JsonValue)
+          : undefined;
+      }
       case "execution_actor":
         return state.actor === undefined
           ? undefined
@@ -674,7 +744,18 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     }
     const intents = [...machine.state.pendingIntents, intent];
     machine.state.pendingIntents = [];
-    machine.state.awaiting = { kind: kind === "show_form" ? "form" : "confirm", taskId };
+    const inputs = kind === "show_form" ? registered.properties.inputs : undefined;
+    const answerTypes = inputs?.kind === "map"
+      ? Object.fromEntries(
+          Object.entries(inputs.entries).map(([name, entry]) => [
+            name,
+            evaluateValue(entry, state, activation, flow, taskId).type,
+          ]),
+        )
+      : undefined;
+    machine.state.awaiting = kind === "show_form"
+      ? { kind: "form", taskId, ...(answerTypes === undefined ? {} : { answerTypes }) }
+      : { kind: "confirm", taskId };
     return {
       kind: "suspend",
       step: {
@@ -892,6 +973,22 @@ export const resumeFlowRun = (
 
   if (awaiting.kind === "form") {
     if (resume.kind !== "form_answered") return mismatch();
+    if (resume.submitted && awaiting.answerTypes !== undefined) {
+      const values = resume.values;
+      const valid = values !== null && typeof values === "object" && !Array.isArray(values) &&
+        Object.keys(values).length === Object.keys(awaiting.answerTypes).length &&
+        Object.entries(awaiting.answerTypes).every(([name, type]) =>
+          Object.hasOwn(values, name) && valueMatchesType(type, values[name]),
+        );
+      if (!valid) {
+        replaceTop(machine, failActivation(activation, {
+          outcome: "validation",
+          code: "inputs_invalid",
+          taskId: awaiting.taskId,
+        }));
+        return drive(machine);
+      }
+    }
     replaceTop(
       machine,
       storeTaskOutputs(activation, awaiting.taskId, {

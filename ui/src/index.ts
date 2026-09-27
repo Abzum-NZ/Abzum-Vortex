@@ -309,7 +309,6 @@ export {
 export {
   ApplicationNavigation,
   ApplicationNavigationBlock,
-  NAVIGATION_STYLES_CSS,
   type ApplicationNavigationProps,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
@@ -430,6 +429,7 @@ export {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowInstallationContext,
+  type FlowSubjectContext,
   type FlowIntent,
   type FlowIntentHost,
   type FlowIntentHostOptions,
