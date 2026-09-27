@@ -45,7 +45,17 @@ begin
             and later_binding.application_release_revision > bundle.application_release_revision
             and later_binding.state in ('active', 'draining')
         )
-        or bundle.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
+        or (
+          bundle.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
+          and not exists (
+            select 1
+            from vortex_module.installation_bindings as previous_binding
+            where previous_binding.organization_id = bundle.organization_id
+              and previous_binding.application_root_id = bundle.application_root_id
+              and previous_binding.application_release_revision = bundle.application_release_revision
+              and previous_binding.state = 'detached'
+          )
+        )
       )
     order by bundle.built_at, bundle.organization_id, bundle.application_root_id,
       bundle.application_release_revision, bundle.bundle_format_version
@@ -87,7 +97,17 @@ begin
           and later_binding.application_root_id = bundle_row.application_root_id
           and later_binding.application_release_revision > bundle_row.application_release_revision
           and later_binding.state in ('active', 'draining')
-      ) and bundle_row.built_at > pg_catalog.statement_timestamp() - abandoned_bundle_ttl then
+      ) and (
+        bundle_row.built_at > pg_catalog.statement_timestamp() - abandoned_bundle_ttl
+        or exists (
+          select 1
+          from vortex_module.installation_bindings as previous_binding
+          where previous_binding.organization_id = bundle_row.organization_id
+            and previous_binding.application_root_id = bundle_row.application_root_id
+            and previous_binding.application_release_revision = bundle_row.application_release_revision
+            and previous_binding.state = 'detached'
+        )
+      ) then
       continue;
     end if;
 
