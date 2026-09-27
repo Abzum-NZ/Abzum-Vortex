@@ -39,7 +39,23 @@ declare
   contributes_to_total boolean := false;
   expected_parents jsonb;
   supplied_parents jsonb;
+  preview_installation jsonb;
 begin
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is not null then
+    if preview_installation ->> 'outcome' = 'refused'
+      or p_parent_mutations is distinct from '[]'::jsonb then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+      );
+    end if;
+    return vortex_record.save_base_record(
+      p_command_id, p_operation, p_record_type_id, p_record_id,
+      p_expected_concurrency_number, p_submitted_values, p_final_values,
+      p_selected_group_id, p_activity_id, p_occurrence_id
+    );
+  end if;
   if pg_catalog.jsonb_typeof(p_parent_mutations) <> 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
