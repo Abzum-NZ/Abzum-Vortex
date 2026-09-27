@@ -16,7 +16,15 @@ import {
   type ModuleSourceDocument,
 } from "./module-source-contracts";
 import { moduleValidationContractVersionV3 } from "./module-contracts-v3";
-import { sourceConditionSchema, sourceQualifiedConditionSchema } from "./definition-source-common";
+import {
+  assertSourceProvenanceCoverage,
+  sourceConditionSchema,
+  sourceProvenanceRegistry,
+  sourceQualifiedConditionSchema,
+  sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
+} from "./definition-source-common";
+import type { SourceProvenanceAnnotation } from "./definition-source-common";
 
 /** The one current Module source/validation contract pair and exact release identity. */
 export const moduleContractPair = {
@@ -46,9 +54,18 @@ export {
   sourcePageDefinitionV2Schema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
+  sourceProvenanceRegistry,
+  sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 };
 
 export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
+  moduleSourceDocumentSchema,
+  applicationSourceDocumentV2Schema,
+  connectionTypeSourceDocumentSchema,
+]);
+
+assertSourceProvenanceCoverage([
   moduleSourceDocumentSchema,
   applicationSourceDocumentV2Schema,
   connectionTypeSourceDocumentSchema,
@@ -60,6 +77,7 @@ export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSc
 export type {
   ApplicationSourceDocumentV2,
   ModuleSourceDocument,
+  SourceProvenanceAnnotation,
   SourceApplicationBodyV2,
   SourcePageDefinitionV2,
 };
