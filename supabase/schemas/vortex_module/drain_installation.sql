@@ -248,6 +248,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.drain_installation(uuid,uuid,bigint,jsonb) owner to vortex_module_owner;
+
 revoke all on function vortex_module.drain_installation(uuid, uuid, bigint, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime,
     vortex_record_owner, vortex_record_adapter;

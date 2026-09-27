@@ -184,6 +184,93 @@
           }
         ],
         "relationships": []
+      },
+      {
+        "id": "rt_landing_zone_application",
+        "key": "application",
+        "name": "Application",
+        "plural_name": "Applications",
+        "title_field": "name",
+        "storage_contract_id": "srt_landing_zone_application",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "none",
+        "standard_actions": ["read"],
+        "custom_actions": [],
+        "system_projection": {
+          "protected_view": "landing_zone_applications",
+          "organization_field": "organization_id",
+          "revision_field": "revision",
+          "filterable_fields": [],
+          "sortable_fields": ["name"]
+        },
+        "fields": [
+          {
+            "id": "fld_landing_zone_application_organization_id",
+            "key": "organization_id",
+            "label": "Organisation",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 36 }
+          },
+          {
+            "id": "fld_landing_zone_application_revision",
+            "key": "revision",
+            "label": "Revision",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {}
+          },
+          {
+            "id": "fld_landing_zone_application_key",
+            "key": "key",
+            "label": "Key",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          },
+          {
+            "id": "fld_landing_zone_application_name",
+            "key": "name",
+            "label": "Name",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          },
+          {
+            "id": "fld_landing_zone_application_icon",
+            "key": "icon",
+            "label": "Icon",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          }
+        ],
+        "relationships": []
       }
     ],
     "permissions": [
@@ -242,6 +329,20 @@
           "readable_fields": [],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "perm_landing_zone_application_read",
+        "key": "vortex.landing_zone.application.read",
+        "label": "Read applications",
+        "description": "Allows reading applications reachable by the current person.",
+        "record_type": "application",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["organization_id", "revision", "key", "name", "icon"],
+          "changeable_fields": []
+        }
       }
     ],
     "actions": [],
@@ -279,6 +380,19 @@
           { "field": "favourite_order", "direction": "ascending" },
           { "field": "target_kind", "direction": "ascending" }
         ],
+        "page_size": 200,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_landing_zone_applications",
+        "key": "landing_zone_applications",
+        "record_type": "application",
+        "inputs": [],
+        "select": ["key", "name", "icon"],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [{ "field": "name", "direction": "ascending" }],
         "page_size": 200,
         "relationship_hops": 0
       }

@@ -511,6 +511,14 @@ export const applicationPreviewDraftFromCompilation = (
   currentReleaseRevision: compiled.currentReleaseRevision,
 });
 
+/** The compiled application content stored in an ephemeral preview installation. */
+export const applicationPreviewCandidateFromCompilation = (
+  compiled: ApplicationDraftCompilation,
+) => ({
+  compilation: compiled.compilation,
+  currentReleaseRevision: compiled.currentReleaseRevision,
+});
+
 /** The Definition read the preview service needs: one organisation-scoped exact-draft compile. */
 export type ApplicationPreviewDraftCompiler = Readonly<{
   compileApplicationDraft(
@@ -547,6 +555,49 @@ const refusalDetail: Readonly<Record<ApplicationPreviewRefusalReason, string>> =
   step_not_found: "The requested guided step is not in this guided form",
 };
 
+export type ApplicationPreviewCompilationResult =
+  | Readonly<{
+      status: "ok";
+      compiled: ApplicationDraftCompilation;
+      draft: ApplicationPreviewDraft;
+    }>
+  | Readonly<{ status: "refused"; refusal: ApplicationPreviewRefusal }>;
+
+/** Compiles one exact current draft for callers that need the full ephemeral candidate. */
+export const compileApplicationPreviewDraft = async (
+  drafts: ApplicationPreviewDraftCompiler,
+  context: SessionContext,
+  request: ApplicationPreviewRequest,
+): Promise<ApplicationPreviewCompilationResult> => {
+  const addressed = { rootId: String(request.rootId), draftRevision: request.draftRevision };
+  let compiled: ApplicationDraftCompilation;
+  try {
+    compiled = await drafts.compileApplicationDraft(context, {
+      rootId: String(request.rootId),
+      expectedDraftRevision: request.draftRevision,
+    });
+  } catch (error) {
+    const reason =
+      error instanceof DefinitionPublicationError
+        ? refusalByPublicationCode[error.code]
+        : undefined;
+    if (reason === undefined) throw error;
+    return {
+      status: "refused",
+      refusal: {
+        reason,
+        detail: refusalDetail[reason],
+        ...addressed,
+      },
+    };
+  }
+  return {
+    status: "ok",
+    compiled,
+    draft: applicationPreviewDraftFromCompilation(compiled),
+  };
+};
+
 /**
  * The preview service. It requires a live system context, compiles the caller organisation's
  * current Application draft at the exact requested revision and materialises it. It exposes no
@@ -563,24 +614,11 @@ export const createApplicationPreviewService = (drafts: ApplicationPreviewDraftC
       return refuse("context_refused", refusalDetail.context_refused);
     const request = parseApplicationPreviewRequest(candidate);
     if (request === undefined) return refuse("invalid_request", refusalDetail.invalid_request);
-    const addressed = { rootId: String(request.rootId), draftRevision: request.draftRevision };
-    let compiled: ApplicationDraftCompilation;
-    try {
-      compiled = await drafts.compileApplicationDraft(context.data, {
-        rootId: String(request.rootId),
-        expectedDraftRevision: request.draftRevision,
-      });
-    } catch (error) {
-      const reason =
-        error instanceof DefinitionPublicationError
-          ? refusalByPublicationCode[error.code]
-          : undefined;
-      if (reason === undefined) throw error;
-      return refuse(reason, refusalDetail[reason], addressed);
-    }
+    const compiled = await compileApplicationPreviewDraft(drafts, context.data, request);
+    if (compiled.status === "refused") return compiled;
     return materialiseApplicationPreview({
       request,
-      draft: applicationPreviewDraftFromCompilation(compiled),
+      draft: compiled.draft,
     });
   },
 });

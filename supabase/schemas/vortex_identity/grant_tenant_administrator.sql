@@ -69,7 +69,10 @@ begin
         where a.tenant_id = p_tenant_id and a.identity_id = actor_identity_id
           and a.revoked_at is null and a.starts_at <= evaluated_at
           and (a.expires_at is null or a.expires_at > evaluated_at)
-          and c = any(a.capability_keys)
+          and (
+            c = any(a.capability_keys)
+            or c = 'platform.tenant.capability_limits.read'
+          )
       )
     ) then
     raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';

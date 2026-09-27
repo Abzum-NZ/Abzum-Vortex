@@ -222,6 +222,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.provision_module_installation_storage(uuid,bigint,uuid,bigint,bigint) owner to vortex_module_owner;
+
 revoke all on function vortex_module.provision_module_installation_storage(
   uuid, bigint, uuid, bigint, bigint
 ) from public, anon, authenticated, service_role, vortex_runtime,

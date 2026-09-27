@@ -34,8 +34,6 @@ declare
   database_type text;
   sql_type text;
   shape_fingerprint text;
-  scope_check text;
-  owner_check text;
   scope_index_columns text;
   result_storage_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
@@ -271,86 +269,9 @@ begin
           'grant select on record_data.%I to vortex_record_adapter', table_token
         );
       else
-        scope_check := case storage_scope_value
-          when 'organization_shared' then 'application_root_id is null'
-          else 'application_root_id is not null'
-        end;
-        owner_check := case ownership_mode_value
-          when 'organization_account' then
-            'owner_organisation_account_id is not null and owner_group_id is null'
-          when 'group' then
-            'owner_organisation_account_id is null and owner_group_id is not null'
-          else 'owner_organisation_account_id is null and owner_group_id is null'
-        end;
-        execute pg_catalog.format(
-          'create table record_data.%I (
-            organisation_id uuid not null references vortex_identity.organizations (organization_id),
-            module_root_id uuid not null check (module_root_id = %L::uuid),
-            record_type_id uuid not null check (record_type_id = %L::uuid),
-            storage_contract_id uuid not null check (storage_contract_id = %L::uuid),
-            record_id uuid not null,
-            application_root_id uuid,
-            definition_revision bigint not null check (definition_revision between 1 and 9007199254740991),
-            owner_organisation_account_id uuid,
-            owner_group_id uuid,
-            lifecycle_state text not null check (lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')),
-            concurrency_number bigint not null check (concurrency_number between 1 and 9007199254740991),
-            created_at timestamptz not null,
-            created_by uuid not null,
-            updated_at timestamptz not null,
-            updated_by uuid not null,
-            deleted_at timestamptz,
-            deleted_by uuid,
-            removal_due_at timestamptz,
-            primary key (%s, record_id),
-            foreign key (organisation_id, owner_organisation_account_id)
-              references vortex_identity.organization_accounts (organization_id, organization_account_id),
-            foreign key (organisation_id, owner_group_id)
-              references vortex_access.organization_groups (organization_id, group_id),
-            check (%s), check (%s),
-            check ((deleted_at is null) = (deleted_by is null)),
-            check ((lifecycle_state = ''active'') = (deleted_at is null and deleted_by is null)),
-            check (updated_at >= created_at)
-          )', table_token, p_module_root_id, record_type_id_value, storage_id,
-          scope_index_columns, scope_check, owner_check
-        );
-        execute pg_catalog.format('alter table record_data.%I enable row level security', table_token);
-        execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
-        execute pg_catalog.format(
-          'create policy record_select on record_data.%I for select to vortex_record_adapter using (
-            organisation_id = vortex_context.organization_id()
-            and case when application_root_id is null then true
-              else application_root_id = vortex_context.application_root_id(true) end
-          )', table_token
-        );
-        execute pg_catalog.format(
-          'create policy record_insert on record_data.%I for insert to vortex_record_adapter with check (
-            organisation_id = vortex_context.organization_id()
-            and case when application_root_id is null then true
-              else application_root_id = vortex_context.application_root_id(true) end
-          )', table_token
-        );
-        execute pg_catalog.format(
-          'create policy record_update on record_data.%I for update to vortex_record_adapter using (
-            organisation_id = vortex_context.organization_id()
-            and case when application_root_id is null then true
-              else application_root_id = vortex_context.application_root_id(true) end
-          ) with check (
-            organisation_id = vortex_context.organization_id()
-            and case when application_root_id is null then true
-              else application_root_id = vortex_context.application_root_id(true) end
-          )', table_token
-        );
-        execute pg_catalog.format(
-          'create policy record_delete on record_data.%I for delete to vortex_record_adapter using (
-            organisation_id = vortex_context.organization_id()
-            and case when application_root_id is null then true
-              else application_root_id = vortex_context.application_root_id(true) end
-          )', table_token
-        );
-        execute pg_catalog.format(
-          'grant select, insert, update, delete on record_data.%I to vortex_record_adapter',
-          table_token
+        perform vortex_record.create_record_storage_table_internal(
+          storage_id, p_module_root_id, record_type_id_value,
+          storage_scope_value, ownership_mode_value
         );
       end if;
 
@@ -629,6 +550,8 @@ exception
     raise exception using errcode = '55000', message = 'Module storage evidence is ambiguous';
 end
 $function$;
+
+alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_record_owner;
 
 revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
