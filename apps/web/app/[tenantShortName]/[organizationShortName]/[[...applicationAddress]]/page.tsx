@@ -22,6 +22,11 @@ import {
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage, loadApplicationTheme } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
+import {
+  abandonGuidedFormDraftAction,
+  advanceGuidedFormStepAction,
+  confirmGuidedFormAction,
+} from "./guided-form-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -319,7 +324,14 @@ export default async function ApplicationAddressPage({
           </button>
         </form>
       )}
-      <ApplicationPageView model={page.model} />
+      <ApplicationPageView
+        model={page.model}
+        guidedFormActions={{
+          advance: advanceGuidedFormStepAction,
+          confirm: confirmGuidedFormAction,
+          abandon: abandonGuidedFormDraftAction,
+        }}
+      />
     </>
   );
 }
