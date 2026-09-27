@@ -30,17 +30,26 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
-      className={cn("cn-select-value", className)}
+      className={cn("cn-select-value line-clamp-1", className)}
       {...props}
     />
   );
 }
 
-function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigger.Props) {
+function SelectTrigger({
+  className,
+  size = "default",
+  children,
+  ...props
+}: SelectPrimitive.Trigger.Props & { size?: "sm" | "default" }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
-      className={cn("cn-select-trigger inline-flex w-full items-center justify-between", className)}
+      data-size={size}
+      className={cn(
+        "cn-select-trigger inline-flex w-full items-center justify-between whitespace-nowrap outline-none select-none disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
       {...props}
     >
       {children}
@@ -79,7 +88,7 @@ function SelectContent({
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
           className={cn(
-            "cn-select-content cn-select-content-aria cn-select-content-logical cn-menu-target cn-menu-translucent",
+            "cn-select-content cn-select-content-aria cn-select-content-logical cn-menu-target cn-menu-translucent relative w-(--anchor-width) max-h-(--available-height) overflow-y-auto",
             className,
           )}
           {...props}
@@ -109,7 +118,10 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn("cn-select-item cn-select-item-aria relative flex items-center", className)}
+      className={cn(
+        "cn-select-item cn-select-item-aria relative flex w-full cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50",
+        className,
+      )}
       {...props}
     >
       <SelectPrimitive.ItemText className="cn-select-item-text">

@@ -7,6 +7,7 @@ import {
   ComboboxContent,
   ComboboxEmpty,
   ComboboxInput,
+  ComboboxInputAddon,
   ComboboxInputGroup,
   ComboboxItem,
   ComboboxList,
@@ -43,10 +44,6 @@ export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
 /** Lists longer than this use a searchable combobox; shorter lists follow the authored variant. */
 const SEARCHABLE_OPTION_THRESHOLD = 7;
-
-type ComboboxChoice =
-  | Readonly<{ kind: "placeholder"; label: string }>
-  | Readonly<{ kind: "choice"; option: ChoiceOption }>;
 
 /**
  * Renders only projected or authored choices. Long and projected reference lists use the
@@ -101,21 +98,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const referenceChoices = context.values?.options !== undefined;
   const searchable = referenceChoices || options.length > SEARCHABLE_OPTION_THRESHOLD;
   const radio = variant === "radio" && !searchable;
-  const normalizedSearch = comboboxOpen ? searchTerm.trim().toLowerCase() : "";
-  const filteredOptions =
-    normalizedSearch.length === 0
-      ? options
-      : options.filter(
-          (option) =>
-            option.key === permittedSelected ||
-            option.label.toLowerCase().includes(normalizedSearch),
-        );
-const comboItems: readonly ComboboxChoice[] = [
-    { kind: "placeholder", label: placeholder },
-    ...options.map((option): ComboboxChoice => ({ kind: "choice", option })),
-  ];
-  const selectedComboItem: ComboboxChoice | null =
-    selectedOption === null ? null : { kind: "choice", option: selectedOption };
   const described = describedBy(ids, help, error, note, draftFeedback);
   const ariaRequired = required || described["aria-required"] === true;
 
@@ -166,30 +148,23 @@ const comboItems: readonly ComboboxChoice[] = [
             <FieldLabelText label={label} required={required} />
           </label>
           <Combobox
-            items={comboItems}
-            value={selectedComboItem}
+            items={options}
+            value={selectedOption}
             inputValue={comboboxOpen ? searchTerm : (selectedOption?.label ?? "")}
             onOpenChange={(open) => {
               setComboboxOpen(open);
               setSearchTerm("");
             }}
             onInputValueChange={setSearchTerm}
-            onValueChange={(item) => change(item?.kind === "choice" ? item.option.key : null)}
-            itemToStringLabel={(item) =>
-              item.kind === "choice" ? item.option.label : item.label
-            }
-            itemToStringValue={(item) => (item.kind === "choice" ? item.option.key : "")}
-            isItemEqualToValue={(item, value) =>
-              item.kind === "choice" && value.kind === "choice"
-                ? item.option.key === value.option.key
-                : item.kind === value.kind
-            }
+            onValueChange={(item) => change(item?.key ?? null)}
+            itemToStringLabel={(item) => item.label}
+            itemToStringValue={(item) => item.key}
+            isItemEqualToValue={(item, value) => item.key === value.key}
             filter={(item, query) => {
               const normalizedQuery = query.trim().toLowerCase();
-              if (item.kind === "placeholder") return normalizedQuery.length === 0;
               return (
-                item.option.key === permittedSelected ||
-                item.option.label.toLowerCase().includes(normalizedQuery)
+                item.key === permittedSelected ||
+                item.label.toLowerCase().includes(normalizedQuery)
               );
             }}
             name={fieldKey}
@@ -206,32 +181,26 @@ const comboItems: readonly ComboboxChoice[] = [
                 aria-required={ariaRequired}
                 aria-invalid={error !== undefined}
               />
-              <ComboboxTrigger
-                aria-label={"Show " + label + " options"}
-                disabled={disabled}
-              />
-              <ComboboxClear
-                aria-label={"Clear " + label + " selection"}
-                disabled={disabled || selectedOption === null}
-              />
+              <ComboboxInputAddon>
+                <ComboboxTrigger
+                  aria-label={"Show " + label + " options"}
+                  disabled={disabled}
+                />
+                <ComboboxClear
+                  aria-label={"Clear " + label + " selection"}
+                  disabled={disabled || selectedOption === null}
+                />
+              </ComboboxInputAddon>
             </ComboboxInputGroup>
             <ComboboxContent>
               <ComboboxList>
-                {normalizedSearch.length === 0 ? (
-                  <ComboboxItem
-                    key={"placeholder:" + ids.control}
-                    value={comboItems[0]}
-                  >
-                    {placeholder}
+                {(item: ChoiceOption) => (
+                  <ComboboxItem key={item.key} value={item}>
+                    {item.label}
                   </ComboboxItem>
-                ) : null}
-                {filteredOptions.map((option) => (
-                  <ComboboxItem key={option.key} value={{ kind: "choice", option }}>
-                    {option.label}
-                  </ComboboxItem>
-                ))}
-                <ComboboxEmpty role="status">No matching options</ComboboxEmpty>
+                )}
               </ComboboxList>
+              <ComboboxEmpty role="status">No matching options</ComboboxEmpty>
             </ComboboxContent>
           </Combobox>
         </>
@@ -241,6 +210,10 @@ const comboItems: readonly ComboboxChoice[] = [
             <FieldLabelText label={label} required={required} />
           </label>
           <Select
+            items={[
+              { value: null, label: placeholder },
+              ...options.map((option) => ({ value: option.key, label: option.label })),
+            ]}
             value={permittedSelected}
             onValueChange={change}
             name={fieldKey}
@@ -258,6 +231,7 @@ const comboItems: readonly ComboboxChoice[] = [
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={null}>{placeholder}</SelectItem>
               {options.map((option) => (
                 <SelectItem key={option.key} value={option.key}>
                   {option.label}

@@ -12,8 +12,24 @@ const Combobox = ComboboxPrimitive.Root;
 function ComboboxInputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      data-slot="combobox-chips"
-      className={cn("cn-combobox-chips", className)}
+      data-slot="input-group"
+      role="group"
+      className={cn("cn-input-group group/input-group relative flex w-full min-w-0 items-center", className)}
+      {...props}
+    />
+  );
+}
+
+function ComboboxInputAddon({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="input-group-addon"
+      data-align="inline-end"
+      role="group"
+      className={cn(
+        "cn-input-group-addon cn-input-group-addon-align-inline-end flex items-center",
+        className,
+      )}
       {...props}
     />
   );
@@ -22,9 +38,9 @@ function ComboboxInputGroup({ className, ...props }: React.ComponentProps<"div">
 function ComboboxInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
   return (
     <ComboboxPrimitive.Input
-      data-slot="combobox-chip-input"
+      data-slot="input-group-control"
       className={cn(
-        "cn-combobox-chip-input cn-input min-w-0 flex-1 border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0",
+        "cn-input cn-input-group-input min-w-0 flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0",
         className,
       )}
       {...props}
@@ -36,8 +52,8 @@ function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Prop
   return (
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
-      render={<Button variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-trigger", className)}
+      render={<Button type="button" variant="ghost" size="icon-xs" />}
+      className={cn("cn-combobox-trigger cn-input-group-button cn-input-group-button-size-icon-xs", className)}
       {...props}
     >
       <ChevronDownIcon className="cn-combobox-trigger-icon" />
@@ -49,8 +65,8 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
   return (
     <ComboboxPrimitive.Clear
       data-slot="combobox-clear"
-      render={<Button variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-clear", className)}
+      render={<Button type="button" variant="ghost" size="icon-xs" />}
+      className={cn("cn-combobox-clear cn-input-group-button cn-input-group-button-size-icon-xs", className)}
       {...props}
     >
       <XIcon className="cn-combobox-clear-icon" />
@@ -95,8 +111,9 @@ function ComboboxContent({
       >
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
+          data-chips={!!anchor}
           className={cn(
-            "cn-combobox-content cn-combobox-content-aria cn-combobox-content-logical cn-menu-target cn-menu-translucent",
+            "cn-combobox-content cn-combobox-content-aria cn-combobox-content-logical cn-menu-target cn-menu-translucent group/combobox-content relative w-(--anchor-width) max-w-(--available-width)",
             className,
           )}
           {...props}
@@ -112,7 +129,7 @@ function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
   return (
     <ComboboxPrimitive.List
       data-slot="combobox-list"
-      className={cn("cn-combobox-list", className)}
+      className={cn("cn-combobox-list overscroll-contain", className)}
       {...props}
     />
   );
@@ -122,7 +139,10 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
   return (
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
-      className={cn("cn-combobox-item cn-combobox-item-aria relative flex items-center", className)}
+      className={cn(
+        "cn-combobox-item cn-combobox-item-aria relative flex w-full cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50",
+        className,
+      )}
       {...props}
     >
       <span className="cn-combobox-item-text">{children}</span>
@@ -151,6 +171,7 @@ export {
   ComboboxContent,
   ComboboxEmpty,
   ComboboxInput,
+  ComboboxInputAddon,
   ComboboxInputGroup,
   ComboboxItem,
   ComboboxList,
