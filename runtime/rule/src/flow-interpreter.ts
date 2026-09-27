@@ -80,6 +80,9 @@ export type FlowFailure = Readonly<{
 
 export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
 
+/** The page subject and revision the host supplied as evidence for this run. */
+export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
+
 type PathSegment = string | number;
 
 type Frame = Readonly<{
@@ -137,6 +140,8 @@ export type FlowRunState = Readonly<{
   runId: string;
   now: string;
   actor?: string;
+  /** The page record and revision the person saw; protected tasks still recheck access and revision. */
+  subject?: FlowSubject;
   /**
    * The record a run acts on, keyed by field key, for `trigger.record.<field>` reads. It is set only
    * by a host that runs a flow for one record (a named action's subject) and never comes from a flow.
@@ -200,6 +205,8 @@ export type FlowRunStart = Readonly<{
   inputs: Readonly<Record<string, unknown>>;
   now: string;
   actor?: string;
+  /** Page record evidence retained with the run across form and confirmation pauses. */
+  subject?: FlowSubject;
   /**
    * The execution kinds the host may start; interactive by default. A named action starts as a
    * `transaction` flow through its binding, driven by the host that owns the transaction.
@@ -893,6 +900,7 @@ export const startFlowRun = (start: FlowRunStart, library: FlowLibrary): FlowRun
     runId: start.runId,
     now: start.now,
     ...(start.actor === undefined ? {} : { actor: start.actor }),
+    ...(start.subject === undefined ? {} : { subject: start.subject }),
     activations: [],
     protectedOperations: 0,
     committedEffects: 0,

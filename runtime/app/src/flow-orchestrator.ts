@@ -43,11 +43,14 @@ import {
   type FlowRunResume,
   type FlowRunState,
   type FlowRunStep,
+  type FlowSubject,
   type FlowTaskOutcome,
 } from "@vortex/rule";
 import { z } from "zod";
 import type { FlowContinuationStore, FlowEffectLedger } from "./flow-continuation-store";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
+
+export type { FlowSubject };
 
 /**
  * The server orchestrator of the in-house flow engine (architecture decision 1, "Who drives a
@@ -67,6 +70,8 @@ import type { ProtectedOperationExecutor } from "./protected-operation-executor"
  * - A continuation is a random token whose hash keys one server-stored row bound to the run, the
  *   initiator, the organisation and the exact flow release. It expires, is handed back once, and a
  *   token that is unknown, expired, used, foreign or for another release is one neutral result.
+ * - The page subject and revision are kept in that server-stored run state as evidence. Protected
+ *   tasks recheck current read access and pass the same expected revision to the owning operation.
  * - The run limits are enforced here and in the interpreter: 100 For each items, 25 protected
  *   operations, 10 seconds of server time (across every resume) and a Run flow depth of 3.
  * - A task the platform cannot run yet fails with a located `not_yet_available` notice and the
@@ -117,14 +122,6 @@ export type FlowNamedAction = Readonly<{
   /** The record type the action runs on. */
   subjectRecordTypeId: string;
 }>;
-
-/**
- * The record a surface was rendered for: the page's own subject and the revision the person saw.
- * It is evidence, never authority. A Save record task or named action that uses it first verifies
- * current read access to the exact record type and identity, then passes the protected path's own
- * change or action permission and revision checks. A forged or stale subject cannot grant access.
- */
-export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
 
 /**
  * The protected save a Save record task runs through (#1369): the ordinary-human base save of the
@@ -225,7 +222,7 @@ const startRequestSchema = z
         inputs: z.record(z.string(), z.unknown()).default({}),
       })
       .strict(),
-    /** The surface's subject record, for the tasks of this segment only (see `FlowSubject`). */
+    /** The page record and revision the surface showed; it remains evidence across pauses. */
     subject: subjectSchema.optional(),
   })
   .strict();
@@ -466,11 +463,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      * nothing that carries one is stored or handed to another protected operation.
      */
     sensitive: string[];
-    /**
-     * The surface's subject record for this segment. It is never stored with a suspended run, so a
-     * resumed segment has none and a task that needs it is not available there.
-     */
-    subject?: FlowSubject;
   }>;
 
   const elapsedMilliseconds = (run: Run): number =>
@@ -607,7 +599,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (!recordId.success) return { outcome: "validation" };
       // A change is bound to the revision the person saw: the surface's subject. Without it the
       // change cannot be checked against what the person was shown, so it does not run.
-      const subject = run.subject;
+      const subject = state.subject;
       if (subject === undefined || subject.recordId.toLowerCase() !== recordId.data.toLowerCase())
         return notAvailable(run, call, "the revision of the record the page shows");
       if (dependencies.subjects === undefined)
@@ -645,7 +637,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       typeof operationKey === "string" ? run.release.namedActions?.get(operationKey) : undefined;
     if (named === undefined || dependencies.actionRecords === undefined)
       return notAvailable(run, call, "a registered protected operation");
-    if (run.subject === undefined)
+    if (state.subject === undefined)
       return notAvailable(run, call, "the record the action runs on");
     if (dependencies.subjects === undefined)
       return notAvailable(run, call, "a protected read of the page's record");
@@ -654,8 +646,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       commandId,
       action: named.action,
       recordTypeId: named.subjectRecordTypeId,
-      recordId: run.subject.recordId,
-      expectedConcurrencyNumber: run.subject.revision,
+      recordId: state.subject.recordId,
+      expectedConcurrencyNumber: state.subject.revision,
       inputs,
     });
     return command.success
@@ -670,8 +662,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     call: FlowProtectedTaskCall,
     plan: TaskPlan,
   ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
-    // The subject is supplied by the browser. A fresh read under this initiator's request scope
-    // verifies the exact record type and identity before either protected change is attempted.
+    // The page subject is retained as run evidence. A fresh read under this initiator's request
+    // scope verifies the exact record type and identity before either protected change is attempted.
     // The record service still checks change or action permission inside its own transaction.
     const target =
       plan.kind === "action"
@@ -981,7 +973,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           segmentStart: clock(),
           unavailable: [],
           sensitive: [],
-          ...(subject === undefined ? {} : { subject }),
         };
         const first = startFlowRun(
           {
@@ -990,6 +981,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             inputs: binding.inputs,
             now: now().toISOString(),
             ...(actor === undefined ? {} : { actor }),
+            ...(subject === undefined ? {} : { subject }),
           },
           run.library,
         );
@@ -1028,6 +1020,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const state = stored.state as FlowRunState;
         // The stored run must be the run the row is bound to; anything else is never resumed.
         if (!isRecord(state) || state.runId !== stored.runId) return refused;
+        if (!subjectSchema.optional().safeParse(state.subject).success) return refused;
         if (expectation !== undefined) {
           const paused = state.awaiting;
           if (
