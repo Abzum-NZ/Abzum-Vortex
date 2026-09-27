@@ -5,10 +5,11 @@ import {
   identitySessionCookieProfile,
 } from "../_lib/session-cookie";
 import { requestMatchesConfiguredSite } from "../_lib/session-request-state";
+import { revokeIdentitySession } from "../_lib/session-server";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
 
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   // The destination is a fixed path on the configured site URL, never on `request.url`: Next dev
   // reports a loopback request as localhost while the configured origin is 127.0.0.1, and the
   // proxy's site match would then fail. The configured value is trusted, so this stays closed
@@ -33,6 +34,13 @@ export function GET(request: NextRequest): NextResponse {
   if (siteUrl === undefined) return response;
   try {
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
+    // The session is ended at the provider too, so its refresh token cannot be replayed after the
+    // cookies are gone. The revocation is limited to this browser's own session: a request another
+    // site triggers can do no more than the cookie clearing below already does, which is to sign
+    // this browser out.
+    await revokeIdentitySession(
+      request.cookies.getAll().map(({ name, value }) => ({ name, value })),
+    );
     const profile = identitySessionCookieProfile(siteUrl);
     for (const mutation of identitySessionCookieDeletions(profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
