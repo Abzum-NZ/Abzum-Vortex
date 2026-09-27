@@ -32,6 +32,7 @@ import {
   suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
   duplicateProtectionKeySchema,
+  executionAuthorityContextSchema,
   flowTaskRegistry,
   workflowNodeIdSchema,
   workflowRunIdSchema,
@@ -39,6 +40,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   type IdentitySession,
+  type ExecutionAuthorityContext,
   type JsonValue,
   type OrganizationSelectionCandidate,
   type PlatformServiceOperationKey,
@@ -98,13 +100,18 @@ export type ProtectedOperationEffectKey = Readonly<{
   iteration: string;
 }>;
 
-export type ProtectedOperationExecutionRequest = Readonly<{
+type ProtectedOperationExecutionRequestBase = Readonly<{
   operation: ProtectedOperationIdentity;
-  session: IdentitySession;
   selection: OrganizationSelectionCandidate;
   inputs: Readonly<Record<string, unknown>>;
   effectKey?: ProtectedOperationEffectKey;
 }>;
+
+export type ProtectedOperationExecutionRequest =
+  | (ProtectedOperationExecutionRequestBase &
+      Readonly<{ session: IdentitySession; executionAuthorityContext?: never }>)
+  | (ProtectedOperationExecutionRequestBase &
+      Readonly<{ session?: never; executionAuthorityContext: ExecutionAuthorityContext }>);
 
 /** A durable callback names a published operation and its verified run context, never a session. */
 export type DurableProtectedOperationExecutionRequest = Readonly<{
@@ -954,6 +961,11 @@ export const createProtectedOperationExecutor = (
   ): Promise<ProtectedOperationExecution> => {
     try {
       const identity = protectedOperationIdentitySchema.safeParse(request.operation);
+      if (request.executionAuthorityContext !== undefined) {
+        // The person-session executor must never downgrade a non-person authority.
+        executionAuthorityContextSchema.safeParse(request.executionAuthorityContext);
+        return { outcome: "refused" };
+      }
       const session = identitySessionSchema.safeParse(request.session);
       const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
       if (!identity.success || !session.success || !selection.success)

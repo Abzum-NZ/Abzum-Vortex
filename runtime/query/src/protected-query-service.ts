@@ -3,13 +3,16 @@ import "server-only";
 import { z } from "zod";
 import {
   sameId,
+  executionAuthorityContextSchema,
   fieldIdSchema,
+  identitySessionSchema,
   jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
+  type ExecutionAuthorityContext,
   type JsonValue,
   type ActiveApplicationInstallationEvidence,
   type OrganizationSelectionCandidate,
@@ -697,10 +700,15 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
 
   return Object.freeze({
     async run(
-      session: IdentitySession,
+      caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
+      // Do not turn a non-person authority into a person session on this adapter.
+      if (executionAuthorityContextSchema.safeParse(caller).success)
+        return { kind: "unavailable" };
+      const session = identitySessionSchema.safeParse(caller);
+      if (!session.success) return { kind: "unavailable" };
       const command = protectedQueryCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "available", value: refusal("request_invalid") };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
@@ -712,9 +720,9 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
               resolveContext: resolveQueryCacheContext,
               now,
               // Verified by the request service before this operation runs.
-              sessionExpiresAt: session.accessTokenExpiresAt,
+              sessionExpiresAt: session.data.accessTokenExpiresAt,
             };
-      return requests.run(session, selection, (transaction, scope) =>
+      return requests.run(session.data, selection, (transaction, scope) =>
         runCommand(transaction, scope, command.data, continuationKey, cache),
       );
     },

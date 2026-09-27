@@ -6,13 +6,16 @@ import {
   applicationRootIdSchema,
   databaseRevision,
   eventOccurrenceIdSchema,
+  executionAuthorityContextSchema,
   fieldIdSchema,
+  identitySessionSchema,
   organizationRuntimeSettingsSchema,
   recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
   writableSystemProjectionRegistrations,
   type IdentitySession,
+  type ExecutionAuthorityContext,
   type JsonValue,
   type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
@@ -717,10 +720,15 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
 
   return Object.freeze({
     async save(
-      session: IdentitySession,
+      caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<RecordSaveServiceResult> {
+      // Do not turn a non-person authority into a person session on this adapter.
+      if (executionAuthorityContextSchema.safeParse(caller).success)
+        return { kind: "unavailable" };
+      const session = identitySessionSchema.safeParse(caller);
+      if (!session.success) return { kind: "unavailable" };
       const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
@@ -735,7 +743,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const attempted: { rules?: BeforeSaveRuleExecution } = {};
         const result = await requests.runChange(
-          session,
+          session.data,
           selection,
           async (transaction, _scope, issuedAt) => {
             const totalPreparation = await prepareRelationshipTotals(
