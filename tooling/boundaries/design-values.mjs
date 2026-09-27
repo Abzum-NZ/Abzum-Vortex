@@ -15,9 +15,12 @@ const skippedDirectories = new Set([
   "__generated__",
   "__tests__",
 ]);
-const styleDirectoryPattern = /(?:^|\/)(?:style|styles|theme|themes)(?:\/|$)/i;
-const styleFilePattern = /(?:^|\/)(?:styles?|[^/]+[-.]styles?|[^/]+styles?)\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
-const themeFilePattern = /(?:^|\/)(?:theme[^/]*|[^/]+-theme)\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
+const styleFilePattern = /(?:^|\/)(?:styles?|[^/]+[-.]styles?)\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
+const themeSourceFiles = new Set([
+  "ui/src/theme/theme-variables.ts",
+  "ui/src/theme/theme-styles.ts",
+  "ui/src/theme/vortex-style.ts",
+]);
 const generatedFilePattern = /^(?:generated(?:[-.][^/]+)?|.*[._-](?:generated|gen))\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
 const testFilePattern = /(?:^|[.-])(?:test|spec)\.(?:cjs|js|jsx|mjs|ts|tsx)$/i;
 const generatedHeaderPattern =
@@ -26,7 +29,8 @@ const colorFunctionPattern = /\b(?:rgba|rgb|oklch)\s*\(/giu;
 const hexColorPattern = /(?<![\w-])#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})(?![\w-])/giu;
 const pixelValuePattern = /(?<![\w.])[-+]?(?:\d+(?:\.\d*)?|\.\d+)px\b/giu;
 const styleCallPattern = /\b(?:cn|cx|clsx|classNames|classnames|twMerge|cva|tv|tailwindVariants|keyframes|createGlobalStyle)\s*\(/giu;
-const designVariablePattern = /(?:^|_)(?:accent|background|bg|border|color|colour|css|destructive|dimension|fill|font|foreground|gap|height|margin|muted|offset|padding|position|primary|radius|ring|secondary|shadow|size|spacing|stroke|style|surface|transform|width)(?:_|$)/u;
+const tailwindArbitraryValuePattern = /(?:^|:)(?:aspect|basis|bg|blur|border(?:-[trblxy])?|bottom|drop-shadow|duration|ease|fill|font|gap(?:-[xy])?|grid-(?:cols|rows)|h|inset(?:-[xy])?|leading|left|m[trblxy]?|max-[hw]|min-[hw]|outline|opacity|p[trblxy]?|right|ring|rounded|scale|shadow|size|space-[xy]|stroke|text|top|tracking|translate-[xy]|w|z)-$/u;
+const designVariablePattern = /(?:^|_)(?:accent|background|bg|border|color|colors|colour|colours|css|destructive|dimension|fill|font|foreground|gap|height|margin|muted|offset|padding|palette|position|primary|radius|ring|secondary|shadow|size|spacing|stroke|style|surface|transform|width)(?:_|$)/u;
 const namedColorVariablePattern = /^(?:black|blue|cyan|gray|green|grey|magenta|orange|pink|purple|red|teal|white|yellow)$/iu;
 
 function blankRange(characters, start, end) {
@@ -137,17 +141,17 @@ function braceIsOpen(source, opening, end) {
   return depth > 0;
 }
 
-function isInsideStyleObject(code, position) {
+function isInsideDesignObject(code, position, kind, identifiers) {
   const patterns = [
-    { pattern: /\bstyle\s*(?:=|:)\s*\{/giu, requireStyleName: false },
-    { pattern: /\b(?:const|let|var)\s+([\w$]+)\s*=\s*\{/giu, requireStyleName: true },
+    { pattern: /(?<![\w-])style\s*(?:=|:)\s*\{/giu, namedVariable: false },
+    { pattern: /\b(?:const|let|var)\s+([\w$]+)(?:\s*:\s*[^=;]+)?\s*=\s*\{/giu, namedVariable: true },
   ];
-  for (const { pattern, requireStyleName } of patterns) {
+  for (const { pattern, namedVariable } of patterns) {
     for (const match of code.matchAll(pattern)) {
       if (match.index >= position) break;
-      if (requireStyleName) {
-        const name = match[1].replace(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`).toLowerCase();
-        if (!/(?:^|_)(?:style|styles|css|appearance)(?:_|$)/u.test(name)) continue;
+      if (namedVariable) {
+        const name = normalizedName(match[1]);
+        if (!isDesignVariable(name, kind) && !identifiers.has(match[1]) && !/(?:^|_)(?:styles|appearance)(?:_|$)/u.test(name)) continue;
       }
       const opening = match.index + match[0].lastIndexOf("{");
       if (braceIsOpen(code, opening, position)) return true;
@@ -158,7 +162,7 @@ function isInsideStyleObject(code, position) {
 
 function styledIdentifiers(code) {
   const identifiers = new Set();
-  const attributePattern = /\b(?:className|class|style)\s*=\s*\{([^}]*)/giu;
+  const attributePattern = /(?<![\w-])(?:className|class|style)\s*=\s*\{([^}]*)/giu;
   const identifierPattern = /\b[A-Za-z_$][\w$]*\b/gu;
   const keywords = new Set(["class", "className", "false", "style", "true"]);
   for (const match of code.matchAll(attributePattern)) {
@@ -182,7 +186,7 @@ function isInsideTailwindValue(view, span, index) {
   const closing = view.lastIndexOf("]", index);
   if (opening < tokenStart || opening <= closing) return false;
   const prefix = view.slice(tokenStart, opening);
-  return /(?:^|:)(?:[\w-]+-|\[--[\w-]+:)\s*$/u.test(prefix);
+  return tailwindArbitraryValuePattern.test(prefix);
 }
 
 function isInsideStyleCall(code, position) {
@@ -219,12 +223,12 @@ function isDesignVariable(name, kind) {
 
 function hasStyleAttribute(code, position) {
   const prefix = code.slice(0, position);
-  return /\b(?:style|fill|stroke|strokeWidth|color|width|height)\s*=\s*\{?\s*$/iu.test(prefix);
+  return /(?<![\w-])(?:style|fill|stroke|strokeWidth|color|width|height)\s*=\s*\{?\s*$/iu.test(prefix);
 }
 
 function hasClassAttribute(code, position) {
   const prefix = code.slice(0, position);
-  return /\b(?:className|class)\s*=\s*\{?\s*$/iu.test(prefix);
+  return /(?<![\w-])(?:className|class)\s*=\s*\{?\s*$/iu.test(prefix);
 }
 
 function isClassVariable(name) {
@@ -235,15 +239,6 @@ function hasCssDeclaration(text, index) {
   const boundary = Math.max(text.lastIndexOf(";", index), text.lastIndexOf("{", index), text.lastIndexOf("}", index));
   const segment = text.slice(boundary + 1, index);
   return /^\s*(?:--)?[A-Za-z][\w-]*\s*:\s*[^;{}]*$/u.test(segment);
-}
-
-function isCssString(code, span) {
-  if (span && code[span.start] === "`") {
-    const prefix = code.slice(0, span.start);
-    if (/\b(?:css|keyframes|createGlobalStyle|styled(?:\.[\w$]+)?)\s*$/iu.test(prefix)) return true;
-  }
-  const variable = declaredVariable(code, span?.start ?? 0);
-  return Boolean(variable && /(?:^|_)(?:css|style|styles)(?:_|$)/u.test(normalizedName(variable)));
 }
 
 function isDesignContext({ code, view, span, index, kind, identifiers }) {
@@ -257,9 +252,9 @@ function isDesignContext({ code, view, span, index, kind, identifiers }) {
   }
   const variable = declaredVariable(code, position);
   if (variable && (isClassVariable(variable) || identifiers.has(variable))) return true;
-  if (hasStyleAttribute(code, position) || isInsideStyleObject(code, position)) return true;
+  if (hasStyleAttribute(code, position) || isInsideDesignObject(code, position, kind, identifiers)) return true;
   if (variable && isDesignVariable(variable, kind)) return true;
-  if (span && isCssString(code, span) && hasCssDeclaration(view.slice(span.contentStart, index), index - span.contentStart)) {
+  if (span && hasCssDeclaration(view.slice(span.contentStart, index), index - span.contentStart)) {
     return true;
   }
   return false;
@@ -303,9 +298,8 @@ function shouldSkipFile(relativePath, entryName) {
   const normalized = relativePath.replace(/\\/gu, "/");
   return (
     entryName.endsWith(".d.ts") ||
-    styleDirectoryPattern.test(normalized) ||
     styleFilePattern.test(normalized) ||
-    themeFilePattern.test(normalized) ||
+    themeSourceFiles.has(normalized) ||
     generatedFilePattern.test(entryName) ||
     testFilePattern.test(entryName) ||
     /(?:^|\/)__(?:tests|generated)__(?:\/|$)/iu.test(normalized)
@@ -382,6 +376,7 @@ async function loadBaseline(root) {
       !entry ||
       typeof entry.file !== "string" ||
       !Number.isInteger(entry.line) ||
+      entry.line < 1 ||
       typeof entry.source !== "string" ||
       typeof entry.value !== "string"
     ) {
@@ -406,6 +401,12 @@ export async function validateDesignValues(root) {
     const remaining = baseline.get(key) ?? 0;
     if (remaining > 0) baseline.set(key, remaining - 1);
     else errors.push(`${occurrence.file}:${occurrence.line} contains hard-coded design value ${JSON.stringify(occurrence.value)}`);
+  }
+  for (const [key, remaining] of baseline) {
+    if (remaining > 0) {
+      const [file, line, , value] = JSON.parse(key);
+      errors.push(`${file}:${line} has ${remaining} obsolete design-value exception(s) for ${JSON.stringify(value)}`);
+    }
   }
   return errors;
 }
