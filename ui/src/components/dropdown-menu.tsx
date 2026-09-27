@@ -26,6 +26,21 @@ function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
   return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
 }
 
+function useMenuColor(): string | undefined {
+  const element = useVortexStylePortalRoot()?.element;
+  const subscribe = React.useCallback(
+    (onChange: () => void) => {
+      if (element === null || element === undefined) return () => {};
+      const observer = new MutationObserver(onChange);
+      observer.observe(element, { attributes: true, attributeFilter: ["data-vortex-menu"] });
+      return () => observer.disconnect();
+    },
+    [element],
+  );
+  const getSnapshot = React.useCallback(() => element?.dataset.vortexMenu, [element]);
+  return React.useSyncExternalStore(subscribe, getSnapshot, () => undefined);
+}
+
 function DropdownMenuContent({
   align = "start",
   alignOffset = 0,
@@ -35,6 +50,8 @@ function DropdownMenuContent({
   ...props
 }: MenuPrimitive.Popup.Props &
   Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+  const menu = useMenuColor();
+  const translucent = menu === "default-translucent" || menu === "inverted-translucent";
   return (
     <DropdownMenuPortal>
       <MenuPrimitive.Positioner
@@ -47,7 +64,8 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "cn-dropdown-menu-content cn-dropdown-menu-content-logical cn-menu-target cn-menu-translucent z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
+            "cn-dropdown-menu-content cn-dropdown-menu-content-logical cn-menu-target z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
+            translucent && "cn-menu-translucent",
             className,
           )}
           {...props}
@@ -141,7 +159,7 @@ function DropdownMenuSubContent({
     <DropdownMenuContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "cn-dropdown-menu-sub-content cn-dropdown-menu-subcontent cn-menu-target cn-menu-translucent w-auto",
+        "cn-dropdown-menu-sub-content cn-dropdown-menu-subcontent cn-menu-target w-auto",
         className,
       )}
       align={align}
