@@ -89,8 +89,8 @@ route URL and credential as the protected Coolify inputs `VORTEX_RUNTIME_BUNDLE_
 and `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64`, and configure its lowercase SHA-256 digest
 in the Vercel server-side environment as `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256`.
 
-The same route credential authenticates the normal database-webhook hint: the database server
-carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
+The event-dispatch route credential also authenticates the normal database-webhook hint. The database
+server carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
 only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. Database sessions can read
 that setting, so the credential must authorise nothing beyond the bounded dispatcher wake-up. The
 database hint is installed by the `20260923173000_event_dispatch_wakeup` migration, reads
