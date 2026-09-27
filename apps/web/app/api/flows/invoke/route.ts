@@ -420,6 +420,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const proof = submitted[guidedFormConfirmationKey];
         const reference = guidedFormConfirmationReference(proof);
         if (reference === undefined) return undefined;
+        if (!(await verifiesGuidedFormConfirmation(proof, {
+          pageId: guided.pageId,
+          flowId: guided.flowId,
+          sessionId: identity.session.sessionId,
+          identityId: identity.session.identityId,
+          organizationId: address.read.organizationId,
+          applicationRootId: address.application.applicationRootId,
+          ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
+        }))) return undefined;
         const page = await loadApplicationPage(identity.session, {
           tenantShortName: body.tenantShortName,
           organizationShortName: body.organizationShortName,
@@ -449,15 +458,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               held.event === "form_submit" &&
               held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase()))
           return undefined;
-        if (!(await verifiesGuidedFormConfirmation(proof, {
-          pageId: guided.pageId,
-          flowId: guided.flowId,
-          sessionId: identity.session.sessionId,
-          identityId: identity.session.identityId,
-          organizationId: address.read.organizationId,
-          applicationRootId: address.application.applicationRootId,
-          ...(model.subject === undefined ? {} : { subjectRecordId: model.subject.recordId }),
-        }))) return undefined;
         return adaptFormSubmit(binding, { values: draft.values }, subject);
       },
       continueForm,
