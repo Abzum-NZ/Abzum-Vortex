@@ -119,6 +119,13 @@ export type ProtectedOperationValue = JsonValue;
 /** The safe results the executor itself can report. */
 export type ProtectedOperationExecution =
   | Readonly<{
+      outcome: "completed" | "committed";
+      outputs: Readonly<Record<string, ProtectedOperationValue>>;
+    }>
+  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
+
+type DurableProtectedOperationExecution =
+  | Readonly<{
       outcome: "committed";
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
     }>
@@ -986,7 +993,12 @@ export const createProtectedOperationExecutor = (
       if (result.kind === "unavailable") return { outcome: "refused" };
       if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
       const outputs = declaredOutputs(registered.descriptor, result.value);
-      return outputs === undefined ? { outcome: "failed" } : { outcome: "committed", outputs };
+      if (outputs === undefined) return { outcome: "failed" };
+      // A successful read supplies data to later tasks without counting as a saved effect.
+      return {
+        outcome: registered.descriptor.effect === "read" ? "completed" : "committed",
+        outputs,
+      };
     } catch {
       return { outcome: "failed" };
     }
@@ -997,7 +1009,7 @@ export const createProtectedOperationExecutor = (
   return Object.freeze({
     /**
      * Runs one registered protected operation as the initiator. It never throws: every failure is
-     * one of the safe results, and only a committed result carries outputs.
+     * one of the safe results, and only a successful result carries outputs.
      */
     execute,
 
@@ -1011,7 +1023,7 @@ export const createProtectedOperationExecutor = (
       request: DurableProtectedOperationExecutionRequest & Readonly<{
         effect: (
           transaction: RequestDatabaseTransaction,
-          executeOperation: () => Promise<ProtectedOperationExecution>,
+          executeOperation: () => Promise<DurableProtectedOperationExecution>,
         ) => Promise<Result>;
       }>,
     ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
@@ -1062,10 +1074,10 @@ export const createProtectedOperationExecutor = (
               applicationRootId: scope.applicationRootId,
             });
             let called = false;
-            return request.effect(transaction, () => {
+            return request.effect(transaction, async (): Promise<DurableProtectedOperationExecution> => {
               if (called) throw new Error("DURABLE_OPERATION_REPEATED");
               called = true;
-              return executeWith(durableOperations(transaction, scope), {
+              const result = await executeWith(durableOperations(transaction, scope), {
                 operation: identity.data,
                 session,
                 selection,
@@ -1076,6 +1088,9 @@ export const createProtectedOperationExecutor = (
                   iteration: context.data.purpose.duplicateProtectionKey,
                 },
               });
+              // The durable workflow effect ledger records successful reads as completed steps.
+              if ("outputs" in result) return { outcome: "committed", outputs: result.outputs };
+              return result;
             });
           },
         );
