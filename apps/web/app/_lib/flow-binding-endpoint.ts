@@ -8,6 +8,8 @@ import {
   formContinuationTargetSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
+  recordIdSchema,
+  revisionSchema,
   safeFlowResultDescriptors,
   type ComponentFlowBinding,
   type FormContinuationOutcome,
@@ -20,10 +22,13 @@ import {
   type SafeFlowResultDescriptor,
 } from "@vortex/contracts";
 import type {
+  FlowNamedAction,
   FlowOrchestrator,
   FlowOrchestratorResponse,
+  FlowRecordType,
   FlowRelease,
   FlowRunExpectation,
+  FlowSubject,
   FlowUnavailableNotice,
 } from "@vortex/app";
 import { z } from "zod";
@@ -53,6 +58,9 @@ import { z } from "zod";
  * - One click runs the flow once. The run identity is derived from the initiator, organisation,
  *   binding and click identity, so a repeated request for the same click reaches the same run and
  *   the effect ledger replays its recorded outcome instead of repeating an effect.
+ * - The surface may name the record it was rendered for, with the revision it showed. That subject
+ *   is evidence for the run's record tasks and named actions, never authority: the protected record
+ *   paths decide access, record type and revision for it themselves.
  * - The orchestrator does the running. This module never executes a task itself and never throws.
  */
 
@@ -72,6 +80,14 @@ const bindingInvocationSchema = z
     clickId: z.uuid(),
     /** The values the surface itself supplies, by the name of the binding's `caller` input. */
     callerInputs: z.record(z.string().min(1).max(100), z.unknown()).default({}),
+    /** The record the surface was rendered for and the revision it showed (evidence only). */
+    subject: z
+      .object({
+        recordId: recordIdSchema,
+        revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -126,6 +142,10 @@ export type InstalledFlowBindings = Readonly<{
   releaseKey: string;
   bindings: readonly ComponentFlowBinding[];
   flows: ReadonlyMap<string, unknown>;
+  /** The release's record types, for the values of a Save record task. */
+  recordTypes?: ReadonlyMap<string, FlowRecordType>;
+  /** The release's named actions by key, for a Call protected operation task that names one. */
+  namedActions?: ReadonlyMap<string, FlowNamedAction>;
 }>;
 
 export type FlowBindingEndpointDependencies = Readonly<{
@@ -144,12 +164,14 @@ export type FlowBindingEndpointDependencies = Readonly<{
   ) => Pick<FlowOrchestrator, "start" | "resume">;
   /**
    * THE SEAM for #588's form-submit adapter (`createPrivateFormSubmitAdapter`): turns what a form
-   * submission supplies into the caller inputs of a `form_submit` binding. Until it is supplied a
-   * `form_submit` binding is refused, so there is never a second, ad hoc submit path.
+   * submission supplies, and the record the form was rendered for, into the caller inputs of a
+   * `form_submit` binding. Until it is supplied a `form_submit` binding is refused, so there is
+   * never a second, ad hoc submit path.
    */
   adaptFormSubmit?: (
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
+    subject: FlowSubject | undefined,
   ) => Promise<Readonly<Record<string, unknown>> | undefined>;
   /**
    * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
@@ -432,6 +454,12 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,
           flows: installation.flows,
+          ...(installation.recordTypes === undefined
+            ? {}
+            : { recordTypes: installation.recordTypes }),
+          ...(installation.namedActions === undefined
+            ? {}
+            : { namedActions: installation.namedActions }),
         };
 
         if (request.kind === "continuation") {
@@ -493,7 +521,11 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {
-          const adapted = await dependencies.adaptFormSubmit?.(binding, callerInputs);
+          const adapted = await dependencies.adaptFormSubmit?.(
+            binding,
+            callerInputs,
+            request.subject,
+          );
           if (adapted === undefined || !isRecord(adapted)) return refused;
           callerInputs = adapted;
         }
@@ -511,6 +543,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           session: session.data,
           selection: selection.data,
           binding: { flowId: binding.flow.flowId, inputs },
+          ...(request.subject === undefined ? {} : { subject: request.subject }),
         });
         return toResult(response, {
           applicationRootId: installation.applicationRootId,

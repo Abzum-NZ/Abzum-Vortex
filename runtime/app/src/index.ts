@@ -191,14 +191,18 @@ export {
   flowContinuationLifetimeSeconds,
   type FlowOrchestrator,
   type FlowOrchestratorDependencies,
+  type FlowNamedAction,
   type FlowOrchestratorResponse,
+  type FlowRecordType,
   type FlowRelease,
   type FlowRunExpectation,
   type FlowResumeRequest,
   type FlowStartRequest,
+  type FlowSubject,
   type FlowUnavailableNotice,
   type NamedActionExecutionResult,
   type NamedActionRecordPort,
+  type RecordSaveTaskPort,
 } from "./flow-orchestrator";
 
 export {
