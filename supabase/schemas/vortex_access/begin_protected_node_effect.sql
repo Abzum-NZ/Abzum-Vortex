@@ -1,4 +1,4 @@
-create or replace function vortex_workflow.begin_protected_node_effect(
+create or replace function vortex_access.begin_protected_node_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -51,13 +51,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_workflow.begin_protected_node_effect(
+revoke all on function vortex_access.begin_protected_node_effect(
   uuid, uuid, uuid, text, text, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_workflow.begin_protected_node_effect(
+grant execute on function vortex_access.begin_protected_node_effect(
   uuid, uuid, uuid, text, text, text
 ) to vortex_request;
-comment on function vortex_workflow.begin_protected_node_effect(
+comment on function vortex_access.begin_protected_node_effect(
   uuid, uuid, uuid, text, text, text
 ) is
   'Claims a protected node effect only for the exact retained run, node and durable human request context, locking the run until the callback transaction finishes.';

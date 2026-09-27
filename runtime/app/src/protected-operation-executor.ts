@@ -1049,7 +1049,7 @@ export const createProtectedOperationExecutor = (
                 scope.actor.kind !== "organization_account" ||
                 scope.actor.organizationAccountId.toLowerCase() !==
                   policy.initiator.organizationAccountId.toLowerCase())
-              throw new Error("DURABLE_OPERATION_ACTOR_MISMATCH");
+              throw Object.assign(new Error("DURABLE_OPERATION_ACTOR_MISMATCH"), { code: "42501" });
             const session = identitySessionSchema.parse({
               identityId: policy.initiator.identityId,
               sessionId: context.data.purpose.runId,

@@ -120,7 +120,7 @@ export const createDatabaseProtectedNodeEffectLedger = (): ProtectedNodeEffectLe
     },
     async begin(transaction, key, operationKey) {
       const rows = await transaction.query<DatabaseRow & { result: unknown }>`
-        select vortex_workflow.begin_protected_node_effect(
+        select vortex_access.begin_protected_node_effect(
           ${key.runId}::uuid,
           ${key.organizationId}::uuid,
           ${key.identityId}::uuid,
@@ -134,7 +134,7 @@ export const createDatabaseProtectedNodeEffectLedger = (): ProtectedNodeEffectLe
     },
     async complete(transaction, key, outcome, outputs) {
       const rows = await transaction.query<DatabaseRow & { completed: unknown }>`
-        select vortex_workflow.complete_protected_node_effect(
+        select vortex_access.complete_protected_node_effect(
           ${key.runId}::uuid,
           ${key.organizationId}::uuid,
           ${key.identityId}::uuid,

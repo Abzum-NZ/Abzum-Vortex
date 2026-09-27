@@ -426,9 +426,9 @@ const callbackBinding = (
 
 /**
  * One generic protected callback carrying the signed envelope binding and the
- * fixed JSON binding. The callback plugin receives any typed runtime values in
- * their own fields and includes them in the signed request; the static binding
- * stays raw-wrapped so builder text is never evaluated as template text.
+ * fixed JSON binding. The #1442 callback plugin will place the typed `inputs`
+ * and `runtimeScope` values into the signed request. The static binding stays
+ * raw-wrapped so builder text is never evaluated as template text.
  */
 const protectedCallbackTask = (
   ctx: CallbackContext,

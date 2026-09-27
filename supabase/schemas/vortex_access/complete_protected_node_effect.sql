@@ -1,4 +1,4 @@
-create or replace function vortex_workflow.complete_protected_node_effect(
+create or replace function vortex_access.complete_protected_node_effect(
   p_run_id uuid,
   p_organization_id uuid,
   p_identity_id uuid,
@@ -41,13 +41,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_workflow.complete_protected_node_effect(
+revoke all on function vortex_access.complete_protected_node_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_workflow.complete_protected_node_effect(
+grant execute on function vortex_access.complete_protected_node_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) to vortex_request;
-comment on function vortex_workflow.complete_protected_node_effect(
+comment on function vortex_access.complete_protected_node_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) is
   'Records the safe response of a claimed protected node effect in the same durable actor transaction as its operation.';

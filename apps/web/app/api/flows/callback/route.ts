@@ -155,7 +155,7 @@ const createCallbackService = () => {
           transaction: RequestDatabaseTransaction,
           scope: ResolvedScope,
         ) => Promise<Result>): Promise<Result> =>
-          operation(transaction, selectedScope as ResolvedScope);
+          operation(transaction, selectedScope as unknown as ResolvedScope);
       return createServices(resolvedRequestTransaction);
     },
     durableActorRequest: createDurableActorRequestService({ identityAuthorityId }),
