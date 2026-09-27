@@ -152,11 +152,15 @@ instance with Vortex's operational secrets. Two separate instances exist:
 | Application | `workflows/kestra/application/` | Customer durable flows and exactly one flow secret, the callback signing key |
 
 The application instance's environment holds exactly one flow secret,
-`VORTEX_WORKFLOW_CALLBACK_KEY`. It holds no delivery, database or provider secret: the delivery
-webhook keys, the Testing and Production Doppler tokens and the event-dispatch credential above
-exist only in this operations instance. Its own PostgreSQL password and interface basic-auth
-password are engine bootstrap values supplied from the deployment environment through
-`KESTRA_CONFIGURATION`. They are not flow secrets and no instance variable carries the `ENV_` prefix,
+`VORTEX_WORKFLOW_CALLBACK_KEY`. The application image is the pinned Kestra image with the
+reviewed `ProtectedCallback` plugin bundled from `application/plugin/`. It also receives the
+non-secret `VORTEX_PROTECTED_CALLBACK_URL`, which names only the fixed Vortex callback route and
+is read by the plugin code rather than exposed to flow templates. The instance holds no delivery,
+database or provider secret: the delivery webhook keys, the Testing and Production Doppler tokens
+and the event-dispatch credential above exist only in this operations instance. Its own PostgreSQL
+password and interface basic-auth password are engine bootstrap values supplied by the deployment
+environment through `KESTRA_CONFIGURATION`. They are not flow secrets and no instance variable
+carries the `ENV_` prefix,
 so neither Kestra's secret lookup nor its environment variables expose them to a flow definition.
 The application instance bakes no operational flow or script and starts with no `--flow-path`.
 
@@ -166,6 +170,12 @@ reach its state database, so it could read those bootstrap values. Vortex compil
 only to the generic protected-operation callback task, and a package script must not run on this
 instance until it has a sandboxed task runner that sees only its declared inputs and the callback
 key.
+
+`VORTEX_PROTECTED_CALLBACK_URL` must be the absolute HTTPS URL of `/api/flows/callback`; local
+development may use that path on `localhost` over HTTP. The start dispatcher supplies the Vortex
+run UUID as the `vortex_run_id` execution label. The callback plugin refuses a missing or malformed
+run label, signs the exact endpoint request fields with the callback key, disables HTTP redirects,
+and returns only the endpoint's declared evaluator value or protected-operation result.
 
 The Workflow service's registration and start adapters resolve their provider target only through
 `runtime/workflow/src/kestra-instance.ts`, which knows only the application instance, reads its
