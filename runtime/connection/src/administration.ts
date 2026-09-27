@@ -117,6 +117,13 @@ const refusalMessages: Readonly<Record<ConnectionAdministrationRefusalCode, stri
 const refuse = (reasonCode: ConnectionAdministrationRefusalCode): ConnectionAdministrationResult =>
   Object.freeze({ outcome: "refused", reasonCode, message: refusalMessages[reasonCode] });
 
+const noAdapterAvailable = (): ConnectionAdministrationResult =>
+  Object.freeze({
+    outcome: "refused",
+    reasonCode: "connection_unavailable",
+    message: "No adapter available",
+  });
+
 class SecretStoreFailure extends Error {}
 
 /** Maps a database failure to a fixed code by SQLSTATE only; the message is never read. */
@@ -268,17 +275,9 @@ async function applyCommand(
       return applied(input.command, input.connectionInstanceId, revision);
     }
     case "health_check": {
-      const rows = await transaction.query<WriteRow>`
-        select
-          vortex_connection.record_connection_health_check_for_administration(
-            ${input.connectionInstanceId}::uuid,
-            ${input.expectedRevision}::bigint,
-            ${input.healthOutcome}::text,
-            ${input.administratorActivityId}::uuid
-          ) as revision,
-          vortex_context.organization_id() as organization_id
-      `;
-      return applied(input.command, input.connectionInstanceId, readWrite(rows).revision);
+      // No provider adapter can produce a health result. #1364 must resolve the instance's
+      // adapter before restoring this writer, or a supplied "healthy" result could activate it.
+      return noAdapterAvailable();
     }
     case "disable": {
       const rows = await transaction.query<WriteRow>`

@@ -14,6 +14,7 @@ import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
   protectedQueryCommandSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
 } from "@vortex/query";
@@ -69,9 +70,9 @@ export type RecordsTableQueryRequest = Readonly<{
 }>;
 
 /**
- * A neutral refusal never distinguishes an undeclared table, a missing page value, a refused
- * query or a hidden fact, and is never an empty page. `unavailable` is a temporary failure the
- * placement may retry; the component then shows its declared error message.
+ * A refusal is never an empty page. The Query engine's closed reason code is retained only for
+ * server-side diagnostics; the component receives the same neutral refusal for every cause.
+ * `unavailable` is a temporary failure the placement may retry.
  */
 export type RecordsTableQueryResolution =
   | Readonly<{
@@ -84,7 +85,7 @@ export type RecordsTableQueryResolution =
       display: ProjectedComponentData<ProjectedTableValues>;
       nextContinuationToken?: string;
     }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reasonCode?: ProtectedQueryRefusalReasonCode }>
   | Readonly<{ kind: "unavailable" }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
@@ -288,7 +289,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
     try {
       const result = await runner.run(session, selection, built.command);
       if (result.kind === "temporarily_unavailable") return unavailable;
-      if (result.kind !== "available" || result.value.outcome !== "completed") return refused;
+      if (result.kind !== "available") return refused;
+      if (result.value.outcome === "refused")
+        return { kind: "refused", reasonCode: result.value.reasonCode };
       const display = projectRecordsTableData(
         {
           settings: request.settings,

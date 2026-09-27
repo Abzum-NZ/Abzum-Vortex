@@ -32,6 +32,19 @@ export type ShadcnThemeOptionRelease = Readonly<{
   releaseVersion?: string;
 }>;
 
+/**
+ * One colour the generator derived because shadcn's value falls short of the platform contrast
+ * gate: the token and mode, shadcn's value, the compliant value (same hue and chroma, nearest
+ * lightness) and the ratio it had to meet.
+ */
+export type ShadcnThemeContrastDerivation = Readonly<{
+  token: string;
+  mode: "light" | "dark";
+  from: string;
+  to: string;
+  requirement: string;
+}>;
+
 /** One catalogue option as the generator wrote it. Only the fields its dimension declares appear. */
 export type ShadcnThemeCatalogueOption = Readonly<{
   id: string;
@@ -42,6 +55,8 @@ export type ShadcnThemeCatalogueOption = Readonly<{
   tokenKeys?: readonly string[];
   /** The option's release, or its refusal; absent for style and menu variants. */
   release?: ShadcnThemeOptionRelease;
+  /** The colours derived to meet the contrast gate; absent when shadcn's values already pass. */
+  contrastDerivations?: readonly ShadcnThemeContrastDerivation[];
   /** Radius option's corner value in rem. */
   rem?: number;
   /** Menu colour option's shadcn variant descriptor. */
