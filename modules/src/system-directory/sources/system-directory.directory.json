@@ -2017,6 +2017,14 @@
                   "label": "Read tenant administrators"
                 },
                 {
+                  "value": "platform.tenant.capability_limits.allocate",
+                  "label": "Allocate capability limits"
+                },
+                {
+                  "value": "platform.tenant.capability_limits.read",
+                  "label": "Read capability limits"
+                },
+                {
                   "value": "platform.tenant.hierarchy.read",
                   "label": "Read tenant hierarchy"
                 },
