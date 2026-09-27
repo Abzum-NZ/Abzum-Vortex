@@ -183,8 +183,7 @@ begin
         when 'completed' then 'completed'
         when 'cancelled' then 'cancelled'
         when 'failed' then 'refused'
-        when 'waiting' then 'waiting'
-        else 'running'
+        else stored.run_record #>> '{authority,state}'
       end),
       false
     ),
