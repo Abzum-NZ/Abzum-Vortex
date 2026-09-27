@@ -19,8 +19,6 @@ export const definitionLocationSegmentKindSchema = z.enum([
   "extension_point",
   "page",
   "block",
-  "workflow",
-  "workflow_node",
   "pipeline",
   "query",
   "role",

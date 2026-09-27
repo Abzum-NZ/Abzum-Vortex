@@ -633,7 +633,6 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
         },
       ],
       queries: [],
-      workflows: [],
       pipelines: [],
       connection_bindings: [],
       interfaces: [],

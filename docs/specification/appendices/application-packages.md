@@ -98,7 +98,7 @@ Custom backend scripts are platform-reviewed code, not customer code:
 
 ## Permissions
 
-Platform permission catalogue release 1.4.0 adds the drafts, releases, custom code and system applications permissions below. Earlier catalogue releases are unchanged.
+The current platform permission catalogue is version 1.4.0. Its declaration sources and organisation-creation registration path are described in the [platform permission catalogue](platform-permission-catalogue.md#declaration-ownership-and-registration); the four system-core builder permissions below are part of that current declaration set.
 
 | Permission or authority | Allows |
 | --- | --- |
