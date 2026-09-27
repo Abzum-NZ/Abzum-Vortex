@@ -995,23 +995,20 @@ export const loadApplicationPage = async (
         };
       });
       const truncated = queryResult.value.nextContinuationToken !== undefined;
-      data[placementId] =
-        items.length === 0 && !truncated
-          ? { status: "empty" }
-          : {
-              status: "ready",
-              values: {
-                kind: "calendar",
-                view,
-                date,
-                windowStart: window.startDate,
-                windowEnd: window.endDate,
-                timeZone,
-                endExclusive: mapping.kind === "start_duration",
-                truncated,
-                items,
-              },
-            };
+      data[placementId] = {
+        status: "ready",
+        values: {
+          kind: "calendar",
+          view,
+          date,
+          windowStart: window.startDate,
+          windowEnd: window.endDate,
+          timeZone,
+          endExclusive: mapping.kind === "start_duration",
+          truncated,
+          items,
+        },
+      };
       continue;
     }
 

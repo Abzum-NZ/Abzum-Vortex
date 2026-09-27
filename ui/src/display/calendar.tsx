@@ -160,7 +160,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     events,
   } = resolveDisplayContext<CalendarPayload>(
     props,
-    (calendar) => calendar.items.length === 0 && !calendar.truncated,
+    () => false,
     "No items in this period",
   );
   const router = useRouter();
@@ -257,7 +257,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               More items in this period than shown
             </p>
           ) : null}
-          {values.view === "agenda" ? (
+          {values.items.length === 0 && !values.truncated ? (
+            <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
+          ) : values.view === "agenda" ? (
             <div className="space-y-3" data-vortex-calendar-view="agenda">
               {periodDays(values).map((day) => {
                 const items = values.items.filter((item) =>
