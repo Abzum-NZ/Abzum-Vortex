@@ -161,10 +161,6 @@ revoke all on function vortex_identity.save_organization_runtime_settings_record
   uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter;
-grant execute on function vortex_identity.save_organization_runtime_settings_record_internal(
-  uuid, bigint, jsonb, jsonb
-) to vortex_access_owner;
-
 comment on function vortex_identity.save_organization_runtime_settings_record_internal(
   uuid, bigint, jsonb, jsonb
 ) is

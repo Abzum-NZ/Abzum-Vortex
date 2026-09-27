@@ -1,6 +1,5 @@
 begin;
 
-set local role vortex_identity_owner;
 alter table vortex_identity.organization_runtime_settings
   add column extension_values jsonb not null default '{}'::jsonb
     constraint organization_runtime_settings_extension_values_object
@@ -169,18 +168,10 @@ revoke all on function vortex_identity.save_organization_runtime_settings_record
   uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter;
-grant execute on function vortex_identity.save_organization_runtime_settings_record_internal(
-  uuid, bigint, jsonb, jsonb
-) to vortex_access_owner;
-
 comment on function vortex_identity.save_organization_runtime_settings_record_internal(
   uuid, bigint, jsonb, jsonb
 ) is
   'Private revision-checked Identity writer for one organisation settings record, merging invariant field patches and declared extension values in the same settings row.';
-
-reset role;
-
-set local role vortex_access_owner;
 
 create or replace function vortex_access.organization_runtime_settings_manage_is_current()
 returns boolean
@@ -439,8 +430,6 @@ comment on function vortex_access.save_organization_settings_record_for_administ
   uuid, bigint, jsonb, jsonb
 ) is
   'Protected organisation settings record writer requiring runtime-settings.manage and an exact current revision; the request organisation supplies the singleton identity and extensions are merged with the invariant settings in one transaction.';
-
-reset role;
 
 set local role vortex_record_adapter;
 
