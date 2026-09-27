@@ -213,6 +213,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.create_preview_installation(uuid,bigint,jsonb) owner to vortex_module_owner;
+
 revoke all on function vortex_module.create_preview_installation(uuid, bigint, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_module.create_preview_installation(uuid, bigint, jsonb)

@@ -240,6 +240,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.provision_module_contribution_storage(uuid,bigint,uuid,bigint,bigint,text,jsonb) owner to vortex_module_owner;
+
 revoke all on function vortex_module.provision_module_contribution_storage(
   uuid, bigint, uuid, bigint, bigint, text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime,
