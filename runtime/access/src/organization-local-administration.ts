@@ -18,6 +18,7 @@ import {
   organizationRuntimeSettingsSchema,
   reactivateOrganizationAccountCommandSchema,
   reactivateOrganizationAccountResultSchema,
+  readOwnProfileResultSchema,
   readOrganizationAccountCommandSchema,
   readOrganizationAccountResultSchema,
   readOrganizationInvitationCommandSchema,
@@ -42,6 +43,7 @@ import {
   type OrganizationSelectionCandidate,
   type ReactivateOrganizationAccountCommand,
   type ReactivateOrganizationAccountResult,
+  type ReadOwnProfileResult,
   type ReadOrganizationAccountCommand,
   type ReadOrganizationAccountResult,
   type ReadOrganizationInvitationCommand,
@@ -63,6 +65,14 @@ import {
 } from "./human-organization-request";
 
 const unavailableCode = "ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE";
+
+const isStaleOwnProfileRevision = (error: unknown): boolean =>
+  error !== null &&
+  typeof error === "object" &&
+  "code" in error &&
+  error.code === "40001" &&
+  "message" in error &&
+  error.message === "Organization account profile update is stale or unavailable";
 
 type AccountPageRow = DatabaseRow & {
   organization_id: unknown;
@@ -130,6 +140,14 @@ type ProfileChangeRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
   access_version: unknown;
+};
+
+type OwnProfileRow = DatabaseRow & {
+  organization_account_id: unknown;
+  revision: unknown;
+  display_name: unknown;
+  language: unknown;
+  time_zone: unknown;
 };
 
 export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
@@ -544,11 +562,40 @@ export const createOrganizationLocalAdministrationService = (
       });
     },
 
+    async readOwnProfile(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+    ): Promise<HumanOrganizationRequestResult<ReadOwnProfileResult>> {
+      return requests.run(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<OwnProfileRow>`
+            select organization_account_id, revision, display_name, language, time_zone
+            from vortex_access.read_own_profile()
+          `,
+        );
+        if (
+          typeof row.organization_account_id !== "string" ||
+          !sameId(row.organization_account_id, scope.organizationAccountId) ||
+          (row.display_name !== null && typeof row.display_name !== "string") ||
+          (row.language !== null && typeof row.language !== "string") ||
+          (row.time_zone !== null && typeof row.time_zone !== "string")
+        )
+          throw unavailableError(unavailableCode);
+        return readOwnProfileResultSchema.parse({
+          organizationAccountId: row.organization_account_id,
+          revision: databaseRevision(row.revision),
+          ...(row.display_name === null ? {} : { displayName: row.display_name }),
+          ...(row.language === null ? {} : { language: row.language }),
+          ...(row.time_zone === null ? {} : { timeZone: row.time_zone }),
+        });
+      });
+    },
+
     async updateOwnProfile(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: UpdateOwnProfileCommand,
-    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> {
+    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult | "conflict">> {
       const command = updateOwnProfileCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
       let activityId: string;
@@ -558,8 +605,10 @@ export const createOrganizationLocalAdministrationService = (
         return { kind: "temporarily_unavailable" };
       }
       return requests.runChange(session, selection, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<ProfileChangeRow>`
+        let row: ProfileChangeRow;
+        try {
+          row = requireOne(
+            await transaction.query<ProfileChangeRow>`
             select outcome, operation, organization_id, organization_account_id,
               account_summary, correlation_id, accepted_at, access_version
             from vortex_access.update_own_profile(
@@ -570,8 +619,12 @@ export const createOrganizationLocalAdministrationService = (
               ${command.data.timeZone ?? null}::text,
               ${activityId}::uuid
             )
-          `,
-        );
+            `,
+          );
+        } catch (error) {
+          if (isStaleOwnProfileRevision(error)) return "conflict" as const;
+          throw error;
+        }
         if (
           typeof row.organization_id !== "string" ||
           !sameId(row.organization_id, scope.organizationId) ||
