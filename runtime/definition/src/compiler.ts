@@ -21,6 +21,7 @@ import {
   moduleCompilationRequestV3Schema,
   moduleSourceDocumentSchema,
   sourceFlowCollectionSchema,
+  sourceProvenanceRegistry,
   ruleIdSchema,
   containedComponentIdSchema,
   recordTypeIdSchema,
@@ -59,6 +60,7 @@ import {
   type DefinitionResolutionSnapshotV3,
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
+  type SourceProvenanceAnnotation,
 } from "@vortex/contracts";
 import {
   canonicalJson,
@@ -296,6 +298,10 @@ function valueAtPath(value: unknown, path: Path): unknown {
 type SourceContractPositions = {
   opaqueDataRoots: readonly Path[];
   recordRoots: readonly Path[];
+  provenanceTargets: readonly Readonly<{
+    sourcePath: Path;
+    annotation: SourceProvenanceAnnotation;
+  }>[];
 };
 
 const pathStartsWith = (path: Path, prefix: Path) =>
@@ -304,6 +310,10 @@ const pathStartsWith = (path: Path, prefix: Path) =>
 function sourceContractPositions(source: JsonObject): SourceContractPositions {
   const opaqueDataRoots: Path[] = [];
   const recordRoots: Path[] = [];
+  const provenanceTargets: {
+    sourcePath: Path;
+    annotation: SourceProvenanceAnnotation;
+  }[] = [];
   const contract =
     source.kind === "module"
       ? moduleSourceDocumentSchema
@@ -313,8 +323,10 @@ function sourceContractPositions(source: JsonObject): SourceContractPositions {
   walkDefinitionContract(contract, source, (schema, _value, path) => {
     if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
     if (schema._zod.def.type === "record") recordRoots.push(path as Path);
+    const annotation = sourceProvenanceRegistry.get(schema);
+    if (annotation) provenanceTargets.push({ sourcePath: path as Path, annotation });
   });
-  return { opaqueDataRoots, recordRoots };
+  return { opaqueDataRoots, recordRoots, provenanceTargets };
 }
 
 const isOpaqueDataPath = (positions: SourceContractPositions, path: Path) =>
@@ -1285,133 +1297,50 @@ function explicitSourceTargets(
   return undefined;
 }
 
-const moduleSourceTransformPatterns = [
-  /^root_alias$/,
-  /^body\/(?:record_types|permissions|actions|events|rules|extension_points|sharing_conditions|queries)\/#\/id$/,
-  /^body\/record_types\/#\/(?:fields|relationships)\/#\/id$/,
-  /^body\/dependencies\/#\/module$/,
-  /^body\/contributions\/#\/(?:id|dependency|extension_point|record_type|field|contributed_action)$/,
-  /^body\/record_types\/#\/(?:name|plural_name|custom_actions\/#|ownership_mode|storage_scope)$/,
-  /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
-  /^body\/record_types\/#\/system_projection\/(?:organization_field|revision_field)$/,
-  /^body\/record_types\/#\/system_projection\/(?:filterable_fields|sortable_fields)\/#$/,
-  /^body\/record_types\/#\/fields\/#\/default(?:\/.*)?$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/(?:minimum|maximum)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/decimal_places$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:minimum|maximum)$/,
-  /^body\/record_types\/#\/relationships\/#\/(?:from_field|to_record_type|to_record_types\/#)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/(?:application_root_required|audience|currency_mode|field|relationship|target|targets\/#)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/(?:options\/#|columns\/#\/settings\/options\/#)\/required_permission$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:currency_mode|display_time_zone)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/display_time_zone$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/expression\/(?:operation|numeric_operation|amount_field|percentage_field|fields\/#|date_field|due_field|status_field)$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/expression\/operands\/#\/(?:operands\/#\/)*(?:field|source|value|numeric_operation)(?:\/.*)?$/,
-  /^body\/record_types\/#\/fields\/#\/settings\/expression\/amount\/(?:field|source|value)(?:\/.*)?$/,
-  /^body\/(?:permissions|events|rules|extension_points)\/#\/record_type$/,
-  /^body\/events\/#\/carries\/#$/,
-  /^body\/actions\/#\/(?:record_type|permission|shareable)$/,
-  /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
-  /^body\/actions\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
-  /^body\/actions\/#\/protected_operation$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/literal\/value(?:\/.*)?$/,
-  /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
-  /^body\/queries\/#\/inputs\/#\/(?:type|record_types\/#)$/,
-  /^body\/queries\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
-  /^body\/queries\/#\/filter$/,
-  /^body\/queries\/#\/sort\/#\/field$/,
-  /^body\/queries\/#\/aggregates\/#\/field$/,
-  /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
-  /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
-  /^body\/sharing_conditions\/#\/(?:source_record_type|declared_fields\/#)$/,
-  /^body\/sharing_conditions\/#\/publication_tests\/#\/(?:field_values|parameters)\/[^/]+(?:\/.*)?$/,
-  /^body\/permissions\/#\/record_scope\/.+$/,
-  /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/,
-] as const;
-
-const applicationSourceTransformPatterns = [
-  /^root_alias$/,
-  /^body\/(?:permissions|actions|rules|events|roles|block_registrations|pages|pipelines|interfaces|public_addresses)\/#\/id$/,
-  /^body\/interfaces\/#\/operations\/#\/id$/,
-  /^body\/pages\/#\/steps\/#\/id$/,
-  /^body\/module_bindings\/#\/module$/,
-  /^body\/connection_bindings\/#\/(?:id|connection_type|required_operations\/#)$/,
-  /^body\/home_page$/,
-  /^body\/roles\/#\/(?:home_page|permissions\/#)$/,
-  /^body\/navigation\/#(?:\/children\/#)*\/(?:id|page|permission)$/,
-  /^body\/queries\/#\/(?:id|record_type|select\/#|group_by\/#)$/,
-  /^body\/queries\/#\/filter$/,
-  /^body\/queries\/#\/sort\/#\/field$/,
-  /^body\/queries\/#\/aggregates\/#\/field$/,
-  /^body\/pages\/#\/(?:id|record_type|query|permission|public_action|public_fields\/#)$/,
-  /^body\/experiences\/#\/page$/,
-  /^body\/pages\/#\/layout\/(?:desktop|phone)\/component_order\/#$/,
-  /^body\/pages\/#\/(?:blocks\/#|steps\/#\/blocks\/#)\/(?:id|block|query|view_permission|use_permission)$/,
-  /^body\/pipelines\/#\/(?:id|record_type|stage_field)$/,
-  /^body\/pipelines\/#\/stages\/#\/(?:entry_workflows|exit_workflows)\/#$/,
-  /^body\/pipelines\/#\/transitions\/#\/(?:permission|action)$/,
-  /^body\/pipelines\/#\/time_targets\/#\/(?:stage|field|escalation_event)$/,
-  /^body\/public_addresses\/#\/(?:id|page)$/,
-  /^body\/block_registrations\/#\/allowed_child_blocks\/#$/,
-  /^body\/interfaces\/#\/operations\/#\/(?:id|permission|authentication|visibility)$/,
-  /^body\/interfaces\/#\/operations\/#\/(?:input_shape|output_shape)\/[^/]+\/target_binding\/(?:kind|key|field|value)$/,
-  /^body\/(?:permissions|actions|events|rules)\/#\/record_type$/,
-  /^body\/permissions\/#\/record_scope\/.+$/,
-  /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/,
-  /^body\/actions\/#\/(?:permission|sharing)$/,
-  /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/(?:record_type|event)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/changes\/#\/(?:relationships\/#|target_input)$/,
-  /^body\/actions\/#\/tasks\/#\/properties\/values\/[^/]+\/literal\/value(?:\/.*)?$/,
-  /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
-  /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
-  /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
-] as const;
-
-const connectionSourceTransformPatterns = [
-  /^root_alias$/,
-  /^body\/authentication\/secret_fields\/#$/,
-  /^body\/operations\/#\/(?:input|output|path|max_attempts)$/,
-  /^body\/incoming_messages\/#\/(?:input|workflow_trigger)$/,
-  /^body\/(?:health_operation|revocation_operation)$/,
-] as const;
-
-function conditionSourcePathPattern(root: string): RegExp {
-  const prefix = root.replaceAll("#", "\\#").replaceAll("/", "\\/");
-  return new RegExp(
-    `^${prefix}(?:(?:\\/(?:all|any)\\/#)|(?:\\/not))*\\/(?:field|operator|parameter|value|(?:left|right)\\/(?:source|field|parameter|value))(?:\\/.*)?$`,
-  );
+/** Match a canonical path suffix template; `#` matches an array index and `**` matches descendants. */
+function canonicalTargetMatches(targetPath: Path, target: string): boolean {
+  const segments = target.split("/").filter(Boolean);
+  if (segments.length === 1 && !["*", "#", "**"].includes(segments[0]!))
+    return targetPath.at(-1) === segments[0];
+  const matchesFrom = (pathOffset: number, patternOffset: number): boolean => {
+    if (patternOffset === segments.length) return pathOffset === targetPath.length;
+    const patternSegment = segments[patternOffset]!;
+    if (patternSegment === "**") {
+      if (patternOffset === segments.length - 1) return true;
+      for (let offset = pathOffset; offset <= targetPath.length; offset++)
+        if (matchesFrom(offset, patternOffset + 1)) return true;
+      return false;
+    }
+    if (pathOffset >= targetPath.length) return false;
+    const value = targetPath[pathOffset];
+    if (
+      patternSegment !== "*" &&
+      patternSegment !== "#" &&
+      patternSegment !== String(value)
+    )
+      return false;
+    if (patternSegment === "#" && typeof value !== "number") return false;
+    return matchesFrom(pathOffset + 1, patternOffset + 1);
+  };
+  for (let offset = 0; offset <= targetPath.length; offset++)
+    if (matchesFrom(offset, 0)) return true;
+  return false;
 }
 
-// Built once: these run for every source leaf of every compile. No flags, so no lastIndex state.
-const conditionSourcePathPatterns = [
-  "body/actions/#/precondition",
-  "body/rules/#/condition",
-  "body/sharing_conditions/#/condition",
-  "body/record_types/#/fields/#/settings/filter",
-  "body/record_types/#/fields/#/settings/expression/condition",
-  "body/queries/#/filter",
-  "body/pipelines/#/transitions/#/gate",
-  "body/pages/#/blocks/#/visibility_condition",
-  "body/pages/#/steps/#/blocks/#/visibility_condition",
-].map(conditionSourcePathPattern);
-
-function isConditionSourcePath(path: string): boolean {
-  return conditionSourcePathPatterns.some((pattern) => pattern.test(path));
-}
-
-function sourceTransformationApproved(source: JsonObject, sourcePath: Path): boolean {
-  const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
-  const path = normalized.join("/");
-  if (isConditionSourcePath(path)) return true;
-  const patterns =
-    source.kind === "module"
-      ? moduleSourceTransformPatterns
-      : source.kind === "application"
-        ? applicationSourceTransformPatterns
-        : connectionSourceTransformPatterns;
-  return patterns.some((pattern) => pattern.test(path));
+function sourceTransformationApproved(
+  sourcePath: Path,
+  canonicalPath: Path,
+  positions: SourceContractPositions,
+): boolean {
+  return positions.provenanceTargets.some(({ sourcePath: annotatedPath, annotation }) => {
+    const sourceMatches =
+      pathKey(annotatedPath) === pathKey(sourcePath) ||
+      (annotation.includeDescendants === true && pathStartsWith(sourcePath, annotatedPath));
+    return (
+      sourceMatches &&
+      annotation.canonicalTargets.some((target) => canonicalTargetMatches(canonicalPath, target))
+    );
+  });
 }
 
 function applicationTypedValueTarget(
@@ -1419,6 +1348,7 @@ function applicationTypedValueTarget(
   sourcePath: Path,
   targetPath: Path,
   canonicalLeafSet: ReadonlySet<string>,
+  positions: SourceContractPositions,
 ): Path {
   // Only normalized typed-value leaves need remapping; preserve resolved targets
   // and unchanged opaque data, even when their property names look like references.
@@ -1426,7 +1356,6 @@ function applicationTypedValueTarget(
     source.kind !== "application" ||
     canonicalLeafSet.has(pathKey(targetPath)) ||
     targetPath.at(-1) !== sourcePath.at(-1) ||
-    !sourceTransformationApproved(source, sourcePath) ||
     !["record_type", "record_id", "organization_account_id"].includes(String(sourcePath.at(-1)))
   )
     return targetPath;
@@ -1438,7 +1367,10 @@ function applicationTypedValueTarget(
         ? "recordId"
         : "organizationAccountId";
   const candidate = [...targetPath.slice(0, -1), canonicalLeaf];
-  return canonicalLeafSet.has(pathKey(candidate)) ? candidate : targetPath;
+  return canonicalLeafSet.has(pathKey(candidate)) &&
+      sourceTransformationApproved(sourcePath, candidate, positions)
+    ? candidate
+    : targetPath;
 }
 
 function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPositions): boolean {
@@ -1579,6 +1511,7 @@ function provenanceFor(
       sourcePath,
       initialCanonicalPath,
       canonicalLeafSet,
+      positions,
     );
     const mapsToCanonicalLeaf = canonicalLeafSet.has(pathKey(canonicalPath));
     const resolved =
@@ -1587,7 +1520,13 @@ function provenanceFor(
       fieldPolicySourceResolvesIdentity(sourcePath);
     const transformTargets = explicitTargets
       ? explicitTargets.map((target) =>
-          applicationTypedValueTarget(sourceObject, sourcePath, target, canonicalLeafSet),
+          applicationTypedValueTarget(
+            sourceObject,
+            sourcePath,
+            target,
+            canonicalLeafSet,
+            positions,
+          ),
         )
       : mapsToCanonicalLeaf
         ? [canonicalPath]
@@ -1598,8 +1537,9 @@ function provenanceFor(
       const transformed =
         canonicalJson(valueAtPath(source, sourcePath)) !==
         canonicalJson(valueAtPath(canonical, targetPath));
-      if (transformed && !sourceTransformationApproved(sourceObject, sourcePath))
+      if (transformed && !sourceTransformationApproved(sourcePath, targetPath, positions)) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
       const mapping: SourceProvenanceMapping = {
         canonicalPath: targetPath,
         origin: resolved ? "resolved" : "source",
@@ -4969,6 +4909,7 @@ function applicationProvenanceV2(
         sourcePath,
         targetPath,
         canonicalLeafSet,
+        positions,
       );
       if (!canonicalLeafSet.has(pathKey(canonicalPath))) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
@@ -4976,6 +4917,9 @@ function applicationProvenanceV2(
       const transformed =
         canonicalJson(valueAtPath(source, sourcePath)) !==
         canonicalJson(valueAtPath(canonical, canonicalPath));
+      if (transformed && !sourceTransformationApproved(sourcePath, canonicalPath, positions)) {
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
       const pageReference =
         sourcePath[0] === "body" &&
         sourcePath[1] === "pages" &&
