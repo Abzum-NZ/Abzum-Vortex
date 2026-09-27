@@ -11,6 +11,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
   type JsonValue,
+  type ActiveApplicationInstallationEvidence,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
@@ -20,7 +21,10 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import {
+  ActiveApplicationInstallationError,
+  createActiveApplicationInstallationRepository,
+} from "@vortex/module";
 import {
   decodeQueryContinuationToken,
   encodeQueryContinuationToken,
@@ -459,8 +463,19 @@ const planCache = async (
     if (resolved === undefined) return undefined;
     // The Application pin must be the release this installation runs now, so
     // a page can never cross an Application upgrade.
-    const installation =
-      await createActiveApplicationInstallationRepository(transaction).readCurrent();
+    let installation: ActiveApplicationInstallationEvidence;
+    try {
+      installation = await createActiveApplicationInstallationRepository(transaction).readCurrent();
+    } catch (error) {
+      if (
+        error instanceof ActiveApplicationInstallationError &&
+        error.databaseCode === undefined &&
+        (error.code === "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE" ||
+          error.code === "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE")
+      )
+        return undefined;
+      throw error;
+    }
     if (
       !sameId(installation.organizationId, scope.organizationId) ||
       !sameId(installation.applicationRootId, applicationRootId) ||

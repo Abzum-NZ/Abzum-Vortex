@@ -136,7 +136,8 @@ export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionI
     trustedContext: trustedContext(input.trustedContext),
   };
   if (!isPlainJson(payload)) refuse("input_refused");
-  const canonical = canonicalJson(payload);
+  // The v1 token used code-point order; preserve its bytes for nested JSON keys.
+  const canonical = canonicalJson(payload, codePointCompare);
   return `${ruleDraftFeedbackFingerprintVersion}:${canonical}`;
 };
 
