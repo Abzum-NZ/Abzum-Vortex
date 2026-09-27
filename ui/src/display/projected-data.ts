@@ -137,6 +137,7 @@ export type CalendarPayload = Readonly<{
   windowStart: string;
   windowEnd: string;
   timeZone: string;
+  endExclusive: boolean;
   truncated: boolean;
   items: readonly CalendarItemPayload[];
 }>;
@@ -870,7 +871,7 @@ export const parseCalendarPayload = (
     return fail(`Expected 'calendar' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(
     record,
-    ["kind", "view", "date", "windowStart", "windowEnd", "timeZone", "truncated", "items"],
+    ["kind", "view", "date", "windowStart", "windowEnd", "timeZone", "endExclusive", "truncated", "items"],
     location,
   );
   const calendarDate = (candidate: unknown, message: string): string => {
@@ -899,6 +900,8 @@ export const parseCalendarPayload = (
   }
   if (typeof record.truncated !== "boolean")
     return fail("A calendar requires a truncation flag", location);
+  if (typeof record.endExclusive !== "boolean")
+    return fail("A calendar requires an end boundary rule", location);
   const seen = new Set<string>();
   const items = requireArray(record.items, "Calendar items must be an array", location).map(
     (candidate): CalendarItemPayload => {
@@ -932,6 +935,7 @@ export const parseCalendarPayload = (
     windowStart,
     windowEnd,
     timeZone,
+    endExclusive: record.endExclusive,
     truncated: record.truncated,
     items: Object.freeze(items),
   });

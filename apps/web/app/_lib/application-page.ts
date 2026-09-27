@@ -1007,6 +1007,7 @@ export const loadApplicationPage = async (
                 windowStart: window.startDate,
                 windowEnd: window.endDate,
                 timeZone,
+                endExclusive: mapping.kind === "start_duration",
                 truncated,
                 items,
               },

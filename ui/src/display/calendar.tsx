@@ -90,17 +90,20 @@ const itemIntersectsDay = (
   item: CalendarPayload["items"][number],
   day: string,
   timeZone: string,
+  endExclusive: boolean,
 ): boolean => {
   if (datePattern.test(item.start)) {
     const startDay = item.start;
     const endDay = item.end ?? startDay;
-    return startDay <= day && endDay >= day;
+    return startDay <= day &&
+      (endExclusive && endDay > startDay ? endDay > day : endDay >= day);
   }
   const start = Date.parse(item.start);
   const end = item.end === null ? start : Date.parse(item.end);
   const dayStart = localDayStart(day, timeZone);
   const dayEnd = localDayStart(addDays(day, 1), timeZone);
-  return start < dayEnd && end >= dayStart;
+  return start < dayEnd &&
+    (endExclusive && end > start ? end > dayStart : end >= dayStart);
 };
 
 const dayLabel = (date: string): string => {
@@ -259,7 +262,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               {periodDays(values).map((day) => {
                 const items = values.items.filter((item) =>
                   day >= values.windowStart && day < values.windowEnd
-                    ? itemIntersectsDay(item, day, values.timeZone)
+                    ? itemIntersectsDay(item, day, values.timeZone, values.endExclusive)
                     : false,
                 );
                 if (items.length === 0) return null;
@@ -299,7 +302,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               {periodDays(values).map((day) => {
                 const inPeriod = day >= values.windowStart && day < values.windowEnd;
                 const items = inPeriod
-                  ? values.items.filter((item) => itemIntersectsDay(item, day, values.timeZone))
+                  ? values.items.filter((item) => itemIntersectsDay(item, day, values.timeZone, values.endExclusive))
                   : [];
                 return (
                   <div
