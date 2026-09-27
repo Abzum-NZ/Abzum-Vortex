@@ -1992,8 +1992,6 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
     drop table if exists ${fixtureStorageTables.join(", ")};
     delete from vortex_record.record_reference_counters
       where organization_id = '${organizationId}';
-    delete from vortex_record.record_data_versions
-      where organization_id = '${organizationId}';
     delete from vortex_record.relationship_edges
       where from_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}')
          or to_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}');
@@ -2007,9 +2005,7 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
       where module_root_id = '${moduleRootId}';
     reset role;
     set local role vortex_record_adapter;
-    delete from vortex_record.save_command_receipts
-      where organization_id = '${organizationId}';
-    delete from vortex_record.named_action_command_receipts
+    delete from vortex_record.command_receipts
       where organization_id = '${organizationId}';
     reset role;
     delete from pgmq.q_vortex_event_occurrences queued
@@ -2085,7 +2081,6 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
     try {
       const replacementSignatures = [
         "vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid)",
-        "vortex_record.save_named_action_set_announce(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,jsonb,text,uuid,bigint,uuid,jsonb)",
       ] as const;
       await expect(
         admin<
@@ -2124,13 +2119,6 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           signature: replacementSignatures[0],
           owner: "vortex_record_adapter",
           security_definer: false,
-          volatility: "v",
-          acl_entries: ["vortex_record_adapter:EXECUTE:false"],
-        },
-        {
-          signature: replacementSignatures[1],
-          owner: "vortex_record_adapter",
-          security_definer: true,
           volatility: "v",
           acl_entries: ["vortex_record_adapter:EXECUTE:false"],
         },
@@ -2870,8 +2858,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           { receipts: string; activities: string; outbox: string; queue: string }[]
         >`
           select
-            (select count(*)::text from vortex_record.named_action_command_receipts
-             where organization_id = ${organizationId}::uuid) receipts,
+            (select count(*)::text from vortex_record.command_receipts
+             where organization_id = ${organizationId}::uuid
+               and command_kind = 'named_action') receipts,
             (select count(*)::text from vortex_activity.organization_activity_entries
              where organization_id = ${organizationId}::uuid
                and action = 'execute_named_action') activities,
@@ -2928,58 +2917,6 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         outbox: "1",
         queue: "1",
       });
-      const exactReplacementResults = await admin.begin(async (transaction) => {
-        const [scope] = await transaction<
-          { tenant_id: string; organization_account_id: string; access_version: string }[]
-        >`select * from vortex_access.resolve_human_application_change_scope(
-          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
-        )`;
-        if (scope === undefined) throw new Error("Named replacement overload scope is unavailable");
-        await transaction`select vortex_context.initialize(${JSON.stringify({
-          callerKind: "human",
-          identityAuthorityId,
-          tenantId: scope.tenant_id,
-          organizationId,
-          organizationAccountId: scope.organization_account_id,
-          applicationRootId,
-          identityId,
-          sessionId: session.sessionId,
-          authenticationStrength: session.authenticationStrength,
-          accessTokenIssuedAt: session.accessTokenIssuedAt,
-          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
-          issuedAt: operationAt.toISOString(),
-          expiresAt: session.accessTokenExpiresAt,
-          accessVersion: Number(scope.access_version),
-          correlationId: id(27),
-        })}::text::jsonb)`;
-        await transaction`set local role vortex_record_adapter`;
-        const [row] = await transaction<{ prepared: unknown; saved: unknown }[]>`
-          select
-            vortex_record.prepare_named_action_set_announce_internal(
-              false, ${eventOnly.commandId}::uuid, 'module', ${moduleRootId}::uuid, 1,
-              ${eventOnly.actionId}::uuid, ${recordTypeId}::uuid, ${namedRecordId}::uuid,
-              ${eventOnly.expectedConcurrencyNumber}, '{}'::jsonb, ${eventOnly.activityId}::uuid
-            ) as prepared,
-            vortex_record.save_named_action_set_announce(
-              ${eventOnly.commandId}::uuid, ${recordTypeId}::uuid, ${namedRecordId}::uuid,
-              ${eventOnly.expectedConcurrencyNumber}, '{}'::jsonb, '{}'::jsonb,
-              ${eventOnly.activityId}::uuid, ${eventOnly.standardOccurrenceId}::uuid,
-              ${JSON.stringify(eventOnly.declaredOccurrenceIds)}::text::jsonb,
-              'module', ${moduleRootId}::uuid, 1, ${eventOnly.actionId}::uuid, '{}'::jsonb
-            ) as saved`;
-        return row;
-      });
-      expect(exactReplacementResults).toMatchObject({
-        prepared: { outcome: "completed", recordId: namedRecordId },
-        saved: { outcome: "completed", recordId: namedRecordId },
-      });
-      expect(await namedEffects()).toEqual({
-        receipts: "1",
-        activities: "1",
-        outbox: "1",
-        queue: "1",
-      });
-
       await expect(
         runNamedAction({
           commandId: commandNamedSetId,
@@ -3230,7 +3167,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
               from vortex_record.record_reference_counters
               where organization_id = $1 and storage_contract_id = $4) as counter,
              (select pg_catalog.count(*)::text
-              from vortex_record.named_action_command_receipts
+              from vortex_record.command_receipts
               where organization_id = $1) as receipts,
              (select pg_catalog.count(*)::text
                from vortex_activity.organization_activity_entries
@@ -3661,61 +3598,6 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         })}::text::jsonb,
         ${actorId}::uuid, ${id(161)}::uuid
       )`;
-      const deniedWriterResult = await admin.begin(async (transaction) => {
-        const [scope] = await transaction<
-          { tenant_id: string; organization_account_id: string; access_version: string }[]
-        >`select * from vortex_access.resolve_human_application_change_scope(
-          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
-        )`;
-        if (scope === undefined) throw new Error("Named writer refusal scope is unavailable");
-        await transaction`select vortex_context.initialize(${JSON.stringify({
-          callerKind: "human",
-          identityAuthorityId,
-          tenantId: scope.tenant_id,
-          organizationId,
-          organizationAccountId: scope.organization_account_id,
-          applicationRootId,
-          identityId,
-          sessionId: session.sessionId,
-          authenticationStrength: session.authenticationStrength,
-          accessTokenIssuedAt: session.accessTokenIssuedAt,
-          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
-          issuedAt: operationAt.toISOString(),
-          expiresAt: session.accessTokenExpiresAt,
-          accessVersion: Number(scope.access_version),
-          correlationId: id(27),
-        })}::text::jsonb)`;
-        await transaction`set local role vortex_record_adapter`;
-        const [row] = await transaction<{ result: unknown }[]>`
-          select vortex_record.save_named_action_set_fields_internal(
-            ${id(210)}::uuid, 'update', ${recordTypeId}::uuid,
-            ${namedRecordId}::uuid, 4,
-            ${JSON.stringify({ [fieldId]: "Denied writer" })}::text::jsonb,
-            ${JSON.stringify({ [fieldId]: "Denied writer" })}::text::jsonb,
-            null::uuid, ${id(211)}::uuid, ${id(212)}::uuid,
-            'module', ${moduleRootId}::uuid, 1, ${setTitleActionId}::uuid,
-            ${JSON.stringify({ title: "Denied writer" })}::text::jsonb
-          ) as result`;
-        return row?.result;
-      });
-      expect(deniedWriterResult).toEqual({
-        outcome: "refused_recorded",
-        reasonCode: "record_unavailable",
-      });
-      await expect(
-        admin<
-          { action: string; subject_ids: string[]; changed_field_ids: string[]; outcome: string }[]
-        >`select action, subject_ids, changed_field_ids, outcome
-          from vortex_activity.organization_activity_entries
-          where activity_id = ${id(211)}::uuid`,
-      ).resolves.toEqual([
-        {
-          action: "execute_named_action",
-          subject_ids: [namedRecordId],
-          changed_field_ids: [],
-          outcome: "refused",
-        },
-      ]);
       const beforeWithdrawnReplay = await namedEffects();
       await expect(runNamedAction(eventOnly)).resolves.toMatchObject({
         kind: "available",
@@ -3734,7 +3616,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       ).resolves.toEqual({ kind: "unavailable" });
       expect(await namedEffects()).toEqual({
         receipts: "29",
-        activities: "56",
+        activities: "55",
         outbox: "3",
         queue: "3",
       });
@@ -3975,8 +3857,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           }[]
         >(
           `select
-            (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
-             where organization_id = $1) as receipt_count,
+            (select pg_catalog.count(*)::text from vortex_record.command_receipts
+             where organization_id = $1 and command_kind = 'record_save') as receipt_count,
             (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
              where organization_id = $1) as activity_count,
             (select pg_catalog.count(*)::text from vortex_event.event_outbox
@@ -4045,8 +3927,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           record.${privateDirectFieldColumn} as private_direct,
           record.${privateTransitiveFieldColumn} as private_transitive,
           record.concurrency_number::text,
-          (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
-           where organization_id = $1) as receipt_count,
+          (select pg_catalog.count(*)::text from vortex_record.command_receipts
+           where organization_id = $1 and command_kind = 'record_save') as receipt_count,
           (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
            where organization_id = $1 and activity_id in ($3, $4)) as activity_count,
           (select pg_catalog.count(*)::text from vortex_event.event_outbox
@@ -4291,7 +4173,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         end
         $function$;
         create trigger delay_exact_total_receipt
-          before update on vortex_record.save_command_receipts
+          before update on vortex_record.command_receipts
           for each row execute function pg_temp.delay_exact_total_receipt();
         reset role;
       `);
@@ -4321,7 +4203,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       ]);
       await admin.unsafe(`
         set role vortex_record_adapter;
-        drop trigger delay_exact_total_receipt on vortex_record.save_command_receipts;
+        drop trigger delay_exact_total_receipt on vortex_record.command_receipts;
         drop function pg_temp.delay_exact_total_receipt();
         reset role;
       `);
@@ -5083,8 +4965,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         >(
           `select record.${fieldColumn} as title, record.${amountColumn} as amount,
             record.concurrency_number::text,
-            (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
-             where organization_id = $1) as receipt_count,
+            (select pg_catalog.count(*)::text from vortex_record.command_receipts
+             where organization_id = $1 and command_kind = 'record_save') as receipt_count,
             (select pg_catalog.count(*)::text from vortex_event.event_outbox
              where organization_id = $1) as outbox_count,
             (select pg_catalog.count(*)::text from pgmq.q_vortex_event_occurrences as queued

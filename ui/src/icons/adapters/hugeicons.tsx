@@ -28,8 +28,8 @@ import type { VortexIconAdapter, VortexIconProps } from "../icon-names";
  * that component with the stroke width the shadcn registry uses for HugeIcons.
  */
 const hugeicon = (icon: IconSvgElement): ComponentType<VortexIconProps> => {
-  function HugeiconsGlyph(props: VortexIconProps) {
-    return <HugeiconsIcon icon={icon} strokeWidth={2} {...props} />;
+  function HugeiconsGlyph({ strokeWidth = 2, ...props }: VortexIconProps) {
+    return <HugeiconsIcon icon={icon} strokeWidth={strokeWidth as number} {...props} />;
   }
   return HugeiconsGlyph;
 };
