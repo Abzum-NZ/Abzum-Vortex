@@ -1,17 +1,15 @@
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { URL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { createPnpmExec } from "./pnpm-exec.mjs";
 
-const pnpmEntry = process.env.npm_execpath;
-if (!pnpmEntry) throw new Error("Run this proof through `pnpm auth:local:proof`");
+const pnpmExec = createPnpmExec("pnpm auth:local:proof");
 
-const statusResult = spawnSync(
-  process.execPath,
-  [pnpmEntry, "exec", "supabase", "status", "--output", "json"],
-  { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-);
+const statusResult = pnpmExec(["exec", "supabase", "status", "--output", "json"], {
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "ignore"],
+});
 let status;
 try {
   status = JSON.parse(statusResult.stdout);
@@ -246,9 +244,8 @@ if (
 )
   throw new Error("The official client did not verify the expected closed Local identity inputs");
 
-const verifierProof = spawnSync(
-  process.execPath,
-  [pnpmEntry, "exec", "vitest", "run", "runtime/identity/test/local-verifier.integration.test.ts"],
+const verifierProof = pnpmExec(
+  ["exec", "vitest", "run", "runtime/identity/test/local-verifier.integration.test.ts"],
   {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
