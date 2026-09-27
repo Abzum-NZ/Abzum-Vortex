@@ -1402,6 +1402,11 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> =>
       localAdministration.updateOwnProfile(session, candidate, commandCandidate),
 
+    readOwnProfile: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+    ) => localAdministration.readOwnProfile(session, candidate),
+
     createOrganizationInvitation: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

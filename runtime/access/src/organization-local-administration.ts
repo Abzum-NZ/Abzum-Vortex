@@ -18,6 +18,7 @@ import {
   organizationRuntimeSettingsSchema,
   reactivateOrganizationAccountCommandSchema,
   reactivateOrganizationAccountResultSchema,
+  readOwnProfileResultSchema,
   readOrganizationAccountCommandSchema,
   readOrganizationAccountResultSchema,
   readOrganizationInvitationCommandSchema,
@@ -42,6 +43,7 @@ import {
   type OrganizationSelectionCandidate,
   type ReactivateOrganizationAccountCommand,
   type ReactivateOrganizationAccountResult,
+  type ReadOwnProfileResult,
   type ReadOrganizationAccountCommand,
   type ReadOrganizationAccountResult,
   type ReadOrganizationInvitationCommand,
@@ -130,6 +132,14 @@ type ProfileChangeRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
   access_version: unknown;
+};
+
+type OwnProfileRow = DatabaseRow & {
+  organization_account_id: unknown;
+  revision: unknown;
+  display_name: unknown;
+  language: unknown;
+  time_zone: unknown;
 };
 
 export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
@@ -541,6 +551,35 @@ export const createOrganizationLocalAdministrationService = (
           },
           closeOrganizationAccountResultSchema,
         );
+      });
+    },
+
+    async readOwnProfile(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+    ): Promise<HumanOrganizationRequestResult<ReadOwnProfileResult>> {
+      return requests.run(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<OwnProfileRow>`
+            select organization_account_id, revision, display_name, language, time_zone
+            from vortex_access.read_own_profile()
+          `,
+        );
+        if (
+          typeof row.organization_account_id !== "string" ||
+          !sameId(row.organization_account_id, scope.organizationAccountId) ||
+          (row.display_name !== null && typeof row.display_name !== "string") ||
+          (row.language !== null && typeof row.language !== "string") ||
+          (row.time_zone !== null && typeof row.time_zone !== "string")
+        )
+          throw unavailableError(unavailableCode);
+        return readOwnProfileResultSchema.parse({
+          organizationAccountId: row.organization_account_id,
+          revision: databaseRevision(row.revision),
+          ...(row.display_name === null ? {} : { displayName: row.display_name }),
+          ...(row.language === null ? {} : { language: row.language }),
+          ...(row.time_zone === null ? {} : { timeZone: row.time_zone }),
+        });
       });
     },
 

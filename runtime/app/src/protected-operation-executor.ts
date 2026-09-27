@@ -195,6 +195,7 @@ type ProtectedOperationServices = Readonly<{
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
+    | "readOwnProfile"
     | "updateOwnProfile"
     | "createOrganizationInvitation"
     | "revokeOrganizationInvitation"
@@ -815,6 +816,21 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           organization_account_id: value.organizationAccountId,
           revision: value.revision,
           access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  read_own_profile: operation({
+    schema: z.object({}).strict(),
+    command: () => ({}),
+    run: async (services, caller) =>
+      mapAvailable(
+        await services.accessAdministration.readOwnProfile(caller.session, caller.selection),
+        (value) => ({
+          organization_account_id: value.organizationAccountId,
+          revision: value.revision,
+          display_name: value.displayName ?? "",
+          language: value.language ?? "",
+          time_zone: value.timeZone ?? "",
         }),
       ),
   }),
