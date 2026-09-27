@@ -98,8 +98,12 @@ begin
   );
 
   with filtered as (
-    select entry.*
+    select entry.*, authority.authority_kind,
+      authority.assignment_id as authority_assignment_id
     from vortex_activity.organization_activity_entries as entry
+    left join vortex_activity.organization_activity_super_administrator_authority as authority
+      on authority.organization_id = entry.organization_id
+      and authority.activity_id = entry.activity_id
     where entry.organization_id = context_organization_id
       and (audit_projection
         or (entry.actor_kind = 'organization_account' and entry.actor_id = context_account_id)
@@ -143,6 +147,14 @@ begin
           'correlationId', numbered.correlation_id,
           'outcome', numbered.outcome
         ) || case
+          when numbered.authority_assignment_id is not null then pg_catalog.jsonb_build_object(
+            'authority', pg_catalog.jsonb_build_object(
+              'kind', numbered.authority_kind,
+              'assignmentId', numbered.authority_assignment_id
+            )
+          )
+          else '{}'::jsonb
+        end || case
           when audit_projection then pg_catalog.jsonb_build_object(
             'changedFieldIds', pg_catalog.to_jsonb(numbered.changed_field_ids)
           )

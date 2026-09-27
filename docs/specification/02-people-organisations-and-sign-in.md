@@ -35,6 +35,27 @@ flowchart TD
 - Records, files, connections, roles, groups, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
 - The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
 
+## Named Vortex super administrators
+
+The configured system operator bootstraps the global named Vortex
+super-administrator assignment ledger. Once an active named assignment exists,
+an active named super administrator may grant or revoke assignments through the
+Identity service. This authority is neither a tenant assignment nor an
+organisation role, and it does not create a second operator concept. The
+configured system operator remains the only caller for the separate entitlement
+policy and tenant-ceiling commands.
+
+A named super administrator sees all active organisations in active tenants in
+the organisation launcher, whether or not a local account exists. Selecting an
+organisation with no local account provisions one active account for that
+identity in the same transaction, records the assignment provenance and an
+Activity entry, and then establishes the ordinary account-bound organisation
+context. A suspended local account is refused; sign-in does not reactivate it.
+This assignment does not admit a suspended organisation or tenant, or let tenant
+administration context read organisation records. Every organisation record
+operation still requires the selected active local account and normal request
+context.
+
 ## Tenant administration
 
 A tenant can have several **tenant administrators**. They may create, move, suspend, restore, and view the administrative status of organisations in that tenant and invoke explicitly granted protected tenant operations.
@@ -82,11 +103,18 @@ Neither operation affects the person's other organisation accounts or rewrites
 creator/audit attribution.
 
 1. A person proves control of a supported sign-in method.
-2. The platform loads the identity's active organisation accounts and tenant-administrator assignments.
+2. The platform loads active organisation accounts and tenant-administrator
+   assignments; an active named super-administrator assignment also makes all
+   active organisations eligible for the launcher.
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
 4. After an organisation is chosen, the platform opens that organisation's default application at its ordinary address, or the organisation's application launcher when the person may not open a default application (see [Addresses and routing](07-applications-pages-and-themes.md#addresses-and-routing)); the `/{tenant_short_name}/{organisation_short_name}` prefix in the tab's address is only an untrusted selection candidate. The server derives the identity, Identity Authority, tenant, organisation account, Access version, session times, and correlation identifier from live trusted state before protected work begins.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
+
+For a named super administrator, choosing an eligible organisation without a
+local account provisions the account and records the authorizing assignment
+before ordinary context is established. Existing suspended accounts are refused
+and are never reactivated by this entry path.
 
 An organisation administrator with the exact account-management permission may
 suspend, reactivate, or close a local organisation account through a protected
