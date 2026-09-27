@@ -15,7 +15,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
     redirect("/auth/session-ended");
   if (identity.kind === "missing" || identity.kind === "cluster_identity_inactive")
-    redirect("/auth/sign-in?status=session-ended");
+    redirect("/auth/session-ended");
   if (identity.kind === "temporarily_unavailable")
     return (
       <AuthShell
