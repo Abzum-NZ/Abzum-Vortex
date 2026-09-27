@@ -4,7 +4,7 @@
 
 ## Current development policy
 
-Develop the bounded functionality and complete it through independent source code review. The reviewer fixes findings itself, re-reviews, integrates its permitted PR into main, updates/closes the assigned issue and reports to the orchestrator. The orchestrator reconciles project status, dependencies and cleanup before the next ordered task.
+Develop bounded, dependency-ready functionality across independent lanes and complete each issue through independent source code review. The reviewer fixes findings itself, re-reviews, integrates its permitted PR into main, updates/closes the assigned issue and reports to the orchestrator. The orchestrator reconciles project status, dependencies and cleanup, then refills available lanes from eligible work across phases.
 
 No tests are created or run. No database review/execution, hosted verification, proof receipts, screenshots, benchmarks or deployment are acceptance requirements. Kestra is not a fleet dependency or a completion gate. Do not deploy to Testing or Production, promote branches, trigger delivery or re-enable delivery hooks. Historical operational tooling remains outside this development sequence.
 

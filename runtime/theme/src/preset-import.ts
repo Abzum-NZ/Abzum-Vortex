@@ -16,6 +16,7 @@ import {
   encodePreset,
   isPresetCode,
   V1_CHART_COLOR_MAP,
+  type PresetConfig,
 } from "shadcn/preset";
 
 type PresetSourceKind = "code" | "url";

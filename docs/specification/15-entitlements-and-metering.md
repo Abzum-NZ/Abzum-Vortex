@@ -28,7 +28,7 @@ The requesting service supplies the tenant, optional organisation attribution, n
 
 The decision contains the policy revision used. A service never infers entitlement from a commercial record, payment-provider message or banner. Security and record access are separate checks: an entitlement can refuse an operation but can never grant data access.
 
-Every protected Frontend Flow node that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. Running as a specified account or system actor, or holding execution delegation, never copies, widens or bypasses the tenant entitlement; sequential nodes meter only their own committed operations.
+Every protected flow task that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. Running as a specified account or system actor, or holding execution delegation, never copies, widens or bypasses the tenant entitlement; sequential tasks meter only their own committed operations.
 
 ```mermaid
 sequenceDiagram

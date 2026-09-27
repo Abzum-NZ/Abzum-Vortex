@@ -8,7 +8,8 @@ import { prepareVerificationDatabase } from "./prepare-verification-database.mjs
 // stack (`supabase start`) and by hosted Testing/Production delivery. A fresh
 // container from this image always takes the `create role` branch of
 // `20260903115546_database_scope_request_role.sql`, because `vortex_request`
-// and `vortex_runtime` never already exist. See docs/build-plan issue #384.
+// and `vortex_runtime` never already exist. See issue #384:
+// https://github.com/Abzum-NZ/Abzum-Vortex/issues/384
 export const verificationDatabaseImage = "public.ecr.aws/supabase/postgres:17.6.1.165";
 
 const readyTimeoutMs = 60_000;
@@ -23,8 +24,8 @@ const randomSecret = (bytes) => randomBytes(bytes).toString("hex");
 // Ownership labels recorded on every container and network this tool creates.
 // `pnpm db:clean` (see `cleanVerificationDatabases` below) selects exclusively
 // by the worktree label; it must never fall back to matching a name prefix,
-// because a name never proves who created a cluster. See docs/build-plan
-// issue #393.
+// because a name never proves who created a cluster. See issue #393:
+// https://github.com/Abzum-NZ/Abzum-Vortex/issues/393
 const verificationWorktreeLabelKey = "vortex.verify.worktree";
 const verificationRunLabelKey = "vortex.verify.run";
 

@@ -1,6 +1,6 @@
 # Agent coordination
 
-Effective 24 September 2026. This is the authoritative development workflow. Read it before worker briefs, archived handoffs or issue comments. Latest direct user instructions take precedence. [Fleet operations](agent-fleet.md) defines pickup, recovery and templates. [Roadmap](README.md) defines phases. [Visual workflow](fleet-orchestration.html) shows the same process.
+Effective 24 September 2026. This is the authoritative development workflow. Read it before worker briefs, archived handoffs or issue comments. Latest direct user instructions take precedence. [Fleet operations](agent-fleet.md) defines pickup, recovery and templates. [Roadmap](README.md) defines phases.
 
 ## Objective
 

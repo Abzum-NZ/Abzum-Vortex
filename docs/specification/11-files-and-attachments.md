@@ -43,7 +43,7 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 5. The record save attaches the active file by identifier.
 6. Unattached pending uploads expire and are removed.
 
-A Frontend Flow file node calls this same File-service boundary for its Access-resolved effective actor. Specified-user or system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
+A flow file task calls this same File-service boundary for the flow's Access-resolved effective actor. Specified-user or system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
 
 ## Download and preview
 
@@ -73,7 +73,7 @@ Storage policies on `storage.objects` inspect the signed claims through `auth.jw
 
 Read, preview, removal and other server operations keep this credential and all upstream addresses server-side. Each new external request, including ranges, rechecks current Access before minting its own credential. A browser receives only an upload credential for INSERT at its admitted pending-object path, with no read/list/update/delete/upsert authority. Resumable uploads renew through File admission and a fresh Access check; a still-valid credential may finish depositing pending bytes after revocation, but activation always rechecks current authority and refuses them. Replacement uploads use a new pending object and an authorised record save, never unrestricted overwrite.
 
-The signing key stays in the destination environment's server secret store, separate from federation and Identity Authority keys, and rotates with the documented provider overlap/revocation procedure. It is a trusted minting credential, not a sandbox against compromised server code; no `service_role`/secret API key enters ordinary file execution. Local, federated and scoped system operations use this same source-side bridge after their own Access resolution. Hosted proof must demonstrate provider acceptance, claim preservation, resumable renewal, exact-operation refusal and key rotation before #92 closes; a simulated policy check or broad key does not satisfy that proof.
+The signing key stays in the destination environment's server secret store, separate from federation and Identity Authority keys, and rotates with the documented provider overlap/revocation procedure. It is a trusted minting credential, not a sandbox against compromised server code; no `service_role`/secret API key enters ordinary file execution. Local, federated and scoped system operations use this same source-side bridge after their own Access resolution. The #92 implementation must preserve the exact accepted claims, recheck authority on resumable renewal, refuse unintended operations and support key rotation. A simulated policy check or broad key cannot replace these source-level safeguards.
 
 ## Attachments on shared records
 

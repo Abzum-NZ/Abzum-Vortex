@@ -23,8 +23,8 @@ nothing to the launcher's entry contract.
 ## Shipped and installed by default — user decision, 10 September 2026
 
 Every organisation gets the Landing Zone. It joins the platform applications that
-[#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) already ships as locked, versioned
-definitions built from ordinary modules, records, pages and permissions. Organisation
+[#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) ships as protected, versioned
+definitions built from ordinary modules, records, pages and permissions. These system applications are customisable through the guarded extension and replacement path in [Architecture Decision 11](architecture-decisions-2026-09-25.md#decision-11--building-installing-and-system-applications-are-permission-gated). Organisation
 provisioning installs it and marks it the organisation's default application through the
 **same protected installation operation** any application uses; provisioning supplies the
 authority and adds no second installation path or backdoor. This reuses an existing concept
