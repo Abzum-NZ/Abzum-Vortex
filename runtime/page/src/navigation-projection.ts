@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   revisionSchema,
   type ApplicationRootId,
@@ -165,9 +166,6 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
   });
 };
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 /**
  * One resolved navigation requirement: an application or bound-Module permission from the
  * release's prepared registration, or an exact platform administration permission from the
@@ -274,17 +272,19 @@ export const createStoredNavigationProjectionService = (
       return { kind: "definition", entry: matches[0] };
     };
     const permissionBindings = Object.fromEntries(
-      collectNavigationPermissionKeys(applicationRelease.content.navigation).map((permissionKey) => [
-        permissionKey,
-        {
+      collectNavigationPermissionKeys(applicationRelease.content.navigation).map(
+        (permissionKey) => [
           permissionKey,
-          declaration: declaration(
-            "application.navigation.discover",
-            applicationRootId,
-            permission(permissionKey),
-          ),
-        },
-      ]),
+          {
+            permissionKey,
+            declaration: declaration(
+              "application.navigation.discover",
+              applicationRootId,
+              permission(permissionKey),
+            ),
+          },
+        ],
+      ),
     );
     return {
       navigation: applicationRelease.content.navigation,
@@ -298,9 +298,9 @@ export const createStoredNavigationProjectionService = (
     candidate: OrganizationSelectionCandidate,
   ): Promise<HumanOrganizationRequestResult<ProjectedNavigation>> => {
     if (
-      !sameUuid(candidate.organizationId, context.organizationId) ||
+      !sameId(candidate.organizationId, context.organizationId) ||
       candidate.applicationRootId === undefined ||
-      !sameUuid(candidate.applicationRootId, applicationRootId)
+      !sameId(candidate.applicationRootId, applicationRootId)
     )
       return { kind: "unavailable" };
     // Prove the person's current authority over this exact application scope before projecting,
@@ -320,8 +320,8 @@ export const createStoredNavigationProjectionService = (
         load: async (_transaction, scope) => {
           if (
             scope.applicationRootId === undefined ||
-            !sameUuid(scope.organizationId, context.organizationId) ||
-            !sameUuid(scope.applicationRootId, applicationRootId)
+            !sameId(scope.organizationId, context.organizationId) ||
+            !sameId(scope.applicationRootId, applicationRootId)
           )
             throw new Error("STORED_NAVIGATION_HUMAN_SCOPE_UNAVAILABLE");
           return stored;

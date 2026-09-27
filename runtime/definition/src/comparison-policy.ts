@@ -71,7 +71,7 @@ const pushChange = (
 };
 
 const setDifference = (left: unknown[], right: unknown[]): unknown[] => {
-  const rightKeys = new Set(right.map(canonicalJson));
+  const rightKeys = new Set(right.map((value) => canonicalJson(value)));
   return left.filter((entry) => !rightKeys.has(canonicalJson(entry)));
 };
 
@@ -2066,7 +2066,7 @@ const assertUnique = (
 };
 
 const assertUniqueValues = (values: unknown[]): void => {
-  const identities = values.map(canonicalJson);
+  const identities = values.map((value) => canonicalJson(value));
   if (new Set(identities).size !== identities.length)
     refuseVersionImpact("ambiguous_component_identity");
 };

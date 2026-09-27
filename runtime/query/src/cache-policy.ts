@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  canonicalJson,
   fieldIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
@@ -274,18 +275,6 @@ const bypass = (reason: QueryCacheBypassReason): QueryCacheDecision =>
 
 const lower = (value: string): string => value.toLowerCase();
 
-/** Stable JSON: object keys sorted, so equal contexts always hash equally. */
-const canonicalJson = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-};
-
 export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   const parsed = queryCacheInputSchema.safeParse(input);
   if (!parsed.success) return bypass("policy_invalid");
@@ -295,16 +284,21 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
   // Published-field evidence is the exact rule when supplied; it can only widen
   // the bypass, never narrow it. Without evidence the caller's own eligibility
   // facts stand, which an unknown field classification already bypasses.
-  const derived = fieldEvidence === undefined
-    ? undefined
-    : queryCacheFieldEligibilityFor(fieldEvidence.publishedFields, fieldEvidence.evaluatedFieldIds);
+  const derived =
+    fieldEvidence === undefined
+      ? undefined
+      : queryCacheFieldEligibilityFor(
+          fieldEvidence.publishedFields,
+          fieldEvidence.evaluatedFieldIds,
+        );
   if (eligibility.readTimeFieldsPresent || derived?.readTimeFieldsPresent === true)
     return bypass("read_time_fields");
   if (!eligibility.cachingAllowed) return bypass("cache_not_allowed");
   if (eligibility.sensitiveFieldsPresent || derived?.sensitiveFieldsPresent === true)
     return bypass("sensitive_fields");
   if (eligibility.sharedSourceOwnership !== "none") return bypass("shared_source");
-  if (lower(request.moduleRootId) !== lower(definition.moduleRootId)) return bypass("policy_invalid");
+  if (lower(request.moduleRootId) !== lower(definition.moduleRootId))
+    return bypass("policy_invalid");
 
   const dependencyRecordTypeIds = recordDependencies
     .map((dependency) => lower(dependency.recordTypeId))

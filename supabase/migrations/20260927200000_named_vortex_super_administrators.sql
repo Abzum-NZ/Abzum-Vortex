@@ -277,11 +277,10 @@ begin
 
   perform 1
   from vortex_identity.vortex_super_administrator_assignments as assignment
-  where assignment.revoked_at is null
   for update;
   if found then
     raise exception using errcode = 'V3141',
-      message = 'Super-administrator bootstrap is unavailable while an assignment is active';
+      message = 'Super-administrator bootstrap is available only for the first assignment';
   end if;
 
   evaluated_at := pg_catalog.clock_timestamp();
@@ -317,7 +316,7 @@ grant execute on function vortex_identity.bootstrap_vortex_super_administrator(u
   to vortex_runtime;
 
 comment on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid) is
-  'Bootstraps a named super-administrator assignment through the existing configured system operator when no assignment is active.';
+  'Bootstraps the first named super-administrator assignment through the existing configured system operator.';
 
 create or replace function vortex_identity.grant_vortex_super_administrator(
   p_duplicate_key uuid,

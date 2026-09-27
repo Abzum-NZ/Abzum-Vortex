@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   fieldIdSchema,
   organizationIdSchema,
@@ -60,7 +61,6 @@ import {
  */
 
 const lower = (value: string): string => value.toLowerCase();
-const sameId = (left: string, right: string): boolean => lower(left) === lower(right);
 
 /** Bounded work per request; a larger request is refused rather than silently truncated. */
 export const sharedResultPolicyLimits = Object.freeze({

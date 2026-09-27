@@ -14,8 +14,6 @@ import {
   roleAssignmentSchema,
 } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const representsSameInstant = (left: string, right: string): boolean =>
   Date.parse(left) === Date.parse(right);
 
@@ -31,7 +29,7 @@ export const organizationRoleAssignmentChangeCommandSchema = z.discriminatedUnio
       organizationId: organizationIdSchema,
       roleAssignmentId: roleAssignmentIdSchema,
       roleId: roleIdSchema,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
       assignee: accessAssigneeSchema,
       assignmentKind: roleAssignmentKindSchema,
       startsAt: timestampSchema,
@@ -52,7 +50,7 @@ export const organizationRoleAssignmentChangeCommandSchema = z.discriminatedUnio
       operation: z.literal("revoke"),
       organizationId: organizationIdSchema,
       roleAssignmentId: roleAssignmentIdSchema,
-      expectedAssignmentRevision: javascriptSafeRevisionSchema,
+      expectedAssignmentRevision: revisionSchema,
       ...trustedChangeFields,
     })
     .strict(),
@@ -63,7 +61,7 @@ export const organizationRoleAssignmentChangeResultSchema = z
     outcome: z.literal("changed"),
     operation: z.enum(["grant", "revoke"]),
     assignment: roleAssignmentSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

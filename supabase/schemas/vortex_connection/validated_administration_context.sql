@@ -10,6 +10,9 @@ declare
   ctx_org_id uuid;
 begin
   ctx := vortex_context.validated_service_context();
+  if ctx ->> 'callerKind' = 'human' then
+    perform vortex_connection.assert_connection_administration_authority(ctx);
+  end if;
   ctx_org_id := (ctx ->> 'organizationId')::uuid;
 
   if ctx_org_id is distinct from p_organization_id then
@@ -26,4 +29,4 @@ revoke all on function vortex_connection.validated_administration_context(uuid) 
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 comment on function vortex_connection.validated_administration_context(uuid) is
-  'Returns the validated human or system context only when it matches the requested organisation.';
+  'Returns a matching validated system context or a matching human context with connection administration authority.';

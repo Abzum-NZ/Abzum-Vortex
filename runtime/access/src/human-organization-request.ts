@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  databaseRevision,
   clampTelemetryDurationMs,
   correlationIdSchema,
   countersForOutcome,
@@ -25,16 +26,15 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
-  resolve: (transaction: RuntimeDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
+  resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
 type ChangePreparation = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
 ) => Promise<void>;
 
@@ -70,12 +70,6 @@ type ScopeRow = DatabaseRow & {
   access_version: unknown;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
 const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("INVALID_SCOPE_RESULT");
   const row = rows[0];
@@ -86,7 +80,7 @@ const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
     ...(row.application_root_id === undefined || row.application_root_id === null
       ? {}
       : { applicationRootId: row.application_root_id }),
-    accessVersion: revision(row.access_version),
+    accessVersion: databaseRevision(row.access_version),
   });
 };
 
@@ -156,6 +150,7 @@ export const createHumanOrganizationRequestService = (
     ) => Promise<Result>,
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
+    mapDatabaseRefusal?: (code: string) => Result | undefined,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -277,7 +272,15 @@ export const createHumanOrganizationRequestService = (
       appendTelemetry(correlationId, "success", startedAtMs);
       return { kind: "available", value };
     } catch (error) {
-      if (databaseCode(error) === "V3140" && suspendedAccountResult !== undefined) {
+      const code = databaseCode(error);
+      if (code !== undefined && mapDatabaseRefusal !== undefined) {
+        const refusal = mapDatabaseRefusal(code);
+        if (refusal !== undefined) {
+          appendTelemetry(correlationId, "refused", startedAtMs);
+          return { kind: "available", value: refusal };
+        }
+      }
+      if (code === "V3140" && suspendedAccountResult !== undefined) {
         appendTelemetry(correlationId, "refused", startedAtMs);
         return suspendedAccountResult();
       }
@@ -310,6 +313,17 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("change", session, candidate, operation),
+    runChangeWithRefusal: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      mapDatabaseRefusal: (code: string) => Result | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("change", session, candidate, operation, undefined, undefined, mapDatabaseRefusal),
     runChangePrepared: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

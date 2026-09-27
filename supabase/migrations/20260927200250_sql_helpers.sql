@@ -127,6 +127,9 @@ declare
   ctx_org_id uuid;
 begin
   ctx := vortex_context.validated_service_context();
+  if ctx ->> 'callerKind' = 'human' then
+    perform vortex_connection.assert_connection_administration_authority(ctx);
+  end if;
   ctx_org_id := (ctx ->> 'organizationId')::uuid;
 
   if ctx_org_id is distinct from p_organization_id then
@@ -143,7 +146,7 @@ revoke all on function vortex_connection.validated_administration_context(uuid) 
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 comment on function vortex_connection.validated_administration_context(uuid) is
-  'Returns the validated human or system context only when it matches the requested organisation.';
+  'Returns a matching validated system context or a matching human context with connection administration authority.';
 
 create or replace function vortex_file.upload_validated_context()
 returns jsonb
@@ -162,6 +165,8 @@ revoke execute on function vortex_file.upload_validated_context() from public, a
 
 comment on function vortex_file.upload_validated_context() is
   'Returns the established upload context after the shared human or system context validator accepts it.';
+
+set local role vortex_record_owner;
 
 create or replace function vortex_record.is_record_type_lifecycle_policy(p_policy jsonb)
 returns boolean
@@ -415,6 +420,10 @@ grant execute on function vortex_record.initialize_organization_lifecycle_limits
 comment on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) is
   'Trusted explicit setup of one organisation lifecycle ceiling row at revision 1; identical retries return the existing row and conflicting retries refuse.';
 
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.read_time_clock_internal()
 returns jsonb
 language plpgsql
@@ -450,6 +459,8 @@ revoke all on function vortex_record.read_time_clock_internal()
 
 comment on function vortex_record.read_time_clock_internal() is
   'The one statement timestamp and the current date in the organisation time zone of the validated request context (null when the organisation has no time zone), which every read-time calculation in a statement uses; owner-only.';
+
+reset role;
 
 create or replace function vortex_invalidation.publish_change_notice(
   p_organization_id uuid,
@@ -841,6 +852,8 @@ grant execute on function vortex_identity.change_tenant_administrator(uuid, text
 
 comment on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz) is
   'Protected same-tenant tenant-administrator change under the bound request context person''s current structural authority, with database-computed command fingerprint, self-grant refusal, grantor-bounded expiry, exact revision and accepted replay.';
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.relationship_total_record_snapshot_internal(
   p_catalogue jsonb,
@@ -2348,6 +2361,11 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows the scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; works out read-time fields, such as a deadline-passed calculation, inside the query at one statement timestamp in the organisation time zone, so no query is refused for freshness.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
 
 create or replace function vortex_event.recover_consumer_occurrence_claim(
   p_consumer_key text,
@@ -4685,29 +4703,9 @@ comment on function vortex_access.grant_organization_direct_record_share(
 ) is
   'Owner-only structural direct-share grant writer. It changes Access and appends Activity but makes no grantor authorization or field-ceiling decision.';
 
-create or replace function vortex_access.direct_share_field_ids_are_canonical(
-  p_field_ids uuid[]
-)
-returns boolean
-language sql
-immutable
-strict
-parallel safe
-security invoker
-set search_path = ''
-as $function$
-  select vortex_context.uuid_array_is_canonical(p_field_ids)
-$function$;
-
-revoke execute on function vortex_access.direct_share_field_ids_are_canonical(uuid[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-
-comment on function vortex_access.direct_share_field_ids_are_canonical(uuid[]) is
-  'Private adapter to the shared canonical UUID-array validator.';
-
 -- Existing stored UUID identities are preserved. Refuse this migration rather than silently
 -- retaining lifecycle policy values that the strict UUID contract would reject.
+set local role vortex_record_owner;
 do $guard$
 begin
   if exists (
@@ -4718,7 +4716,15 @@ begin
       or not vortex_context.is_non_nil_uuid(policy.storage_contract_id::text)
       or (policy.application_root_id is not null
         and not vortex_context.is_non_nil_uuid(policy.application_root_id::text))
-      or not vortex_record.is_record_type_lifecycle_policy(policy.policy_body)
+      or not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'policyId')
+      or not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'organizationId')
+      or not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'storageContractId')
+      or (policy.policy_body ->> 'applicationRootId' is not null
+        and not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'applicationRootId'))
+      or (policy.policy_body ? 'archiveWorkflowId'
+        and not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'archiveWorkflowId'))
+      or (policy.policy_body ? 'archiveConnectionInstanceId'
+        and not vortex_context.is_non_nil_uuid(policy.policy_body ->> 'archiveConnectionInstanceId'))
   ) then
     raise exception using errcode = '23514',
       message = 'Stored lifecycle policy contains a UUID outside the strict version and variant rule';
@@ -4734,6 +4740,7 @@ begin
   end if;
 end
 $guard$;
+reset role;
 
 do $guard$
 begin
@@ -4805,9 +4812,12 @@ alter table vortex_access.organization_direct_record_shares
   );
 
 -- Retire duplicate validators now that their callers and constraints share one implementation.
+set local role vortex_record_owner;
 drop function vortex_record.is_lifecycle_uuid_text(text);
+reset role;
 drop function vortex_file.upload_timestamp(timestamptz);
 drop function vortex_access.flow_execution_binding_timestamp_internal(timestamptz);
 drop function vortex_activity.uuid_array_is_canonical(uuid[]);
+drop function vortex_access.direct_share_field_ids_are_canonical(uuid[]);
 
 commit;

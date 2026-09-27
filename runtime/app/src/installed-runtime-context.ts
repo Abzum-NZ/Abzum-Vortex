@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   activeApplicationInstallationEvidenceSchema,
   sessionContextSchema,
   systemApplicationBoundReleaseSetResultSchema,
@@ -89,8 +90,6 @@ export const requireInstalledRuntimeContext = (candidate: unknown): InstalledRun
   return candidate as InstalledRuntimeContext;
 };
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 const isLiveSystemContext = (context: SessionContext): boolean => {
   if (context.callerKind !== "system") return false;
   const issuedAt = Date.parse(context.issuedAt);
@@ -160,9 +159,8 @@ export const createInstalledRuntimeContextLoader = (
       } catch (error) {
         throw installationFailure(error);
       }
-      const installation = activeApplicationInstallationEvidenceSchema.safeParse(
-        installationCandidate,
-      );
+      const installation =
+        activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
       if (!installation.success)
         throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
 
@@ -233,9 +231,8 @@ export const createHumanInstalledRuntimeContextLoader = (
       } catch (error) {
         throw installationFailure(error);
       }
-      const installation = activeApplicationInstallationEvidenceSchema.safeParse(
-        installationCandidate,
-      );
+      const installation =
+        activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
       if (!installation.success)
         throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
       if (

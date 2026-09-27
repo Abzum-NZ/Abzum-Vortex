@@ -1,3 +1,4 @@
+import { isRecord } from "@vortex/contracts";
 import "server-only";
 
 /**
@@ -68,9 +69,6 @@ export class KestraInstanceTargetError extends Error {
   }
 }
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /**
  * True only when `value` has exactly the `required` keys as its own properties,
  * so an inherited or extra field can neither supply nor smuggle a setting.
@@ -118,7 +116,7 @@ const parseBaseUrl = (value: unknown): string | undefined => {
 export const parseApplicationKestraInstanceTarget = (
   candidate: unknown,
 ): ApplicationKestraInstanceTarget => {
-  if (!isObject(candidate) || !hasExactlyOwnKeys(candidate, ["kind", "baseUrl"]))
+  if (!isRecord(candidate) || !hasExactlyOwnKeys(candidate, ["kind", "baseUrl"]))
     throw new KestraInstanceTargetError("INVALID_KESTRA_INSTANCE_TARGET");
   if (candidate.kind !== workflowServiceKestraInstanceKind)
     throw new KestraInstanceTargetError("UNSUPPORTED_KESTRA_INSTANCE_KIND");

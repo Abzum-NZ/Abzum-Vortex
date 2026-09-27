@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   lifecycleCandidateRecordSchema,
   organizationIdSchema,
@@ -55,18 +56,7 @@ export interface LifecyclePreviewContinuation {
   readonly next?: LifecyclePreviewCursor;
 }
 
-const lifecyclePreviewCursorKeys = [
-  "c",
-  "r",
-  "x",
-  "o",
-  "s",
-  "a",
-  "p",
-  "v",
-  "e",
-  "t",
-] as const;
+const lifecyclePreviewCursorKeys = ["c", "r", "x", "o", "s", "a", "p", "v", "e", "t"] as const;
 const lifecyclePreviewDecodedCursorKeys = [
   "afterCreatedAt",
   "afterRecordId",
@@ -87,9 +77,7 @@ const parseLifecyclePreviewCursor = (candidate: unknown): LifecyclePreviewCursor
   const afterCreatedAt = timestampSchema.safeParse(candidate.c);
   const afterRecordId = recordIdSchema.safeParse(candidate.r);
   const afterRecordPosition =
-    typeof candidate.x === "number" &&
-    Number.isSafeInteger(candidate.x) &&
-    candidate.x > 0
+    typeof candidate.x === "number" && Number.isSafeInteger(candidate.x) && candidate.x > 0
       ? candidate.x
       : undefined;
   const organizationId = organizationIdSchema.safeParse(candidate.o);
@@ -99,12 +87,10 @@ const parseLifecyclePreviewCursor = (candidate: unknown): LifecyclePreviewCursor
       ? { success: true as const, data: null }
       : applicationRootIdSchema.safeParse(candidate.a);
   const policyId = recordLifecyclePolicyIdSchema.safeParse(candidate.p);
-  const policyRevision = revisionSchema.max(Number.MAX_SAFE_INTEGER).safeParse(candidate.v);
+  const policyRevision = revisionSchema.safeParse(candidate.v);
   const evaluatedAt = timestampSchema.safeParse(candidate.e);
   const totalRetainedCount =
-    typeof candidate.t === "number" &&
-    Number.isSafeInteger(candidate.t) &&
-    candidate.t >= 0
+    typeof candidate.t === "number" && Number.isSafeInteger(candidate.t) && candidate.t >= 0
       ? candidate.t
       : undefined;
   if (
@@ -191,7 +177,9 @@ export const encodeLifecyclePreviewCursor = (cursorCandidate: LifecyclePreviewCu
  */
 export const decodeLifecyclePreviewCursor = (token: string): LifecyclePreviewCursor | undefined => {
   try {
-    return parseLifecyclePreviewCursor(JSON.parse(Buffer.from(token, "base64url").toString("utf8")));
+    return parseLifecyclePreviewCursor(
+      JSON.parse(Buffer.from(token, "base64url").toString("utf8")),
+    );
   } catch {
     return undefined;
   }
@@ -306,10 +294,7 @@ export interface EvaluateLifecyclePreviewInput {
 export const evaluateLifecyclePreview = (
   input: EvaluateLifecyclePreviewInput,
 ): RecordLifecyclePreviewResult => {
-  if (
-    (input.totalRetainedCount === undefined) !==
-    (input.recordOffset === undefined)
-  ) {
+  if ((input.totalRetainedCount === undefined) !== (input.recordOffset === undefined)) {
     throw new Error("Bounded lifecycle count and offset must be supplied together");
   }
   const policy = recordTypeLifecyclePolicySchema.parse(input.policy);
@@ -410,12 +395,6 @@ const storedCandidateKeys = [
 ] as const;
 const protectionKeys = ["recordId", "isHeld", "isProtected"] as const;
 
-const sameIdentifier = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const sameNullableIdentifier = (left: string | null, right: string | null): boolean =>
-  left === null || right === null ? left === right : sameIdentifier(left, right);
-
 const parseJsonSafeNonnegativeInteger = (candidate: unknown): number | undefined =>
   typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0
     ? candidate
@@ -504,7 +483,8 @@ const parseStoredLifecyclePreview = (candidate: unknown): StoredLifecyclePreview
       recordId: recordId.data,
       expectedRecordRevision: expectedRecordRevision.data,
       createdAt: createdAt.data,
-      lifecycleState: itemCandidate.lifecycleState as LifecyclePreviewStoredCandidate["lifecycleState"],
+      lifecycleState:
+        itemCandidate.lifecycleState as LifecyclePreviewStoredCandidate["lifecycleState"],
       deletedAt: deletedAt.data,
       recordPosition,
     });
@@ -620,9 +600,9 @@ export const createRecordLifecyclePreviewService = (
         if (
           command.cursor !== undefined &&
           (cursor === undefined ||
-            !sameIdentifier(cursor.organizationId, command.organizationId) ||
-            !sameIdentifier(cursor.storageContractId, command.storageContractId) ||
-            !sameNullableIdentifier(cursor.applicationRootId, command.applicationRootId))
+            !sameId(cursor.organizationId, command.organizationId) ||
+            !sameId(cursor.storageContractId, command.storageContractId) ||
+            !sameId(cursor.applicationRootId, command.applicationRootId))
         ) {
           throw new Error("INVALID_LIFECYCLE_PREVIEW_CURSOR");
         }
@@ -667,12 +647,12 @@ export const createRecordLifecyclePreviewService = (
 
         const policy = previewData.policy;
         if (
-          !sameIdentifier(policy.organizationId, scope.organizationId) ||
-          !sameIdentifier(policy.organizationId, command.organizationId) ||
-          !sameIdentifier(policy.storageContractId, command.storageContractId) ||
-          !sameNullableIdentifier(policy.applicationRootId, command.applicationRootId) ||
+          !sameId(policy.organizationId, scope.organizationId) ||
+          !sameId(policy.organizationId, command.organizationId) ||
+          !sameId(policy.storageContractId, command.storageContractId) ||
+          !sameId(policy.applicationRootId, command.applicationRootId) ||
           (cursor !== undefined &&
-            (!sameIdentifier(cursor.policyId, policy.policyId) ||
+            (!sameId(cursor.policyId, policy.policyId) ||
               cursor.policyRevision !== policy.policyRevision ||
               cursor.totalRetainedCount !== previewData.totalRetainedCount))
         ) {
@@ -689,8 +669,7 @@ export const createRecordLifecyclePreviewService = (
             firstStoredRecord === undefined &&
             previewData.totalRetainedCount !== 0) ||
           (cursor !== undefined &&
-            (firstStoredRecord === undefined ||
-              recordOffset !== cursor.afterRecordPosition)) ||
+            (firstStoredRecord === undefined || recordOffset !== cursor.afterRecordPosition)) ||
           (previewData.hasMore && previewData.records.length !== limit) ||
           previewData.records.length > limit
         ) {
@@ -714,13 +693,15 @@ export const createRecordLifecyclePreviewService = (
           throw new Error("LIFECYCLE_PREVIEW_PROTECTION_EVIDENCE_INVALID");
         }
 
-        const handoff = recordLifecycleHandoffSchema.parse(selectDueRecordsForLifecycleHandoff({
-          policy,
-          records: candidatesToEvaluate,
-          evaluatedAt,
-          totalRetainedCount: previewData.totalRetainedCount,
-          recordOffset,
-        }));
+        const handoff = recordLifecycleHandoffSchema.parse(
+          selectDueRecordsForLifecycleHandoff({
+            policy,
+            records: candidatesToEvaluate,
+            evaluatedAt,
+            totalRetainedCount: previewData.totalRetainedCount,
+            recordOffset,
+          }),
+        );
 
         let continuation: LifecyclePreviewContinuation;
         if (previewData.hasMore) {
