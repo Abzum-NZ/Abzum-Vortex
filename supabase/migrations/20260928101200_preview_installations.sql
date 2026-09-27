@@ -1,5 +1,10 @@
 begin;
 
+set local role vortex_module_owner;
+grant create on schema vortex_module to postgres;
+set local role vortex_record_owner;
+grant create on schema vortex_record to postgres;
+grant references on vortex_record.storage_catalogue to postgres;
 set local role postgres;
 
 grant select (root_id, draft_revision) on vortex_definition.drafts
@@ -40,7 +45,6 @@ create table vortex_module.preview_installations (
   foreign key (organization_id, previewer_organization_account_id)
     references vortex_identity.organization_accounts (organization_id, organization_account_id)
 );
-alter table vortex_module.preview_installations owner to vortex_module_owner;
 alter table vortex_module.preview_installations enable row level security;
 alter table vortex_module.preview_installations force row level security;
 create policy preview_installations_owner on vortex_module.preview_installations
@@ -69,7 +73,7 @@ create table vortex_record.preview_storage_bindings (
   unique (storage_contract_id),
   unique (preview_installation_id, release_storage_contract_id)
 );
-alter table vortex_record.preview_storage_bindings owner to vortex_record_owner;
+alter table vortex_module.preview_installations owner to vortex_module_owner;
 alter table vortex_record.preview_storage_bindings enable row level security;
 alter table vortex_record.preview_storage_bindings force row level security;
 create policy preview_storage_bindings_owner on vortex_record.preview_storage_bindings
@@ -79,11 +83,16 @@ create index preview_storage_bindings_storage_idx
 revoke all on table vortex_record.preview_storage_bindings
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter, vortex_module_owner;
+alter table vortex_record.preview_storage_bindings owner to vortex_record_owner;
 
 grant execute on function vortex_context.is_non_nil_uuid(text)
   to vortex_record_owner, vortex_module_owner;
+set local role vortex_module_owner;
 grant usage on schema vortex_module to vortex_record_owner;
+revoke create on schema vortex_module from postgres;
 set local role vortex_record_owner;
+revoke create on schema vortex_record from postgres;
+revoke references on vortex_record.storage_catalogue from postgres;
 create or replace function vortex_record.create_record_storage_table_internal(
   p_storage_contract_id uuid,
   p_module_root_id uuid,
