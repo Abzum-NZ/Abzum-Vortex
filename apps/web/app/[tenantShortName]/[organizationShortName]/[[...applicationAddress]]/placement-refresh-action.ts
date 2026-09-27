@@ -56,7 +56,7 @@ export async function rereadApplicationPlacements(
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
   if (!address.success || !placementIds.success) return { kind: "unavailable" };
 
-  const identity = continueSessionOrEnd(await resolveIdentitySession());
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable")
     return { kind: "temporarily_unavailable" };
 
@@ -93,6 +93,7 @@ export async function rereadApplicationPlacements(
       editFormBaselines: Object.fromEntries(
         placementIds.data.map((placementId) => [placementId, null]),
       ),
+      subject: null,
     };
   }
 }
