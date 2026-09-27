@@ -114,8 +114,9 @@ export const findShadcnThemeCatalogueOption = (
 
 /**
  * The platform default selection: the base-nova style, neutral base colour, neutral theme, neutral
- * chart colour, default radius, default menu colour and subtle menu accent, with the current
- * fonts. Every shipped application pins this so a new application starts from the platform look.
+ * chart colour, default radius, default menu colour and subtle menu accent. It names no font, so
+ * it paints the font catalogue's defaults (contracts/src/shadcn-font-catalogue.ts). Every shipped
+ * application pins this so a new application starts from the platform look.
  */
 export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelectionV2 =
   applicationThemeSelectionV2Schema.parse({
