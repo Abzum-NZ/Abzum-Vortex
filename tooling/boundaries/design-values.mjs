@@ -29,6 +29,7 @@ const colorFunctionPattern = /\b(?:rgba|rgb|oklch)\s*\(/giu;
 const hexColorPattern = /(?<![\w-])#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})(?![\w-])/giu;
 const pixelValuePattern = /(?<![\w.])[-+]?(?:\d+(?:\.\d*)?|\.\d+)px\b/giu;
 const styleCallPattern = /\b(?:cn|cx|clsx|classNames|classnames|twMerge|cva|tv|tailwindVariants|keyframes|createGlobalStyle)\s*\(/giu;
+const cssDeclarationPattern = /^\s*(?:--[\w-]+|(?:background|border|box|color|fill|filter|font|gap|grid|height|inset|left|letter|line|margin|max|min|outline|padding|right|scroll|stroke|text|top|transform|width)(?:-[\w-]+)?)\s*:\s*[^;{}]*$/iu;
 const tailwindArbitraryValuePattern = /(?:^|:)(?:aspect|basis|bg|blur|border(?:-[trblxy])?|bottom|drop-shadow|duration|ease|fill|font|gap(?:-[xy])?|grid-(?:cols|rows)|h|inset(?:-[xy])?|leading|left|m[trblxy]?|max-[hw]|min-[hw]|outline|opacity|p[trblxy]?|right|ring|rounded|scale|shadow|size|space-[xy]|stroke|text|top|tracking|translate-[xy]|w|z)-$/u;
 const designVariablePattern = /(?:^|_)(?:accent|background|bg|border|color|colors|colour|colours|css|destructive|dimension|fill|font|foreground|gap|height|margin|muted|offset|padding|palette|position|primary|radius|ring|secondary|shadow|size|spacing|stroke|style|surface|transform|width)(?:_|$)/u;
 const namedColorVariablePattern = /^(?:black|blue|cyan|gray|green|grey|magenta|orange|pink|purple|red|teal|white|yellow)$/iu;
@@ -238,7 +239,7 @@ function isClassVariable(name) {
 function hasCssDeclaration(text, index) {
   const boundary = Math.max(text.lastIndexOf(";", index), text.lastIndexOf("{", index), text.lastIndexOf("}", index));
   const segment = text.slice(boundary + 1, index);
-  return /^\s*(?:--)?[A-Za-z][\w-]*\s*:\s*[^;{}]*$/u.test(segment);
+  return cssDeclarationPattern.test(segment);
 }
 
 function isDesignContext({ code, view, span, index, kind, identifiers }) {
