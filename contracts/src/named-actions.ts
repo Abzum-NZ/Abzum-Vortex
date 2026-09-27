@@ -16,7 +16,7 @@ export const installedNamedActionReferenceV2Schema = z.discriminatedUnion("owner
     .object({
       ownerKind: z.literal("application"),
       ownerId: applicationRootIdSchema,
-      releaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+      releaseRevision: revisionSchema,
       actionId: actionIdSchema,
     })
     .strict(),
@@ -24,7 +24,7 @@ export const installedNamedActionReferenceV2Schema = z.discriminatedUnion("owner
     .object({
       ownerKind: z.literal("module"),
       ownerId: moduleRootIdSchema,
-      releaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+      releaseRevision: revisionSchema,
       actionId: actionIdSchema,
     })
     .strict(),
@@ -49,7 +49,7 @@ export const executeNamedActionResultV2Schema = z.discriminatedUnion("outcome", 
       contractVersion: z.literal("2.0.0"),
       outcome: z.literal("completed"),
       recordId: recordIdSchema,
-      concurrencyNumber: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+      concurrencyNumber: revisionSchema,
       readableValues: z.record(z.string().uuid(), jsonValueSchema),
       correlationId: correlationIdSchema,
       backgroundDelivery: z.literal("pending"),

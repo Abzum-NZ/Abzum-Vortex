@@ -2,6 +2,9 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  unavailableError,
+  databaseRevision,
+  sameId,
   activityIdSchema,
   applicationRootIdSchema,
   identitySessionSchema,
@@ -65,20 +68,7 @@ type DefaultApplicationChangeRow = DatabaseRow & {
   changed: unknown;
 };
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const unavailable = (): Error => {
-  const error = new Error("ORGANIZATION_RUNTIME_SETTINGS_UNAVAILABLE");
-  Object.assign(error, { code: "42501" });
-  return error;
-};
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
+const unavailableCode = "ORGANIZATION_RUNTIME_SETTINGS_UNAVAILABLE";
 
 /** Reads only the organisation already established by the request context. */
 export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
@@ -87,7 +77,8 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   const rows = await transaction.query<ReadRow>`
     select * from vortex_access.read_current_organization_runtime_settings_for_application()
   `;
-  if (rows.length > 1) throw unavailable();
+
+  if (rows.length > 1) throw unavailableError(unavailableCode, "42501");
   const row = rows[0];
   if (row === undefined) return undefined;
   const settings = organizationRuntimeSettingsSchema.safeParse({
@@ -97,9 +88,9 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
     currency: row.currency,
     dateFormat: row.date_format,
     numberFormat: row.number_format,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
   });
-  if (!settings.success) throw unavailable();
+  if (!settings.success) throw unavailableError(unavailableCode, "42501");
   return settings.data;
 };
 
@@ -111,11 +102,11 @@ export const readCurrentOrganizationDefaultApplicationAfterAuthorization = async
     select vortex_access.read_current_organization_default_application_for_application()
       as default_application_root_id
   `;
-  if (rows.length !== 1 || rows[0] === undefined) throw unavailable();
+  if (rows.length !== 1 || rows[0] === undefined) throw unavailableError(unavailableCode, "42501");
   const value = rows[0].default_application_root_id;
   if (value === null) return null;
   const parsed = applicationRootIdSchema.safeParse(value);
-  if (!parsed.success) throw unavailable();
+  if (!parsed.success) throw unavailableError(unavailableCode, "42501");
   return parsed.data;
 };
 
@@ -179,7 +170,8 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
         return { kind: "unavailable" };
 
       return requests.runChange(session.data, selection.data, async (transaction, scope) => {
-        if (!sameUuid(command.settings.organizationId, scope.organizationId)) throw unavailable();
+        if (!sameId(command.settings.organizationId, scope.organizationId))
+          throw unavailableError(unavailableCode, "42501");
         const rows = await transaction.query<UpdateRow>`
           select organization_id, settings
           from vortex_access.update_organization_runtime_settings_for_administration(
@@ -194,12 +186,12 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
         if (
           rows.length !== 1 ||
           rows[0] === undefined ||
-          !sameUuid(String(rows[0].organization_id), scope.organizationId)
+          !sameId(String(rows[0].organization_id), scope.organizationId)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode, "42501");
         const settings = organizationRuntimeSettingsSchema.safeParse(rows[0].settings);
         if (!settings.success || settings.data.revision !== command.expectedRevision + 1)
-          throw unavailable();
+          throw unavailableError(unavailableCode, "42501");
         return settings.data;
       });
     },
@@ -239,21 +231,22 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
         if (
           rows.length !== 1 ||
           rows[0] === undefined ||
-          !sameUuid(String(rows[0].organization_id), scope.organizationId)
+          !sameId(String(rows[0].organization_id), scope.organizationId)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode, "42501");
         const changed = rows[0].changed;
-        const nextRevision = revision(rows[0].revision);
+        const nextRevision = databaseRevision(rows[0].revision);
         if (
           typeof changed !== "boolean" ||
           typeof nextRevision !== "number" ||
           (changed && nextRevision !== command.expectedRevision + 1) ||
           (!changed && nextRevision !== command.expectedRevision)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode, "42501");
         const value = rows[0].default_application_root_id;
         if (value === null) {
-          if (command.defaultApplicationRootId !== null) throw unavailable();
+          if (command.defaultApplicationRootId !== null)
+            throw unavailableError(unavailableCode, "42501");
           return {
             organizationId: scope.organizationId,
             defaultApplicationRootId: null,
@@ -264,9 +257,9 @@ export const createOrganizationRuntimeSettingsAdministrationService = (
         if (
           !parsed.success ||
           command.defaultApplicationRootId === null ||
-          !sameUuid(parsed.data, command.defaultApplicationRootId)
+          !sameId(parsed.data, command.defaultApplicationRootId)
         )
-          throw unavailable();
+          throw unavailableError(unavailableCode, "42501");
         return {
           organizationId: scope.organizationId,
           defaultApplicationRootId: parsed.data,

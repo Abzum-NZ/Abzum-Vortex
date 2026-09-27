@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  databaseTimestamp,
   activityIdSchema,
   administrationDuplicateKeySchema,
   applicationRootIdSchema,
@@ -182,9 +183,6 @@ type ReadResultRow = DatabaseRow & {
   result: unknown;
 };
 
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
 const databaseCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { readonly code?: unknown }).code)
@@ -228,15 +226,13 @@ const parseBinding = (value: unknown): FlowExecutionBinding => {
   return parsed.data;
 };
 
-const parseMutation = (
-  rows: readonly MutationResultRow[],
-): FlowExecutionBindingMutationResult => {
+const parseMutation = (rows: readonly MutationResultRow[]): FlowExecutionBindingMutationResult => {
   const row = requireOne(rows);
   const parsed = flowExecutionBindingMutationResultSchema.safeParse({
     outcome: row.outcome,
     binding: row.result,
     correlationId: row.correlation_id,
-    acceptedAt: timestamp(row.accepted_at),
+    acceptedAt: databaseTimestamp(row.accepted_at),
   });
   if (!parsed.success)
     throw new FlowExecutionBindingError("INVALID_FLOW_EXECUTION_BINDING_STORAGE_RESULT", {

@@ -11,11 +11,11 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 type LauncherRow = DatabaseRow & {

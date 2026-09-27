@@ -11,7 +11,7 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 /**
@@ -91,7 +91,7 @@ export type IdentityAuthorityDisablementConfiguration = Readonly<{
 export interface IdentityAuthorityDisablementDependencies {
   readonly configuration: IdentityAuthorityDisablementConfiguration;
   readonly runtimeTransaction?: <Result>(
-    operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
   ) => Promise<Result>;
 }
 
@@ -141,7 +141,8 @@ const count = (value: unknown): number | undefined => {
 
 const single = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   const row = rows[0];
-  if (rows.length !== 1 || row === undefined) throw new Error("Identity disablement record mismatch");
+  if (rows.length !== 1 || row === undefined)
+    throw new Error("Identity disablement record mismatch");
   return row;
 };
 
@@ -201,7 +202,8 @@ export const createIdentityAuthorityDisablement = (
         if (!recordedCorrelationId.success) throw new Error("Identity disablement record mismatch");
         if (begun.outcome === "replayed") {
           const sessionsRevoked = count(begun.sessions_revoked);
-          if (sessionsRevoked === undefined) throw new Error("Identity disablement record mismatch");
+          if (sessionsRevoked === undefined)
+            throw new Error("Identity disablement record mismatch");
           return {
             outcome: "disabled",
             commandId: command.commandId,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { identityIdSchema } from "@vortex/contracts";
-import type { RequestDatabaseTransaction, RuntimeDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 
 /**
  * Live disablement checks for named sensitive operations.
@@ -23,7 +23,7 @@ import type { RequestDatabaseTransaction, RuntimeDatabaseTransaction } from "@vo
  * identity of its checked session) when that identity is disabled.
  */
 export const requireIdentityNotDisabled = async (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   identityId: string,
 ): Promise<void> => {
   const verified = identityIdSchema.parse(identityId);
