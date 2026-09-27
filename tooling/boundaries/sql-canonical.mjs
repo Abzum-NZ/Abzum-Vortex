@@ -252,6 +252,52 @@ function readFunctionOwner(statement) {
   };
 }
 
+function readFunctionRename(statement) {
+  const header = /^\s*alter\s+function\s+(if\s+exists\s+)?([a-z_][a-z0-9_]*)\s*\.\s*([a-z_][a-z0-9_]*)\s*\(/i.exec(
+    statement.code,
+  );
+  if (!header) return null;
+  const openParenthesis = header[0].lastIndexOf("(");
+  const close = closingParenthesis(statement.code, openParenthesis);
+  if (close === -1) return null;
+  const rename = /^\s*rename\s+to\s+([a-z_][a-z0-9_]*)\s*;?\s*$/i.exec(
+    statement.code.slice(close + 1),
+  );
+  if (!rename) return null;
+  return {
+    schema: header[2].toLowerCase(),
+    name: header[3].toLowerCase(),
+    signature: inputSignature(statement.code.slice(openParenthesis + 1, close)),
+    newName: rename[1].toLowerCase(),
+    ifExists: Boolean(header[1]),
+  };
+}
+
+function renameDefinitionBlock(block, schema, name, newName) {
+  const header = definitionHeader.exec(block);
+  if (
+    !header ||
+    header[1].toLowerCase() !== schema ||
+    header[2].toLowerCase() !== name
+  ) {
+    return null;
+  }
+  // Use the final identifier in the matched header. Whitespace around the dot is valid SQL.
+  const nameSuffix = /[a-z_][a-z0-9_]*\s*\($/i.exec(header[0]);
+  const nameStart = header[0].length - nameSuffix[0].length;
+  return (block.slice(0, nameStart) + newName + block.slice(nameStart + name.length))
+    .replace(/^create\s+function\b/i, "create or replace function");
+}
+
+function isFunctionBodyPatchInDoBlock(code) {
+  return (
+    /^\s*do\b/i.test(code) &&
+    /\b(?:regexp_)?replace\s*\(/i.test(code) &&
+    /\bexecute\b/i.test(code) &&
+    /\b(?:function|procedure|pg_proc|regprocedure|prosrc|routine_definition)\b/i.test(code)
+  );
+}
+
 function readRoleCommand(statement) {
   const code = statement.code.trim();
   if (/^reset\s+role\s*;?$/i.test(code)) return { kind: "reset" };
@@ -459,6 +505,80 @@ export async function validateSqlCanonical(root) {
         continue;
       }
 
+      const functionRename = readFunctionRename(statement);
+      if (functionRename) {
+        const previousKey = functionKey(functionRename.schema, functionRename.name);
+        const renamedKey = functionKey(functionRename.schema, functionRename.newName);
+        const live = signatures.get(previousKey);
+        if (!live?.has(functionRename.signature)) {
+          if (governed && !functionRename.ifExists) {
+            errors.push(
+              `${relative} renames ${previousKey}(${functionRename.signature}) without a matching live signature`,
+            );
+          }
+          continue;
+        }
+        if (previousKey === renamedKey) {
+          errors.push(`${relative} renames ${previousKey} to the same name`);
+          continue;
+        }
+        const renamedSignatures = signatures.get(renamedKey) ?? new Set();
+        // Owner and canonical state are keyed by function name, so a rename cannot merge
+        // two names even when PostgreSQL would allow distinct overload signatures.
+        if (renamedSignatures.size > 0) {
+          errors.push(
+            `${relative} renames ${previousKey}(${functionRename.signature}) to an existing ${renamedKey} function name`,
+          );
+          continue;
+        }
+
+        const previousState = latest.get(previousKey);
+        if (live.size !== 1 || previousState?.signature !== functionRename.signature) {
+          errors.push(
+            `${relative} renames ${previousKey}(${functionRename.signature}) without an unambiguous replayed definition`,
+          );
+          continue;
+        }
+
+        const renamedBlock = renameDefinitionBlock(
+          previousState.block,
+          functionRename.schema,
+          functionRename.name,
+          functionRename.newName,
+        );
+        if (!renamedBlock) {
+          errors.push(`${relative} cannot replay the definition header for ${previousKey}`);
+          continue;
+        }
+
+        live.delete(functionRename.signature);
+        signatures.delete(previousKey);
+        renamedSignatures.add(functionRename.signature);
+        signatures.set(renamedKey, renamedSignatures);
+
+        latest.set(previousKey, { file: relative, governed, dropped: true });
+        latest.set(renamedKey, {
+          ...previousState,
+          file: relative,
+          governed,
+          dropped: false,
+          signature: functionRename.signature,
+          block: renamedBlock,
+        });
+
+        const previousOwner = owners.get(previousKey);
+        if (previousOwner !== undefined) {
+          owners.delete(previousKey);
+          owners.set(renamedKey, previousOwner);
+        }
+        const previousOwnerChange = governedOwnerChanges.get(previousKey);
+        if (previousOwnerChange) {
+          governedOwnerChanges.delete(previousKey);
+          governedOwnerChanges.set(renamedKey, previousOwnerChange);
+        }
+        continue;
+      }
+
       const ownerChange = readFunctionOwner(statement);
       if (ownerChange) {
         const key = functionKey(ownerChange.schema, ownerChange.name);
@@ -503,6 +623,11 @@ export async function validateSqlCanonical(root) {
           governedOwnerChanges.delete(key);
           latest.set(key, { file: relative, governed, dropped: true });
         }
+        if (governed && isFunctionBodyPatchInDoBlock(statement.code)) {
+          errors.push(
+            `${relative} patches a function body inside a do block; carry the complete new body instead`,
+          );
+        }
         if (governed && definitionPatch.test(statement.code)) {
           errors.push(
             `${relative} patches a function definition with replace(); carry the complete new body instead`,
@@ -518,6 +643,11 @@ export async function validateSqlCanonical(root) {
 
       // Session-temporary helpers never persist, so they have no canonical source.
       if (definition.schema === "pg_temp") {
+        if (governed && isFunctionBodyPatchInDoBlock(statement.code)) {
+          errors.push(
+            `${relative} patches a function body inside a do block; carry the complete new body instead`,
+          );
+        }
         if (governed && definitionPatch.test(statement.code)) {
           errors.push(
             `${relative} patches a function definition with replace(); carry the complete new body instead`,
@@ -541,7 +671,13 @@ export async function validateSqlCanonical(root) {
       live.add(definition.signature);
       signatures.set(key, live);
       if (!definition.orReplace || !owners.has(key)) owners.set(key, currentRole);
-      latest.set(key, { file: relative, governed, dropped: false, block: definition.block });
+      latest.set(key, {
+        file: relative,
+        governed,
+        dropped: false,
+        signature: definition.signature,
+        block: definition.block,
+      });
     }
   }
 

@@ -7,6 +7,7 @@ export {
   parseControlData,
   parseControlEventHandlers,
   parseDateInputPayload,
+  parseDateTimeInputPayload,
   parseDialogPayload,
   parseDrawerPayload,
   parseFieldInputPayload,
@@ -14,6 +15,7 @@ export {
   parseLinkInputPayload,
   parseNumberInputPayload,
   parseRichTextInputPayload,
+  parseSeveralChoicesInputPayload,
   parseTabsPayload,
   parseTextInputPayload,
   parseTypedFieldValue,
@@ -32,6 +34,8 @@ export {
   type ControlSemanticEventName,
   type DateInputData,
   type DateInputPayload,
+  type DateTimeInputData,
+  type DateTimeInputPayload,
   type DialogData,
   type DialogPayload,
   type DrawerData,
@@ -46,6 +50,8 @@ export {
   type NumberInputPayload,
   type RichTextInputData,
   type RichTextInputPayload,
+  type SeveralChoicesInputData,
+  type SeveralChoicesInputPayload,
   type TabsData,
   type TabsPayload,
   type TextInputData,
@@ -53,6 +59,7 @@ export {
   type TypedFieldValue,
   type TypedRecordReference,
   type TypedRichTextDocument,
+  type TypedSeveralChoicesValue,
   type ValidationData,
   type ValidationPayload,
 } from "./projected-data";
@@ -65,7 +72,9 @@ export { RichTextInput, type RichTextInputProps } from "./rich-text-input";
 export { NumberInput, type NumberInputProps } from "./number-input";
 export { BooleanInput, type BooleanInputProps } from "./boolean-input";
 export { DateInput, type DateInputProps } from "./date-input";
+export { DateTimeInput, type DateTimeInputProps } from "./date-time-input";
 export { ChoiceInput, type ChoiceInputProps } from "./choice-input";
+export { SeveralChoicesInput, type SeveralChoicesInputProps } from "./several-choices-input";
 export { FieldInput, type FieldInputProps } from "./field-input";
 export { ValidationMessage, type ValidationMessageProps } from "./validation-message";
 export {
