@@ -542,11 +542,13 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.service_desk.cases:service_desk_open_cases"
-                                                                                                     }
+                                                                                                     },
+        "button_new_case": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.service_desk.case.create", "settings": {"label": {"kind": "text", "value": "New case"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_1"
+                                                                                                  "content_1",
+            "button_new_case"
                                                                                               ]
                                                                               }
                                                                     }
@@ -911,13 +913,15 @@
                                                                                                          "slots":  {
 
                                                                                                                    }
-                                                                                                     }
+                                                                                                     },
+        "button_edit_case": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.service_desk.case.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
                                                                                                   "content_2",
                                                                                                   "form_sd_case_resolve",
-                                                                                                  "form_sd_case_public_comment"
+                                                                                                  "form_sd_case_public_comment",
+            "button_edit_case"
                                                                                               ]
                                                                               }
                                                                     }
@@ -2568,6 +2572,20 @@
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_new_case",
+      "key": "vortex.app.events.vortex_app_service_desk_new_case",
+      "record_type": "vortex.service_desk.cases:case",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_edit_case",
+      "key": "vortex.app.events.vortex_app_service_desk_edit_case",
+      "record_type": "vortex.service_desk.cases:case",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
     }
                             ],
                  "public_addresses":  [
@@ -3396,7 +3414,83 @@
                              }
                          ],
                          "outputs": {}
-                     }
+                     },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_case",
+      "key": "navigate_new_case",
+      "description": "Opens the case creation form.",
+      "labels": {
+        "name": "New case"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "service_desk_new_case"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_edit_case",
+      "key": "navigate_edit_case",
+      "description": "Opens the current case in the edit form.",
+      "labels": {
+        "name": "Edit"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.service_desk.cases:case"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "service_desk_case_edit"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
                  ],
                  "flow_bindings":  [
                      {
@@ -3535,7 +3629,28 @@
                                  "name": "record_id"
                              }
                          }
-                     }
+                     },
+    {
+      "id": "binding_new_case",
+      "control": "button_new_case",
+      "event_id": "event_new_case",
+      "event": "action",
+      "flow": "navigate_new_case",
+      "inputs": {}
+    },
+    {
+      "id": "binding_edit_case",
+      "control": "button_edit_case",
+      "event_id": "event_edit_case",
+      "event": "action",
+      "flow": "navigate_edit_case",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
+    }
                  ]
              }
 }
