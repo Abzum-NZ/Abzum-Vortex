@@ -12,7 +12,18 @@ as $function$
 declare
   record_type_id uuid;
   version_value bigint;
+  preview_installation jsonb;
 begin
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is not null then
+    if preview_installation ->> 'outcome' = 'refused' then
+      raise exception using errcode = '42501',
+        message = 'Preview Record context is unavailable';
+    end if;
+    return 0;
+  end if;
+
   version_value := pg_catalog.nextval(
     'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
   );
@@ -64,4 +75,4 @@ grant execute on function vortex_record.bump_record_data_version_internal(uuid, 
   to vortex_record_adapter;
 
 comment on function vortex_record.bump_record_data_version_internal(uuid, uuid, uuid) is
-  'Private Record change signal: takes one non-blocking monotonic version and, for an application-contained scope, publishes the existing content-free post-commit invalidation notice for the record type. Never takes a shared row lock.';
+  'Private live Record change signal: takes one non-blocking monotonic version and, for an application-contained scope, publishes the existing content-free post-commit invalidation notice; preview writes return without changing live invalidation state.';
