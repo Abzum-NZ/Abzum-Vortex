@@ -389,7 +389,7 @@ type CallbackContext = {
 };
 
 type CallbackRuntimeValues = Readonly<{
-  resolvedInputs?: JsonValue;
+  inputs?: JsonValue;
   runtimeScope?: JsonValue;
 }>;
 
@@ -454,9 +454,9 @@ const protectedCallbackTask = (
     type: kestraProtectedCallbackTaskType,
     envelope: rawJson(binding as unknown as JsonValue),
     callbackKey: kestraCallbackKeyReference,
-    ...(runtimeValues.resolvedInputs === undefined
+    ...(runtimeValues.inputs === undefined
       ? {}
-      : { resolvedInputs: runtimeValues.resolvedInputs }),
+      : { inputs: runtimeValues.inputs }),
     ...(runtimeValues.runtimeScope === undefined
       ? {}
       : { runtimeScope: runtimeValues.runtimeScope }),
@@ -1019,7 +1019,7 @@ const compileRegisteredTask = (
         operationId: registered.release.operationId,
         releaseVersion: registered.release.releaseVersion,
       },
-      { resolvedInputs: evaluatedInputs?.reference ?? {} },
+      { inputs: evaluatedInputs?.reference ?? {} },
     );
     return ok([...(evaluatedInputs?.tasks ?? []), callback]);
   }

@@ -58,6 +58,8 @@ import type {
   HumanOrganizationRequestResult,
 } from "@vortex/access";
 import { verifiedDurableActorContextSchema } from "@vortex/access";
+import type { DurableActorRequestScope } from "@vortex/access";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 
 /**
@@ -204,8 +206,11 @@ type ProtectedOperationServices = Readonly<{
 }>;
 
 export type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
-  /** The same registered operations composed on the durable_workflow Access channel. */
-  durableOperations?: ProtectedOperationServices;
+  /** Services bound to the actor's one request transaction and resolved scope. */
+  durableOperations?: (
+    transaction: RequestDatabaseTransaction,
+    scope: DurableActorRequestScope,
+  ) => ProtectedOperationServices;
   /** The #663 Access boundary used to re-resolve the durable run actor and current grants. */
   durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
 }>;
@@ -1002,80 +1007,83 @@ export const createProtectedOperationExecutor = (
      * to provide an IdentitySession or an organisation selection. Platform-service operations
      * remain person-owned; a system actor is refused rather than converted into a person.
      */
-    async executeDurableActor(
-      request: DurableProtectedOperationExecutionRequest,
-    ): Promise<ProtectedOperationExecution> {
+    async executeDurableActor<Result>(
+      request: DurableProtectedOperationExecutionRequest & Readonly<{
+        effect: (
+          transaction: RequestDatabaseTransaction,
+          executeOperation: () => Promise<ProtectedOperationExecution>,
+        ) => Promise<Result>;
+      }>,
+    ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
       try {
         const durableActorRequest = dependencies.durableActorRequest;
         const durableOperations = dependencies.durableOperations;
         const context = durableActorOperationContextSchema.safeParse(request.actorContext);
         const identity = protectedOperationIdentitySchema.safeParse(request.operation);
         if (!durableActorRequest || !durableOperations || !context.success || !identity.success)
-          return { outcome: "refused" };
+          return { kind: "refused" };
         const operationCallKey =
           flowTaskRegistry["operation.call"].protectedOperationKey ??
           "workflow.task.operation.call";
         if (context.data.purpose.operationKey !== operationCallKey)
-          return { outcome: "refused" };
+          return { kind: "refused" };
 
         const registered = findPlatformServiceOperation(
           identity.data.serviceId,
           identity.data.operationId,
           identity.data.releaseVersion,
         );
-        if (registered === undefined) return { outcome: "refused" };
+        if (registered === undefined) return { kind: "refused" };
         const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
         if (
           registeredOperation === undefined ||
           registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
         )
-          return { outcome: "refused" };
+          return { kind: "refused" };
 
         const actorResolution = await durableActorRequest.run(
           context.data,
-          async (_transaction, scope) => {
+          async (transaction, scope) => {
             const policy = context.data.policy;
-            if (policy.kind !== "initiating_person") return false;
-            return (
-              scope.actor.kind === "organization_account" &&
-              scope.actor.organizationAccountId.toLowerCase() ===
-                policy.initiator.organizationAccountId.toLowerCase()
-            );
+            if (policy.kind !== "initiating_person" ||
+                scope.actor.kind !== "organization_account" ||
+                scope.actor.organizationAccountId.toLowerCase() !==
+                  policy.initiator.organizationAccountId.toLowerCase())
+              throw new Error("DURABLE_OPERATION_ACTOR_MISMATCH");
+            const session = identitySessionSchema.parse({
+              identityId: policy.initiator.identityId,
+              sessionId: context.data.purpose.runId,
+              authenticationStrength: "single_factor",
+              accessTokenIssuedAt: context.data.issuedAt,
+              accessTokenExpiresAt: context.data.expiresAt,
+            });
+            const selection = organizationSelectionCandidateSchema.parse({
+              organizationId: scope.organizationId,
+              applicationRootId: scope.applicationRootId,
+            });
+            let called = false;
+            return request.effect(transaction, () => {
+              if (called) throw new Error("DURABLE_OPERATION_REPEATED");
+              called = true;
+              return executeWith(durableOperations(transaction, scope), {
+                operation: identity.data,
+                session,
+                selection,
+                inputs: request.inputs,
+                effectKey: {
+                  runId: context.data.purpose.runId,
+                  taskPath: context.data.purpose.nodeId,
+                  iteration: context.data.purpose.duplicateProtectionKey,
+                },
+              });
+            });
           },
         );
-        if (actorResolution.kind === "unavailable") return { outcome: "refused" };
-        if (actorResolution.kind === "temporarily_unavailable") return { outcome: "failed" };
-        if (!actorResolution.value) return { outcome: "refused" };
-
-        const policy = context.data.policy;
-        if (policy.kind !== "initiating_person") return { outcome: "refused" };
-        const session = identitySessionSchema.safeParse({
-          identityId: policy.initiator.identityId,
-          // The durable run id scopes this short-lived internal request; it is not an auth token.
-          sessionId: context.data.purpose.runId,
-          authenticationStrength: "single_factor",
-          accessTokenIssuedAt: context.data.issuedAt,
-          accessTokenExpiresAt: context.data.expiresAt,
-        });
-        const selection = organizationSelectionCandidateSchema.safeParse({
-          organizationId: context.data.purpose.organizationId,
-          applicationRootId: context.data.purpose.applicationRootId,
-        });
-        if (!session.success || !selection.success) return { outcome: "refused" };
-
-        return await executeWith(durableOperations, {
-          operation: identity.data,
-          session: session.data,
-          selection: selection.data,
-          inputs: request.inputs,
-          effectKey: {
-            runId: context.data.purpose.runId,
-            taskPath: context.data.purpose.nodeId,
-            iteration: context.data.purpose.duplicateProtectionKey,
-          },
-        });
+        if (actorResolution.kind === "unavailable") return { kind: "refused" };
+        if (actorResolution.kind === "temporarily_unavailable") return { kind: "failed" };
+        return { kind: "available", value: actorResolution.value };
       } catch {
-        return { outcome: "failed" };
+        return { kind: "failed" };
       }
     },
   });

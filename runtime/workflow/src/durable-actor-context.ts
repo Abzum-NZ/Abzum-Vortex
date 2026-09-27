@@ -184,6 +184,8 @@ export type DurableActorContextDependencies = Readonly<{
   clock?: () => Date;
   /** The correlation identifier of this attempt; an invalid value refuses. */
   correlationId: () => string;
+  /** Only a caller that reads a completed effect before any new work may use this. */
+  permitTerminalForReplay?: boolean;
 }>;
 
 const canonicalJson = (value: unknown): string => {
@@ -274,7 +276,8 @@ export const resolveDurableActorContext = (
     envelope.data.workflowRevision !== retained.workflowRevision
   )
     return refused("run_mismatch");
-  if (retained.state !== "running") return refused("run_not_active");
+  if (retained.state !== "running" && dependencies.permitTerminalForReplay !== true)
+    return refused("run_not_active");
 
   const node = retained.nodes.find((candidate) => sameId(candidate.nodeId, envelope.data.nodeId));
   if (node === undefined) return refused("node_unknown");

@@ -98,7 +98,7 @@ export {
   type ProtectedNodeRunStore,
 } from "./protected-node-execution";
 
-export { createDatabaseProtectedNodeRunStore } from "./protected-node-store";
+export { createDatabaseProtectedNodeRunStore, createDatabaseProtectedNodeEffectLedger } from "./protected-node-store";
 
 export const WorkflowService = Object.freeze({
   key: "workflow",

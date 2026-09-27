@@ -7,6 +7,7 @@ import {
   protectedNodeRunRecordSchema,
   type ProtectedNodeRunRecord,
   type ProtectedNodeRunStore,
+  type ProtectedNodeEffectLedger,
 } from "./protected-node-execution";
 
 type RunRecordRow = DatabaseRow & { readonly run_record: unknown };
@@ -15,6 +16,18 @@ type RunRefreshRow = DatabaseRow & { readonly refreshed: unknown };
 
 const objectResult = z.object({ written: z.boolean() });
 const refreshResult = z.object({ refreshed: z.boolean() });
+const effectClaimResult = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("claimed") }),
+  z.object({ kind: z.literal("completed"), outcome: z.string(), outputs: z.record(z.string(), z.unknown()) }),
+  z.object({ kind: z.literal("in_progress") }),
+  z.object({ kind: z.literal("unavailable") }),
+]);
+const effectReplayResult = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("missing") }),
+  z.object({ kind: z.literal("completed"), outcome: z.string(), outputs: z.record(z.string(), z.unknown()) }),
+  z.object({ kind: z.literal("in_progress") }),
+  z.object({ kind: z.literal("unavailable") }),
+]);
 const asJson = (value: unknown): string => JSON.stringify(value);
 
 /**
@@ -83,5 +96,54 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
       );
       const row = rows.length === 1 ? refreshResult.safeParse({ refreshed: rows[0]?.refreshed }) : undefined;
       if (row?.success !== true || !row.data.refreshed) return;
+    },
+  });
+
+/** The callback ledger runs on the durable actor's owning request transaction. */
+export const createDatabaseProtectedNodeEffectLedger = (): ProtectedNodeEffectLedger =>
+  Object.freeze({
+    async replay(key, operationKey) {
+      const rows = await withRuntimeTransaction((transaction) =>
+        transaction.query<DatabaseRow & { result: unknown }>`
+          select vortex_workflow.read_protected_node_effect(
+            ${key.runId}::uuid,
+            ${key.organizationId}::uuid,
+            ${key.identityId}::uuid,
+            ${key.taskPath}::text,
+            ${key.iteration}::text,
+            ${operationKey}::text
+          ) as result
+        `,
+      );
+      const result = rows.length === 1 ? effectReplayResult.safeParse(rows[0]?.result) : undefined;
+      return result?.success === true ? result.data : { kind: "unavailable" as const };
+    },
+    async begin(transaction, key, operationKey) {
+      const rows = await transaction.query<DatabaseRow & { result: unknown }>`
+        select vortex_workflow.begin_protected_node_effect(
+          ${key.runId}::uuid,
+          ${key.organizationId}::uuid,
+          ${key.identityId}::uuid,
+          ${key.taskPath}::text,
+          ${key.iteration}::text,
+          ${operationKey}::text
+        ) as result
+      `;
+      const result = rows.length === 1 ? effectClaimResult.safeParse(rows[0]?.result) : undefined;
+      return result?.success === true ? result.data : { kind: "unavailable" as const };
+    },
+    async complete(transaction, key, outcome, outputs) {
+      const rows = await transaction.query<DatabaseRow & { completed: unknown }>`
+        select vortex_workflow.complete_protected_node_effect(
+          ${key.runId}::uuid,
+          ${key.organizationId}::uuid,
+          ${key.identityId}::uuid,
+          ${key.taskPath}::text,
+          ${key.iteration}::text,
+          ${outcome}::text,
+          ${asJson(outputs)}::text::jsonb
+        ) as completed
+      `;
+      return rows.length === 1 && rows[0]?.completed === true;
     },
   });

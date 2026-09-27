@@ -5,19 +5,21 @@ import {
   createHumanOrganizationRequestService,
   createOrganizationAccessAdministrationService,
   createOrganizationRuntimeSettingsAdministrationService,
+  type DurableActorRequestScope,
+  type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import {
   createAppTelemetryCollector,
-  createDatabaseFlowStores,
   createOperationsAlertSink,
   createProtectedOperationExecutor,
 } from "@vortex/app";
-import { type RuntimeDatabaseTransaction } from "@vortex/db";
+import { type RequestDatabaseTransaction, type RuntimeDatabaseTransaction } from "@vortex/db";
 import { createTenantGovernanceService } from "@vortex/identity";
-import type { IdentitySession, OrganizationSelectionCandidate, TenantId } from "@vortex/contracts";
+import type { IdentitySession, OrganizationSelectionCandidate, SelectedOrganizationScope, TenantId } from "@vortex/contracts";
 import {
   applicationKestraCallbackKeySecretName,
   createDatabaseProtectedNodeRunStore,
+  createDatabaseProtectedNodeEffectLedger,
   createProtectedNodeExecution,
   resolveApplicationKestraInstanceTarget,
   type ProtectedNodeRunRecord,
@@ -98,49 +100,66 @@ const kestraExecutionState = async (
 const createCallbackService = () => {
   const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
   const { authorityId: identityAuthorityId } = getIdentityAuthorityConfiguration();
-  const durableRequests = createHumanOrganizationRequestService({
-    identityAuthorityId,
-    telemetry,
-    channel: "durable_workflow",
-  });
-  const services = {
-    accessAdministration: createOrganizationAccessAdministrationService({
+  const createServices = (
+    resolvedRequestTransaction?: HumanOrganizationRequestDependencies["resolvedRequestTransaction"],
+  ) => {
+    const requestDependencies = {
       identityAuthorityId,
       telemetry,
       channel: "durable_workflow",
-    }),
-    runtimeSettings: createOrganizationRuntimeSettingsAdministrationService({
-      identityAuthorityId,
-      telemetry,
-      channel: "durable_workflow",
-    }),
-    tenantGovernance: {
-      run: <Result>(
-        session: IdentitySession,
-        selection: OrganizationSelectionCandidate,
-        operation: (scope: Readonly<{
-          tenantId: TenantId;
-          operations: ReturnType<typeof createTenantGovernanceService>;
-        }>) => Promise<Result>,
-      ) =>
-        durableRequests.runChange(session, selection, (transaction, scope) =>
-          operation({
-            tenantId: scope.tenantId,
-            operations: createTenantGovernanceService({
-              runtimeTransaction: <Result>(
-                run: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
-              ) => run(transaction),
+      ...(resolvedRequestTransaction === undefined ? {} : { resolvedRequestTransaction }),
+    } as const;
+    const durableRequests = createHumanOrganizationRequestService(requestDependencies);
+    return {
+      accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+      runtimeSettings: createOrganizationRuntimeSettingsAdministrationService(requestDependencies),
+      tenantGovernance: {
+        run: <Result>(
+          session: IdentitySession,
+          selection: OrganizationSelectionCandidate,
+          operation: (scope: Readonly<{
+            tenantId: TenantId;
+            operations: ReturnType<typeof createTenantGovernanceService>;
+          }>) => Promise<Result>,
+        ) =>
+          durableRequests.runChange(session, selection, (transaction, scope) =>
+            operation({
+              tenantId: scope.tenantId,
+              operations: createTenantGovernanceService({
+                runtimeTransaction: <Value>(
+                  run: (transaction: RuntimeDatabaseTransaction) => Promise<Value>,
+                ) => run(transaction),
+              }),
             }),
-          }),
-        ),
-    },
+          ),
+      },
+    };
   };
+  const services = createServices();
   const executor = createProtectedOperationExecutor({
     ...services,
-    durableOperations: services,
+    durableOperations: (transaction: RequestDatabaseTransaction, scope: DurableActorRequestScope) => {
+      if (scope.actor.kind !== "organization_account")
+        throw new Error("DURABLE_OPERATION_ACTOR_UNAVAILABLE");
+      const selectedScope: SelectedOrganizationScope = {
+        tenantId: scope.tenantId,
+        organizationId: scope.organizationId,
+        organizationAccountId: scope.actor.organizationAccountId,
+        applicationRootId: scope.applicationRootId,
+        accessVersion: scope.accessVersion,
+      };
+      // The durable actor resolver established this exact request context on this transaction.
+      // Service wrappers reuse it so the operation and effect record commit together.
+      const resolvedRequestTransaction: NonNullable<HumanOrganizationRequestDependencies["resolvedRequestTransaction"]> =
+        async <ResolvedScope, Result>(_resolve: unknown, operation: (
+          transaction: RequestDatabaseTransaction,
+          scope: ResolvedScope,
+        ) => Promise<Result>): Promise<Result> =>
+          operation(transaction, selectedScope as ResolvedScope);
+      return createServices(resolvedRequestTransaction);
+    },
     durableActorRequest: createDurableActorRequestService({ identityAuthorityId }),
   });
-  const stores = createDatabaseFlowStores();
   const runs = createDatabaseProtectedNodeRunStore();
   const execution = createProtectedNodeExecution({
     callbackKey: () => {
@@ -149,7 +168,7 @@ const createCallbackService = () => {
     },
     correlationId: randomUUID,
     runs,
-    effects: stores.ledger,
+    effects: createDatabaseProtectedNodeEffectLedger(),
     operations: executor,
     readKestraState: kestraExecutionState,
   });

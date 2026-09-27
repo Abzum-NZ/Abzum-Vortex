@@ -19,6 +19,7 @@ import {
   type WorkflowExecutionReference,
 } from "@vortex/contracts";
 import { evaluateFlowFormula, type FlowRuntimeValue } from "@vortex/rule";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import {
   resolveDurableActorContext,
@@ -136,10 +137,16 @@ export type ProtectedNodeEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
+export type ProtectedNodeEffectReplay =
+  | Extract<ProtectedNodeEffectClaim, { kind: "completed" | "in_progress" | "unavailable" }>
+  | Readonly<{ kind: "missing" }>;
+
 /** The existing private flow-effect ledger; the application action remains the owning transaction. */
 export type ProtectedNodeEffectLedger = Readonly<{
-  begin: (key: ProtectedNodeEffectKey) => Promise<ProtectedNodeEffectClaim>;
+  replay: (key: ProtectedNodeEffectKey, operationKey: string) => Promise<ProtectedNodeEffectReplay>;
+  begin: (transaction: RequestDatabaseTransaction, key: ProtectedNodeEffectKey, operationKey: string) => Promise<ProtectedNodeEffectClaim>;
   complete: (
+    transaction: RequestDatabaseTransaction,
     key: ProtectedNodeEffectKey,
     outcome: string,
     outputs: Readonly<Record<string, unknown>>,
@@ -153,11 +160,15 @@ export type ProtectedNodeOperationResult =
   | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
 
 export type ProtectedNodeOperationExecutor = Readonly<{
-  executeDurableActor: (request: Readonly<{
+  executeDurableActor: <Result>(request: Readonly<{
     operation: ProtectedNodeOperationIdentity;
     actorContext: VerifiedDurableActorContext;
     inputs: Readonly<Record<string, unknown>>;
-  }>) => Promise<ProtectedNodeOperationResult>;
+    effect: (
+      transaction: RequestDatabaseTransaction,
+      executeOperation: () => Promise<ProtectedNodeOperationResult>,
+    ) => Promise<Result>;
+  }>) => Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>>;
 }>;
 
 /** Safe callback response. `outputs` contains only the descriptor's declared values. */
@@ -394,6 +405,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         callbackKey: dependencies.callbackKey,
         correlationId: dependencies.correlationId,
         clock,
+        permitTerminalForReplay: true,
       });
       if (contextResolution.outcome !== "verified")
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
@@ -410,10 +422,11 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           safeCode: `adapter_unavailable_${owner.replace(/^#/, "")}`,
         };
 
-      if (context.purpose.attempt > maximumCallbackAttempts)
-        return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
-
       if (binding.taskType === "workflow.evaluate") {
+        if (run.data.authority.state !== "running")
+          return { outcome: "permanent_refusal", safeCode: "callback_refused" };
+        if (context.purpose.attempt > maximumCallbackAttempts)
+          return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
         const properties = objectRecord(envelope.data.inputs.properties);
         const value = evaluateValue(
           properties?.expression,
@@ -458,82 +471,79 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         // The signed duplicate key is stable across bounded callback retries.
         iteration: context.purpose.duplicateProtectionKey,
       };
-      let claim: ProtectedNodeEffectClaim;
+      let prior: ProtectedNodeEffectReplay;
       try {
-        claim = await dependencies.effects.begin(effectKey);
+        prior = await dependencies.effects.replay(effectKey, context.purpose.operationKey);
       } catch {
         return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
       }
-      if (claim.kind === "unavailable")
+      if (prior.kind === "unavailable")
         return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
-      if (claim.kind === "in_progress")
+      if (prior.kind === "in_progress")
         return { outcome: "waiting", safeCode: "effect_in_progress", nextPollAt: nextPollAt(clock()) };
-      if (claim.kind === "completed") {
-        const replay = storedResponse(claim.outputs);
+      if (prior.kind === "completed") {
+        const replay = storedResponse(prior.outputs);
         return replay === undefined
           ? { outcome: "retryable_failure", safeCode: "effect_result_unavailable", nextPollAt: nextPollAt(clock()) }
           : { ...replay, outcome: replay.outcome === "completed" ? "already_completed" : replay.outcome };
       }
+      if (run.data.authority.state !== "running")
+        return { outcome: "permanent_refusal", safeCode: "callback_refused" };
+      if (context.purpose.attempt > maximumCallbackAttempts)
+        return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
+      const execution = await dependencies.operations.executeDurableActor({
+        operation,
+        actorContext: context,
+        inputs,
+        effect: async (transaction, executeOperation): Promise<ProtectedNodeCallbackResponse> => {
+          const claim = await dependencies.effects.begin(transaction, effectKey, context.purpose.operationKey);
+          if (claim.kind === "unavailable")
+            throw new Error("PROTECTED_EFFECT_UNAVAILABLE");
+          if (claim.kind === "in_progress")
+            return { outcome: "waiting", safeCode: "effect_in_progress", nextPollAt: nextPollAt(clock()) };
+          if (claim.kind === "completed") {
+            const replay = storedResponse(claim.outputs);
+            if (replay === undefined) throw new Error("PROTECTED_EFFECT_RESULT_UNAVAILABLE");
+            return { ...replay, outcome: replay.outcome === "completed" ? "already_completed" : replay.outcome };
+          }
 
-      let result: ProtectedNodeOperationResult;
-      try {
-        result = await dependencies.operations.executeDurableActor({
-          operation,
-          actorContext: context,
-          inputs,
-        });
-      } catch {
-        result = { outcome: "failed" };
-      }
-
-      const now = clock();
-      const sensitiveOutputs = new Set(registeredOperation.descriptor.sensitiveOutputs ?? []);
-      let response: ProtectedNodeCallbackResponse;
-      switch (result.outcome) {
-        case "committed":
-          response = {
-            outcome: "completed",
-            safeCode: "completed",
-            outputs: {
-              result: Object.fromEntries(
-                Object.entries(result.outputs).filter(([key]) => !sensitiveOutputs.has(key)),
-              ),
-            },
-          };
-          break;
-        case "validation":
-          response = { outcome: "permanent_refusal", safeCode: "invalid_input" };
-          break;
-        case "conflict":
-          response = { outcome: "permanent_refusal", safeCode: "conflict" };
-          break;
-        case "refused":
-          response = { outcome: "permanent_refusal", safeCode: "not_authorized" };
-          break;
-        case "failed":
-          response = { outcome: "retryable_failure", safeCode: "temporarily_unavailable", nextPollAt: nextPollAt(now) };
-          break;
-      }
-      response = safeResponse(response);
-
-      try {
-        const stored = await dependencies.effects.complete(effectKey, ledgerOutcome(response), {
-          response,
-        });
-        if (!stored)
-          return {
-            outcome: "retryable_failure",
-            safeCode: "effect_result_unavailable",
-            nextPollAt: nextPollAt(clock()),
-          };
-      } catch {
-        return {
-          outcome: "retryable_failure",
-          safeCode: "effect_result_unavailable",
-          nextPollAt: nextPollAt(clock()),
-        };
-      }
-      return response;
+          const result = await executeOperation();
+          if (result.outcome === "failed") throw new Error("PROTECTED_OPERATION_FAILED");
+          const sensitiveOutputs = new Set(registeredOperation.descriptor.sensitiveOutputs ?? []);
+          let response: ProtectedNodeCallbackResponse;
+          switch (result.outcome) {
+            case "committed":
+              response = {
+                outcome: "completed",
+                safeCode: "completed",
+                outputs: {
+                  result: Object.fromEntries(
+                    Object.entries(result.outputs).filter(([key]) => !sensitiveOutputs.has(key)),
+                  ),
+                },
+              };
+              break;
+            case "validation":
+              response = { outcome: "permanent_refusal", safeCode: "invalid_input" };
+              break;
+            case "conflict":
+              response = { outcome: "permanent_refusal", safeCode: "conflict" };
+              break;
+            case "refused":
+              response = { outcome: "permanent_refusal", safeCode: "not_authorized" };
+              break;
+          }
+          response = safeResponse(response);
+          const stored = await dependencies.effects.complete(transaction, effectKey, ledgerOutcome(response), { response });
+          if (!stored) throw new Error("PROTECTED_EFFECT_RESULT_UNAVAILABLE");
+          return response;
+        },
+      });
+      if (execution.kind === "refused")
+        return { outcome: "permanent_refusal", safeCode: "not_authorized" };
+      if (execution.kind === "failed")
+        return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
+      return execution.value;
     },
 
     async readRunStatus(runId: string): Promise<ProtectedNodeRunStatus> {
