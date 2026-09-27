@@ -28,7 +28,7 @@ import {
   type FormScope,
 } from "./form-context";
 import { useUnsavedWorkRegistry } from "./unsaved-work";
-import type { FormPayload, TypedFieldValue } from "./projected-data";
+import type { FormPayload } from "./projected-data";
 
 /**
  * A form container accepts its own projected data and declared callbacks, plus one supplied #591
@@ -46,8 +46,6 @@ export type FormContainerProps = ControlRenderProps<FormPayload> &
 export type FormFlowFeedback = Readonly<{
   tone: "success" | "problem";
   text: string;
-  /** True only when this form's submission completed successfully. */
-  clearUnsavedWork?: boolean;
 }>;
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
@@ -86,18 +84,25 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const titleId = useId();
   const feedbackId = useId();
-  const formId = useId();
+  const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
   const [generation, setGeneration] = useState(0);
   const [registry] = useState(() => createFormFieldRegistry(context.location));
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
-  const baselineRef = useRef<Readonly<Record<string, TypedFieldValue>> | undefined>(undefined);
+  const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
   const resetBaseline = useCallback(() => {
     baselineRef.current = registry.values();
   }, [registry]);
+  const setSavedBaseline = useCallback(
+    (values: Readonly<Record<string, unknown>>): boolean => {
+      baselineRef.current = values;
+      return !equalFormValue(registry.values(), values);
+    },
+    [registry],
+  );
   // Rechecks settled feedback only while a result is supplied; without one a
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
@@ -144,14 +149,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   useEffect(() => {
     resetBaseline();
-    return unsavedWorkRegistry?.registerForm(formId, resetBaseline);
-  }, [formId, generation, registry, resetBaseline, unsavedWorkRegistry]);
-
-  useEffect(() => {
-    if (props.flowFeedback?.clearUnsavedWork !== true) return;
-    resetBaseline();
-    unsavedWorkRegistry?.setDirty(formId, false);
-  }, [formId, props.flowFeedback?.clearUnsavedWork, resetBaseline, unsavedWorkRegistry]);
+    return unsavedWorkRegistry?.registerForm(formId, resetBaseline, setSavedBaseline);
+  }, [formId, generation, resetBaseline, setSavedBaseline, unsavedWorkRegistry]);
 
   const resetRef = useRef(false);
   useEffect(() => {
@@ -195,7 +194,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
   if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
     return (
-      <p role="alert" data-vortex-control="form-container" data-vortex-placement-id={props.placementId}>
+      <p
+        role="alert"
+        data-vortex-control="form-container"
+        data-vortex-placement-id={props.placementId}
+      >
         Record unavailable.
       </p>
     );

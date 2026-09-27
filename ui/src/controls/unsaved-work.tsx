@@ -14,12 +14,18 @@ import type { UnsavedWorkGuard } from "../launcher/link-navigation";
 type RegisteredForm = Readonly<{
   dirty: boolean;
   resetBaseline: () => void;
+  setSavedBaseline: (values: Readonly<Record<string, unknown>>) => boolean;
   registration: object;
 }>;
 
 type UnsavedWorkRegistry = Readonly<{
-  registerForm: (formId: string, resetBaseline: () => void) => () => void;
+  registerForm: (
+    formId: string,
+    resetBaseline: () => void,
+    setSavedBaseline: RegisteredForm["setSavedBaseline"],
+  ) => () => void;
   setDirty: (formId: string, dirty: boolean) => void;
+  markSaved: (formId: string, values: Readonly<Record<string, unknown>>) => void;
   clearAll: () => void;
   hasUnsavedWork: () => boolean;
   subscribe: (listener: () => void) => () => void;
@@ -36,10 +42,15 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
   };
 
   return {
-    registerForm: (formId, resetBaseline) => {
+    registerForm: (formId, resetBaseline, setSavedBaseline) => {
       const previous = forms.get(formId);
       const registration = {};
-      const form = { dirty: previous?.dirty ?? false, resetBaseline, registration };
+      const form = {
+        dirty: previous?.dirty ?? false,
+        resetBaseline,
+        setSavedBaseline,
+        registration,
+      };
       forms.set(formId, form);
       return () => {
         if (forms.get(formId)?.registration !== registration) return;
@@ -53,6 +64,13 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
       if (form === undefined || form.dirty === dirty) return;
       const wasDirty = hasUnsavedWork();
       forms.set(formId, { ...form, dirty });
+      if (wasDirty !== hasUnsavedWork()) notify();
+    },
+    markSaved: (formId, values) => {
+      const form = forms.get(formId);
+      if (form === undefined) return;
+      const wasDirty = hasUnsavedWork();
+      forms.set(formId, { ...form, dirty: form.setSavedBaseline(values) });
       if (wasDirty !== hasUnsavedWork()) notify();
     },
     clearAll: () => {

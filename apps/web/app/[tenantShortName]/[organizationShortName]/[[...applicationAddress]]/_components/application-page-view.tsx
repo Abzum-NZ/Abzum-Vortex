@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-} from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createFlowInvokeClient,
@@ -27,9 +19,11 @@ import {
   type FlowDispatchResult,
   type FlowFormAnswer,
   type FlowFormIntent,
+  type FlowInvokeClient,
   type FormBlockRuntime,
   type LinkNavigationEnvironment,
   type ProjectedPageCapability,
+  type ServerFlowResponse,
 } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -74,10 +68,10 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
  */
 type EventHandlers = Record<string, (event: never) => void>;
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
-type FormNotice = Readonly<{
-  tone: "success" | "problem";
-  text: string;
-  clearUnsavedWork?: boolean;
+type FormNotice = Readonly<{ tone: "success" | "problem"; text: string }>;
+type SubmittedForm = Readonly<{
+  formId: string;
+  values: Readonly<Record<string, unknown>>;
 }>;
 
 /**
@@ -264,6 +258,8 @@ function ApplicationPageViewContent({
   const [busy, setBusy] = useState(false);
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
+  const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
+  const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   const confirmationResolveRef = useRef<((leave: boolean) => void) | undefined>(undefined);
   const confirmationPromiseRef = useRef<Promise<boolean> | undefined>(undefined);
   const confirmDiscardUnsavedWork = useCallback((): Promise<boolean> => {
@@ -296,8 +292,7 @@ function ApplicationPageViewContent({
     },
     [],
   );
-  const { hasUnsavedWork, guard: unsavedWork } =
-    useUnsavedWorkGuard(confirmDiscardUnsavedWork);
+  const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   const application = model.invocation;
   const subject = model.subject;
@@ -345,7 +340,12 @@ function ApplicationPageViewContent({
             ? event.target.parentElement
             : null;
       const anchor = target?.closest<HTMLAnchorElement>("a[href]");
-      if (anchor === null || anchor.target.toLowerCase() === "_blank") return;
+      if (
+        !(anchor instanceof HTMLAnchorElement) ||
+        (anchor.target !== "" && anchor.target.toLowerCase() !== "_self") ||
+        anchor.hasAttribute("download")
+      )
+        return;
       let address: URL;
       try {
         address = new URL(anchor.href, window.location.href);
@@ -353,7 +353,13 @@ function ApplicationPageViewContent({
         return;
       }
       if (address.origin !== window.location.origin || !unsavedWork.hasUnsavedWork()) return;
+      if (
+        address.pathname === window.location.pathname &&
+        address.search === window.location.search
+      )
+        return;
       event.preventDefault();
+      event.stopPropagation();
       void (async () => {
         if (!(await unsavedWork.confirmDiscardUnsavedWork())) return;
         router.push(`${address.pathname}${address.search}${address.hash}`);
@@ -368,22 +374,52 @@ function ApplicationPageViewContent({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
-  const flowClient = useMemo(
-    () =>
-      createFlowInvokeClient({
-        address: {
-          tenantShortName: application.tenantShortName,
-          organizationShortName: application.organizationShortName,
-          applicationKey: application.applicationKey,
-        },
-        installation: {
-          installationRevision: application.installationRevision,
-          releaseKey: application.releaseKey,
-        },
-        ...(subject === undefined ? {} : { subject }),
-      }),
-    [application, subject],
-  );
+  const flowClient = useMemo<FlowInvokeClient>(() => {
+    const client = createFlowInvokeClient({
+      address: {
+        tenantShortName: application.tenantShortName,
+        organizationShortName: application.organizationShortName,
+        applicationKey: application.applicationKey,
+      },
+      installation: {
+        installationRevision: application.installationRevision,
+        releaseKey: application.releaseKey,
+      },
+      ...(subject === undefined ? {} : { subject }),
+    });
+    const recordResponse = (
+      response: ServerFlowResponse,
+      submission: SubmittedForm | undefined,
+    ) => {
+      if (submission === undefined) return;
+      if (response.kind === "intent") {
+        continuingFormsRef.current.set(response.continuation, submission);
+      } else if (
+        response.kind === "result" &&
+        response.failure === undefined &&
+        response.descriptor.commit === "confirmed"
+      ) {
+        // The server has confirmed the submitted values before its Navigate intent is presented.
+        unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
+      }
+    };
+    return {
+      startBinding: async (binding, callerInputs, clickId) => {
+        const submission = submittedFormsRef.current.get(binding.bindingId);
+        submittedFormsRef.current.delete(binding.bindingId);
+        const response = await client.startBinding(binding, callerInputs, clickId);
+        recordResponse(response, submission);
+        return response;
+      },
+      resume: async (flowId, continuation, answer, evidence) => {
+        const submission = continuingFormsRef.current.get(continuation);
+        continuingFormsRef.current.delete(continuation);
+        const response = await client.resume(flowId, continuation, answer, evidence);
+        recordResponse(response, submission);
+        return response;
+      },
+    };
+  }, [application, subject, unsavedWorkRegistry]);
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
@@ -479,11 +515,7 @@ function ApplicationPageViewContent({
    * that run set it.
    */
   const applyDispatch = useCallback(
-    async (
-      dispatch: Promise<FlowDispatchResult | undefined>,
-      formPlacementId?: string,
-      formSubmission = false,
-    ) => {
+    async (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string) => {
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -493,7 +525,7 @@ function ApplicationPageViewContent({
           delete next[formPlacementId];
           return next;
         });
-      const showResult = (resultNotice: Notice, clearUnsavedWork = false): void => {
+      const showResult = (resultNotice: Notice): void => {
         setNotice(resultNotice);
         if (formPlacementId !== undefined)
           setFormFeedback((current) => ({
@@ -501,7 +533,6 @@ function ApplicationPageViewContent({
             [formPlacementId]: {
               tone: resultNotice.tone === "problem" ? "problem" : "success",
               text: resultNotice.text,
-              ...(clearUnsavedWork ? { clearUnsavedWork: true } : {}),
             },
           }));
       };
@@ -524,10 +555,7 @@ function ApplicationPageViewContent({
         if (server.kind === "finished") {
           setSelection({});
           const resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
-          showResult(
-            resultNotice,
-            formSubmission && server.failure === undefined && resultNotice.tone !== "problem",
-          );
+          showResult(resultNotice);
           return router.refresh();
         }
         if (server.kind === "refused") {
@@ -661,10 +689,13 @@ function ApplicationPageViewContent({
             }));
             return;
           }
+          submittedFormsRef.current.set(submitBinding.bindingId, {
+            formId: placementId,
+            values: event.values,
+          });
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
             placementId,
-            true,
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
