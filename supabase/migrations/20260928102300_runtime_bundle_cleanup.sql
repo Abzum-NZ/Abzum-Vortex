@@ -9,6 +9,7 @@ begin;
 
 set local role vortex_record_owner;
 grant usage on schema vortex_record to vortex_module_owner;
+grant create on schema vortex_record to vortex_record_adapter;
 reset role;
 
 set local role vortex_record_adapter;
@@ -20,6 +21,10 @@ create index installation_access_plans_bundle_cleanup_idx
 create policy installation_access_plans_module_bundle_cleanup
   on vortex_record.installation_access_plans to vortex_module_owner
   using (true) with check (true);
+reset role;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
 
 set local role vortex_module_owner;
