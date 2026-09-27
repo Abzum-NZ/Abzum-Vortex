@@ -1,8 +1,8 @@
 import {
-  moduleFieldV2Schema,
-  recordTypeDefinitionV2Schema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  moduleFieldV3Schema,
+  recordTypeDefinitionV3Schema,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import { evaluateRecordTotalsV2 } from "../src";
@@ -32,11 +32,11 @@ const ids = {
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
   required = false,
-): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -50,7 +50,7 @@ const field = (
     settings,
   });
 
-const sourceFields = (): ModuleFieldV2[] => [
+const sourceFields = (): ModuleFieldV3[] => [
   field(ids.sourceTitle, "source_title", "text", { maxLength: 100 }, true),
   field(ids.link, "parent", "link", {
     target: { state: "resolved", moduleRootId: ids.module, recordTypeId: ids.targetRecord },
@@ -70,8 +70,8 @@ const sourceFields = (): ModuleFieldV2[] => [
   field(ids.category, "category", "text", { maxLength: 20 }),
 ];
 
-const sourceRecordType = (): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const sourceRecordType = (): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.sourceRecord,
     key: "source_record",
     singularLabel: "Source record",
@@ -112,7 +112,7 @@ const total = (
     decimalPlaces?: number;
     filter?: unknown;
   }> = {},
-): ModuleFieldV2 =>
+): ModuleFieldV3 =>
   field(
     id(100 + value),
     `total_${value}`,
@@ -129,8 +129,8 @@ const total = (
     options.required,
   );
 
-const targetRecordType = (totals: readonly ModuleFieldV2[]): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const targetRecordType = (totals: readonly ModuleFieldV3[]): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.targetRecord,
     key: "target_record",
     singularLabel: "Target record",
@@ -146,7 +146,7 @@ const targetRecordType = (totals: readonly ModuleFieldV2[]): RecordTypeDefinitio
   });
 
 const evaluate = (
-  totals: readonly ModuleFieldV2[],
+  totals: readonly ModuleFieldV3[],
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[],
 ) =>
   evaluateRecordTotalsV2({
@@ -156,7 +156,7 @@ const evaluate = (
     ],
   });
 
-describe("Module V2 relationship totals", () => {
+describe("Module V3 relationship totals", () => {
   it("counts filtered related records with Rule V2 null semantics", () => {
     const filter = {
       kind: "comparison",

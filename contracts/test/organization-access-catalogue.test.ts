@@ -4,7 +4,6 @@ import {
   applicationRoleSchema,
   applicationRoleTemplateContinuitySchema,
   delegationAuthoritySchema,
-  permissionEntrySchema,
   permissionContinuitySchema,
   preparedApplicationRoleTemplatesSchema,
   projectLiveApplicationRolePermissions,
@@ -377,7 +376,6 @@ describe("organisation access catalogue contracts", () => {
 
   it("requires exact owner-qualified permission identity and application context", () => {
     expect(rolePermissionEntrySchema.safeParse(exactPermission()).success).toBe(true);
-    expect(permissionEntrySchema.safeParse(exactPermission()).success).toBe(true);
     expect(
       rolePermissionEntrySchema.safeParse({
         ...exactPermission(),
