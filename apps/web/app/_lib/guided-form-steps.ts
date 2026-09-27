@@ -399,7 +399,8 @@ const collectStepFields = (
   visiblePlacementIds?: ReadonlySet<string>,
 ): readonly GuidedFormStepFields[] | undefined => {
   const roots = guidedStepRoots(page, shellsCandidate);
-  if (roots === undefined) return undefined;
+  const lastStep = Array.isArray(page.steps) ? page.steps.at(-1) : undefined;
+  if (roots === undefined || !isRecord(lastStep) || lastStep.summary !== true) return undefined;
   const result: GuidedFormStepFields[] = [];
   const allFieldKeys = new Set<string>();
   for (const candidate of page.steps as readonly unknown[]) {
