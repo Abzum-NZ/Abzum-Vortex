@@ -1,9 +1,17 @@
 import { z } from "zod";
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
-import { builderKeySchema, namespacedKeySchema, organizationAccountIdSchema } from "./identifiers";
+import {
+  builderKeySchema,
+  fingerprintSchema,
+  namespacedKeySchema,
+  organizationAccountIdSchema,
+  permissionIdSchema,
+  recordTypeIdSchema,
+} from "./identifiers";
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
+  descriptionSchema,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -38,6 +46,11 @@ import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compat
 import { sourceFlowCollectionSchema } from "./flow-source-contracts";
 import { protectedReadModelKeySchema } from "./application-composition-v2";
 import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
+import {
+  permissionActionKindSchema,
+  permissionFieldPolicySchema,
+  permissionRecordScopeSchema,
+} from "./permissions";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
@@ -50,6 +63,42 @@ export const writableSystemProjectionRegistrations = Object.freeze({
     writer: "save_organization_settings_record",
   }),
 } as const);
+
+/** A declaration kept by a platform system-module source for creation-time platform registration. */
+export const modulePlatformPermissionDeclarationSchema = z
+  .object({
+    pinnedPermissionId: permissionIdSchema.optional(),
+    key: namespacedKeySchema,
+    label: labelSchema,
+    description: descriptionSchema,
+    recordTypeId: recordTypeIdSchema.optional(),
+    actionKind: permissionActionKindSchema,
+    namedAction: builderKeySchema.optional(),
+    administrative: z.boolean(),
+    recordScope: permissionRecordScopeSchema.optional(),
+    fieldPolicy: permissionFieldPolicySchema.optional(),
+    stewardMinimum: z.boolean().optional(),
+    meaningFingerprint: fingerprintSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.actionKind === "named") !== (value.namedAction !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["namedAction"],
+        message: "Named actions are present only for the named action kind",
+      });
+    if (value.fieldPolicy !== undefined && value.recordTypeId === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["fieldPolicy"],
+        message: "Only record permissions may declare a field policy",
+      });
+  });
+
+export type ModulePlatformPermissionDeclaration = z.infer<
+  typeof modulePlatformPermissionDeclarationSchema
+>;
 
 export const isRegisteredWritableSystemProjection = (
   recordTypeKey: string,

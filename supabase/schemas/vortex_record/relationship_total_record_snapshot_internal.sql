@@ -121,6 +121,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.relationship_total_record_snapshot_internal(jsonb,uuid,uuid,boolean) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.relationship_total_record_snapshot_internal(
   jsonb, uuid, uuid, boolean
 )

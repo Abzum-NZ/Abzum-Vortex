@@ -7,6 +7,7 @@ import { createFlowOrchestrator } from "./flow-orchestrator";
 import { createFormContinuationService } from "./form-continuation";
 import { createIdentityDisablementCoordinator } from "./identity-disablement";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
+import { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
@@ -152,6 +153,14 @@ export {
 } from "./installation-coordinator";
 
 export {
+  createPreviewInstallationCoordinator,
+  PreviewInstallationCoordinatorError,
+  previewInstallationCoordinatorErrorCodes,
+  type PreviewInstallationCoordinatorDependencies,
+  type PreviewInstallationCoordinatorErrorCode,
+} from "./preview-installation-coordinator";
+
+export {
   createIdentityDisablementCoordinator,
   identityDisablementRefusalCodes,
   identityDisablementRequestSchema,
@@ -216,6 +225,7 @@ export const AppService = Object.freeze({
   createOperationsAlertSink,
   readOpenOperationsAlertSignals,
   createApplicationInstallationCoordinator,
+  createPreviewInstallationCoordinator,
   createInstalledRuntimeContextLoader,
   createComponentContextResolver,
   createComponentEventDispatcher,

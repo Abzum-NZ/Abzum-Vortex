@@ -50,6 +50,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.transfer_offboarding_active_owned_record(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid,bigint) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.transfer_offboarding_active_owned_record(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint
 ) from public, anon, authenticated, service_role, vortex_runtime,

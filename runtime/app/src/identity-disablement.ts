@@ -12,11 +12,13 @@ import {
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
-  platformPermissionCatalogue,
-  platformPermissionCatalogueOwnerId,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
+import {
+  platformPermissionDeclarations,
+  platformPermissionOwnerId,
+} from "@vortex/modules";
 import { z } from "zod";
 
 /**
@@ -116,7 +118,7 @@ export type IdentityDisablementDependencies = HumanOrganizationRequestDependenci
     identityAuthority: IdentityAuthorityDisabler;
   }>;
 
-const disableIdentitiesPermission = platformPermissionCatalogue.permissions.find(
+const disableIdentitiesPermission = platformPermissionDeclarations.find(
   (permission) => permission.key === "platform.security.identities.disable",
 );
 
@@ -133,7 +135,7 @@ const buildDeclaration = (): OrganizationAccessDeclaration => {
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionCatalogueOwnerId,
+      ownerId: platformPermissionOwnerId,
       permissionId: disableIdentitiesPermission.permissionId,
     },
     recentAuthentication: { kind: "primary", maximumAgeSeconds: 900 },

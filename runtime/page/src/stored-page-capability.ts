@@ -12,8 +12,6 @@ import {
   type OrganizationSelectionCandidate,
   type PermissionDeclaration,
   type PermissionRegistryEntryCandidate,
-  platformPermissionCatalogueOwnerId,
-  platformPermissionFor,
   PLATFORM_SERVICE_OPERATIONS,
   flowTaskChildLists,
   flowTaskRegistry,
@@ -22,6 +20,7 @@ import {
   type FlowTask,
   type ProtectedReadModelKey,
 } from "@vortex/contracts";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -110,7 +109,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionCatalogueOwnerId,
+          ownerId: platformPermissionOwnerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },

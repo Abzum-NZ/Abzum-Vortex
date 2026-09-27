@@ -57,10 +57,12 @@ export const tenantSchema = z
     message: "The tenant state-change time cannot precede its creation time",
   });
 
-/** The complete structural authority catalogue; tenant assignments never name permissions or roles. */
+/** The single closed tenant permission set. */
 export const tenantStructuralCapabilityKeys = [
   "platform.tenant.administrators.manage",
   "platform.tenant.administrators.read",
+  "platform.tenant.capability_limits.allocate",
+  "platform.tenant.capability_limits.read",
   "platform.tenant.hierarchy.read",
   "platform.tenant.organizations.create",
   "platform.tenant.organizations.lifecycle",
@@ -70,7 +72,28 @@ export const tenantStructuralCapabilityKeys = [
 
 export const tenantStructuralCapabilitySchema = z.enum(tenantStructuralCapabilityKeys);
 
-/** One stable, deduplicated capability set: callers cannot encode the same authority twice or reorder it. */
+/** Tenant administrators receive this read permission by default. */
+export const tenantAdministratorDefaultCapabilityKeys = [
+  "platform.tenant.capability_limits.read",
+] as const satisfies readonly (typeof tenantStructuralCapabilityKeys)[number][];
+
+/** This role preset resolves to the same direct tenant permissions held in assignments. */
+export const tenantPermissionRoleTemplates = [
+  {
+    key: "tenant_limits_manager",
+    name: "Tenant limits manager",
+    capabilityKeys: [
+      "platform.tenant.capability_limits.allocate",
+      "platform.tenant.capability_limits.read",
+    ],
+  },
+] as const satisfies readonly {
+  key: string;
+  name: string;
+  capabilityKeys: readonly (typeof tenantStructuralCapabilityKeys)[number][];
+}[];
+
+/** One stable, deduplicated tenant permission set in canonical order. */
 export const tenantStructuralCapabilitySetSchema = z
   .array(tenantStructuralCapabilitySchema)
   .min(1)
@@ -80,7 +103,7 @@ export const tenantStructuralCapabilitySetSchema = z
         context.addIssue({
           code: "custom",
           path: [index],
-          message: "Tenant structural capabilities must be unique and sorted in canonical order",
+          message: "Tenant permissions must be unique and sorted in canonical order",
         });
   });
 

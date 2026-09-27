@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthShell } from "../../auth/_components/auth-shell";
+import { continueSessionOrEnd } from "../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
 import { loadSelectedOrganization } from "../../_lib/organization-context";
 
@@ -11,11 +12,7 @@ type OrganizationPageProps = Readonly<{
 }>;
 
 export default async function OrganizationPage({ params }: OrganizationPageProps) {
-  const identity = await resolveIdentitySession();
-  if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
-    redirect("/auth/session-ended");
-  if (identity.kind === "missing" || identity.kind === "cluster_identity_inactive")
-    redirect("/auth/session-ended");
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable")
     return (
       <AuthShell

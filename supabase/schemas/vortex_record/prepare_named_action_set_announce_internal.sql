@@ -197,6 +197,8 @@ exception
 end
 $function$;
 
+alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

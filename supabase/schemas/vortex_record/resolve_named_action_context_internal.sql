@@ -268,6 +268,8 @@ exception
 end
 $function$;
 
+alter function vortex_record.resolve_named_action_context_internal(text,uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.resolve_named_action_context_internal(
   text, uuid, bigint, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
