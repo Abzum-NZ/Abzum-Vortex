@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
@@ -54,7 +54,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon
-        render={<ChevronDownIcon className="cn-select-trigger-icon" />}
+        render={<Icon name="chevron-down" className="cn-select-trigger-icon" />}
       />
     </SelectPrimitive.Trigger>
   );
@@ -130,7 +130,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
       <SelectPrimitive.ItemIndicator
         render={<span className="cn-select-item-indicator" />}
       >
-        <CheckIcon className="cn-select-item-indicator-icon" />
+        <Icon name="check" className="cn-select-item-indicator-icon" />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   );
@@ -156,7 +156,7 @@ function SelectScrollUpButton({
       className={cn("cn-select-scroll-up-button", className)}
       {...props}
     >
-      <ChevronUpIcon />
+      <Icon name="chevron-up" />
     </SelectPrimitive.ScrollUpArrow>
   );
 }
@@ -171,7 +171,7 @@ function SelectScrollDownButton({
       className={cn("cn-select-scroll-down-button", className)}
       {...props}
     >
-      <ChevronDownIcon />
+      <Icon name="chevron-down" />
     </SelectPrimitive.ScrollDownArrow>
   );
 }

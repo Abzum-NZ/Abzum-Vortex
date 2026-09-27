@@ -39,6 +39,7 @@
     "boundaries": "node tooling/boundaries/check.mjs",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs",
     "styles:emit": "node tooling/emit-style-stylesheets.mjs",
+    "fonts:emit": "node tooling/emit-font-assets.mjs",
     "test": "vitest run",
     "fixtures": "vitest run testing/fixtures/validate-fixtures.test.ts testing/fixtures/current-module-v2-runtime.test.ts",
     "build": "turbo run build --filter=!@vortex/testing",

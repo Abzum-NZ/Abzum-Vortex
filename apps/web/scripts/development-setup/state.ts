@@ -27,8 +27,7 @@ export type SetupState = {
    * Every application that binds the owning module needs it, but only the first stores it.
    */
   sharedLifecyclePolicies: Record<string, boolean>;
-  rolesGranted: Record<string, boolean>;
-  /** Every step, including the initial operating-role grant, completed once for this organisation. */
+  /** Every application was installed once for this organisation. */
   setupCompleted: boolean;
   save(): void;
 };
@@ -52,7 +51,6 @@ export const loadSetupState = (organizationId: string): SetupState => {
   let installerRoleGranted = false;
   let lifecyclePolicies: Record<string, boolean> = {};
   let sharedLifecyclePolicies: Record<string, boolean> = {};
-  let rolesGranted: Record<string, boolean> = {};
   let setupCompleted = false;
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
@@ -62,7 +60,6 @@ export const loadSetupState = (organizationId: string): SetupState => {
       installerRoleGranted?: boolean;
       lifecyclePolicies?: Record<string, boolean>;
       sharedLifecyclePolicies?: Record<string, boolean>;
-      rolesGranted?: Record<string, boolean>;
       setupCompleted?: boolean;
     };
     if (stored.organizationId === organizationId) {
@@ -71,7 +68,6 @@ export const loadSetupState = (organizationId: string): SetupState => {
       installerRoleGranted = stored.installerRoleGranted === true;
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
       sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
-      rolesGranted = stored.rolesGranted ?? {};
       setupCompleted = stored.setupCompleted === true;
     }
   } catch {
@@ -84,7 +80,6 @@ export const loadSetupState = (organizationId: string): SetupState => {
     installerRoleGranted,
     lifecyclePolicies,
     sharedLifecyclePolicies,
-    rolesGranted,
     setupCompleted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
@@ -98,7 +93,6 @@ export const loadSetupState = (organizationId: string): SetupState => {
             installerRoleGranted: state.installerRoleGranted,
             lifecyclePolicies: state.lifecyclePolicies,
             sharedLifecyclePolicies: state.sharedLifecyclePolicies,
-            rolesGranted: state.rolesGranted,
             setupCompleted: state.setupCompleted,
           },
           null,

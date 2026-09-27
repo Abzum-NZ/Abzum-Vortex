@@ -1,6 +1,7 @@
 export {
   createThemeRootProps,
   resolvePlacementTheme,
+  resolveThemeFonts,
   type ApplicationThemeV2,
   type PlacementThemeScope,
   type ThemeMode,
@@ -31,4 +32,10 @@ export {
 } from "./vortex-style";
 
 export { VortexStyleStylesheet } from "./vortex-style-stylesheet";
+export {
+  VORTEX_FONT_BASE_PATH,
+  VortexFontStylesheets,
+  vortexFontPreloadHref,
+  vortexFontStylesheetHref,
+} from "./vortex-fonts";
 export { VortexStyleRoot } from "./vortex-style-root";

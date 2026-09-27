@@ -69,7 +69,7 @@ The development server binds to `127.0.0.1`. Authentication and protected data o
 
 ### Local development setup
 
-A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation, publishes and installs every shipped application and gives one nominated first owner their access. It runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
+A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation with a nominated steward, then publishes and installs every shipped application. The steward grants application roles later through IAM. The command runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
 
 1. Start the local stack and build a fresh database (this deletes local data, including local sign-ups):
 
@@ -99,8 +99,8 @@ What the setup does, in order, through the protected entry points only (no table
 | Publish | The IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
 | Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
 | Install | Organisation Administration, Tenant Administration, CRM, Service Desk and Operations, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
-| Grant | The App first-owner composition installs IAM and calls the Access-owned initial operating-role grant once with the provisioning receipt: the nominated account receives the IAM reviewer role (`iam_reviewer`) as a standing assignment. |
-| Administration and application roles | The steward accepts and assigns to themselves `iam_administrator`, `organisation_administrator` and `tenant_administrator` through the ordinary Access administration operations, so the owner can administer the organisation from IAM, plus `crm_manager`, `service_manager` and `operations_operator` so the owner can open CRM, Service Desk and Operations. |
+| Administration access | The nominated steward opens IAM, Organisation Administration and Tenant Administration through the platform permissions established at provisioning; setup grants no application operating role. |
+| Later application roles | Through IAM's protected Access operations, the steward accepts application role templates and assigns roles to accounts or Groups within their delegated scope, including CRM access. |
 
 The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application.
 

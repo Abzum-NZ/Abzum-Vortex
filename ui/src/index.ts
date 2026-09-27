@@ -388,6 +388,11 @@ export {
   resolveVortexMenuColor,
   resolveVortexStyle,
   resolveVortexStyleSelection,
+  resolveThemeFonts,
+  VORTEX_FONT_BASE_PATH,
+  VortexFontStylesheets,
+  vortexFontPreloadHref,
+  vortexFontStylesheetHref,
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
   VORTEX_STYLES,
@@ -401,6 +406,18 @@ export {
   type VortexStyleRootProps,
   type VortexStyleSelection,
 } from "./theme";
+
+// Semantic icons drawn by the selected shadcn/create icon library (#1278)
+export {
+  Icon,
+  IconLibraryProvider,
+  loadIconAdapter,
+  VORTEX_ICON_LIBRARIES,
+  VORTEX_ICON_NAMES,
+  type VortexIconAdapter,
+  type VortexIconName,
+  type VortexIconProps,
+} from "./icons";
 
 // Browser Flow Runtime (#1013)
 export {
@@ -429,6 +446,7 @@ export {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowInstallationContext,
+  type FlowSubjectContext,
   type FlowIntent,
   type FlowIntentHost,
   type FlowIntentHostOptions,
