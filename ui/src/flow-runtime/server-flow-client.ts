@@ -67,9 +67,16 @@ export type FlowInvokeClient = Readonly<{
   ) => Promise<ServerFlowResponse>;
 }>;
 
+/**
+ * The record the surface was rendered for and the revision it showed, sent with every binding
+ * start. It is evidence only: the server's protected record paths decide what it may be used for.
+ */
+export type FlowSubjectContext = Readonly<{ recordId: string; revision: number }>;
+
 export type FlowInvokeClientOptions = Readonly<{
   address: FlowApplicationAddress;
   installation: FlowInstallationContext;
+  subject?: FlowSubjectContext;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
 }>;
@@ -200,6 +207,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         flowId: binding.flowId,
         clickId,
         callerInputs,
+        ...(options.subject === undefined ? {} : { subject: options.subject }),
       }),
     resume: (flowId, continuation, answer, evidence) =>
       send({
