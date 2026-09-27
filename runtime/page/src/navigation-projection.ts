@@ -11,12 +11,11 @@ import {
   type OrganizationSelectionCandidate,
   type PermissionDeclaration,
   type PermissionRegistryEntryCandidate,
-  platformPermissionCatalogueOwnerId,
-  platformPermissionFor,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import {
   createHumanOrganizationRequestService,
@@ -193,7 +192,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionCatalogueOwnerId,
+          ownerId: platformPermissionOwnerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },

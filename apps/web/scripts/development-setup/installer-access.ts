@@ -1,10 +1,13 @@
 import {
   createOrganizationAccessAdministrationService,
   fingerprintPermissionMeaning,
-  platformPermissionCatalogue,
-  platformPermissionCatalogueOwnerId,
   prepareOrganizationRoleChangeEvidence,
 } from "@vortex/access";
+import { fingerprintCanonicalValue } from "@vortex/definition";
+import {
+  platformPermissionDeclarations,
+  platformPermissionOwnerId,
+} from "@vortex/modules";
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -29,8 +32,19 @@ import type { SetupState } from "./state";
  */
 
 const installPermissionKey = "platform.organization.applications.manage";
-/** The registration revision of the current shipped platform catalogue (1.4.0). */
+/** The current shipped platform permission declaration set retains registration revision 6. */
 const currentPlatformRegistrationRevision = 6;
+const sourceMetadataKeys = new Set(["meaningFingerprint", "stewardMinimum"]);
+const currentPlatformPermissionCatalogueFingerprint = fingerprintCanonicalValue({
+  catalogueVersion: "1.4.0",
+  ownerKind: "platform",
+  ownerId: platformPermissionOwnerId,
+  permissions: platformPermissionDeclarations.map((permission) =>
+    Object.fromEntries(
+      Object.entries(permission).filter(([key]) => !sourceMetadataKeys.has(key)),
+    ),
+  ),
+});
 
 export type InstallerAccessFacts = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
@@ -48,7 +62,7 @@ export const grantStewardInstallerRole = async (
 ): Promise<void> => {
   if (facts.state.installerRoleGranted) return;
   const { installerRole } = facts.manifest;
-  const declaration = platformPermissionCatalogue.permissions.find(
+  const declaration = platformPermissionDeclarations.find(
     (permission) => permission.key === installPermissionKey,
   );
   if (declaration === undefined)
@@ -78,14 +92,14 @@ export const grantStewardInstallerRole = async (
           {
             kind: "exact",
             ownerKind: "platform",
-            ownerId: platformPermissionCatalogueOwnerId,
+            ownerId: platformPermissionOwnerId,
             permissionId: declaration.permissionId,
             acceptedRegistrationRevision: currentPlatformRegistrationRevision,
-            catalogueFingerprint: platformPermissionCatalogue.catalogueFingerprint,
+            catalogueFingerprint: currentPlatformPermissionCatalogueFingerprint,
             continuityRevision: 1,
             meaningFingerprint: fingerprintPermissionMeaning(
               "platform",
-              platformPermissionCatalogueOwnerId,
+              platformPermissionOwnerId,
               declaration,
             ),
           },
