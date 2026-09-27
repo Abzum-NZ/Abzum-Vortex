@@ -206,6 +206,10 @@ An organisation role grants exact permissions within one organisation, such as m
 
 An application role grants permissions inside one [application](07-applications-pages-and-themes.md), such as discovering the application, opening particular pages, performing named actions, or reading a record scope. It is registered and assigned within that application's organisation through the same organisation-managed catalogue described above.
 
+Tenant permissions belong to the tenant-administrator assignment and are separate from organisation roles. The fixed tenant permission set includes tenant structure and capability-limit permissions. Tenant administrators receive `platform.tenant.capability_limits.read` by default. The `Tenant limits manager` tenant-role preset grants both `platform.tenant.capability_limits.read` and `platform.tenant.capability_limits.allocate`; a tenant administrator may also be given the allocation permission separately. These role presets resolve to exact tenant permissions in the existing assignment ledger, which remains the single source of effective tenant authority.
+
+Capability-limit allocation and revocation require `platform.tenant.capability_limits.allocate`. Tenant-wide capability-limit reads require `platform.tenant.capability_limits.read`; a tenant administrator may read an organisation's applicable limit under the same permission. Organisation administrators continue to see the effective limit for their own organisation through its organisation-scoped request. Neither permission grants organisation record access. A named Vortex super administrator inherits both through the existing tenant-capability decision.
+
 When accepting a supplied template as an assignable local role, the administrator supplies its organisation-local description alongside its local key and label. The current published template has no description field; Vortex neither invents one nor changes the published source contract to create local administrative metadata.
 
 ### Assignment
@@ -262,7 +266,7 @@ Unknown names are refused at publication and at runtime. An application role may
 
 Publishing an application role resolves `*` against that application's permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
-The exact initial organisation-administration identities, keys and meanings are defined in the [platform permission catalogue](appendices/platform-permission-catalogue.md). Business permission declarations continue to come from their own modules and applications.
+The 22 permanent platform administration permission identities, owning declarations and organisation-creation registration path are defined in the [platform permission catalogue](appendices/platform-permission-catalogue.md#declaration-ownership-and-registration). Business permission declarations continue to come from their own modules and applications.
 
 ## Record visibility
 
