@@ -9,7 +9,6 @@ export * from "./shadcn-theme-catalogue";
 export * from "./shadcn-icon-libraries";
 export * from "./shadcn-font-catalogue";
 export * from "./platform-service-operation-catalogue";
-export * from "./platform-permission-catalogue";
 export * from "./application-flow-bindings";
 export * from "./flow-contracts";
 export * from "./form-continuation-contracts";
@@ -37,6 +36,10 @@ export * from "./lineage";
 export * from "./loopback-hostname";
 export * from "./module-contracts";
 export * from "./module-contracts-v3";
+export {
+  modulePlatformPermissionDeclarationSchema,
+  type ModulePlatformPermissionDeclaration,
+} from "./module-source-contracts";
 export * from "./named-actions";
 export * from "./module-field-values-v2";
 export * from "./exact-decimal";
