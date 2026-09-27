@@ -51,6 +51,21 @@ import { containedComponentIdSchema } from "@vortex/contracts";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
 
 type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
+import type {
+  GuidedFormAbandonRequest,
+  GuidedFormConfirmRequest,
+  GuidedFormConfirmResult,
+  GuidedFormStepActionResult,
+  GuidedFormStepRequest,
+} from "../../../../_lib/guided-form-steps";
+
+type GuidedFormActions = Readonly<{
+  advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;
+  confirm: (request: GuidedFormConfirmRequest) => Promise<GuidedFormConfirmResult>;
+  abandon: (
+    request: GuidedFormAbandonRequest,
+  ) => Promise<Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>>;
+}>;
 
 /**
  * The full component flow binding the browser runtime expects. A {@link PlacementFlowBinding} carries
@@ -206,7 +221,11 @@ const formOwnersByPlacement = (
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
   const visit = (slot: unknown, formOwner?: string): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child, formOwner);
+      return;
+    }
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
       const block = candidate.block;
@@ -227,6 +246,24 @@ const formOwnersByPlacement = (
   else if (isRecord(composition.stepContent))
     for (const child of Object.values(composition.stepContent)) visit(child);
   return owners;
+};
+
+const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
+  const result = new Set<string>();
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child);
+      return;
+    }
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      result.add(placementId);
+      if (isRecord(placement) && isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) visit(child);
+    }
+  };
+  visit(candidate);
+  return result;
 };
 
 /**
@@ -251,17 +288,19 @@ const bindingFor = (
  */
 export function ApplicationPageView({
   model,
-}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  guidedFormActions,
+}: Readonly<{ model: ApplicationPageModel; guidedFormActions: GuidedFormActions }>): ReactElement {
   return (
     <UnsavedWorkProvider>
-      <ApplicationPageViewContent model={model} />
+      <ApplicationPageViewContent model={model} guidedFormActions={guidedFormActions} />
     </UnsavedWorkProvider>
   );
 }
 
 function ApplicationPageViewContent({
   model,
-}: Readonly<{ model: ApplicationPageModel }>): ReactElement {
+  guidedFormActions,
+}: Readonly<{ model: ApplicationPageModel; guidedFormActions: GuidedFormActions }>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -279,6 +318,8 @@ function ApplicationPageViewContent({
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
+  const requestedStepId = useRef<string | undefined>(undefined);
+  const guidedSubmitInFlight = useRef(false);
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
@@ -356,6 +397,32 @@ function ApplicationPageViewContent({
   const currentPageKey = model.pages.find(
     (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
   )?.key;
+  const guidedActivePlacementIds = useMemo(() => {
+    const guidedForm = model.guidedForm;
+    const composition = model.page.composition;
+    if (!guidedForm || !isRecord(composition) || !isRecord(composition.stepContent))
+      return undefined;
+    return placementIdsInSlot(composition.stepContent[guidedForm.activeStepId]);
+  }, [model.guidedForm, model.page]);
+  const guidedActiveFormIds = useMemo(
+    () =>
+        guidedActivePlacementIds === undefined
+        ? []
+        : [...guidedActivePlacementIds].filter(
+            (placementId) => formOwners[placementId] === placementId,
+          ),
+    [formOwners, guidedActivePlacementIds],
+  );
+  const guidedAddress = useMemo(
+    () => ({
+      tenantShortName: application.tenantShortName,
+      organizationShortName: application.organizationShortName,
+      applicationKey: application.applicationKey,
+      pageKey: application.pageKey,
+      ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
+    }),
+    [application, subject],
+  );
   const basePath = `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(application.applicationKey)}`;
   const pageKeyOf = useMemo(
     () => new Map(model.pages.map((page) => [page.pageId.toLowerCase(), page.key])),
@@ -496,14 +563,14 @@ function ApplicationPageViewContent({
     },
     [application, currentPageKey, currentSearch, model.data, model.editFormBaselines, navigationKey],
   );
-  const refreshTargetsForSource = useCallback(
-    (sourcePlacementId: string): readonly string[] => {
-      const match = Object.entries(model.refreshPlacementsBySource).find(
-        ([candidate]) => candidate.toLowerCase() === sourcePlacementId.toLowerCase(),
+  const refreshTargetsForBinding = useCallback(
+    (bindingId: string): readonly string[] => {
+      const match = Object.entries(model.refreshPlacementsByBinding).find(
+        ([candidate]) => candidate.toLowerCase() === bindingId.toLowerCase(),
       );
       return match?.[1] ?? [];
     },
-    [model.refreshPlacementsBySource],
+    [model.refreshPlacementsByBinding],
   );
   const currentData = useMemo(
     () =>
@@ -742,7 +809,7 @@ function ApplicationPageViewContent({
       dispatch: Promise<FlowDispatchResult | undefined>,
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
-      sourcePlacementId?: string,
+      sourceBindingId?: string,
     ) => {
       const isCurrentNavigation = (): boolean =>
         placementRequestsRef.current.key === navigationKey;
@@ -798,12 +865,11 @@ function ApplicationPageViewContent({
           }
           if (!isCurrentNavigation()) return;
           showResult(resultNotice);
-          const refreshSource = sourcePlacementId ?? formPlacementId;
           if (
             (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
-            refreshSource !== undefined
+            sourceBindingId !== undefined
           )
-            void refreshPlacements(refreshTargetsForSource(refreshSource));
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
           return;
         }
         if (server.kind === "refused") {
@@ -813,9 +879,8 @@ function ApplicationPageViewContent({
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
           showResult(outcomeNotices.uncertain ?? unavailableNotice);
-          const refreshSource = sourcePlacementId ?? formPlacementId;
-          if (refreshSource !== undefined)
-            void refreshPlacements(refreshTargetsForSource(refreshSource));
+          if (sourceBindingId !== undefined)
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
           return;
         }
         showResult(unavailableNotice);
@@ -825,7 +890,182 @@ function ApplicationPageViewContent({
         if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
-    [navigationKey, refreshPlacements, refreshTargetsForSource, router],
+    [navigationKey, refreshPlacements, refreshTargetsForBinding, router],
+  );
+
+  const guidedSummaryStepId = useMemo(() => {
+    if (!Array.isArray(model.page.steps)) return undefined;
+    const summary = model.page.steps.find(
+      (step) => isRecord(step) && step.summary === true && typeof step.id === "string",
+    );
+    return isRecord(summary) && typeof summary.id === "string" ? summary.id : undefined;
+  }, [model.page]);
+  const guidedPreviousStepId = useMemo(() => {
+    const activeStepId = model.guidedForm?.activeStepId;
+    if (activeStepId === undefined || !Array.isArray(model.page.steps)) return undefined;
+    const activeIndex = model.page.steps.findIndex(
+      (step) => isRecord(step) && step.id === activeStepId,
+    );
+    if (activeIndex <= 0) return undefined;
+    const previous = model.page.steps[activeIndex - 1];
+    return isRecord(previous) && typeof previous.id === "string" ? previous.id : undefined;
+  }, [model.guidedForm?.activeStepId, model.page]);
+
+  const advanceGuidedStep = useCallback(
+    async (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => {
+      const guidedForm = model.guidedForm;
+      if (guidedForm === undefined || busy) return;
+      setBusy(true);
+      setNotice(undefined);
+      try {
+        const result = await guidedFormActions.advance({
+          address: guidedAddress,
+          draftId: guidedForm.draftId,
+          expectedRevision: guidedForm.revision,
+          stepId,
+          ...(requested === undefined ? {} : { requestedStepId: requested }),
+          values,
+        });
+        if (result.kind === "updated" || result.kind === "unchanged") {
+          if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
+            setNotice({ tone: "problem", text: "Review the fields in this step before continuing." });
+          const queryStep =
+            result.activeStepId === result.computedStepId ? null : result.activeStepId;
+          if (searchParams.get("step") === queryStep) router.refresh();
+          else
+            setQuery((parameters) => {
+              if (queryStep === null) parameters.delete("step");
+              else parameters.set("step", queryStep);
+            });
+          return;
+        }
+        if (result.kind === "conflict") {
+          setNotice({ tone: "problem", text: "This draft changed in another session. Review the latest step." });
+          router.refresh();
+          return;
+        }
+        setNotice(unavailableNotice);
+      } catch {
+        setNotice(unavailableNotice);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, searchParams, setQuery],
+  );
+
+  const requestGuidedStep = useCallback(
+    (requested?: string) => {
+      const guidedForm = model.guidedForm;
+      if (guidedForm === undefined || busy) return;
+      if (requested !== undefined && guidedForm.activeStepId === guidedSummaryStepId) {
+        void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+        return;
+      }
+      requestedStepId.current = requested;
+      const boundSummaryFormId =
+        guidedForm.activeStepId === guidedSummaryStepId
+          ? guidedActiveFormIds.find((placementId) =>
+              (model.bindings[placementId] ?? []).some(
+                (binding) =>
+                  binding.event === "form_submit" &&
+                  binding.flowId.toLowerCase() === guidedForm.flowId.toLowerCase(),
+              ),
+            )
+          : undefined;
+      const activeFormId = boundSummaryFormId ?? guidedActiveFormIds[0];
+      const activeForm =
+        activeFormId === undefined
+          ? undefined
+          : [...document.querySelectorAll<HTMLFormElement>(
+              'form[data-vortex-control="form-container"]',
+            )].find((form) => form.dataset.vortexPlacementId === activeFormId);
+      if (activeForm !== undefined) {
+        activeForm.requestSubmit();
+        return;
+      }
+      requestedStepId.current = undefined;
+      void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+    },
+    [
+      advanceGuidedStep,
+      busy,
+      guidedActiveFormIds,
+      guidedSummaryStepId,
+      model.bindings,
+      model.guidedForm,
+    ],
+  );
+
+  const submitGuidedSummary = useCallback(
+    async (placementId: string, binding: PlacementFlowBinding) => {
+      const guidedForm = model.guidedForm;
+      if (
+        guidedForm === undefined ||
+        guidedSummaryStepId === undefined ||
+        guidedForm.activeStepId !== guidedSummaryStepId ||
+        binding.flowId.toLowerCase() !== guidedForm.flowId.toLowerCase() ||
+        busy ||
+        guidedSubmitInFlight.current
+      )
+        return;
+      guidedSubmitInFlight.current = true;
+      setBusy(true);
+      setNotice(undefined);
+      let flowStarted = false;
+      try {
+        const confirmed = await guidedFormActions.confirm({
+          address: guidedAddress,
+          draftId: guidedForm.draftId,
+          expectedRevision: guidedForm.revision,
+          stepId: guidedForm.activeStepId,
+        });
+        if (confirmed.kind !== "confirmed") {
+          setNotice(
+            confirmed.kind === "conflict"
+              ? { tone: "problem", text: "This draft changed in another session. Review the latest step." }
+              : unavailableNotice,
+          );
+          if (confirmed.kind === "conflict") router.refresh();
+          return;
+        }
+        const afterAccepted = async (): Promise<Notice | undefined> => {
+          const abandoned = await guidedFormActions.abandon({
+            address: guidedAddress,
+            draftId: guidedForm.draftId,
+            expectedRevision: guidedForm.revision,
+          });
+          return abandoned.kind === "abandoned"
+            ? undefined
+            : {
+                tone: "problem",
+                text: "The submission finished, but the saved draft could not be cleared. Refresh before submitting again.",
+              };
+        };
+        const dispatch = formBlock.submit(
+          asComponentBinding(placementId, binding),
+          { $guidedFormConfirmation: confirmed.proof },
+        );
+        flowStarted = true;
+        await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
+      } catch {
+        setNotice(unavailableNotice);
+      } finally {
+        guidedSubmitInFlight.current = false;
+        if (!flowStarted) setBusy(false);
+      }
+    },
+    [
+      applyDispatch,
+      busy,
+      formBlock,
+      guidedAddress,
+      guidedFormActions,
+      guidedSummaryStepId,
+      guidedSubmitInFlight,
+      model.guidedForm,
+      router,
+    ],
   );
 
   /**
@@ -844,7 +1084,7 @@ function ApplicationPageViewContent({
         ),
         formOwners[placementId],
         undefined,
-        placementId,
+        binding.bindingId,
       ),
     [applyDispatch, formOwners, flowRuntime],
   );
@@ -857,7 +1097,11 @@ function ApplicationPageViewContent({
       ...Object.keys(currentData),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
+      ...guidedActiveFormIds,
     ]);
+    if (guidedActivePlacementIds !== undefined)
+      for (const placementId of placementIds)
+        if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
       const data = currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
@@ -866,7 +1110,7 @@ function ApplicationPageViewContent({
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Display callbacks belong only to a placement with projected data; a control placement's
       // own parser refuses an event name it does not declare, so they are never added to a form.
-      if (data !== undefined) {
+      if (data !== undefined && model.guidedForm === undefined) {
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
           if (bindings.some((binding) => binding.event === kind))
             events[kind] = (event: DisplaySemanticEvent) => {
@@ -912,7 +1156,7 @@ function ApplicationPageViewContent({
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
       const actionBinding = bindingOfEvent(bindings, "action");
-      if (actionBinding !== undefined)
+      if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
           return runBinding(placementId, actionBinding, {
@@ -923,9 +1167,24 @@ function ApplicationPageViewContent({
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
-      if (submitBinding !== undefined)
+      if (
+        submitBinding !== undefined ||
+        (model.guidedForm !== undefined && formOwners[placementId] === placementId)
+      )
         events.form_submit = (event: ControlSemanticEvent) => {
           if (event.event !== "form_submit" || busy) return;
+          if (model.guidedForm !== undefined) {
+            const requested = requestedStepId.current;
+            requestedStepId.current = undefined;
+            if (model.guidedForm.activeStepId === guidedSummaryStepId) {
+              if (submitBinding === undefined) setNotice(unavailableNotice);
+              else void submitGuidedSummary(placementId, submitBinding);
+            }
+            else
+              void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
+            return;
+          }
+          if (submitBinding === undefined) return;
           const baseline = currentEditFormBaselines[placementId];
           const values =
             baseline === undefined
@@ -952,22 +1211,22 @@ function ApplicationPageViewContent({
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
             placementId,
             undefined,
-            placementId,
+            submitBinding.bindingId,
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
-      if (readyBinding !== undefined)
+      if (readyBinding !== undefined && model.guidedForm === undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready" || busy) return;
           void applyDispatch(
             formBlock.ready(asComponentBinding(placementId, readyBinding)),
             undefined,
             undefined,
-            placementId,
+            readyBinding.bindingId,
           );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (resetBinding !== undefined)
+      if (resetBinding !== undefined && model.guidedForm === undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset" || busy) return;
           setFormFeedback((current) => {
@@ -980,7 +1239,7 @@ function ApplicationPageViewContent({
             formBlock.reset(asComponentBinding(placementId, resetBinding)),
             undefined,
             undefined,
-            placementId,
+            resetBinding.bindingId,
           );
         };
       if (data === undefined) {
@@ -1011,8 +1270,14 @@ function ApplicationPageViewContent({
     formOwners,
     currentData,
     currentEditFormBaselines,
+    guidedActivePlacementIds,
+    guidedActiveFormIds,
+    guidedSummaryStepId,
+    advanceGuidedStep,
+    submitGuidedSummary,
     model.bindings,
     model.data,
+    model.guidedForm,
     router,
     refreshPlacements,
     runBinding,
@@ -1037,7 +1302,25 @@ function ApplicationPageViewContent({
         projectedNavigation={model.navigation}
         resolvePageHref={resolvePageHref}
         currentPageId={model.pageId}
+        {...(model.guidedForm === undefined
+          ? {}
+          : {
+              activeStepId: model.guidedForm.activeStepId,
+              guidedSummaryValues: model.guidedForm.values,
+            })}
         runtimeInputs={runtimeInputs}
+        {...(model.guidedForm === undefined
+          ? {}
+          : {
+              guidedStepNavigation: {
+                  disabled: busy,
+                  onBack: () => {
+                    if (guidedPreviousStepId !== undefined)
+                      requestGuidedStep(guidedPreviousStepId);
+                  },
+                  onNext: () => requestGuidedStep(),
+              },
+            })}
       />
       {intentHostElement}
       <Dialog

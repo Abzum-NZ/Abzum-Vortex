@@ -23,6 +23,7 @@ import {
   createStoredPageCapabilityService,
   projectRecordDetailData,
   type PageSubjectReadResult,
+  type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
 } from "@vortex/page";
 import {
@@ -49,6 +50,20 @@ import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import {
+  computeGuidedFormStepId,
+  getGuidedFormFlowId,
+  getGuidedFormRecordType,
+  getGuidedFormStepFields,
+  getGuidedFormVisiblePlacementIds,
+  guidedFormDraftScope,
+  guidedFormInitialValues,
+  guidedFormInputData,
+  earlierGuidedStepId,
+  openGuidedFormDraft,
+  visibleGuidedFormValues,
+  visibleGuidedFormValidation,
+} from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 
 /**
@@ -81,10 +96,19 @@ export type ApplicationPageModel = Readonly<{
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
-  /** Data placements to re-read after a write from each flow-bound page placement. */
-  refreshPlacementsBySource: Readonly<Record<string, readonly string[]>>;
+  /** Data placements to re-read after a write from each installed flow binding. */
+  refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  guidedForm?: Readonly<{
+    draftId: string;
+    revision: number;
+    flowId: string;
+    activeStepId: string;
+    computedStepId: string;
+    values: Readonly<Record<string, JsonValue>>;
+    validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
+  }>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
@@ -107,6 +131,7 @@ export type ApplicationPageModel = Readonly<{
     tenantShortName: string;
     organizationShortName: string;
     applicationKey: string;
+    pageKey: string;
     installationRevision: number;
     releaseKey: string;
   }>;
@@ -758,11 +783,18 @@ const loadApplicationPageInternal = async (
   const subjectType =
     (pageDefinition.type === "detail" ||
       pageDefinition.type === "public" ||
-      pageDefinition.type === "form") &&
+      pageDefinition.type === "form" ||
+      pageDefinition.type === "guided_form") &&
     pageDefinition.recordType?.state === "resolved"
       ? pageDefinition.recordType
       : undefined;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  if (
+    pageDefinition.type === "guided_form" &&
+    first(parameters[pageSubjectParameter]) !== undefined &&
+    !subjectId.success
+  )
+    return { kind: "unavailable" };
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
@@ -876,7 +908,7 @@ const loadApplicationPageInternal = async (
     }
   }
 
-  const refreshPlacementsBySource: Record<string, readonly string[]> = {};
+  const refreshPlacementsByBinding: Record<string, readonly string[]> = {};
   const flowsById = new Map(
     application.content.flows.map((flow) => [String(flow.id).toLowerCase(), flow] as const),
   );
@@ -944,30 +976,32 @@ const loadApplicationPageInternal = async (
       recordTypeByPlacement.get(placementId.toLowerCase()) ??
       (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase())) ??
       pageSubjectRecordTypeId;
-    const writtenTypes = [
-      ...new Set(held.flatMap((binding) => flowWrittenRecordTypes(String(binding.flow.flowId)))),
-    ];
-    const targetTypes =
-      writtenTypes.length > 0
-        ? writtenTypes
-        : sourceRecordTypeId === undefined
-          ? []
-          : [sourceRecordTypeId];
-    const queryTargets = targetTypes.flatMap((recordTypeId) =>
-      dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
-    );
     const editFormId =
       editFormPlacementIds.has(placementId)
         ? placementId
         : formId !== undefined && editFormPlacementIds.has(formId)
           ? formId
           : undefined;
-    const formTargets =
-      editFormId === undefined
-        ? []
-        : (editFormDataPlacementIds.get(editFormId.toLowerCase()) ?? []);
-    const targets = [...new Set([...queryTargets, ...formTargets])];
-    if (targets.length > 0) refreshPlacementsBySource[placementId] = targets;
+    for (const binding of held) {
+      const writtenTypes = flowWrittenRecordTypes(String(binding.flow.flowId));
+      const targetTypes =
+        writtenTypes.length > 0
+          ? writtenTypes
+          : sourceRecordTypeId === undefined
+            ? []
+            : [sourceRecordTypeId];
+      const queryTargets = targetTypes.flatMap((recordTypeId) =>
+        dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
+      );
+      const formTargets =
+        editFormId === undefined ||
+        pageSubjectRecordTypeId === undefined ||
+        !targetTypes.some((recordTypeId) => sameId(recordTypeId, pageSubjectRecordTypeId))
+          ? []
+          : (editFormDataPlacementIds.get(editFormId.toLowerCase()) ?? []);
+      const targets = [...new Set([...queryTargets, ...formTargets])];
+      if (targets.length > 0) refreshPlacementsByBinding[String(binding.bindingId)] = targets;
+    }
   }
 
   const data: Record<string, PageDataState> = {};
@@ -1176,9 +1210,80 @@ const loadApplicationPageInternal = async (
       ? { recordId: String(subjectRow.row.recordId), revision: subjectRow.row.revision }
       : undefined;
 
-  // An edit form is the form whose installed submit binding takes a page record. Its fields are
-  // projected from the same authorized subject read used for the page revision, and only from the
-  // form's visible, declared fields on that record type. An incomplete read disables the form.
+  let guidedForm: ApplicationPageModel["guidedForm"];
+  if (pageDefinition.type === "guided_form") {
+    const subjectCandidate = first(parameters[pageSubjectParameter]);
+    if (subjectCandidate !== undefined) {
+      if (subjectRow?.kind === "temporarily_unavailable")
+        return { kind: "temporarily_unavailable" };
+      if (subjectRow?.kind !== "read" || subject === undefined)
+        return { kind: "unavailable" };
+    }
+    const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
+    if (recordType === undefined) return { kind: "unavailable" };
+    const shells = context.releaseSet.application.content.shells;
+    const declaredStepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+    );
+    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
+    const stepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+      page,
+    );
+    const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
+    if (
+      declaredStepFields === undefined ||
+      visiblePlacementIds === undefined ||
+      stepFields === undefined ||
+      declaredStepFields.some((step) =>
+        step.fields.some(
+          (field) => field.required && !visiblePlacementIds.has(field.placementId.toLowerCase()),
+        ),
+      ) ||
+      flowId === undefined
+    )
+      return { kind: "unavailable" };
+    const draftScope = guidedFormDraftScope(
+      String(pageDefinition.pageId),
+      flowId,
+      subject?.recordId,
+    );
+    const openedDraft = await openGuidedFormDraft(
+      session,
+      selection,
+      draftScope,
+      guidedFormInitialValues(
+        stepFields,
+        subjectRow?.kind === "read" ? subjectRow.row.values : undefined,
+      ),
+    );
+    if (openedDraft.kind !== "available") return openedDraft;
+    const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
+    const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
+    if (computedStepId === undefined) return { kind: "unavailable" };
+    const activeStepId = earlierGuidedStepId(
+      stepFields,
+      computedStepId,
+      first(parameters.step),
+    );
+    Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
+    guidedForm = {
+      draftId: String(openedDraft.draft.draftId),
+      revision: openedDraft.draft.revision,
+      flowId,
+      activeStepId,
+      computedStepId,
+      values,
+      validation: visibleGuidedFormValidation(openedDraft.draft.validation, stepFields),
+    };
+  }
+
+  // Detail and ordinary form edit surfaces project their fields from the authorized subject read.
+  // Guided-form fields instead come from the person's revisioned draft above.
   const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
   const subjectRecordType = context.releaseSet.modules
     .flatMap((module) => module.content.recordTypes)
@@ -1187,51 +1292,53 @@ const loadApplicationPageInternal = async (
         subjectType !== undefined &&
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
-  for (const { placementId, placement } of placements) {
-    if (!editFormPlacementIds.has(placementId)) continue;
-    const block = placement.block;
-    if (
-      !isRecord(block) ||
-      typeof block.blockId !== "string" ||
-      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      continue;
-    const editBinding = bindings[placementId]?.some(
-      (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
-    );
-    if (!editBinding) continue;
-    if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    const fields = placements.filter((entry) => {
-      if (entry.formId !== placementId || entry.placementId === placementId) return false;
-      return isEditFieldPlacement(entry.placement);
-    });
-    const baseline: Record<string, JsonValue> = {};
-    const projected: Record<string, PageDataState> = {};
-    let complete = true;
-    for (const entry of fields) {
-      const field = projectEditField(
-        entry.placement,
-        subjectRecordType,
-        subjectRow.row.values,
-        dateTimeZones,
+  if (pageDefinition.type !== "guided_form") {
+    for (const { placementId, placement } of placements) {
+      if (!editFormPlacementIds.has(placementId)) continue;
+      const block = placement.block;
+      if (
+        !isRecord(block) ||
+        typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+      )
+        continue;
+      const editBinding = bindings[placementId]?.some(
+        (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
       );
-      if (field === undefined || Object.hasOwn(baseline, field.key)) {
-        complete = false;
-        break;
+      if (!editBinding) continue;
+      if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
       }
-      baseline[field.key] = field.value;
-      projected[entry.placementId] = field.data;
+      const fields = placements.filter((entry) => {
+        if (entry.formId !== placementId || entry.placementId === placementId) return false;
+        return isEditFieldPlacement(entry.placement);
+      });
+      const baseline: Record<string, JsonValue> = {};
+      const projected: Record<string, PageDataState> = {};
+      let complete = true;
+      for (const entry of fields) {
+        const field = projectEditField(
+          entry.placement,
+          subjectRecordType,
+          subjectRow.row.values,
+          dateTimeZones,
+        );
+        if (field === undefined || Object.hasOwn(baseline, field.key)) {
+          complete = false;
+          break;
+        }
+        baseline[field.key] = field.value;
+        projected[entry.placementId] = field.data;
+      }
+      if (!complete) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
+      }
+      Object.assign(data, projected);
+      data[placementId] = { status: "ready", values: { kind: "form" } };
+      editFormBaselines[placementId] = baseline;
     }
-    if (!complete) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    Object.assign(data, projected);
-    data[placementId] = { status: "ready", values: { kind: "form" } };
-    editFormBaselines[placementId] = baseline;
   }
 
   const permittedKeys = new Set(address.application.pageKeys);
@@ -1245,8 +1352,9 @@ const loadApplicationPageInternal = async (
       navigation: navigation.value,
       data,
       bindings,
-      refreshPlacementsBySource,
+      refreshPlacementsByBinding,
       editFormBaselines,
+      ...(guidedForm === undefined ? {} : { guidedForm }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
@@ -1265,6 +1373,7 @@ const loadApplicationPageInternal = async (
         tenantShortName: address.tenantShortName,
         organizationShortName: address.organizationShortName,
         applicationKey: address.application.key,
+        pageKey: address.pageKey,
         installationRevision: context.applicationReleaseRevision,
         releaseKey: [
           application.releaseVersion,

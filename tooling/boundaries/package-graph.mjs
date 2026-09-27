@@ -62,17 +62,49 @@ async function walk(directory) {
 }
 
 export async function loadWorkspace(root) {
-  const rootManifest = await readJson(path.join(root, "package.json"));
+  const workspaceManifest = await readFile(path.join(root, "pnpm-workspace.yaml"), "utf8");
+  const lines = workspaceManifest.split(/\r?\n/);
+  const packagesSections = lines.flatMap((line, index) =>
+    /^packages:\s*(?:#.*)?$/.test(line) ? [index] : [],
+  );
+  if (packagesSections.length !== 1) {
+    throw new Error("pnpm-workspace.yaml must contain exactly one packages section");
+  }
+
+  const workspaces = [];
+  for (const line of lines.slice(packagesSections[0] + 1)) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    if (!/^\s/.test(line)) break;
+
+    const entry = line.match(/^\s+-\s+(?:"([^"]+)"|'([^']+)'|([^#\s]+))\s*(?:#.*)?$/);
+    if (!entry) {
+      throw new Error(`Unsupported pnpm-workspace.yaml package entry: ${line.trim()}`);
+    }
+    workspaces.push(entry[1] ?? entry[2] ?? entry[3]);
+  }
+  if (workspaces.length === 0) {
+    throw new Error("pnpm-workspace.yaml packages section must not be empty");
+  }
+
   const locations = [];
-  for (const workspace of rootManifest.workspaces ?? []) {
-    if (!workspace.endsWith("/*")) {
+  for (const workspace of workspaces) {
+    if (!workspace.includes("*")) {
       locations.push(workspace);
       continue;
     }
-    const parent = workspace.slice(0, -2);
+
+    const glob = workspace.match(/^([^*]+)\/\*$/);
+    if (!glob) {
+      throw new Error(`Unsupported pnpm workspace glob: ${workspace}`);
+    }
+    const parent = glob[1];
     for (const entry of await readdir(path.join(root, parent), { withFileTypes: true })) {
       if (entry.isDirectory()) locations.push(path.join(parent, entry.name));
     }
+  }
+
+  if (locations.length === 0) {
+    throw new Error("pnpm-workspace.yaml packages section matched no workspace packages");
   }
 
   return Promise.all(
