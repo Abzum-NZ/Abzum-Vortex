@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   revisionSchema,
   sessionContextSchema,
@@ -31,9 +32,6 @@ export type StoredApplicationPermissionSourceDependencies = Readonly<{
   resolvedRequestTransaction?: HumanOrganizationRequestDependencies["resolvedRequestTransaction"];
 }>;
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 export const createStoredApplicationPermissionSource = (
   dependencies: StoredApplicationPermissionSourceDependencies,
 ) => {
@@ -43,7 +41,7 @@ export const createStoredApplicationPermissionSource = (
   const applicationRootId = applicationRootIdSchema.parse(dependencies.applicationRootId);
   if (
     systemContext.applicationRootId !== undefined &&
-    !sameUuid(systemContext.applicationRootId, applicationRootId)
+    !sameId(systemContext.applicationRootId, applicationRootId)
   )
     throw new Error("STORED_APPLICATION_SYSTEM_CONTEXT_UNAVAILABLE");
   const releaseRevision = revisionSchema
@@ -72,13 +70,13 @@ export const createStoredApplicationPermissionSource = (
           );
           if (
             applicationRelease.kind !== "application" ||
-            !sameUuid(applicationRelease.organizationId, systemContext.organizationId) ||
-            !sameUuid(applicationRelease.rootId, applicationRootId) ||
+            !sameId(applicationRelease.organizationId, systemContext.organizationId) ||
+            !sameId(applicationRelease.rootId, applicationRootId) ||
             applicationRelease.releaseRevision !== releaseRevision ||
             applicationRelease.correlationId.toLowerCase() !==
               systemContext.correlationId.toLowerCase() ||
-            !sameUuid(permissionRegistration.organizationId, applicationRelease.organizationId) ||
-            !sameUuid(permissionRegistration.applicationRootId, applicationRelease.rootId) ||
+            !sameId(permissionRegistration.organizationId, applicationRelease.organizationId) ||
+            !sameId(permissionRegistration.applicationRootId, applicationRelease.rootId) ||
             permissionRegistration.applicationRelease.definitionKey !==
               applicationRelease.definitionKey ||
             permissionRegistration.applicationRelease.releaseRevision !==

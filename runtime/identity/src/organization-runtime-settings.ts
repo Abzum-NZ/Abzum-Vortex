@@ -1,13 +1,14 @@
 import "server-only";
 
 import {
+  databaseRevision,
   organizationRuntimeSettingsSchema,
   type OrganizationRuntimeSettings,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 export const organizationRuntimeSettingsErrorCodes = [
@@ -39,18 +40,12 @@ type RuntimeSettingsRow = DatabaseRow & {
 };
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface OrganizationRuntimeSettingsStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
 
 const parseRow = (row: RuntimeSettingsRow): OrganizationRuntimeSettings =>
   organizationRuntimeSettingsSchema.parse({
@@ -60,7 +55,7 @@ const parseRow = (row: RuntimeSettingsRow): OrganizationRuntimeSettings =>
     currency: row.currency,
     dateFormat: row.date_format,
     numberFormat: row.number_format,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
   });
 
 const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
@@ -111,7 +106,7 @@ export const createOrganizationRuntimeSettingsStore = (
     },
 
     async stageUpdate(
-      transaction: RuntimeDatabaseTransaction,
+      transaction: RequestDatabaseTransaction,
       settingsCandidate: OrganizationRuntimeSettings,
     ): Promise<void> {
       const settings = organizationRuntimeSettingsSchema.safeParse(settingsCandidate);

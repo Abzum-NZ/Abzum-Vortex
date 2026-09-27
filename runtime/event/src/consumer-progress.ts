@@ -3,10 +3,11 @@ import "server-only";
 import {
   eventOccurrenceEnvelopeV2Schema,
   eventOccurrenceIdSchema,
+  isNonNilUuidText,
   timestampSchema,
   type EventOccurrenceEnvelopeV2,
 } from "@vortex/contracts";
-import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,
@@ -77,11 +78,6 @@ const consumerKeyMatches = (value: unknown): value is string =>
   value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 
-const uuidMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value !== "00000000-0000-0000-0000-000000000000" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
 
@@ -133,7 +129,7 @@ const validateLeaseRenewalInput = (
 ): EventConsumerLeaseRenewalInput => {
   if (
     !consumerKeyMatches(input.consumerKey) ||
-    !uuidMatches(input.ackCursor) ||
+    !isNonNilUuidText(input.ackCursor) ||
     !eventOccurrenceIdSchema.safeParse(input.occurrenceId).success ||
     !Number.isInteger(input.leaseSeconds) ||
     input.leaseSeconds < 1 ||
@@ -148,7 +144,7 @@ const validateAcknowledgementInput = (
 ): EventConsumerAcknowledgementInput => {
   if (
     !consumerKeyMatches(input.consumerKey) ||
-    !uuidMatches(input.ackCursor) ||
+    !isNonNilUuidText(input.ackCursor) ||
     !eventOccurrenceIdSchema.safeParse(input.occurrenceId).success
   )
     return inputInvalid();
@@ -180,7 +176,7 @@ const parseClaimResult = (
     value === undefined ||
     occurrences === undefined ||
     occurrences.length > maximumOccurrenceCount ||
-    !(ackCursor === null || uuidMatches(ackCursor)) ||
+    !(ackCursor === null || isNonNilUuidText(ackCursor)) ||
     (ackCursor === null) !== (occurrences.length === 0)
   )
     throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
@@ -272,7 +268,7 @@ export interface EventConsumerProgressRepository {
  * organisation selector from a consumer.
  */
 export const createEventConsumerProgressRepository = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
 ): EventConsumerProgressRepository =>
   Object.freeze<EventConsumerProgressRepository>({
     async claim(inputCandidate) {

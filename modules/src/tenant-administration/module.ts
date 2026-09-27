@@ -1,15 +1,5 @@
 import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/contracts";
 
-const editableRecordFields = [
-  "subject_display_name",
-  "change_kind",
-  "requested_display_name",
-  "requested_parent_reference",
-  "reason",
-] as const;
-
-const allRecordFields = [...editableRecordFields, "state"];
-
 // The tenant, organisation and tenant-administrator system record types are
 // read-only projections of protected Identity facts. They declare only safe,
 // projected fields; they have no ordinary write path, and their changes go
@@ -71,14 +61,10 @@ const tenantStateOptions = [
 ] as const;
 
 /**
- * Ordinary, application-contained records that capture an organisation lifecycle
- * request and its outcome, beside the read-only tenant, organisation and
- * tenant-administrator system records. The lifecycle request describes intent
- * only: it confers no organisation data access and no tenant authority. The
- * system record types are read-only projections of protected Identity facts, so
- * the ordinary query path reads them and their changes still go through the
- * tenant governance service's protected operations. Protected tenant reads and
- * operations stay with the tenant governance service and its read models.
+ * Read-only tenant, organisation and tenant-administrator system records
+ * project protected Identity facts. The ordinary query path reads those
+ * projections; tenant structure changes use tenant governance's protected
+ * operations, never ordinary record writes.
  */
 export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse({
   source_contract_version: "3.0.0",
@@ -88,119 +74,9 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
   body: {
     name: "Tenant Administration",
     description:
-      "Tenant structure and organisation lifecycle requests for a tenant administrator.",
+      "Tenant structure and direct protected actions for a tenant administrator.",
     dependencies: [],
     record_types: [
-      {
-        id: "rt_organization_lifecycle_request",
-        key: "organization_lifecycle_request",
-        name: "Organisation lifecycle request",
-        plural_name: "Organisation lifecycle requests",
-        title_field: "subject_display_name",
-        storage_contract_id: "srt_tenant_admin_lifecycle",
-        storage_scope: "application_contained",
-        ownership_mode: "none",
-        standard_actions: ["create", "read", "update", "soft_delete", "restore", "export"],
-        custom_actions: ["act_submit_organization_lifecycle_request"],
-        fields: [
-          {
-            id: "fld_lifecycle_subject",
-            key: "subject_display_name",
-            label: "Organisation",
-            required: true,
-            unique: false,
-            filterable: true,
-            sortable: true,
-            search_priority: "first",
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 120 },
-          },
-          {
-            id: "fld_lifecycle_change_kind",
-            key: "change_kind",
-            label: "Requested change",
-            required: true,
-            unique: false,
-            filterable: true,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "choice",
-            settings: {
-              options: [
-                { value: "create", label: "Create organisation" },
-                { value: "rename", label: "Rename organisation" },
-                { value: "reparent", label: "Move organisation" },
-                { value: "suspend", label: "Suspend organisation" },
-                { value: "reactivate", label: "Reactivate organisation" },
-                { value: "archive", label: "Archive organisation" },
-              ],
-            },
-          },
-          {
-            id: "fld_lifecycle_display_name",
-            key: "requested_display_name",
-            label: "Requested display name",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 120 },
-          },
-          {
-            id: "fld_lifecycle_parent_reference",
-            key: "requested_parent_reference",
-            label: "Requested parent organisation",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 120 },
-          },
-          {
-            id: "fld_lifecycle_reason",
-            key: "reason",
-            label: "Reason",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            search_priority: "normal",
-            personal_data: "personal",
-            public_display: "refused",
-            type: "long_text",
-            settings: { max_length: 1_000 },
-          },
-          {
-            id: "fld_lifecycle_state",
-            key: "state",
-            label: "State",
-            required: true,
-            unique: false,
-            filterable: true,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "choice",
-            settings: {
-              options: [
-                { value: "draft", label: "Draft" },
-                { value: "submitted", label: "Submitted" },
-              ],
-            },
-            default: "draft",
-          },
-        ],
-        relationships: [],
-      },
       {
         id: "rt_tenant",
         key: "tenant",
@@ -606,90 +482,6 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
     ],
     permissions: [
       {
-        id: "perm_lifecycle_create",
-        key: "vortex.tenant_administration.organization_lifecycle_request.create",
-        label: "Create organisation lifecycle request",
-        description: "Allows the standard create operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "create",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: {
-          readable_fields: allRecordFields,
-          changeable_fields: [...editableRecordFields],
-        },
-      },
-      {
-        id: "perm_lifecycle_read",
-        key: "vortex.tenant_administration.organization_lifecycle_request.read",
-        label: "Read organisation lifecycle request",
-        description: "Allows the standard read operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "read",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: allRecordFields, changeable_fields: [] },
-      },
-      {
-        id: "perm_lifecycle_update",
-        key: "vortex.tenant_administration.organization_lifecycle_request.update",
-        label: "Update organisation lifecycle request",
-        description: "Allows the standard update operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "update",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: {
-          readable_fields: allRecordFields,
-          changeable_fields: [...editableRecordFields],
-        },
-      },
-      {
-        id: "perm_lifecycle_soft_delete",
-        key: "vortex.tenant_administration.organization_lifecycle_request.soft_delete",
-        label: "Remove organisation lifecycle request",
-        description: "Allows the standard soft-delete operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "delete",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: [], changeable_fields: [] },
-      },
-      {
-        id: "perm_lifecycle_restore",
-        key: "vortex.tenant_administration.organization_lifecycle_request.restore",
-        label: "Restore organisation lifecycle request",
-        description: "Allows the standard restore operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "restore",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: [], changeable_fields: [] },
-      },
-      {
-        id: "perm_lifecycle_export",
-        key: "vortex.tenant_administration.organization_lifecycle_request.export",
-        label: "Export organisation lifecycle request",
-        description: "Allows the standard export operation for lifecycle requests.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "export",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: allRecordFields, changeable_fields: [] },
-      },
-      {
-        id: "perm_lifecycle_submit",
-        key: "vortex.tenant_administration.organization_lifecycle_request.submit",
-        label: "Submit organisation lifecycle request",
-        description: "Allows recording a lifecycle request reason and submitting it for review.",
-        record_type: "organization_lifecycle_request",
-        action_kind: "named",
-        named_action: "submit",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["reason", "state"], changeable_fields: ["reason", "state"] },
-      },
-      {
         id: "perm_tenant_read",
         key: "vortex.tenant_administration.tenant.read",
         label: "Read tenants",
@@ -728,67 +520,12 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         },
       },
     ],
-    actions: [
-      {
-        id: "act_submit_organization_lifecycle_request",
-        key: "vortex.tenant_administration.organization_lifecycle_request.submit",
-        label: "Submit organisation lifecycle request",
-        record_type: "organization_lifecycle_request",
-        permission: "vortex.tenant_administration.organization_lifecycle_request.submit",
-        shareable: false,
-        precondition: { field: "state", operator: "equals", value: "draft" },
-        inputs: [
-          {
-            key: "reason",
-            label: "Reason",
-            required: true,
-            type: "text",
-            validation: { maximum_length: 1_000 },
-          },
-        ],
-        tasks: [
-          {
-            id: "set_reason",
-            type: "record.set_fields",
-            properties: { values: { reason: "{{ inputs.reason }}" } },
-          },
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "submitted" } } } },
-          },
-        ],
-      },
-    ],
+    actions: [],
     events: [],
     flows: [],
     extension_points: [],
     sharing_conditions: [],
     queries: [
-      {
-        "id": "qry_lifecycle_requests",
-        "key": "organization_lifecycle_requests",
-        "record_type": "organization_lifecycle_request",
-        "inputs": [],
-        "select": [
-          "subject_display_name",
-          "change_kind",
-          "requested_display_name",
-          "requested_parent_reference",
-          "state"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "subject_display_name",
-            "direction": "ascending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      },
       {
         "id": "qry_organizations",
         "key": "organizations",

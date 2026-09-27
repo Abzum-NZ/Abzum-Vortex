@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  databaseTimestamp,
+  databaseRevision,
   adoptOrganizationCommandSchema,
   adoptOrganizationResultSchema,
   adoptTenantCommandSchema,
@@ -9,6 +11,8 @@ import {
   closeClusterIdentityCommandSchema,
   closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
+  bootstrapVortexSuperAdministratorCommandSchema,
+  vortexSuperAdministratorAssignmentMutationResultSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
@@ -23,6 +27,7 @@ import {
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
   type AdoptTenantResult,
+  type BootstrapVortexSuperAdministratorCommand,
   type CloseClusterIdentityCommand,
   type CloseClusterIdentityResult,
   type ConfiguredTenantAdministrationOperatorContext,
@@ -36,15 +41,16 @@ import {
   type SuspendClusterIdentityResult,
   type SuspendTenantCommand,
   type SuspendTenantResult,
+  type VortexSuperAdministratorAssignmentMutationResult,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface ConfiguredTenantAdministrationDependencies {
@@ -100,14 +106,15 @@ type TenantLifecycleRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
 };
-
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
+type SuperAdministratorBootstrapRow = DatabaseRow & {
+  outcome: unknown;
+  assignment_id: unknown;
+  identity_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
 };
+
 const fingerprint = (command: object): string =>
   `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
 const databaseCode = (error: unknown): string | undefined =>
@@ -148,6 +155,18 @@ const refusalCode = (error: unknown) => {
 };
 const lifecycleRefusalCode = (error: unknown) =>
   databaseCode(error) === "V3102" ? ("stale_revision" as const) : refusalCode(error);
+const superAdministratorBootstrapCode = (error: unknown) => {
+  switch (databaseCode(error)) {
+    case "V3141":
+      return "identity_unavailable" as const;
+    case "V3143":
+      return "duplicate_conflict" as const;
+    case "22023":
+      return "invalid_command" as const;
+    default:
+      return "operation_unavailable" as const;
+  }
+};
 
 const one = <Row extends DatabaseRow>(rows: readonly Row[]): Row | undefined =>
   rows.length === 1 ? rows[0] : undefined;
@@ -163,21 +182,71 @@ export const createConfiguredTenantAdministrationService = (
       outcome: row.outcome,
       operation: row.operation,
       identityId: row.identity_id,
-      revision: revision(row.revision),
+      revision: databaseRevision(row.revision),
       correlationId: row.correlation_id,
-      acceptedAt: timestamp(row.accepted_at),
+      acceptedAt: databaseTimestamp(row.accepted_at),
     };
   const tenantLifecycleResult = (row: TenantLifecycleRow | undefined) =>
     row && {
       outcome: row.outcome,
       operation: row.operation,
       tenantId: row.tenant_id,
-      revision: revision(row.revision),
+      revision: databaseRevision(row.revision),
       correlationId: row.correlation_id,
-      acceptedAt: timestamp(row.accepted_at),
+      acceptedAt: databaseTimestamp(row.accepted_at),
     };
 
   return Object.freeze({
+    async bootstrapVortexSuperAdministrator(
+      candidate: BootstrapVortexSuperAdministratorCommand,
+    ): Promise<VortexSuperAdministratorAssignmentMutationResult> {
+      const command = bootstrapVortexSuperAdministratorCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: "invalid_command",
+        };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run((transaction) => transaction.query<SuperAdministratorBootstrapRow>`
+          select *
+          from vortex_identity.bootstrap_vortex_super_administrator(
+            ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid,
+            ${value.identityId}::uuid
+          )
+        `);
+        const row = one(rows);
+        if (row === undefined)
+          return {
+            outcome: "refused",
+            operation: "bootstrap_vortex_super_administrator",
+            code: "operation_unavailable",
+          };
+        return vortexSuperAdministratorAssignmentMutationResultSchema.parse({
+          outcome: row.outcome,
+          operation: "bootstrap_vortex_super_administrator",
+          assignmentId: row.assignment_id,
+          identityId: row.identity_id,
+          revision: databaseRevision(row.revision),
+          correlationId: row.correlation_id,
+          acceptedAt: databaseTimestamp(row.accepted_at),
+        });
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: superAdministratorBootstrapCode(error),
+        };
+      }
+    },
+
     async provisionTenant(candidate: ProvisionTenantCommand): Promise<ProvisionTenantResult> {
       const command = provisionTenantCommandSchema.safeParse(candidate);
       if (!command.success)
@@ -221,14 +290,14 @@ export const createConfiguredTenantAdministrationService = (
               tenantId: row.tenant_id,
               rootOrganizationId: row.root_organization_id,
               tenantAdministratorAssignmentId: row.tenant_administrator_assignment_id,
-              tenantAdministratorAssignmentRevision: revision(
+              tenantAdministratorAssignmentRevision: databaseRevision(
                 row.tenant_administrator_assignment_revision,
               ),
               organizationAccountId: row.organization_account_id,
-              organizationAccountRevision: revision(row.organization_account_revision),
-              accessVersion: revision(row.access_version),
+              organizationAccountRevision: databaseRevision(row.organization_account_revision),
+              accessVersion: databaseRevision(row.access_version),
               correlationId: row.correlation_id,
-              acceptedAt: timestamp(row.accepted_at),
+              acceptedAt: databaseTimestamp(row.accepted_at),
             },
           );
           if (!parsed.success) throw new Error("Configured provisioning result contract mismatch");
@@ -268,11 +337,11 @@ export const createConfiguredTenantAdministrationService = (
               operation: row.operation,
               tenantId: row.tenant_id,
               tenantAdministratorAssignmentId: row.tenant_administrator_assignment_id,
-              tenantAdministratorAssignmentRevision: revision(
+              tenantAdministratorAssignmentRevision: databaseRevision(
                 row.tenant_administrator_assignment_revision,
               ),
               correlationId: row.correlation_id,
-              acceptedAt: timestamp(row.accepted_at),
+              acceptedAt: databaseTimestamp(row.accepted_at),
             },
           );
           if (!parsed.success)
@@ -316,9 +385,9 @@ export const createConfiguredTenantAdministrationService = (
               tenantId: row.tenant_id,
               organizationId: row.organization_id,
               organizationAccountId: row.organization_account_id,
-              accessVersion: revision(row.access_version),
+              accessVersion: databaseRevision(row.access_version),
               correlationId: row.correlation_id,
-              acceptedAt: timestamp(row.accepted_at),
+              acceptedAt: databaseTimestamp(row.accepted_at),
             },
           );
           if (!parsed.success)
@@ -477,6 +546,8 @@ export const createConfiguredTenantAdministrationService = (
 };
 
 const defaultService = createConfiguredTenantAdministrationService();
+export const bootstrapVortexSuperAdministrator =
+  defaultService.bootstrapVortexSuperAdministrator;
 export const provisionTenant = defaultService.provisionTenant;
 export const adoptTenant = defaultService.adoptTenant;
 export const adoptOrganization = defaultService.adoptOrganization;

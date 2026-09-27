@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  sameId,
   componentSemanticEventKindSchema,
   recordIdSchema,
   revisionSchema,
@@ -69,9 +70,7 @@ export type ComponentDisplayOutcomeKind = (typeof componentDisplayOutcomeKinds)[
  * an answer. It is viewer-safe guidance only, never a retry instruction for a committed effect.
  */
 export type ComponentDisplayRecovery =
-  | SafeFlowResultDescriptor["recovery"]
-  | "retry"
-  | "await_person";
+  SafeFlowResultDescriptor["recovery"] | "retry" | "await_person";
 
 export const componentDisplayRefusalReasons = [
   /** The viewer may not run the query, or the verified context was not the one it resolved for. */
@@ -332,8 +331,6 @@ export type ComponentInvocationStart = Readonly<{
   invocation: ComponentInvocation;
 }>;
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 const sameSelection = (
   left: ComponentSelection | undefined,
   right: ComponentSelection | undefined,
@@ -536,7 +533,11 @@ const projectDatasetReread = (read: ComponentDatasetReread): ComponentDisplayOut
  * invocation began is discarded like any other obsolete response.
  */
 export type ComponentRefreshAfterSave =
-  | Readonly<{ started: false; state: ComponentResultState; reason: ComponentResultReductionReason }>
+  | Readonly<{
+      started: false;
+      state: ComponentResultState;
+      reason: ComponentResultReductionReason;
+    }>
   | Readonly<{
       started: true;
       state: ComponentResultState;

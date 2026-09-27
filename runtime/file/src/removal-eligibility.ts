@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  sameId,
   activeFileAttachmentReferenceSchema,
   activeFileShareReferenceSchema,
   activeFileSourceResponsibilityReferenceSchema,
@@ -60,18 +61,10 @@ export type FileHoldEvaluationScope = Readonly<{
   ownerRecordId?: string;
 }>;
 
-const sameId = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 const sameOptionalId = (left: string | undefined, right: string | undefined): boolean =>
-  left === undefined || right === undefined
-    ? left === right
-    : sameId(left, right);
+  left === undefined || right === undefined ? left === right : sameId(left, right);
 
-const sameOwner = (
-  left: FileRemovalOwnerBinding,
-  right: FileRemovalOwnerBinding,
-): boolean =>
+const sameOwner = (left: FileRemovalOwnerBinding, right: FileRemovalOwnerBinding): boolean =>
   sameId(left.sourceOrganizationId, right.sourceOrganizationId) &&
   sameOptionalId(left.applicationRootId, right.applicationRootId) &&
   sameId(left.recordTypeId, right.recordTypeId) &&
@@ -242,11 +235,7 @@ const evaluateFileRemovalEligibility = (
       holdAuthority.validUntil,
       nowMilliseconds,
     ) ||
-    !authorityWindowIsCurrent(
-      recoveryPolicy.resolvedAt,
-      recoveryPolicy.validUntil,
-      nowMilliseconds,
-    )
+    !authorityWindowIsCurrent(recoveryPolicy.resolvedAt, recoveryPolicy.validUntil, nowMilliseconds)
   ) {
     return refused("authority_stale", decidedAt);
   }
@@ -333,9 +322,7 @@ export type ResolveCurrentFileRemovalAuthority = (
 ) => Promise<FileRemovalAuthorityResolution>;
 
 export type FileRemovalEligibilityService = Readonly<{
-  decideFileRemovalEligibility(
-    candidate: unknown,
-  ): Promise<FileRemovalEligibilityDecision>;
+  decideFileRemovalEligibility(candidate: unknown): Promise<FileRemovalEligibilityDecision>;
 }>;
 
 /**
@@ -343,10 +330,12 @@ export type FileRemovalEligibilityService = Readonly<{
  * only a file; the injected resolver supplies every current ownership, relation,
  * hold and recovery-policy fact, and the injected server clock supplies time.
  */
-export const createFileRemovalEligibilityService = (dependencies: Readonly<{
-  resolveCurrentAuthority: ResolveCurrentFileRemovalAuthority;
-  clock?: () => Date;
-}>): FileRemovalEligibilityService => {
+export const createFileRemovalEligibilityService = (
+  dependencies: Readonly<{
+    resolveCurrentAuthority: ResolveCurrentFileRemovalAuthority;
+    clock?: () => Date;
+  }>,
+): FileRemovalEligibilityService => {
   if (typeof dependencies.resolveCurrentAuthority !== "function") {
     throw new Error("File removal eligibility requires a current-authority resolver");
   }
@@ -380,9 +369,7 @@ export const createFileRemovalEligibilityService = (dependencies: Readonly<{
         return refused("authority_unavailable", decidedAt);
       }
       if (!resolution.available) return refused("authority_unavailable", decidedAt);
-      const authority = fileRemovalAuthoritySnapshotSchema.safeParse(
-        resolution.authority,
-      );
+      const authority = fileRemovalAuthoritySnapshotSchema.safeParse(resolution.authority);
       if (!authority.success) return refused("authority_unavailable", decidedAt);
       if (!sameId(authority.data.fileId, request.data.fileId)) {
         return refused("ownership_mismatch", decidedAt);

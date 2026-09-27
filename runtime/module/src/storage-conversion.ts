@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  isNonNilUuidText,
+  isRecord,
   applicationRootIdSchema,
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
@@ -206,17 +208,8 @@ export interface StorageConversionCorrections {
 type PlanRow = DatabaseRow & { readonly conversion_plan: unknown };
 type BindingsRow = DatabaseRow & { readonly bindings: unknown };
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const nilUuid = "00000000-0000-0000-0000-000000000000";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isUuid = (value: unknown): value is string =>
-  typeof value === "string" && uuidPattern.test(value) && value.toLowerCase() !== nilUuid;
-
 const isNullableUuid = (value: unknown): value is string | null =>
-  value === null || isUuid(value);
+  value === null || isNonNilUuidText(value);
 
 const asRevision = (value: unknown): number | undefined => {
   if (typeof value === "number")
@@ -257,10 +250,10 @@ const parseRegistration = (value: unknown): StorageConversionRegistration => {
   const sourceReleaseRevision = asRevision(value.sourceReleaseRevision);
   const targetReleaseRevision = asRevision(value.targetReleaseRevision);
   if (
-    !isUuid(value.conversionContractId) ||
-    !isUuid(value.storageContractId) ||
-    !isUuid(value.sourceFieldId) ||
-    !isUuid(value.targetFieldId) ||
+    !isNonNilUuidText(value.conversionContractId) ||
+    !isNonNilUuidText(value.storageContractId) ||
+    !isNonNilUuidText(value.sourceFieldId) ||
+    !isNonNilUuidText(value.targetFieldId) ||
     conversionSemantic === undefined ||
     sourceDatabaseValueType === undefined ||
     targetDatabaseValueType === undefined ||
@@ -296,14 +289,14 @@ const parsePlanSummary = (value: unknown): StorageConversionPlanSummary => {
   const planRevision = asRevision(value.planRevision);
   const convertedCount = asNonNegativeCount(value.convertedCount);
   if (
-    !isUuid(conversionContractId) ||
-    !isUuid(storageContractId) ||
-    !isUuid(sourceFieldId) ||
-    !isUuid(targetFieldId) ||
+    !isNonNilUuidText(conversionContractId) ||
+    !isNonNilUuidText(storageContractId) ||
+    !isNonNilUuidText(sourceFieldId) ||
+    !isNonNilUuidText(targetFieldId) ||
     conversionSemantic === undefined ||
     sourceDatabaseValueType === undefined ||
     targetDatabaseValueType === undefined ||
-    !isUuid(organisationId) ||
+    !isNonNilUuidText(organisationId) ||
     !isNullableUuid(value.applicationRootId) ||
     asPlanState(value.state) === undefined ||
     planRevision === undefined ||
@@ -336,8 +329,8 @@ const parseBatchResult = (value: unknown): StorageConversionBatchResult => {
   const convertedCount = asNonNegativeCount(value.convertedCount);
   const batchConverted = asNonNegativeCount(value.batchConverted);
   if (
-    !isUuid(conversionContractId) ||
-    !isUuid(organisationId) ||
+    !isNonNilUuidText(conversionContractId) ||
+    !isNonNilUuidText(organisationId) ||
     !isNullableUuid(value.applicationRootId) ||
     asPlanState(value.state) === undefined ||
     planRevision === undefined ||
@@ -368,8 +361,8 @@ const parseCorrections = (value: unknown): StorageConversionCorrections => {
   const changedCount = asNonNegativeCount(value.changedCount);
   const rawCorrections = value.corrections;
   if (
-    !isUuid(conversionContractId) ||
-    !isUuid(organisationId) ||
+    !isNonNilUuidText(conversionContractId) ||
+    !isNonNilUuidText(organisationId) ||
     !isNullableUuid(value.applicationRootId) ||
     conversionSemantic === undefined ||
     changedCount === undefined ||
@@ -383,7 +376,7 @@ const parseCorrections = (value: unknown): StorageConversionCorrections => {
     const sourceConcurrencyNumber = asRevision(candidate.sourceConcurrencyNumber);
     const currentConcurrencyNumber = asRevision(candidate.currentConcurrencyNumber);
     if (
-      !isUuid(recordId) ||
+      !isNonNilUuidText(recordId) ||
       sourceConcurrencyNumber === undefined ||
       currentConcurrencyNumber === undefined
     )
@@ -409,13 +402,13 @@ const parseAdoptionRow = (value: unknown): Omit<StorageAdoptionResult, "installa
   const planRevision = asRevision(value.planRevision);
   const dependentCount = asNonNegativeCount(value.dependentCount);
   if (
-    !isUuid(value.conversionContractId) ||
-    !isUuid(value.storageContractId) ||
-    !isUuid(value.moduleRootId) ||
-    !isUuid(value.sourceFieldId) ||
-    !isUuid(value.targetFieldId) ||
-    !isUuid(value.organisationId) ||
-    !isUuid(value.applicationRootId) ||
+    !isNonNilUuidText(value.conversionContractId) ||
+    !isNonNilUuidText(value.storageContractId) ||
+    !isNonNilUuidText(value.moduleRootId) ||
+    !isNonNilUuidText(value.sourceFieldId) ||
+    !isNonNilUuidText(value.targetFieldId) ||
+    !isNonNilUuidText(value.organisationId) ||
+    !isNonNilUuidText(value.applicationRootId) ||
     sourceReleaseRevision === undefined ||
     targetReleaseRevision === undefined ||
     planRevision === undefined ||
@@ -460,8 +453,8 @@ const validateAdoptCommand = (
   const rawBindings: unknown = candidate.active.expectedModuleBindings;
   const rawPins: unknown = candidate.target.modulePins;
   if (
-    !isUuid(candidate.conversionContractId) ||
-    !isUuid(candidate.applicationRootId) ||
+    !isNonNilUuidText(candidate.conversionContractId) ||
+    !isNonNilUuidText(candidate.applicationRootId) ||
     expectedPlanRevision === undefined ||
     activeRevision === undefined ||
     targetRevision === undefined ||
@@ -539,9 +532,9 @@ const validateRegisterCommand = (
   const sourceReleaseRevision = parseCommandRevision(candidate.sourceReleaseRevision);
   const targetReleaseRevision = parseCommandRevision(candidate.targetReleaseRevision);
   if (
-    !isUuid(candidate.sourceStorageContractId) ||
-    !isUuid(candidate.sourceFieldId) ||
-    !isUuid(candidate.targetFieldId) ||
+    !isNonNilUuidText(candidate.sourceStorageContractId) ||
+    !isNonNilUuidText(candidate.sourceFieldId) ||
+    !isNonNilUuidText(candidate.targetFieldId) ||
     candidate.sourceFieldId === candidate.targetFieldId ||
     sourceReleaseRevision === undefined ||
     targetReleaseRevision === undefined ||
@@ -562,7 +555,7 @@ const validateAllocateCommand = (
 ): AllocateStorageConversionPlanCommand | undefined => {
   if (!isRecord(candidate)) return undefined;
   const expectedPlanRevision = parseNullableRevision(candidate.expectedPlanRevision);
-  if (!isUuid(candidate.conversionContractId) || expectedPlanRevision === undefined)
+  if (!isNonNilUuidText(candidate.conversionContractId) || expectedPlanRevision === undefined)
     return undefined;
   return Object.freeze({
     conversionContractId: candidate.conversionContractId,
@@ -577,7 +570,7 @@ const validateBatchCommand = (
   const expectedPlanRevision = parseCommandRevision(candidate.expectedPlanRevision);
   const batchSize = candidate.batchSize;
   if (
-    !isUuid(candidate.conversionContractId) ||
+    !isNonNilUuidText(candidate.conversionContractId) ||
     expectedPlanRevision === undefined ||
     typeof batchSize !== "number" ||
     !Number.isSafeInteger(batchSize) ||
@@ -598,7 +591,7 @@ const validateCorrectionsCommand = (
   if (!isRecord(candidate)) return undefined;
   const limit = candidate.limit;
   if (
-    !isUuid(candidate.conversionContractId) ||
+    !isNonNilUuidText(candidate.conversionContractId) ||
     typeof limit !== "number" ||
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
@@ -707,9 +700,7 @@ const adoptConvertedPlan = async (
 };
 
 export interface StorageConversionRepository {
-  registerPlan(
-    command: RegisterStorageConversionCommand,
-  ): Promise<StorageConversionRegistration>;
+  registerPlan(command: RegisterStorageConversionCommand): Promise<StorageConversionRegistration>;
   allocatePlan(
     command: AllocateStorageConversionPlanCommand,
   ): Promise<StorageConversionPlanSummary>;

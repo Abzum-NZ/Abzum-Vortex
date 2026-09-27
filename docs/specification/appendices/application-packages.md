@@ -100,20 +100,27 @@ Custom backend scripts are platform-reviewed code, not customer code:
 
 Platform permission catalogue release 1.4.0 adds the drafts, releases, custom code and system applications permissions below. Earlier catalogue releases are unchanged.
 
-| Permission | Allows |
+| Permission or authority | Allows |
 | --- | --- |
 | `platform.organization.definition_drafts.manage` | Create and change module and application drafts, including flows, placements and role templates. |
 | `platform.organization.definition_releases.manage` | Publish drafts as immutable releases. |
 | `platform.organization.applications.manage` | Install, upgrade and uninstall packages. This permission already exists. |
 | `platform.organization.custom_code.manage` | Required in addition to `applications.manage` when a package contains custom components. |
 | `platform.organization.system_applications.manage` | Change system applications. |
-| Vortex super administrator (platform operator, never a customer role) | Install packages that contain custom scripts, and operate Kestra. |
+| Named Vortex super administrator (global Identity assignment, not a customer role) | Install packages that contain custom scripts, and operate Kestra. |
+| Configured system operator | Bootstrap named super-administrator assignments and perform the separate entitlement policy and tenant-ceiling commands. |
 
 These permissions have further rules:
 - **Approvals and the one fixed rule.** The organisation's approval workflow decides who must approve a grant, and the required-caller policy can make that workflow mandatory. Independently of any workflow, the grant operation refuses any role or role template that contains a permission outside the actor's own delegated scope ([04](../04-access-and-permissions.md)). Workflows are editable definitions, so this rule is what stops anyone granting themselves more than they hold.
 - **Recent authentication.** Installing custom components, or accepting role templates, requires the person to have signed in within the last 15 minutes.
 - **One server-side check.** Every draft change, publication, installation, upgrade and uninstallation passes the same server-side permission check, whether it comes from the designer, the API or MCP.
 - **Who holds them.** Ordinary organisation administrators do not hold these permissions unless a role grants them.
+
+Named super-administrator entry still establishes an ordinary local organisation
+account. Selecting an active organisation with no account provisions one with
+assignment provenance and an Activity entry; a suspended account is refused
+without reactivation. All organisation operations continue through the account's
+normal request context.
 
 ## Installation
 

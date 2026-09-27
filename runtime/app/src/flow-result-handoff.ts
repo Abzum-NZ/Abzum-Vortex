@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  sameId,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
@@ -158,10 +159,7 @@ export const flowResultViewerAuthoritySchema = z
     readableRecordCounts: z.array(recordTypeIdSchema).max(1000).default([]),
     readableFiles: z.array(fileIdSchema).max(10_000).default([]),
     readableComponents: z.array(containedComponentIdSchema).max(5000).default([]),
-    authorisedDisclosureOperations: z
-      .array(protectedOperationReferenceSchema)
-      .max(500)
-      .default([]),
+    authorisedDisclosureOperations: z.array(protectedOperationReferenceSchema).max(500).default([]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -321,9 +319,7 @@ export const flowResultHandoffRefusalReasonSchema = z.enum([
   "viewer_scope_mismatch",
   "declaration_mismatch",
 ]);
-export type FlowResultHandoffRefusalReason = z.infer<
-  typeof flowResultHandoffRefusalReasonSchema
->;
+export type FlowResultHandoffRefusalReason = z.infer<typeof flowResultHandoffRefusalReasonSchema>;
 
 /** One viewer-permitted result value, keyed by its declared result key. */
 export const flowResultProjectedValueSchema = z
@@ -410,8 +406,6 @@ const correlationIdFrom = (candidate: unknown): CorrelationId => {
   return extracted.success ? extracted.data.resolution.correlationId : FALLBACK_CORRELATION_ID;
 };
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
 const sameOperation = (
   left: ProtectedOperationReference,
   right: ProtectedOperationReference,
@@ -475,9 +469,7 @@ const disclosureOperationAuthorised = (
   authority: FlowResultViewerAuthority,
 ): boolean =>
   operation !== undefined &&
-  authority.authorisedDisclosureOperations.some((candidate) =>
-    sameOperation(candidate, operation),
-  );
+  authority.authorisedDisclosureOperations.some((candidate) => sameOperation(candidate, operation));
 
 const viewerMatchesInitiator = (
   viewer: FlowResultViewer,
@@ -588,9 +580,7 @@ export const projectFlowResultHandoff = (
           kind: "result",
           result: resultKey,
           reason:
-            mapping.mappingKind === "return"
-              ? "not_viewer_readable"
-              : "unsafe_disclosure_mapping",
+            mapping.mappingKind === "return" ? "not_viewer_readable" : "unsafe_disclosure_mapping",
         });
     }
   }

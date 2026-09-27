@@ -3,6 +3,7 @@ import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
+  sameId,
   activityActorKindSchema,
   activityAggregateDimensionSchema,
   activityHistoryFilterSchema,
@@ -19,6 +20,7 @@ import {
   organizationIdSchema,
   platformIdSchema,
   timestampSchema,
+  vortexSuperAdministratorAssignmentIdSchema,
   type IdentityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
@@ -50,6 +52,13 @@ export const activityHistoryEntrySchema = z
     source: activitySourceSchema,
     correlationId: correlationIdSchema,
     outcome: activityOutcomeSchema,
+    authority: z
+      .object({
+        kind: z.literal("vortex_super_administrator"),
+        assignmentId: vortexSuperAdministratorAssignmentIdSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ActivityHistoryEntry = z.infer<typeof activityHistoryEntrySchema>;
@@ -156,8 +165,6 @@ const one = (rows: readonly ResultRow[]): unknown => {
     throw new Error("ACTIVITY_HISTORY_RESULT_INVALID");
   return rows[0].result;
 };
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const pageReadSchema = z
   .object({
