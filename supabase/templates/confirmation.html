@@ -1,4 +1,5 @@
 <h2>Confirm your email address</h2>
-<p>Follow this link to finish creating your account.</p>
-<p><a href="{{ .ConfirmationURL }}">Confirm email address</a></p>
+<p>Open the confirmation page and enter the email address and six-digit code below to finish creating your account.</p>
+<p><strong>{{ .Token }}</strong></p>
+<p><a href="{{ .SiteURL }}/auth/confirm">Open the confirmation page</a></p>
 <p>If you did not request this, you can ignore this email.</p>
