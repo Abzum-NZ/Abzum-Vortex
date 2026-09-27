@@ -42,6 +42,66 @@ const removeNetwork = (networkName, spawn) =>
 const removeContainer = (containerName, spawn) =>
   spawn("docker", ["rm", "--force", containerName], { encoding: "utf8" });
 
+// The Supabase Postgres image starts with `supabase_admin` as its bootstrap
+// superuser. Its internal demotion migration gives `postgres` these grants
+// before applying project migrations; the disposable image needs the same
+// setup because it does not run the stack's internal database migrations.
+const configurePostgresMigrationRole = ({ containerName, spawn, stdout, stderr }) => {
+  const result = spawn(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--network",
+      `container:${containerName}`,
+      "--entrypoint",
+      "psql",
+      verificationDatabaseImage,
+      "-h",
+      "127.0.0.1",
+      "-p",
+      "5432",
+      "-U",
+      "supabase_admin",
+      "-d",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      `
+        GRANT ALL ON DATABASE postgres TO postgres;
+        GRANT ALL ON SCHEMA auth TO postgres;
+        GRANT ALL ON SCHEMA extensions TO postgres;
+        GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres;
+        GRANT ALL ON ALL TABLES IN SCHEMA extensions TO postgres;
+        GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres;
+        GRANT ALL ON ALL SEQUENCES IN SCHEMA extensions TO postgres;
+        GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO postgres;
+        GRANT ALL ON ALL ROUTINES IN SCHEMA extensions TO postgres;
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT FROM pg_catalog.pg_namespace WHERE nspname = 'storage') THEN
+            GRANT ALL ON SCHEMA storage TO postgres;
+            GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres;
+            GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres;
+            GRANT ALL ON ALL ROUTINES IN SCHEMA storage TO postgres;
+          END IF;
+        END
+        $$;
+        ALTER ROLE postgres NOSUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION BYPASSRLS;
+      `,
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.stdout) stdout.write(result.stdout);
+  if (result.stderr) stderr.write(result.stderr);
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(
+      `Configuring the Supabase postgres migration role failed (exit ${result.status})`,
+    );
+};
+
 /**
  * Starts one fresh, database-only Postgres cluster for a single verification
  * run: a dedicated container plus a dedicated Docker network, prepared with the
@@ -230,6 +290,15 @@ export const startVerificationDatabase = async ({
   } catch (cause) {
     throw new VerificationDatabaseStartupError(
       `Preparing the Supabase schemas for verification database container ${containerName} failed: ${cause.message}`,
+      { handle, cause },
+    );
+  }
+
+  try {
+    configurePostgresMigrationRole({ containerName, spawn, stdout, stderr });
+  } catch (cause) {
+    throw new VerificationDatabaseStartupError(
+      `Configuring the Supabase migration role for verification database container ${containerName} failed: ${cause.message}`,
       { handle, cause },
     );
   }
