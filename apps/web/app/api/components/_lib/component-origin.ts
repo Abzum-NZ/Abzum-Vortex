@@ -1,21 +1,14 @@
 import "server-only";
 
 import { requestMatchesConfiguredSite } from "../../../auth/_lib/session-request-state";
-
-const requiredEnvironmentValue = (name: string): string => {
-  const value = process.env[name];
-  if (!value || value.trim().length === 0)
-    throw new Error(`Missing required server configuration: ${name}`);
-  return value;
-};
+import { requiredEnvironmentValue } from "../../../_lib/server-configuration";
 
 let componentOrigin: string | undefined;
 
 /**
  * The configured dedicated component origin, refused when its host is, contains or is contained by
  * the Vortex site host. Any configuration error fails closed, so publisher code is never served
- * from a Vortex application origin. The component bundle route on the same domain keeps its own
- * copy of this check; this module is the shared home for the bootstrap document's use of it.
+ * from a Vortex application origin. Both component routes use this check.
  */
 export const configuredComponentOrigin = (): string => {
   if (componentOrigin !== undefined) return componentOrigin;

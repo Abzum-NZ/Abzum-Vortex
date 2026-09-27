@@ -104,7 +104,8 @@ export function validateGraph(packages) {
     if (typeof manifest.vortex.ships !== "boolean") {
       errors.push(`${manifest.name} must declare whether it ships`);
     }
-    if (!manifest.exports?.["."]) errors.push(`${manifest.name} has no public root export`);
+    if (!manifest.exports?.["."] && !manifest.vortex?.compositionRoot)
+      errors.push(`${manifest.name} has no public root export`);
     if (
       manifest.vortex.environment === "server" &&
       manifest.dependencies?.["server-only"] !== "0.0.1"
