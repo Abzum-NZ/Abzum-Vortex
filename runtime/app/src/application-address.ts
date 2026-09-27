@@ -80,7 +80,6 @@ const addressCandidateReadSchema = z.discriminatedUnion("kind", [
     organizationShortName: builderKeySchema,
     applications: z.array(applicationCandidateSchema).max(10_000),
   }).strict(),
-  z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
@@ -113,7 +112,6 @@ export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
     defaultApplicationRootId: applicationRootIdSchema.nullable(),
     applications: z.array(permittedApplicationSchema).max(10_000),
   }).strict(),
-  z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
