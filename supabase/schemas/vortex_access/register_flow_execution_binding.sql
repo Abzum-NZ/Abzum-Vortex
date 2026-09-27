@@ -156,7 +156,7 @@ begin
       p_permitted_invokers::text,
       p_permitted_surfaces::text,
       p_permitted_inputs::text,
-      coalesce(vortex_access.flow_execution_binding_timestamp_internal(p_expires_at), ''),
+      coalesce(vortex_context.format_timestamp_utc(p_expires_at), ''),
       coalesce(p_expected_revision::text, '')
     ), 'UTF8'),
     'sha256'), 'hex');
