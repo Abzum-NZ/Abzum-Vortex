@@ -46,13 +46,9 @@ const historyResult = {
   correlationId: ids.correlation,
 } as const;
 
-const moduleFixtureDirectory = path.resolve(
-  import.meta.dirname,
-  "../../testing/fixtures/historical/module-v1/modules",
-);
 const moduleSource = JSON.parse(
   fs.readFileSync(
-    path.join(moduleFixtureDirectory, fs.readdirSync(moduleFixtureDirectory).sort()[0]!),
+    path.resolve(import.meta.dirname, "../../modules/src/crm/sources/crm.activities.json"),
     "utf8",
   ),
 );
@@ -232,10 +228,10 @@ describe("definition history and restore contracts", () => {
       kind: "module",
       rootId: ids.moduleRoot,
       organizationId: ids.organization,
-      key: "example.generic_module",
+      key: moduleSource.key,
       draftRevision: 3,
       source: moduleSource,
-      sourceContractVersion: "1.0.0",
+      sourceContractVersion: "3.0.0",
       sourceFingerprint: fingerprint,
       createdAt: "2026-09-04T00:00:00Z",
       createdBy: ids.actor,
