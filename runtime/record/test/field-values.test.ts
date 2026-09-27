@@ -1,9 +1,8 @@
 import {
-  fieldDefinitionSchema,
-  moduleFieldV2Schema,
-  recordTypeDefinitionV2Schema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  moduleFieldV3Schema,
+  recordTypeDefinitionV3Schema,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import {
@@ -18,11 +17,11 @@ const id = (value: number) => `70000000-0000-4000-8000-${value.toString().padSta
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
   options: { required?: boolean; default?: unknown } = {},
-): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -71,13 +70,13 @@ const moduleRootId = id(104);
 const fileId = id(105);
 const richFileId = id(106);
 const organizationAccountId = id(107);
-const generatedFieldTypesForTest = new Set<ModuleFieldV2["type"]>([
+const generatedFieldTypesForTest = new Set<ModuleFieldV3["type"]>([
   "reference_number",
   "calculation",
   "total",
 ]);
 
-const fields = (): ModuleFieldV2[] => [
+const fields = (): ModuleFieldV3[] => [
   field(fieldIds.text, "title", "text", { maxLength: 40 }, { required: true, default: "Untitled" }),
   field(fieldIds.longText, "notes", "long_text", { maxLength: 200 }),
   field(fieldIds.formatted, "formatted", "formatted_text", {
@@ -201,8 +200,8 @@ const fields = (): ModuleFieldV2[] => [
   }),
 ];
 
-const recordType = (overrides: Partial<RecordTypeDefinitionV2> = {}): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const recordType = (overrides: Partial<RecordTypeDefinitionV3> = {}): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: id(900),
     key: "test_record",
     singularLabel: "Test record",
@@ -318,7 +317,7 @@ describe("prepareRecordFieldValuesV2", () => {
     const configured = recordType({
       fields: fields().map((candidate) =>
         candidate.fieldId === fieldIds.table
-          ? moduleFieldV2Schema.parse({
+          ? moduleFieldV3Schema.parse({
               ...candidate,
               default: [
                 {
@@ -365,14 +364,14 @@ describe("prepareRecordFieldValuesV2", () => {
     const configured = recordType({
       fields: fields().map((candidate) => {
         if (candidate.fieldId === fieldIds.money)
-          return moduleFieldV2Schema.parse({
+          return moduleFieldV3Schema.parse({
             ...candidate,
             settings: { currencyMode: "organization_default", minimum: "0" },
             default: "12.34",
           });
         if (candidate.fieldId === fieldIds.table) {
-          const table = candidate as Extract<ModuleFieldV2, { type: "table" }>;
-          return moduleFieldV2Schema.parse({
+          const table = candidate as Extract<ModuleFieldV3, { type: "table" }>;
+          return moduleFieldV3Schema.parse({
             ...table,
             settings: {
               ...table.settings,
@@ -506,7 +505,7 @@ describe("prepareRecordFieldValuesV2", () => {
     const generatedRequired = recordType({
       fields: fields().map((candidate) =>
         generatedFieldTypesForTest.has(candidate.type)
-          ? moduleFieldV2Schema.parse({ ...candidate, required: true })
+          ? moduleFieldV3Schema.parse({ ...candidate, required: true })
           : candidate,
       ),
     });
@@ -563,14 +562,14 @@ describe("prepareRecordFieldValuesV2", () => {
     const configured = recordType({
       fields: fields().map((candidate) => {
         if (candidate.fieldId === fieldIds.text)
-          return moduleFieldV2Schema.parse({
+          return moduleFieldV3Schema.parse({
             ...candidate,
             required: false,
             default: undefined,
             settings: { maxLength: 40, format: "uuid" },
           });
         if (candidate.fieldId === fieldIds.formatted)
-          return moduleFieldV2Schema.parse({
+          return moduleFieldV3Schema.parse({
             ...candidate,
             settings: { allowedBlocks: ["paragraph"], maxLength: 20 },
           });
@@ -660,7 +659,7 @@ describe("prepareRecordFieldValuesV2", () => {
     const configured = recordType({
       fields: fields().map((candidate) =>
         candidate.fieldId === fieldIds.attachment
-          ? moduleFieldV2Schema.parse({ ...candidate, required: true })
+          ? moduleFieldV3Schema.parse({ ...candidate, required: true })
           : candidate,
       ),
     });
@@ -690,7 +689,7 @@ describe("prepareRecordFieldValuesV2", () => {
     const configured = recordType({
       fields: fields().map((candidate) =>
         candidate.fieldId === fieldIds.attachment
-          ? moduleFieldV2Schema.parse({
+          ? moduleFieldV3Schema.parse({
               ...candidate,
               settings: {
                 allowedKinds: ["document"],
@@ -727,7 +726,7 @@ describe("prepareRecordFieldValuesV2", () => {
     const configuredFields = fields();
     const title = { ...configuredFields[0] } as Record<string, unknown>;
     delete title.default;
-    configuredFields[0] = moduleFieldV2Schema.parse(title);
+    configuredFields[0] = moduleFieldV3Schema.parse(title);
     const result = prepareRecordFieldValuesV2({
       operation: "create",
       recordType: recordType({ fields: configuredFields }),
@@ -801,7 +800,7 @@ describe("two-phase Record field candidate preparation", () => {
     const configuredFields = fields();
     const requiredTitle = { ...configuredFields[0] } as Record<string, unknown>;
     delete requiredTitle.default;
-    configuredFields[0] = moduleFieldV2Schema.parse(requiredTitle);
+    configuredFields[0] = moduleFieldV3Schema.parse(requiredTitle);
     const configured = recordType({ fields: configuredFields });
     const initial = prepareInitialRecordFieldCandidateV2({
       operation: "create",
@@ -877,7 +876,7 @@ describe("two-phase Record field candidate preparation", () => {
     const configured = recordType({
       fields: fields().map((candidate) =>
         candidate.fieldId === fieldIds.whole
-          ? moduleFieldV2Schema.parse({
+          ? moduleFieldV3Schema.parse({
               ...candidate,
               settings: { minimum: 0, maximum: 20, step: 1 },
             })
@@ -983,7 +982,7 @@ describe("two-phase Record field candidate preparation", () => {
     const requiredGenerated = recordType({
       fields: fields().map((candidate) =>
         generatedFieldTypesForTest.has(candidate.type)
-          ? moduleFieldV2Schema.parse({ ...candidate, required: true })
+          ? moduleFieldV3Schema.parse({ ...candidate, required: true })
           : candidate,
       ),
     });
@@ -1046,99 +1045,32 @@ describe("two-phase Record field candidate preparation", () => {
 });
 
 describe("persistedRecordFieldValueMatches", () => {
-  it("reuses canonical V2 value and static reference-target semantics", () => {
+  it("uses canonical value and static reference-target semantics", () => {
     const definitions = fields();
     const byId = new Map(definitions.map((candidate) => [candidate.fieldId, candidate]));
     expect(
       persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field: byId.get(fieldIds.reference)!,
         value: "00000042",
       }),
     ).toBe(true);
     expect(
       persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field: byId.get(fieldIds.attachment)!,
         value: [fileId],
       }),
     ).toBe(true);
     expect(
       persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field: byId.get(fieldIds.link)!,
         value: { recordTypeId: otherRecordTypeId, recordId: id(201) },
       }),
     ).toBe(false);
     expect(
       persistedRecordFieldValueMatches({
-        validationContractVersion: "2.0.0",
         field: byId.get(fieldIds.decimal)!,
         value: "1.00",
       }),
     ).toBe(false);
-  });
-
-  it("checks accepted V1 persisted values against their historical field settings", () => {
-    const base = {
-      fieldId: id(300),
-      key: "historical",
-      label: "Historical",
-      required: false,
-      unique: false,
-      filterable: true,
-      sortable: true,
-      personalData: "none" as const,
-      publicDisplay: "refused" as const,
-    };
-    const text = fieldDefinitionSchema.parse({
-      ...base,
-      type: "text",
-      settings: { maxLength: 3 },
-    });
-    const whole = fieldDefinitionSchema.parse({
-      ...base,
-      fieldId: id(301),
-      type: "whole_number",
-      settings: { minimum: 1, maximum: 9, step: 2 },
-    });
-    const attachment = fieldDefinitionSchema.parse({
-      ...base,
-      fieldId: id(302),
-      type: "attachment",
-      settings: {
-        allowedKinds: ["document"],
-        maxFileSizeMb: 20,
-        multiple: false,
-      },
-    });
-    expect(
-      persistedRecordFieldValueMatches({
-        validationContractVersion: "1.0.0",
-        field: text,
-        value: "old",
-      }),
-    ).toBe(true);
-    expect(
-      persistedRecordFieldValueMatches({
-        validationContractVersion: "1.0.0",
-        field: text,
-        value: "long",
-      }),
-    ).toBe(false);
-    expect(
-      persistedRecordFieldValueMatches({
-        validationContractVersion: "1.0.0",
-        field: whole,
-        value: 4,
-      }),
-    ).toBe(false);
-    expect(
-      persistedRecordFieldValueMatches({
-        validationContractVersion: "1.0.0",
-        field: attachment,
-        value: [fileId],
-      }),
-    ).toBe(true);
   });
 });
