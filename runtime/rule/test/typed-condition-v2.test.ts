@@ -1,4 +1,4 @@
-import { moduleFieldV2Schema, type ConditionNode, type ModuleFieldV2 } from "@vortex/contracts";
+import { moduleFieldV3Schema, type ConditionNode, type ModuleFieldV3 } from "@vortex/contracts";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,8 +10,8 @@ import {
 
 const id = (value: number) => `20000000-0000-4000-8000-${value.toString().padStart(12, "0")}`;
 
-const field = (fieldId: string, key: string, type: string, settings: unknown): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+const field = (fieldId: string, key: string, type: string, settings: unknown): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -91,7 +91,7 @@ const comparison = (
 
 const evaluate = (
   condition: ConditionNode,
-  selectedFields: readonly ModuleFieldV2[],
+  selectedFields: readonly ModuleFieldV3[],
   fieldValues: Readonly<Record<string, unknown>>,
   options: Partial<
     Pick<
@@ -155,7 +155,7 @@ describe("typed conditions V2", () => {
     expect(corpus.v2.sourceContractVersion).toBe("2.0.0");
     expect(corpus.v2.vectors).toHaveLength(19);
 
-    const parityField = (entry: ParityField, index: number): ModuleFieldV2 => {
+    const parityField = (entry: ParityField, index: number): ModuleFieldV3 => {
       const settings = (() => {
         switch (entry.type) {
           case "whole_number":
