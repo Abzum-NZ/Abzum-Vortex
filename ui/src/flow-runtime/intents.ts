@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/contracts";
+import type { FormContinuationAnswer, JsonValue } from "@vortex/contracts";
 
 /**
  * One typed interface intent, as the shared interpreter produces it in the page or the server
@@ -29,8 +29,8 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
   "set_filter",
 ]);
 
-/** The person's answer to a form intent. A dismissed form is `submitted: false`. */
-export type FlowFormAnswer = Readonly<{ submitted: boolean; values: JsonValue }>;
+/** The person's answer to a form intent, using the same shape sent to the server. */
+export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" | "cancel" }>;
 
 export type FlowMessageIntent = Readonly<{ text: string; tone: string | undefined }>;
 export type FlowConfirmIntent = Readonly<{ title: string | undefined; message: string }>;

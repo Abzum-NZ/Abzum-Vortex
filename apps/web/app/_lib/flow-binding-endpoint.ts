@@ -2,20 +2,18 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
-  containedComponentIdSchema,
-  flowIdSchema,
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
+  flowBindingInvocationSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
-  recordIdSchema,
-  revisionSchema,
   safeFlowResultDescriptors,
   type ComponentFlowBinding,
   type FormContinuationOutcome,
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
+  type FlowBindingInvocation,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -31,7 +29,6 @@ import type {
   FlowSubject,
   FlowUnavailableNotice,
 } from "@vortex/app";
-import { z } from "zod";
 
 /**
  * The one server entry point that runs the flow bound to a component event (architecture decision
@@ -65,68 +62,6 @@ import { z } from "zod";
  */
 
 const maximumSuppliedCharacters = 65_536;
-
-const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
-const releaseKeySchema = z.string().min(1).max(200);
-
-const bindingInvocationSchema = z
-  .object({
-    kind: z.literal("binding"),
-    installationRevision: installationRevisionSchema,
-    releaseKey: releaseKeySchema,
-    bindingId: containedComponentIdSchema,
-    flowId: flowIdSchema,
-    /** One identity per user gesture, so a repeated request for the same click is the same run. */
-    clickId: z.uuid(),
-    /** The values the surface itself supplies, by the name of the binding's `caller` input. */
-    callerInputs: z.record(z.string().min(1).max(100), z.unknown()).default({}),
-    /** The record the surface was rendered for and the revision it showed (evidence only). */
-    subject: z
-      .object({
-        recordId: recordIdSchema,
-        revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
-
-const continuationInvocationSchema = z
-  .object({
-    kind: z.literal("continuation"),
-    installationRevision: installationRevisionSchema,
-    releaseKey: releaseKeySchema,
-    flowId: flowIdSchema,
-    continuation: z.string().min(16).max(128),
-    answer: z.discriminatedUnion("kind", [
-      z
-        .object({
-          kind: z.literal("form_answered"),
-          submitted: z.boolean(),
-          values: z.unknown(),
-        })
-        .strict(),
-      z.object({ kind: z.literal("confirmed"), confirmed: z.boolean() }).strict(),
-    ]),
-    /**
-     * #588: the exact paused target and the run receipt the surface last saw. Both are evidence: the
-     * server compares them with the trusted installation and the stored run, so a caller can neither
-     * skip unanswered inputs nor name a different node. The target is absent only for a pause the
-     * server issued none for (a form node that names no form); that resume stays under the
-     * orchestrator's own release and receipt checks. No private draft evidence is accepted: until a
-     * draft authority can verify one on the server, a request that names a draft is refused.
-     */
-    target: formContinuationTargetSchema.optional(),
-    receipt: formContinuationReceiptSchema.optional(),
-  })
-  .strict();
-
-export const flowBindingInvocationSchema = z.discriminatedUnion("kind", [
-  bindingInvocationSchema,
-  continuationInvocationSchema,
-]);
-
-export type FlowBindingInvocation = z.input<typeof flowBindingInvocationSchema>;
 
 /**
  * What the trusted installation read holds for one organisation's active installation: its
@@ -474,19 +409,10 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (target !== undefined) {
             if (dependencies.continueForm === undefined || !sameId(target.flowId, request.flowId))
               return refused;
-            const answer =
-              request.answer.kind === "confirmed"
-                ? ({ kind: "confirm", confirmed: request.answer.confirmed } as const)
-                : request.answer.submitted
-                  ? ({
-                      kind: "submit",
-                      values: request.answer.values as Record<string, JsonValue>,
-                    } as const)
-                  : ({ kind: "cancel" } as const);
             const outcome = await dependencies.continueForm(session.data, selection.data, {
               target,
               continuation: request.continuation,
-              answer,
+              answer: request.answer,
               ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
             });
             return continuationResult(outcome, installation.installationRevision);
