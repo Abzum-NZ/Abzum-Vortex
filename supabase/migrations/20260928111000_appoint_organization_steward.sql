@@ -29,6 +29,7 @@ declare
   delegation_grant record;
   existing_role_assignment_id uuid;
   existing_delegation_authority_id uuid;
+  steward_role_is_qualified boolean;
   generated_role_assignment_id uuid := pg_catalog.gen_random_uuid();
   generated_delegation_authority_id uuid := pg_catalog.gen_random_uuid();
   activity_id uuid;
@@ -71,27 +72,6 @@ begin
   where requirement.organization_id = context_organization_id
   for update;
   if not found then
-    raise exception using errcode = '42501',
-      message = 'Organization steward appointment is unavailable';
-  end if;
-
-  select role.* into steward_role
-  from vortex_access.organization_roles as role
-  where role.organization_id = context_organization_id
-    and role.role_id = stewardship_requirement.original_role_id
-  for update;
-  if not found then
-    raise exception using errcode = '42501',
-      message = 'Organization steward appointment is unavailable';
-  end if;
-  select revision.* into steward_role_revision
-  from vortex_access.organization_role_revisions as revision
-  where revision.organization_id = context_organization_id
-    and revision.role_id = steward_role.role_id
-    and revision.revision = steward_role.live_revision;
-  if not found
-    or steward_role_revision.lifecycle is distinct from 'active'
-    or steward_role_revision.assignment_policy is distinct from 'standing' then
     raise exception using errcode = '42501',
       message = 'Organization steward appointment is unavailable';
   end if;
@@ -185,40 +165,113 @@ begin
       message = 'Organization steward appointment is stale or unavailable';
   end if;
 
-  select assignment.role_assignment_id,
-    delegation.delegation_authority_id
-  into existing_role_assignment_id, existing_delegation_authority_id
-  from vortex_access.organization_role_assignments as assignment
-  join vortex_access.organization_roles as role
-    on role.organization_id = assignment.organization_id
-    and role.role_id = assignment.role_id
-  join vortex_access.organization_role_revisions as revision
-    on revision.organization_id = role.organization_id
-    and revision.role_id = role.role_id
-    and revision.revision = role.live_revision
-  join vortex_access.organization_delegation_authorities as delegation
-    on delegation.organization_id = assignment.organization_id
-    and delegation.holder_kind = 'organization_account'
-    and delegation.organization_account_id = p_organization_account_id
-    and delegation.group_id is null
-    and delegation.scope_kind = 'organization_catalogue'
-    and delegation.state = 'live'
-    and delegation.starts_at <= appointment_starts_at
-    and delegation.expires_at is null
-  where assignment.organization_id = context_organization_id
-    and assignment.role_id = stewardship_requirement.original_role_id
-    and assignment.assignee_kind = 'organization_account'
-    and assignment.organization_account_id = p_organization_account_id
-    and assignment.group_id is null
-    and assignment.assignment_kind = 'standing'
-    and assignment.state = 'live'
-    and assignment.starts_at <= appointment_starts_at
-    and assignment.expires_at is null
-    and revision.lifecycle = 'active'
-    and revision.assignment_policy = 'standing'
-  order by assignment.role_assignment_id, delegation.delegation_authority_id
-  limit 1;
-  if found then
+  -- Match the target against the same live minimum used by the permanent-steward
+  -- safeguard. The original adoption role may have changed or another role may
+  -- already qualify the target.
+  with required_permission as (
+    select entry.application_root_id, entry.owner_kind, entry.owner_id,
+      entry.permission_id, entry.meaning_fingerprint,
+      registration.revision as registration_revision
+    from vortex_access.permission_registrations as registration
+    join vortex_access.permission_catalogue_entries as entry
+      on entry.organization_id = registration.organization_id
+      and entry.registration_kind = 'platform'
+      and entry.registration_revision = registration.revision
+    where registration.organization_id = context_organization_id
+      and registration.registration_kind = 'platform'
+      and registration.state = 'active'
+      and vortex_access.platform_permission_catalogue_revision_is_exact(
+        context_organization_id, registration.revision
+      )
+      and entry.application_root_id is null
+      and entry.owner_kind = 'platform'
+      and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+      and entry.permission_id = any (array[
+        '687d5649-62ee-43dd-b684-b8af3a5394c1',
+        'ca5f56d4-5382-4bf8-9a91-fbfdc77642b2',
+        '87c96495-c806-4692-9bc2-250ddb10613c',
+        '290ae49f-4cab-4159-9c20-6e664f07d50b',
+        '6185dc64-464b-4776-97dc-c64a6f299550',
+        '9901c0dc-8bac-45c7-be0b-3642cb839bb1',
+        '156d01f3-8f80-45fb-8fc8-b31c47dbb1df',
+        '02c772e5-2921-4300-ad90-4f5772a7fa46',
+        '630a980c-0ff5-40b1-a329-7326a2122395',
+        '9300e501-6d56-41b1-b203-3361dbace9bc',
+        'c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb',
+        '6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5',
+        'c658c254-2884-414a-9012-512c0cfe4b34'
+      ]::uuid[])
+  ), qualifying_role as (
+    select role.role_id
+    from vortex_access.organization_roles as role
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = role.organization_id
+      and revision.role_id = role.role_id
+      and revision.revision = role.live_revision
+    where role.organization_id = context_organization_id
+      and revision.lifecycle = 'active'
+      and revision.assignment_policy = 'standing'
+      and (select pg_catalog.count(*) from required_permission) = 13
+      and not exists (
+        select 1 from required_permission as required
+        where not exists (
+          select 1
+          from vortex_access.organization_role_permission_entries as permission
+          join vortex_access.permission_continuities as continuity
+            on continuity.organization_id = permission.organization_id
+            and continuity.application_root_id is not distinct from permission.application_root_id
+            and continuity.owner_kind = permission.owner_kind
+            and continuity.owner_id = permission.owner_id
+            and continuity.permission_id = permission.permission_id
+            and continuity.state = 'available'
+            and continuity.continuity_revision = permission.continuity_revision
+            and continuity.meaning_fingerprint = permission.meaning_fingerprint
+            and continuity.last_processed_registration_revision = required.registration_revision
+          where permission.organization_id = role.organization_id
+            and permission.role_id = role.role_id
+            and permission.role_revision = role.live_revision
+            and permission.application_root_id is not distinct from required.application_root_id
+            and permission.owner_kind = required.owner_kind
+            and permission.owner_id = required.owner_id
+            and permission.permission_id = required.permission_id
+            and permission.meaning_fingerprint = required.meaning_fingerprint
+        )
+      )
+  ), current_steward as (
+    select assignment.role_assignment_id,
+      delegation.delegation_authority_id
+    from vortex_access.organization_role_assignments as assignment
+    join qualifying_role as role on role.role_id = assignment.role_id
+    join vortex_access.organization_delegation_authorities as delegation
+      on delegation.organization_id = assignment.organization_id
+      and delegation.holder_kind = 'organization_account'
+      and delegation.organization_account_id = p_organization_account_id
+      and delegation.group_id is null
+      and delegation.scope_kind = 'organization_catalogue'
+      and delegation.state = 'live'
+      and delegation.starts_at <= appointment_starts_at
+      and delegation.expires_at is null
+    where assignment.organization_id = context_organization_id
+      and assignment.assignee_kind = 'organization_account'
+      and assignment.organization_account_id = p_organization_account_id
+      and assignment.group_id is null
+      and assignment.assignment_kind = 'standing'
+      and assignment.state = 'live'
+      and assignment.starts_at <= appointment_starts_at
+      and assignment.expires_at is null
+    order by assignment.role_assignment_id, delegation.delegation_authority_id
+    limit 1
+  )
+  select exists (
+      select 1 from qualifying_role as role
+      where role.role_id = stewardship_requirement.original_role_id
+    ), current_steward_result.role_assignment_id,
+    current_steward_result.delegation_authority_id
+  into steward_role_is_qualified, existing_role_assignment_id,
+    existing_delegation_authority_id
+  from (select 1) as anchor
+  left join current_steward as current_steward_result on true;
+  if existing_role_assignment_id is not null then
     perform vortex_access.assert_organization_has_permanent_steward(
       context_organization_id
     );
@@ -230,6 +283,31 @@ begin
     return query select 'unchanged'::text, context_organization_id,
       result_summary, context_access_version;
     return;
+  end if;
+
+  if steward_role_is_qualified is not true then
+    raise exception using errcode = '42501',
+      message = 'Organization steward appointment is unavailable';
+  end if;
+  select role.* into steward_role
+  from vortex_access.organization_roles as role
+  where role.organization_id = context_organization_id
+    and role.role_id = stewardship_requirement.original_role_id
+  for update;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Organization steward appointment is unavailable';
+  end if;
+  select revision.* into steward_role_revision
+  from vortex_access.organization_role_revisions as revision
+  where revision.organization_id = context_organization_id
+    and revision.role_id = steward_role.role_id
+    and revision.revision = steward_role.live_revision;
+  if not found
+    or steward_role_revision.lifecycle is distinct from 'active'
+    or steward_role_revision.assignment_policy is distinct from 'standing' then
+    raise exception using errcode = '42501',
+      message = 'Organization steward appointment is unavailable';
   end if;
 
   activity_id := pg_catalog.gen_random_uuid();
