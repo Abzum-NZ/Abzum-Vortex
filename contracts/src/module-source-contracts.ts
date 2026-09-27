@@ -17,6 +17,7 @@ import {
   sourceConditionSchema,
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
+  sourceProvenanceTarget,
 } from "./definition-source-common";
 import { parseExactDecimal } from "./exact-decimal";
 import { compileTextInputPattern } from "./text-input-pattern";
@@ -145,8 +146,8 @@ export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind
   z
     .object({
       kind: z.literal("relationship"),
-      relationship: sourceQualifiedRelationshipSchema,
-      source_permission: namespacedKeySchema,
+      relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, ["relationshipId"]),
+      source_permission: sourceProvenanceTarget(namespacedKeySchema, ["sourcePermissionId"]),
     })
     .strict(),
 ]);
@@ -193,7 +194,11 @@ export const moduleSourcePermissionRecordScopeSchema =
   sourcePermissionRecordScopeBaseSchema.safeExtend({
     saved_condition: z
       .object({
-        condition: builderKeySchema,
+        condition: sourceProvenanceTarget(builderKeySchema, [
+          "conditionId",
+          "publishedRevision",
+          "contractFingerprint",
+        ]),
         parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
       })
       .strict()
@@ -202,8 +207,8 @@ export const moduleSourcePermissionRecordScopeSchema =
 
 export const sourcePermissionFieldPolicySchema = z
   .object({
-    readable_fields: z.array(builderKeySchema).max(500),
-    changeable_fields: z.array(builderKeySchema).max(500),
+    readable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["readableFieldIds/#"])).max(500),
+    changeable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["changeableFieldIds/#"])).max(500),
   })
   .strict()
   .superRefine((value, context) => {
@@ -267,7 +272,7 @@ export const actionInputSchema = z
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("text"),
+        type: sourceProvenanceTarget(z.literal("text"), ["type"]),
         validation: z
           .object({
             minimum_length: z.number().int().min(0).optional(),
@@ -281,7 +286,7 @@ export const actionInputSchema = z
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("formatted_text"),
+        type: sourceProvenanceTarget(z.literal("formatted_text"), ["type"]),
         validation: z
           .object({
             allowed_blocks: z
@@ -296,21 +301,26 @@ export const actionInputSchema = z
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("number"),
+        type: sourceProvenanceTarget(z.literal("number"), ["type"]),
         validation: z
           .object({
-            minimum: z.number().finite().optional(),
-            maximum: z.number().finite().optional(),
+            minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
+            maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
           })
           .strict()
           .optional(),
       })
       .strict(),
-    z.object({ ...sourceSharedActionInputBase, type: z.literal("boolean") }).strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("date"),
+        type: sourceProvenanceTarget(z.literal("boolean"), ["type"]),
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceSharedActionInputBase,
+        type: sourceProvenanceTarget(z.literal("date"), ["type"]),
         validation: z
           .object({
             earliest: z
@@ -329,7 +339,7 @@ export const actionInputSchema = z
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("date_time"),
+        type: sourceProvenanceTarget(z.literal("date_time"), ["type"]),
         validation: z
           .object({
             earliest: z.string().datetime({ offset: true }).optional(),
@@ -342,14 +352,17 @@ export const actionInputSchema = z
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("record_reference"),
-        record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
+        type: sourceProvenanceTarget(z.literal("record_reference"), ["type"]),
+        record_types: z
+          .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
+          .min(1)
+          .max(20),
       })
       .strict(),
     z
       .object({
         ...sourceSharedActionInputBase,
-        type: z.literal("organisation_account_reference"),
+        type: sourceProvenanceTarget(z.literal("organisation_account_reference"), ["type"]),
       })
       .strict(),
   ])
@@ -388,7 +401,7 @@ const sourceOptionSchema = z
   .object({
     value: z.string().min(1).max(120),
     label: labelSchema,
-    required_permission: namespacedKeySchema.optional(),
+    required_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["requiredPermissionId"]),
   })
   .strict();
 const emptySettingsSchema = z.object({}).strict();
@@ -418,8 +431,8 @@ const sourceFormattedTextSettingsSchema = z
   .strict();
 const sourceWholeNumberSettingsSchema = z
   .object({
-    minimum: z.number().int().optional(),
-    maximum: z.number().int().optional(),
+    minimum: sourceProvenanceTarget(z.number().int().optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(z.number().int().optional(), ["maximum"]),
     step: z.number().int().positive().optional(),
   })
   .strict()
@@ -442,9 +455,9 @@ const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
 const sourceDecimalSettingsSchema = z
   .object({
     digits_before_decimal: z.number().int().min(1).max(30),
-    decimal_places: z.number().int().min(0).max(12),
-    minimum: sourceExactDecimalTextV2Schema.optional(),
-    maximum: sourceExactDecimalTextV2Schema.optional(),
+    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12), ["decimalPlaces"]),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
   })
   .strict()
   .refine(
@@ -456,10 +469,10 @@ const sourceDecimalSettingsSchema = z
   );
 const sourceMoneySettingsSchema = z
   .object({
-    currency_mode: z.enum(["fixed", "organisation_default"]),
+    currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organisation_default"]), ["currencyMode"]),
     currency: currencyCodeV2Schema.optional(),
-    minimum: sourceExactDecimalTextV2Schema.optional(),
-    maximum: sourceExactDecimalTextV2Schema.optional(),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -484,7 +497,12 @@ const sourceDateSettingsSchema = z
   .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
   .strict();
 const sourceDateTimeSettingsSchema = z
-  .object({ display_time_zone: z.enum(["person", "organisation", "utc"]).optional() })
+  .object({
+    display_time_zone: sourceProvenanceTarget(
+      z.enum(["person", "organisation", "utc"]).optional(),
+      ["displayTimeZone"],
+    ),
+  })
   .strict();
 const sourceChoiceSettingsSchema = z
   .object({ options: z.array(sourceOptionSchema).min(1).max(200) })
@@ -593,25 +611,28 @@ const sourceTableSettingsSchema = z
   });
 const sourceLinkSettingsSchema = z
   .object({
-    target: sourceQualifiedRecordTypeSchema,
+    target: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["target/**"]),
     reverse_key: builderKeySchema,
     on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
   .object({
-    targets: z.array(sourceQualifiedRecordTypeSchema).min(2).max(20),
+    targets: z
+      .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["targets/#/**"]))
+      .min(2)
+      .max(20),
     on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
   })
   .strict();
 const sourcePersonLinkSettingsSchema = z
   .object({
-    audience: z.enum([
+    audience: sourceProvenanceTarget(z.enum([
       "organisation_accounts",
       "application_accounts",
       "organisation_identities_and_external_requesters",
-    ]),
-    application_root_required: z.boolean(),
+    ]), ["audience"]),
+    application_root_required: sourceProvenanceTarget(z.boolean(), ["applicationRootIdRequired"]),
     on_person_deactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
   })
   .strict();
@@ -619,8 +640,18 @@ const sourcePersonLinkSettingsSchema = z
 /** Closed safety limits for one nested numeric expression are declared in ./common. */
 const sourceCalculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
 const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("field"), field: builderKeySchema }).strict(),
-  z.object({ source: z.literal("literal"), value: sourceExactDecimalTextV2Schema }).strict(),
+  z
+    .object({
+      source: z.literal("field"),
+      field: sourceProvenanceTarget(builderKeySchema, ["fieldId", "fieldIds/#", "dependencyFieldIds/#"]),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("literal"),
+      value: sourceProvenanceTarget(sourceExactDecimalTextV2Schema, ["value"]),
+    })
+    .strict(),
 ]);
 /**
  * One value of a numeric calculation as authored: a named field, an exact decimal literal, or a
@@ -654,7 +685,7 @@ const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue
       z
         .object({
           source: z.literal("numeric"),
-          numeric_operation: sourceCalculationNumberOperationSchema,
+          numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, ["operation"]),
           operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
         })
         .strict(),
@@ -676,32 +707,37 @@ const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue
 const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
   z
     .object({
-      operation: z.literal("join_text"),
-      fields: z.array(builderKeySchema).min(1).max(20),
+      operation: sourceProvenanceTarget(z.literal("join_text"), ["kind"]),
+      fields: z.array(sourceProvenanceTarget(builderKeySchema, ["fieldIds/#", "dependencyFieldIds/#"])).min(1).max(20),
       separator: z.string().max(20),
     })
     .strict(),
   z
     .object({
-      operation: z.literal("numeric"),
-      numeric_operation: sourceCalculationNumberOperationSchema,
+      operation: sourceProvenanceTarget(z.literal("numeric"), ["kind"]),
+      numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, ["operation"]),
       operands: z.array(sourceCalculationNumberValueSchema).min(2).max(20),
     })
     .strict(),
-  z.object({ operation: z.literal("condition"), condition: sourceConditionSchema }).strict(),
   z
     .object({
-      operation: z.literal("date_offset"),
-      date_field: builderKeySchema,
+      operation: sourceProvenanceTarget(z.literal("condition"), ["kind"]),
+      condition: sourceConditionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      operation: sourceProvenanceTarget(z.literal("date_offset"), ["kind"]),
+      date_field: sourceProvenanceTarget(builderKeySchema, ["dateFieldId", "dependencyFieldIds/#"]),
       amount: sourceCalculationNumberOperandSchema,
       unit: z.enum(["days", "weeks", "months", "years"]),
     })
     .strict(),
   z
     .object({
-      operation: z.literal("deadline_passed"),
-      due_field: builderKeySchema,
-      status_field: builderKeySchema.optional(),
+      operation: sourceProvenanceTarget(z.literal("deadline_passed"), ["kind"]),
+      due_field: sourceProvenanceTarget(builderKeySchema, ["dueFieldId", "dependencyFieldIds/#"]),
+      status_field: sourceProvenanceTarget(builderKeySchema.optional(), ["statusFieldId", "dependencyFieldIds/#"]),
       terminal_status_values: z.array(jsonValueSchema).max(20),
     })
     .strict(),
@@ -718,7 +754,7 @@ const sourceCalculationSettingsSchema = z
       "date_time",
     ]),
     evaluation: z.enum(["read_time", "stored"]).optional(),
-    decimal_places: z.number().int().min(0).max(12).optional(),
+    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), ["decimalPlaces"]),
     expression: sourceCalculationExpressionSchema,
   })
   .strict()
@@ -768,7 +804,7 @@ const sourceCalculationSettingsSchema = z
   });
 const sourceTotalSettingsSchema = z
   .object({
-    relationship: sourceQualifiedRelationshipSchema,
+    relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, ["relationshipId"]),
     operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
     result_type: z.enum([
       "text",
@@ -779,10 +815,10 @@ const sourceTotalSettingsSchema = z
       "date",
       "date_time",
     ]),
-    field: builderKeySchema.optional(),
+    field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
     filter: sourceConditionSchema.optional(),
     currency: currencyCodeV2Schema.optional(),
-    decimal_places: z.number().int().min(0).max(12).optional(),
+    decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), ["decimalPlaces"]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -857,7 +893,7 @@ const sourceAttachmentSettingsSchema = z
   });
 
 const sourceFieldBase = {
-  id: sourceAliasSchema,
+  id: sourceProvenanceTarget(sourceAliasSchema, ["fieldId"]),
   key: builderKeySchema,
   label: labelSchema,
   help_text: z.string().max(200).optional(),
@@ -879,7 +915,7 @@ const sourceField = <K extends string, S extends z.ZodType, D extends z.ZodType>
       ...sourceFieldBase,
       type: z.literal(type),
       settings,
-      default: defaultValue.optional(),
+      default: sourceProvenanceTarget(defaultValue.optional(), ["default/**"], true),
     })
     .strict();
 const noDefaultSchema = z.never();
@@ -1113,8 +1149,8 @@ const moduleSourceActionInputBase = {
 };
 const moduleSourceExactActionInputValidationSchema = z
   .object({
-    minimum: sourceExactDecimalTextV2Schema.optional(),
-    maximum: sourceExactDecimalTextV2Schema.optional(),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
   })
   .strict()
   .refine(
@@ -1130,7 +1166,7 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("text"),
+        type: sourceProvenanceTarget(z.literal("text"), ["type"]),
         validation: z
           .object({
             minimum_length: z.number().int().min(0).optional(),
@@ -1144,7 +1180,7 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("formatted_text"),
+        type: sourceProvenanceTarget(z.literal("formatted_text"), ["type"]),
         validation: z
           .object({
             allowed_blocks: z.array(formattedTextAllowedBlockSchema).min(1),
@@ -1157,11 +1193,11 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("number"),
+        type: sourceProvenanceTarget(z.literal("number"), ["type"]),
         validation: z
           .object({
-            minimum: z.number().finite().optional(),
-            maximum: z.number().finite().optional(),
+            minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
+            maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
           })
           .strict()
           .optional(),
@@ -1170,22 +1206,27 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("decimal_number"),
+        type: sourceProvenanceTarget(z.literal("decimal_number"), ["type"]),
         validation: moduleSourceExactActionInputValidationSchema.optional(),
       })
       .strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("money"),
+        type: sourceProvenanceTarget(z.literal("money"), ["type"]),
         validation: moduleSourceExactActionInputValidationSchema.optional(),
       })
       .strict(),
-    z.object({ ...moduleSourceActionInputBase, type: z.literal("boolean") }).strict(),
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("date"),
+        type: sourceProvenanceTarget(z.literal("boolean"), ["type"]),
+      })
+      .strict(),
+    z
+      .object({
+        ...moduleSourceActionInputBase,
+        type: sourceProvenanceTarget(z.literal("date"), ["type"]),
         validation: z
           .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
           .strict()
@@ -1195,7 +1236,7 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("date_time"),
+        type: sourceProvenanceTarget(z.literal("date_time"), ["type"]),
         validation: z
           .object({
             earliest: z.iso.datetime({ offset: true }).optional(),
@@ -1208,12 +1249,18 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: z.literal("record_reference"),
-        record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20),
+        type: sourceProvenanceTarget(z.literal("record_reference"), ["type"]),
+        record_types: z
+          .array(sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypes/#/**"]))
+          .min(1)
+          .max(20),
       })
       .strict(),
     z
-      .object({ ...moduleSourceActionInputBase, type: z.literal("organisation_account_reference") })
+      .object({
+        ...moduleSourceActionInputBase,
+        type: sourceProvenanceTarget(z.literal("organisation_account_reference"), ["type"]),
+      })
       .strict(),
   ])
   .superRefine((value, context) => {
@@ -1270,10 +1317,10 @@ export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtec
 export const moduleSourceSystemProjectionSchema = z
   .object({
     protected_view: protectedReadModelKeySchema,
-    organization_field: builderKeySchema,
-    revision_field: builderKeySchema,
-    filterable_fields: z.array(builderKeySchema).max(500),
-    sortable_fields: z.array(builderKeySchema).max(500),
+    organization_field: sourceProvenanceTarget(builderKeySchema, ["organizationFieldId"]),
+    revision_field: sourceProvenanceTarget(builderKeySchema, ["revisionFieldId"]),
+    filterable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"])).max(500),
+    sortable_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["sortableFieldIds/#"])).max(500),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1307,30 +1354,34 @@ const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
 
 export const moduleSourceRecordTypeSchema = z
   .object({
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["recordTypeId", "fromRecordTypeId"]),
     key: builderKeySchema,
-    name: labelSchema,
-    plural_name: labelSchema,
-    title_field: builderKeySchema,
-    storage_contract_id: sourceAliasSchema,
-    storage_scope: z.enum(["organisation_shared", "application_contained"]),
+    name: sourceProvenanceTarget(labelSchema, ["singularLabel"]),
+    plural_name: sourceProvenanceTarget(labelSchema, ["pluralLabel"]),
+    title_field: sourceProvenanceTarget(builderKeySchema, ["titleFieldId"]),
+    storage_contract_id: sourceProvenanceTarget(sourceAliasSchema, ["storageContractId"]),
+    storage_scope: sourceProvenanceTarget(z.enum(["organisation_shared", "application_contained"]), ["storageScope"]),
     system_projection: moduleSourceSystemProjectionSchema.optional(),
-    ownership_mode: moduleSourceRecordOwnershipModeSchema,
-    ownership_relationship: builderKeySchema.optional(),
+    ownership_mode: sourceProvenanceTarget(moduleSourceRecordOwnershipModeSchema, ["ownershipMode"]),
+    ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), ["ownershipRelationshipId"]),
     standard_actions: z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
       .min(1)
       .max(6),
-    custom_actions: z.array(sourceAliasSchema).max(100),
+    custom_actions: z.array(sourceProvenanceTarget(sourceAliasSchema, ["customActionIds/#"])).max(100),
     fields: z.array(moduleSourceFieldSchema).min(1).max(500),
     relationships: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["relationshipId"]),
           key: builderKeySchema,
-          from_field: builderKeySchema,
-          to_record_type: sourceQualifiedRecordTypeSchema.optional(),
-          to_record_types: z.array(sourceQualifiedRecordTypeSchema).min(2).max(20).optional(),
+          from_field: sourceProvenanceTarget(builderKeySchema, ["fromFieldId"]),
+          to_record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), ["toRecordType/**"]),
+          to_record_types: sourceProvenanceTarget(
+            z.array(sourceQualifiedRecordTypeSchema).min(2).max(20).optional(),
+            ["toRecordTypes/#/**"],
+            true,
+          ),
           cardinality: z.enum(["one_to_one", "many_to_one", "many_to_many"]),
           on_parent_delete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
         })
@@ -1433,17 +1484,24 @@ export const moduleSourceRecordTypeSchema = z
 
 export const moduleSourceActionSchema = z
   .object({
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
     key: namespacedKeySchema,
     label: labelSchema,
-    record_type: builderKeySchema,
-    permission: namespacedKeySchema.optional(),
+    record_type: sourceProvenanceTarget(builderKeySchema, ["subjectRecordTypeId"]),
+    permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
     permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
-    shareable: z.boolean(),
+    shareable: sourceProvenanceTarget(z.boolean(), ["sharing"]),
     inputs: z.array(moduleSourceActionInputSchema).max(50),
     precondition: sourceConditionSchema.optional(),
     tasks: z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
-    protected_operation: moduleSourceProtectedOperationKeySchema.optional(),
+    protected_operation: sourceProvenanceTarget(
+      moduleSourceProtectedOperationKeySchema.optional(),
+      [
+        "protectedOperation/owner/kind",
+        "protectedOperation/owner/serviceId",
+        "protectedOperation/operationId",
+      ],
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1497,8 +1555,8 @@ const moduleSourceSharingParameterSchema = z
 const moduleSourceSharingPublicationTestSchema = z
   .object({
     name: labelSchema,
-    parameters: z.record(builderKeySchema, jsonValueSchema),
-    field_values: z.record(builderKeySchema, jsonValueSchema),
+    parameters: sourceProvenanceTarget(z.record(builderKeySchema, jsonValueSchema), ["parameters/**"], true),
+    field_values: sourceProvenanceTarget(z.record(builderKeySchema, jsonValueSchema), ["fieldValues/**"], true),
     expected: z.boolean(),
   })
   .strict();
@@ -1521,12 +1579,12 @@ const sourceSharingParameterValueSchemas: Record<
 
 export const moduleSourceSharingConditionSchema = z
   .object({
-    id: sourceAliasSchema,
-    source_record_type: builderKeySchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["conditionId"]),
+    source_record_type: sourceProvenanceTarget(builderKeySchema, ["sourceRecordTypeId"]),
     key: builderKeySchema,
     parameters: z.array(moduleSourceSharingParameterSchema).max(100),
     condition: sourceConditionSchema,
-    declared_fields: z.array(builderKeySchema).max(500),
+    declared_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["declaredFieldIds/#"])).max(500),
     publication_tests: z.array(moduleSourceSharingPublicationTestSchema).min(1).max(100),
   })
   .strict()
@@ -1551,7 +1609,7 @@ export const moduleSourceSharingConditionSchema = z
 
 export const moduleSourceQuerySortSchema = z
   .object({
-    field: builderKeySchema,
+    field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
     direction: z.enum(["ascending", "descending"]),
   })
   .strict();
@@ -1559,7 +1617,7 @@ export const moduleSourceQuerySortSchema = z
 export const moduleSourceQueryAggregateSchema = z
   .object({
     operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
-    field: builderKeySchema.optional(),
+    field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
     alias: builderKeySchema,
   })
   .strict();
@@ -1571,15 +1629,15 @@ export const moduleSourceQueryAggregateSchema = z
  */
 export const moduleSourceQuerySchema = z
   .object({
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
     key: builderKeySchema,
     label: labelSchema.optional(),
     description: z.string().min(1).max(1_000).optional(),
-    record_type: z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
+    record_type: sourceProvenanceTarget(z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]), ["recordType/**"]),
     inputs: z.array(moduleSourceActionInputSchema).max(50),
-    select: z.array(builderKeySchema).min(1).max(200),
+    select: z.array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"])).min(1).max(200),
     filter: z.union([z.null(), sourceConditionSchema]),
-    group_by: z.array(builderKeySchema).max(10),
+    group_by: z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
     aggregates: z.array(moduleSourceQueryAggregateSchema).max(20),
     sort: z.array(moduleSourceQuerySortSchema).min(1).max(20),
     page_size: z.number().int().min(1).max(200),
@@ -1592,9 +1650,9 @@ export const moduleSourceQuerySchema = z
 // ---------------------------------------------------------------------------
 
 const moduleSourceContributionBase = {
-  id: sourceAliasSchema,
-  dependency: builderKeySchema,
-  extension_point: builderKeySchema,
+  id: sourceProvenanceTarget(sourceAliasSchema, ["contributionId"]),
+  dependency: sourceProvenanceTarget(builderKeySchema, ["targetModule/**"]),
+  extension_point: sourceProvenanceTarget(builderKeySchema, ["targetExtensionPointId"]),
 };
 
 /**
@@ -1608,15 +1666,15 @@ export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
     .object({
       ...moduleSourceContributionBase,
       kind: z.literal("field"),
-      record_type: builderKeySchema,
-      field: builderKeySchema,
+      record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+      field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
     })
     .strict(),
   z
     .object({
       ...moduleSourceContributionBase,
       kind: z.literal("action"),
-      contributed_action: sourceAliasSchema,
+      contributed_action: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
     })
     .strict(),
 ]);
@@ -1633,7 +1691,7 @@ const moduleSourceBodySchema = z
       z
         .object({
           dependency_key: builderKeySchema,
-          module: namespacedKeySchema,
+          module: sourceProvenanceTarget(namespacedKeySchema, ["moduleRootId", "moduleKey", "resolvedVersion"]),
           version: versionRequirementSchema,
         })
         .strict(),
@@ -1642,11 +1700,11 @@ const moduleSourceBodySchema = z
     permissions: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
           key: namespacedKeySchema,
           label: labelSchema,
           description: z.string().min(1).max(1_000),
-          record_type: builderKeySchema.optional(),
+          record_type: sourceProvenanceTarget(builderKeySchema.optional(), ["recordTypeId"]),
           action_kind: z.enum([
             "create",
             "read",
@@ -1677,10 +1735,10 @@ const moduleSourceBodySchema = z
     events: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
           key: namespacedKeySchema,
-          record_type: builderKeySchema,
-          carries: z.array(builderKeySchema).max(30),
+          record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+          carries: z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
           personal_or_sensitive_values_allowed: z.literal(false),
         })
         .strict(),
@@ -1694,9 +1752,9 @@ const moduleSourceBodySchema = z
     extension_points: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["extensionPointId"]),
           key: builderKeySchema,
-          record_type: builderKeySchema,
+          record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
           accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
         })
         .strict(),

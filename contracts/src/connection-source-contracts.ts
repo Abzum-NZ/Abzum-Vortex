@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { builderKeySchema } from "./identifiers";
-import { authoredSourceBase } from "./definition-source-common";
+import { authoredSourceBase, sourceProvenanceTarget } from "./definition-source-common";
 
 export const connectionTypeSourceDocumentSchema = z
   .object({
@@ -15,21 +15,21 @@ export const connectionTypeSourceDocumentSchema = z
           z
             .object({
               kind: z.literal("oauth2"),
-              secret_fields: z.array(builderKeySchema).min(1),
+              secret_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["secretFieldKeys/#"])).min(1),
               scopes: z.array(z.string().min(1).max(200)),
             })
             .strict(),
           z
             .object({
               kind: z.literal("signed_secret"),
-              secret_fields: z.array(builderKeySchema).min(1),
+              secret_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["secretFieldKeys/#"])).min(1),
               algorithm: z.enum(["hmac_sha256", "ed25519"]),
             })
             .strict(),
           z
             .object({
               kind: z.literal("api_key"),
-              secret_fields: z.array(builderKeySchema).min(1),
+              secret_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["secretFieldKeys/#"])).min(1),
               placement: z.enum(["header", "query"]),
             })
             .strict(),
@@ -78,11 +78,11 @@ export const connectionTypeSourceDocumentSchema = z
               .object({
                 key: builderKeySchema,
                 method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
-                path: z.string().startsWith("/").max(500),
-                input: builderKeySchema,
-                output: builderKeySchema,
+                path: sourceProvenanceTarget(z.string().startsWith("/").max(500), ["pathTemplate"]),
+                input: sourceProvenanceTarget(builderKeySchema, ["inputShapeKey"]),
+                output: sourceProvenanceTarget(builderKeySchema, ["outputShapeKey"]),
                 timeout_seconds: z.number().int().min(1).max(120),
-                max_attempts: z.number().int().min(1).max(10),
+                max_attempts: sourceProvenanceTarget(z.number().int().min(1).max(10), ["maximumAttempts"]),
                 maximum_response_bytes: z.number().int().min(1).max(100_000_000),
               })
               .strict(),
@@ -94,13 +94,13 @@ export const connectionTypeSourceDocumentSchema = z
               key: builderKeySchema,
               signature: z.enum(["hmac_sha256", "ed25519"]),
               replay_window_seconds: z.number().int().min(1).max(86_400),
-              input: builderKeySchema,
-              workflow_trigger: builderKeySchema,
+              input: sourceProvenanceTarget(builderKeySchema, ["inputShapeKey"]),
+              workflow_trigger: sourceProvenanceTarget(builderKeySchema, ["workflowTriggerKey"]),
             })
             .strict(),
         ),
-        health_operation: builderKeySchema.optional(),
-        revocation_operation: builderKeySchema.optional(),
+        health_operation: sourceProvenanceTarget(builderKeySchema.optional(), ["healthOperationKey"]),
+        revocation_operation: sourceProvenanceTarget(builderKeySchema.optional(), ["revocationOperationKey"]),
       })
       .strict(),
   })

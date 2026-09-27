@@ -7,6 +7,31 @@ import {
 } from "./common";
 import { flowValueSchema } from "./flow-contracts";
 
+export type SourceProvenanceAnnotation = Readonly<{
+  /** Canonical path suffixes; use `#` for an array index and `**` for descendant paths. */
+  canonicalTargets: readonly string[];
+  /** Apply this target to parsed source leaves below the annotated property. */
+  includeDescendants?: boolean;
+}>;
+
+export const sourceProvenanceRegistry = z.registry<SourceProvenanceAnnotation>();
+
+/** Attach provenance targets to one authored source property without changing its parse shape. */
+export const sourceProvenanceTarget = <Schema extends z.ZodType>(
+  schema: Schema,
+  canonicalTargets: string | readonly string[],
+  includeDescendants = false,
+): Schema => {
+  const annotatedSchema =
+    schema === jsonValueSchema
+      ? z.preprocess((value) => value, schema)
+      : schema.clone();
+  return annotatedSchema.register(sourceProvenanceRegistry, {
+    canonicalTargets: typeof canonicalTargets === "string" ? [canonicalTargets] : canonicalTargets,
+    ...(includeDescendants ? { includeDescendants: true } : {}),
+  }) as unknown as Schema;
+};
+
 /** Portable aliases exist only in authored definitions. #15 resolves them to platform identifiers. */
 export const sourceAliasSchema = z
   .string()
@@ -53,14 +78,44 @@ const sourceBinaryConditionOperatorSchema = z.enum([
 ]);
 const sourceUnaryConditionOperatorSchema = z.enum(["is_empty", "is_not_empty"]);
 const sourceConditionOperandSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("field"), field: builderKeySchema }).strict(),
-  z.object({ source: z.literal("value"), value: jsonValueSchema }).strict(),
-  z.object({ source: z.literal("parameter"), parameter: builderKeySchema }).strict(),
+  z
+    .object({
+      source: z.literal("field"),
+      field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/fieldId", "right/fieldId"]),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("value"),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "left/value/**", "right/value/**"], true),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("parameter"),
+      parameter: sourceProvenanceTarget(builderKeySchema, ["kind", "left/key", "right/key"]),
+    })
+    .strict(),
 ]);
 const sourceQualifiedConditionOperandSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("field"), field: sourceQualifiedFieldSchema }).strict(),
-  z.object({ source: z.literal("value"), value: jsonValueSchema }).strict(),
-  z.object({ source: z.literal("parameter"), parameter: builderKeySchema }).strict(),
+  z
+    .object({
+      source: z.literal("field"),
+      field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["kind", "left/fieldId", "right/fieldId"]),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("value"),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "left/value/**", "right/value/**"], true),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("parameter"),
+      parameter: sourceProvenanceTarget(builderKeySchema, ["kind", "left/key", "right/key"]),
+    })
+    .strict(),
 ]);
 
 /**
@@ -68,30 +123,35 @@ const sourceQualifiedConditionOperandSchema = z.discriminatedUnion("source", [
  * explicit operand form is the complete representation and permits field-to-field comparisons.
  */
 export const sourceComparisonSchema = z.union([
-  z.object({ field: builderKeySchema, operator: z.enum(["is_empty", "is_not_empty"]) }).strict(),
   z
     .object({
-      field: builderKeySchema,
-      operator: sourceBinaryConditionOperatorSchema,
-      value: jsonValueSchema,
+      field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(z.enum(["is_empty", "is_not_empty"]), ["kind", "operator"]),
     })
     .strict(),
   z
     .object({
-      field: builderKeySchema,
-      operator: sourceBinaryConditionOperatorSchema,
-      parameter: builderKeySchema,
+      field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "right/source", "right/value/**"], true),
     })
     .strict(),
   z
     .object({
-      operator: sourceUnaryConditionOperatorSchema,
+      field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
+      parameter: sourceProvenanceTarget(builderKeySchema, ["right/source", "right/key"]),
+    })
+    .strict(),
+  z
+    .object({
+      operator: sourceProvenanceTarget(sourceUnaryConditionOperatorSchema, ["kind", "operator"]),
       left: sourceConditionOperandSchema,
     })
     .strict(),
   z
     .object({
-      operator: sourceBinaryConditionOperatorSchema,
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
       left: sourceConditionOperandSchema,
       right: sourceConditionOperandSchema,
     })
@@ -146,33 +206,33 @@ export const sourceConditionSchema: z.ZodType<SourceCondition> =
 const sourceQualifiedComparisonSchema = z.union([
   z
     .object({
-      field: sourceQualifiedFieldSchema,
-      operator: sourceUnaryConditionOperatorSchema,
+      field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(sourceUnaryConditionOperatorSchema, ["kind", "operator"]),
     })
     .strict(),
   z
     .object({
-      field: sourceQualifiedFieldSchema,
-      operator: sourceBinaryConditionOperatorSchema,
-      value: jsonValueSchema,
+      field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "right/source", "right/value/**"], true),
     })
     .strict(),
   z
     .object({
-      field: sourceQualifiedFieldSchema,
-      operator: sourceBinaryConditionOperatorSchema,
-      parameter: builderKeySchema,
+      field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["kind", "left/source", "left/fieldId"]),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
+      parameter: sourceProvenanceTarget(builderKeySchema, ["right/source", "right/key"]),
     })
     .strict(),
   z
     .object({
-      operator: sourceUnaryConditionOperatorSchema,
+      operator: sourceProvenanceTarget(sourceUnaryConditionOperatorSchema, ["kind", "operator"]),
       left: sourceQualifiedConditionOperandSchema,
     })
     .strict(),
   z
     .object({
-      operator: sourceBinaryConditionOperatorSchema,
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
       left: sourceQualifiedConditionOperandSchema,
       right: sourceQualifiedConditionOperandSchema,
     })
@@ -238,7 +298,9 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
       id: builderKeySchema,
       type: z.literal("record.set_fields"),
       properties: z
-        .object({ values: z.record(builderKeySchema, flowValueSchema) })
+        .object({
+          values: sourceProvenanceTarget(z.record(builderKeySchema, flowValueSchema), ["values/**"], true),
+        })
         .strict(),
     })
     .strict(),
@@ -248,8 +310,8 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
       type: z.literal("record.create"),
       properties: z
         .object({
-          record_type: sourceQualifiedRecordTypeSchema,
-          values: z.record(builderKeySchema, flowValueSchema),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+          values: sourceProvenanceTarget(z.record(builderKeySchema, flowValueSchema), ["values/**"], true),
         })
         .strict(),
     })
@@ -265,8 +327,12 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
               z
                 .object({
                   kind: z.literal("copy_relationships"),
-                  relationships: z.array(builderKeySchema).min(1),
-                  target_input: builderKeySchema,
+                  relationships: sourceProvenanceTarget(
+                    z.array(builderKeySchema).min(1),
+                    ["relationshipIds/#"],
+                    true,
+                  ),
+                  target_input: sourceProvenanceTarget(builderKeySchema, ["targetInputKey"]),
                 })
                 .strict(),
             )
@@ -287,13 +353,15 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
     .object({
       id: builderKeySchema,
       type: z.literal("event.announce"),
-      properties: z.object({ event: namespacedKeySchema }).strict(),
+      properties: z
+        .object({ event: sourceProvenanceTarget(namespacedKeySchema, ["eventKey"]) })
+        .strict(),
     })
     .strict(),
 ]);
 
 export const authoredSourceBase = {
   source_contract_version: z.literal(definitionSourceContractVersion),
-  root_alias: sourceAliasSchema,
+  root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId", "connectionTypeId"]),
   key: namespacedKeySchema,
 };

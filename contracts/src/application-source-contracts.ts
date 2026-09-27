@@ -18,6 +18,7 @@ import {
   sourceQualifiedConditionSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRecordTypeSchema,
+  sourceProvenanceTarget,
 } from "./definition-source-common";
 import {
   actionInputSchema,
@@ -138,7 +139,10 @@ const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
  * missing page resolve to the same experience, so their surfaces stay indistinguishable.
  */
 const sourceApplicationExperienceSchema = z
-  .object({ state: applicationExperienceStateSchema, page: builderKeySchema })
+  .object({
+    state: applicationExperienceStateSchema,
+    page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+  })
   .strict();
 /** Placement bindings that gate, condition or load data; none may appear on an experience page. */
 const sourceExperienceGatedPlacementKeys = [
@@ -167,7 +171,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z
       .object({
-        id: sourceAliasSchema,
+        id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
         type: z.literal("heading"),
         label: labelSchema,
         children: z.array(sourceNavigationSchema).min(1).max(100),
@@ -175,11 +179,11 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
     z
       .object({
-        id: sourceAliasSchema,
+        id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
         type: z.literal("page"),
         label: labelSchema,
-        page: builderKeySchema,
-        permission: namespacedKeySchema,
+        page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+        permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
       .strict(),
     z
@@ -188,7 +192,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
         type: z.literal("external"),
         label: labelSchema,
         address: z.string().url().startsWith("https://"),
-        permission: namespacedKeySchema,
+        permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
       .strict(),
   ]),
@@ -198,7 +202,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
 const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
 
 const sourcePageV2Common = {
-  id: sourceAliasSchema,
+  id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
   key: builderKeySchema,
   name: labelSchema,
   states: retiredSourcePageSettingV2Schema,
@@ -214,16 +218,20 @@ const sourceListPageV2Schema = z
   .object({
     ...sourcePageV2Base,
     type: z.literal("list"),
-    record_type: sourceQualifiedRecordTypeSchema,
-    permission: namespacedKeySchema,
-    query: sourceQualifiedQueryReferenceSchema,
+    record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+    permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+    query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
     arrangements: retiredSourcePageSettingV2Schema,
     calendar_mapping: retiredSourcePageSettingV2Schema,
   })
   .strict();
 
 const sourceGuidedFormStepV2Schema = z
-  .object({ id: sourceAliasSchema, name: z.string().min(1).max(60), summary: z.boolean() })
+  .object({
+    id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
+    name: z.string().min(1).max(60),
+    summary: z.boolean(),
+  })
   .strict();
 
 export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
@@ -232,31 +240,31 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     .object({
       ...sourcePageV2Base,
       type: z.literal("detail"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Base,
       type: z.literal("dashboard"),
-      permission: namespacedKeySchema,
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Base,
       type: z.literal("form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Common,
       type: z.literal("guided_form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
       steps: z.array(sourceGuidedFormStepV2Schema).min(2).max(20),
       composition: sourceGuidedFormPageCompositionV2Schema,
     })
@@ -290,10 +298,10 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     .object({
       ...sourcePageV2Base,
       type: z.literal("public"),
-      permission: namespacedKeySchema,
-      record_type: sourceQualifiedRecordTypeSchema.optional(),
-      public_fields: z.array(builderKeySchema),
-      public_action: namespacedKeySchema.optional(),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), ["recordType/**"]),
+      public_fields: z.array(sourceProvenanceTarget(builderKeySchema, ["publicFieldIds/#"])),
+      public_action: sourceProvenanceTarget(namespacedKeySchema.optional(), ["publicActionKey"]),
       rate_limit_per_minute: z.number().int().min(1).max(10_000),
     })
     .strict()
@@ -551,10 +559,10 @@ const sourceInterfaceInputFieldSchema = z
   .object({
     type: z.union([sourceInterfaceValueTypeSchema, z.literal("formatted_text")]),
     required: z.boolean(),
-    target_binding: z.discriminatedUnion("kind", [
+    target_binding: sourceProvenanceTarget(z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("action_subject") }).strict(),
       z.object({ kind: z.literal("action_input"), key: builderKeySchema }).strict(),
-    ]),
+    ]), ["targetBinding/**"], true),
   })
   .strict()
   .superRefine((value, context) => {
@@ -569,7 +577,7 @@ const sourceInterfaceOutputFieldSchema = z
   .object({
     type: sourceInterfaceValueTypeSchema,
     required: z.boolean(),
-    target_binding: z.discriminatedUnion("kind", [
+    target_binding: sourceProvenanceTarget(z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("query_field"), field: sourceQualifiedFieldSchema }).strict(),
       z
         .object({
@@ -578,7 +586,7 @@ const sourceInterfaceOutputFieldSchema = z
         })
         .strict(),
       z.object({ kind: z.literal("workflow_run_id") }).strict(),
-    ]),
+    ]), ["targetBinding/**"], true),
   })
   .strict()
   .superRefine((value, context) => {
@@ -611,15 +619,15 @@ const sourceInterfaceTargetSchema = z.discriminatedUnion("kind", [
 const sourceInterfaceOperationSchema = z
   .object({
     key: builderKeySchema,
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["operationId"]),
     description: z.string().min(1).max(1_000),
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
     path: z.string().startsWith("/").max(500),
     input_shape: z.record(builderKeySchema, sourceInterfaceInputFieldSchema),
     output_shape: z.record(builderKeySchema, sourceInterfaceOutputFieldSchema),
-    authentication: z.enum(["organisation_token", "partner_token", "public"]),
-    permission: namespacedKeySchema,
-    visibility: z.enum(["organisation_private", "partner", "public"]),
+    authentication: sourceProvenanceTarget(z.enum(["organisation_token", "partner_token", "public"]), ["authentication"]),
+    permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
+    visibility: sourceProvenanceTarget(z.enum(["organisation_private", "partner", "public"]), ["visibility"]),
     rate_limit_per_minute: z.number().int().min(1).max(100_000),
     maximum_request_bytes: z.number().int().min(1).max(100_000_000),
     duplicate_protection: z.enum(["not_required", "required"]),
@@ -666,12 +674,12 @@ export const sourceApplicationBodyV2Schema = z
       .min(1)
       .max(120)
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    home_page: builderKeySchema,
+    home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
     module_bindings: z
       .array(
         z
           .object({
-            module: namespacedKeySchema,
+            module: sourceProvenanceTarget(namespacedKeySchema, ["moduleRootId", "resolvedVersion"]),
             version: versionRequirementSchema,
             purpose: builderKeySchema,
           })
@@ -682,11 +690,11 @@ export const sourceApplicationBodyV2Schema = z
     permissions: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
           key: namespacedKeySchema,
           label: labelSchema,
           description: z.string().min(1).max(1_000),
-          record_type: sourceQualifiedRecordTypeSchema.optional(),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), ["recordType/**"]),
           action_kind: z.enum([
             "create",
             "read",
@@ -717,11 +725,15 @@ export const sourceApplicationBodyV2Schema = z
       .array(
         z
           .object({
-            id: sourceAliasSchema,
+            id: sourceProvenanceTarget(sourceAliasSchema, ["roleId"]),
             key: builderKeySchema,
             name: labelSchema,
-            home_page: builderKeySchema,
-            permissions: applicationRolePermissionKeysSchema,
+            home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
+            permissions: sourceProvenanceTarget(
+              applicationRolePermissionKeysSchema,
+              ["permissionKeys/#", "permissionSelection/kind"],
+              true,
+            ),
           })
           .strict(),
       )
@@ -731,17 +743,17 @@ export const sourceApplicationBodyV2Schema = z
     queries: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
           key: builderKeySchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          select: z.array(builderKeySchema).min(1).max(200),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+          select: z.array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"])).min(1).max(200),
           filter: sourceFilterSchema,
-          group_by: z.array(builderKeySchema).max(10),
+          group_by: z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
           aggregates: z.array(
             z
               .object({
                 operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
-                field: builderKeySchema.optional(),
+                field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
                 alias: builderKeySchema,
               })
               .strict(),
@@ -749,7 +761,10 @@ export const sourceApplicationBodyV2Schema = z
           sort: z
             .array(
               z
-                .object({ field: builderKeySchema, direction: z.enum(["ascending", "descending"]) })
+                .object({
+                  field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
+                  direction: z.enum(["ascending", "descending"]),
+                })
                 .strict(),
             )
             .min(1)
@@ -763,7 +778,7 @@ export const sourceApplicationBodyV2Schema = z
     workflows: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["workflowId"]),
           key: builderKeySchema,
           name: z.string().min(1).max(120),
           trigger: z.discriminatedUnion("kind", [
@@ -823,21 +838,21 @@ export const sourceApplicationBodyV2Schema = z
     pipelines: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["pipelineId"]),
           key: builderKeySchema,
           name: labelSchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          stage_field: builderKeySchema,
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+          stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
           stages: z
             .array(
               z
                 .object({
                   key: builderKeySchema,
                   label: labelSchema,
-                  entry_actions: z.array(namespacedKeySchema).max(10),
-                  exit_actions: z.array(namespacedKeySchema).max(10),
-                  entry_workflows: z.array(builderKeySchema).max(10),
-                  exit_workflows: z.array(builderKeySchema).max(10),
+                  entry_actions: z.array(sourceProvenanceTarget(namespacedKeySchema, ["entryActionKeys/#"])).max(10),
+                  exit_actions: z.array(sourceProvenanceTarget(namespacedKeySchema, ["exitActionKeys/#"])).max(10),
+                  entry_workflows: z.array(sourceProvenanceTarget(builderKeySchema, ["entryWorkflowIds/#"])).max(10),
+                  exit_workflows: z.array(sourceProvenanceTarget(builderKeySchema, ["exitWorkflowIds/#"])).max(10),
                 })
                 .strict(),
             )
@@ -849,8 +864,8 @@ export const sourceApplicationBodyV2Schema = z
                 .object({
                   from: builderKeySchema,
                   to: builderKeySchema,
-                  permission: namespacedKeySchema.optional(),
-                  action: namespacedKeySchema.optional(),
+                  permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
+                  action: sourceProvenanceTarget(namespacedKeySchema.optional(), ["actionKey"]),
                   gate: sourceConditionSchema.optional(),
                 })
                 .strict(),
@@ -860,9 +875,9 @@ export const sourceApplicationBodyV2Schema = z
           time_targets: z.array(
             z
               .object({
-                stage: builderKeySchema,
-                field: builderKeySchema,
-                escalation_event: namespacedKeySchema,
+                stage: sourceProvenanceTarget(builderKeySchema, ["stageKey"]),
+                field: sourceProvenanceTarget(builderKeySchema, ["dateTimeFieldId"]),
+                escalation_event: sourceProvenanceTarget(namespacedKeySchema, ["escalationEventKey"]),
               })
               .strict(),
           ).max(100),
@@ -872,18 +887,18 @@ export const sourceApplicationBodyV2Schema = z
     connection_bindings: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["bindingId"]),
           key: builderKeySchema,
-          connection_type: namespacedKeySchema,
+          connection_type: sourceProvenanceTarget(namespacedKeySchema, ["connectionTypeId", "resolvedVersion"]),
           version: versionRequirementSchema,
-          required_operations: z.array(builderKeySchema).min(1),
+          required_operations: z.array(sourceProvenanceTarget(builderKeySchema, ["requiredOperationKeys/#"])).min(1),
         })
         .strict(),
     ).max(100),
     interfaces: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["interfaceId"]),
           key: namespacedKeySchema,
           version: semanticVersionSchema,
           state: z.enum(["supported", "deprecated", "removal_scheduled", "removed"]),
@@ -894,13 +909,13 @@ export const sourceApplicationBodyV2Schema = z
     actions: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
           key: namespacedKeySchema,
           label: labelSchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          permission: namespacedKeySchema.optional(),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["subjectRecordTypeId"]),
+          permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
           permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
-          sharing: z.enum(["refused", "allowed"]),
+          sharing: sourceProvenanceTarget(z.enum(["refused", "allowed"]), ["sharing"]),
           inputs: z.array(actionInputSchema).max(50),
           precondition: sourceConditionSchema.optional(),
           tasks: z.array(sourceActionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
@@ -936,10 +951,10 @@ export const sourceApplicationBodyV2Schema = z
     events: z.array(
       z
         .object({
-          id: sourceAliasSchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
           key: namespacedKeySchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          carries: z.array(builderKeySchema).max(30),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordTypeId"]),
+          carries: z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
           personal_or_sensitive_values_allowed: z.literal(false),
         })
         .strict(),
@@ -947,8 +962,8 @@ export const sourceApplicationBodyV2Schema = z
     public_addresses: z.array(
       z
         .object({
-          id: sourceAliasSchema,
-          page: builderKeySchema,
+          id: sourceProvenanceTarget(sourceAliasSchema, ["addressId"]),
+          page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
           path: z.string().startsWith("/").max(500),
           state: z.enum(["draft", "active", "disabled"]),
           rate_limit_per_minute: z.number().int().min(1).max(10_000),

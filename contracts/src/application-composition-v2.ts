@@ -12,6 +12,7 @@ import {
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
+  sourceProvenanceTarget,
 } from "./definition-source-common";
 import {
   componentSemanticEventKindSchema,
@@ -1501,7 +1502,7 @@ export const platformBlockDependencyV2Schema = z
 export const sourcePlatformBlockDependencyV2Schema = z
   .object({
     kind: z.literal("platform_block"),
-    block_id: blockIdSchema,
+    block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
     release_version: semanticVersionSchema,
     content_fingerprint: fingerprintSchema,
     catalogue_fingerprint: fingerprintSchema,
@@ -1562,7 +1563,10 @@ export const platformBlockReferenceV2Schema = z
   .strict();
 
 export const sourcePlatformBlockReferenceV2Schema = z
-  .object({ block_id: blockIdSchema, release_version: semanticVersionSchema })
+  .object({
+    block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
+    release_version: semanticVersionSchema,
+  })
   .strict();
 
 const widthV2Schema = z.discriminatedUnion("kind", [
@@ -1587,7 +1591,7 @@ const sourceWidthV2Schema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("grid"),
-      start_column: z.number().int().min(1).max(12),
+      start_column: sourceProvenanceTarget(z.number().int().min(1).max(12), ["startColumn"]),
       span: z.number().int().min(1).max(12),
     })
     .strict()
@@ -2194,10 +2198,10 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
   z
     .object({
       block: sourcePlatformBlockReferenceV2Schema,
-      view_permission: namespacedKeySchema.optional(),
-      use_permission: namespacedKeySchema.optional(),
+      view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["viewPermissionKey"]),
+      use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
       visibility_condition: sourceQualifiedConditionSchema.optional(),
-      query: sourceQualifiedQueryReferenceSchema.optional(),
+      query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
       read_model: protectedReadModelKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
@@ -2213,9 +2217,9 @@ export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.l
       placements: z.record(sourceAliasSchema, sourceBlockPlacementV2Schema),
       order: z
         .object({
-          desktop: z.array(sourceAliasSchema),
-          tablet: z.array(sourceAliasSchema).optional(),
-          phone: z.array(sourceAliasSchema).optional(),
+          desktop: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/desktop/#"])),
+          tablet: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#"])).optional(),
+          phone: z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/phone/#"])).optional(),
         })
         .strict(),
     })
@@ -2248,12 +2252,12 @@ export const shellContentSlotV2Schema = z
 
 export const sourceShellContentSlotV2Schema = z
   .object({
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["slotId"]),
     key: builderKeySchema,
     label: labelSchema,
     required: z.boolean(),
     allowed_child_categories: z.array(blockPaletteGroupSchema).min(1),
-    parent_placement: sourceAliasSchema,
+    parent_placement: sourceProvenanceTarget(sourceAliasSchema, ["parentPlacementId"]),
     parent_slot: builderKeySchema,
   })
   .strict();
@@ -2361,7 +2365,7 @@ export const applicationShellV2Schema = z
 
 export const sourceApplicationShellV2Schema = z
   .object({
-    id: sourceAliasSchema,
+    id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
     key: builderKeySchema,
     name: labelSchema,
     layout: sourcePlacementSlotV2Schema,
@@ -2431,7 +2435,7 @@ export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", 
   z
     .object({
       shell_kind: z.literal("application"),
-      shell: sourceAliasSchema,
+      shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
       content: z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
     })
     .strict(),
@@ -2467,7 +2471,7 @@ export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("she
   z
     .object({
       shell_kind: z.literal("application"),
-      shell: sourceAliasSchema,
+      shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
       step_content: z.record(
         sourceAliasSchema,
         z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
