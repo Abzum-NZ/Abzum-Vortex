@@ -16,7 +16,7 @@ export default async function RecoverPage({ searchParams }: RecoverPageProps) {
     <AuthShell
       eyebrow="Password recovery"
       title="Reset your password"
-      description="Enter your email address. If it is connected to an account, a recovery link will be sent."
+      description="Enter your email address. If it is connected to an account, a one-time recovery code and instructions will be sent."
       footer={
         <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
           Return to sign in
@@ -29,7 +29,7 @@ export default async function RecoverPage({ searchParams }: RecoverPageProps) {
           <Label htmlFor="email">Email address</Label>
           <Input id="email" name="email" type="email" autoComplete="email" required />
         </Field>
-        <SubmitButton pendingLabel="Requesting link…">Send recovery link</SubmitButton>
+        <SubmitButton pendingLabel="Requesting code…">Send recovery code</SubmitButton>
       </form>
     </AuthShell>
   );
