@@ -24,6 +24,10 @@ revoke all on function
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+grant execute on function
+  vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(uuid, timestamptz)
+  to vortex_access_owner;
+
 comment on function
   vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(uuid, timestamptz) is
   'Private live assignment lookup for the named Vortex super-administrator authority; tenant and organisation roles never participate.';

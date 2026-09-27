@@ -188,6 +188,16 @@ export const updateOwnProfileCommandSchema = z
   })
   .strict();
 
+export const readOwnProfileResultSchema = z
+  .object({
+    organizationAccountId: organizationAccountIdSchema,
+    revision: revisionSchema,
+    displayName: z.string().trim().min(1).max(120).optional(),
+    language: organizationRuntimeSettingsSchema.shape.language.max(35).optional(),
+    timeZone: organizationRuntimeSettingsSchema.shape.timeZone.max(100).optional(),
+  })
+  .strict();
+
 const updateOwnProfileChangeFields = {
   operation: z.literal("update_own_profile"),
   organizationId: organizationIdSchema,
@@ -291,6 +301,7 @@ export type ReactivateOrganizationAccountResult = z.infer<
   typeof reactivateOrganizationAccountResultSchema
 >;
 export type CloseOrganizationAccountResult = z.infer<typeof closeOrganizationAccountResultSchema>;
+export type ReadOwnProfileResult = z.infer<typeof readOwnProfileResultSchema>;
 export type UpdateOwnProfileCommand = z.infer<typeof updateOwnProfileCommandSchema>;
 export type UpdateOwnProfileResult = z.infer<typeof updateOwnProfileResultSchema>;
 export type CreateOrganizationInvitationForAdministrationResult = z.infer<

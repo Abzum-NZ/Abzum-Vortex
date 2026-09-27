@@ -1,6 +1,7 @@
 "use client";
 
-import type { ChangeEvent, ReactElement } from "react";
+import { useEffect, useRef, type ChangeEvent, type ReactElement } from "react";
+import { moduleFieldValueV2Schemas } from "@vortex/contracts";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Textarea } from "../components/textarea";
@@ -41,20 +42,55 @@ export function TextInput(props: TextInputProps): ReactElement {
   const readOnly = settings.boolean("read_only");
   const multiline = settings.boolean("multiline");
   const inputType = settings.choice<(typeof INPUT_TYPES)[number]>("input_type", "text");
+  const inputRef = useRef<HTMLInputElement>(null);
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const error = context.values?.error;
   const note = inactiveNote(context);
 
   const [value, setValue] = useSeededState(context.values?.value ?? "");
-  useFormField(fieldKey, props.placementId, value);
+  const invalidEmail =
+    inputType === "email" &&
+    (value !== "" || required) &&
+    !moduleFieldValueV2Schemas.email_address.safeParse(value).success;
+  const error = invalidEmail ? "Enter a valid email address." : context.values?.error;
+  useFormField(
+    fieldKey,
+    props.placementId,
+    inputType === "email" && !required && value === "" ? null : value,
+  );
+
+  // FormContainer disables native validation, so this field refuses an invalid local submit.
+  useEffect(() => {
+    if (inputType !== "email" || multiline) return;
+    const input = inputRef.current;
+    const form = input?.form;
+    if (input === null || input === undefined || form === null || form === undefined) return;
+    const refuseInvalidEmail = (event: Event): void => {
+      const candidate = input.value;
+      if (
+        input.disabled ||
+        (!required && candidate === "") ||
+        moduleFieldValueV2Schemas.email_address.safeParse(candidate).success
+      )
+        return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      input.focus();
+    };
+    form.addEventListener("submit", refuseInvalidEmail, true);
+    return () => form.removeEventListener("submit", refuseInvalidEmail, true);
+  }, [inputType, multiline, required]);
 
   const onChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
     const next = event.target.value;
     setValue(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: next });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      fieldKey,
+      value: inputType === "email" && !required && next === "" ? null : next,
+    });
   };
 
   const controlProps = {
@@ -80,7 +116,7 @@ export function TextInput(props: TextInputProps): ReactElement {
       <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
-      {multiline ? <Textarea {...controlProps} /> : <Input {...controlProps} type={inputType} />}
+      {multiline ? <Textarea {...controlProps} /> : <Input {...controlProps} ref={inputRef} type={inputType} />}
       <FieldMessages
         ids={ids}
         help={help}
