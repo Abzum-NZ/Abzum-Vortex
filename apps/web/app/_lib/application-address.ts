@@ -29,6 +29,7 @@ export type ApplicationAddressResult =
       application?: PermittedApplication;
     }>
   | Readonly<{ kind: "temporarily_unavailable" }>
+  | Readonly<{ kind: "suspended_super_administrator_account" }>
   | Readonly<{
       kind: "organization_launcher";
       read: Extract<PermittedApplicationsRead, { kind: "available" }>;
