@@ -3,6 +3,7 @@ export * from "./application-contract-versions";
 export * from "./application-composition-v2";
 export * from "./application-composition-catalogue";
 export * from "./projected-navigation";
+export * from "./preview-installation-contracts";
 export * from "./platform-theme-catalogue";
 export * from "./platform-connection-type-catalogue";
 export * from "./shadcn-theme-catalogue";
