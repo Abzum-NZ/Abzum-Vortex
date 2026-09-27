@@ -206,11 +206,7 @@
           "application.iam.directory.group_membership.read",
           "application.iam.directory.role_assignment.read",
           "application.iam.directory.role_activation.read",
-          "application.iam.directory.delegation.read",
-          "platform.organization.accounts.read",
-          "platform.organization.roles.read",
-          "platform.organization.groups.read",
-          "platform.organization.assignments.read"
+          "application.iam.directory.delegation.read"
         ]
       }
     ],
