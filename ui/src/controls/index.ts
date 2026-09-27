@@ -89,6 +89,11 @@ export {
   type FormFlowFeedback,
 } from "./form-container";
 export { equalFormValue } from "./form-context";
+export {
+  UnsavedWorkProvider,
+  useUnsavedWorkGuard,
+  useUnsavedWorkRegistry,
+} from "./unsaved-work";
 
 // Control Registrations & Registry
 export {
