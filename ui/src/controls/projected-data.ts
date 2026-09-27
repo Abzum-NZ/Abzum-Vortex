@@ -2,6 +2,7 @@ import {
   builderKeySchema,
   referenceChoiceSelectionEvidenceMapSchema,
   richTextDocumentV2Schema,
+  timestampSchema,
   type BlockPropertyValueV2Contract,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
@@ -36,11 +37,15 @@ export type TypedRecordReference = Readonly<{
   recordId: string;
 }>;
 
+/** A field value containing the selected option values of a several_choices field. */
+export type TypedSeveralChoicesValue = readonly string[];
+
 export type TypedFieldValue =
   | string
   | number
   | boolean
   | null
+  | TypedSeveralChoicesValue
   | TypedRecordReference
   | TypedRichTextDocument;
 
@@ -117,6 +122,15 @@ export type DateInputPayload = Readonly<{
   error?: string;
 }>;
 
+/** The ready values a time-zone-aware date-time input accepts. */
+export type DateTimeInputPayload = Readonly<{
+  kind: "date_time_input";
+  value?: string | null;
+  personTimeZone?: string;
+  organizationTimeZone?: string;
+  error?: string;
+}>;
+
 /** The ready values a choice input accepts. */
 export type ChoiceInputPayload = Readonly<{
   kind: "choice_input";
@@ -124,6 +138,13 @@ export type ChoiceInputPayload = Readonly<{
   options?: readonly ChoiceOption[];
   optionEvidence?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
   nextContinuationToken?: string;
+  error?: string;
+}>;
+
+/** The ready values a multi-choice input accepts. */
+export type SeveralChoicesInputPayload = Readonly<{
+  kind: "several_choices_input";
+  value?: TypedSeveralChoicesValue | null;
   error?: string;
 }>;
 
@@ -138,7 +159,9 @@ export type FieldInputPayload =
   | NumberInputPayload
   | BooleanInputPayload
   | DateInputPayload
-  | ChoiceInputPayload;
+  | DateTimeInputPayload
+  | ChoiceInputPayload
+  | SeveralChoicesInputPayload;
 
 /** The ready values a validation message block accepts. */
 export type ValidationPayload = Readonly<{ kind: "validation"; errors: readonly string[] }>;
@@ -164,7 +187,9 @@ export type RichTextInputData = ControlDataState<RichTextInputPayload>;
 export type NumberInputData = ControlDataState<NumberInputPayload>;
 export type BooleanInputData = ControlDataState<BooleanInputPayload>;
 export type DateInputData = ControlDataState<DateInputPayload>;
+export type DateTimeInputData = ControlDataState<DateTimeInputPayload>;
 export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
+export type SeveralChoicesInputData = ControlDataState<SeveralChoicesInputPayload>;
 export type FieldInputData = ControlDataState<FieldInputPayload>;
 export type ValidationData = ControlDataState<ValidationPayload>;
 export type ButtonData = ControlDataState<ButtonPayload>;
@@ -242,6 +267,15 @@ const requireBuilderKey = (
   return parsed.success ? parsed.data : fail(message, location);
 };
 
+const requireChoiceValue = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): string => {
+  const text = requireString(value, message, location);
+  return text.length >= 1 && text.length <= 120 ? text : fail(message, location);
+};
+
 const requireRecordReference = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -293,19 +327,20 @@ const optionalError = (
         ),
       };
 
-/** Parses choice options, refusing duplicate keys so every option has one stable identity. */
+/** Parses bounded choice options, refusing duplicate values so every option has one identity. */
 export const parseChoiceOptions = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): readonly ChoiceOption[] => {
-  if (!Array.isArray(value)) return fail("Choice options must be an array", location);
+  if (!Array.isArray(value) || value.length > 200)
+    return fail("Choice options must be an array of at most 200 options", location);
   const seen = new Set<string>();
   return Object.freeze(
     value.map((item) => {
       const record = requireRecord(item, "A choice option must be an object", location);
       requireExactKeys(record, ["key", "label"], location);
-      const key = requireBuilderKey(record.key, "A choice option key is invalid", location);
-      if (seen.has(key)) fail(`Duplicate choice option key '${key}'`, location);
+      const key = requireChoiceValue(record.key, "A choice option value is invalid", location);
+      if (seen.has(key)) fail(`Duplicate choice option value '${key}'`, location);
       seen.add(key);
       const label = requireNonEmptyString(
         record.label,
@@ -319,8 +354,9 @@ export const parseChoiceOptions = (
 
 /**
  * One typed form field value exactly as a control input emits or collects it, validated
- * fail-closed. A linked record contributes only its stable `recordTypeId:recordId` identity, a
- * document is a structured rich-text document, and nothing else is a typed field value.
+ * fail-closed. A several-choice value is a bounded array of declared option values, a linked
+ * record contributes only its stable `recordTypeId:recordId` identity, and a document is structured
+ * rich text.
  */
 export const parseTypedFieldValue = (
   value: unknown,
@@ -330,12 +366,21 @@ export const parseTypedFieldValue = (
   if (typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number")
     return Number.isFinite(value) ? value : fail("A typed number must be finite", location);
+  if (Array.isArray(value)) {
+    if (value.length > 200) return fail("A several-choice value cannot exceed 200 options", location);
+    const selected = value.map((item) =>
+      requireChoiceValue(item, "A several-choice value must contain option values", location),
+    );
+    if (new Set(selected).size !== selected.length)
+      return fail("A several-choice value cannot repeat an option", location);
+    return Object.freeze(selected);
+  }
   if (!isRecord(value)) return fail("A typed field value must be a field value", location);
   if (Object.hasOwn(value, "blocks")) return parseRichTextDocument(value, location);
   if (Object.hasOwn(value, "recordTypeId") && Object.hasOwn(value, "recordId"))
     return requireRecordReference(value, location);
   return fail(
-    "A typed field value must be a text, number, boolean, record reference or document",
+    "A typed field value must be text, a number, a boolean, several-choice option values, a record reference or a document",
     location,
   );
 };
@@ -475,6 +520,48 @@ export const parseDateInputPayload = (
   });
 };
 
+/** Parses the offset-bearing instant a date-time field stores. */
+export const parseDateTimeInputPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): DateTimeInputPayload => {
+  const record = requireRecord(value, "Projected control values must be an object", location);
+  if (record.kind !== "date_time_input")
+    return fail(
+      `Expected 'date_time_input' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "value", "personTimeZone", "organizationTimeZone", "error"], location);
+  if (
+    record.value !== undefined &&
+    record.value !== null &&
+    !(typeof record.value === "string" && timestampSchema.safeParse(record.value).success)
+  )
+    fail("A date-time value must be an offset-bearing ISO timestamp or null", location);
+  for (const key of ["personTimeZone", "organizationTimeZone"] as const) {
+    const zone = record[key];
+    if (zone === undefined) continue;
+    if (typeof zone !== "string")
+      return fail("A date-time zone must be a valid IANA time zone", location);
+    if (zone.length > 100 || zone.length === 0)
+      return fail("A date-time zone must be a valid IANA time zone", location);
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: zone });
+    } catch {
+      fail("A date-time zone must be a valid IANA time zone", location);
+    }
+  }
+  return Object.freeze({
+    kind: "date_time_input",
+    ...(record.value === undefined ? {} : { value: record.value as string | null }),
+    ...(record.personTimeZone === undefined ? {} : { personTimeZone: record.personTimeZone as string }),
+    ...(record.organizationTimeZone === undefined
+      ? {}
+      : { organizationTimeZone: record.organizationTimeZone as string }),
+    ...optionalError(record, location),
+  });
+};
+
 /** The ready values a choice input accepts. */
 export const parseChoiceInputPayload = (
   value: unknown,
@@ -514,7 +601,7 @@ export const parseChoiceInputPayload = (
           location,
         );
   if (record.value !== undefined && record.value !== null) {
-    const key = requireBuilderKey(record.value, "A choice value must be an option key", location);
+    const key = requireChoiceValue(record.value, "A choice value must be an option value", location);
     if (options !== undefined && !options.some((option) => option.key === key))
       fail(`Choice value '${key}' is not a projected option`, location);
   }
@@ -524,6 +611,37 @@ export const parseChoiceInputPayload = (
     ...(options === undefined ? {} : { options }),
     ...(optionEvidence === undefined ? {} : { optionEvidence }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+    ...optionalError(record, location),
+  });
+};
+
+/** Parses a multi-choice value as a bounded list of exact declared option values. */
+export const parseSeveralChoicesInputPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): SeveralChoicesInputPayload => {
+  const record = requireRecord(value, "Projected control values must be an object", location);
+  if (record.kind !== "several_choices_input")
+    return fail(
+      `Expected 'several_choices_input' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "value", "error"], location);
+  let selected: TypedSeveralChoicesValue | null | undefined;
+  if (record.value === null) selected = null;
+  else if (record.value !== undefined) {
+    if (!Array.isArray(record.value) || record.value.length > 200)
+      return fail("Several-choice values must be a list of at most 200 option values", location);
+    const keys = record.value.map((item) =>
+      requireChoiceValue(item, "A several-choice value must contain option values", location),
+    );
+    if (new Set(keys).size !== keys.length)
+      return fail("A several-choice value cannot repeat an option", location);
+    selected = Object.freeze(keys);
+  }
+  return Object.freeze({
+    kind: "several_choices_input",
+    ...(selected === undefined ? {} : { value: selected }),
     ...optionalError(record, location),
   });
 };
@@ -551,8 +669,12 @@ export const parseFieldInputPayload = (
       return parseBooleanInputPayload(value, location);
     case "date_input":
       return parseDateInputPayload(value, location);
+    case "date_time_input":
+      return parseDateTimeInputPayload(value, location);
     case "choice_input":
       return parseChoiceInputPayload(value, location);
+    case "several_choices_input":
+      return parseSeveralChoicesInputPayload(value, location);
     default:
       return fail(
         `An automatic field input cannot carry '${String(record.kind)}' projected values`,

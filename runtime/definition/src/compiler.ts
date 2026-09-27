@@ -4433,7 +4433,7 @@ const applicationCompositionResolutionV2 = (
         };
       };
       const choices =
-        type === "choice" && Array.isArray(settings.options)
+        (type === "choice" || type === "several_choices") && Array.isArray(settings.options)
           ? (settings.options as JsonObject[]).map((option) => ({
               key: String(option.value),
               label: String(option.label),
@@ -4452,6 +4452,15 @@ const applicationCompositionResolutionV2 = (
         type,
         ...(type === "text" && settings.format !== undefined
           ? { textFormat: String(settings.format) }
+          : {}),
+        ...(type === "date_time" &&
+        (settings.displayTimeZone === "person" ||
+          settings.displayTimeZone === "organization" ||
+          settings.displayTimeZone === "utc")
+          ? { displayTimeZone: settings.displayTimeZone }
+          : {}),
+        ...(type === "several_choices" && typeof settings.maximumSelections === "number"
+          ? { maximumSelections: settings.maximumSelections }
           : {}),
         choices,
         recordTypes,

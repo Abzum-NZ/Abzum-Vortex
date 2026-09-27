@@ -372,7 +372,9 @@ export const fieldInputControlKeys = [
   "number",
   "boolean",
   "date",
+  "date_time",
   "choice",
+  "several_choices",
   "link",
 ] as const;
 export type FieldInputControlKey = (typeof fieldInputControlKeys)[number];
