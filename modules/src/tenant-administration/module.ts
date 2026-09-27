@@ -1,4 +1,8 @@
-import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/contracts";
+import {
+  moduleSourceDocumentSchema,
+  tenantStructuralCapabilityKeys,
+  type ModuleSourceDocument,
+} from "@vortex/contracts";
 
 // The tenant, organisation and tenant-administrator system record types are
 // read-only projections of protected Identity facts. They declare only safe,
@@ -42,17 +46,26 @@ const tenantAdministratorAllFields = [
   "expires_at",
   "state",
 ];
-// The seven structural tenant capabilities the projection can return, in the
+// The tenant capabilities the projection can return, in the
 // canonical order the private tenant writer accepts.
-const tenantStructuralCapabilityOptions = [
-  { value: "platform.tenant.administrators.manage", label: "Manage tenant administrators" },
-  { value: "platform.tenant.administrators.read", label: "Read tenant administrators" },
-  { value: "platform.tenant.hierarchy.read", label: "Read tenant hierarchy" },
-  { value: "platform.tenant.organizations.create", label: "Create organisations" },
-  { value: "platform.tenant.organizations.lifecycle", label: "Change organisation lifecycle" },
-  { value: "platform.tenant.organizations.rename", label: "Rename organisations" },
-  { value: "platform.tenant.organizations.reparent", label: "Move organisations" },
-] as const;
+const tenantCapabilityPermissionLabels: Record<
+  (typeof tenantStructuralCapabilityKeys)[number],
+  string
+> = {
+  "platform.tenant.administrators.manage": "Manage tenant administrators",
+  "platform.tenant.administrators.read": "Read tenant administrators",
+  "platform.tenant.capability_limits.allocate": "Allocate capability limits",
+  "platform.tenant.capability_limits.read": "Read capability limits",
+  "platform.tenant.hierarchy.read": "Read tenant hierarchy",
+  "platform.tenant.organizations.create": "Create organisations",
+  "platform.tenant.organizations.lifecycle": "Change organisation lifecycle",
+  "platform.tenant.organizations.rename": "Rename organisations",
+  "platform.tenant.organizations.reparent": "Move organisations",
+};
+const tenantCapabilityPermissionOptions = tenantStructuralCapabilityKeys.map((value) => ({
+  value,
+  label: tenantCapabilityPermissionLabels[value],
+}));
 const tenantStateOptions = [
   { value: "active", label: "Active" },
   { value: "suspended", label: "Suspended" },
@@ -428,7 +441,7 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
             personal_data: "none",
             public_display: "refused",
             type: "several_choices",
-            settings: { options: [...tenantStructuralCapabilityOptions] },
+            settings: { options: [...tenantCapabilityPermissionOptions] },
           },
           {
             id: "fld_tenant_administrator_starts_at",
