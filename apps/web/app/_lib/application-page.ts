@@ -79,6 +79,8 @@ export type ApplicationPageModel = Readonly<{
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
+  /** Data placements to re-read after a write from each flow-bound page placement. */
+  refreshPlacementsBySource: Readonly<Record<string, readonly string[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
@@ -112,6 +114,25 @@ export type ApplicationPageResult =
   | Readonly<{ kind: "available"; model: ApplicationPageModel }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
+
+export type ApplicationPagePlacementReadResult =
+  | Readonly<{
+      kind: "available";
+      data: Readonly<Record<string, PageDataState>>;
+      editFormBaselines: Readonly<
+        Record<string, Readonly<Record<string, JsonValue>> | null>
+      >;
+    }>
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+export type ApplicationPageLoaderAddress = Readonly<{
+  tenantShortName: string;
+  organizationShortName: string;
+  read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+  application: PermittedApplication;
+  pageKey: string;
+}>;
 
 type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
@@ -327,6 +348,14 @@ const findModuleQuery = (
   return undefined;
 };
 
+const resolvedQueryRecordTypeId = (
+  context: InstalledRuntimeContext,
+  queryId: string,
+): string | undefined => {
+  const recordType = findModuleQuery(context, queryId)?.query.recordType;
+  return recordType?.state === "resolved" ? String(recordType.recordTypeId) : undefined;
+};
+
 const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
@@ -437,16 +466,11 @@ export const loadApplicationTheme = async (
   }
 };
 
-export const loadApplicationPage = async (
+const loadApplicationPageInternal = async (
   session: IdentitySession,
-  address: Readonly<{
-    tenantShortName: string;
-    organizationShortName: string;
-    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
-    application: PermittedApplication;
-    pageKey: string;
-  }>,
+  address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
+  selectedPlacementIds?: ReadonlySet<string>,
 ): Promise<ApplicationPageResult> => {
   const dependencies = requestDependencies();
   const continuationKey = getQueryContinuationKey();
@@ -463,10 +487,13 @@ export const loadApplicationPage = async (
 
   // The offered release is read under the viewer's own application scope. A refusal or an absent
   // target reads as "nothing to adopt"; publishing a release alone never changes this page.
-  const adoptionTarget = await readApplicationReleaseAdoption(session, {
-    organizationId: context.organizationId,
-    applicationRootId: context.applicationRootId,
-  });
+  const adoptionTarget =
+    selectedPlacementIds === undefined
+      ? await readApplicationReleaseAdoption(session, {
+          organizationId: context.organizationId,
+          applicationRootId: context.applicationRootId,
+        })
+      : undefined;
 
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "unavailable" };
@@ -507,7 +534,128 @@ export const loadApplicationPage = async (
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
-  const placements = collectPlacements(page);
+  const allPlacements = collectPlacements(page);
+  if (
+    selectedPlacementIds !== undefined &&
+    [...selectedPlacementIds].some(
+      (requestedId) => !allPlacements.some((entry) => sameId(entry.placementId, requestedId)),
+    )
+  )
+    return { kind: "unavailable" };
+  const placements =
+    selectedPlacementIds === undefined
+      ? allPlacements
+      : allPlacements.filter((entry) => selectedPlacementIds.has(entry.placementId.toLowerCase()));
+
+  const pageSubjectRecordTypeId =
+    subjectType === undefined ? undefined : String(subjectType.recordTypeId);
+  const recordTypeByPlacement = new Map<string, string>();
+  const dataPlacementsByRecordType = new Map<string, string[]>();
+  const editFormDataPlacementIds = new Map<string, string[]>();
+  const addDataPlacement = (recordTypeId: string, placementId: string): void => {
+    const key = recordTypeId.toLowerCase();
+    const current = dataPlacementsByRecordType.get(key) ?? [];
+    if (!current.some((candidate) => sameId(candidate, placementId)))
+      dataPlacementsByRecordType.set(key, [...current, placementId]);
+  };
+  const editFormPlacementIds = new Set(
+    allPlacements.flatMap(({ placementId, placement }) => {
+      const block = placement.block;
+      const isFormContainer =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
+      const submitsPageRecord = application.content.flowBindings.some(
+        (binding) =>
+          sameId(binding.controlId, placementId) &&
+          binding.event === "form_submit" &&
+          Object.values(binding.flow.inputs).some(
+            (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
+          ),
+      );
+      return isFormContainer && submitsPageRecord ? [placementId] : [];
+    }),
+  );
+  for (const { placementId, placement } of allPlacements) {
+    if (placement.readModel !== undefined) continue;
+    const block = placement.block;
+    if (
+      pageSubjectRecordTypeId !== undefined &&
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+
+    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+    const tableContract = readRecordsTableContract(settings);
+    const detailContract =
+      tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    if (tableContract === undefined && detailContract === undefined) continue;
+
+    const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+    const recordTypeId =
+      queryId === undefined
+        ? detailContract === undefined || pageDefinition.type === "form"
+          ? undefined
+          : pageSubjectRecordTypeId
+        : resolvedQueryRecordTypeId(context, queryId);
+    if (recordTypeId === undefined) continue;
+    recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
+    addDataPlacement(recordTypeId, placementId);
+  }
+  if (pageSubjectRecordTypeId !== undefined) {
+    for (const formId of editFormPlacementIds) {
+      const formDataPlacementIds = [formId];
+      for (const { placementId, placement, formId: ownerFormId } of allPlacements) {
+        if (ownerFormId === undefined || !sameId(ownerFormId, formId)) continue;
+        const block = placement.block;
+        if (
+          !isRecord(block) ||
+          typeof block.blockId !== "string" ||
+          !(
+            sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+            Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+              sameId(release.blockId, block.blockId as string),
+            )
+          )
+        )
+          continue;
+        recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+        formDataPlacementIds.push(placementId);
+      }
+      editFormDataPlacementIds.set(formId.toLowerCase(), formDataPlacementIds);
+    }
+  }
+
+  const refreshPlacementsBySource: Record<string, readonly string[]> = {};
+  const boundPlacementIds = new Set(
+    application.content.flowBindings.map((binding) => binding.controlId.toLowerCase()),
+  );
+  for (const { placementId, formId } of allPlacements) {
+    if (!boundPlacementIds.has(placementId.toLowerCase())) continue;
+    const recordTypeId =
+      recordTypeByPlacement.get(placementId.toLowerCase()) ??
+      (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase())) ??
+      pageSubjectRecordTypeId;
+    const queryTargets =
+      recordTypeId === undefined
+        ? []
+        : (dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? []);
+    const editFormId =
+      editFormPlacementIds.has(placementId)
+        ? placementId
+        : formId !== undefined && editFormPlacementIds.has(formId)
+          ? formId
+          : undefined;
+    const formTargets =
+      editFormId === undefined
+        ? []
+        : (editFormDataPlacementIds.get(editFormId.toLowerCase()) ?? []);
+    const targets = [...new Set([...queryTargets, ...formTargets])];
+    if (targets.length > 0) refreshPlacementsBySource[placementId] = targets;
+  }
+
   const data: Record<string, PageDataState> = {};
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   for (const { placementId, placement } of placements) {
@@ -694,7 +842,13 @@ export const loadApplicationPage = async (
 
   // A detail or form page offers its subject to the flows it starts; a public page never does.
   const subjectRow =
-    subjectType !== undefined && pageDefinition.type !== "public" && subjectId.success
+    (selectedPlacementIds === undefined ||
+      [...editFormPlacementIds].some((placementId) =>
+        selectedPlacementIds.has(placementId.toLowerCase()),
+      )) &&
+    subjectType !== undefined &&
+    pageDefinition.type !== "public" &&
+    subjectId.success
       ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
       : undefined;
   const subject =
@@ -714,6 +868,7 @@ export const loadApplicationPage = async (
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
   for (const { placementId, placement } of placements) {
+    if (!editFormPlacementIds.has(placementId)) continue;
     const block = placement.block;
     if (
       !isRecord(block) ||
@@ -773,6 +928,7 @@ export const loadApplicationPage = async (
       navigation: navigation.value,
       data,
       bindings,
+      refreshPlacementsBySource,
       editFormBaselines,
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
@@ -801,4 +957,35 @@ export const loadApplicationPage = async (
       },
     },
   };
+};
+
+export const loadApplicationPage = (
+  session: IdentitySession,
+  address: ApplicationPageLoaderAddress,
+  parameters: SearchParameters,
+): Promise<ApplicationPageResult> => loadApplicationPageInternal(session, address, parameters);
+
+/** Loads only the requested placements through the same protected page, Query and Record reads. */
+export const loadApplicationPagePlacements = async (
+  session: IdentitySession,
+  address: ApplicationPageLoaderAddress,
+  parameters: SearchParameters,
+  placementIds: readonly string[],
+): Promise<ApplicationPagePlacementReadResult> => {
+  const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
+  const loaded = await loadApplicationPageInternal(session, address, parameters, requestedIds);
+  if (loaded.kind !== "available") return loaded;
+
+  const loadedData = Object.entries(loaded.model.data);
+  const loadedBaselines = Object.entries(loaded.model.editFormBaselines);
+  const data: Record<string, PageDataState> = {};
+  const editFormBaselines: Record<string, Readonly<Record<string, JsonValue>> | null> = {};
+  for (const placementId of requestedIds) {
+    const entry = loadedData.find(([candidate]) => sameId(candidate, placementId));
+    const displayId = entry?.[0] ?? placementId;
+    const baseline = loadedBaselines.find(([candidate]) => sameId(candidate, placementId));
+    data[displayId] = entry?.[1] ?? { status: "error" };
+    editFormBaselines[displayId] = baseline?.[1] ?? null;
+  }
+  return { kind: "available", data, editFormBaselines };
 };

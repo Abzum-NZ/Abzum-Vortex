@@ -37,7 +37,20 @@ import {
 import { Field, FieldGroup } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import type { ApplicationPageModel, PlacementFlowBinding } from "../../../../_lib/application-page";
+import type {
+  ApplicationPageModel,
+  PageDataState,
+  PlacementFlowBinding,
+} from "../../../../_lib/application-page";
+import {
+  isCurrentComponentRequestGeneration,
+  nextComponentRequestGeneration,
+  type ComponentRequestGeneration,
+} from "@vortex/app/component-result-state";
+import { containedComponentIdSchema } from "@vortex/contracts";
+import { rereadApplicationPlacements } from "../placement-refresh-action";
+
+type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 
 /**
  * The full component flow binding the browser runtime expects. A {@link PlacementFlowBinding} carries
@@ -233,8 +246,8 @@ const bindingFor = (
 /**
  * Renders one installed application page and carries out what its people do on it. Every
  * declared component event goes to the one flow endpoint with the exact installation and binding
- * the page was rendered from; the page then refreshes so the affected view shows the persisted
- * result. Nothing here decides permission or runs an operation itself.
+ * the page was rendered from; after a write, only data placements affected by that source are
+ * re-read. Nothing here decides permission or runs an operation itself.
  */
 export function ApplicationPageView({
   model,
@@ -252,7 +265,16 @@ function ApplicationPageViewContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentSearch = searchParams.toString();
   const [selection, setSelection] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const [refreshedPlacementData, setRefreshedPlacementData] = useState<
+    | Readonly<{
+        navigationKey: string;
+        data: Readonly<Record<string, PageDataState>>;
+        editFormBaselines: Readonly<Record<string, EditFormBaseline | null>>;
+      }>
+    | undefined
+  >(undefined);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
@@ -297,6 +319,38 @@ function ApplicationPageViewContent({
   const application = model.invocation;
   const subject = model.subject;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const serverDataRef = useRef(model.data);
+  const serverDataGenerationRef = useRef(0);
+  if (serverDataRef.current !== model.data) {
+    serverDataRef.current = model.data;
+    serverDataGenerationRef.current += 1;
+  }
+  const navigationBase = JSON.stringify([
+    pathname,
+    currentSearch,
+    model.pageId,
+    application.installationRevision,
+    application.releaseKey,
+    serverDataGenerationRef.current,
+  ]);
+  const navigationSequenceRef = useRef(0);
+  const placementRequestsRef = useRef<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
+  if (placementRequestsRef.current.base !== navigationBase) {
+    navigationSequenceRef.current += 1;
+    placementRequestsRef.current = {
+      base: navigationBase,
+      key: `${navigationBase}:${navigationSequenceRef.current}`,
+      generations: new Map(),
+    };
+  }
+  const navigationKey = placementRequestsRef.current.key;
+  const currentPageKey = model.pages.find(
+    (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
+  )?.key;
   const basePath = `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(application.applicationKey)}`;
   const pageKeyOf = useMemo(
     () => new Map(model.pages.map((page) => [page.pageId.toLowerCase(), page.key])),
@@ -309,6 +363,150 @@ function ApplicationPageViewContent({
     },
     [basePath, pageKeyOf],
   );
+  const refreshPlacements = useCallback(
+    async (placementIds: readonly string[]): Promise<void> => {
+      const pageKey = currentPageKey;
+      const requestScope = placementRequestsRef.current;
+      if (pageKey === undefined) return;
+
+      const requests = new Map<string, ComponentRequestGeneration>();
+      for (const placementId of new Set(placementIds)) {
+        const parsedId = containedComponentIdSchema.safeParse(placementId);
+        if (!parsedId.success) continue;
+        const key = parsedId.data.toLowerCase();
+        const request = nextComponentRequestGeneration(
+          requestScope.generations.get(key),
+          parsedId.data,
+          requestScope.key,
+        );
+        requestScope.generations.set(key, request);
+        requests.set(key, request);
+      }
+      if (requests.size === 0) return;
+
+      const loadedData = new Map<string, PageDataState>();
+      const loadedBaselines = new Map<string, EditFormBaseline | null>();
+      const requestEntries = [...requests.entries()];
+      for (let offset = 0; offset < requestEntries.length; offset += 500) {
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+        const batch = requestEntries
+          .slice(offset, offset + 500)
+          .filter(([key, request]) =>
+            isCurrentComponentRequestGeneration(requestScope.generations.get(key), request),
+          );
+        if (batch.length === 0) continue;
+
+        let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
+        try {
+          result = await rereadApplicationPlacements(
+            {
+              tenantShortName: application.tenantShortName,
+              organizationShortName: application.organizationShortName,
+              applicationKey: application.applicationKey,
+              pageKey,
+              search: currentSearch,
+            },
+            batch.map(([, request]) => request.componentId),
+          );
+        } catch {
+          continue;
+        }
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+
+        for (const [key, request] of batch) {
+          if (
+            !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
+          )
+            continue;
+          const data =
+            result.kind === "available"
+              ? Object.entries(result.data).find(([candidate]) => candidate.toLowerCase() === key)?.[1]
+              : undefined;
+          const baseline =
+            result.kind === "available"
+              ? Object.entries(result.editFormBaselines).find(
+                  ([candidate]) => candidate.toLowerCase() === key,
+                )?.[1] ?? null
+              : null;
+          loadedData.set(key, data ?? { status: "error" });
+          loadedBaselines.set(key, baseline);
+        }
+      }
+
+      const accepted: {
+        key: string;
+        request: ComponentRequestGeneration;
+        placementId: string;
+        data: PageDataState;
+        editFormBaseline: EditFormBaseline | null;
+      }[] = [];
+      for (const [key, request] of requests) {
+        if (
+          !loadedData.has(key) ||
+          !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
+        )
+          continue;
+        const displayKey =
+          Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+          request.componentId;
+        accepted.push({
+          key,
+          request,
+          placementId: displayKey,
+          data: loadedData.get(key) ?? { status: "error" },
+          editFormBaseline: loadedBaselines.get(key) ?? null,
+        });
+      }
+      if (accepted.length === 0) return;
+      setRefreshedPlacementData((current) => {
+        const liveScope = placementRequestsRef.current;
+        if (liveScope?.key !== requestScope.key) return current;
+        const data = { ...(current?.navigationKey === requestScope.key ? current.data : {}) };
+        const editFormBaselines = {
+          ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
+        };
+        let changed = false;
+        for (const entry of accepted) {
+          if (!isCurrentComponentRequestGeneration(liveScope.generations.get(entry.key), entry.request))
+            continue;
+          data[entry.placementId] = entry.data;
+          editFormBaselines[entry.placementId] = entry.editFormBaseline;
+          changed = true;
+        }
+        return changed
+          ? { navigationKey: requestScope.key, data, editFormBaselines }
+          : current;
+      });
+    },
+    [application, currentPageKey, currentSearch, model.data],
+  );
+  const refreshTargetsForSource = useCallback(
+    (sourcePlacementId: string): readonly string[] => {
+      const match = Object.entries(model.refreshPlacementsBySource).find(
+        ([candidate]) => candidate.toLowerCase() === sourcePlacementId.toLowerCase(),
+      );
+      return match?.[1] ?? [];
+    },
+    [model.refreshPlacementsBySource],
+  );
+  const currentData = useMemo(
+    () =>
+      refreshedPlacementData?.navigationKey === navigationKey
+        ? { ...model.data, ...refreshedPlacementData.data }
+        : model.data,
+    [model.data, navigationKey, refreshedPlacementData],
+  );
+  const currentEditFormBaselines = useMemo(() => {
+    const baselines = { ...model.editFormBaselines };
+    if (refreshedPlacementData?.navigationKey === navigationKey)
+      for (const [placementId, baseline] of Object.entries(
+        refreshedPlacementData.editFormBaselines,
+      )) {
+        if (baseline === null) delete baselines[placementId];
+        else baselines[placementId] = baseline;
+      }
+    return baselines;
+  }, [model.editFormBaselines, navigationKey, refreshedPlacementData]);
 
   useEffect(() => {
     if (!hasUnsavedWork) return;
@@ -513,12 +711,17 @@ function ApplicationPageViewContent({
   /**
    * Reports a server-driven flow's safe outcome for any gesture. The runtime already carried out
    * every pause through a continuation and every presentation intent through the host; only the
-   * final outcome is shown, and the page re-reads the persisted data whatever the flow reported. A
+   * final outcome is shown, and affected placements re-read their persisted data after a write. A
    * gesture the form block ignored because the same binding is already running leaves the page as
    * that run set it.
    */
   const applyDispatch = useCallback(
-    async (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string) => {
+    async (
+      dispatch: Promise<FlowDispatchResult | undefined>,
+      formPlacementId?: string,
+      afterAccepted?: () => Promise<Notice | undefined>,
+      sourcePlacementId?: string,
+    ) => {
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -552,14 +755,30 @@ function ApplicationPageViewContent({
         }
         const server = result.result;
         if (server.kind === "reload") {
-          setSelection({});
           return router.refresh();
         }
         if (server.kind === "finished") {
-          setSelection({});
-          const resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          if (
+            afterAccepted !== undefined &&
+            ["completed", "committed", "background_pending"].includes(
+              server.descriptor.outcome,
+            )
+          ) {
+            try {
+              resultNotice = (await afterAccepted()) ?? resultNotice;
+            } catch {
+              resultNotice = unavailableNotice;
+            }
+          }
           showResult(resultNotice);
-          return router.refresh();
+          const refreshSource = sourcePlacementId ?? formPlacementId;
+          if (
+            (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
+            refreshSource !== undefined
+          )
+            void refreshPlacements(refreshTargetsForSource(refreshSource));
+          return;
         }
         if (server.kind === "refused") {
           showResult(unavailableNotice);
@@ -568,7 +787,10 @@ function ApplicationPageViewContent({
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
           showResult(outcomeNotices.uncertain ?? unavailableNotice);
-          return router.refresh();
+          const refreshSource = sourcePlacementId ?? formPlacementId;
+          if (refreshSource !== undefined)
+            void refreshPlacements(refreshTargetsForSource(refreshSource));
+          return;
         }
         showResult(unavailableNotice);
       } catch {
@@ -577,7 +799,7 @@ function ApplicationPageViewContent({
         if (settles) setBusy(false);
       }
     },
-    [router],
+    [refreshPlacements, refreshTargetsForSource, router],
   );
 
   /**
@@ -595,6 +817,8 @@ function ApplicationPageViewContent({
           ),
         ),
         formOwners[placementId],
+        undefined,
+        placementId,
       ),
     [applyDispatch, formOwners, flowRuntime],
   );
@@ -604,12 +828,12 @@ function ApplicationPageViewContent({
     // A placement may hold bindings (a form submits) without holding projected data, so both key
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
     const placementIds = new Set([
-      ...Object.keys(model.data),
+      ...Object.keys(currentData),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
     ]);
     for (const placementId of placementIds) {
-      const data = model.data[placementId];
+      const data = currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const flowFeedback =
@@ -624,7 +848,9 @@ function ApplicationPageViewContent({
               if (binding !== undefined && !busy)
                 void runBinding(placementId, binding, suppliedValues(event));
             };
-        events.refresh = () => router.refresh();
+        events.refresh = () => {
+          void refreshPlacements([placementId]);
+        };
         events.selection_changed = (event: DisplaySemanticEvent) => {
           if (event.event !== "selection_changed") return;
           setSelection((current) => {
@@ -674,7 +900,7 @@ function ApplicationPageViewContent({
       if (submitBinding !== undefined)
         events.form_submit = (event: ControlSemanticEvent) => {
           if (event.event !== "form_submit" || busy) return;
-          const baseline = model.editFormBaselines[placementId];
+          const baseline = currentEditFormBaselines[placementId];
           const values =
             baseline === undefined
               ? event.values
@@ -699,13 +925,20 @@ function ApplicationPageViewContent({
           void applyDispatch(
             formBlock.submit(asComponentBinding(placementId, submitBinding), values),
             placementId,
+            undefined,
+            placementId,
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
       if (readyBinding !== undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready" || busy) return;
-          void applyDispatch(formBlock.ready(asComponentBinding(placementId, readyBinding)));
+          void applyDispatch(
+            formBlock.ready(asComponentBinding(placementId, readyBinding)),
+            undefined,
+            undefined,
+            placementId,
+          );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
       if (resetBinding !== undefined)
@@ -717,7 +950,12 @@ function ApplicationPageViewContent({
             delete next[placementId];
             return next;
           });
-          void applyDispatch(formBlock.reset(asComponentBinding(placementId, resetBinding)));
+          void applyDispatch(
+            formBlock.reset(asComponentBinding(placementId, resetBinding)),
+            undefined,
+            undefined,
+            placementId,
+          );
         };
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
@@ -745,10 +983,12 @@ function ApplicationPageViewContent({
     formBlock,
     formFeedback,
     formOwners,
+    currentData,
+    currentEditFormBaselines,
     model.bindings,
     model.data,
-    model.editFormBaselines,
     router,
+    refreshPlacements,
     runBinding,
     selection,
     setQuery,
