@@ -25,10 +25,25 @@ import { fileURLToPath } from "node:url";
  *   entry per option of every dimension with its release identity (or its refusal), the tokens it
  *   sets, style CSS assets, and menu colour and accent variant descriptors.
  *
- * Every option whose release fails the platform's theme contrast gate (the same rules as
- * runtime/theme/src/contrast.ts validateThemeContrast) is refused: it gets no release, and it is
- * listed in the importer output and in the index's `refused` list rather than silently dropped.
- * The existing 2.0.0 and 3.0.0 releases are never written.
+ * shadcn tunes several of its colours for looks rather than for the platform's contrast gate: most
+ * accent themes paint a dark-mode primary fill that is barely visible on the dark background, lime
+ * and yellow paint a light-mode primary that is barely visible on white, and olive's muted text is
+ * just under the normal-text ratio. Before judging an option, the importer derives compliant values
+ * for exactly the colours that fall short: it moves the colour's OKLCH lightness by the smallest
+ * step that meets the gate's ratio, keeping its hue and chroma, and never touches a colour that
+ * already passes. A fill is judged on every base colour's background, because a theme colour or
+ * chart colour is combined with any base colour; a paired foreground is judged on its (derived)
+ * fill. Every derived value is recorded in the index's `contrastDerivations` for its option and in
+ * the importer output, so the catalogue shows exactly where it departs from shadcn and why.
+ *
+ * The contrast gate itself is unchanged. Every option release, derived or not, must still pass the
+ * platform's theme contrast gate (the same rules as runtime/theme/src/contrast.ts
+ * validateThemeContrast); one that fails is refused: it gets no release, and it is listed in the
+ * importer output and in the index's `refused` list rather than silently dropped. Every
+ * combination of the offered base, theme and chart colours is then resolved as runtime/theme/src/
+ * selection.ts resolves it and judged by the same gate, and the import fails if any combination a
+ * person could select would be refused at publication. The existing 2.0.0 and 3.0.0 releases are
+ * never written.
  *
  *   node tooling/import-shadcn-theme-catalogue.mjs            import and regenerate fingerprints
  *   node tooling/import-shadcn-theme-catalogue.mjs --check    fail when a generated file is stale
@@ -225,7 +240,16 @@ const parseOklch = (value) => {
   return { r: toChannel(r), g: toChannel(g), b: toChannel(b), a: alpha };
 };
 
-const parseColor = (value) => (value.startsWith("oklch(") ? parseOklch(value) : parseHex(value));
+const parsedColours = new Map();
+/** Parses a colour once; the derivation and the combination check judge the same values often. */
+const parseColor = (value) => {
+  let parsed = parsedColours.get(value);
+  if (parsed === undefined) {
+    parsed = value.startsWith("oklch(") ? parseOklch(value) : parseHex(value);
+    parsedColours.set(value, parsed);
+  }
+  return parsed;
+};
 const isOpaqueColor = (value) => parseColor(value).a === 1;
 const composite = (foreground, background) => {
   const alpha = foreground.a + background.a * (1 - foreground.a);
@@ -325,6 +349,98 @@ const themeGateFailures = (tokens, vocabularyRoles) => {
   return failures;
 };
 
+/** shadcn writes OKLCH lightness to three decimals, so a derived lightness moves on that grid. */
+const LIGHTNESS_STEP = 0.001;
+
+/** The value with its OKLCH lightness replaced, keeping chroma, hue and alpha exactly as written. */
+const withLightness = (value, lightness) => {
+  const [, , , chroma, hue, alpha, alphaPercent] = OKLCH_COLOR.exec(value);
+  const alphaText = alpha === undefined ? "" : ` / ${alpha}${alphaPercent}`;
+  return `oklch(${Number(lightness.toFixed(3))} ${chroma} ${hue}${alphaText})`;
+};
+
+/**
+ * The value nearest the original, on the lightness grid, that meets `passes`: the lightness moves
+ * outwards one step at a time in both directions (lighter first on a tie), keeping hue and chroma.
+ * Returns undefined for a colour that is not an oklch() value or when no lightness passes, which
+ * leaves the original value for the gate to refuse.
+ */
+const nearestCompliantColour = (value, passes) => {
+  const match = OKLCH_COLOR.exec(value);
+  if (match === null) return undefined;
+  const original = clamp(Number(match[1]) / (match[2] === "%" ? 100 : 1), 0, 1);
+  const steps = Math.round(1 / LIGHTNESS_STEP);
+  for (let step = 1; step <= steps; step += 1) {
+    for (const lightness of [original + step * LIGHTNESS_STEP, original - step * LIGHTNESS_STEP]) {
+      if (lightness < 0 || lightness > 1) continue;
+      const candidate = withLightness(value, lightness);
+      if (passes(candidate)) return candidate;
+    }
+  }
+  return undefined;
+};
+
+const FOREGROUND_SUFFIX = "_foreground";
+
+/**
+ * Derives compliant values for the option's own colours that fall short of the theme gate, in the
+ * gate's own terms: an unpaired foreground reads on every surface at 4.5:1 and the brand fill is
+ * visible on every surface at 3:1; then a paired foreground the option sets reads on its fill at
+ * 4.5:1. `surfaces` holds, per mode, every background the option can be painted on. A colour that
+ * already passes is kept exactly. Returns the option's tokens and one record per derived value.
+ */
+const deriveCompliantTokens = (own, baseTokens, surfaces) => {
+  const derived = Object.fromEntries(Object.entries(own).map(([key, token]) => [key, { ...token }]));
+  const merged = () => ({ ...baseTokens, ...derived });
+  const derivations = [];
+  const derive = (key, mode, requirement, passes) => {
+    const from = derived[key][mode];
+    if (passes(from)) return;
+    const to = nearestCompliantColour(from, passes);
+    if (to === undefined) return;
+    derived[key][mode] = to;
+    derivations.push({ token: key, mode, from, to, requirement });
+  };
+  const modes = [
+    ["light", DEFAULT_LIGHT_SURFACE],
+    ["dark", DEFAULT_DARK_SURFACE],
+  ];
+  const surfaceKey = findThemeSurface(merged())?.key;
+  const fillOf = (key) =>
+    key.endsWith(FOREGROUND_SUFFIX) ? key.slice(0, -FOREGROUND_SUFFIX.length) : undefined;
+
+  for (const key of Object.keys(derived).sort()) {
+    const token = derived[key];
+    if (token.kind !== "color_pair" || key === surfaceKey) continue;
+    const fill = fillOf(key);
+    const paired = fill !== undefined && merged()[fill]?.kind === "color_pair";
+    const minimum =
+      token.role === "foreground" && !paired
+        ? WCAG_AA_NORMAL_TEXT_MIN_CONTRAST
+        : key === ACCENT_TOKEN_KEY
+          ? WCAG_AA_NON_TEXT_MIN_CONTRAST
+          : undefined;
+    if (minimum === undefined) continue;
+    for (const [mode, canvas] of modes)
+      derive(key, mode, `${minimum}:1 on ${surfaceKey}`, (candidate) =>
+        surfaces[mode].every((surface) => contrastRatio(candidate, surface, canvas) >= minimum),
+      );
+  }
+
+  for (const key of Object.keys(derived).sort()) {
+    const fillKey = fillOf(key);
+    const fill = fillKey === undefined ? undefined : merged()[fillKey];
+    if (derived[key].kind !== "color_pair" || fill?.kind !== "color_pair") continue;
+    for (const [mode] of modes)
+      derive(key, mode, `${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1 on ${fillKey}`, (candidate) =>
+        surfaces[mode].every(
+          (surface) => contrastRatio(candidate, fill[mode], surface) >= WCAG_AA_NORMAL_TEXT_MIN_CONTRAST,
+        ),
+      );
+  }
+  return { tokens: derived, derivations };
+};
+
 /** Fails the import when a token the importer writes would not parse against the release contract. */
 const assertContractValue = (key, token, context) => {
   if (!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(key) || key.length > 40) throw new Error(`${context}: invalid token key ${key}`);
@@ -364,12 +480,14 @@ const optionThemeId = (dimension, optionId) =>
 
 /**
  * Builds one complete release per colour, chart and radius option: the base release with the
- * option's tokens applied, refused when it fails the theme gate. Returns the releases by key, the
- * token keys each option sets and the refusal list.
+ * option's tokens applied, after deriving compliant values for the colours that fall short, and
+ * refused when it still fails the theme gate. Returns the releases by key, the token keys each
+ * option sets, each option's derived values and the refusal list.
  */
 const buildReleases = (snapshot, base) => {
   const releases = {};
   const optionKeys = {};
+  const derivationsByKey = {};
   const refused = [];
   const vocabularyRoles = Object.entries(base.tokens)
     .filter(([, token]) => token.kind === "color_pair")
@@ -380,20 +498,35 @@ const buildReleases = (snapshot, base) => {
     { id: "chartColor", options: snapshot.chartColors },
     { id: "radius", options: snapshot.radii },
   ];
+  // A base colour option replaces the surface, so its own colours are judged on that surface
+  // alone. Any other option is combined with whichever base colour is selected, so its colours
+  // are judged on every base colour's surface.
+  const surfaceKey = findThemeSurface(base.tokens)?.key;
+  if (surfaceKey === undefined) throw new Error(`${BASE_RELEASE_KEY} declares no background colour`);
+  const everySurface = (mode) => [
+    ...new Set([
+      base.tokens[surfaceKey][mode],
+      ...snapshot.baseColors.flatMap((option) => optionTokens("baseColor", option, base.tokens)[surfaceKey]?.[mode] ?? []),
+    ]),
+  ];
+  const combinedSurfaces = { light: everySurface("light"), dark: everySurface("dark") };
 
   for (const dimension of dimensions) {
     for (const option of dimension.options) {
       const key = releaseKey(dimension.id, option.id);
-      const own = optionTokens(dimension.id, option, base.tokens);
-      if (Object.keys(own).length === 0) throw new Error(`${dimension.id}/${option.id} sets no token`);
-      const tokens = { ...base.tokens };
-      for (const [tokenKey, token] of Object.entries(own)) {
+      const mapped = optionTokens(dimension.id, option, base.tokens);
+      if (Object.keys(mapped).length === 0) throw new Error(`${dimension.id}/${option.id} sets no token`);
+      for (const [tokenKey, token] of Object.entries(mapped))
         if (base.tokens[tokenKey]?.kind !== token.kind)
           throw new Error(`${dimension.id}/${option.id}: ${tokenKey} is not a ${token.kind} role of the base release`);
-        tokens[tokenKey] = token;
-      }
+      const ownSurface = mapped[surfaceKey];
+      const surfaces =
+        ownSurface === undefined ? combinedSurfaces : { light: [ownSurface.light], dark: [ownSurface.dark] };
+      const { tokens: own, derivations } = deriveCompliantTokens(mapped, base.tokens, surfaces);
+      const tokens = { ...base.tokens, ...own };
       for (const [tokenKey, token] of Object.entries(tokens)) assertContractValue(tokenKey, token, key);
       optionKeys[key] = Object.keys(own);
+      derivationsByKey[key] = derivations;
       const failures = themeGateFailures(tokens, vocabularyRoles);
       if (failures.length > 0) {
         refused.push({ dimension: dimension.id, option: option.id, failures });
@@ -406,20 +539,46 @@ const buildReleases = (snapshot, base) => {
       };
     }
   }
-  return { releases, optionKeys, refused };
+  assertEveryCombinationPasses(snapshot, base, releases, optionKeys, vocabularyRoles);
+  return { releases, optionKeys, derivationsByKey, refused };
+};
+
+/**
+ * Resolves every combination of the offered base, theme and chart colours as runtime/theme/src/
+ * selection.ts resolves a selection (the base release, then each option's own token keys from its
+ * release, in dimension order) and fails the import when the gate would refuse any of them, so no
+ * offered option can only be selected in some combinations. The radius sets no colour.
+ */
+const assertEveryCombinationPasses = (snapshot, base, releases, optionKeys, vocabularyRoles) => {
+  const offered = (dimension, options) =>
+    options.map((option) => releaseKey(dimension, option.id)).filter((key) => releases[key] !== undefined);
+  const failed = [];
+  for (const baseColor of offered("baseColor", snapshot.baseColors))
+    for (const theme of offered("theme", snapshot.themes))
+      for (const chartColor of offered("chartColor", snapshot.chartColors)) {
+        const tokens = { ...base.tokens };
+        for (const key of [baseColor, theme, chartColor])
+          for (const tokenKey of optionKeys[key]) tokens[tokenKey] = releases[key].tokens[tokenKey];
+        const failures = themeGateFailures(tokens, vocabularyRoles);
+        if (failures.length > 0) failed.push(`${baseColor} + ${theme} + ${chartColor}: ${failures.join(", ")}`);
+      }
+  if (failed.length > 0)
+    throw new Error(`Offered catalogue combinations fail the theme contrast gate:\n  ${failed.join("\n  ")}`);
 };
 
 /** The release index the application-selection work reads: one entry per dimension option. */
-const buildIndex = (snapshot, base, releases, optionKeys) => (refused) => {
+const buildIndex = (snapshot, base, releases, optionKeys, derivationsByKey) => (refused) => {
   const option = (dimension, entry, extra) => {
     const key = releaseKey(dimension, entry.id);
     const release = releases[key];
+    const derivations = derivationsByKey[key] ?? [];
     return {
       id: entry.id,
       label: entry.label,
       ...extra,
       releaseKey: key,
       tokenKeys: optionKeys[key],
+      ...(derivations.length === 0 ? {} : { contrastDerivations: derivations }),
       release:
         release === undefined
           ? { refused: true }
@@ -496,8 +655,8 @@ const main = async () => {
       throw new Error(`Style asset ${style.cssPath} contains an import, a URL or a byte-order mark`);
   }
 
-  const { releases, optionKeys, refused } = buildReleases(snapshot, base);
-  const index = buildIndex(snapshot, base, releases, optionKeys)(refused);
+  const { releases, optionKeys, derivationsByKey, refused } = buildReleases(snapshot, base);
+  const index = buildIndex(snapshot, base, releases, optionKeys, derivationsByKey)(refused);
 
   const releasesOutput = `${JSON.stringify(releases, null, 2)}\n`;
   const indexOutput = `${JSON.stringify(index, null, 2)}\n`;
@@ -511,6 +670,13 @@ const main = async () => {
       `${snapshot.themes.length} themes, ${snapshot.chartColors.length} chart colours, ${snapshot.radii.length} radii, ` +
       `${snapshot.menuColors.length} menu colours, ${snapshot.menuAccents.length} menu accents.`,
   );
+  const derived = Object.entries(derivationsByKey).filter(([, derivations]) => derivations.length > 0);
+  if (derived.length > 0) {
+    console.log(`Derived compliant colours for ${derived.length} option(s) whose shadcn values fall short of the gate:`);
+    for (const [key, derivations] of derived)
+      for (const entry of derivations)
+        console.log(`  - ${key} ${entry.token} ${entry.mode}: ${entry.from} -> ${entry.to} (${entry.requirement})`);
+  }
   if (refused.length === 0) console.log("No option was refused: every release passes the theme contrast gate.");
   else {
     console.log(`Refused ${refused.length} option(s) whose release fails the theme contrast gate:`);
