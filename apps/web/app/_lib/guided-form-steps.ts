@@ -237,11 +237,15 @@ const fieldForPlacement = (
   const name = settings.name;
   const parsedKey = isRecord(name) && name.kind === "text" ? builderKeySchema.safeParse(name.value) : undefined;
   const fieldReference = settings.field;
-  const field =
+  const referencedFieldId =
     isRecord(fieldReference) &&
     fieldReference.kind === "field_reference" &&
     typeof fieldReference.fieldId === "string"
-      ? recordType.fields.find((candidate) => sameId(String(candidate.fieldId), fieldReference.fieldId))
+      ? fieldReference.fieldId
+      : undefined;
+  const field =
+    referencedFieldId !== undefined
+      ? recordType.fields.find((candidate) => sameId(String(candidate.fieldId), referencedFieldId))
       : parsedKey?.success
         ? recordType.fields.find((candidate) => candidate.key === parsedKey.data)
         : undefined;

@@ -21,7 +21,6 @@ import {
   earlierGuidedStepId,
   loadGuidedFormAuthorityForSession,
   validateGuidedFormStep,
-  visibleGuidedFormValues,
   visibleGuidedFormValidation,
   type GuidedFormAbandonRequest,
   type GuidedFormConfirmRequest,
@@ -73,13 +72,22 @@ const abandonRequestSchema = z
 
 const parseAddress = (candidate: unknown): GuidedFormPageAddress | undefined => {
   const parsed = actionAddressSchema.safeParse(candidate);
-  return parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return undefined;
+  return {
+    tenantShortName: parsed.data.tenantShortName,
+    organizationShortName: parsed.data.organizationShortName,
+    applicationKey: parsed.data.applicationKey,
+    pageKey: parsed.data.pageKey,
+    ...(parsed.data.subjectRecordId === undefined
+      ? {}
+      : { subjectRecordId: parsed.data.subjectRecordId }),
+  };
 };
 
 const loadActionPage = async (addressCandidate: unknown) => {
   const address = parseAddress(addressCandidate);
   if (address === undefined) return { kind: "unavailable" as const };
-  const identity = continueSessionOrEnd(await resolveIdentitySession());
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable")
     return { kind: "temporarily_unavailable" as const };
   const resolved = await resolveApplicationAddress(
@@ -218,7 +226,6 @@ export async function advanceGuidedFormStepAction(
       revision: current.revision,
     };
   if (result.value.outcome !== "updated") return { kind: "unavailable" };
-  const visibleValues = visibleGuidedFormValues(result.value.draft, loaded.steps);
   const visibleValidation = visibleGuidedFormValidation(result.value.draft.validation, loaded.steps);
   const computedStepId = computeGuidedFormStepId(loaded.steps, visibleValidation);
   if (computedStepId === undefined) return { kind: "unavailable" };
@@ -284,7 +291,7 @@ export async function abandonGuidedFormDraftAction(
   if (!parsedRequest.success) return { kind: "unavailable" };
   const input = parsedRequest.data;
   const address = input.address;
-  const identity = continueSessionOrEnd(await resolveIdentitySession());
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable")
     return { kind: "temporarily_unavailable" };
   const resolved = await resolveApplicationAddress(

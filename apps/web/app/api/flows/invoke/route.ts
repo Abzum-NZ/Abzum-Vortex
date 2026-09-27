@@ -248,7 +248,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             guidedControls.set(key, guidedControls.has(key) ? null : {
               pageKey: page.key,
               pageId: String(page.pageId),
-              flowId,
+              ...(flowId === undefined ? {} : { flowId }),
               summary: key === controls.summary,
             });
           }

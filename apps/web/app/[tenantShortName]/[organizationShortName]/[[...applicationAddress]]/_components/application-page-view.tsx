@@ -1054,21 +1054,25 @@ function ApplicationPageViewContent({
         projectedNavigation={model.navigation}
         resolvePageHref={resolvePageHref}
         currentPageId={model.pageId}
-        activeStepId={model.guidedForm?.activeStepId}
-        guidedSummaryValues={model.guidedForm?.values}
+        {...(model.guidedForm === undefined
+          ? {}
+          : {
+              activeStepId: model.guidedForm.activeStepId,
+              guidedSummaryValues: model.guidedForm.values,
+            })}
         runtimeInputs={runtimeInputs}
-        guidedStepNavigation={
-          model.guidedForm === undefined
-            ? undefined
-            : {
-                disabled: busy,
-                onBack: () => {
-                  if (guidedPreviousStepId !== undefined)
-                    requestGuidedStep(guidedPreviousStepId);
-                },
-                onNext: () => requestGuidedStep(),
-              }
-        }
+        {...(model.guidedForm === undefined
+          ? {}
+          : {
+              guidedStepNavigation: {
+                  disabled: busy,
+                  onBack: () => {
+                    if (guidedPreviousStepId !== undefined)
+                      requestGuidedStep(guidedPreviousStepId);
+                  },
+                  onNext: () => requestGuidedStep(),
+              },
+            })}
       />
       {intentHostElement}
       <Dialog
