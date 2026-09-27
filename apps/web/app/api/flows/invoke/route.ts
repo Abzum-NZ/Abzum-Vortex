@@ -14,6 +14,7 @@ import {
 } from "@vortex/app";
 import {
   flowTaskChildLists,
+  flowBindingInvocationSchema,
   installedNamedActionReferenceV2Schema,
   type FlowDefinition,
   type FlowTask,
@@ -38,7 +39,6 @@ import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import {
   createFlowBindingEndpoint,
-  flowBindingInvocationSchema,
   type InstalledFlowBindings,
 } from "../../../_lib/flow-binding-endpoint";
 import {

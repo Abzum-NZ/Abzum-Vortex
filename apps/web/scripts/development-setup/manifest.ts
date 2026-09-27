@@ -83,8 +83,8 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       timeZone: "Pacific/Auckland",
       currency: "NZD",
     },
-    // Install every shipped application. The nominated steward receives application roles later
-    // through the IAM application.
+    // Install every shipped application. Local setup accepts and assigns its registered roles to
+    // the nominated first owner through protected Access administration operations.
     applicationKeys: [
       "vortex.app.iam",
       "vortex.app.organisation_administration",

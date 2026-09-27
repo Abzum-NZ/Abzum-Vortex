@@ -48,7 +48,12 @@ import {
   relationshipDefinitionSchema,
 } from "./module-contracts";
 import { refineActionTaskIds } from "./definition-source-common";
-import { moduleSourceContractVersion as moduleSourceContractVersionV3 } from "./module-source-contracts";
+import {
+  isRegisteredWritableSystemProjection,
+  moduleSourceContractVersion as moduleSourceContractVersionV3,
+  writableSystemProjectionRegistrations,
+} from "./module-source-contracts";
+export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrations };
 import { permissionDeclarationSchema } from "./permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
@@ -1063,7 +1068,8 @@ const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
 
 /**
  * A canonical Module record type. A generated-table record type carries no `systemProjection`. A
- * system projection record type is organisation scoped, refuses every standard write action, holds a
+ * system projection record type is organisation scoped and read-only except for a standard update
+ * admitted by the closed writable-projection registration; it holds a
  * required text organisation field and a required whole-number revision field, and its declared
  * filterable and sortable fields are exactly its fields flagged filterable and sortable.
  */
@@ -1141,18 +1147,23 @@ export const recordTypeDefinitionV3Schema = z
       invalid("A system projection record type is scoped to exactly one organisation", [
         "storageScope",
       ]);
+    const mayUpdate = isRegisteredWritableSystemProjection(
+      value.key,
+      projection.protectedView,
+    );
     if (
       value.standardActions.some(
         (action) =>
           action === "create" ||
-          action === "update" ||
           action === "soft_delete" ||
-          action === "restore",
+          action === "restore" ||
+          (action === "update" && !mayUpdate),
       )
     )
-      invalid("System projection record types refuse standard create, update, delete and restore", [
-        "standardActions",
-      ]);
+      invalid(
+        "A system projection standard write action must be in the closed writable registration",
+        ["standardActions"],
+      );
     const fields = new Map(value.fields.map((field) => [String(field.fieldId), field]));
     const organization = fields.get(String(projection.organizationFieldId));
     if (organization === undefined || organization.type !== "text" || !organization.required)
@@ -1376,8 +1387,8 @@ export const moduleDraftV3Schema = z
           "flows",
           draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
         ]);
-    // A system projection record type has no ordinary write path, so every action on it targets a
-    // registered protected operation, and no other record type's action may target one.
+    // Every named action on a system projection targets a registered protected operation, and no
+    // other record type's action may target one; standard update is governed by the closed registry.
     const projections = new Set(
       draft.content.recordTypes.flatMap((recordType) =>
         recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
