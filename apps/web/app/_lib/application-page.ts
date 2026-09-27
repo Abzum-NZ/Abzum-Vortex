@@ -313,9 +313,13 @@ const projectEditField = (
       if (
         !isRecord(options) ||
         options.kind !== "list" ||
-        !Array.isArray(options.items) ||
+        !Array.isArray(options.items)
+      )
+        return undefined;
+      const optionItems: unknown[] = options.items;
+      if (
         !selected.every((choice) =>
-          options.items.some(
+          optionItems.some(
             (item) =>
               isRecord(item) &&
               isRecord(item.properties) &&
@@ -327,7 +331,9 @@ const projectEditField = (
         return undefined;
       const maximumSelections = settings.maximum_selections;
       if (
-        maximumSelections?.kind === "number" &&
+        isRecord(maximumSelections) &&
+        maximumSelections.kind === "number" &&
+        typeof maximumSelections.value === "number" &&
         selected.length > maximumSelections.value
       )
         return undefined;

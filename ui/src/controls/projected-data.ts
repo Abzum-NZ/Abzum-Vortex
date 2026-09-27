@@ -530,8 +530,10 @@ export const parseDateTimeInputPayload = (
   for (const key of ["personTimeZone", "organizationTimeZone"] as const) {
     const zone = record[key];
     if (zone === undefined) continue;
-    if (typeof zone !== "string" || zone.length > 100 || zone.length === 0)
-      fail("A date-time zone must be a valid IANA time zone", location);
+    if (typeof zone !== "string")
+      return fail("A date-time zone must be a valid IANA time zone", location);
+    if (zone.length > 100 || zone.length === 0)
+      return fail("A date-time zone must be a valid IANA time zone", location);
     try {
       new Intl.DateTimeFormat("en", { timeZone: zone });
     } catch {
