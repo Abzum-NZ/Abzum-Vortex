@@ -265,7 +265,8 @@ function readRoleCommand(statement) {
 function readTransactionCommand(statement) {
   const code = statement.code.trim();
   if (/^(?:begin|start\s+transaction)\s*;?$/i.test(code)) return "begin";
-  if (/^(?:commit|end|rollback)\s*;?$/i.test(code)) return "end";
+  if (/^(?:commit|end)\s*;?$/i.test(code)) return "commit";
+  if (/^rollback\s*;?$/i.test(code)) return "rollback";
   return null;
 }
 
@@ -418,11 +419,22 @@ export async function validateSqlCanonical(root) {
 
     let currentRole = "postgres";
     let sessionRole = "postgres";
+    let transactionSessionRole = null;
     for (const statement of statements) {
       const transaction = readTransactionCommand(statement);
-      if (transaction === "begin") continue;
-      if (transaction === "end") {
+      if (transaction === "begin") {
+        transactionSessionRole ??= sessionRole;
+        continue;
+      }
+      if (transaction === "commit") {
         currentRole = sessionRole;
+        transactionSessionRole = null;
+        continue;
+      }
+      if (transaction === "rollback") {
+        if (transactionSessionRole !== null) sessionRole = transactionSessionRole;
+        currentRole = sessionRole;
+        transactionSessionRole = null;
         continue;
       }
 
