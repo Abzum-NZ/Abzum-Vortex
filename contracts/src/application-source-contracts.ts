@@ -510,7 +510,7 @@ export const sourceApplicationBodyV2Schema = z
               label: sourceProvenanceUnchanged(labelSchema),
               description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
               record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
-                "recordTypeId",
+                "content/permissions/#/recordTypeId",
               ]),
               action_kind: sourceProvenanceUnchanged(
                 z.enum([
