@@ -1,8 +1,8 @@
 import {
-  recordTypeDefinitionV2Schema,
+  recordTypeDefinitionV3Schema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-  type RecordTypeDefinitionV2,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import type {
   DatabaseRow,
@@ -69,8 +69,8 @@ const textField = (fieldId: string, key: string, required: boolean) => ({
   settings: { maxLength: 40 },
 });
 
-const recordType = (includeHiddenRequiredField = false): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const recordType = (includeHiddenRequiredField = false): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.recordType,
     key: "service_record",
     singularLabel: "Service record",
@@ -90,8 +90,8 @@ const recordType = (includeHiddenRequiredField = false): RecordTypeDefinitionV2 
     customActionIds: [],
   });
 
-const moneyRecordType = (defaultValue?: string): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const moneyRecordType = (defaultValue?: string): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.recordType,
     key: "service_record",
     singularLabel: "Service record",
@@ -122,8 +122,8 @@ const moneyRecordType = (defaultValue?: string): RecordTypeDefinitionV2 =>
     customActionIds: [],
   });
 
-const calculatedRecordType = (): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const calculatedRecordType = (): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.recordType,
     key: "calculated_record",
     singularLabel: "Calculated record",
@@ -161,8 +161,8 @@ const calculatedRecordType = (): RecordTypeDefinitionV2 =>
     customActionIds: [],
   });
 
-const deadlineRecordType = (): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const deadlineRecordType = (): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: ids.recordType,
     key: "deadline_record",
     singularLabel: "Deadline record",
@@ -213,9 +213,9 @@ const deadlineRecordType = (): RecordTypeDefinitionV2 =>
     customActionIds: [],
   });
 
-const instantDeadlineRecordType = (): RecordTypeDefinitionV2 => {
+const instantDeadlineRecordType = (): RecordTypeDefinitionV3 => {
   const dateDeadline = deadlineRecordType();
-  return recordTypeDefinitionV2Schema.parse({
+  return recordTypeDefinitionV3Schema.parse({
     ...dateDeadline,
     fields: dateDeadline.fields.map((field) =>
       field.fieldId === ids.dueDateField

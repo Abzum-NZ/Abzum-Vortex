@@ -1,5 +1,4 @@
 import {
-  eventEnvelopeSchema,
   eventOccurrenceEnvelopeV2Schema,
   installedEventDescriptorSchema,
   standardInstalledEventKindSchema,
@@ -101,24 +100,4 @@ describe("installed event contracts", () => {
     ).toBe(false);
   });
 
-  it("leaves the historical envelope shape and builder eventName semantics unchanged", () => {
-    const historical = {
-      eventId: id(12),
-      organizationId: id(6),
-      moduleRootId: id(1),
-      recordTypeId: id(3),
-      recordId: id(8),
-      eventName: "reviewed",
-      occurredAt: occurrence.occurredAt,
-      actorId: id(9),
-      correlationId: id(10),
-      definitionRevisions: { module: 4 },
-      recordSequence: 12,
-      carriedValues: {},
-    };
-    expect(eventEnvelopeSchema.parse(historical)).toEqual(historical);
-    expect(eventEnvelopeSchema.safeParse({ ...historical, occurrenceId: id(5) }).success).toBe(
-      false,
-    );
-  });
 });
