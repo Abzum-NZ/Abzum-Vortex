@@ -1,12 +1,13 @@
 import "server-only";
 
-import type {
-  ComponentFlowBinding,
-  FormContinuationOutcome,
-  FormContinuationRequest,
-  FormContinuationService,
-  IdentitySession,
-  OrganizationSelectionCandidate,
+import {
+  isRecord,
+  type ComponentFlowBinding,
+  type FormContinuationOutcome,
+  type FormContinuationRequest,
+  type FormContinuationService,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 
 /**

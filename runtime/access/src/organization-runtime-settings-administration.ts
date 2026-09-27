@@ -68,6 +68,8 @@ type DefaultApplicationChangeRow = DatabaseRow & {
   changed: unknown;
 };
 
+const unavailableCode = "ORGANIZATION_RUNTIME_SETTINGS_UNAVAILABLE";
+
 /** Reads only the organisation already established by the request context. */
 export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   transaction: RequestDatabaseTransaction,
@@ -76,7 +78,6 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
     select * from vortex_access.read_current_organization_runtime_settings_for_application()
   `;
 
-  const unavailableCode = "ORGANIZATION_RUNTIME_SETTINGS_UNAVAILABLE";
   if (rows.length > 1) throw unavailableError(unavailableCode, "42501");
   const row = rows[0];
   if (row === undefined) return undefined;
