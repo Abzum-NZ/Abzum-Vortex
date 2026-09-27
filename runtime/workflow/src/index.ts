@@ -1,6 +1,13 @@
 import "server-only";
 
 export {
+  acceptFlowStartIntent,
+  startIntentCommandSchema,
+  type AcceptedStartIntent,
+  type StartIntentCommand,
+} from "./start-intent";
+
+export {
   registerKestraFlowCandidate,
   kestraFlowRegistrationErrorCodes,
   kestraFlowRegistrationRefusalReasons,
