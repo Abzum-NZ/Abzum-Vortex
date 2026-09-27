@@ -25,7 +25,10 @@ import {
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/definition";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import { installedReleaseCatalogue } from "./definition-catalogue";
+import {
+  installedReleaseCatalogue,
+  releaseSetContainsCustomComponents,
+} from "./definition-catalogue";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the
@@ -95,9 +98,9 @@ const coordinator = () =>
         // composition concern owned by the system-application work.
         targetFacts: async () => ({ isSystemApplication: false }),
       }),
-    // This deployment's publication catalogue carries no custom component releases, so an
-    // installable release set can contain none (the same catalogue seam as the page loader).
-    containsCustomComponents: () => false,
+    // Derived from the exact release set, so a release that places a custom component also
+    // requires `custom_code.manage` and a recent sign-in.
+    containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(),
   });
 

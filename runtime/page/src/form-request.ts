@@ -61,15 +61,20 @@ export const readPrivateFormSubmission = (
  * the submitted answers, or `undefined` so the endpoint refuses the submit. A binding that
  * declares the whole answer receives the submission's own values record; every other declared
  * caller input is named exactly.
+ *
+ * `subject` is the record the form was rendered for, named by the surface from its own address. A
+ * binding that declares a `record` caller input the answers do not carry receives that record's
+ * identity. It is only a candidate: the protected save decides whether the person may change it.
  */
 export type PrivateFormSubmitAdapter = (
   binding: ComponentFlowBinding,
   callerInputs: Readonly<Record<string, unknown>>,
+  subject?: Readonly<{ recordId: string }>,
 ) => Readonly<Record<string, unknown>> | undefined;
 
 export const createPrivateFormSubmitAdapter =
   (): PrivateFormSubmitAdapter =>
-  (binding, callerInputs) => {
+  (binding, callerInputs, subject) => {
     if (binding.event !== "form_submit") return undefined;
     const submission = readPrivateFormSubmission(callerInputs);
     if (submission === undefined) return undefined;
@@ -81,6 +86,8 @@ export const createPrivateFormSubmitAdapter =
       if (input.name === "values") adapted[input.name] = submission.values;
       else if (Object.hasOwn(submission.values, input.name))
         adapted[input.name] = submission.values[input.name];
+      else if (input.name === "record" && subject !== undefined)
+        adapted[input.name] = subject.recordId;
       else return undefined;
     }
     return adapted;

@@ -295,6 +295,20 @@
         "record_type": "vortex.organisation_administration:delegation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_revise_role_metadata",
+        "key": "vortex.app.iam.revise_role_metadata",
+        "record_type": "vortex.organisation_administration:role",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_rename_group",
+        "key": "vortex.app.iam.rename_group",
+        "record_type": "vortex.organisation_administration:group",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -1121,6 +1135,19 @@
                             "value": "Retire role"
                           }
                         }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_revise_role_metadata"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Revise role details"
+                          }
+                        }
                       }
                     ]
                   }
@@ -1207,6 +1234,19 @@
                           "label": {
                             "kind": "text",
                             "value": "Retire group"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_rename_group"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Rename group"
                           }
                         }
                       }
@@ -1713,7 +1753,7 @@
                 "theme_overrides": {},
                 "responsive": {
                   "desktop": {
-                    "visible": true,
+                    "visible": false,
                     "width": {
                       "kind": "fill"
                     },
@@ -1725,80 +1765,6 @@
                 "slots": {
                   "content": {
                     "placements": {
-                      "input_revise_role_metadata_role_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "role_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Role id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_revise_role_metadata_expected_role_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_role_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected role revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "input_revise_role_metadata_label": {
                         "block": {
                           "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -1868,48 +1834,12 @@
                           }
                         },
                         "slots": {}
-                      },
-                      "button_revise_role_metadata": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Revise role details"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
                       }
                     },
                     "order": {
                       "desktop": [
-                        "input_revise_role_metadata_role_id",
-                        "input_revise_role_metadata_expected_role_revision",
                         "input_revise_role_metadata_label",
-                        "input_revise_role_metadata_description",
-                        "button_revise_role_metadata"
+                        "input_revise_role_metadata_description"
                       ]
                     }
                   }
@@ -2065,7 +1995,7 @@
                 "theme_overrides": {},
                 "responsive": {
                   "desktop": {
-                    "visible": true,
+                    "visible": false,
                     "width": {
                       "kind": "fill"
                     },
@@ -2077,80 +2007,6 @@
                 "slots": {
                   "content": {
                     "placements": {
-                      "input_rename_group_group_id": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "group_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Group id"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_rename_group_expected_group_revision": {
-                        "block": {
-                          "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expected_group_revision"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expected group revision"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "integer": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "min_value": {
-                            "kind": "number",
-                            "value": 1
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
                       "input_rename_group_label": {
                         "block": {
                           "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -2183,47 +2039,11 @@
                           }
                         },
                         "slots": {}
-                      },
-                      "button_rename_group": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Rename group"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
                       }
                     },
                     "order": {
                       "desktop": [
-                        "input_rename_group_group_id",
-                        "input_rename_group_expected_group_revision",
-                        "input_rename_group_label",
-                        "button_rename_group"
+                        "input_rename_group_label"
                       ]
                     }
                   }
@@ -4693,17 +4513,42 @@
           "expected_role_revision": {
             "type": "whole_number",
             "required": true
-          },
-          "label": {
-            "type": "text",
-            "required": true
-          },
-          "description": {
-            "type": "text",
-            "required": true
           }
         },
         "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_revise_role_metadata"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "label": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "description": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
           {
             "id": "call",
             "type": "operation.call",
@@ -4714,6 +4559,47 @@
                 "literal": {
                   "type": "text",
                   "value": "platform.revise_role_metadata"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "role_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "role_id"
+                    }
+                  },
+                  "expected_role_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_role_revision"
+                    }
+                  },
+                  "label": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": [
+                        "label"
+                      ]
+                    }
+                  },
+                  "description": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": [
+                        "description"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -4857,13 +4743,35 @@
           "expected_group_revision": {
             "type": "whole_number",
             "required": true
-          },
-          "label": {
-            "type": "text",
-            "required": true
           }
         },
         "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_rename_group"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "label": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
           {
             "id": "call",
             "type": "operation.call",
@@ -4874,6 +4782,36 @@
                 "literal": {
                   "type": "text",
                   "value": "platform.rename_group"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "group_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "group_id"
+                    }
+                  },
+                  "expected_group_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_group_revision"
+                    }
+                  },
+                  "label": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": [
+                        "label"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -5871,26 +5809,18 @@
       },
       {
         "id": "binding_revise_role_metadata",
-        "control": "button_revise_role_metadata",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
+        "control": "iam_roles_region",
+        "event_id": "event_revise_role_metadata",
+        "event": "row_action",
         "flow": "flow_revise_role_metadata",
         "inputs": {
           "role_id": {
             "kind": "caller",
-            "name": "role_id"
+            "name": "record_id"
           },
           "expected_role_revision": {
             "kind": "caller",
-            "name": "expected_role_revision"
-          },
-          "label": {
-            "kind": "caller",
-            "name": "label"
-          },
-          "description": {
-            "kind": "caller",
-            "name": "description"
+            "name": "revision"
           }
         }
       },
@@ -5913,22 +5843,18 @@
       },
       {
         "id": "binding_rename_group",
-        "control": "button_rename_group",
-        "event_id": "event_iam_administration_action",
-        "event": "action",
+        "control": "iam_groups_region",
+        "event_id": "event_rename_group",
+        "event": "row_action",
         "flow": "flow_rename_group",
         "inputs": {
           "group_id": {
             "kind": "caller",
-            "name": "group_id"
+            "name": "record_id"
           },
           "expected_group_revision": {
             "kind": "caller",
-            "name": "expected_group_revision"
-          },
-          "label": {
-            "kind": "caller",
-            "name": "label"
+            "name": "revision"
           }
         }
       },

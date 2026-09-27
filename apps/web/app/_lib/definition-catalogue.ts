@@ -1,10 +1,13 @@
 import "server-only";
 
 import {
+  containsCustomComponentReleasesV2,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
+  type PlatformBlockReleaseV2,
+  type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@vortex/definition";
 
@@ -29,4 +32,29 @@ export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueD
       ),
     ],
   },
+};
+
+/**
+ * Whether an exact release set places any custom component, derived from the application's own
+ * block dependency manifest rather than assumed. Each dependency is matched to the exact registered
+ * block release it names; a release that carries a custom component counts, and so does any
+ * dependency that is not exactly a registered release, so an unknown block can never skip the
+ * `custom_code.manage` and recent sign-in requirements installation adds for custom code.
+ */
+export const releaseSetContainsCustomComponents = (
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+): boolean => {
+  const releases: PlatformBlockReleaseV2[] = [];
+  for (const dependency of releaseSet.application.content.platformBlockDependencies) {
+    const release = PLATFORM_BLOCK_RELEASES.find(
+      (candidate) =>
+        candidate.blockId === dependency.blockId &&
+        candidate.releaseVersion === dependency.releaseVersion &&
+        candidate.contentFingerprint === dependency.contentFingerprint &&
+        candidate.catalogueFingerprint === dependency.catalogueFingerprint,
+    );
+    if (release === undefined) return true;
+    releases.push(release);
+  }
+  return containsCustomComponentReleasesV2(releases);
 };

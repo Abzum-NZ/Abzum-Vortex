@@ -25,6 +25,7 @@ import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCompilerEnvironment,
   type KestraFlowIdentity,
+  type KestraFlowTrigger,
 } from "./kestra-compiler";
 import type {
   KestraFlowRegistrationCommand,
@@ -141,14 +142,12 @@ const targetKeys = [
 
 const identityKeys = [...targetKeys, "workflowRevision"] as const;
 
+/** The start kinds a compiled durable flow candidate carries (`KestraFlowTrigger.kind`). */
 const workflowTriggerKinds = [
-  "event",
   "schedule",
   "incoming_message",
-  "button",
-  "interface",
   "workflow",
-] as const;
+] as const satisfies readonly KestraFlowTrigger["kind"][];
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
