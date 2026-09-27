@@ -9,7 +9,7 @@ export type BoundedRequestText =
  * Reads a request body as text without ever holding more than `maximumBytes` of it. A declared
  * `content-length` over the limit is refused before reading, and the stream itself is counted
  * while it is read, so a chunked or understated body is cancelled as soon as it passes the limit
- * instead of being buffered in full before any credential or session check runs.
+ * instead of being buffered in full.
  */
 export const readBoundedRequestText = async (
   request: Request,

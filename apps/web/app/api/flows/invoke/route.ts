@@ -132,6 +132,11 @@ const declaresPausedNode = (
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
+    const identity = await resolveIdentitySession();
+    if (identity.kind === "temporarily_unavailable")
+      return privateResponse({ kind: "unavailable" }, 503);
+    if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
+
     const read = await readBoundedRequestText(request, maximumRequestBodyLength);
     if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
     if (read.kind === "unreadable") return refusedResponse();
@@ -143,11 +148,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     if (!parsedBody.success) return refusedResponse();
     const body = parsedBody.data;
-
-    const identity = await resolveIdentitySession();
-    if (identity.kind === "temporarily_unavailable")
-      return privateResponse({ kind: "unavailable" }, 503);
-    if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
 
     const address = await resolveApplicationAddress(
       identity.session,

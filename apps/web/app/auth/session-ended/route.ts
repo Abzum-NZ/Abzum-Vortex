@@ -42,9 +42,9 @@ export function GET(request: NextRequest): NextResponse {
     return response;
   }
 
-  // The session is ended at the provider too, so its refresh token cannot be replayed after the
-  // cookies are gone. The revocation runs once the redirect is sent, so a slow or unreachable
-  // provider never delays or fails the sign-out, and it is limited to this browser's own session:
+  // Attempt to revoke this browser's provider refresh token after the redirect is sent, so a slow
+  // or unreachable provider never delays or fails local sign-out. The attempt is limited to this
+  // browser's own session:
   // a request another site triggers can do no more than the cookie clearing above already does,
   // which is to sign this browser out.
   const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));

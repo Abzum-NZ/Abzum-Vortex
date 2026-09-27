@@ -50,7 +50,8 @@ export const releaseSetContainsCustomComponents = (
       (candidate) =>
         candidate.blockId === dependency.blockId &&
         candidate.releaseVersion === dependency.releaseVersion &&
-        candidate.contentFingerprint === dependency.contentFingerprint,
+        candidate.contentFingerprint === dependency.contentFingerprint &&
+        candidate.catalogueFingerprint === dependency.catalogueFingerprint,
     );
     if (release === undefined) return true;
     releases.push(release);

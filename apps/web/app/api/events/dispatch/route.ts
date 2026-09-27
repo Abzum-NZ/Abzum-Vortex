@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createEventDispatcherWakeup, eventDispatcherWakeupLimits } from "@vortex/event";
+import {
+  authenticateEventDispatcher,
+  createEventDispatcherWakeup,
+  eventDispatcherWakeupLimits,
+} from "@vortex/event";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 
 // One protected wake-up endpoint serves both callers: a database webhook hint
@@ -47,6 +51,13 @@ const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const authentication = authenticateEventDispatcher(request.headers.get("authorization"));
+  if (authentication.outcome === "refused")
+    return privateResponse(
+      { outcome: "refused", reason: authentication.reason },
+      credentialRefusals.has(authentication.reason) ? 401 : 503,
+    );
+
   const body = await readBody(request);
   if (!body.ok) return privateResponse({ outcome: "invalid_request" }, body.status);
 
