@@ -42,8 +42,6 @@ comment on table vortex_module.staged_installation_bindings is
 reset role;
 
 set local role vortex_module_owner;
-grant usage, create on schema vortex_module to postgres;
-reset role;
 
 create or replace function vortex_module.provision_module_installation_storage(
   p_application_root_id uuid,
@@ -1153,8 +1151,6 @@ grant execute on function vortex_module.discard_prepared_application_installatio
 comment on function vortex_module.discard_prepared_application_installation(uuid, bigint) is
   'Protected removal of one exact inactive staged or provisioned Application candidate while retaining shared Module storage mappings and records.';
 
-set local role vortex_module_owner;
-revoke usage, create on schema vortex_module from postgres;
 reset role;
 
 commit;
