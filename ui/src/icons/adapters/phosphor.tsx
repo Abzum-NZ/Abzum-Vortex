@@ -17,28 +17,37 @@ import {
   SidebarIcon,
   SpinnerIcon,
   XIcon,
+  type Icon as PhosphorIcon,
 } from "@phosphor-icons/react";
+import type { ComponentType } from "react";
 
-import type { VortexIconAdapter } from "../icon-names";
+import type { VortexIconAdapter, VortexIconProps } from "../icon-names";
+
+const phosphorIcon = (Glyph: PhosphorIcon): ComponentType<VortexIconProps> => {
+  function PhosphorGlyph({ color, ...props }: VortexIconProps) {
+    return <Glyph {...props} {...(color === undefined ? {} : { color })} />;
+  }
+  return PhosphorGlyph;
+};
 
 /** The semantic icon set drawn with Phosphor Icons, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
-  "arrow-down": ArrowDownIcon,
-  "arrow-up": ArrowUpIcon,
-  calendar: CalendarBlankIcon,
-  check: CheckIcon,
-  "chevron-down": CaretDownIcon,
-  "chevron-left": CaretLeftIcon,
-  "chevron-right": CaretRightIcon,
-  "chevron-up": CaretUpIcon,
-  circle: CircleIcon,
-  close: XIcon,
-  loader: SpinnerIcon,
-  menu: ListIcon,
-  minus: MinusIcon,
-  "more-horizontal": DotsThreeIcon,
-  "more-vertical": DotsThreeVerticalIcon,
-  "panel-left": SidebarIcon,
-  plus: PlusIcon,
-  search: MagnifyingGlassIcon,
+  "arrow-down": phosphorIcon(ArrowDownIcon),
+  "arrow-up": phosphorIcon(ArrowUpIcon),
+  calendar: phosphorIcon(CalendarBlankIcon),
+  check: phosphorIcon(CheckIcon),
+  "chevron-down": phosphorIcon(CaretDownIcon),
+  "chevron-left": phosphorIcon(CaretLeftIcon),
+  "chevron-right": phosphorIcon(CaretRightIcon),
+  "chevron-up": phosphorIcon(CaretUpIcon),
+  circle: phosphorIcon(CircleIcon),
+  close: phosphorIcon(XIcon),
+  loader: phosphorIcon(SpinnerIcon),
+  menu: phosphorIcon(ListIcon),
+  minus: phosphorIcon(MinusIcon),
+  "more-horizontal": phosphorIcon(DotsThreeIcon),
+  "more-vertical": phosphorIcon(DotsThreeVerticalIcon),
+  "panel-left": phosphorIcon(SidebarIcon),
+  plus: phosphorIcon(PlusIcon),
+  search: phosphorIcon(MagnifyingGlassIcon),
 };

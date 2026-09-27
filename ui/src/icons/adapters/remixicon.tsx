@@ -17,28 +17,37 @@ import {
   RiSearchLine,
   RiSideBarLine,
   RiSubtractLine,
+  type RemixiconComponentType,
 } from "@remixicon/react";
+import type { ComponentType } from "react";
 
-import type { VortexIconAdapter } from "../icon-names";
+import type { VortexIconAdapter, VortexIconProps } from "../icon-names";
+
+const remixIcon = (Glyph: RemixiconComponentType): ComponentType<VortexIconProps> => {
+  function RemixGlyph({ color, ...props }: VortexIconProps) {
+    return <Glyph {...props} {...(color === undefined ? {} : { color })} />;
+  }
+  return RemixGlyph;
+};
 
 /** The semantic icon set drawn with Remix Icon, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
-  "arrow-down": RiArrowDownLine,
-  "arrow-up": RiArrowUpLine,
-  calendar: RiCalendarLine,
-  check: RiCheckLine,
-  "chevron-down": RiArrowDownSLine,
-  "chevron-left": RiArrowLeftSLine,
-  "chevron-right": RiArrowRightSLine,
-  "chevron-up": RiArrowUpSLine,
-  circle: RiCircleLine,
-  close: RiCloseLine,
-  loader: RiLoader4Line,
-  menu: RiMenuLine,
-  minus: RiSubtractLine,
-  "more-horizontal": RiMoreLine,
-  "more-vertical": RiMore2Line,
-  "panel-left": RiSideBarLine,
-  plus: RiAddLine,
-  search: RiSearchLine,
+  "arrow-down": remixIcon(RiArrowDownLine),
+  "arrow-up": remixIcon(RiArrowUpLine),
+  calendar: remixIcon(RiCalendarLine),
+  check: remixIcon(RiCheckLine),
+  "chevron-down": remixIcon(RiArrowDownSLine),
+  "chevron-left": remixIcon(RiArrowLeftSLine),
+  "chevron-right": remixIcon(RiArrowRightSLine),
+  "chevron-up": remixIcon(RiArrowUpSLine),
+  circle: remixIcon(RiCircleLine),
+  close: remixIcon(RiCloseLine),
+  loader: remixIcon(RiLoader4Line),
+  menu: remixIcon(RiMenuLine),
+  minus: remixIcon(RiSubtractLine),
+  "more-horizontal": remixIcon(RiMoreLine),
+  "more-vertical": remixIcon(RiMore2Line),
+  "panel-left": remixIcon(RiSideBarLine),
+  plus: remixIcon(RiAddLine),
+  search: remixIcon(RiSearchLine),
 };
