@@ -84,6 +84,7 @@ export { Tabs, type TabsProps } from "./tabs";
 export { Dialog, type DialogProps } from "./dialog";
 export { Drawer, type DrawerProps } from "./drawer";
 export { FormContainer, type FormContainerProps } from "./form-container";
+export { equalFormValue } from "./form-context";
 
 // Control Registrations & Registry
 export {
