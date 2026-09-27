@@ -42,9 +42,10 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  *   output of a task that has already run in scope, and its type must fit where it is used, by
  *   the one value-type compatibility function (`valueTypesCompatible`, the `flow` context). Run
  *   flow and Run background flow must name a flow compiled with this one, so the target's inputs,
- *   outputs and execution kind are known. A trigger record field (whose existence the caller
- *   checks), a selected member of a JSON task output (whose value its consumer checks), and a
- *   person's answer to Wait for person stay typed only at run time;
+ *   outputs and execution kind are known. Show form's input map declares its answer names and
+ *   types; a field path on its values output must select a declared member. A trigger record field
+ *   (whose existence the caller checks) and a person's answer to Wait for person stay typed only
+ *   at run time;
  * - outputs and error handling: an output's value must fit its declared type, and `outcome` is
  *   readable only from a task that sets `allowRefusal`.
  *
@@ -167,6 +168,15 @@ const describe = (accepted: readonly string[]): string => accepted.join(" or ");
 
 const isTextLiteral = (value: FlowValue): boolean =>
   value.kind === "literal" && value.literal.type === "text" && typeof value.literal.value === "string";
+
+const jsonMemberType = (
+  value: unknown,
+): "text" | "yes_no" | "whole_number" | "decimal_number" | "json" => {
+  if (typeof value === "string") return "text";
+  if (typeof value === "boolean") return "yes_no";
+  if (typeof value === "number") return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
+  return "json";
+};
 
 // ─── The validator ─────────────────────────────────────────────────────────────────────────────
 
@@ -379,9 +389,50 @@ export function validateFlow(
             );
             return undefined;
           }
-          // The producing task declares a JSON value, not its dynamic member schema. Keep the
-          // selected value as JSON so the consuming property or protected operation validates it.
-          return "json";
+          const inputs =
+            task.type === "interface.show_form"
+              ? (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs
+              : undefined;
+          if (reference.key !== "values" || inputs?.kind !== "map") {
+            add(
+              path,
+              "vortex.definition.workflow_node_references",
+              "broken_reference",
+              `Task ${reference.task}.${reference.key} declares no named output fields`,
+            );
+            return undefined;
+          }
+          // Show form's input map is its answer declaration. A nested map or a JSON object
+          // literal declares further names; an arbitrary JSON value has no known member shape.
+          let member: FlowValue = inputs;
+          for (const name of reference.path) {
+            if (member.kind === "map" && Object.hasOwn(member.entries, name)) {
+              member = member.entries[name]!;
+              continue;
+            }
+            const object =
+              member.kind === "literal" && member.literal.type === "json"
+                ? member.literal.value
+                : undefined;
+            if (
+              object !== null &&
+              typeof object === "object" &&
+              !Array.isArray(object) &&
+              Object.hasOwn(object, name)
+            ) {
+              const value = object[name]!;
+              member = { kind: "literal", literal: { type: jsonMemberType(value), value } };
+              continue;
+            }
+            add(
+              path,
+              "vortex.definition.workflow_node_references",
+              "broken_reference",
+              `Task ${reference.task}.${reference.key} declares no field ${name} at this path`,
+            );
+            return undefined;
+          }
+          return valueType(member, where, path);
         }
         return output.type;
       }

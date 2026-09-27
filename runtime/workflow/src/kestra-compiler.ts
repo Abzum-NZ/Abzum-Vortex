@@ -226,6 +226,14 @@ const hasTemplateDelimiter = (value: string): boolean => templateDelimiterPatter
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** Durable callbacks do not receive the interpreter's prior task-output scope. */
+const hasTaskOutputFieldPath = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(hasTaskOutputFieldPath);
+  if (!isObject(value) || value.kind === "literal") return false;
+  if (value.source === "task_output" && Array.isArray(value.path)) return true;
+  return Object.values(value).some(hasTaskOutputFieldPath);
+};
+
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,
   allowed: readonly string[],
@@ -493,8 +501,8 @@ const literalValue = (literal: FlowLiteral): JsonValue => literal.value;
 /**
  * Compiles one Kestra property value. A literal stays an inert literal; a
  * reference or formula becomes an evaluator callback and the generated
- * reference to its result. The callback receives the complete FlowValue, so a
- * bounded task-output field path keeps the same Vortex interpreter semantics.
+ * reference to its result. A task-output field path is refused before this
+ * compiler emits any callback because its prior-output scope is unavailable.
  */
 const compileValue = (
   ctx: CompileContext,
@@ -1753,6 +1761,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
 
   // Only durable flows run on Kestra; every other execution kind runs in Vortex.
   if (definition.execution !== "durable") return refused("not_durable");
+  if (hasTaskOutputFieldPath(definition)) return refused("unsupported_node");
 
   const namespace = installationNamespace(identity);
   const id = generatedFlowId(identity, definition.id, identity.workflowRevision);

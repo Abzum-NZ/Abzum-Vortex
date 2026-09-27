@@ -1753,7 +1753,7 @@
                 "theme_overrides": {},
                 "responsive": {
                   "desktop": {
-                    "visible": true,
+                    "visible": false,
                     "width": {
                       "kind": "fill"
                     },
@@ -1995,7 +1995,7 @@
                 "theme_overrides": {},
                 "responsive": {
                   "desktop": {
-                    "visible": true,
+                    "visible": false,
                     "width": {
                       "kind": "fill"
                     },
@@ -2791,8 +2791,10 @@
             "order": {
               "desktop": [
                 "iam_manage_roles_groups_heading",
+                "form_revise_role_metadata",
                 "form_create_group",
                 "form_add_group_membership",
+                "form_rename_group",
                 "form_create_custom_role",
                 "form_accept_application_role_template"
               ]
@@ -4532,15 +4534,15 @@
                   "label": {
                     "kind": "literal",
                     "literal": {
-                      "type": "json",
-                      "value": null
+                      "type": "text",
+                      "value": ""
                     }
                   },
                   "description": {
                     "kind": "literal",
                     "literal": {
-                      "type": "json",
-                      "value": null
+                      "type": "text",
+                      "value": ""
                     }
                   }
                 }
@@ -4762,8 +4764,8 @@
                   "label": {
                     "kind": "literal",
                     "literal": {
-                      "type": "json",
-                      "value": null
+                      "type": "text",
+                      "value": ""
                     }
                   }
                 }

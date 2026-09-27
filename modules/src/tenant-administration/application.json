@@ -559,7 +559,7 @@
                   "theme_overrides": {},
                   "responsive": {
                     "desktop": {
-                      "visible": true,
+                      "visible": false,
                       "width": {
                         "kind": "fill"
                       },
@@ -616,7 +616,8 @@
               },
               "order": {
                 "desktop": [
-                  "structure_region"
+                  "structure_region",
+                  "form_rename_organization"
                 ]
               }
             }
@@ -1194,8 +1195,8 @@
                   "display_name": {
                     "kind": "literal",
                     "literal": {
-                      "type": "json",
-                      "value": null
+                      "type": "text",
+                      "value": ""
                     }
                   }
                 }
