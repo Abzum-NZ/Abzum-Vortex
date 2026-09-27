@@ -4917,6 +4917,9 @@ function applicationProvenanceV2(
       const transformed =
         canonicalJson(valueAtPath(source, sourcePath)) !==
         canonicalJson(valueAtPath(canonical, canonicalPath));
+      if (transformed && !sourceTransformationApproved(sourcePath, canonicalPath, positions)) {
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
       const pageReference =
         sourcePath[0] === "body" &&
         sourcePath[1] === "pages" &&
