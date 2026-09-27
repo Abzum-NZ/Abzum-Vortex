@@ -15,16 +15,8 @@ Where these sections conflict with this document, this document wins until each 
 
 | Section | Superseded by | Rewritten by |
 | --- | --- | --- |
-| [08](../specification/08-forms-actions-rules-and-events.md) §Actions, §Rules | Decisions 1–3 | #977 |
-| [Rule designer](../specification/appendices/frontend-rule-designer.md): §Execution contexts, §Triggers, §Initial frontend node catalogue, §Deterministic execution and failure, §Designer experience, and the rule that frontend and durable catalogues stay distinct | Decision 1 | #977, #978 |
-| [09](../specification/09-workflows-and-pipelines.md) §Safe workflow node catalogue, and the first-release input limits in §Triggers | Decision 1 | #978, #979 |
-| [05](../specification/05-modules-fields-and-relationships.md) §Calculations and totals, and [record ownership](../specification/appendices/record-ownership-and-lifecycle.md) §Scheduled time-based calculations | Decision 4 | #994 |
 | [03](../specification/03-composition-and-publication.md) §Definition ownership and versions (packages are derived, not a third kind) | Decision 7 | package specification issue |
-| [Version-impact policy](../specification/appendices/version-impact-policy.md) §Workflow-node policy (reordering tasks and changing a bundle are major changes) | Decisions 1 and 7 | #978 |
-| [Core contract boundary](../specification/appendices/core-contract-boundary.md) §Core inventory (adds the flow engine, the component sandbox, the application Kestra instance and the runtime bundle) | Decisions 1, 7 and 8 | #1026 |
-| [07](../specification/07-applications-pages-and-themes.md) and the [IAM appendix](../specification/appendices/iam-application.md) wording that system applications are "locked" | Decision 11 | #1027 |
 | [16](../specification/16-copying-sharing-import-export.md) §Definition packages (packages are derived; version ranges apply only across clusters) | Decision 7 | #722 |
-| Rule designer §Kestra integration decision (run-as for durable flows started by a person) | Decision 1 | #977 |
 | [Platform permission catalogue](../specification/appendices/platform-permission-catalogue.md) (adds the builder permissions in 1.2.0) | Decision 11 | builder permissions issue |
 
 ## Summary

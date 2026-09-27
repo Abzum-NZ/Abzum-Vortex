@@ -426,13 +426,16 @@ export function ApplicationPageView({
         };
       }
       // An action button runs its bound flow through the same path as a display event. Inside a
-      // form it reports the form's current values, and the binding receives only the caller inputs
-      // it declares; the button stays busy until the run settles.
+      // form it reports the form's current values. A record page also supplies its verified page
+      // subject for declared navigation bindings; the binding receives only the inputs it declares.
       const actionBinding = bindingOfEvent(bindings, "action");
       if (actionBinding !== undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
-          return runBinding(placementId, actionBinding, { ...(event.values ?? {}) });
+          return runBinding(placementId, actionBinding, {
+            ...(event.values ?? {}),
+            ...(subject === undefined ? {} : { record_id: subject.recordId }),
+          });
         };
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
@@ -471,7 +474,7 @@ export function ApplicationPageView({
       };
     }
     return inputs;
-  }, [applyDispatch, busy, formBlock, model.bindings, model.data, router, runBinding, selection, setQuery]);
+  }, [applyDispatch, busy, formBlock, model.bindings, model.data, router, runBinding, selection, setQuery, subject]);
 
   return (
     <>

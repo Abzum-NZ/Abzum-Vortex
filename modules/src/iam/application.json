@@ -309,7 +309,21 @@
         "record_type": "vortex.organisation_administration:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      }
+      },
+    {
+      "id": "event_new_access_request",
+      "key": "vortex.app.events.vortex_app_iam_new_access_request",
+      "record_type": "vortex.iam.core:access_request",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "event_edit_access_request",
+      "key": "vortex.app.events.vortex_app_iam_edit_access_request",
+      "record_type": "vortex.iam.core:access_request",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -3597,11 +3611,13 @@
                 },
                 "slots": {},
                 "query": "vortex.iam.core:iam_access_requests"
-              }
+              },
+        "button_new_access_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.iam.request", "settings": {"label": {"kind": "text", "value": "New access request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
             },
             "order": {
               "desktop": [
-                "iam_access_requests_list"
+                "iam_access_requests_list",
+            "button_new_access_request"
               ]
             }
           } }
@@ -3817,11 +3833,13 @@
                   }
                 },
                 "slots": {}
-              }
+              },
+        "button_edit_access_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.iam.request", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
             },
             "order": {
               "desktop": [
-                "iam_access_request_detail_body"
+                "iam_access_request_detail_body",
+            "button_edit_access_request"
               ]
             }
           } }
@@ -5775,7 +5793,83 @@
           }
         ],
         "outputs": {}
-      }
+      },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_access_request",
+      "key": "navigate_new_access_request",
+      "description": "Opens the access request creation form.",
+      "labels": {
+        "name": "New access request"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "iam_access_request_new"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_edit_access_request",
+      "key": "navigate_edit_access_request",
+      "description": "Opens the current access request in the edit form.",
+      "labels": {
+        "name": "Edit"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.iam.core:access_request"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "iam_access_request_edit"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
     ],
     "flow_bindings": [
       {
@@ -6158,7 +6252,28 @@
             "name": "revision"
           }
         }
+      },
+    {
+      "id": "binding_new_access_request",
+      "control": "button_new_access_request",
+      "event_id": "event_new_access_request",
+      "event": "action",
+      "flow": "navigate_new_access_request",
+      "inputs": {}
+    },
+    {
+      "id": "binding_edit_access_request",
+      "control": "button_edit_access_request",
+      "event_id": "event_edit_access_request",
+      "event": "action",
+      "flow": "navigate_edit_access_request",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
       }
+    }
     ]
   }
 }

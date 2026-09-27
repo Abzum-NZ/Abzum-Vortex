@@ -155,7 +155,14 @@
         "record_type": "vortex.tenant_administration:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      }
+      },
+    {
+      "id": "event_new_lifecycle_request",
+      "key": "vortex.app.events.vortex_app_tenant_administration_new_lifecycle_request",
+      "record_type": "vortex.tenant_administration:organization_lifecycle_request",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -868,11 +875,13 @@
                   },
                   "slots": {},
                   "query": "vortex.tenant_administration:organization_lifecycle_requests"
-                }
+                },
+        "button_new_lifecycle_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.tenant_administration.organization_lifecycle_request.submit", "settings": {"label": {"kind": "text", "value": "New lifecycle request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
               },
               "order": {
                 "desktop": [
-                  "requests_table"
+                  "requests_table",
+            "button_new_lifecycle_request"
                 ]
               }
             }
@@ -1263,7 +1272,38 @@
         },
         "errors": [],
         "finally": []
-      }
+      },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_new_lifecycle_request",
+      "key": "navigate_new_lifecycle_request",
+      "description": "Opens the organisation lifecycle request form.",
+      "labels": {
+        "name": "New lifecycle request"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {},
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "record_lifecycle_request"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    }
     ],
     "flow_bindings": [
       {
@@ -1329,7 +1369,15 @@
             "name": "revision"
           }
         }
-      }
+      },
+    {
+      "id": "binding_new_lifecycle_request",
+      "control": "button_new_lifecycle_request",
+      "event_id": "event_new_lifecycle_request",
+      "event": "action",
+      "flow": "navigate_new_lifecycle_request",
+      "inputs": {}
+    }
     ]
   }
 }
