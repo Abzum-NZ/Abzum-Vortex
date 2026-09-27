@@ -51,10 +51,6 @@ begin
       p_identity_id, addressed_organization.organization_id
     ) as scope;
   exception
-    when sqlstate 'V3140' then
-      return pg_catalog.jsonb_build_object(
-        'kind', 'suspended_super_administrator_account'
-      );
     when sqlstate '42501' or sqlstate 'P0002' then
       return pg_catalog.jsonb_build_object('kind', 'unavailable');
   end;
@@ -210,7 +206,6 @@ $function$;
 
 revoke all on function vortex_access.read_application_address_candidates(uuid, text, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
 grant execute on function vortex_access.read_application_address_candidates(uuid, text, text)
   to vortex_runtime;
 
