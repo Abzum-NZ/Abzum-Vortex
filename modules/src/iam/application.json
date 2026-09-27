@@ -53,6 +53,104 @@
         "action_kind": "named",
         "named_action": "manage",
         "administrative": true
+      },
+      {
+        "id": "perm_app_iam_person_read",
+        "key": "application.iam.directory.person.read",
+        "label": "Read IAM people",
+        "description": "Read the IAM people directory under current account authority.",
+        "record_type": "vortex.system_directory:person",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["display_name", "state", "language", "time_zone"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_read",
+        "key": "application.iam.directory.role.read",
+        "label": "Read IAM roles",
+        "description": "Read IAM roles under current role authority.",
+        "record_type": "vortex.system_directory:role",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_group_read",
+        "key": "application.iam.directory.group.read",
+        "label": "Read IAM groups",
+        "description": "Read IAM groups under current group authority.",
+        "record_type": "vortex.system_directory:group",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["key", "label", "state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_group_membership_read",
+        "key": "application.iam.directory.group_membership.read",
+        "label": "Read IAM group memberships",
+        "description": "Read IAM group memberships under current group authority.",
+        "record_type": "vortex.system_directory:group_membership",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["group_id", "account_display_name", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_assignment_read",
+        "key": "application.iam.directory.role_assignment.read",
+        "label": "Read IAM role assignments",
+        "description": "Read IAM role assignments under current assignment authority.",
+        "record_type": "vortex.system_directory:role_assignment",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_activation_read",
+        "key": "application.iam.directory.role_activation.read",
+        "label": "Read IAM role activations",
+        "description": "Read IAM role activations under current role authority.",
+        "record_type": "vortex.system_directory:role_activation",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["account_display_name", "role_key", "role_label", "activated_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_delegation_read",
+        "key": "application.iam.directory.delegation.read",
+        "label": "Read IAM delegations",
+        "description": "Read IAM delegations under current assignment authority.",
+        "record_type": "vortex.system_directory:delegation",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["holder_kind", "group_id", "scope_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -102,6 +200,13 @@
           "vortex.iam.core.access_request_item.soft_delete",
           "vortex.iam.core.access_request_item.restore",
           "vortex.iam.core.access_request_item.export",
+          "application.iam.directory.person.read",
+          "application.iam.directory.role.read",
+          "application.iam.directory.group.read",
+          "application.iam.directory.group_membership.read",
+          "application.iam.directory.role_assignment.read",
+          "application.iam.directory.role_activation.read",
+          "application.iam.directory.delegation.read",
           "platform.organization.accounts.read",
           "platform.organization.roles.read",
           "platform.organization.groups.read",
