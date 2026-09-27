@@ -1,4 +1,5 @@
 import {
+  isRecord,
   builderKeySchema,
   conditionNodeSchema,
   fieldIdSchema,
@@ -75,9 +76,6 @@ const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
 
 const hasOwn = (value: Readonly<Record<string, unknown>>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key);
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const sameKeys = (actual: readonly string[], expected: ReadonlySet<string>) =>
   actual.length === expected.size && actual.every((key) => expected.has(key));

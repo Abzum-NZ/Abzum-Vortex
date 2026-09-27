@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
+  isRecord,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
   flowIdSchema,
@@ -355,9 +356,6 @@ const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
   "file.export": "the server file export task",
   "connection.call": "the durable Kestra runner",
 });
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 const withinPayload = (candidate: unknown): boolean => {
   try {

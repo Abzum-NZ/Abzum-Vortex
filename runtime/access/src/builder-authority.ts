@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  unavailableError,
   organizationAccessDeclarationSchema,
   type OrganizationAccessDeclaration,
   type SelectedOrganizationScope,
@@ -34,6 +35,8 @@ export type BuilderTargetFactsReader = (
   rootId: string | undefined,
 ) => Promise<BuilderTargetFacts>;
 
+const unavailableCode = "BUILDER_AUTHORITY_UNAVAILABLE";
+
 export type BuilderAuthorityDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
   /** The selected organisation scope resolved for the authenticated human's own request. */
@@ -41,12 +44,10 @@ export type BuilderAuthorityDependencies = Readonly<{
   targetFacts: BuilderTargetFactsReader;
 }>;
 
-const unavailable = (): Error => new Error("BUILDER_AUTHORITY_UNAVAILABLE");
-
 /** The exact permission identity is looked up in the platform catalogue, never taken as input. */
 const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccessDeclaration => {
   const permission = platformPermissionCatalogue.permissions.find((entry) => entry.key === key);
-  if (permission === undefined) throw unavailable();
+  if (permission === undefined) throw unavailableError(unavailableCode);
   return organizationAccessDeclarationSchema.parse({
     operationKey: permission.key,
     action: { actionKind: permission.actionKind },
@@ -73,7 +74,7 @@ const declarationForAcceptance = (
   const applications = platformPermissionCatalogue.permissions.find(
     (entry) => entry.key === "platform.organization.applications.manage",
   );
-  if (applications === undefined) throw unavailable();
+  if (applications === undefined) throw unavailableError(unavailableCode);
   return organizationAccessDeclarationSchema.parse({
     operationKey: "platform.organization.application_role_templates.accept",
     action: { actionKind: applications.actionKind },
@@ -138,7 +139,11 @@ export const createBuilderAuthority = (
   async require(operation: BuilderOperation): Promise<BuilderAuthorityDecision> {
     const rootId =
       operation.kind === "installation" ? operation.applicationRootId : operation.rootId;
-    const facts = await dependencies.targetFacts(dependencies.transaction, dependencies.scope, rootId);
+    const facts = await dependencies.targetFacts(
+      dependencies.transaction,
+      dependencies.scope,
+      rootId,
+    );
     const requirements = deriveBuilderRequirements(operation, facts);
 
     const declarations = requirements.permissionKeys.map((key) => {
@@ -176,7 +181,7 @@ export const createBuilderAuthority = (
       if (requirements.refused)
         return { outcome: "refused", reason: "permission_refused", correlationId: checked.value };
     }
-    if (requirements.refused || declarations.length === 0) throw unavailable();
+    if (requirements.refused || declarations.length === 0) throw unavailableError(unavailableCode);
     return { outcome: "allowed" };
   },
 });

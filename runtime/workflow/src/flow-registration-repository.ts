@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  isRecord,
   applicationRootIdSchema,
   fingerprintSchema,
   organizationIdSchema,
@@ -11,7 +12,7 @@ import {
   type OrganizationId,
   type SemanticVersion,
 } from "@vortex/contracts";
-import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCandidate,
@@ -101,9 +102,6 @@ const identityKeys = [
   "workflowRevision",
 ] as const;
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,
   allowed: readonly string[],
@@ -120,7 +118,7 @@ const invalidStorageResult = (cause?: unknown): KestraFlowRegistrationError =>
  * UUIDs to lower case, so one identity always shortens to one namespace.
  */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
   if (
     typeof candidate.environment !== "string" ||
     !(kestraFlowCompilerEnvironments as readonly string[]).includes(candidate.environment)
@@ -160,9 +158,9 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
  * transaction, so a caller cannot store a runnable or mismatched candidate.
  */
 const parseCommand = (candidate: unknown): KestraFlowRegistrationCommand => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) throw invalidInput();
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) throw invalidInput();
   const identity = parseIdentity(candidate.identity);
-  if (identity === undefined || !isObject(candidate.flow)) throw invalidInput();
+  if (identity === undefined || !isRecord(candidate.flow)) throw invalidInput();
 
   const flow = candidate.flow;
   if (flow.active !== false) throw invalidInput();
@@ -171,7 +169,7 @@ const parseCommand = (candidate: unknown): KestraFlowRegistrationCommand => {
     flow.workflowRevision !== identity.workflowRevision ||
     typeof flow.namespace !== "string" ||
     typeof flow.id !== "string" ||
-    !isObject(flow.trigger)
+    !isRecord(flow.trigger)
   )
     throw invalidInput();
 
@@ -179,7 +177,7 @@ const parseCommand = (candidate: unknown): KestraFlowRegistrationCommand => {
 };
 
 const parseRegistration = (value: unknown): KestraFlowRegistration => {
-  if (!isObject(value)) throw invalidStorageResult();
+  if (!isRecord(value)) throw invalidStorageResult();
   if (
     typeof value.environment !== "string" ||
     !(kestraFlowCompilerEnvironments as readonly string[]).includes(value.environment)
@@ -245,7 +243,7 @@ const parseResult = (
     return Object.freeze({ outcome: row.outcome, registration });
   }
   if (row.outcome === "refused") {
-    if (!isObject(row.result)) throw invalidStorageResult();
+    if (!isRecord(row.result)) throw invalidStorageResult();
     const reasonCode = row.result.reasonCode;
     if (
       typeof reasonCode !== "string" ||
@@ -286,7 +284,7 @@ const mapStorageFailure = (error: unknown): KestraFlowRegistrationError => {
  * candidate for an existing identity. It never enables, calls or deploys a flow.
  */
 export const registerKestraFlowCandidate = async (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   commandCandidate: unknown,
 ): Promise<KestraFlowRegistrationResult> => {
   const command = parseCommand(commandCandidate);

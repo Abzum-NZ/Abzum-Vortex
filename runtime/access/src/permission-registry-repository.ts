@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  databaseRevision,
   adoptShippedPlatformPermissionCatalogueCommandSchema,
   adoptShippedPlatformPermissionCatalogueResultSchema,
   applicationPermissionCatalogueSnapshotCommandSchema,
@@ -118,12 +119,6 @@ type ApplicationSnapshotRow = DatabaseRow & {
   permission_ids: unknown;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
 const optional = <Value>(value: Value | null | undefined): Value | undefined =>
   value === null || value === undefined ? undefined : value;
 
@@ -142,8 +137,8 @@ const parsePlatformInitialization = (
 ): InitializePlatformPermissionCatalogueResult => {
   const parsed = initializePlatformPermissionCatalogueResultSchema.safeParse({
     organizationId: row.organization_id,
-    registrationRevision: revision(row.registration_revision),
-    accessVersion: revision(row.access_version),
+    registrationRevision: databaseRevision(row.registration_revision),
+    accessVersion: databaseRevision(row.access_version),
   });
   return parsed.success ? parsed.data : invalidStorage();
 };
@@ -155,8 +150,8 @@ const parsePlatformMetadataRevision = (
     organizationId: row.organization_id,
     sourceCatalogueVersion: row.source_catalogue_version,
     targetCatalogueVersion: row.target_catalogue_version,
-    registrationRevision: revision(row.registration_revision),
-    accessVersion: revision(row.access_version),
+    registrationRevision: databaseRevision(row.registration_revision),
+    accessVersion: databaseRevision(row.access_version),
   });
   return parsed.success ? parsed.data : invalidStorage();
 };
@@ -168,8 +163,8 @@ const parsePlatformCatalogueAdoption = (
     organizationId: row.organization_id,
     sourceCatalogueVersion: row.source_catalogue_version,
     targetCatalogueVersion: row.target_catalogue_version,
-    registrationRevision: revision(row.registration_revision),
-    accessVersion: revision(row.access_version),
+    registrationRevision: databaseRevision(row.registration_revision),
+    accessVersion: databaseRevision(row.access_version),
   });
   return parsed.success ? parsed.data : invalidStorage();
 };
@@ -181,7 +176,7 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
   const parsed = permissionCatalogueEntrySchema.safeParse({
     organizationId: row.organization_id,
     applicationRootId: optional(row.application_root_id),
-    registrationRevision: revision(row.registration_revision),
+    registrationRevision: databaseRevision(row.registration_revision),
     ownerKind: row.owner_kind,
     ownerId: row.owner_id,
     permission: {
@@ -207,7 +202,7 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
           kind: row.source_kind,
           definitionKey: row.source_definition_key,
           rootId: row.source_root_id,
-          releaseRevision: revision(row.source_revision),
+          releaseRevision: databaseRevision(row.source_revision),
           releaseVersion: row.source_version,
           validationContractVersion: row.source_validation_contract_version,
           contentFingerprint: row.source_content_fingerprint,
@@ -222,12 +217,12 @@ const parseSnapshot = (row: ApplicationSnapshotRow): ApplicationPermissionCatalo
   const parsed = applicationPermissionCatalogueSnapshotSchema.safeParse({
     organizationId: row.organization_id,
     applicationRootId: row.application_root_id,
-    registrationRevision: revision(row.registration_revision),
+    registrationRevision: databaseRevision(row.registration_revision),
     applicationRelease: {
       kind: "application",
       definitionKey: row.definition_key,
       rootId: row.application_root_id,
-      releaseRevision: revision(row.release_revision),
+      releaseRevision: databaseRevision(row.release_revision),
       releaseVersion: row.release_version,
       validationContractVersion: row.validation_contract_version,
       contentFingerprint: row.content_fingerprint,
