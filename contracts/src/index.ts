@@ -34,6 +34,7 @@ export * from "./identifiers";
 export * from "./identity-access";
 export * from "./index-readiness";
 export * from "./integration-contracts";
+export * from "./installation-runtime-bundle";
 export * from "./lineage";
 export * from "./loopback-hostname";
 export * from "./module-contracts";
