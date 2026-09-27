@@ -318,6 +318,7 @@ function ApplicationPageViewContent({
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
   const [busy, setBusy] = useState(false);
+  const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
@@ -389,6 +390,7 @@ function ApplicationPageViewContent({
     };
   }
   const navigationKey = placementRequestsRef.current.key;
+  const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
   const subject =
     refreshedPlacementData?.navigationKey === navigationKey &&
     refreshedPlacementData.subject !== undefined
@@ -865,6 +867,15 @@ function ApplicationPageViewContent({
           }
           if (!isCurrentNavigation()) return;
           showResult(resultNotice);
+          // A finished guided-form submission may have abandoned its draft. Keep the journey
+          // visible but inactive until a new page load establishes the next draft.
+          if (
+            model.guidedForm !== undefined &&
+            (afterAccepted !== undefined ||
+              server.descriptor.commit === "confirmed" ||
+              server.descriptor.commit === "partial")
+          )
+            setCompletedGuidedNavigationKey(navigationKey);
           if (
             (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
             sourceBindingId !== undefined
@@ -879,6 +890,7 @@ function ApplicationPageViewContent({
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
           showResult(outcomeNotices.uncertain ?? unavailableNotice);
+          if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
           if (sourceBindingId !== undefined)
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
           return;
@@ -890,7 +902,7 @@ function ApplicationPageViewContent({
         if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
-    [navigationKey, refreshPlacements, refreshTargetsForBinding, router],
+    [model.guidedForm, navigationKey, refreshPlacements, refreshTargetsForBinding, router],
   );
 
   const guidedSummaryStepId = useMemo(() => {
@@ -914,7 +926,7 @@ function ApplicationPageViewContent({
   const advanceGuidedStep = useCallback(
     async (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => {
       const guidedForm = model.guidedForm;
-      if (guidedForm === undefined || busy) return;
+      if (guidedForm === undefined || busy || guidedFormCompleted) return;
       setBusy(true);
       setNotice(undefined);
       try {
@@ -951,13 +963,22 @@ function ApplicationPageViewContent({
         setBusy(false);
       }
     },
-    [busy, guidedAddress, guidedFormActions, model.guidedForm, router, searchParams, setQuery],
+    [
+      busy,
+      guidedAddress,
+      guidedFormActions,
+      guidedFormCompleted,
+      model.guidedForm,
+      router,
+      searchParams,
+      setQuery,
+    ],
   );
 
   const requestGuidedStep = useCallback(
     (requested?: string) => {
       const guidedForm = model.guidedForm;
-      if (guidedForm === undefined || busy) return;
+      if (guidedForm === undefined || busy || guidedFormCompleted) return;
       if (requested !== undefined && guidedForm.activeStepId === guidedSummaryStepId) {
         void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
         return;
@@ -990,6 +1011,7 @@ function ApplicationPageViewContent({
     [
       advanceGuidedStep,
       busy,
+      guidedFormCompleted,
       guidedActiveFormIds,
       guidedSummaryStepId,
       model.bindings,
@@ -1006,6 +1028,7 @@ function ApplicationPageViewContent({
         guidedForm.activeStepId !== guidedSummaryStepId ||
         binding.flowId.toLowerCase() !== guidedForm.flowId.toLowerCase() ||
         busy ||
+        guidedFormCompleted ||
         guidedSubmitInFlight.current
       )
         return;
@@ -1061,6 +1084,7 @@ function ApplicationPageViewContent({
       formBlock,
       guidedAddress,
       guidedFormActions,
+      guidedFormCompleted,
       guidedSummaryStepId,
       guidedSubmitInFlight,
       model.guidedForm,
@@ -1103,7 +1127,10 @@ function ApplicationPageViewContent({
       for (const placementId of placementIds)
         if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
-      const data = currentData[placementId];
+      const data =
+        guidedFormCompleted && guidedActiveFormIds.includes(placementId)
+          ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
+          : currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const flowFeedback =
@@ -1172,7 +1199,7 @@ function ApplicationPageViewContent({
         (model.guidedForm !== undefined && formOwners[placementId] === placementId)
       )
         events.form_submit = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_submit" || busy) return;
+          if (event.event !== "form_submit" || busy || guidedFormCompleted) return;
           if (model.guidedForm !== undefined) {
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
@@ -1272,6 +1299,7 @@ function ApplicationPageViewContent({
     currentEditFormBaselines,
     guidedActivePlacementIds,
     guidedActiveFormIds,
+    guidedFormCompleted,
     guidedSummaryStepId,
     advanceGuidedStep,
     submitGuidedSummary,
@@ -1313,7 +1341,7 @@ function ApplicationPageViewContent({
           ? {}
           : {
               guidedStepNavigation: {
-                  disabled: busy,
+                  disabled: busy || guidedFormCompleted,
                   onBack: () => {
                     if (guidedPreviousStepId !== undefined)
                       requestGuidedStep(guidedPreviousStepId);

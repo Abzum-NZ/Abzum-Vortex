@@ -1197,6 +1197,7 @@ const loadApplicationPageInternal = async (
   // A detail or form page offers its subject to the flows it starts; a public page never does.
   const subjectRow =
     (selectedForProjection === undefined ||
+      pageDefinition.type === "guided_form" ||
       [...editFormPlacementIds].some((placementId) =>
         selectedForProjection.has(placementId.toLowerCase()),
       )) &&
