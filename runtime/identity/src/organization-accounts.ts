@@ -2,9 +2,12 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 import {
+  databaseTimestamp,
+  databaseRevision,
   createOrganizationInvitationCommandSchema,
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
+  isNonNilUuidText,
   invitationSchema,
   revokeOrganizationInvitationCommandSchema,
   verifiedIdentitySchema,
@@ -19,7 +22,6 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
@@ -49,7 +51,7 @@ export interface CreatedOrganizationInvitation {
 }
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 interface OrganizationAccountStoreDependencies {
@@ -90,27 +92,18 @@ type InvitationRow = DatabaseRow & {
   revision: unknown;
 };
 
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
 const optional = <Value>(value: Value | null | undefined): Value | undefined =>
   value === null || value === undefined ? undefined : value;
-
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
 
 const parseIdentityProjection = (row: IdentityProjectionRow): IdentityProjection =>
   identityProjectionSchema.parse({
     identityId: row.identity_id,
     state: row.state,
-    createdAt: timestamp(row.created_at),
-    stateChangedAt: timestamp(row.state_changed_at),
+    createdAt: databaseTimestamp(row.created_at),
+    stateChangedAt: databaseTimestamp(row.state_changed_at),
     stateChangedBy: row.state_changed_by,
     stateChangeCorrelationId: row.state_change_correlation_id,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
   });
 
 const parseInvitation = (row: InvitationRow): Invitation =>
@@ -119,15 +112,15 @@ const parseInvitation = (row: InvitationRow): Invitation =>
     organizationId: row.organization_id,
     invitedEmail: row.invited_email,
     invitedBy: row.invited_by,
-    createdAt: timestamp(row.created_at),
-    invitedAt: timestamp(row.invited_at),
-    expiresAt: timestamp(row.expires_at),
-    revokedAt: optional(timestamp(row.revoked_at)),
+    createdAt: databaseTimestamp(row.created_at),
+    invitedAt: databaseTimestamp(row.invited_at),
+    expiresAt: databaseTimestamp(row.expires_at),
+    revokedAt: optional(databaseTimestamp(row.revoked_at)),
     revokedBy: optional(row.revoked_by),
-    acceptedAt: optional(timestamp(row.accepted_at)),
+    acceptedAt: optional(databaseTimestamp(row.accepted_at)),
     acceptedOrganizationAccountId: optional(row.accepted_organization_account_id),
-    changedAt: timestamp(row.changed_at),
-    revision: revision(row.revision),
+    changedAt: databaseTimestamp(row.changed_at),
+    revision: databaseRevision(row.revision),
   });
 
 const mapStorageFailure = (error: unknown): OrganizationAccountError => {
@@ -447,11 +440,7 @@ export interface OffboardingTransferBatchResult {
 }
 
 export type OrganizationAccountLifecycleState =
-  | "active"
-  | "suspended"
-  | "closed"
-  | "closing"
-  | "deleted";
+  "active" | "suspended" | "closed" | "closing" | "deleted";
 
 const organizationAccountLifecycleStates = [
   "active",
@@ -530,16 +519,10 @@ interface OffboardingInventorySection {
   readonly accessVersion: number;
 }
 
-const isUuid = (value: unknown): value is string =>
-  typeof value === "string" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
-  value !== "00000000-0000-0000-0000-000000000000";
-
 const isMember = <Member extends string>(
   value: unknown,
   allowed: readonly Member[],
-): value is Member =>
-  typeof value === "string" && (allowed as readonly string[]).includes(value);
+): value is Member => typeof value === "string" && (allowed as readonly string[]).includes(value);
 
 const invalidCommand = (): never => {
   throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
@@ -553,7 +536,8 @@ const invalidResult = (): never => {
   throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
 };
 
-const commandUuid = (value: unknown): string => (isUuid(value) ? value : invalidCommand());
+const commandUuid = (value: unknown): string =>
+  isNonNilUuidText(value) ? value : invalidCommand();
 
 const commandRevision = (value: unknown): number =>
   typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 9007199254740991
@@ -565,12 +549,10 @@ const commandMember = <Member extends string>(
   allowed: readonly Member[],
 ): Member => (isMember(value, allowed) ? value : invalidCommand());
 
-const resultUuid = (value: unknown): string => (isUuid(value) ? value : invalidResult());
+const resultUuid = (value: unknown): string => (isNonNilUuidText(value) ? value : invalidResult());
 
-const resultMember = <Member extends string>(
-  value: unknown,
-  allowed: readonly Member[],
-): Member => (isMember(value, allowed) ? value : invalidResult());
+const resultMember = <Member extends string>(value: unknown, allowed: readonly Member[]): Member =>
+  isMember(value, allowed) ? value : invalidResult();
 
 /** A `bigint` column as the driver may present it: number, bigint or digits. */
 const resultStoredInteger = (value: unknown): number => {
@@ -661,8 +643,7 @@ const readInventorySelector = (query: unknown): OffboardingInventorySelector => 
     targetId: commandUuid(fields.targetId),
     sectionKind,
     after,
-    limit:
-      typeof fields.limit === "number" ? fields.limit : offboardingInventoryPageLimit,
+    limit: typeof fields.limit === "number" ? fields.limit : offboardingInventoryPageLimit,
   };
 };
 

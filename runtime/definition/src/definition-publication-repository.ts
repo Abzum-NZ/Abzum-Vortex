@@ -61,7 +61,7 @@ import {
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
-  revisionSchema.max(Number.MAX_SAFE_INTEGER),
+  revisionSchema,
 );
 const databaseTimestampSchema = z.preprocess(
   (value) =>
@@ -80,19 +80,19 @@ const exactManifestSchema = z
         : entry.kind === "platform_block"
           ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
           : entry.kind === "application_flow"
-              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
-              : entry.kind === "application_flow_node"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
-                : entry.kind === "application_query"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
-                  : entry.kind === "module_query"
-                    ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-                    : entry.kind === "application_form"
-                      ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-                        : entry.kind === "application_workflow"
-                          ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                          : entry.kind === "application_action"
-                            ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+            ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+            : entry.kind === "application_flow_node"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+              : entry.kind === "application_query"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+                : entry.kind === "module_query"
+                  ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                  : entry.kind === "application_form"
+                    ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                    : entry.kind === "application_workflow"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                      : entry.kind === "application_action"
+                        ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
                         : entry.kind === "protected_operation"
                           ? `${entry.kind}:${entry.operation.owner.kind}:${
                               entry.operation.owner.kind === "application"
@@ -101,7 +101,7 @@ const exactManifestSchema = z
                                   ? entry.operation.owner.moduleRootId
                                   : entry.operation.owner.serviceId
                             }:${entry.operation.operationId}`
-          : `${entry.kind}:${entry.key}`,
+                          : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({ code: "custom", message: "Dependency subjects must be unique" });

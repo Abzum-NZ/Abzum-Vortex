@@ -14,7 +14,6 @@ import {
   roleActivationSchema,
 } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const requestedDurationSecondsSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const trustedChangeFields = {
   changedBy: actorIdSchema,
@@ -29,7 +28,7 @@ export const organizationRoleActivationChangeCommandSchema = z.discriminatedUnio
       roleActivationId: roleActivationIdSchema,
       organizationAccountId: organizationAccountIdSchema,
       roleId: roleIdSchema,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
       requestedDurationSeconds: requestedDurationSecondsSchema,
       eligibilitySource: roleActivationEligibilitySourceSchema,
       /** Set only from the verified flow execution binding that resolved the caller, never from input. */
@@ -42,7 +41,7 @@ export const organizationRoleActivationChangeCommandSchema = z.discriminatedUnio
       operation: z.literal("revoke_role_activation"),
       organizationId: organizationIdSchema,
       roleActivationId: roleActivationIdSchema,
-      expectedActivationRevision: javascriptSafeRevisionSchema,
+      expectedActivationRevision: revisionSchema,
       ...trustedChangeFields,
     })
     .strict(),
@@ -53,7 +52,7 @@ export const organizationRoleActivationChangeResultSchema = z
     outcome: z.literal("changed"),
     operation: z.enum(["activate_role", "revoke_role_activation"]),
     activation: roleActivationSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

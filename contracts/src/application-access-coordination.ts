@@ -8,8 +8,6 @@ import {
 } from "./identifiers";
 import { preparedApplicationRoleTemplatesSchema } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const preparedChangeFields = {
   preparedTemplates: preparedApplicationRoleTemplatesSchema,
   changedBy: actorIdSchema,
@@ -23,7 +21,7 @@ export const applicationAccessChangeCommandSchema = z
       z
         .object({
           operation: z.literal(operation),
-          expectedRevision: javascriptSafeRevisionSchema,
+          expectedRevision: revisionSchema,
           ...preparedChangeFields,
         })
         .strict(),
@@ -33,7 +31,7 @@ export const applicationAccessChangeCommandSchema = z
         operation: z.literal("withdraw"),
         organizationId: organizationIdSchema,
         applicationRootId: applicationRootIdSchema,
-        expectedRevision: javascriptSafeRevisionSchema,
+        expectedRevision: revisionSchema,
         changedBy: actorIdSchema,
         correlationId: correlationIdSchema,
       })
@@ -54,8 +52,8 @@ export const applicationAccessChangeCommandSchema = z
 const applicationAccessChangeResultFields = {
   organizationId: organizationIdSchema,
   applicationRootId: applicationRootIdSchema,
-  registrationRevision: javascriptSafeRevisionSchema,
-  accessVersion: javascriptSafeRevisionSchema,
+  registrationRevision: revisionSchema,
+  accessVersion: revisionSchema,
   correlationId: correlationIdSchema,
 };
 

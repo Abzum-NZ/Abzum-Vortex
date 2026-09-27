@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  databaseRevision,
+  sameId,
   activityIdSchema,
   addOrganizationAdministrationMembershipCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -125,9 +127,7 @@ import {
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import { fingerprintCanonicalValue } from "@vortex/definition";
-import {
-  verifyPreparedApplicationRoleTemplates,
-} from "./application-role-template-adapter";
+import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -302,25 +302,19 @@ type RoleActivationDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
 const normalizeGroup = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
-  return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+  return { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) };
 };
 
 const normalizeMembership = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
-  return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+  return { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) };
 };
 
 const normalizeAssignmentLedgerFact = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
-  return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+  return { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) };
 };
 
 const normalizeRoleActivation = (value: unknown): unknown => {
@@ -343,7 +337,7 @@ const normalizeRoleActivation = (value: unknown): unknown => {
             ? {
                 eligibilityAssignment: {
                   ...(source as { eligibilityAssignment: object }).eligibilityAssignment,
-                  revision: revision(
+                  revision: databaseRevision(
                     (
                       source as {
                         eligibilityAssignment: { revision?: unknown };
@@ -360,7 +354,7 @@ const normalizeRoleActivation = (value: unknown): unknown => {
             ? {
                 originatingMembership: {
                   ...(source as { originatingMembership: object }).originatingMembership,
-                  revision: revision(
+                  revision: databaseRevision(
                     (
                       source as {
                         originatingMembership: { revision?: unknown };
@@ -375,14 +369,14 @@ const normalizeRoleActivation = (value: unknown): unknown => {
   const policy = activation.policyAtActivation;
   return {
     ...activation,
-    revision: revision(activation.revision),
-    historicalRoleRevision: revision(activation.historicalRoleRevision),
+    revision: databaseRevision(activation.revision),
+    historicalRoleRevision: databaseRevision(activation.historicalRoleRevision),
     ...(source === undefined ? {} : { eligibilitySource: normalizedSource }),
     ...(typeof policy === "object" && policy !== null && !Array.isArray(policy)
       ? {
           policyAtActivation: {
             ...policy,
-            maximumActivationDurationSeconds: revision(
+            maximumActivationDurationSeconds: databaseRevision(
               (policy as { maximumActivationDurationSeconds?: unknown })
                 .maximumActivationDurationSeconds,
             ),
@@ -391,9 +385,6 @@ const normalizeRoleActivation = (value: unknown): unknown => {
       : {}),
   };
 };
-
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
 
 const sameAssignee = (
   assignee: Readonly<
@@ -409,10 +400,10 @@ const sameAssignee = (
   assignee.kind === "organization_account"
     ? requested.assigneeKind === "organization_account" &&
       requested.organizationAccountId !== undefined &&
-      sameUuid(assignee.organizationAccountId, requested.organizationAccountId)
+      sameId(assignee.organizationAccountId, requested.organizationAccountId)
     : requested.assigneeKind === "group" &&
       requested.groupId !== undefined &&
-      sameUuid(assignee.groupId, requested.groupId);
+      sameId(assignee.groupId, requested.groupId);
 
 const samePermissionReference = (
   left: Readonly<{
@@ -429,19 +420,19 @@ const samePermissionReference = (
   }>,
 ): boolean =>
   left.ownerKind === right.ownerKind &&
-  sameUuid(left.ownerId, right.ownerId) &&
-  sameUuid(left.permissionId, right.permissionId) &&
+  sameId(left.ownerId, right.ownerId) &&
+  sameId(left.permissionId, right.permissionId) &&
   (left.applicationRootId === undefined) === (right.applicationRootId === undefined) &&
   (left.applicationRootId === undefined ||
     right.applicationRootId === undefined ||
-    sameUuid(left.applicationRootId, right.applicationRootId));
+    sameId(left.applicationRootId, right.applicationRootId));
 
 const sameApplicationRoleTemplateReference = (
   left: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
   right: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
 ): boolean =>
-  sameUuid(left.applicationRootId, right.applicationRootId) &&
-  sameUuid(left.sourceRoleId, right.sourceRoleId);
+  sameId(left.applicationRootId, right.applicationRootId) &&
+  sameId(left.sourceRoleId, right.sourceRoleId);
 
 const requireOne = <Row>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
@@ -465,9 +456,9 @@ const isRecordedRefusal = (
   if (row.outcome !== "refused") return false;
   if (
     typeof row.organization_id !== "string" ||
-    !sameUuid(row.organization_id, organizationId) ||
+    !sameId(row.organization_id, organizationId) ||
     summary !== null ||
-    revision(row.access_version) !== accessVersion
+    databaseRevision(row.access_version) !== accessVersion
   )
     throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
   return true;
@@ -558,15 +549,15 @@ export const createOrganizationAccessAdministrationService = (
     const row = requireOne(rows);
     const parsed = changeOrganizationAdministrationGroupResultSchema.safeParse({
       group: normalizeGroup(row.group_summary),
-      accessVersion: revision(row.access_version),
+      accessVersion: databaseRevision(row.access_version),
     });
     if (
       typeof row.organization_id !== "string" ||
-      !sameUuid(row.organization_id, organizationId) ||
+      !sameId(row.organization_id, organizationId) ||
       row.outcome !== "completed" ||
       !parsed.success ||
       parsed.data.accessVersion !== priorAccessVersion ||
-      !sameUuid(parsed.data.group.groupId, expected.groupId) ||
+      !sameId(parsed.data.group.groupId, expected.groupId) ||
       parsed.data.group.label !== expected.label ||
       parsed.data.group.revision !== expected.revision ||
       parsed.data.group.state !== "active" ||
@@ -614,7 +605,7 @@ export const createOrganizationAccessAdministrationService = (
     return mapRecordedRefusal(
       requests.runChange(session, candidate, async (transaction, scope) => {
         // The evidence names its organisation; it must be the one the request context selected.
-        if (!sameUuid(evidence.candidate.organizationId, scope.organizationId))
+        if (!sameId(evidence.candidate.organizationId, scope.organizationId))
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         const row = requireOne(
           await transaction.query<RoleChangeRow>`
@@ -629,15 +620,15 @@ export const createOrganizationAccessAdministrationService = (
           return recordedRefusal;
         const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
           role: row.role_summary,
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
+          !sameId(row.organization_id, scope.organizationId) ||
           row.outcome !== "completed" ||
           !parsed.success ||
           parsed.data.accessVersion !== scope.accessVersion + 1 ||
-          !sameUuid(parsed.data.role.roleId, evidence.candidate.roleId) ||
+          !sameId(parsed.data.role.roleId, evidence.candidate.roleId) ||
           parsed.data.role.liveRevision !== expectedLiveRevision
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -757,15 +748,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationGroupResultSchema.safeParse({
             group: normalizeGroup(row.group_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.group.groupId, command.data.groupId) ||
+            !sameId(parsed.data.group.groupId, command.data.groupId) ||
             parsed.data.group.revision !== command.data.expectedGroupRevision + 1 ||
             parsed.data.group.state !== "retired"
           )
@@ -820,17 +811,17 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationMembershipResultSchema.safeParse({
             membership: normalizeMembership(row.membership_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.membership.membershipId, membershipId) ||
-            !sameUuid(parsed.data.membership.groupId, command.data.groupId) ||
-            !sameUuid(
+            !sameId(parsed.data.membership.membershipId, membershipId) ||
+            !sameId(parsed.data.membership.groupId, command.data.groupId) ||
+            !sameId(
               parsed.data.membership.organizationAccountId,
               command.data.organizationAccountId,
             ) ||
@@ -883,15 +874,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationMembershipResultSchema.safeParse({
             membership: normalizeMembership(row.membership_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.membership.membershipId, command.data.membershipId) ||
+            !sameId(parsed.data.membership.membershipId, command.data.membershipId) ||
             parsed.data.membership.revision !== command.data.expectedMembershipRevision + 1 ||
             parsed.data.membership.state !== "revoked" ||
             parsed.data.membership.temporalState !== "revoked"
@@ -935,15 +926,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
             role: row.role_summary,
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion ||
-            !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
+            !sameId(parsed.data.role.roleId, command.data.roleId) ||
             parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
             parsed.data.role.label !== command.data.label
           )
@@ -992,15 +983,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
             role: row.role_summary,
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
+            !sameId(parsed.data.role.roleId, command.data.roleId) ||
             parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
             parsed.data.role.lifecycle !== "retired"
           )
@@ -1063,7 +1054,7 @@ export const createOrganizationAccessAdministrationService = (
           read === undefined ||
           read.outcome !== "available" ||
           typeof read.organizationId !== "string" ||
-          !sameUuid(read.organizationId, scope.organizationId) ||
+          !sameId(read.organizationId, scope.organizationId) ||
           !Array.isArray(read.permissions)
         )
           throw preparationUnavailable();
@@ -1083,8 +1074,11 @@ export const createOrganizationAccessAdministrationService = (
           };
           return sealPreparedRoleChange(roleCandidate);
         }
-        const templateContinuityRevision = revision(read.templateContinuityRevision);
-        if (typeof templateContinuityRevision !== "number" || command.data.sourceRoleId === undefined)
+        const templateContinuityRevision = databaseRevision(read.templateContinuityRevision);
+        if (
+          typeof templateContinuityRevision !== "number" ||
+          command.data.sourceRoleId === undefined
+        )
           throw preparationUnavailable();
         const templateCandidate: OrganizationRoleChangeCandidate = {
           operation: "accept_new_application_role",
@@ -1185,16 +1179,16 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
             assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
-            !sameUuid(parsed.data.assignment.role.roleId, command.data.roleId) ||
+            !sameId(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
+            !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
             !sameAssignee(parsed.data.assignment.assignee, command.data) ||
             parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
             parsed.data.assignment.revision !== 1 ||
@@ -1245,15 +1239,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
             assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.assignment.roleAssignmentId, command.data.roleAssignmentId) ||
+            !sameId(parsed.data.assignment.roleAssignmentId, command.data.roleAssignmentId) ||
             parsed.data.assignment.revision !== command.data.expectedAssignmentRevision + 1 ||
             parsed.data.assignment.state !== "revoked" ||
             parsed.data.assignment.temporalState !== "revoked"
@@ -1302,15 +1296,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationRoleActivationResultSchema.safeParse({
             activation: normalizeRoleActivation(row.activation_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(parsed.data.activation.roleActivationId, command.data.roleActivationId) ||
+            !sameId(parsed.data.activation.roleActivationId, command.data.roleActivationId) ||
             parsed.data.activation.revision !== command.data.expectedActivationRevision + 1 ||
             parsed.data.activation.state !== "revoked" ||
             parsed.data.activation.temporalState !== "revoked"
@@ -1361,15 +1355,15 @@ export const createOrganizationAccessAdministrationService = (
             return recordedRefusal;
           const parsed = changeOrganizationAdministrationDelegationAuthorityResultSchema.safeParse({
             delegation: normalizeAssignmentLedgerFact(row.delegation_summary),
-            accessVersion: revision(row.access_version),
+            accessVersion: databaseRevision(row.access_version),
           });
           if (
             typeof row.organization_id !== "string" ||
-            !sameUuid(row.organization_id, scope.organizationId) ||
+            !sameId(row.organization_id, scope.organizationId) ||
             row.outcome !== "completed" ||
             !parsed.success ||
             parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameUuid(
+            !sameId(
               parsed.data.delegation.delegationAuthorityId,
               command.data.delegationAuthorityId,
             ) ||
@@ -1412,15 +1406,13 @@ export const createOrganizationAccessAdministrationService = (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       commandCandidate: CreateOrganizationInvitationForAdministrationCommand,
-    ) =>
-      localAdministration.createOrganizationInvitation(session, candidate, commandCandidate),
+    ) => localAdministration.createOrganizationInvitation(session, candidate, commandCandidate),
 
     revokeOrganizationInvitation: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       commandCandidate: RevokeOrganizationInvitationForAdministrationCommand,
-    ) =>
-      localAdministration.revokeOrganizationInvitation(session, candidate, commandCandidate),
+    ) => localAdministration.revokeOrganizationInvitation(session, candidate, commandCandidate),
 
     listGroups: async (
       session: IdentitySession,
@@ -1442,8 +1434,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.groups)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1453,7 +1445,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.next_after_group_id === null || row.next_after_group_id === undefined
             ? {}
             : { nextAfterGroupId: row.next_after_group_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1477,8 +1469,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1487,7 +1479,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.group_summary === null || row.group_summary === undefined
             ? {}
             : { group: normalizeGroup(row.group_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1515,10 +1507,10 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
+          !sameId(row.organization_id, scope.organizationId) ||
           typeof row.group_id !== "string" ||
-          !sameUuid(row.group_id, command.data.groupId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.group_id, command.data.groupId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.memberships)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1529,7 +1521,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.next_after_membership_id === null || row.next_after_membership_id === undefined
             ? {}
             : { nextAfterMembershipId: row.next_after_membership_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1554,8 +1546,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1564,7 +1556,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.membership_summary === null || row.membership_summary === undefined
             ? {}
             : { membership: normalizeMembership(row.membership_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1596,8 +1588,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.permissions)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1623,7 +1615,7 @@ export const createOrganizationAccessAdministrationService = (
                 },
               }
             : {}),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1652,8 +1644,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1662,7 +1654,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.permission_summary === null || row.permission_summary === undefined
             ? {}
             : { permission: row.permission_summary }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
@@ -1693,8 +1685,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.roles)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1704,7 +1696,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.next_after_role_id === null || row.next_after_role_id === undefined
             ? {}
             : { nextAfterRoleId: row.next_after_role_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1728,8 +1720,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1738,9 +1730,9 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.role_summary === null || row.role_summary === undefined
             ? {}
             : { role: row.role_summary }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
-        if (result.outcome === "available" && !sameUuid(result.role.roleId, command.data.roleId))
+        if (result.outcome === "available" && !sameId(result.role.roleId, command.data.roleId))
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;
       });
@@ -1774,8 +1766,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.templates)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1798,7 +1790,7 @@ export const createOrganizationAccessAdministrationService = (
                 },
               }
             : {}),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1829,8 +1821,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1839,7 +1831,7 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.template_summary === null || row.template_summary === undefined
             ? {}
             : { template: row.template_summary }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
@@ -1874,8 +1866,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.assignments)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1886,7 +1878,7 @@ export const createOrganizationAccessAdministrationService = (
           row.next_after_role_assignment_id === undefined
             ? {}
             : { nextAfterRoleAssignmentId: row.next_after_role_assignment_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1913,8 +1905,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -1923,11 +1915,11 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.assignment_summary === null || row.assignment_summary === undefined
             ? {}
             : { assignment: normalizeAssignmentLedgerFact(row.assignment_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
-          !sameUuid(result.assignment.roleAssignmentId, command.data.roleAssignmentId)
+          !sameId(result.assignment.roleAssignmentId, command.data.roleAssignmentId)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;
@@ -1960,8 +1952,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.delegations)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -1972,7 +1964,7 @@ export const createOrganizationAccessAdministrationService = (
           row.next_after_delegation_authority_id === undefined
             ? {}
             : { nextAfterDelegationAuthorityId: row.next_after_delegation_authority_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -1999,8 +1991,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -2009,11 +2001,11 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.delegation_summary === null || row.delegation_summary === undefined
             ? {}
             : { delegation: normalizeAssignmentLedgerFact(row.delegation_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
-          !sameUuid(result.delegation.delegationAuthorityId, command.data.delegationAuthorityId)
+          !sameId(result.delegation.delegationAuthorityId, command.data.delegationAuthorityId)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;
@@ -2044,8 +2036,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion ||
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion ||
           !Array.isArray(row.activations)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -2056,7 +2048,7 @@ export const createOrganizationAccessAdministrationService = (
           row.next_after_role_activation_id === undefined
             ? {}
             : { nextAfterRoleActivationId: row.next_after_role_activation_id }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
       });
     },
@@ -2083,8 +2075,8 @@ export const createOrganizationAccessAdministrationService = (
         );
         if (
           typeof row.organization_id !== "string" ||
-          !sameUuid(row.organization_id, scope.organizationId) ||
-          revision(row.access_version) !== scope.accessVersion
+          !sameId(row.organization_id, scope.organizationId) ||
+          databaseRevision(row.access_version) !== scope.accessVersion
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
 
@@ -2093,11 +2085,11 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.activation_summary === null || row.activation_summary === undefined
             ? {}
             : { activation: normalizeRoleActivation(row.activation_summary) }),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         });
         if (
           result.outcome === "available" &&
-          !sameUuid(result.activation.roleActivationId, command.data.roleActivationId)
+          !sameId(result.activation.roleActivationId, command.data.roleActivationId)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;

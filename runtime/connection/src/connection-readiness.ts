@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
   organizationIdSchema,
@@ -115,8 +116,6 @@ export class ConnectionReadinessError extends Error {
 }
 
 /** Identifiers are case-insensitive: compare the canonical lower-cased forms. */
-const sameIdentifier = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
 
 const isValidationError = (error: unknown): boolean =>
   error instanceof ConnectionInstanceStateError ||
@@ -140,7 +139,10 @@ export async function resolveConnectionInstanceReadiness(
 
   try {
     if (query === null || typeof query !== "object") {
-      throw new ConnectionInstanceStateError("CONNECTION_INVALID_STATE", "Readiness query is invalid");
+      throw new ConnectionInstanceStateError(
+        "CONNECTION_INVALID_STATE",
+        "Readiness query is invalid",
+      );
     }
     const validatedConnId = connectionInstanceIdSchema.parse(query.connectionInstanceId);
     const validatedDestKey = archiveDestinationReferenceSchema.parse(query.destinationKey);
@@ -196,7 +198,10 @@ export async function resolveConnectionInstanceReadiness(
       const verifiedAt = timestampSchema.parse(raw.verifiedAt);
       const verifiedAtInstant = Date.parse(verifiedAt);
       if (!Number.isFinite(verifiedAtInstant)) {
-        throw new ConnectionReadinessError("database_error", "SQL readiness timestamp is unreadable");
+        throw new ConnectionReadinessError(
+          "database_error",
+          "SQL readiness timestamp is unreadable",
+        );
       }
       const tokenExpiry = assertFiniteTokenExpiry(raw.tokenExpiresAt);
       if (tokenExpiry !== null && tokenExpiry.getTime() <= verifiedAtInstant) {
@@ -207,9 +212,9 @@ export async function resolveConnectionInstanceReadiness(
       }
 
       if (
-        !sameIdentifier(connId, validatedConnId) ||
-        !sameIdentifier(orgId, validatedOrganizationId) ||
-        !sameIdentifier(appId, validatedAppId) ||
+        !sameId(connId, validatedConnId) ||
+        !sameId(orgId, validatedOrganizationId) ||
+        !sameId(appId, validatedAppId) ||
         destKey !== validatedDestKey ||
         destFp !== validatedFingerprint ||
         rev !== validatedRevision
@@ -250,10 +255,7 @@ export async function resolveConnectionInstanceReadiness(
 
     const reasonCode = asConnectionReadinessRefusalCode(raw.reasonCode);
     const currentState = knownValue(raw.currentState, connectionStateSet);
-    const currentHealthOutcome = knownValue(
-      raw.currentHealthOutcome,
-      connectionHealthOutcomeSet,
-    );
+    const currentHealthOutcome = knownValue(raw.currentHealthOutcome, connectionHealthOutcomeSet);
     const currentRevision =
       raw.currentRevision === undefined || raw.currentRevision === null
         ? undefined
@@ -309,7 +311,10 @@ export async function readActiveConnectionEvidence(
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) {
-      throw new ConnectionReadinessError("connection_unavailable", "Active connection evidence is unavailable");
+      throw new ConnectionReadinessError(
+        "connection_unavailable",
+        "Active connection evidence is unavailable",
+      );
     }
 
     const evidence = activeConnectionEvidenceSchema.parse({
@@ -322,11 +327,17 @@ export async function readActiveConnectionEvidence(
       revision: assertSafeIntegerRevision(row.revision, "Active connection evidence"),
       lastHealthOutcome: row.last_health_outcome,
     });
-    if (!sameIdentifier(evidence.connectionInstanceId, validatedConnId)) {
-      throw new ConnectionReadinessError("connection_unavailable", "Active connection evidence is unavailable");
+    if (!sameId(evidence.connectionInstanceId, validatedConnId)) {
+      throw new ConnectionReadinessError(
+        "connection_unavailable",
+        "Active connection evidence is unavailable",
+      );
     }
     return evidence;
   } catch {
-    throw new ConnectionReadinessError("connection_unavailable", "Active connection evidence is unavailable");
+    throw new ConnectionReadinessError(
+      "connection_unavailable",
+      "Active connection evidence is unavailable",
+    );
   }
 }

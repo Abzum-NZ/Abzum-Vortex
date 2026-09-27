@@ -3,11 +3,14 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import {
+  isRecord,
   applicationRootIdSchema,
+  canonicalJson,
   flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
   isFlowControlTask,
+  isUuidText,
   organizationIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
@@ -204,13 +207,10 @@ const maximumFlowIdLength = 100;
 const templateDelimiterPattern = /\{\{|\{%/;
 const hasTemplateDelimiter = (value: string): boolean => templateDelimiterPattern.test(value);
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** Durable callbacks do not receive the interpreter's prior task-output scope. */
 const hasTaskOutputFieldPath = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.some(hasTaskOutputFieldPath);
-  if (!isObject(value) || value.kind === "literal") return false;
+  if (!isRecord(value) || value.kind === "literal") return false;
   if (value.source === "task_output" && Array.isArray(value.path)) return true;
   return Object.values(value).some(hasTaskOutputFieldPath);
 };
@@ -236,7 +236,7 @@ const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =
  */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasOnlyKeys(candidate, [
       "environment",
       "organizationId",
@@ -276,18 +276,6 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 };
 
 // ─── Determinism ─────────────────────────────────────────────────────────────────────────────
-
-/** Canonical JSON with sorted keys and omitted undefined, so equal data always hashes equally. */
-const canonicalJson = (value: JsonValue): string => {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value)
-    .filter(([, member]) => member !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return `{${entries
-    .map(([key, member]) => `${JSON.stringify(key)}:${canonicalJson(member as JsonValue)}`)
-    .join(",")}}`;
-};
 
 /** The fixed UUID namespace one callback node id is derived under. */
 const callbackNodeIdNamespace = "8f7d4f2a-6c31-4b0e-9f5a-2d1c3b4a5e60";
@@ -1003,9 +991,9 @@ const LABEL_PLACEHOLDER = "inert_builder_label";
  * compiler neutralises instead of refusing.
  */
 const readBuilderLabels = (definition: unknown): Record<string, string> => {
-  if (!isObject(definition)) return {};
+  if (!isRecord(definition)) return {};
   const labels = definition.labels;
-  if (!isObject(labels)) return {};
+  if (!isRecord(labels)) return {};
   const read: Record<string, string> = {};
   for (const [key, value] of Object.entries(labels))
     if (typeof value === "string") read[key] = value;
@@ -1019,9 +1007,9 @@ const readBuilderLabels = (definition: unknown): Record<string, string> => {
  * inert instead of refusing the whole flow.
  */
 const neutralizeLabelDelimiters = (definition: unknown): unknown => {
-  if (!isObject(definition)) return definition;
+  if (!isRecord(definition)) return definition;
   const labels = definition.labels;
-  if (!isObject(labels)) return definition;
+  if (!isRecord(labels)) return definition;
   const neutralized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(labels))
     neutralized[key] =
@@ -1044,11 +1032,11 @@ const labelIsRenderable = (value: string): boolean => !rawBreakPattern.test(valu
 
 const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number> | undefined => {
   if (candidate === undefined) return new Map();
-  if (!isObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
   const revisions = new Map<string, number>();
   for (const [key, value] of Object.entries(candidate)) {
     const revision = revisionSchema.safeParse(value);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(key.toLowerCase()))
+    if (!isUuidText(key))
       return undefined;
     if (!revision.success) return undefined;
     revisions.set(key.toLowerCase(), revision.data);
@@ -1069,7 +1057,7 @@ const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number
  */
 export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilation => {
   if (
-    !isObject(inputCandidate) ||
+    !isRecord(inputCandidate) ||
     !hasOnlyKeys(inputCandidate, ["definition", "identity", "childFlowRevisions"])
   )
     return refused("invalid_input");
