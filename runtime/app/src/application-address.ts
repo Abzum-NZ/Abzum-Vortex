@@ -15,14 +15,13 @@ import {
   pageDefinitionV2Schema,
   pageIdSchema,
   permissionIdSchema,
-  platformPermissionCatalogueOwnerId,
-  platformPermissionFor,
   revisionSchema,
   roleIdSchema,
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationAccessDeclaration,
 } from "@vortex/contracts";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
@@ -241,7 +240,7 @@ const permittedApplication = async (
             target: { kind: "organization" },
             requiredPermission: {
               ownerKind: "platform",
-              ownerId: platformPermissionCatalogueOwnerId,
+              ownerId: platformPermissionOwnerId,
               permissionId: platformDeclaration.permissionId,
             },
             recentAuthentication: { kind: "none" },

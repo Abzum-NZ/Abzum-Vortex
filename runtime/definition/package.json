@@ -15,6 +15,7 @@
   "dependencies": {
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/modules": "workspace:*",
     "@vortex/rule": "workspace:*",
     "@vortex/theme": "workspace:*",
     "semver": "catalog:",
