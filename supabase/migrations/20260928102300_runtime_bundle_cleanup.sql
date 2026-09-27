@@ -76,25 +76,7 @@ begin
             and later_binding.application_release_revision > bundle.application_release_revision
             and later_binding.state in ('active', 'draining')
         )
-        or (
-          bundle.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
-          and exists (
-            select 1
-            from vortex_module.installation_bindings as candidate_binding
-            where candidate_binding.organization_id = bundle.organization_id
-              and candidate_binding.application_root_id = bundle.application_root_id
-              and candidate_binding.application_release_revision = bundle.application_release_revision
-              and candidate_binding.state = 'provisioned'
-          )
-          and not exists (
-            select 1
-            from vortex_module.installation_bindings as candidate_binding
-            where candidate_binding.organization_id = bundle.organization_id
-              and candidate_binding.application_root_id = bundle.application_root_id
-              and candidate_binding.application_release_revision = bundle.application_release_revision
-              and candidate_binding.state <> 'provisioned'
-          )
-        )
+        or bundle.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
       )
     order by bundle.built_at, bundle.organization_id, bundle.application_root_id,
       bundle.application_release_revision, bundle.bundle_format_version
@@ -136,25 +118,7 @@ begin
           and later_binding.application_root_id = bundle_row.application_root_id
           and later_binding.application_release_revision > bundle_row.application_release_revision
           and later_binding.state in ('active', 'draining')
-      ) and not (
-        bundle_row.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
-        and exists (
-          select 1
-          from vortex_module.installation_bindings as candidate_binding
-          where candidate_binding.organization_id = bundle_row.organization_id
-            and candidate_binding.application_root_id = bundle_row.application_root_id
-            and candidate_binding.application_release_revision = bundle_row.application_release_revision
-            and candidate_binding.state = 'provisioned'
-        )
-        and not exists (
-          select 1
-          from vortex_module.installation_bindings as candidate_binding
-          where candidate_binding.organization_id = bundle_row.organization_id
-            and candidate_binding.application_root_id = bundle_row.application_root_id
-            and candidate_binding.application_release_revision = bundle_row.application_release_revision
-            and candidate_binding.state <> 'provisioned'
-        )
-      ) then
+      ) and bundle_row.built_at > pg_catalog.statement_timestamp() - abandoned_bundle_ttl then
       continue;
     end if;
 
@@ -221,13 +185,14 @@ begin
   where plan.plan_key in (
     select candidate.plan_key
     from vortex_record.installation_access_plans as candidate
-    where not exists (
-      select 1
-      from vortex_module.installation_runtime_bundles as bundle
-      where bundle.organization_id = candidate.organization_id
-        and bundle.application_root_id = candidate.application_root_id
-        and bundle.application_release_revision = candidate.application_release_revision
-    )
+    where candidate.created_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
+      and not exists (
+        select 1
+        from vortex_module.installation_runtime_bundles as bundle
+        where bundle.organization_id = candidate.organization_id
+          and bundle.application_root_id = candidate.application_root_id
+          and bundle.application_release_revision = candidate.application_release_revision
+      )
       and not exists (
         select 1
         from vortex_module.installation_bindings as binding
