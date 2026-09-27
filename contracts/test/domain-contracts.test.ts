@@ -1,3 +1,5 @@
+import { readFile, readdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
@@ -295,6 +297,155 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(
       organizationRuntimeSettingsSchema.safeParse({ ...settings, locale: "en-NZ" }).success,
     ).toBe(false);
+  });
+});
+
+describe("shipping source boundaries", () => {
+  test("keeps shipped application identities out of generic engines", async () => {
+    const readSourceTree = async (directory: string): Promise<string[]> => {
+      const entries = await readdir(directory, { withFileTypes: true });
+      const contents: string[] = [];
+      for (const entry of entries) {
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) contents.push(...(await readSourceTree(path)));
+        else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name))
+          contents.push(await readFile(path, "utf8"));
+      }
+      return contents;
+    };
+
+    const moduleRoots = ["crm", "service-desk"];
+    const definitionPaths = (
+      await Promise.all(
+        moduleRoots.map(async (root) => {
+          const sourceDirectory = resolve(process.cwd(), "modules/src", root, "sources");
+          const sourceFiles = await readdir(sourceDirectory);
+          return [
+            resolve(process.cwd(), "modules/src", root, "application.json"),
+            ...sourceFiles
+              .filter((file) => file.endsWith(".json"))
+              .map((file) => resolve(sourceDirectory, file)),
+          ];
+        }),
+      )
+    ).flat();
+    const identifiers = new Set<string>();
+    for (const path of definitionPaths) {
+      const document = JSON.parse(await readFile(path, "utf8")) as {
+        key: string;
+        body: {
+          record_types?: { key: string; fields?: { key: string }[] }[];
+          permissions?: { key: string }[];
+          actions?: { key: string }[];
+          events?: { key: string }[];
+          rules?: { key: string }[];
+          pages?: { key: string }[];
+          queries?: { key: string }[];
+          workflows?: { key: string }[];
+          pipelines?: { key: string }[];
+          interfaces?: { key: string; operations?: { key: string }[] }[];
+          operations?: { key: string }[];
+        };
+      };
+      identifiers.add(document.key);
+      for (const recordType of document.body.record_types ?? []) {
+        identifiers.add(recordType.key);
+        identifiers.add(`${document.key}:${recordType.key}`);
+        for (const field of recordType.fields ?? []) identifiers.add(field.key);
+      }
+      for (const collection of [
+        document.body.permissions,
+        document.body.actions,
+        document.body.events,
+        document.body.rules,
+        document.body.pages,
+        document.body.queries,
+        document.body.workflows,
+        document.body.pipelines,
+        document.body.operations,
+      ]) {
+        for (const item of collection ?? []) identifiers.add(item.key);
+      }
+      for (const interfaceDefinition of document.body.interfaces ?? []) {
+        identifiers.add(interfaceDefinition.key);
+        for (const operation of interfaceDefinition.operations ?? []) identifiers.add(operation.key);
+      }
+    }
+
+    const runtimeRoots = (await readdir(resolve(process.cwd(), "runtime"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `runtime/${entry.name}/src`);
+    const shippingRoots = [
+      "apps/web/app",
+      "contracts/src",
+      "db/src",
+      ...runtimeRoots,
+      "studio/src",
+      "testing/src",
+      "tooling/boundaries",
+      "ui/src",
+    ];
+    const source = (
+      await Promise.all(shippingRoots.map((root) => readSourceTree(resolve(process.cwd(), root))))
+    )
+      .flat()
+      .join("\n")
+      .toLowerCase();
+    const genericVocabulary = new Set([
+      "action",
+      "active",
+      "address",
+      "application",
+      "behavior",
+      "body",
+      "calendar",
+      "completed",
+      "configuration",
+      "constraint",
+      "description",
+      "email",
+      "event",
+      "export",
+      "field",
+      "identity",
+      "interface",
+      "key",
+      "module",
+      "name",
+      "order",
+      "ownership",
+      "permission",
+      "phone",
+      "priority",
+      "public",
+      "query",
+      "record",
+      "relationship",
+      "required",
+      "role",
+      "rule",
+      "source",
+      "status",
+      "storage",
+      "subject",
+      "theme",
+      "value",
+      "visibility",
+      "workflow",
+    ]);
+    for (const identifier of identifiers) {
+      if (identifier.length < 4 || genericVocabulary.has(identifier)) continue;
+      const lower = identifier.toLowerCase();
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `"${lower}"`,
+      );
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `'${lower}'`,
+      );
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `\`${lower}\``,
+      );
+    }
   });
 });
 
