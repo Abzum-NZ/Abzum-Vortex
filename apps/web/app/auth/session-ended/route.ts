@@ -43,7 +43,7 @@ export function GET(request: NextRequest): NextResponse {
   if (siteUrl === undefined) return response;
   try {
     // Browser cross-site navigations and form submissions cannot clear this browser's session.
-    // Internal session-expiry redirects are same-origin navigations; direct visits use "none".
+    // Session-expiry redirects started on this origin are same-origin navigations; direct visits use "none".
     if (!allowsSessionEnd(request, siteUrl))
       return new NextResponse(null, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
