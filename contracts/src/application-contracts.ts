@@ -31,7 +31,6 @@ import {
   recordTypeIdSchema,
   roleIdSchema,
   semanticVersionSchema,
-  workflowIdSchema,
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "./catalogues";
@@ -537,8 +536,6 @@ export const pipelineSchema = z
             label: labelSchema,
             entryActionKeys: z.array(namespacedKeySchema).max(10),
             exitActionKeys: z.array(namespacedKeySchema).max(10),
-            entryWorkflowIds: z.array(workflowIdSchema).max(10),
-            exitWorkflowIds: z.array(workflowIdSchema).max(10),
           })
           .strict(),
       )

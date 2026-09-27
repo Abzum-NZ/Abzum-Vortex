@@ -3278,9 +3278,6 @@
                                                    }
                                }
                            ],
-                 "workflows":  [
-
-                               ],
                  "pipelines":  [
                                    {
                                        "id":  "pipe_crm_opportunity",
@@ -3297,13 +3294,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "qualified",
@@ -3313,13 +3304,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "proposal",
@@ -3329,13 +3314,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "negotiation",
@@ -3345,13 +3324,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "won",
@@ -3361,13 +3334,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "lost",
@@ -3377,13 +3344,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       }
                                                   ],
                                        "transitions":  [

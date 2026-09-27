@@ -1,5 +1,6 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { getIdentityJourneyConfiguration } from "../_lib/authority-configuration";
+import { verifiesSessionCleanupProof } from "../_lib/session-cleanup-proof";
 import {
   identitySessionCookieDeletions,
   identitySessionCookieProfile,
@@ -9,6 +10,15 @@ import { revokeIdentitySession } from "../_lib/session-server";
 import { privateResponse } from "../../_lib/private-response";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
+
+const allowsSessionEnd = (request: NextRequest, siteUrl: string): boolean => {
+  const configuredOrigin = new URL(siteUrl).origin;
+  const fetchSite = request.headers.get("sec-fetch-site");
+  const origin = request.headers.get("origin");
+  if (origin !== null && origin !== configuredOrigin) return false;
+  if (fetchSite === "same-origin" || fetchSite === "none") return true;
+  return origin === configuredOrigin && (fetchSite === null || fetchSite === "same-site");
+};
 
 export function GET(request: NextRequest): NextResponse {
   // The destination is a fixed path on the configured site URL, never on `request.url`: Next dev
@@ -27,10 +37,19 @@ export function GET(request: NextRequest): NextResponse {
   }
 
   const response = privateResponse(NextResponse.redirect(destination, 303));
+  response.headers.set("Referrer-Policy", "no-referrer");
 
   // A fixed safe redirect remains available when configuration is unavailable.
   if (siteUrl === undefined) return response;
   try {
+    // A redirect from a protected page carries proof bound to this browser's current cookies.
+    // Fetch Metadata stays cross-site through redirects, so that proof is required for that case.
+    const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
+    if (
+      !allowsSessionEnd(request, siteUrl) &&
+      !verifiesSessionCleanupProof(request.nextUrl.searchParams.get("proof"), sessionCookies, siteUrl)
+    )
+      return new NextResponse(null, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
     const profile = identitySessionCookieProfile(siteUrl);
     for (const mutation of identitySessionCookieDeletions(profile))
@@ -42,9 +61,7 @@ export function GET(request: NextRequest): NextResponse {
 
   // Attempt to revoke this browser's provider refresh token after the redirect is sent, so a slow
   // or unreachable provider never delays or fails local sign-out. The attempt is limited to this
-  // browser's own session:
-  // a request another site triggers can do no more than the cookie clearing above already does,
-  // which is to sign this browser out.
+  // browser's own session and only runs for an allowed navigation.
   const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
   try {
     after(() => revokeIdentitySession(sessionCookies).then(() => undefined));

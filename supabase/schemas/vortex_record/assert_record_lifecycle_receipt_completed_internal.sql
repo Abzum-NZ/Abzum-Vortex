@@ -22,6 +22,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.assert_record_lifecycle_receipt_completed_internal() owner to vortex_record_adapter;
+
 revoke all on function vortex_record.assert_record_lifecycle_receipt_completed_internal(
   
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

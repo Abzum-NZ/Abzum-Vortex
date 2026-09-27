@@ -348,7 +348,7 @@ history does not invalidate a complete current installation. See the
 
 The [Application lifecycle permission](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
 is the organisation-scoped platform permission
-`platform.organization.applications.manage`. The operation binds the exact
+[`platform.organization.applications.manage`](appendices/platform-permission-catalogue.md#permission-inventory), registered from the platform declarations at organisation creation. The operation binds the exact
 application and additionally checks delegated management of its complete affected
 permission scope. Installation rights do not grant record access or assignment
 rights. Registration creates no grants and does not expand the permanent
@@ -524,23 +524,37 @@ A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recove
 
 ## Cache model
 
-The cache model distinguishes shared public assets, shared organisation-keyed values, and values that live only for one request.
+Runtime definitions and permitted query results have different cache rules. An installed runtime bundle is an immutable, organisation-keyed database value; permission decisions and sensitive responses remain live and request-scoped.
 
 ```mermaid
 flowchart TD
-    REQ[Request] --> LIVE[Read live session, organisation account, access version and root pointers]
-    LIVE --> DEF{Immutable definition in shared cache?}
-    DEF -- Yes --> RESOLVE[Resolve application for this request]
-    DEF -- No --> DBDEF[Load revision from database and cache by organisation and revision]
-    DBDEF --> RESOLVE
-    RESOLVE --> DATA{Safe data-result cache allowed?}
-    DATA -- Yes --> CHECK{Current account, application, authority, data and query key match?}
+    REQ[Request] --> LIVE[Read verified request context and active installation revision]
+    LIVE --> KEY[Key bundle by organisation, application root, release revision and format]
+    KEY --> IDX[Read immutable bundle index]
+    IDX --> PARTS[Read selected parts and reassemble sections]
+    PARTS --> PAGE[Resolve and serve this request]
+    PAGE --> DATA{Safe data-result cache allowed?}
     DATA -- No --> QUERY[Run authorised query]
+    DATA -- Yes --> CHECK{Current authority, data versions and query key match?}
     CHECK -- No --> QUERY
     CHECK -- Yes --> HIT[Recheck current permission and field scope before reuse]
-    HIT --> PAGE
-    QUERY --> PAGE[Return private non-shared response]
+    HIT --> RESPONSE[Return private response]
+    QUERY --> RESPONSE
 ```
+
+### Installed runtime bundle
+
+Prepare builds one runtime bundle for the Application release revision being installed. That Application release revision is the installation revision. The bundle format starts at version 1 and the immutable key is `(organisation, application root, application release revision, bundle-format version)`. Its pin fingerprint is the SHA-256 fingerprint of the exact pinned Module release set.
+
+`vortex_module.installation_runtime_bundles` stores the bundle index and `vortex_module.installation_runtime_bundle_parts` stores its content. The index records the pin fingerprint, each part's section, ordinal, UTF-8 byte size and SHA-256 fingerprint, the total byte size and the database build time. The sections are `pages`, `navigation`, `flows`, `trigger_index`, `theme`, `component_registry`, `access_plan` and `tool_bundle`. Every part is below 1,048,576 bytes. A section of 1,048,576 bytes or more is canonicalised as JSON, split at UTF-8 character boundaries, and reassembled before parsing.
+
+The writer requires an authorised installation request and one verified organisation context. It stores the index and all parts atomically. Repeating the exact key and pin fingerprint returns the stored index; trying that key with a different pin fingerprint is refused. Rows are immutable through the protected interface and inaccessible to API roles.
+
+The access plan contains declared permission requirements only. It contains no person's permission decisions, role assignments or live access state. Each request reads its active Application release revision in the request-context transaction, then reads the index and requested parts by the exact key and verified organisation. A format mismatch is rebuilt through the protected writer. A request naming a stale installation revision receives a reload outcome. Abandoned prepared bundles are removed by the scheduled installation cleanup.
+
+Servers may keep parts in a memory cache bounded by bytes. A shared runtime-cache tier is optional. Custom component bundles and assets use immutable content-addressed URLs with long cache lifetimes.
+
+### Other cache layers
 
 The allowed layers are:
 
@@ -548,8 +562,7 @@ The allowed layers are:
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Built application assets       | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash                                                                                                                                                         | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
 | Request-local values           | One server request                                                                                                                                                                                                                     | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request.                         |
-| Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint                                                                                                              | Revisions never change. Cross-organisation keys are structurally impossible.                                                                                        |
-| Resolved application and theme | Shared cache, keyed by organisation, application context, exact pinned releases/fingerprints, organisation account where permission-varying, and current Access version                                                                | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
+| Immutable runtime bundle       | `vortex_module.installation_runtime_bundles` plus `vortex_module.installation_runtime_bundle_parts`, keyed by organisation, application root, Application release revision and bundle-format version | Exact immutable release and pin set; reads are scoped to the verified organisation. The optional memory cache uses the same complete key.                         |
 | Initial data-block result      | Shared cache only when explicitly allowed; keyed by organisation, organisation account, application, current Access version, exact pinned releases/fingerprints, all relevant record-type data versions and complete query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable.                                   |
 
 Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
@@ -558,12 +571,15 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 
 ## Cache correctness
 
-- A cache-writing function requires an organisation identifier except for content-hashed application assets.
-- Permission-varying values require the organisation-account identifier, application context and current Access version, not a global identity alone. Query-result keys also include exact pinned releases/fingerprints and the complete query parameters.
+- Bundle writes derive the organisation from the validated human request context. Application root and release identifiers are checked against that organisation's published Application release; they never supply tenant authority.
+- Bundle reads use the exact organisation, application root, Application release revision and format version. They do not resolve a current pointer or a Module release range. A new release creates a new key.
+- The bundle index and parts are committed together and cannot be changed through the protected interface. A repeat write with the same key and pin fingerprint returns the existing index; a different pin fingerprint is refused.
+- Every stored part is at most 1,048,575 UTF-8 bytes, strictly below 1,048,576 bytes, and its size and SHA-256 fingerprint are checked. Large section JSON is split into ordered fragments and reassembled before parsing.
+- Permission-varying query results require the organisation-account identifier, application context and current Access version, not a global identity alone. Query-result keys also include exact pinned releases/fingerprints and the complete query parameters.
 - Data cache keys name every record-type data version used by the query.
 - Read current account, session, Access and relevant data versions before lookup. A hit never bypasses current permission or field checks. Reuse ends at the earliest cache-policy lifetime, authority validity or session/context expiry; there is no fixed 60-second security policy.
 - Permission-administration and Activity responses are not cross-request cached. Provider failure falls back to the ordinary authorised query, never unverifiable stale content.
-- Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, flows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
+- Publication does not retarget an existing installation. Installed applications, grants, flows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them. A format mismatch uses the protected rebuild path, while a stale revision returns a reload outcome.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 

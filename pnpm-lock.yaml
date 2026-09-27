@@ -385,6 +385,9 @@ importers:
       '@vortex/identity':
         specifier: workspace:*
         version: link:../identity
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:../../modules
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -410,6 +413,9 @@ importers:
       '@vortex/module':
         specifier: workspace:*
         version: link:../module
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:../../modules
       '@vortex/query':
         specifier: workspace:*
         version: link:../query
@@ -453,6 +459,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:../../modules
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
@@ -583,6 +592,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:../../modules
       '@vortex/query':
         specifier: workspace:*
         version: link:../query

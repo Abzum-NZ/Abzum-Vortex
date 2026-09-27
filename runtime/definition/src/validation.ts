@@ -5,7 +5,6 @@ import {
   protectedReadModelKeys,
   readRecordDetailContract,
   readRecordsTableContract,
-  isPlatformPermissionKey,
   applicationSourceDocumentV2Schema,
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
@@ -53,6 +52,7 @@ import {
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+import { isPlatformPermissionKey } from "@vortex/modules";
 import type { z } from "zod";
 import {
   evaluateTypedConditionV2,
@@ -287,8 +287,6 @@ const sourceCollectionLocationKind = {
   pages: "page",
   blocks: "block",
   block_registrations: "block",
-  workflows: "workflow",
-  nodes: "workflow_node",
   pipelines: "pipeline",
   queries: "query",
   roles: "role",
@@ -535,6 +533,38 @@ function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFail
       family: schemaFailureFamily[error.code],
       ...(error.location ? { location: error.location } : {}),
     }));
+  });
+}
+
+function pinnedModulePermissionIdRule(
+  context: PreparedValidationContext,
+): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((candidate): DefinitionRuleFailure[] => {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return [];
+    const source = object(candidate);
+    if (source.kind !== "module") return [];
+    if (source.body === null || typeof source.body !== "object" || Array.isArray(source.body))
+      return [];
+    const body = object(source.body);
+    if (!Array.isArray(body.permissions)) return [];
+    const pinnedPermissions = (body.permissions as unknown[]).filter((candidatePermission) =>
+      candidatePermission !== null &&
+      typeof candidatePermission === "object" &&
+      !Array.isArray(candidatePermission) &&
+      Object.prototype.hasOwnProperty.call(candidatePermission, "pinnedPermissionId"),
+    );
+    if (pinnedPermissions.length === 0) return [];
+    return [
+      {
+        ruleCode: "vortex.definition.source_shape",
+        family: "unsupported_choice",
+        location: {
+          documentKind: "module",
+          documentKey: String(source.key),
+          segments: [{ kind: "module", key: String(source.key) }],
+        },
+      },
+    ];
   });
 }
 
@@ -850,7 +880,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
-      const workflows = new Set(array(body.workflows).map((workflow) => String(workflow.key)));
       const flows = new Set(
         array(body.flows).flatMap((flow) => [String(flow.id), String(flow.key)]),
       );
@@ -873,14 +902,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       for (const role of array(body.roles)) if (!pages.has(String(role.home_page))) valid = false;
       for (const pipeline of array(body.pipelines)) {
         const stages = new Set(array(pipeline.stages).map((stage) => String(stage.key)));
-        for (const stage of array(pipeline.stages))
-          if (
-            [
-              ...((stage.entry_workflows as string[]) ?? []),
-              ...((stage.exit_workflows as string[]) ?? []),
-            ].some((workflow) => !workflows.has(workflow))
-          )
-            valid = false;
         for (const transition of array(pipeline.transitions))
           if (!stages.has(String(transition.from)) || !stages.has(String(transition.to)))
             valid = false;
@@ -896,16 +917,6 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         }
       for (const address of array(body.public_addresses))
         if (!pages.has(String(address.page))) valid = false;
-      for (const workflow of array(body.workflows))
-        for (const node of array(workflow.nodes)) {
-          const config = object(node.config);
-          if (node.type === "request_form" && !pages.has(String(config.page))) valid = false;
-          if (node.type === "query_records" && !queries.has(String(config.query))) valid = false;
-          if (node.type === "start_workflow" && !workflows.has(String(config.workflow)))
-            valid = false;
-          if (node.type === "call_connection" && !connections.has(String(config.connection)))
-            valid = false;
-        }
     } else {
       const shapeKeys = new Set(array(body.shapes).map((shape) => String(shape.key)));
       const operationKeys = new Set(
@@ -3799,11 +3810,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         if (
           [...(stage.entryActionKeys as string[]), ...(stage.exitActionKeys as string[])].some(
             (key) => !executableActionKeys.has(key),
-          ) ||
-          // Application content no longer carries node-and-edge workflows (#1086), so a stage
-          // workflow cannot resolve until stage hooks start durable flows.
-          (stage.entryWorkflowIds as string[]).length > 0 ||
-          (stage.exitWorkflowIds as string[]).length > 0
+          )
         )
           failures.push(
             failure(
@@ -4744,6 +4751,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     requiredContext: ["source"],
     safeLocationFamily: "document",
     run: sourceShapeRule,
+  },
+  {
+    ruleId: "vortex.definition.pinned_module_permission_id",
+    emittedCodes: ["vortex.definition.source_shape"],
+    stage: "edit_save",
+    definitionKinds: ["module"],
+    requiredContext: ["source"],
+    safeLocationFamily: "document",
+    run: pinnedModulePermissionIdRule,
   },
   {
     ruleId: "vortex.definition.local_identity_unique",
