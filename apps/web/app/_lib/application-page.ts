@@ -293,6 +293,7 @@ export const loadApplicationPage = async (
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
+  const tables = createRecordsTableQueryResolver(queries);
   const subjects = createPageSubjectReader(dependencies);
 
   const data: Record<string, PageDataState> = {};
@@ -396,16 +397,6 @@ export const loadApplicationPage = async (
     const fieldLabels = fieldLabelsOf(bound.module);
 
     if (tableContract !== undefined) {
-      let queryRefusalReasonCode: string | undefined;
-      const tables = createRecordsTableQueryResolver({
-        run: async (querySession, querySelection, command) => {
-          const result = await queries.run(querySession, querySelection, command);
-          if (result.kind === "available" && result.value.outcome === "refused") {
-            queryRefusalReasonCode = result.value.reasonCode;
-          }
-          return result;
-        },
-      });
       const pageParameters: Record<string, JsonValue> = {};
       for (const parameter of tableContract.parameters) {
         const raw = parameter.pageParameter === undefined ? undefined : first(parameters[parameter.pageParameter]);
@@ -430,7 +421,7 @@ export const loadApplicationPage = async (
         data[placementId] = { status: "error" };
       } else if (resolved.kind === "refused") {
         console.error(
-          `[page] data placement refused: class=${queryRefusalReasonCode === undefined ? "records_table" : "protected_query"} code=${queryRefusalReasonCode ?? "query_refused"}`,
+          `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
         );
         data[placementId] = { status: "refused", reason: "not_permitted" };
       } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
