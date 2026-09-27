@@ -18,6 +18,8 @@ import {
   sourceQualifiedConditionSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRecordTypeSchema,
+  sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
 } from "./definition-source-common";
 import {
   actionInputSchema,
@@ -91,10 +93,7 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    if (
-      Array.isArray(entry.value) &&
-      entry.value.length > maximumSourceContainerItems
-    ) {
+    if (Array.isArray(entry.value) && entry.value.length > maximumSourceContainerItems) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -138,7 +137,10 @@ const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
  * missing page resolve to the same experience, so their surfaces stay indistinguishable.
  */
 const sourceApplicationExperienceSchema = z
-  .object({ state: applicationExperienceStateSchema, page: builderKeySchema })
+  .object({
+    state: sourceProvenanceUnchanged(applicationExperienceStateSchema),
+    page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+  })
   .strict();
 /** Placement bindings that gate, condition or load data; none may appear on an experience page. */
 const sourceExperienceGatedPlacementKeys = [
@@ -167,28 +169,28 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z
       .object({
-        id: sourceAliasSchema,
-        type: z.literal("heading"),
-        label: labelSchema,
-        children: z.array(sourceNavigationSchema).min(1).max(100),
+        id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
+        type: sourceProvenanceUnchanged(z.literal("heading")),
+        label: sourceProvenanceUnchanged(labelSchema),
+        children: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).min(1).max(100)),
       })
       .strict(),
     z
       .object({
-        id: sourceAliasSchema,
-        type: z.literal("page"),
-        label: labelSchema,
-        page: builderKeySchema,
-        permission: namespacedKeySchema,
+        id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
+        type: sourceProvenanceUnchanged(z.literal("page")),
+        label: sourceProvenanceUnchanged(labelSchema),
+        page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+        permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
       .strict(),
     z
       .object({
-        id: sourceAliasSchema,
-        type: z.literal("external"),
-        label: labelSchema,
-        address: z.string().url().startsWith("https://"),
-        permission: namespacedKeySchema,
+        id: sourceProvenanceUnchanged(sourceAliasSchema),
+        type: sourceProvenanceUnchanged(z.literal("external")),
+        label: sourceProvenanceUnchanged(labelSchema),
+        address: sourceProvenanceUnchanged(z.string().url().startsWith("https://")),
+        permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
       .strict(),
   ]),
@@ -198,32 +200,36 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
 const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
 
 const sourcePageV2Common = {
-  id: sourceAliasSchema,
-  key: builderKeySchema,
-  name: labelSchema,
-  states: retiredSourcePageSettingV2Schema,
-  standard_page_replacement: retiredSourcePageSettingV2Schema,
+  id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
+  key: sourceProvenanceUnchanged(builderKeySchema),
+  name: sourceProvenanceUnchanged(labelSchema),
+  states: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
+  standard_page_replacement: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
 };
 
 const sourcePageV2Base = {
   ...sourcePageV2Common,
-  composition: sourcePageCompositionV2Schema,
+  composition: sourceProvenanceUnchanged(sourcePageCompositionV2Schema),
 };
 
 const sourceListPageV2Schema = z
   .object({
     ...sourcePageV2Base,
-    type: z.literal("list"),
-    record_type: sourceQualifiedRecordTypeSchema,
-    permission: namespacedKeySchema,
-    query: sourceQualifiedQueryReferenceSchema,
-    arrangements: retiredSourcePageSettingV2Schema,
-    calendar_mapping: retiredSourcePageSettingV2Schema,
+    type: sourceProvenanceUnchanged(z.literal("list")),
+    record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+    permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+    query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
+    arrangements: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
+    calendar_mapping: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
   })
   .strict();
 
 const sourceGuidedFormStepV2Schema = z
-  .object({ id: sourceAliasSchema, name: z.string().min(1).max(60), summary: z.boolean() })
+  .object({
+    id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
+    name: sourceProvenanceUnchanged(z.string().min(1).max(60)),
+    summary: sourceProvenanceUnchanged(z.boolean()),
+  })
   .strict();
 
 export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
@@ -231,34 +237,34 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
   z
     .object({
       ...sourcePageV2Base,
-      type: z.literal("detail"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
+      type: sourceProvenanceUnchanged(z.literal("detail")),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Base,
-      type: z.literal("dashboard"),
-      permission: namespacedKeySchema,
+      type: sourceProvenanceUnchanged(z.literal("dashboard")),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Base,
-      type: z.literal("form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
+      type: sourceProvenanceUnchanged(z.literal("form")),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
       ...sourcePageV2Common,
-      type: z.literal("guided_form"),
-      record_type: sourceQualifiedRecordTypeSchema,
-      permission: namespacedKeySchema,
-      steps: z.array(sourceGuidedFormStepV2Schema).min(2).max(20),
-      composition: sourceGuidedFormPageCompositionV2Schema,
+      type: sourceProvenanceUnchanged(z.literal("guided_form")),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+      steps: sourceProvenanceUnchanged(z.array(sourceGuidedFormStepV2Schema).min(2).max(20)),
+      composition: sourceProvenanceUnchanged(sourceGuidedFormPageCompositionV2Schema),
     })
     .strict()
     .superRefine((value, context) => {
@@ -289,12 +295,16 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
   z
     .object({
       ...sourcePageV2Base,
-      type: z.literal("public"),
-      permission: namespacedKeySchema,
-      record_type: sourceQualifiedRecordTypeSchema.optional(),
-      public_fields: z.array(builderKeySchema),
-      public_action: namespacedKeySchema.optional(),
-      rate_limit_per_minute: z.number().int().min(1).max(10_000),
+      type: sourceProvenanceUnchanged(z.literal("public")),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
+        "recordType/**",
+      ]),
+      public_fields: sourceProvenanceUnchanged(
+        z.array(sourceProvenanceTarget(builderKeySchema, ["publicFieldIds/#"])),
+      ),
+      public_action: sourceProvenanceTarget(namespacedKeySchema.optional(), ["publicActionKey"]),
+      rate_limit_per_minute: sourceProvenanceUnchanged(z.number().int().min(1).max(10_000)),
     })
     .strict()
     .superRefine((value, context) => {
@@ -313,27 +323,44 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
 // compiler validates them as source and compiles them to nothing. They remain only until the shipped
 // background workflows become durable flows (#1088, #1092); do not extend this shape.
 const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
-  z.object({ source: z.literal("trigger_field"), field: sourceQualifiedFieldSchema }).strict(),
-  z.object({ source: z.literal("trigger_input"), input: builderKeySchema }).strict(),
   z
     .object({
-      source: z.literal("node_output"),
-      node: sourceAliasSchema,
-      output: builderKeySchema,
+      source: sourceProvenanceUnchanged(z.literal("literal")),
+      value: sourceProvenanceUnchanged(jsonValueSchema),
     })
     .strict(),
-  z.object({ source: z.literal("current_record") }).strict(),
-  z.object({ source: z.literal("current_actor") }).strict(),
-  z.object({ source: z.literal("current_time") }).strict(),
+  z
+    .object({
+      source: sourceProvenanceUnchanged(z.literal("trigger_field")),
+      field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+    })
+    .strict(),
+  z
+    .object({
+      source: sourceProvenanceUnchanged(z.literal("trigger_input")),
+      input: sourceProvenanceUnchanged(builderKeySchema),
+    })
+    .strict(),
+  z
+    .object({
+      source: sourceProvenanceUnchanged(z.literal("node_output")),
+      node: sourceProvenanceUnchanged(sourceAliasSchema),
+      output: sourceProvenanceUnchanged(builderKeySchema),
+    })
+    .strict(),
+  z.object({ source: sourceProvenanceUnchanged(z.literal("current_record")) }).strict(),
+  z.object({ source: sourceProvenanceUnchanged(z.literal("current_actor")) }).strict(),
+  z.object({ source: sourceProvenanceUnchanged(z.literal("current_time")) }).strict(),
 ]);
 const isSourceRecordReferenceType = (type: string) =>
   type === "record_reference" || type === "record_reference_list";
 const sourceWorkflowDeclaredOutputSchema = z
   .object({
-    key: builderKeySchema,
-    type: workflowValueTypeSchema,
-    record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    type: sourceProvenanceUnchanged(workflowValueTypeSchema),
+    record_types: sourceProvenanceUnchanged(
+      z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -349,125 +376,161 @@ const sourceWorkflowConfigByType = {
   condition: sourceQualifiedConditionSchema,
   decision_table: z
     .object({
-      decisions: z
-        .array(
-          z.object({ when: sourceQualifiedConditionSchema, output: builderKeySchema }).strict(),
-        )
-        .min(2),
+      decisions: sourceProvenanceUnchanged(
+        z
+          .array(
+            z
+              .object({
+                when: sourceProvenanceUnchanged(sourceQualifiedConditionSchema),
+                output: sourceProvenanceUnchanged(builderKeySchema),
+              })
+              .strict(),
+          )
+          .min(2),
+      ),
     })
     .strict(),
   bounded_loop: z
-    .object({ query: builderKeySchema, maximum_records: z.number().int().min(1).max(1_000) })
+    .object({
+      query: sourceProvenanceUnchanged(builderKeySchema),
+      maximum_records: sourceProvenanceUnchanged(z.number().int().min(1).max(1_000)),
+    })
     .strict(),
-  delay: z.object({ seconds: z.number().int().min(1).max(7_776_000) }).strict(),
-  wait_until: z.object({ field: sourceQualifiedFieldSchema }).strict(),
-  start_workflow: z.object({ workflow: builderKeySchema }).strict(),
-  stop: z.object({ reason_code: builderKeySchema }).strict(),
+  delay: z
+    .object({ seconds: sourceProvenanceUnchanged(z.number().int().min(1).max(7_776_000)) })
+    .strict(),
+  wait_until: z.object({ field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema) }).strict(),
+  start_workflow: z.object({ workflow: sourceProvenanceUnchanged(builderKeySchema) }).strict(),
+  stop: z.object({ reason_code: sourceProvenanceUnchanged(builderKeySchema) }).strict(),
   create_record: z
     .object({
-      record_type: sourceQualifiedRecordTypeSchema,
-      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+      record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+      values: sourceProvenanceUnchanged(z.record(builderKeySchema, sourceWorkflowValueSchema)),
     })
     .strict(),
   change_record: z
     .object({
-      record_type: sourceQualifiedRecordTypeSchema,
-      record: sourceWorkflowValueSchema,
-      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+      record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      values: sourceProvenanceUnchanged(z.record(builderKeySchema, sourceWorkflowValueSchema)),
     })
     .strict(),
   run_action: z
     .object({
-      action: namespacedKeySchema,
-      subject: sourceWorkflowValueSchema,
-      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+      action: sourceProvenanceUnchanged(namespacedKeySchema),
+      subject: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      inputs: sourceProvenanceUnchanged(z.record(builderKeySchema, sourceWorkflowValueSchema)),
     })
     .strict(),
   soft_delete_record: z
-    .object({ record_type: sourceQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
+    .object({
+      record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+    })
     .strict(),
   duplicate_record: z
-    .object({ record_type: sourceQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
+    .object({
+      record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+    })
     .strict(),
   add_relationship: z
     .object({
-      relationship: sourceQualifiedRelationshipSchema,
-      subject: sourceWorkflowValueSchema,
-      target: sourceWorkflowValueSchema,
+      relationship: sourceProvenanceUnchanged(sourceQualifiedRelationshipSchema),
+      subject: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      target: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
     })
     .strict(),
   copy_relationships: z
     .object({
-      relationships: z.array(sourceQualifiedRelationshipSchema).min(1).max(100),
-      source_record: sourceWorkflowValueSchema,
-      target_record: sourceWorkflowValueSchema,
+      relationships: sourceProvenanceUnchanged(
+        z.array(sourceQualifiedRelationshipSchema).min(1).max(100),
+      ),
+      source_record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      target_record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
     })
     .strict(),
   request_form: z
     .object({
-      page: builderKeySchema,
-      responder_permission: namespacedKeySchema,
-      due_in_seconds: z.number().int().min(1).max(7_776_000),
-      timeout_outcome: builderKeySchema,
-      outputs: z.array(sourceWorkflowDeclaredOutputSchema).min(1).max(100),
+      page: sourceProvenanceUnchanged(builderKeySchema),
+      responder_permission: sourceProvenanceUnchanged(namespacedKeySchema),
+      due_in_seconds: sourceProvenanceUnchanged(z.number().int().min(1).max(7_776_000)),
+      timeout_outcome: sourceProvenanceUnchanged(builderKeySchema),
+      outputs: sourceProvenanceUnchanged(
+        z.array(sourceWorkflowDeclaredOutputSchema).min(1).max(100),
+      ),
     })
     .strict(),
-  query_records: z.object({ query: builderKeySchema }).strict(),
+  query_records: z.object({ query: sourceProvenanceUnchanged(builderKeySchema) }).strict(),
   set_values: z
     .object({
-      record: sourceWorkflowValueSchema,
-      values: z.record(sourceQualifiedFieldSchema, sourceWorkflowValueSchema),
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      values: sourceProvenanceUnchanged(
+        z.record(sourceQualifiedFieldSchema, sourceWorkflowValueSchema),
+      ),
     })
     .strict(),
   format_value: z
-    .object({ formatter: builderKeySchema, input: sourceWorkflowValueSchema })
+    .object({
+      formatter: sourceProvenanceUnchanged(builderKeySchema),
+      input: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+    })
     .strict(),
   generate_export: z
-    .object({ query: builderKeySchema, maximum_rows: z.number().int().min(1).max(100_000) })
+    .object({
+      query: sourceProvenanceUnchanged(builderKeySchema),
+      maximum_rows: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),
+    })
     .strict(),
   attach_file: z
     .object({
-      record: sourceWorkflowValueSchema,
-      field: sourceQualifiedFieldSchema,
-      file: sourceWorkflowValueSchema,
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+      file: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
     })
     .strict(),
   move_file: z
     .object({
-      record: sourceWorkflowValueSchema,
-      field: sourceQualifiedFieldSchema,
-      file: sourceWorkflowValueSchema,
+      record: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
+      field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+      file: sourceProvenanceUnchanged(sourceWorkflowValueSchema),
     })
     .strict(),
   call_connection: z
     .object({
-      connection: sourceAliasSchema,
-      operation: builderKeySchema,
-      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+      connection: sourceProvenanceUnchanged(sourceAliasSchema),
+      operation: sourceProvenanceUnchanged(builderKeySchema),
+      inputs: sourceProvenanceUnchanged(z.record(builderKeySchema, sourceWorkflowValueSchema)),
     })
     .strict(),
-  acknowledge_message: z.object({ message: builderKeySchema }).strict(),
+  acknowledge_message: z.object({ message: sourceProvenanceUnchanged(builderKeySchema) }).strict(),
 } satisfies Record<(typeof workflowNodeTypeKeys)[number], z.ZodType>;
 const sourceWorkflowNodeMembers = workflowNodeTypeKeys.map((type) =>
   z
     .object({
-      id: sourceAliasSchema,
-      type: z.literal(type),
-      config: sourceWorkflowConfigByType[type],
-      permission: namespacedKeySchema.optional(),
-      timeout_seconds: z.number().int().min(1).max(7_776_000).optional(),
-      retry: z
-        .object({
-          maximum_attempts: z.number().int().min(1).max(20),
-          initial_delay_seconds: z.number().int().min(0).max(86_400),
-          maximum_delay_seconds: z.number().int().min(0).max(86_400),
-          backoff: z.enum(["fixed", "exponential"]),
-        })
-        .strict()
-        .optional(),
-      duplicate_protection: z.enum(["not_applicable", "required"]).optional(),
-      activity: builderKeySchema.optional(),
-      redaction: z.enum(["identifiers_only", "safe_fields", "no_payload"]).optional(),
+      id: sourceProvenanceUnchanged(sourceAliasSchema),
+      type: sourceProvenanceUnchanged(z.literal(type)),
+      config: sourceProvenanceUnchanged(sourceWorkflowConfigByType[type]),
+      permission: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
+      timeout_seconds: sourceProvenanceUnchanged(z.number().int().min(1).max(7_776_000).optional()),
+      retry: sourceProvenanceUnchanged(
+        z
+          .object({
+            maximum_attempts: sourceProvenanceUnchanged(z.number().int().min(1).max(20)),
+            initial_delay_seconds: sourceProvenanceUnchanged(z.number().int().min(0).max(86_400)),
+            maximum_delay_seconds: sourceProvenanceUnchanged(z.number().int().min(0).max(86_400)),
+            backoff: sourceProvenanceUnchanged(z.enum(["fixed", "exponential"])),
+          })
+          .strict()
+          .optional(),
+      ),
+      duplicate_protection: sourceProvenanceUnchanged(
+        z.enum(["not_applicable", "required"]).optional(),
+      ),
+      activity: sourceProvenanceUnchanged(builderKeySchema.optional()),
+      redaction: sourceProvenanceUnchanged(
+        z.enum(["identifiers_only", "safe_fields", "no_payload"]).optional(),
+      ),
     })
     .strict(),
 );
@@ -481,13 +544,27 @@ const sourceWorkflowNodeSchema = z.discriminatedUnion(
 );
 const sourceWorkflowTriggerInputSchema = z
   .object({
-    key: builderKeySchema,
-    type: workflowValueTypeSchema,
-    source: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("record_field"), field: builderKeySchema }).strict(),
-      z.object({ kind: z.literal("payload"), key: builderKeySchema }).strict(),
-    ]),
-    record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    type: sourceProvenanceUnchanged(workflowValueTypeSchema),
+    source: sourceProvenanceUnchanged(
+      z.discriminatedUnion("kind", [
+        z
+          .object({
+            kind: sourceProvenanceUnchanged(z.literal("record_field")),
+            field: sourceProvenanceUnchanged(builderKeySchema),
+          })
+          .strict(),
+        z
+          .object({
+            kind: sourceProvenanceUnchanged(z.literal("payload")),
+            key: sourceProvenanceUnchanged(builderKeySchema),
+          })
+          .strict(),
+      ]),
+    ),
+    record_types: sourceProvenanceUnchanged(
+      z.array(sourceQualifiedRecordTypeSchema).min(1).optional(),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -499,19 +576,19 @@ const sourceWorkflowTriggerInputSchema = z
       });
   });
 const sourceWorkflowTriggerCommon = {
-  inputs: z.array(sourceWorkflowTriggerInputSchema).max(100),
-  condition: sourceConditionSchema.nullable(),
-  duplicate_protection: z.enum(["not_required", "required"]),
+  inputs: sourceProvenanceUnchanged(z.array(sourceWorkflowTriggerInputSchema).max(100)),
+  condition: sourceProvenanceUnchanged(sourceConditionSchema.nullable()),
+  duplicate_protection: sourceProvenanceUnchanged(z.enum(["not_required", "required"])),
 };
 const sourceWorkflowScheduleSchema = z
   .object({
-    cadence: z.enum(["hourly", "daily", "weekly", "monthly"]),
-    interval: z.number().int().min(1).max(365),
-    time_zone: z.string().min(1).max(100),
-    minute: z.number().int().min(0).max(59),
-    hour: z.number().int().min(0).max(23).optional(),
-    week_day: z.number().int().min(1).max(7).optional(),
-    month_day: z.number().int().min(1).max(31).optional(),
+    cadence: sourceProvenanceUnchanged(z.enum(["hourly", "daily", "weekly", "monthly"])),
+    interval: sourceProvenanceUnchanged(z.number().int().min(1).max(365)),
+    time_zone: sourceProvenanceUnchanged(z.string().min(1).max(100)),
+    minute: sourceProvenanceUnchanged(z.number().int().min(0).max(59)),
+    hour: sourceProvenanceUnchanged(z.number().int().min(0).max(23).optional()),
+    week_day: sourceProvenanceUnchanged(z.number().int().min(1).max(7).optional()),
+    month_day: sourceProvenanceUnchanged(z.number().int().min(1).max(31).optional()),
   })
   .strict()
   .superRefine((value, context) => {
@@ -549,12 +626,23 @@ const sourceInterfaceValueTypeSchema = z.enum([
 ]);
 const sourceInterfaceInputFieldSchema = z
   .object({
-    type: z.union([sourceInterfaceValueTypeSchema, z.literal("formatted_text")]),
-    required: z.boolean(),
-    target_binding: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("action_subject") }).strict(),
-      z.object({ kind: z.literal("action_input"), key: builderKeySchema }).strict(),
-    ]),
+    type: sourceProvenanceUnchanged(
+      z.union([sourceInterfaceValueTypeSchema, z.literal("formatted_text")]),
+    ),
+    required: sourceProvenanceUnchanged(z.boolean()),
+    target_binding: sourceProvenanceTarget(
+      z.discriminatedUnion("kind", [
+        z.object({ kind: sourceProvenanceUnchanged(z.literal("action_subject")) }).strict(),
+        z
+          .object({
+            kind: sourceProvenanceUnchanged(z.literal("action_input")),
+            key: sourceProvenanceUnchanged(builderKeySchema),
+          })
+          .strict(),
+      ]),
+      ["targetBinding/**"],
+      true,
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -567,18 +655,29 @@ const sourceInterfaceInputFieldSchema = z
   });
 const sourceInterfaceOutputFieldSchema = z
   .object({
-    type: sourceInterfaceValueTypeSchema,
-    required: z.boolean(),
-    target_binding: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("query_field"), field: sourceQualifiedFieldSchema }).strict(),
-      z
-        .object({
-          kind: z.literal("query_page_information"),
-          value: z.enum(["continuation_token", "has_more", "result_count"]),
-        })
-        .strict(),
-      z.object({ kind: z.literal("workflow_run_id") }).strict(),
-    ]),
+    type: sourceProvenanceUnchanged(sourceInterfaceValueTypeSchema),
+    required: sourceProvenanceUnchanged(z.boolean()),
+    target_binding: sourceProvenanceTarget(
+      z.discriminatedUnion("kind", [
+        z
+          .object({
+            kind: sourceProvenanceUnchanged(z.literal("query_field")),
+            field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+          })
+          .strict(),
+        z
+          .object({
+            kind: sourceProvenanceUnchanged(z.literal("query_page_information")),
+            value: sourceProvenanceUnchanged(
+              z.enum(["continuation_token", "has_more", "result_count"]),
+            ),
+          })
+          .strict(),
+        z.object({ kind: sourceProvenanceUnchanged(z.literal("workflow_run_id")) }).strict(),
+      ]),
+      ["targetBinding/**"],
+      true,
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -605,26 +704,45 @@ const sourceInterfaceOutputFieldSchema = z
  * background start, never a lower-level action or workflow, or a declared query for a read.
  */
 const sourceInterfaceTargetSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("flow"), flow: flowAliasSchema }).strict(),
-  z.object({ kind: z.literal("query"), key: builderKeySchema }).strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("flow")),
+      flow: sourceProvenanceTarget(flowAliasSchema, ["flowId"]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: sourceProvenanceUnchanged(z.literal("query")),
+      key: sourceProvenanceTarget(builderKeySchema, ["queryId"]),
+    })
+    .strict(),
 ]);
 const sourceInterfaceOperationSchema = z
   .object({
-    key: builderKeySchema,
-    id: sourceAliasSchema,
-    description: z.string().min(1).max(1_000),
-    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
-    path: z.string().startsWith("/").max(500),
-    input_shape: z.record(builderKeySchema, sourceInterfaceInputFieldSchema),
-    output_shape: z.record(builderKeySchema, sourceInterfaceOutputFieldSchema),
-    authentication: z.enum(["organisation_token", "partner_token", "public"]),
-    permission: namespacedKeySchema,
-    visibility: z.enum(["organisation_private", "partner", "public"]),
-    rate_limit_per_minute: z.number().int().min(1).max(100_000),
-    maximum_request_bytes: z.number().int().min(1).max(100_000_000),
-    duplicate_protection: z.enum(["not_required", "required"]),
-    target: sourceInterfaceTargetSchema,
-    error_codes: z.array(builderKeySchema),
+    key: sourceProvenanceUnchanged(builderKeySchema),
+    id: sourceProvenanceTarget(sourceAliasSchema, ["operationId"]),
+    description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+    method: sourceProvenanceUnchanged(z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"])),
+    path: sourceProvenanceUnchanged(z.string().startsWith("/").max(500)),
+    input_shape: sourceProvenanceUnchanged(
+      z.record(builderKeySchema, sourceInterfaceInputFieldSchema),
+    ),
+    output_shape: sourceProvenanceUnchanged(
+      z.record(builderKeySchema, sourceInterfaceOutputFieldSchema),
+    ),
+    authentication: sourceProvenanceTarget(
+      z.enum(["organisation_token", "partner_token", "public"]),
+      ["authentication"],
+    ),
+    permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
+    visibility: sourceProvenanceTarget(z.enum(["organisation_private", "partner", "public"]), [
+      "visibility",
+    ]),
+    rate_limit_per_minute: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),
+    maximum_request_bytes: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000_000)),
+    duplicate_protection: sourceProvenanceUnchanged(z.enum(["not_required", "required"])),
+    target: sourceProvenanceUnchanged(sourceInterfaceTargetSchema),
+    error_codes: sourceProvenanceUnchanged(z.array(builderKeySchema)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -659,310 +777,456 @@ const sourceInterfaceOperationSchema = z
   });
 export const sourceApplicationBodyV2Schema = z
   .object({
-    name: z.string().min(1).max(120),
-    description: z.string().min(1).max(1_000),
-    icon: z
-      .string()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    home_page: builderKeySchema,
-    module_bindings: z
-      .array(
-        z
-          .object({
-            module: namespacedKeySchema,
-            version: versionRequirementSchema,
-            purpose: builderKeySchema,
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(100),
-    permissions: z.array(
+    name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+    description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+    icon: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: namespacedKeySchema,
-          label: labelSchema,
-          description: z.string().min(1).max(1_000),
-          record_type: sourceQualifiedRecordTypeSchema.optional(),
-          action_kind: z.enum([
-            "create",
-            "read",
-            "update",
-            "delete",
-            "restore",
-            "export",
-            "share",
-            "manage",
-            "named",
-          ]),
-          named_action: builderKeySchema.optional(),
-          administrative: z.boolean(),
-          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
-          field_policy: sourcePermissionFieldPolicySchema.optional(),
-        })
-        .strict()
-        .superRefine((value, context) => {
-          if (value.field_policy !== undefined && value.record_type === undefined)
-            context.addIssue({
-              code: "custom",
-              path: ["field_policy"],
-              message: "Only record permissions may declare a field policy",
-            });
-        }),
-    ).max(100),
-    roles: z
-      .array(
-        z
-          .object({
-            id: sourceAliasSchema,
-            key: builderKeySchema,
-            name: labelSchema,
-            home_page: builderKeySchema,
-            permissions: applicationRolePermissionKeysSchema,
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(100),
-    navigation: z.array(sourceNavigationSchema).max(100),
-    queries: z.array(
+        .string()
+        .min(1)
+        .max(120)
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    ),
+    home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
+    module_bindings: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          select: z.array(builderKeySchema).min(1).max(200),
-          filter: sourceFilterSchema,
-          group_by: z.array(builderKeySchema).max(10),
-          aggregates: z.array(
-            z
-              .object({
-                operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
-                field: builderKeySchema.optional(),
-                alias: builderKeySchema,
-              })
-              .strict(),
-          ).max(20),
-          sort: z
-            .array(
-              z
-                .object({ field: builderKeySchema, direction: z.enum(["ascending", "descending"]) })
-                .strict(),
-            )
-            .min(1)
-            .max(20),
-          page_size: z.number().int().min(1).max(200),
-          relationship_hops: z.number().int().min(0).max(2),
-        })
-        .strict(),
-    ).max(100),
+        .array(
+          z
+            .object({
+              module: sourceProvenanceTarget(namespacedKeySchema, [
+                "moduleRootId",
+                "resolvedVersion",
+              ]),
+              version: sourceProvenanceUnchanged(versionRequirementSchema, true),
+              purpose: sourceProvenanceUnchanged(builderKeySchema),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(100),
+    ),
+    permissions: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              label: sourceProvenanceUnchanged(labelSchema),
+              description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
+                "recordType/**",
+              ]),
+              action_kind: sourceProvenanceUnchanged(
+                z.enum([
+                  "create",
+                  "read",
+                  "update",
+                  "delete",
+                  "restore",
+                  "export",
+                  "share",
+                  "manage",
+                  "named",
+                ]),
+              ),
+              named_action: sourceProvenanceUnchanged(builderKeySchema.optional()),
+              administrative: sourceProvenanceUnchanged(z.boolean()),
+              record_scope: sourceProvenanceUnchanged(
+                moduleSourcePermissionRecordScopeSchema.optional(),
+              ),
+              field_policy: sourceProvenanceUnchanged(sourcePermissionFieldPolicySchema.optional()),
+            })
+            .strict()
+            .superRefine((value, context) => {
+              if (value.field_policy !== undefined && value.record_type === undefined)
+                context.addIssue({
+                  code: "custom",
+                  path: ["field_policy"],
+                  message: "Only record permissions may declare a field policy",
+                });
+            }),
+        )
+        .max(100),
+    ),
+    roles: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["roleId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              name: sourceProvenanceUnchanged(labelSchema),
+              home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
+              permissions: sourceProvenanceTarget(
+                applicationRolePermissionKeysSchema,
+                ["permissionKeys/#", "permissionSelection/kind"],
+                true,
+              ),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(100),
+    ),
+    navigation: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).max(100)),
+    queries: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
+                "recordType/**",
+              ]),
+              select: sourceProvenanceUnchanged(
+                z
+                  .array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"]))
+                  .min(1)
+                  .max(200),
+              ),
+              filter: sourceProvenanceUnchanged(sourceFilterSchema),
+              group_by: sourceProvenanceUnchanged(
+                z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
+              ),
+              aggregates: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z
+                      .object({
+                        operation: sourceProvenanceUnchanged(
+                          z.enum(["count", "sum", "minimum", "maximum", "average"]),
+                        ),
+                        field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
+                        alias: sourceProvenanceUnchanged(builderKeySchema),
+                      })
+                      .strict(),
+                  )
+                  .max(20),
+              ),
+              sort: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z
+                      .object({
+                        field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
+                        direction: sourceProvenanceUnchanged(z.enum(["ascending", "descending"])),
+                      })
+                      .strict(),
+                  )
+                  .min(1)
+                  .max(20),
+              ),
+              page_size: sourceProvenanceUnchanged(z.number().int().min(1).max(200)),
+              relationship_hops: sourceProvenanceUnchanged(z.number().int().min(0).max(2)),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
     /** Legacy node-and-edge workflows; validated as source, compiled to nothing (#1086). */
-    workflows: z.array(
+    workflows: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          name: z.string().min(1).max(120),
-          trigger: z.discriminatedUnion("kind", [
-            z
-              .object({
-                kind: z.literal("event"),
-                event: namespacedKeySchema,
-                record_type: sourceQualifiedRecordTypeSchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("schedule"),
-                schedule: sourceWorkflowScheduleSchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("incoming_message"),
-                message: builderKeySchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("button"),
-                action: namespacedKeySchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("interface"),
-                operation: builderKeySchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("workflow"),
-                workflow: builderKeySchema,
-                ...sourceWorkflowTriggerCommon,
-              })
-              .strict(),
-          ]),
-          run_as: sourceWorkflowRunAsSchema,
-          maximum_nesting_depth: z.number().int().min(1).max(5),
-          nodes: z.array(sourceWorkflowNodeSchema).min(1).max(100),
-          edges: z.array(
-            z.tuple([sourceAliasSchema, sourceAliasSchema, builderKeySchema.optional()]),
-          ).max(200),
-        })
-        .strict(),
-    ).max(100),
-    pipelines: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["workflowId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+              trigger: sourceProvenanceUnchanged(
+                z.discriminatedUnion("kind", [
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("event")),
+                      event: sourceProvenanceUnchanged(namespacedKeySchema),
+                      record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("schedule")),
+                      schedule: sourceProvenanceUnchanged(sourceWorkflowScheduleSchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("incoming_message")),
+                      message: sourceProvenanceUnchanged(builderKeySchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("button")),
+                      action: sourceProvenanceUnchanged(namespacedKeySchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("interface")),
+                      operation: sourceProvenanceUnchanged(builderKeySchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      kind: sourceProvenanceUnchanged(z.literal("workflow")),
+                      workflow: sourceProvenanceUnchanged(builderKeySchema),
+                      ...sourceWorkflowTriggerCommon,
+                    })
+                    .strict(),
+                ]),
+              ),
+              run_as: sourceProvenanceUnchanged(sourceWorkflowRunAsSchema),
+              maximum_nesting_depth: sourceProvenanceUnchanged(z.number().int().min(1).max(5)),
+              nodes: sourceProvenanceUnchanged(z.array(sourceWorkflowNodeSchema).min(1).max(100)),
+              edges: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z.tuple([sourceAliasSchema, sourceAliasSchema, builderKeySchema.optional()]),
+                  )
+                  .max(200),
+              ),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    pipelines: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          name: labelSchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          stage_field: builderKeySchema,
-          stages: z
-            .array(
-              z
-                .object({
-                  key: builderKeySchema,
-                  label: labelSchema,
-                  entry_actions: z.array(namespacedKeySchema).max(10),
-                  exit_actions: z.array(namespacedKeySchema).max(10),
-                  entry_workflows: z.array(builderKeySchema).max(10),
-                  exit_workflows: z.array(builderKeySchema).max(10),
-                })
-                .strict(),
-            )
-            .min(1)
-            .max(100),
-          transitions: z
-            .array(
-              z
-                .object({
-                  from: builderKeySchema,
-                  to: builderKeySchema,
-                  permission: namespacedKeySchema.optional(),
-                  action: namespacedKeySchema.optional(),
-                  gate: sourceConditionSchema.optional(),
-                })
-                .strict(),
-            )
-            .min(1)
-            .max(200),
-          time_targets: z.array(
-            z
-              .object({
-                stage: builderKeySchema,
-                field: builderKeySchema,
-                escalation_event: namespacedKeySchema,
-              })
-              .strict(),
-          ).max(100),
-        })
-        .strict(),
-    ).max(100),
-    connection_bindings: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["pipelineId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              name: sourceProvenanceUnchanged(labelSchema),
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
+                "recordType/**",
+              ]),
+              stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
+              stages: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z
+                      .object({
+                        key: sourceProvenanceUnchanged(builderKeySchema),
+                        label: sourceProvenanceUnchanged(labelSchema),
+                        entry_actions: sourceProvenanceUnchanged(
+                          z
+                            .array(
+                              sourceProvenanceTarget(namespacedKeySchema, ["entryActionKeys/#"]),
+                            )
+                            .max(10),
+                        ),
+                        exit_actions: sourceProvenanceUnchanged(
+                          z
+                            .array(
+                              sourceProvenanceTarget(namespacedKeySchema, ["exitActionKeys/#"]),
+                            )
+                            .max(10),
+                        ),
+                        entry_workflows: sourceProvenanceUnchanged(
+                          z
+                            .array(sourceProvenanceTarget(builderKeySchema, ["entryWorkflowIds/#"]))
+                            .max(10),
+                        ),
+                        exit_workflows: sourceProvenanceUnchanged(
+                          z
+                            .array(sourceProvenanceTarget(builderKeySchema, ["exitWorkflowIds/#"]))
+                            .max(10),
+                        ),
+                      })
+                      .strict(),
+                  )
+                  .min(1)
+                  .max(100),
+              ),
+              transitions: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z
+                      .object({
+                        from: sourceProvenanceUnchanged(builderKeySchema),
+                        to: sourceProvenanceUnchanged(builderKeySchema),
+                        permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
+                          "permissionKey",
+                        ]),
+                        action: sourceProvenanceTarget(namespacedKeySchema.optional(), [
+                          "actionKey",
+                        ]),
+                        gate: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
+                      })
+                      .strict(),
+                  )
+                  .min(1)
+                  .max(200),
+              ),
+              time_targets: sourceProvenanceUnchanged(
+                z
+                  .array(
+                    z
+                      .object({
+                        stage: sourceProvenanceTarget(builderKeySchema, ["stageKey"]),
+                        field: sourceProvenanceTarget(builderKeySchema, ["dateTimeFieldId"]),
+                        escalation_event: sourceProvenanceTarget(namespacedKeySchema, [
+                          "escalationEventKey",
+                        ]),
+                      })
+                      .strict(),
+                  )
+                  .max(100),
+              ),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    connection_bindings: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: builderKeySchema,
-          connection_type: namespacedKeySchema,
-          version: versionRequirementSchema,
-          required_operations: z.array(builderKeySchema).min(1),
-        })
-        .strict(),
-    ).max(100),
-    interfaces: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["bindingId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              connection_type: sourceProvenanceTarget(namespacedKeySchema, [
+                "connectionTypeId",
+                "resolvedVersion",
+              ]),
+              version: sourceProvenanceUnchanged(versionRequirementSchema, true),
+              required_operations: sourceProvenanceUnchanged(
+                z
+                  .array(sourceProvenanceTarget(builderKeySchema, ["requiredOperationKeys/#"]))
+                  .min(1),
+              ),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    interfaces: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: namespacedKeySchema,
-          version: semanticVersionSchema,
-          state: z.enum(["supported", "deprecated", "removal_scheduled", "removed"]),
-          operations: z.array(sourceInterfaceOperationSchema).min(1).max(100),
-        })
-        .strict(),
-    ).max(100),
-    actions: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["interfaceId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              version: sourceProvenanceUnchanged(semanticVersionSchema),
+              state: sourceProvenanceUnchanged(
+                z.enum(["supported", "deprecated", "removal_scheduled", "removed"]),
+              ),
+              operations: sourceProvenanceUnchanged(
+                z.array(sourceInterfaceOperationSchema).min(1).max(100),
+              ),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    actions: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: namespacedKeySchema,
-          label: labelSchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          permission: namespacedKeySchema.optional(),
-          permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
-          sharing: z.enum(["refused", "allowed"]),
-          inputs: z.array(actionInputSchema).max(50),
-          precondition: sourceConditionSchema.optional(),
-          tasks: z.array(sourceActionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
-        })
-        .strict()
-        .superRefine((value, context) => {
-          if ((value.permission === undefined) === (value.permission_alternatives === undefined))
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "An action requires either one permission or canonical alternatives",
-            });
-          const alternatives = value.permission_alternatives;
-          if (!alternatives) return;
-          if (new Set(alternatives).size !== alternatives.length)
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "Action permission alternatives must be unique",
-            });
-          if (
-            alternatives.some(
-              (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
-            )
-          )
-            context.addIssue({
-              code: "custom",
-              path: ["permission_alternatives"],
-              message: "Action permission alternatives must use canonical order",
-            });
-        }),
-    ).max(100),
-    events: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              label: sourceProvenanceUnchanged(labelSchema),
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
+                "subjectRecordTypeId",
+              ]),
+              permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
+              permission_alternatives: sourceProvenanceUnchanged(
+                z.array(namespacedKeySchema).min(2).optional(),
+              ),
+              sharing: sourceProvenanceTarget(z.enum(["refused", "allowed"]), ["sharing"]),
+              inputs: sourceProvenanceUnchanged(z.array(actionInputSchema).max(50)),
+              precondition: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
+              tasks: sourceProvenanceUnchanged(
+                z.array(sourceActionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
+              ),
+            })
+            .strict()
+            .superRefine((value, context) => {
+              if (
+                (value.permission === undefined) ===
+                (value.permission_alternatives === undefined)
+              )
+                context.addIssue({
+                  code: "custom",
+                  path: ["permission_alternatives"],
+                  message: "An action requires either one permission or canonical alternatives",
+                });
+              const alternatives = value.permission_alternatives;
+              if (!alternatives) return;
+              if (new Set(alternatives).size !== alternatives.length)
+                context.addIssue({
+                  code: "custom",
+                  path: ["permission_alternatives"],
+                  message: "Action permission alternatives must be unique",
+                });
+              if (
+                alternatives.some(
+                  (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
+                )
+              )
+                context.addIssue({
+                  code: "custom",
+                  path: ["permission_alternatives"],
+                  message: "Action permission alternatives must use canonical order",
+                });
+            }),
+        )
+        .max(100),
+    ),
+    events: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          key: namespacedKeySchema,
-          record_type: sourceQualifiedRecordTypeSchema,
-          carries: z.array(builderKeySchema).max(30),
-          personal_or_sensitive_values_allowed: z.literal(false),
-        })
-        .strict(),
-    ).max(100),
-    public_addresses: z.array(
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
+              key: sourceProvenanceUnchanged(namespacedKeySchema),
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
+                "recordTypeId",
+              ]),
+              carries: sourceProvenanceUnchanged(
+                z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
+              ),
+              personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    public_addresses: sourceProvenanceUnchanged(
       z
-        .object({
-          id: sourceAliasSchema,
-          page: builderKeySchema,
-          path: z.string().startsWith("/").max(500),
-          state: z.enum(["draft", "active", "disabled"]),
-          rate_limit_per_minute: z.number().int().min(1).max(10_000),
-        })
-        .strict(),
-    ).max(100),
-    platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
-    shells: z.array(sourceApplicationShellV2Schema).max(100),
-    pages: z.array(sourcePageDefinitionV2Schema).min(1).max(100),
-    experiences: z.array(sourceApplicationExperienceSchema).max(3).optional(),
-    theme: sourceApplicationThemeV2Schema,
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["addressId"]),
+              page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+              path: sourceProvenanceUnchanged(z.string().startsWith("/").max(500)),
+              state: sourceProvenanceUnchanged(z.enum(["draft", "active", "disabled"])),
+              rate_limit_per_minute: sourceProvenanceUnchanged(z.number().int().min(1).max(10_000)),
+            })
+            .strict(),
+        )
+        .max(100),
+    ),
+    platform_block_dependencies: sourceProvenanceUnchanged(sourcePlatformBlockDependenciesV2Schema),
+    shells: sourceProvenanceUnchanged(z.array(sourceApplicationShellV2Schema).max(100)),
+    pages: sourceProvenanceUnchanged(z.array(sourcePageDefinitionV2Schema).min(1).max(100)),
+    experiences: sourceProvenanceUnchanged(
+      z.array(sourceApplicationExperienceSchema).max(3).optional(),
+    ),
+    theme: sourceProvenanceUnchanged(sourceApplicationThemeV2Schema),
     /** Every flow this Application owns (architecture decision 1); each has one owner. */
-    flows: sourceFlowCollectionSchema,
-    flow_bindings: z.array(sourceComponentFlowBindingSchema).max(100),
+    flows: sourceProvenanceUnchanged(sourceFlowCollectionSchema, true),
+    flow_bindings: sourceProvenanceUnchanged(
+      z.array(sourceComponentFlowBindingSchema).max(100),
+      true,
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1170,11 +1434,13 @@ export const sourceApplicationBodyV2Schema = z
 
 export const applicationSourceDocumentV2Schema = z
   .object({
-    source_contract_version: z.literal(applicationSourceContractVersion),
-    root_alias: sourceAliasSchema,
-    key: namespacedKeySchema,
-    kind: z.literal("application"),
-    body: z.preprocess(inspectSourceBounds, sourceApplicationBodyV2Schema),
+    source_contract_version: sourceProvenanceUnchanged(z.literal(applicationSourceContractVersion)),
+    root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
+    key: sourceProvenanceUnchanged(namespacedKeySchema),
+    kind: sourceProvenanceUnchanged(z.literal("application")),
+    body: sourceProvenanceUnchanged(
+      z.preprocess(inspectSourceBounds, sourceApplicationBodyV2Schema),
+    ),
   })
   .strict();
 
