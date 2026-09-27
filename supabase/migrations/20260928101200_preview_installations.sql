@@ -1114,7 +1114,7 @@ declare
   preview_row record;
   expired_count integer := 0;
 begin
-  if p_limit not between 1 and 100 then
+  if p_limit is null or p_limit not between 1 and 100 then
     raise exception using errcode = '22023', message = 'Preview expiry batch size is invalid';
   end if;
   checked_context := vortex_module.assert_preview_installation_authority_internal();
