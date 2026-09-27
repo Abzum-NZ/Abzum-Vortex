@@ -493,7 +493,8 @@ const literalValue = (literal: FlowLiteral): JsonValue => literal.value;
 /**
  * Compiles one Kestra property value. A literal stays an inert literal; a
  * reference or formula becomes an evaluator callback and the generated
- * reference to its result.
+ * reference to its result. The callback receives the complete FlowValue, so a
+ * bounded task-output field path keeps the same Vortex interpreter semantics.
  */
 const compileValue = (
   ctx: CompileContext,

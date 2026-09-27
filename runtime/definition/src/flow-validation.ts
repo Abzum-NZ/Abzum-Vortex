@@ -5,6 +5,7 @@ import {
   flowMaximumServerSeconds,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
+  flowMaximumTaskOutputPathDepth,
   flowTaskChildLists,
   flowTaskRegistry,
   flowTriggerExecutionKinds,
@@ -41,8 +42,9 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  *   output of a task that has already run in scope, and its type must fit where it is used, by
  *   the one value-type compatibility function (`valueTypesCompatible`, the `flow` context). Run
  *   flow and Run background flow must name a flow compiled with this one, so the target's inputs,
- *   outputs and execution kind are known. Two values stay typed only at run time: a trigger
- *   record field (the caller checks it exists) and a person's answers to Wait for person;
+ *   outputs and execution kind are known. A trigger record field (whose existence the caller
+ *   checks), a selected member of a JSON task output (whose value its consumer checks), and a
+ *   person's answer to Wait for person stay typed only at run time;
  * - outputs and error handling: an output's value must fit its declared type, and `outcome` is
  *   readable only from a task that sets `allowRefusal`.
  *
@@ -357,6 +359,29 @@ export function validateFlow(
               : `Task ${reference.task} has no output ${reference.key}`,
           );
           return undefined;
+        }
+        if (reference.path !== undefined) {
+          if (output.type !== "json") {
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Task ${reference.task}.${reference.key} does not declare a JSON output that can be read by field path`,
+            );
+            return undefined;
+          }
+          if (reference.path.length > flowMaximumTaskOutputPathDepth) {
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "too_many_items",
+              `A task output field path can contain at most ${flowMaximumTaskOutputPathDepth} names`,
+            );
+            return undefined;
+          }
+          // The producing task declares a JSON value, not its dynamic member schema. Keep the
+          // selected value as JSON so the consuming property or protected operation validates it.
+          return "json";
         }
         return output.type;
       }

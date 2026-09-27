@@ -2,6 +2,7 @@ import {
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
+  flowMaximumTaskOutputPathDepth,
   flowTaskRegistry,
   parseExactDecimal,
   type FlowDefinition,
@@ -313,8 +314,27 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
         );
       case "variable":
         return activation.variables[reference.name];
-      case "task_output":
-        return activation.outputs[reference.task]?.[reference.key];
+      case "task_output": {
+        const output = activation.outputs[reference.task]?.[reference.key];
+        if (output === undefined || reference.path === undefined) return output;
+        if (
+          output.type !== "json" ||
+          reference.path.length > flowMaximumTaskOutputPathDepth
+        )
+          return undefined;
+        let selected: unknown = output.value;
+        for (const name of reference.path) {
+          if (
+            selected === null ||
+            typeof selected !== "object" ||
+            Array.isArray(selected) ||
+            !Object.hasOwn(selected, name)
+          )
+            return undefined;
+          selected = (selected as Record<string, unknown>)[name];
+        }
+        return typed("json", selected as JsonValue);
+      }
       case "execution_actor":
         return state.actor === undefined
           ? undefined
