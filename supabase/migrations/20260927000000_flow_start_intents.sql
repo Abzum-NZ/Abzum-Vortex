@@ -341,6 +341,7 @@ begin
     if published_flow ->> 'execution' is distinct from 'background'
       or coalesce(published_flow #>> '{runAs,kind}', '')
         not in ('specified_account', 'system')
+      or published_flow ? 'invocationPermissionId'
       or p_inputs <> '{}'::jsonb
       or p_trigger_values <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Event flow start is invalid';
@@ -351,6 +352,9 @@ begin
       and start_trigger.value ->> 'type' = p_trigger_type;
     if not found then
       raise exception using errcode = '55000', message = 'Published flow trigger is unavailable';
+    end if;
+    if published_trigger ? 'condition' then
+      raise exception using errcode = '55000', message = 'Event trigger condition is unavailable';
     end if;
   end if;
 
