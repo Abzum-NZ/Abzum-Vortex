@@ -165,6 +165,21 @@ begin
         and (removed.bundle_key ->> 'applicationReleaseRevision')::bigint =
           candidate.application_release_revision
     )
+      and not exists (
+        select 1
+        from vortex_module.installation_runtime_bundles as remaining
+        where remaining.organization_id = candidate.organization_id
+          and remaining.application_root_id = candidate.application_root_id
+          and remaining.application_release_revision = candidate.application_release_revision
+      )
+      and not exists (
+        select 1
+        from vortex_module.installation_bindings as binding
+        where binding.organization_id = candidate.organization_id
+          and binding.application_root_id = candidate.application_root_id
+          and binding.application_release_revision = candidate.application_release_revision
+          and binding.state in ('active', 'draining')
+      )
     order by candidate.plan_key
     limit p_limit
   );
@@ -182,6 +197,14 @@ begin
         and bundle.application_root_id = candidate.application_root_id
         and bundle.application_release_revision = candidate.application_release_revision
     )
+      and not exists (
+        select 1
+        from vortex_module.installation_bindings as binding
+        where binding.organization_id = candidate.organization_id
+          and binding.application_root_id = candidate.application_root_id
+          and binding.application_release_revision = candidate.application_release_revision
+          and binding.state in ('active', 'draining')
+      )
     order by candidate.plan_key
     limit p_limit
   );
