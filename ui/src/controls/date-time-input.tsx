@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type ReactElement } from "react";
+import type { ChangeEvent, ReactElement } from "react";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { useDateFormatOptions } from "../display/date-format-context";
@@ -105,36 +105,27 @@ const toLocalInputValue = (value: string | null, timeZone: string): string => {
   if (value === null) return "";
   const instant = Date.parse(value);
   if (Number.isNaN(instant)) return "";
-  try {
-    return inputText(partsAt(instant, timeZone));
-  } catch {
-    return inputText(partsAt(instant, "UTC"));
-  }
+  return inputText(partsAt(instant, timeZone));
 };
 
-/** Converts a wall-clock input to an ISO instant, refusing invalid or skipped local times. */
-const toStoredInstant = (raw: string, timeZone: string): string | null => {
+/** Converts an unambiguous wall-clock input to an ISO instant. */
+const toStoredInstant = (raw: string, timeZone: string): string | undefined => {
   const local = parseLocalParts(raw);
-  if (local === undefined) return null;
+  if (local === undefined) return undefined;
   const wallClock = utcMilliseconds(local);
   const offsets = new Set<number>();
-  try {
-    for (const probe of [
-      wallClock - 36 * 60 * 60 * 1_000,
-      wallClock,
-      wallClock + 36 * 60 * 60 * 1_000,
-    ]) {
-      const zoned = partsAt(probe, timeZone);
-      offsets.add(utcMilliseconds(zoned) - probe);
-    }
-    const matches = [...offsets]
-      .map((offset) => wallClock - offset)
-      .filter((candidate) => inputText(partsAt(candidate, timeZone)) === inputText(local))
-      .sort((left, right) => left - right);
-    return matches.length === 0 ? null : new Date(matches[0]!).toISOString();
-  } catch {
-    return timeZone === "UTC" ? null : toStoredInstant(raw, "UTC");
+  for (const probe of [
+    wallClock - 36 * 60 * 60 * 1_000,
+    wallClock,
+    wallClock + 36 * 60 * 60 * 1_000,
+  ]) {
+    const zoned = partsAt(probe, timeZone);
+    offsets.add(utcMilliseconds(zoned) - probe);
   }
+  const matches = [...offsets]
+    .map((offset) => wallClock - offset)
+    .filter((candidate) => inputText(partsAt(candidate, timeZone)) === inputText(local));
+  return matches.length === 1 ? new Date(matches[0]!).toISOString() : undefined;
 };
 
 /**
@@ -155,13 +146,15 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
   const timeZonePolicy = settings.choice<"person" | "organization" | "utc">(
     "display_time_zone",
     "person",
   );
   const timeZone = timeZonePolicy === "utc" ? "UTC" : (dateFormat.timeZone ?? "UTC");
+  // A malformed supplied zone must never reinterpret a person's input as UTC.
+  formatterFor(timeZone);
   const help = [authoredHelp, `Time zone: ${timeZone}.`].filter(Boolean).join(" ");
   const projected = context.values?.value ?? null;
   const initialInput = toLocalInputValue(projected, timeZone);
@@ -169,11 +162,16 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const [initialRaw] = useSeededState(initialInput);
   const [typedValue, setTypedValue] = useSeededState(projected);
   useFormField(fieldKey, props.placementId, typedValue);
+  const invalidLocalTime = raw !== "" && raw !== initialRaw && toStoredInstant(raw, timeZone) === undefined;
+  const error = invalidLocalTime
+    ? "Enter a valid, unambiguous date and time in the shown time zone."
+    : projectedError;
 
   const commit = (next: string): void => {
     if (disabled || readOnly) return;
     setRaw(next);
-    const value = next === initialRaw ? projected : toStoredInstant(next, timeZone);
+    const value =
+      next === initialRaw ? projected : next === "" ? null : (toStoredInstant(next, timeZone) ?? next);
     setTypedValue(value);
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
   };
