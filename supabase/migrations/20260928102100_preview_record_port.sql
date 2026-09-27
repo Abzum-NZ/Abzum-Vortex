@@ -7,7 +7,9 @@ set local role vortex_record_owner;
 grant create on schema vortex_record to vortex_record_adapter;
 reset role;
 
+set local role vortex_module_owner;
 grant references on vortex_module.preview_installations to vortex_record_adapter;
+reset role;
 set local role vortex_record_adapter;
 
 create table vortex_record.preview_command_receipts (
@@ -76,7 +78,9 @@ comment on table vortex_record.preview_reference_counters is
   'Reference-number sequences isolated by preview and storage identity; deleting a preview deletes its counters.';
 
 reset role;
+set local role vortex_module_owner;
 revoke references on vortex_module.preview_installations from vortex_record_adapter;
+reset role;
 
 set local role vortex_module_owner;
 
