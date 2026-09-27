@@ -11,6 +11,8 @@ import {
   closeClusterIdentityCommandSchema,
   closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
+  bootstrapVortexSuperAdministratorCommandSchema,
+  vortexSuperAdministratorAssignmentMutationResultSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
@@ -25,6 +27,7 @@ import {
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
   type AdoptTenantResult,
+  type BootstrapVortexSuperAdministratorCommand,
   type CloseClusterIdentityCommand,
   type CloseClusterIdentityResult,
   type ConfiguredTenantAdministrationOperatorContext,
@@ -38,6 +41,7 @@ import {
   type SuspendClusterIdentityResult,
   type SuspendTenantCommand,
   type SuspendTenantResult,
+  type VortexSuperAdministratorAssignmentMutationResult,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
@@ -102,6 +106,14 @@ type TenantLifecycleRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
 };
+type SuperAdministratorBootstrapRow = DatabaseRow & {
+  outcome: unknown;
+  assignment_id: unknown;
+  identity_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
 
 const fingerprint = (command: object): string =>
   `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
@@ -143,6 +155,18 @@ const refusalCode = (error: unknown) => {
 };
 const lifecycleRefusalCode = (error: unknown) =>
   databaseCode(error) === "V3102" ? ("stale_revision" as const) : refusalCode(error);
+const superAdministratorBootstrapCode = (error: unknown) => {
+  switch (databaseCode(error)) {
+    case "V3141":
+      return "identity_unavailable" as const;
+    case "V3143":
+      return "duplicate_conflict" as const;
+    case "22023":
+      return "invalid_command" as const;
+    default:
+      return "operation_unavailable" as const;
+  }
+};
 
 const one = <Row extends DatabaseRow>(rows: readonly Row[]): Row | undefined =>
   rows.length === 1 ? rows[0] : undefined;
@@ -173,6 +197,56 @@ export const createConfiguredTenantAdministrationService = (
     };
 
   return Object.freeze({
+    async bootstrapVortexSuperAdministrator(
+      candidate: BootstrapVortexSuperAdministratorCommand,
+    ): Promise<VortexSuperAdministratorAssignmentMutationResult> {
+      const command = bootstrapVortexSuperAdministratorCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: "invalid_command",
+        };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run((transaction) => transaction.query<SuperAdministratorBootstrapRow>`
+          select *
+          from vortex_identity.bootstrap_vortex_super_administrator(
+            ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid,
+            ${value.identityId}::uuid
+          )
+        `);
+        const row = one(rows);
+        if (row === undefined)
+          return {
+            outcome: "refused",
+            operation: "bootstrap_vortex_super_administrator",
+            code: "operation_unavailable",
+          };
+        return vortexSuperAdministratorAssignmentMutationResultSchema.parse({
+          outcome: row.outcome,
+          operation: "bootstrap_vortex_super_administrator",
+          assignmentId: row.assignment_id,
+          identityId: row.identity_id,
+          revision: databaseRevision(row.revision),
+          correlationId: row.correlation_id,
+          acceptedAt: databaseTimestamp(row.accepted_at),
+        });
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "bootstrap_vortex_super_administrator",
+          code: superAdministratorBootstrapCode(error),
+        };
+      }
+    },
+
     async provisionTenant(candidate: ProvisionTenantCommand): Promise<ProvisionTenantResult> {
       const command = provisionTenantCommandSchema.safeParse(candidate);
       if (!command.success)
@@ -472,6 +546,8 @@ export const createConfiguredTenantAdministrationService = (
 };
 
 const defaultService = createConfiguredTenantAdministrationService();
+export const bootstrapVortexSuperAdministrator =
+  defaultService.bootstrapVortexSuperAdministrator;
 export const provisionTenant = defaultService.provisionTenant;
 export const adoptTenant = defaultService.adoptTenant;
 export const adoptOrganization = defaultService.adoptOrganization;

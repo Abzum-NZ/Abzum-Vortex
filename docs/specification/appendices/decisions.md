@@ -23,6 +23,16 @@ The September architecture review resolved the HR example scope, workflow-based 
 
 The 5 September Roles and Groups clarification and optional per-role PIM model are incorporated in [Groups and privileged access](groups-and-privileged-access.md) and their owning tasks. Organisation policy configuration (duration, authentication and required review) is not an unresolved universal product setting. There is no new open decision from that clarification.
 
+The owner resolved the named Vortex super-administrator entry choice on 27
+September 2026: local organisation accounts remain the sole entry path. An active
+named super administrator selecting an eligible organisation without an account
+receives a provisioned local account with assignment provenance and Activity
+evidence; a suspended account is refused without reactivation. Person-backed
+ceiling commands and reactivation belong to #1441. The configured system operator
+remains the sole caller for the #1384 entitlement authority. See [people and
+sign-in](../02-people-organisations-and-sign-in.md#named-vortex-super-administrators)
+and [access and permissions](../04-access-and-permissions.md#named-vortex-super-administrators).
+
 ## Adding an open decision
 
 Add an entry only when a genuinely unresolved business/product choice needs the owner's decision. Engineering, security, database, implementation and dependency decisions belong to the responsible task and its engineering review, even when their impact is material. Hold only the affected work, and continue independent work. Each business-decision entry must state:
