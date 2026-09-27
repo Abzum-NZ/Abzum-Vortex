@@ -94,11 +94,7 @@ export async function driveServerFlow(
             response = await client.resume(
               flowId,
               continuation,
-              {
-                kind: "form_answered",
-                submitted: answer.submitted,
-                values: answer.submitted ? answer.values : null,
-              },
+              answer,
               evidence,
             );
           } else {
@@ -107,10 +103,7 @@ export async function driveServerFlow(
             response = await client.resume(
               flowId,
               continuation,
-              {
-                kind: "confirmed",
-                confirmed: await host.confirm(confirmation),
-              },
+              { kind: "confirm", confirmed: await host.confirm(confirmation) },
               evidence,
             );
           }

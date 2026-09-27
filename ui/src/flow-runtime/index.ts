@@ -31,7 +31,6 @@ export { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
 export {
   createFlowInvokeClient,
   parseServerFlowResponse,
-  type FlowAnswer,
   type FlowApplicationAddress,
   type FlowInstallationContext,
   type FlowSubjectContext,

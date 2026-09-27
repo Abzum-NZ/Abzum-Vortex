@@ -9,6 +9,7 @@ import {
   parseExactDecimal,
   type FlowDefinition,
   type FlowExecutionKind,
+  type FormContinuationAnswer,
   type FlowReference,
   type FlowTask,
   type FlowValue,
@@ -220,8 +221,7 @@ export type FlowRunResume =
       outcome: FlowTaskOutcome;
       outputs?: Readonly<Record<string, JsonValue>>;
     }>
-  | Readonly<{ kind: "form_answered"; submitted: boolean; values: JsonValue }>
-  | Readonly<{ kind: "confirmed"; confirmed: boolean }>;
+  | FormContinuationAnswer;
 
 const maximumSteps = 10_000;
 
@@ -972,9 +972,13 @@ export const resumeFlowRun = (
   }
 
   if (awaiting.kind === "form") {
-    if (resume.kind !== "form_answered") return mismatch();
-    if (resume.submitted && awaiting.answerTypes !== undefined) {
-      const values = resume.values;
+    if (resume.kind !== "submit" && resume.kind !== "cancel") return mismatch();
+    const submitted = resume.kind === "submit";
+    let values: JsonValue | null = null;
+    if (resume.kind === "submit") {
+      values = resume.values;
+    }
+    if (submitted && awaiting.answerTypes !== undefined) {
       const valid = values !== null && typeof values === "object" && !Array.isArray(values) &&
         Object.keys(values).length === Object.keys(awaiting.answerTypes).length &&
         Object.entries(awaiting.answerTypes).every(([name, type]) =>
@@ -992,14 +996,14 @@ export const resumeFlowRun = (
     replaceTop(
       machine,
       storeTaskOutputs(activation, awaiting.taskId, {
-        submitted: typed("yes_no", resume.submitted),
-        values: typed("json", resume.submitted ? resume.values : null),
+        submitted: typed("yes_no", submitted),
+        values: typed("json", values),
       }),
     );
     return drive(machine);
   }
 
-  if (resume.kind !== "confirmed") return mismatch();
+  if (resume.kind !== "confirm") return mismatch();
   replaceTop(
     machine,
     storeTaskOutputs(activation, awaiting.taskId, { confirmed: typed("yes_no", resume.confirmed) }),

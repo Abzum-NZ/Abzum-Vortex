@@ -292,7 +292,7 @@ export function ApplicationPageView({
     (
       form: FlowFormIntent,
       controls: Readonly<{
-        submit: (values: FlowFormAnswer["values"]) => void;
+        submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
         cancel: () => void;
       }>,
     ) => (
