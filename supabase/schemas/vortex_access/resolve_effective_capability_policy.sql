@@ -31,6 +31,7 @@ declare
   context jsonb := vortex_context.current_context();
   context_organization_id uuid;
   effective_organization_id uuid;
+  actor_identity_id uuid;
   selected record;
 begin
   if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
@@ -55,6 +56,31 @@ begin
       and organization.state = 'active'
   ) then
     raise exception using errcode = '42501', message = 'Capability policy scope is unavailable';
+  end if;
+  -- Tenant-scoped reads require tenant authority. Organisation-scoped
+  -- entitlement reads also serve system actors, which have no person identity.
+  if effective_organization_id is null then
+    actor_identity_id := vortex_identity.tenant_request_actor_id();
+    perform vortex_identity.require_current_tenant_capability(
+      actor_identity_id, p_tenant_id,
+      'platform.tenant.capability_limits.read', evaluated_at
+    );
+  elsif (context ->> 'callerKind') in ('human', 'federated')
+    and vortex_context.is_non_nil_uuid(context ->> 'identityId')
+    and exists (
+      select 1
+      from vortex_identity.tenant_administrator_assignments as assignment
+      where assignment.tenant_id = p_tenant_id
+        and assignment.identity_id = (context ->> 'identityId')::uuid
+        and assignment.revoked_at is null
+        and assignment.starts_at <= evaluated_at
+        and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
+    ) then
+    actor_identity_id := vortex_identity.tenant_request_actor_id();
+    perform vortex_identity.require_current_tenant_capability(
+      actor_identity_id, p_tenant_id,
+      'platform.tenant.capability_limits.read', evaluated_at
+    );
   end if;
   -- The effective limit is the lowest of the platform ceiling and every
   -- allocation beneath it; on a tie the narrower scope is reported. No
@@ -89,4 +115,4 @@ grant execute on function vortex_access.resolve_effective_capability_policy(uuid
   to vortex_request;
 
 comment on function vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text) is
-  'Returns the lowest of the live platform ceiling and the tenant and organisation allocations for the established request scope, the ceiling itself, and which limit applied; an allocation can only narrow the ceiling.';
+  'Returns the lowest of the live platform ceiling and the tenant and organisation allocations for the established request scope, the ceiling itself, and which limit applied; tenant administrators require the capability-limits read permission, and an allocation can only narrow the ceiling.';
