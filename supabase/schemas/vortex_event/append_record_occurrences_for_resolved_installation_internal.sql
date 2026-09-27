@@ -252,7 +252,10 @@ begin
     raise exception using errcode = '22003', message = 'Event record sequence is exhausted';
   end if;
 
-  occurrence_time_text := vortex_context.format_timestamp_utc(occurrence_time);
+  occurrence_time_text := pg_catalog.to_char(
+    pg_catalog.timezone('UTC', occurrence_time),
+    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+  );
 
   for occurrence_item in
     select item.value

@@ -68,7 +68,7 @@ begin
           case ordered_fields.value ->> 'databaseValueType'
             when 'decimal' then pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', ordered_fields.value ->> 'token')
             when 'timestamp_with_time_zone' then pg_catalog.format(
-              'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.%I))',
+              'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', stored.%I), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))',
               ordered_fields.value ->> 'token'
             )
             when 'date' then pg_catalog.format(

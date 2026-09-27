@@ -58,19 +58,14 @@ begin
   from vortex_identity.tenants as tenant
   where tenant.state = 'active'
     and (p_record_id is null or p_record_id = tenant.tenant_id)
-    and (
-      vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
-        actor_identity_id, evaluated_at
-      ) is not null
-      or exists (
-        select 1
-        from vortex_identity.tenant_administrator_assignments as assignment
-        where assignment.tenant_id = tenant.tenant_id
-          and assignment.identity_id = actor_identity_id
-          and assignment.revoked_at is null
-          and assignment.starts_at <= evaluated_at
-          and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
-      )
+    and exists (
+      select 1
+      from vortex_identity.tenant_administrator_assignments as assignment
+      where assignment.tenant_id = tenant.tenant_id
+        and assignment.identity_id = actor_identity_id
+        and assignment.revoked_at is null
+        and assignment.starts_at <= evaluated_at
+        and (assignment.expires_at is null or assignment.expires_at > evaluated_at)
     )
   order by tenant.tenant_id;
 end

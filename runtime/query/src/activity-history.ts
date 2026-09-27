@@ -19,7 +19,6 @@ import {
   organizationIdSchema,
   platformIdSchema,
   timestampSchema,
-  vortexSuperAdministratorAssignmentIdSchema,
   type IdentityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
@@ -51,13 +50,6 @@ export const activityHistoryEntrySchema = z
     source: activitySourceSchema,
     correlationId: correlationIdSchema,
     outcome: activityOutcomeSchema,
-    authority: z
-      .object({
-        kind: z.literal("vortex_super_administrator"),
-        assignmentId: vortexSuperAdministratorAssignmentIdSchema,
-      })
-      .strict()
-      .optional(),
   })
   .strict();
 export type ActivityHistoryEntry = z.infer<typeof activityHistoryEntrySchema>;

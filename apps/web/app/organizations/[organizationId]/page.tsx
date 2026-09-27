@@ -50,16 +50,6 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
         <Link href="/signed-in">Choose an organisation</Link>
       </AuthShell>
     );
-  if (selected.kind === "suspended_super_administrator_account")
-    return (
-      <AuthShell
-        eyebrow="Organisation access"
-        title="Your organisation account is suspended"
-        description="This account needs explicit reactivation before it can be used. Signing in will not reactivate it."
-      >
-        <Link href="/signed-in">Choose another organisation</Link>
-      </AuthShell>
-    );
 
   redirect(
     `/${encodeURIComponent(selected.entry.tenantShortName)}/${encodeURIComponent(selected.entry.organizationShortName)}`,
