@@ -1,13 +1,12 @@
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { URL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { createPnpmExec } from "./pnpm-exec.mjs";
 import { createProtectedSiteFetch } from "./protected-site-request.mjs";
 import { createVerifierProcessEnvironment } from "./verifier-process-environment.mjs";
 
-const pnpmEntry = process.env.npm_execpath;
-if (!pnpmEntry) throw new Error("Run this proof through `pnpm auth:testing:proof`");
+const pnpmExec = createPnpmExec("pnpm auth:testing:proof");
 
 const requiredEnvironmentValue = (name) => {
   const value = process.env[name];
@@ -277,15 +276,8 @@ if (
 )
   throw new Error("Signing out one Testing browser ended an independent browser session");
 
-const verifierProof = spawnSync(
-  process.execPath,
-  [
-    pnpmEntry,
-    "exec",
-    "vitest",
-    "run",
-    "runtime/identity/test/testing-verifier.integration.test.ts",
-  ],
+const verifierProof = pnpmExec(
+  ["exec", "vitest", "run", "runtime/identity/test/testing-verifier.integration.test.ts"],
   {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
