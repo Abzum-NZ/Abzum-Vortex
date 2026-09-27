@@ -382,9 +382,8 @@ begin
     );
   end if;
 
-  select pg_catalog.to_char(
-    pg_catalog.timezone('UTC', pg_catalog.min((elem.value ->> 'validUntil')::timestamptz)),
-    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+  select vortex_context.format_timestamp_utc(
+    pg_catalog.min((elem.value ->> 'validUntil')::timestamptz)
   )
   into decision_valid_until
   from pg_catalog.jsonb_array_elements(matched) as elem(value);
