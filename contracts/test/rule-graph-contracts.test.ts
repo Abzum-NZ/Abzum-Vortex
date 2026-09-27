@@ -2,18 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  moduleCanonicalDocumentV2Schema,
-  moduleContractVersionPairV2Schema,
-  moduleDraftV2Schema,
-} from "../src/module-contracts-v2";
-import {
-  moduleCanonicalDocumentV3Schema,
-  moduleContractVersionPairV3Schema,
-  moduleDraftV3Schema,
-} from "../src/module-contracts-v3";
-import { moduleSourceDocumentV2Schema } from "../src/module-source-contracts-v2";
-import { moduleSourceDocumentV3Schema } from "../src/module-source-contracts-v3";
-import {
   ruleGraphConditionSchema,
   ruleGraphInputDeclarationSchema,
   ruleGraphSchema,
@@ -39,7 +27,6 @@ const fixture = (name: string): unknown =>
 
 const sourceGraph = fixture("before-save-complete.source.json");
 const canonicalGraph = fixture("before-save-complete.canonical.json");
-const currentModuleV2 = fixture("../modules/service-desk.sla.json");
 
 const id = (value: number) => `10000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
 
@@ -75,61 +62,6 @@ const expectedValueTypes = [
   "link_to_person",
   "attachment",
 ] as const;
-
-const canonicalModuleV2 = {
-  envelope: {
-    kind: "module",
-    rootId: id(901),
-    key: "example.rule_graph",
-    organizationId: id(902),
-    draftRevision: 1,
-    createdAt: "2026-09-09T00:00:00Z",
-    createdBy: id(903),
-    updatedAt: "2026-09-09T00:00:00Z",
-    updatedBy: id(903),
-  },
-  content: {
-    name: "Rule graph fixture",
-    description: "A structural Module contract fixture.",
-    dependencies: [],
-    recordTypes: [
-      {
-        recordTypeId: id(2),
-        key: "candidate",
-        singularLabel: "Candidate",
-        pluralLabel: "Candidates",
-        titleFieldId: id(41),
-        storageContractId: id(904),
-        storageScope: "organization_shared",
-        ownershipMode: "none",
-        fields: [
-          {
-            fieldId: id(41),
-            key: "amount",
-            label: "Amount",
-            required: true,
-            unique: false,
-            filterable: true,
-            sortable: true,
-            personalData: "none",
-            publicDisplay: "refused",
-            type: "decimal_number",
-            settings: { digitsBeforeDecimal: 30, decimalPlaces: 12 },
-          },
-        ],
-        relationships: [],
-        standardActions: ["create", "read"],
-        customActionIds: [],
-      },
-    ],
-    permissions: [],
-    actions: [],
-    events: [],
-    rules: [],
-    sharingConditions: [],
-    extensionPoints: [],
-  },
-} as const;
 
 describe("shared Rule graph contracts", () => {
   it("accepts the complete authored and canonical before-save fixture shapes", () => {
@@ -376,64 +308,5 @@ describe("shared Rule graph contracts", () => {
     expect(sourceRuleGraphConditionSchema.safeParse(sourceCondition).success).toBe(false);
     expect(() => ruleGraphConditionSchema.safeParse(canonicalCondition)).not.toThrow();
     expect(ruleGraphConditionSchema.safeParse(canonicalCondition).success).toBe(false);
-  });
-
-  it("embeds graphs only in the explicit Module 3 source shape", () => {
-    const moduleV2 = moduleSourceDocumentV2Schema.parse(currentModuleV2);
-    const moduleV3 = {
-      ...moduleV2,
-      source_contract_version: "3.0.0",
-      body: { ...moduleV2.body, rules: [sourceGraph] },
-    };
-
-    expect(moduleSourceDocumentV3Schema.safeParse(moduleV3).success).toBe(true);
-    expect(moduleSourceDocumentV2Schema.safeParse(moduleV3).success).toBe(false);
-    expect(moduleSourceDocumentV2Schema.safeParse(moduleV2).success).toBe(true);
-    expect(moduleSourceDocumentV3Schema.safeParse(moduleV2).success).toBe(false);
-  });
-
-  it("embeds canonical graphs only in the explicit Module 3 pair", () => {
-    const moduleV2 = moduleDraftV2Schema.parse(canonicalModuleV2);
-    const moduleV3 = { ...moduleV2, content: { ...moduleV2.content, rules: [canonicalGraph] } };
-
-    expect(moduleDraftV3Schema.safeParse(moduleV3).success).toBe(true);
-    expect(moduleDraftV2Schema.safeParse(moduleV3).success).toBe(false);
-    expect(
-      moduleCanonicalDocumentV3Schema.safeParse({
-        validationContractVersion: "3.0.0",
-        canonical: moduleV3,
-      }).success,
-    ).toBe(true);
-    expect(
-      moduleCanonicalDocumentV2Schema.safeParse({
-        validationContractVersion: "2.0.0",
-        canonical: moduleV3,
-      }).success,
-    ).toBe(false);
-    expect(
-      moduleCanonicalDocumentV3Schema.safeParse({
-        validationContractVersion: "2.0.0",
-        canonical: moduleV2,
-      }).success,
-    ).toBe(false);
-
-    expect(
-      moduleContractVersionPairV3Schema.safeParse({
-        sourceContractVersion: "3.0.0",
-        validationContractVersion: "3.0.0",
-      }).success,
-    ).toBe(true);
-    expect(
-      moduleContractVersionPairV3Schema.safeParse({
-        sourceContractVersion: "3.0.0",
-        validationContractVersion: "2.0.0",
-      }).success,
-    ).toBe(false);
-    expect(
-      moduleContractVersionPairV2Schema.safeParse({
-        sourceContractVersion: "2.0.0",
-        validationContractVersion: "3.0.0",
-      }).success,
-    ).toBe(false);
   });
 });

@@ -1,16 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  moduleSourceDocumentV3Schema,
+  moduleSourceDocumentSchema,
   moduleCompilationRequestV3Schema,
-  type ModuleSourceDocumentV3,
+  type ModuleSourceDocument,
   type ModuleCompilationRequestV3,
 } from "@vortex/contracts";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { extractModuleSourceIdentityRequirementsV3 } from "../src/source-identities";
 
-export const graphModuleFixture = (name: "candidate" | "shared"): ModuleSourceDocumentV3 =>
-  moduleSourceDocumentV3Schema.parse(
+export const graphModuleFixture = (name: "candidate" | "shared"): ModuleSourceDocument =>
+  moduleSourceDocumentSchema.parse(
     JSON.parse(
       fs.readFileSync(
         path.resolve(
@@ -23,7 +23,7 @@ export const graphModuleFixture = (name: "candidate" | "shared"): ModuleSourceDo
   );
 
 export const graphModuleRequests = (
-  sources: readonly ModuleSourceDocumentV3[] = [
+  sources: readonly ModuleSourceDocument[] = [
     graphModuleFixture("shared"),
     graphModuleFixture("candidate"),
   ],

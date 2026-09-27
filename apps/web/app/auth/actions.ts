@@ -84,11 +84,11 @@ export async function requestRecovery(formData: FormData): Promise<never> {
 
 export async function confirmEmail(formData: FormData): Promise<never> {
   const configuration = configuredAuthority();
-  if (!configuration || formValue(formData, "type") !== "signup")
-    redirect("/auth/error?reason=invalid-link");
+  if (!configuration) redirect("/auth/error?reason=invalid-link");
   const result = await confirmEmailWithAuthority(
     configuration,
-    formValue(formData, "access_token"),
+    formValue(formData, "email"),
+    formValue(formData, "token"),
   );
 
   redirect(result.ok ? "/auth/success?state=email-confirmed" : "/auth/error?reason=invalid-link");
@@ -99,8 +99,8 @@ export async function updatePassword(formData: FormData): Promise<never> {
   if (!configuration) redirect("/auth/error?reason=unavailable");
   const result = await completePasswordRecovery(
     configuration,
-    formValue(formData, "access_token"),
-    formValue(formData, "refresh_token"),
+    formValue(formData, "email"),
+    formValue(formData, "token"),
     formValue(formData, "password", false),
   );
 

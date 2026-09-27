@@ -231,8 +231,8 @@ describe("safe definition validation errors", () => {
     }
   });
 
-  test("locks version 1.0.0 public wording independently of the implementation", () => {
-    expect(definitionValidationCatalogueVersion).toBe("1.0.0");
+  test("locks version 1.1.0 public wording independently of the implementation", () => {
+    expect(definitionValidationCatalogueVersion).toBe("1.1.0");
     expect(definitionValidationErrorCatalogue).toEqual({
       definition_required_value: {
         order: 10,
@@ -543,16 +543,21 @@ describe("safe definition validation errors", () => {
   });
 
   test("keeps every runtime translator and public default independent of shipped examples", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const manifest = JSON.parse(
-      await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
-    ) as { files: string[] };
-    const definitionFiles = manifest.files.filter((file) =>
-      /^(applications|connection-types|modules)\//.test(file),
-    );
+    const definitionFiles = [
+      "modules/src/crm/application.json",
+      "modules/src/crm/sources/crm.activities.json",
+      "modules/src/crm/sources/crm.opportunities.json",
+      "modules/src/crm/sources/crm.organisations.json",
+      "modules/src/crm/sources/crm.people.json",
+      "modules/src/crm/sources/crm.tags.json",
+      "modules/src/service-desk/application.json",
+      "modules/src/service-desk/sources/service-desk.cases.json",
+      "modules/src/service-desk/sources/service-desk.knowledge.json",
+      "modules/src/service-desk/sources/service-desk.sla.json",
+    ];
     const documents = await Promise.all(
       definitionFiles.map(async (file) =>
-        JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8")),
+        JSON.parse(await readFile(resolve(process.cwd(), file), "utf8")),
       ),
     );
     const runtimeSource = (

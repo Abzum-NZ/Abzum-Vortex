@@ -9,10 +9,8 @@ vi.mock("next/headers", () => ({ headers: vi.fn(async () => requestHeaders) }));
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("../app/auth/actions", () => ({ signIn: vi.fn() }));
 
-import FoundationPage from "../app/page";
 import SignInPage from "../app/auth/sign-in/page";
 
-const renderHome = async (): Promise<string> => renderToStaticMarkup(await FoundationPage());
 const renderSignIn = async (status?: string): Promise<string> =>
   renderToStaticMarkup(
     await SignInPage({ searchParams: Promise.resolve(status ? { status } : {}) }),
@@ -22,43 +20,6 @@ describe("session-aware entry pages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  it("offers the protected launcher from the homepage for a verified session", async () => {
-    requestHeaders.get.mockReturnValue("verified");
-
-    const html = await renderHome();
-
-    expect(html).toContain('href="/signed-in"');
-    expect(html).toContain("Continue to Vortex");
-    expect(html).not.toContain("Secure sign in");
-  });
-
-  it.each(["missing", "invalid"])(
-    "retains secure sign-in entry for a %s session marker",
-    async (state) => {
-      requestHeaders.get.mockReturnValue(state);
-
-      const html = await renderHome();
-
-      expect(html).toContain('href="/auth/sign-in"');
-      expect(html).toContain("Secure sign in");
-      expect(html).not.toContain("Continue to Vortex");
-    },
-  );
-
-  it.each(["temporarily_unavailable", "unexpected", null])(
-    "keeps homepage account access neutral for marker %s",
-    async (state) => {
-      requestHeaders.get.mockReturnValue(state);
-
-      const html = await renderHome();
-
-      expect(html).toContain('href="/auth/sign-in"');
-      expect(html).toContain("Account access");
-      expect(html).not.toContain("Secure sign in");
-      expect(html).not.toContain("Continue to Vortex");
-    },
-  );
 
   it("redirects a verified sign-in page request to the protected launcher", async () => {
     requestHeaders.get.mockReturnValue("verified");
