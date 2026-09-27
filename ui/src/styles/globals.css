@@ -73,6 +73,45 @@
   color-scheme: dark;
 }
 
+@layer base {
+  /*
+   * The part of Tailwind's preflight that shadcn lists and links rely on, for every style: a list
+   * part draws no marker and no indent of its own, and a link inside a part takes its colour and
+   * decoration from the part rather than the browser's link colours. Zero specificity, so a style
+   * rule or a utility always decides.
+   */
+  :where([data-vortex-style]) :where(ul, ol):where([data-slot]) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  :where([data-vortex-style]) :where(a):where([data-slot], [data-slot] *) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  /*
+   * The shadcn/create menu colour and menu accent selections, published on the application root by
+   * the layout renderer. An inverted menu paints its menu surfaces (the navigation sidebar and the
+   * menu popups) from the dark values of the same resolved theme; the bold accent highlights their
+   * hovered and current items with the primary pair instead of the neutral accent pair. Both only
+   * re-point shadcn variables at other shadcn variables, so every value still comes from the
+   * theme the bridge resolved and checked.
+   */
+  :where([data-vortex-menu="inverted"], [data-vortex-menu="inverted-translucent"])
+    :where([data-slot="sidebar"], .cn-menu-target) {
+    color-scheme: dark;
+  }
+
+  :where([data-vortex-menu-accent="bold"]) :where([data-slot="sidebar"], .cn-menu-target) {
+    --accent: var(--primary);
+    --accent-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--sidebar-primary);
+    --sidebar-accent-foreground: var(--sidebar-primary-foreground);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
