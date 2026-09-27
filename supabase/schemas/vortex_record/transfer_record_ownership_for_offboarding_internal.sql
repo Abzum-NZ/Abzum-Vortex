@@ -152,6 +152,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.transfer_record_ownership_for_offboarding_internal(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid,uuid) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.transfer_record_ownership_for_offboarding_internal(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

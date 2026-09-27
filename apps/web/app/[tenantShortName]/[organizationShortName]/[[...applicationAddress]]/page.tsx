@@ -57,7 +57,7 @@ export default async function ApplicationAddressPage({
   params,
   searchParams,
 }: ApplicationAddressPageProps) {
-  const identity = continueSessionOrEnd(await resolveIdentitySession());
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
 
   const { tenantShortName, organizationShortName, applicationAddress } = await params;
   const addressSegments = applicationAddress ?? [];
@@ -72,7 +72,7 @@ export default async function ApplicationAddressPage({
     "use server";
     if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
     const chooser = launcherPath(tenantShortName, organizationShortName);
-    const currentIdentity = continueSessionOrEnd(await resolveIdentitySession());
+    const currentIdentity = await continueSessionOrEnd(await resolveIdentitySession());
     if (currentIdentity.kind === "temporarily_unavailable") redirect(chooser);
 
     const rechecked = await resolveApplicationAddress(
@@ -100,7 +100,7 @@ export default async function ApplicationAddressPage({
    */
   async function adoptRelease(formData: FormData): Promise<void> {
     "use server";
-    const currentIdentity = continueSessionOrEnd(await resolveIdentitySession());
+    const currentIdentity = await continueSessionOrEnd(await resolveIdentitySession());
     if (currentIdentity.kind === "temporarily_unavailable")
       redirect(launcherPath(tenantShortName, organizationShortName));
 

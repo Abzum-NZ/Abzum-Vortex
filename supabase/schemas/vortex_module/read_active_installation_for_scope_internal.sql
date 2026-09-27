@@ -114,6 +114,8 @@ begin
 end
 $function$;
 
+alter function vortex_module.read_active_installation_for_scope_internal(uuid,uuid) owner to vortex_module_owner;
+
 revoke all on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter;

@@ -253,6 +253,7 @@ begin
 end
 $function$;
 
+alter function vortex_record.write_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
