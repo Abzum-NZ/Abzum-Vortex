@@ -640,7 +640,7 @@ $function$;
 revoke execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
-  to vortex_request, vortex_module_owner, vortex_record_owner;
+  to vortex_request, vortex_module_owner, vortex_record_owner, postgres;
 comment on function vortex_access.evaluate_organization_permission_eligibility(jsonb) is
   'Returns transaction-bound permission and current delegation eligibility from one trusted operation declaration; it is not a final protected-operation decision.';
 alter function vortex_access.evaluate_organization_permission_eligibility(jsonb)

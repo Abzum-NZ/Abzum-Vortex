@@ -146,7 +146,7 @@ revoke execute on function vortex_access.resolve_record_field_bounds_internal(js
   vortex_module_owner, vortex_record_owner;
 
 grant execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
-  to vortex_record_adapter;
+  to vortex_record_adapter, postgres;
 
 comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
   'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the live permission catalogue itself, never from a caller-supplied declaration.';
