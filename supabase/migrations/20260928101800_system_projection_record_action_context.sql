@@ -222,6 +222,14 @@ comment on function vortex_record.resolve_record_action_context_internal(uuid, t
 
 
 reset role;
+-- The adapter-owned capability reader verifies the installed module identity.
+-- Give it only the root columns it reads, within the current organisation.
+grant select (root_id, kind, key) on vortex_definition.roots
+  to vortex_record_adapter;
+create policy record_action_capabilities_definition_roots_read
+  on vortex_definition.roots for select to vortex_record_adapter
+  using (organization_id = vortex_context.organization_id());
+
 set local role vortex_record_owner;
 revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
