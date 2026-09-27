@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  sameId,
+  isRecord,
   applicationRootIdSchema,
   installationWorkflowActivationPlanSchema,
   installationWorkflowWithdrawalReconciliationSchema,
@@ -149,16 +151,10 @@ const workflowTriggerKinds = [
   "workflow",
 ] as const satisfies readonly KestraFlowTrigger["kind"][];
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,
   allowed: readonly string[],
 ): boolean => Object.keys(value).every((key) => allowed.includes(key));
-
-const sameIdentifier = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
 
 const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =>
   typeof value === "string" &&
@@ -177,7 +173,7 @@ const refusedPlan = (
  * one identity always names one installation.
  */
 const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
   if (!isEnvironment(candidate.environment)) return undefined;
 
   const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
@@ -207,10 +203,8 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
 };
 
 /** Validates the five installation fields, refusing any extra or missing field. */
-const parseTarget = (
-  candidate: unknown,
-): InstallationWorkflowInstallationIdentity | undefined => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, targetKeys)) return undefined;
+const parseTarget = (candidate: unknown): InstallationWorkflowInstallationIdentity | undefined => {
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, targetKeys)) return undefined;
   const identity = parseIdentity({ ...candidate, workflowRevision: 1 });
   if (identity === undefined) return undefined;
   return Object.freeze({
@@ -227,15 +221,15 @@ const sameTargetIdentity = (
   identity: KestraFlowIdentity,
 ): boolean =>
   target.environment === identity.environment &&
-  sameIdentifier(target.organizationId, identity.organizationId) &&
-  sameIdentifier(target.applicationRootId, identity.applicationRootId) &&
+  sameId(target.organizationId, identity.organizationId) &&
+  sameId(target.applicationRootId, identity.applicationRootId) &&
   target.applicationVersion === identity.applicationVersion &&
   target.installationRevision === identity.installationRevision;
 
 const sameWorkflowIdentity = (left: KestraFlowIdentity, right: KestraFlowIdentity): boolean =>
   left.environment === right.environment &&
-  sameIdentifier(left.organizationId, right.organizationId) &&
-  sameIdentifier(left.applicationRootId, right.applicationRootId) &&
+  sameId(left.organizationId, right.organizationId) &&
+  sameId(left.applicationRootId, right.applicationRootId) &&
   left.applicationVersion === right.applicationVersion &&
   left.installationRevision === right.installationRevision &&
   left.workflowRevision === right.workflowRevision;
@@ -302,12 +296,12 @@ type ParsedCandidate = Readonly<{
  * identity or an unknown trigger kind is refused.
  */
 const parseCandidate = (candidate: unknown): ParsedCandidate | undefined => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) return undefined;
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) return undefined;
   const identity = parseIdentity(candidate.identity);
   if (identity === undefined) return undefined;
 
   const flow = candidate.flow;
-  if (!isObject(flow) || flow.active !== false) return undefined;
+  if (!isRecord(flow) || flow.active !== false) return undefined;
   if (
     typeof flow.workflowRevision !== "number" ||
     flow.workflowRevision !== identity.workflowRevision ||
@@ -320,7 +314,7 @@ const parseCandidate = (candidate: unknown): ParsedCandidate | undefined => {
   )
     return undefined;
 
-  const trigger = isObject(flow.trigger) ? flow.trigger : undefined;
+  const trigger = isRecord(flow.trigger) ? flow.trigger : undefined;
   if (
     trigger === undefined ||
     typeof trigger.kind !== "string" ||
@@ -360,7 +354,7 @@ const parseRegistrationIdentity = (
 
 /** Reads one exact #661 registration result; a changed-candidate refusal is the only refusal. */
 const parseRegistrationResult = (candidate: unknown): ParsedRegistration | undefined => {
-  if (!isObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
 
   if (candidate.outcome === "refused") {
     if (
@@ -374,7 +368,7 @@ const parseRegistrationResult = (candidate: unknown): ParsedRegistration | undef
   if (!hasOnlyKeys(candidate, ["outcome", "registration"])) return undefined;
 
   const registration = candidate.registration;
-  if (!isObject(registration)) return undefined;
+  if (!isRecord(registration)) return undefined;
   const identity = parseRegistrationIdentity(registration);
   if (identity === undefined) return undefined;
   if (
@@ -400,7 +394,7 @@ const parseRegistrationResult = (candidate: unknown): ParsedRegistration | undef
 };
 
 const parseFlowReference = (candidate: unknown): InstallationWorkflowFlowReference | undefined => {
-  if (!isObject(candidate) || !hasOnlyKeys(candidate, ["workflowRevision", "flowId", "namespace"]))
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, ["workflowRevision", "flowId", "namespace"]))
     return undefined;
   const workflowRevision = revisionSchema.safeParse(candidate.workflowRevision);
   if (
@@ -420,9 +414,11 @@ const parseFlowReference = (candidate: unknown): InstallationWorkflowFlowReferen
   });
 };
 
-const parseRegisteredFlow = (candidate: unknown): InstallationWorkflowRegisteredFlow | undefined => {
+const parseRegisteredFlow = (
+  candidate: unknown,
+): InstallationWorkflowRegisteredFlow | undefined => {
   if (
-    !isObject(candidate) ||
+    !isRecord(candidate) ||
     !hasOnlyKeys(candidate, [
       "workflowRevision",
       "flowId",
@@ -456,13 +452,8 @@ const parseRegisteredFlow = (candidate: unknown): InstallationWorkflowRegistered
 
 const parseAcceptedStart = (candidate: unknown): AcceptedInstallationWorkflowStart | undefined => {
   if (
-    !isObject(candidate) ||
-    !hasOnlyKeys(candidate, [
-      "runId",
-      "applicationReleaseRevision",
-      "workflowRevision",
-      "started",
-    ])
+    !isRecord(candidate) ||
+    !hasOnlyKeys(candidate, ["runId", "applicationReleaseRevision", "workflowRevision", "started"])
   )
     return undefined;
   const runId = workflowRunIdSchema.safeParse(candidate.runId);
@@ -495,7 +486,7 @@ export const planInstallationWorkflowActivation = (
   inputCandidate: unknown,
 ): InstallationWorkflowActivationPlan => {
   if (
-    !isObject(inputCandidate) ||
+    !isRecord(inputCandidate) ||
     !hasOnlyKeys(inputCandidate, [
       "target",
       "candidates",
@@ -530,7 +521,9 @@ export const planInstallationWorkflowActivation = (
     new Set(candidateFlowIds).size !== candidateFlowIds.length
   )
     return refusedPlan("duplicate_workflow");
-  candidates.sort((left, right) => left.identity.workflowRevision - right.identity.workflowRevision);
+  candidates.sort(
+    (left, right) => left.identity.workflowRevision - right.identity.workflowRevision,
+  );
 
   const registrationsInput = inputCandidate.registrations;
   if (!Array.isArray(registrationsInput)) return refusedPlan("invalid_input");
@@ -639,7 +632,7 @@ export const reconcileInstallationWorkflowWithdrawal = (
   inputCandidate: unknown,
 ): InstallationWorkflowWithdrawalReconciliation => {
   if (
-    !isObject(inputCandidate) ||
+    !isRecord(inputCandidate) ||
     !hasOnlyKeys(inputCandidate, ["target", "flows", "acceptedStarts"])
   )
     throw invalidInput();

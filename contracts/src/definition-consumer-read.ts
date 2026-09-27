@@ -15,13 +15,9 @@ import {
 import { moduleContentV3Schema, moduleQueryDefinitionV3Schema } from "./module-contracts-v3";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const definitionConsumerReadSelectorSchema = z.discriminatedUnion("selection", [
   z.object({ selection: z.literal("current") }).strict(),
-  z
-    .object({ selection: z.literal("revision"), releaseRevision: javascriptSafeRevisionSchema })
-    .strict(),
+  z.object({ selection: z.literal("revision"), releaseRevision: revisionSchema }).strict(),
 ]);
 
 /**
@@ -48,34 +44,33 @@ export const definitionConsumerReadCommandSchema = z.discriminatedUnion("kind", 
 const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema>): string =>
   // IDs compare lower-cased, matching the publication contract's lowercase references,
   // so casing differences cannot hide a duplicate subject or break canonical order.
-  (
-    entry.kind === "platform_theme"
-      ? `${entry.kind}:${entry.catalogueThemeId}`
-      : entry.kind === "platform_block"
-        ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
-        : entry.kind === "application_flow"
-            ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
-            : entry.kind === "application_flow_node"
-              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
-              : entry.kind === "application_query"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
-                : entry.kind === "module_query"
-                  ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-                  : entry.kind === "application_form"
-                    ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-                      : entry.kind === "application_workflow"
-                        ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                        : entry.kind === "application_action"
-                          ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
-                      : entry.kind === "protected_operation"
-                        ? `${entry.kind}:${entry.operation.owner.kind}:${
-                            entry.operation.owner.kind === "application"
-                              ? entry.operation.owner.applicationRootId
-                              : entry.operation.owner.kind === "module"
-                                ? entry.operation.owner.moduleRootId
-                                : entry.operation.owner.serviceId
-                          }:${entry.operation.operationId}`
-      : `${entry.kind}:${entry.key}`
+  (entry.kind === "platform_theme"
+    ? `${entry.kind}:${entry.catalogueThemeId}`
+    : entry.kind === "platform_block"
+      ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
+      : entry.kind === "application_flow"
+        ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+        : entry.kind === "application_flow_node"
+          ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+          : entry.kind === "application_query"
+            ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+            : entry.kind === "module_query"
+              ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+              : entry.kind === "application_form"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                : entry.kind === "application_workflow"
+                  ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                  : entry.kind === "application_action"
+                    ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                    : entry.kind === "protected_operation"
+                      ? `${entry.kind}:${entry.operation.owner.kind}:${
+                          entry.operation.owner.kind === "application"
+                            ? entry.operation.owner.applicationRootId
+                            : entry.operation.owner.kind === "module"
+                              ? entry.operation.owner.moduleRootId
+                              : entry.operation.owner.serviceId
+                        }:${entry.operation.operationId}`
+                      : `${entry.kind}:${entry.key}`
   ).toLowerCase();
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */
@@ -99,7 +94,7 @@ export const definitionConsumerReadDependencyManifestSchema = z
 const definitionConsumerReadResultCommon = {
   organizationId: organizationIdSchema,
   definitionKey: namespacedKeySchema,
-  releaseRevision: javascriptSafeRevisionSchema,
+  releaseRevision: revisionSchema,
   releaseVersion: stableDefinitionReleaseVersionSchema,
   validationContractVersion: semanticVersionSchema,
   contentFingerprint: fingerprintSchema,
@@ -139,14 +134,14 @@ export const definitionConsumerReadResultSchema = z.union([
 ]);
 
 export const applicationBoundReleaseSetCommandSchema = z
-  .object({ applicationReleaseRevision: javascriptSafeRevisionSchema })
+  .object({ applicationReleaseRevision: revisionSchema })
   .strict();
 
 /** Exact Application root and revision selected by a protected system consumer. */
 export const systemApplicationBoundReleaseSetCommandSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: revisionSchema,
   })
   .strict();
 

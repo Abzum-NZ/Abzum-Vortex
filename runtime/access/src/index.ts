@@ -29,10 +29,6 @@ export {
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
 export {
-  createVortexSuperAdministratorAdministrationService,
-  type VortexSuperAdministratorAdministrationDependencies,
-} from "./super-administrator-administration";
-export {
   createOrganizationRuntimeSettingsAdministrationService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,

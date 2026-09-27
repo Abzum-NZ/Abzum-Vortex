@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  databaseTimestamp,
+  databaseRevision,
   acceptOrganizationInvitationCommandSchema,
   invitationAcceptanceWithAccessVersionSchema,
   organizationAccountSchema,
@@ -14,7 +16,7 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 export const accessVersionErrorCodes = [
@@ -39,7 +41,7 @@ export class AccessVersionError extends Error {
 }
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 interface AccessVersionStoreDependencies {
@@ -67,15 +69,6 @@ type AcceptanceRow = DatabaseRow & {
   access_version: unknown;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
-const timestamp = (value: unknown): unknown =>
-  value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
-
 const optional = <Value>(value: Value | null | undefined): Value | undefined =>
   value === null || value === undefined ? undefined : value;
 
@@ -95,14 +88,14 @@ const parseAccount = (row: AcceptanceRow): OrganizationAccount => {
     language: optional(row.language),
     timeZone: optional(row.time_zone),
     invitationId: optional(row.invitation_id),
-    activatedAt: timestamp(row.activated_at),
-    suspendedAt: optional(timestamp(row.suspended_at)),
-    closedAt: optional(timestamp(row.closed_at)),
-    changedAt: timestamp(row.changed_at),
-    stateChangedAt: timestamp(row.state_changed_at),
+    activatedAt: databaseTimestamp(row.activated_at),
+    suspendedAt: optional(databaseTimestamp(row.suspended_at)),
+    closedAt: optional(databaseTimestamp(row.closed_at)),
+    changedAt: databaseTimestamp(row.changed_at),
+    stateChangedAt: databaseTimestamp(row.state_changed_at),
     stateChangedBy: row.state_changed_by,
     stateChangeCorrelationId: row.state_change_correlation_id,
-    revision: revision(row.revision),
+    revision: databaseRevision(row.revision),
   });
   if (!parsed.success) throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");
   return parsed.data;
@@ -115,7 +108,7 @@ const parseAcceptance = (row: AcceptanceRow): InvitationAcceptanceWithAccessVers
       : {
           outcome: row.outcome,
           account: parseAccount(row),
-          accessVersion: revision(row.access_version),
+          accessVersion: databaseRevision(row.access_version),
         };
   const parsed = invitationAcceptanceWithAccessVersionSchema.safeParse(candidate);
   if (!parsed.success) throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");

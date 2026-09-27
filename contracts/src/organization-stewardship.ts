@@ -12,7 +12,6 @@ import {
   timestampSchema,
 } from "./identifiers";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const representsSameInstant = (left: string, right: string): boolean =>
   Date.parse(left) === Date.parse(right);
 const representsSameUuid = (left: string, right: string): boolean =>
@@ -26,7 +25,7 @@ const representsSameUuid = (left: string, right: string): boolean =>
 export const organizationStewardshipRequirementSchema = z
   .object({
     organizationId: organizationIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     originalOrganizationAccountId: organizationAccountIdSchema,
     originalRoleId: roleIdSchema,
     originalRoleAssignmentId: roleAssignmentIdSchema,
@@ -80,7 +79,7 @@ export const organizationStewardshipAdoptionResultSchema = z
     outcome: z.enum(["changed", "unchanged"]),
     operation: z.literal("adopt_organization_stewardship"),
     requirement: organizationStewardshipRequirementSchema,
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

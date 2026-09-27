@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  sameId,
   activityIdSchema,
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
@@ -30,7 +31,7 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RuntimeDatabaseTransaction,
+  type RequestDatabaseTransaction,
 } from "@vortex/db";
 
 /**
@@ -112,11 +113,7 @@ export interface SaveInitialRecordTypeLifecyclePolicyForProvisionedSetupCommand 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const parseSafeRevision = (value: unknown) =>
-  revisionSchema.max(Number.MAX_SAFE_INTEGER).safeParse(value);
+const parseSafeRevision = (value: unknown) => revisionSchema.safeParse(value);
 
 const parseNullablePositiveInteger = (value: unknown): number | null | undefined => {
   if (value === null) return null;
@@ -317,7 +314,7 @@ const parseSaveInitialPolicyForProvisionedSetupCommand = (
     // The policy scope is either this exact Application or, for an
     // organisation-shared record type, no Application at all.
     (applicationRootId.data !== null &&
-      !sameUuid(applicationRootId.data, bindingApplicationRootId.data))
+      !sameId(applicationRootId.data, bindingApplicationRootId.data))
   )
     return undefined;
 
@@ -341,7 +338,7 @@ const requireOneRow = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
 type LimitsRow = DatabaseRow & { limits: unknown };
 
 type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 export interface RecordLifecycleLimitsStoreDependencies {
@@ -390,12 +387,11 @@ export const createOrganizationLifecycleLimitsStore = (
         const stored = organizationLifecycleLimitsSchema.safeParse(row.limits);
         if (
           !stored.success ||
-          !sameUuid(stored.data.organizationId, canonicalLimits.organizationId) ||
+          !sameId(stored.data.organizationId, canonicalLimits.organizationId) ||
           stored.data.settingsRevision !== 1 ||
           stored.data.maxRetentionDays !== canonicalLimits.maxRetentionDays ||
           stored.data.maxRecordCount !== canonicalLimits.maxRecordCount ||
-          stored.data.allowUnlimitedRetentionDays !==
-            canonicalLimits.allowUnlimitedRetentionDays ||
+          stored.data.allowUnlimitedRetentionDays !== canonicalLimits.allowUnlimitedRetentionDays ||
           stored.data.allowUnlimitedRecordCount !== canonicalLimits.allowUnlimitedRecordCount ||
           stored.data.allowedActions.length !== canonicalLimits.allowedActions.length ||
           stored.data.allowedActions.some(
@@ -431,14 +427,14 @@ const storedPolicyMatchesCommand = (
   stored.allowUnlimitedCount === submitted.allowUnlimitedCount &&
   (stored.action === "delete"
     ? submitted.action === "delete" && stored.recoveryWindowDays === submitted.recoveryWindowDays
-    : (submitted.action === "archive_workflow" &&
-      sameUuid(stored.archiveWorkflowId, submitted.archiveWorkflowId) &&
+    : submitted.action === "archive_workflow" &&
+      sameId(stored.archiveWorkflowId, submitted.archiveWorkflowId) &&
       stored.expectedWorkflowRevision === submitted.expectedWorkflowRevision &&
-      sameUuid(stored.archiveConnectionInstanceId, submitted.archiveConnectionInstanceId) &&
+      sameId(stored.archiveConnectionInstanceId, submitted.archiveConnectionInstanceId) &&
       stored.archiveDestination === submitted.archiveDestination &&
       stored.expectedConnectionRevision === submitted.expectedConnectionRevision &&
       stored.expectedDestinationFingerprint === submitted.expectedDestinationFingerprint &&
-      stored.expectedConnectionHealthOutcome === submitted.expectedConnectionHealthOutcome));
+      stored.expectedConnectionHealthOutcome === submitted.expectedConnectionHealthOutcome);
 
 /**
  * Protected current record-type lifecycle policy storage (#566). Reuses the
@@ -497,12 +493,12 @@ export const createRecordTypeLifecyclePolicyService = (
         const expectedRevision = (command.expectedPolicyRevision ?? 0) + 1;
         if (
           !parsed.success ||
-          !sameUuid(parsed.data.organizationId, scope.organizationId) ||
-          !sameUuid(parsed.data.storageContractId, command.storageContractId) ||
+          !sameId(parsed.data.organizationId, scope.organizationId) ||
+          !sameId(parsed.data.storageContractId, command.storageContractId) ||
           (parsed.data.applicationRootId === null) !== (command.applicationRootId === null) ||
           (parsed.data.applicationRootId !== null &&
             command.applicationRootId !== null &&
-            !sameUuid(parsed.data.applicationRootId, command.applicationRootId)) ||
+            !sameId(parsed.data.applicationRootId, command.applicationRootId)) ||
           parsed.data.policyRevision !== expectedRevision ||
           !storedPolicyMatchesCommand(parsed.data, command.policy)
         )
@@ -556,12 +552,12 @@ export const createRecordTypeLifecyclePolicyService = (
         const parsed = recordTypeLifecyclePolicySchema.safeParse(row.policy);
         if (
           !parsed.success ||
-          !sameUuid(parsed.data.organizationId, scope.organizationId) ||
-          !sameUuid(parsed.data.storageContractId, command.storageContractId) ||
+          !sameId(parsed.data.organizationId, scope.organizationId) ||
+          !sameId(parsed.data.storageContractId, command.storageContractId) ||
           (parsed.data.applicationRootId === null) !== (command.applicationRootId === null) ||
           (parsed.data.applicationRootId !== null &&
             command.applicationRootId !== null &&
-            !sameUuid(parsed.data.applicationRootId, command.applicationRootId)) ||
+            !sameId(parsed.data.applicationRootId, command.applicationRootId)) ||
           parsed.data.policyRevision !== 1 ||
           !storedPolicyMatchesCommand(parsed.data, command.policy)
         )

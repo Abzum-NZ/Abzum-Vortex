@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  isNonNilUuidText,
   moduleInstallationStorageCommandSchema,
   moduleInstallationStorageResultSchema,
   type ModuleInstallationStorageCommand,
@@ -135,38 +136,29 @@ type ContributionRow = DatabaseRow & {
   readonly contribution_ids: unknown;
 };
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isNonNilUuid = (value: unknown): value is string =>
-  typeof value === "string" &&
-  uuidPattern.test(value) &&
-  value.toLowerCase() !== "00000000-0000-0000-0000-000000000000";
-
 const isSafeRevision = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 
-const parseContributionBinding = (
-  candidate: unknown,
-): ResolvedContributionBinding | undefined => {
+const parseContributionBinding = (candidate: unknown): ResolvedContributionBinding | undefined => {
   if (typeof candidate !== "object" || candidate === null) return undefined;
   const binding = candidate as Record<string, unknown>;
   if (
-    !isNonNilUuid(binding.contributionId) ||
+    !isNonNilUuidText(binding.contributionId) ||
     (binding.kind !== "field" && binding.kind !== "action") ||
-    !isNonNilUuid(binding.contributorModuleRootId) ||
+    !isNonNilUuidText(binding.contributorModuleRootId) ||
     typeof binding.contributorReleaseVersion !== "string" ||
     binding.contributorReleaseVersion.length === 0 ||
-    !isNonNilUuid(binding.targetModuleRootId) ||
+    !isNonNilUuidText(binding.targetModuleRootId) ||
     typeof binding.targetModuleReleaseVersion !== "string" ||
     binding.targetModuleReleaseVersion.length === 0 ||
-    !isNonNilUuid(binding.targetExtensionPointId) ||
-    !isNonNilUuid(binding.targetRecordTypeId)
+    !isNonNilUuidText(binding.targetExtensionPointId) ||
+    !isNonNilUuidText(binding.targetRecordTypeId)
   )
     return undefined;
   if (binding.kind === "field") {
     if (
-      !isNonNilUuid(binding.recordTypeId) ||
-      !isNonNilUuid(binding.fieldId) ||
+      !isNonNilUuidText(binding.recordTypeId) ||
+      !isNonNilUuidText(binding.fieldId) ||
       binding.fieldId.toLowerCase() !== binding.contributionId.toLowerCase()
     )
       return undefined;
@@ -184,7 +176,7 @@ const parseContributionBinding = (
     });
   }
   if (
-    !isNonNilUuid(binding.actionId) ||
+    !isNonNilUuidText(binding.actionId) ||
     binding.actionId.toLowerCase() !== binding.contributionId.toLowerCase()
   )
     return undefined;
@@ -207,9 +199,9 @@ const parseContributionCommand = (
   if (typeof candidate !== "object" || candidate === null) return undefined;
   const command = candidate as Record<string, unknown>;
   if (
-    !isNonNilUuid(command.applicationRootId) ||
+    !isNonNilUuidText(command.applicationRootId) ||
     !isSafeRevision(command.applicationReleaseRevision) ||
-    !isNonNilUuid(command.moduleRootId) ||
+    !isNonNilUuidText(command.moduleRootId) ||
     !isSafeRevision(command.moduleReleaseRevision) ||
     (command.expectedBindingRevision !== null &&
       !isSafeRevision(command.expectedBindingRevision)) ||
@@ -252,16 +244,16 @@ const parseContributionResult = (
   const expectedState = mode === "attach" ? "attached" : "detached";
   const contributionIds =
     Array.isArray(row.contribution_ids) &&
-    row.contribution_ids.every((value): value is string => isNonNilUuid(value))
+    row.contribution_ids.every((value): value is string => isNonNilUuidText(value))
       ? Object.freeze(row.contribution_ids as string[])
       : undefined;
   if (
     row.state !== expectedState ||
     typeof row.changed !== "boolean" ||
     safeRevision(row.binding_revision) === undefined ||
-    !isNonNilUuid(row.application_root_id) ||
+    !isNonNilUuidText(row.application_root_id) ||
     safeRevision(row.application_release_revision) === undefined ||
-    !isNonNilUuid(row.module_root_id) ||
+    !isNonNilUuidText(row.module_root_id) ||
     safeRevision(row.module_release_revision) === undefined ||
     contributionIds === undefined
   )

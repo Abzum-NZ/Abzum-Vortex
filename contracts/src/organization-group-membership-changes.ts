@@ -11,7 +11,6 @@ import {
 } from "./identifiers";
 import { groupMembershipSchema } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const trustedChangeFields = {
   changedBy: actorIdSchema,
   correlationId: correlationIdSchema,
@@ -44,7 +43,7 @@ export const organizationGroupMembershipChangeCommandSchema = z.discriminatedUni
       operation: z.literal("remove_membership"),
       organizationId: organizationIdSchema,
       membershipId: membershipIdSchema,
-      expectedMembershipRevision: javascriptSafeRevisionSchema,
+      expectedMembershipRevision: revisionSchema,
       ...trustedChangeFields,
     })
     .strict(),
@@ -53,7 +52,7 @@ export const organizationGroupMembershipChangeCommandSchema = z.discriminatedUni
       operation: z.literal("restore_membership"),
       organizationId: organizationIdSchema,
       membershipId: membershipIdSchema,
-      expectedMembershipRevision: javascriptSafeRevisionSchema,
+      expectedMembershipRevision: revisionSchema,
       ...trustedChangeFields,
     })
     .strict(),
@@ -62,7 +61,7 @@ export const organizationGroupMembershipChangeCommandSchema = z.discriminatedUni
       operation: z.literal("renew_membership"),
       organizationId: organizationIdSchema,
       membershipId: membershipIdSchema,
-      expectedMembershipRevision: javascriptSafeRevisionSchema,
+      expectedMembershipRevision: revisionSchema,
       replacementMembershipId: membershipIdSchema,
       ...fixedWindowFields,
       ...trustedChangeFields,
@@ -84,7 +83,7 @@ export const organizationGroupMembershipChangeCommandSchema = z.discriminatedUni
 const commonResultFields = {
   outcome: z.literal("changed"),
   membership: groupMembershipSchema,
-  accessVersion: javascriptSafeRevisionSchema,
+  accessVersion: revisionSchema,
   correlationId: correlationIdSchema,
 };
 

@@ -71,7 +71,7 @@ export const normalizeExactDecimal = (value: unknown): string | undefined => {
   return parsed === undefined ? undefined : formatExactDecimal(parsed);
 };
 
-const powerOfTen = (exponent: number): bigint => 10n ** BigInt(exponent);
+export const powerOfTen = (exponent: number): bigint => 10n ** BigInt(exponent);
 
 /** Compares two parsed values exactly, including values with different scales. */
 export const compareExactDecimals = (left: ExactDecimal, right: ExactDecimal): -1 | 0 | 1 => {

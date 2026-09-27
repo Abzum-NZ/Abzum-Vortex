@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  sameId,
   applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
@@ -82,9 +83,6 @@ export type StoredLinkTargetDeclaration =
   | Readonly<{ kind: "application"; applicationRootId: string }>
   | Readonly<{ kind: "external"; address: string }>;
 
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
 /**
  * One resolved page requirement: an application or bound-Module permission from the release's
  * prepared registration, or an exact platform administration permission from the shipped
@@ -141,7 +139,10 @@ const declaration = (
 type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
 
 const platformOperationsByKey = new Map(
-  Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [platformOperationKey(entry.key), entry]),
+  Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [
+    platformOperationKey(entry.key),
+    entry,
+  ]),
 );
 
 /**
@@ -167,18 +168,23 @@ const placementOperationBindings = (
     new Set([...values].map((value) => String(value).toLowerCase()));
   const actionKeys = new Set([
     ...application.content.actions.map((action) => String(action.key)),
-    ...release.modules.flatMap((module) => module.content.actions.map((action) => String(action.key))),
+    ...release.modules.flatMap((module) =>
+      module.content.actions.map((action) => String(action.key)),
+    ),
   ]);
   const recordTypeIds = lower(
-    release.modules.flatMap((module) => module.content.recordTypes.map((record) => record.recordTypeId)),
+    release.modules.flatMap((module) =>
+      module.content.recordTypes.map((record) => record.recordTypeId),
+    ),
   );
   const queryIds = lower([
     ...application.content.queries.map((query) => query.queryId),
     ...release.modules.flatMap((module) => module.content.queries.map((query) => query.queryId)),
   ]);
   const literal = (task: FlowTask, name: string): string | undefined => {
-    const value = (task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> })
-      .properties?.[name];
+    const value = (
+      task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> }
+    ).properties?.[name];
     return value?.kind === "literal" ? String(value.literal?.value) : undefined;
   };
   const operationResolves = (key: string | undefined): boolean => {
@@ -191,8 +197,8 @@ const placementOperationBindings = (
         (entry) =>
           entry.kind === "protected_operation" &&
           entry.operation.owner.kind === "platform_service" &&
-          sameUuid(entry.operation.owner.serviceId, platform.release.serviceId) &&
-          sameUuid(entry.operation.operationId, platform.release.operationId) &&
+          sameId(entry.operation.owner.serviceId, platform.release.serviceId) &&
+          sameId(entry.operation.operationId, platform.release.operationId) &&
           entry.releaseVersion === platform.release.releaseVersion &&
           entry.contentFingerprint === platform.release.contentFingerprint &&
           entry.catalogueFingerprint === platform.release.catalogueFingerprint,
@@ -278,7 +284,7 @@ const findProjectedPlacement = (
     ?.placements;
   if (placements === undefined) return undefined;
   for (const [candidateId, placement] of Object.entries(placements)) {
-    if (sameUuid(candidateId, placementId)) return placement;
+    if (sameId(candidateId, placementId)) return placement;
     for (const child of Object.values((placement.slots ?? {}) as Record<string, unknown>)) {
       const found = findProjectedPlacement(child, placementId);
       if (found !== undefined) return found;
@@ -335,7 +341,7 @@ export const createStoredPageCapabilityService = (
 
   // Undefined means the selected page is not in the release: a lasting answer, not a fault.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
-    const pages = applicationRelease.content.pages.filter((page) => sameUuid(page.pageId, pageId));
+    const pages = applicationRelease.content.pages.filter((page) => sameId(page.pageId, pageId));
     if (pages.length === 0) return undefined;
     if (pages.length !== 1 || pages[0] === undefined)
       throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
@@ -429,8 +435,8 @@ export const createStoredPageCapabilityService = (
         load: async (_transaction, scope) => {
           if (
             scope.applicationRootId === undefined ||
-            !sameUuid(scope.organizationId, context.organizationId) ||
-            !sameUuid(scope.applicationRootId, applicationRootId)
+            !sameId(scope.organizationId, context.organizationId) ||
+            !sameId(scope.applicationRootId, applicationRootId)
           )
             throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
           return stored;
@@ -443,9 +449,9 @@ export const createStoredPageCapabilityService = (
     candidate: OrganizationSelectionCandidate,
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     if (
-      !sameUuid(candidate.organizationId, context.organizationId) ||
+      !sameId(candidate.organizationId, context.organizationId) ||
       candidate.applicationRootId === undefined ||
-      !sameUuid(candidate.applicationRootId, applicationRootId)
+      !sameId(candidate.applicationRootId, applicationRootId)
     )
       return { kind: "unavailable" };
     // Verify the session and application scope before projecting, so a caller without access
@@ -553,9 +559,9 @@ export const createStoredPageCapabilityService = (
       target: StoredLinkTargetDeclaration,
     ): Promise<HumanOrganizationRequestResult<ProjectedLinkDestination>> {
       if (
-        !sameUuid(candidate.organizationId, context.organizationId) ||
+        !sameId(candidate.organizationId, context.organizationId) ||
         candidate.applicationRootId === undefined ||
-        !sameUuid(candidate.applicationRootId, applicationRootId)
+        !sameId(candidate.applicationRootId, applicationRootId)
       )
         return { kind: "unavailable" };
       const unavailable = {
@@ -575,13 +581,11 @@ export const createStoredPageCapabilityService = (
 
       if (target.kind === "application") {
         const parsed = applicationRootIdSchema.safeParse(target.applicationRootId);
-        if (!parsed.success || !sameUuid(parsed.data, applicationRootId)) return unavailable;
+        if (!parsed.success || !sameId(parsed.data, applicationRootId)) return unavailable;
         const homes = [
           applicationRelease.content.homePageId,
           ...applicationRelease.content.roles.map((role) => role.homePageId),
-        ].filter(
-          (pageId, index, all) => all.findIndex((other) => sameUuid(other, pageId)) === index,
-        );
+        ].filter((pageId, index, all) => all.findIndex((other) => sameId(other, pageId)) === index);
         for (const pageId of homes)
           if (await pageOpens(session, candidate, pageId))
             return {

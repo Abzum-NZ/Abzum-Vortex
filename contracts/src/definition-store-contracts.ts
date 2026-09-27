@@ -28,7 +28,6 @@ export const storedDefinitionSourceSchema = z.union([
   storedModuleSourceDocumentSchema,
   storedApplicationSourceDocumentSchema,
 ]);
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
 export const createDefinitionRootCommandSchema = z
   .object({ source: storedDefinitionSourceSchema })
@@ -37,7 +36,7 @@ export const createDefinitionRootCommandSchema = z
 export const saveDefinitionDraftCommandSchema = z
   .object({
     rootId: platformIdSchema,
-    expectedDraftRevision: javascriptSafeRevisionSchema,
+    expectedDraftRevision: revisionSchema,
     source: storedDefinitionSourceSchema,
   })
   .strict();
@@ -49,7 +48,7 @@ export const createModuleRootCommandSchema = z
 export const saveModuleDraftCommandSchema = z
   .object({
     rootId: moduleRootIdSchema,
-    expectedDraftRevision: javascriptSafeRevisionSchema,
+    expectedDraftRevision: revisionSchema,
     source: moduleSourceDocumentSchema,
   })
   .strict();
@@ -57,15 +56,15 @@ export const saveModuleDraftCommandSchema = z
 const storedDraftMetadata = {
   organizationId: organizationIdSchema,
   key: namespacedKeySchema,
-  draftRevision: javascriptSafeRevisionSchema,
-  publishedRevision: javascriptSafeRevisionSchema.optional(),
+  draftRevision: revisionSchema,
+  publishedRevision: revisionSchema.optional(),
   sourceContractVersion: semanticVersionSchema,
   sourceFingerprint: fingerprintSchema,
   createdAt: timestampSchema,
   createdBy: actorIdSchema,
   updatedAt: timestampSchema,
   updatedBy: actorIdSchema,
-  restoredFromReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  restoredFromReleaseRevision: revisionSchema.optional(),
   restoredFromSourceFingerprint: fingerprintSchema.optional(),
   restoredBy: actorIdSchema.optional(),
   restoredAt: timestampSchema.optional(),
@@ -160,7 +159,7 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
       kind: z.literal("module"),
       ...exactDependencyCommon,
       rootId: moduleRootIdSchema,
-      releaseRevision: javascriptSafeRevisionSchema,
+      releaseRevision: revisionSchema,
       resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
@@ -202,34 +201,33 @@ const dependencyManifestSchema = z
     // IDs compare lower-cased, matching the database's lowercase dependency references,
     // so casing differences cannot hide a duplicate subject or break canonical order.
     const subjects = entries.map((entry) =>
-      (
-        entry.kind === "platform_theme"
-          ? `${entry.kind}:${entry.catalogueThemeId}`
-          : entry.kind === "platform_block"
-            ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
-            : entry.kind === "application_flow"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
-                : entry.kind === "application_flow_node"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
-                  : entry.kind === "application_query"
-                    ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
-                    : entry.kind === "module_query"
-                      ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-                      : entry.kind === "application_form"
-                        ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-                : entry.kind === "application_workflow"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                  : entry.kind === "application_action"
-                    ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
-                          : entry.kind === "protected_operation"
-                            ? `${entry.kind}:${entry.operation.owner.kind}:${
-                                entry.operation.owner.kind === "application"
-                                  ? entry.operation.owner.applicationRootId
-                                  : entry.operation.owner.kind === "module"
-                                    ? entry.operation.owner.moduleRootId
-                                    : entry.operation.owner.serviceId
-                              }:${entry.operation.operationId}`
-            : `${entry.kind}:${entry.key}`
+      (entry.kind === "platform_theme"
+        ? `${entry.kind}:${entry.catalogueThemeId}`
+        : entry.kind === "platform_block"
+          ? `${entry.kind}:${entry.blockId}@${entry.releaseVersion}`
+          : entry.kind === "application_flow"
+            ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}`
+            : entry.kind === "application_flow_node"
+              ? `${entry.kind}:${entry.applicationRootId}:${entry.flowId}:${entry.nodeId}`
+              : entry.kind === "application_query"
+                ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
+                : entry.kind === "module_query"
+                  ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
+                  : entry.kind === "application_form"
+                    ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
+                    : entry.kind === "application_workflow"
+                      ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
+                      : entry.kind === "application_action"
+                        ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
+                        : entry.kind === "protected_operation"
+                          ? `${entry.kind}:${entry.operation.owner.kind}:${
+                              entry.operation.owner.kind === "application"
+                                ? entry.operation.owner.applicationRootId
+                                : entry.operation.owner.kind === "module"
+                                  ? entry.operation.owner.moduleRootId
+                                  : entry.operation.owner.serviceId
+                            }:${entry.operation.operationId}`
+                          : `${entry.kind}:${entry.key}`
       ).toLowerCase(),
     );
     if (new Set(subjects).size !== subjects.length)
@@ -247,13 +245,13 @@ const dependencyManifestSchema = z
 export const prepareDefinitionPublicationCommandSchema = z
   .object({
     rootId: platformIdSchema,
-    expectedDraftRevision: javascriptSafeRevisionSchema,
+    expectedDraftRevision: revisionSchema,
   })
   .strict();
 
 const publicationConfirmationCommon = {
   rootId: platformIdSchema,
-  expectedDraftRevision: javascriptSafeRevisionSchema,
+  expectedDraftRevision: revisionSchema,
   sourceFingerprint: fingerprintSchema,
   assignedVersion: stableDefinitionReleaseVersionSchema,
   contentFingerprint: fingerprintSchema,
@@ -298,7 +296,7 @@ export const publishDefinitionCommandSchema = z
 export const publishDefinitionResultSchema = z
   .object({
     rootId: platformIdSchema,
-    releaseRevision: javascriptSafeRevisionSchema,
+    releaseRevision: revisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,

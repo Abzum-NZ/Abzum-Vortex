@@ -1,7 +1,13 @@
 import "server-only";
 
-import { fieldIdSchema, fingerprintSchema, storageContractIdSchema } from "@vortex/contracts";
-import type { DatabaseRow, RuntimeDatabaseTransaction } from "@vortex/db";
+import {
+  uuidText,
+  isRecord,
+  fieldIdSchema,
+  fingerprintSchema,
+  storageContractIdSchema,
+} from "@vortex/contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 
 /**
  * Bounded operational runner for the #612 concurrent field-index build.
@@ -67,7 +73,7 @@ export class IndexBuildRunnerError extends Error {
  * renew and result calls must each be a new transaction on that login.
  */
 export type IndexBuildWorkerTransactionRunner = <Result>(
-  operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 /**
@@ -158,9 +164,6 @@ type ParsedRecord =
   | Readonly<{ kind: "recorded"; observedState: "present" | "missing" | "invalid" }>
   | Readonly<{ kind: "refused"; reasonCode: IndexBuildRefusalReasonCode }>;
 
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const hasExactKeys = (
   value: Readonly<Record<string, unknown>>,
   required: readonly string[],
@@ -209,15 +212,6 @@ const parseRefusal = (
     : undefined;
 };
 
-const uuidText = (value: unknown): string | undefined => {
-  if (
-    typeof value !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-  )
-    return undefined;
-  return value;
-};
-
 /**
  * Accepts only the single-statement DDL the catalogue derives: a concurrent
  * create or cleanup against `record_data`. The runner never assembles SQL, so
@@ -240,9 +234,8 @@ const parseStatements = (candidate: unknown): readonly string[] | undefined => {
 };
 
 const parseClaim = (candidate: unknown): ParsedClaim => {
-  if (!isObject(candidate)) throw invalidResult();
-  if (candidate.outcome === "none" && hasExactKeys(candidate, ["outcome"]))
-    return { kind: "none" };
+  if (!isRecord(candidate)) throw invalidResult();
+  if (candidate.outcome === "none" && hasExactKeys(candidate, ["outcome"])) return { kind: "none" };
   const refusal = parseRefusal(candidate);
   if (refusal !== undefined) return { kind: "refused", reasonCode: refusal };
   if (
@@ -293,7 +286,7 @@ const parseClaim = (candidate: unknown): ParsedClaim => {
 };
 
 const parseRenewal = (candidate: unknown): ParsedRenewal => {
-  if (!isObject(candidate)) throw invalidResult();
+  if (!isRecord(candidate)) throw invalidResult();
   if (candidate.outcome === "renewed" && hasExactKeys(candidate, ["outcome"]))
     return { kind: "renewed" };
   const refusal = parseRefusal(candidate);
@@ -302,7 +295,7 @@ const parseRenewal = (candidate: unknown): ParsedRenewal => {
 };
 
 const parseRecord = (candidate: unknown, job: IndexBuildJob): ParsedRecord => {
-  if (!isObject(candidate)) throw invalidResult();
+  if (!isRecord(candidate)) throw invalidResult();
   const refusal = parseRefusal(candidate);
   if (refusal !== undefined) return { kind: "refused", reasonCode: refusal };
   const outcome = candidate.outcome;
@@ -337,7 +330,7 @@ const validateRunInput = (candidate: unknown): ValidatedRunInput => {
       batchLimit: indexBuildRunnerLimits.defaultBatchLimit,
       leaseSeconds: indexBuildRunnerLimits.defaultLeaseSeconds,
     };
-  if (!isObject(candidate) || !hasExactKeys(candidate, [], ["batchLimit", "leaseSeconds"]))
+  if (!isRecord(candidate) || !hasExactKeys(candidate, [], ["batchLimit", "leaseSeconds"]))
     throw invalidInput();
   const batchLimit =
     candidate.batchLimit === undefined
@@ -491,7 +484,7 @@ export const createIndexBuildRunner = (
   dependencies: IndexBuildRunnerDependencies,
 ): IndexBuildRunner => {
   if (
-    !isObject(dependencies) ||
+    !isRecord(dependencies) ||
     typeof dependencies.runWorkerTransaction !== "function" ||
     typeof dependencies.runStandaloneStatement !== "function"
   )
@@ -507,5 +500,4 @@ export const createIndexBuildRunner = (
 export const runIndexBuild = async (
   dependencies: IndexBuildRunnerDependencies,
   inputCandidate?: unknown,
-): Promise<IndexBuildRunResult> =>
-  createIndexBuildRunner(dependencies).run(inputCandidate);
+): Promise<IndexBuildRunResult> => createIndexBuildRunner(dependencies).run(inputCandidate);

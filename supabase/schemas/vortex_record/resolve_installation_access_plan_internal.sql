@@ -216,7 +216,7 @@ begin
                   pg_catalog.format('pg_catalog.to_jsonb(%I::text)', ordered_fields.value ->> 'token')
                 when 'timestamp_with_time_zone' then
                   pg_catalog.format(
-                    'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(%I))',
+                    'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', %I), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))',
                     ordered_fields.value ->> 'token'
                   )
                 when 'date' then
