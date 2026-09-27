@@ -4530,19 +4530,7 @@
             }
           }
         ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
+        "outputs": {}
       },
       {
         "contractVersion": "1.0.0",
