@@ -885,6 +885,17 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if ("clearFieldIds" in values)
               for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
             if (prepared.recordType.systemProjection !== undefined) {
+              // The shipped text input submits an empty string for an unset optional default.
+              // Store that as the nullable application reference the settings writer accepts.
+              const defaultApplicationFieldId = settingsFieldId(
+                prepared.recordType,
+                "default_application_root_id",
+              );
+              if (
+                defaultApplicationFieldId !== undefined &&
+                finalValues[defaultApplicationFieldId] === ""
+              )
+                finalValues[defaultApplicationFieldId] = null;
               const corrections = invalidSettingsCorrections(prepared, command.data, finalValues);
               if (corrections === undefined)
                 return safeRefusal(prepared.correlationId, "operation_refused");

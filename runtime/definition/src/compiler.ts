@@ -3238,10 +3238,14 @@ function compileModule(
     const projection = recordType.system_projection as JsonObject | undefined;
     const registeredWritableUpdate =
       projection !== undefined &&
-      isRegisteredWritableSystemProjection(recordKey, String(projection.protected_view));
-    // A system projection remains read-only except for update on a type in the closed writable
-    // registration. Create, delete, restore and every unregistered standard update still refuse at
-    // publication with the stable system-record code.
+      isRegisteredWritableSystemProjection(
+        recordKey,
+        String(projection.protected_view),
+        definitionKey,
+      );
+    // A system projection remains read-only except for update on the exact registered Module,
+    // record type and protected view. Create, delete, restore and every other standard update
+    // still refuse at publication with the stable system-record code.
     if (
       projection !== undefined &&
       (recordType.standard_actions as string[]).some(

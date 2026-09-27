@@ -43,6 +43,7 @@ export const moduleSourceContractVersion = "3.0.0" as const;
 /** The closed set of protected projections that may declare the standard update action. */
 export const writableSystemProjectionRegistrations = Object.freeze({
   organization_settings: Object.freeze({
+    moduleKey: "vortex.organisation_administration",
     protectedView: "organization_runtime_settings",
     writer: "save_organization_settings_record",
   }),
@@ -51,10 +52,13 @@ export const writableSystemProjectionRegistrations = Object.freeze({
 export const isRegisteredWritableSystemProjection = (
   recordTypeKey: string,
   protectedView: string,
+  moduleKey?: string,
 ): boolean =>
   Object.entries(writableSystemProjectionRegistrations).some(
     ([key, registration]) =>
-      key === recordTypeKey && registration.protectedView === protectedView,
+      key === recordTypeKey &&
+      registration.protectedView === protectedView &&
+      (moduleKey === undefined || registration.moduleKey === moduleKey),
   );
 
 const maximumSourceDocumentNodes = 50_000;
