@@ -348,7 +348,7 @@ history does not invalidate a complete current installation. See the
 
 The [Application lifecycle permission](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
 is the organisation-scoped platform permission
-`platform.organization.applications.manage`. The operation binds the exact
+[`platform.organization.applications.manage`](appendices/platform-permission-catalogue.md#permission-inventory), registered from the platform declarations at organisation creation. The operation binds the exact
 application and additionally checks delegated management of its complete affected
 permission scope. Installation rights do not grant record access or assignment
 rights. Registration creates no grants and does not expand the permanent

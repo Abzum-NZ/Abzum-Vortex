@@ -161,7 +161,9 @@ end
 $function$;
 
 revoke all on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb)
+  to vortex_record_owner;
 grant execute on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) to vortex_runtime;
 
 comment on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) is
