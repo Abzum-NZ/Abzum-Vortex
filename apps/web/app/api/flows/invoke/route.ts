@@ -54,7 +54,10 @@ import {
   humanOrganizationRequests,
 } from "../../../_lib/server-composition";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
-import { resolveReferenceChoiceFormValues } from "../../../_lib/reference-choices";
+import {
+  applicationHasAuthoredForm,
+  resolveReferenceChoiceFormValues,
+} from "../../../_lib/reference-choices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,14 +97,16 @@ const fromOwnSite = (request: NextRequest): boolean => {
 
 /**
  * Whether an installed flow declares the paused node a continuation target names (#544): a task
- * with that id anywhere in the flow and, for a form, a Show form task whose fixed form is the named
- * one (a confirmation names no form). The stored run still pins the exact node; this refuses a
- * target the installed flow could never pause at before the continuation is spent.
+ * with that id anywhere in the flow and, for a form, a Show form task whose literal form matches
+ * or whose dynamic form is checked against the active authored release. The stored run still pins
+ * the exact node; this refuses a target the installed flow could never pause at before spending
+ * the continuation.
  */
 const declaresPausedNode = (
   flow: unknown,
   node: Readonly<{ nodeId: string; formId?: string }>,
 ): boolean => {
+  if (typeof flow !== "object" || flow === null) return false;
   const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
   const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
     for (const task of tasks ?? []) {
@@ -122,28 +127,6 @@ const declaresPausedNode = (
   // A form chosen by a reference or formula is only known at run time; the stored run pins it.
   if (form?.kind !== "literal") return form !== undefined;
   return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
-};
-
-/** Returns a Show form id only when the installed task fixes it as a literal. */
-const literalPausedFormId = (flow: unknown, nodeId: string): string | undefined => {
-  const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
-  const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
-    for (const task of tasks ?? []) {
-      if (task.id === nodeId) return task;
-      for (const child of flowTaskChildLists(task)) {
-        const found = find(child.tasks);
-        if (found !== undefined) return found;
-      }
-    }
-    return undefined;
-  };
-  const task = find(definition.tasks) ?? find(definition.errors) ?? find(definition.finally);
-  if (task?.type !== "interface.show_form") return undefined;
-  const form = (task as { properties?: Record<string, unknown> }).properties?.form as
-    Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }> | undefined;
-  return form?.kind === "literal" && typeof form.literal?.value === "string"
-    ? form.literal.value
-    : undefined;
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -378,20 +361,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const answer = request.answer;
       if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
 
-      const trustedFormId = literalPausedFormId(
-        installed.flows.get(request.target.flowId),
-        request.target.nodeId,
-      );
+      const trustedFormId = request.target.formId;
       if (
         trustedFormId === undefined ||
-        request.target.formId === undefined ||
-        trustedFormId.toLowerCase() !== request.target.formId.toLowerCase()
+        request.target.awaiting !== "form" ||
+        request.target.releaseKey !== installed.releaseKey ||
+        request.target.installation.applicationRootId.toLowerCase() !==
+          installed.applicationRootId.toLowerCase() ||
+        request.target.installation.installationReleaseRevision !== installed.installationRevision ||
+        !declaresPausedNode(installed.flows.get(request.target.flowId), {
+          nodeId: request.target.nodeId,
+          formId: trustedFormId,
+        })
       ) {
-        if (answer.choiceEvidence !== undefined)
-          return { kind: "refused", reason: "unavailable" };
-        return pageFormRequests.resume(session, selection, request);
+        return { kind: "refused", reason: "unavailable" };
       }
-      if (installed.applicationContent === undefined || installed.modules === undefined)
+      if (
+        installed.applicationContent === undefined ||
+        installed.modules === undefined ||
+        !applicationHasAuthoredForm(installed.applicationContent, trustedFormId)
+      )
         return { kind: "refused", reason: "unavailable" };
       const values = await resolveReferenceChoiceFormValues({
         service: referenceChoices,

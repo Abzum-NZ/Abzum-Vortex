@@ -161,6 +161,39 @@ const formPlacementsOnPage = (
   return { fields: found, invalid };
 };
 
+/** A form ID is usable only when one authored Form placement has that identity in the release. */
+export const applicationHasAuthoredForm = (
+  application: ApplicationContentV2,
+  formId: string,
+): boolean => {
+  let matches = 0;
+  const visitSlot = (slot: unknown): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      const block = blockOf(placement);
+      if (
+        sameId(placementId, formId) &&
+        typeof block?.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+      )
+        matches += 1;
+      if (isRecord(placement) && isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) visitSlot(child);
+    }
+  };
+
+  for (const page of application.pages) {
+    const composition = page.composition;
+    if (!isRecord(composition)) continue;
+    if ("main" in composition) visitSlot(composition.main);
+    if (isRecord(composition.content))
+      for (const slot of Object.values(composition.content)) visitSlot(slot);
+    if (isRecord(composition.stepContent))
+      for (const slot of Object.values(composition.stepContent)) visitSlot(slot);
+  }
+  return matches === 1;
+};
+
 /** Finds the exact form's choice inputs across the active Application release. */
 export const referenceChoiceFieldsForForm = (
   application: ApplicationContentV2,
