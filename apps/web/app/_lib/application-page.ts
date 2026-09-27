@@ -29,6 +29,7 @@ import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
+  flowTaskChildLists,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
@@ -37,6 +38,7 @@ import {
   organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
+  type FlowTask,
   type IdentitySession,
   type JsonValue,
   type OrganizationAccessDeclaration,
@@ -875,19 +877,85 @@ const loadApplicationPageInternal = async (
   }
 
   const refreshPlacementsBySource: Record<string, readonly string[]> = {};
-  const boundPlacementIds = new Set(
-    application.content.flowBindings.map((binding) => binding.controlId.toLowerCase()),
+  const flowsById = new Map(
+    application.content.flows.map((flow) => [String(flow.id).toLowerCase(), flow] as const),
   );
+  const actionRecordTypes = new Map(
+    [
+      ...application.content.actions,
+      ...context.releaseSet.modules.flatMap((module) => module.content.actions),
+    ].map((action) => [String(action.key).toLowerCase(), String(action.subjectRecordTypeId)] as const),
+  );
+  const flowWrittenRecordTypes = (flowId: string): readonly string[] => {
+    const types = new Set<string>();
+    const visited = new Set<string>();
+    const literal = (task: FlowTask, name: string): string | undefined => {
+      const properties = "properties" in task ? task.properties : undefined;
+      const value = properties?.[name];
+      return isRecord(value) && value.kind === "literal" && isRecord(value.literal) &&
+        value.literal.type === "text" && typeof value.literal.value === "string"
+        ? value.literal.value
+        : undefined;
+    };
+    const visitFlow = (id: string): void => {
+      const key = id.toLowerCase();
+      if (visited.has(key)) return;
+      visited.add(key);
+      const flow = flowsById.get(key);
+      if (flow === undefined) return;
+      const visitTasks = (tasks: readonly FlowTask[]): void => {
+        for (const task of tasks) {
+          if (task.type === "run_flow")
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId));
+          if (
+            [
+              "record.save",
+              "record.create",
+              "record.set_fields",
+              "record.delete",
+              "record.restore",
+              "record.changes",
+            ].includes(task.type)
+          ) {
+            const recordType = literal(task, "record_type");
+            if (recordType !== undefined) types.add(recordType);
+          } else if (task.type === "operation.call") {
+            const operation = literal(task, "operation");
+            const recordType =
+              operation === undefined ? undefined : actionRecordTypes.get(operation.toLowerCase());
+            if (recordType !== undefined) types.add(recordType);
+          }
+          for (const child of flowTaskChildLists(task)) visitTasks(child.tasks);
+        }
+      };
+      visitTasks(flow.tasks);
+      visitTasks(flow.errors);
+      visitTasks(flow.finally);
+    };
+    visitFlow(flowId);
+    return [...types];
+  };
   for (const { placementId, formId } of allPlacements) {
-    if (!boundPlacementIds.has(placementId.toLowerCase())) continue;
-    const recordTypeId =
+    const held = application.content.flowBindings.filter((binding) =>
+      sameId(String(binding.controlId), placementId),
+    );
+    if (held.length === 0) continue;
+    const sourceRecordTypeId =
       recordTypeByPlacement.get(placementId.toLowerCase()) ??
       (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase())) ??
       pageSubjectRecordTypeId;
-    const queryTargets =
-      recordTypeId === undefined
-        ? []
-        : (dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? []);
+    const writtenTypes = [
+      ...new Set(held.flatMap((binding) => flowWrittenRecordTypes(String(binding.flow.flowId)))),
+    ];
+    const targetTypes =
+      writtenTypes.length > 0
+        ? writtenTypes
+        : sourceRecordTypeId === undefined
+          ? []
+          : [sourceRecordTypeId];
+    const queryTargets = targetTypes.flatMap((recordTypeId) =>
+      dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
+    );
     const editFormId =
       editFormPlacementIds.has(placementId)
         ? placementId
