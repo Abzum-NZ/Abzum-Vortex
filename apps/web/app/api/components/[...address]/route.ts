@@ -10,7 +10,11 @@ import {
   type ComponentBundleObjectStore,
   type ServeComponentBundleResult,
 } from "@vortex/file";
-import { requestMatchesConfiguredSite } from "../../../auth/_lib/session-request-state";
+import { isComponentOriginRequest } from "../_lib/component-origin";
+import {
+  hostedStorageSigningConfiguration,
+  requiredEnvironmentValue,
+} from "../../../_lib/server-configuration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,13 +34,6 @@ export const dynamic = "force-dynamic";
  * a tampered object is refused rather than delivered.
  */
 
-const requiredEnvironmentValue = (name: string): string => {
-  const value = process.env[name];
-  if (!value || value.trim().length === 0)
-    throw new Error(`Missing required server configuration: ${name}`);
-  return value;
-};
-
 const refusal = (
   reason: keyof typeof componentBundleRefusalHttpStatus,
   headers?: Readonly<Record<string, string>>,
@@ -55,42 +52,6 @@ const refusal = (
   return response;
 };
 
-let componentOrigin: string | undefined;
-
-/**
- * The configured component origin, refused when its host is, contains or is
- * contained by the Vortex site host. Any configuration error fails closed.
- */
-const configuredComponentOrigin = (): string => {
-  if (componentOrigin !== undefined) return componentOrigin;
-  const component = new URL(requiredEnvironmentValue("VORTEX_COMPONENT_BUNDLE_ORIGIN"));
-  const site = new URL(requiredEnvironmentValue("VORTEX_SITE_URL"));
-  const componentHost = component.hostname.toLowerCase();
-  const siteHost = site.hostname.toLowerCase();
-  if (
-    component.origin !== component.href.replace(/\/$/, "") ||
-    componentHost === siteHost ||
-    componentHost.endsWith(`.${siteHost}`) ||
-    siteHost.endsWith(`.${componentHost}`)
-  )
-    throw new Error("The component bundle origin must be a dedicated domain, never the Vortex site");
-  componentOrigin = component.origin;
-  return componentOrigin;
-};
-
-/** True only for a request addressed to the dedicated component origin. */
-const isComponentOriginRequest = (request: Request): boolean => {
-  try {
-    return requestMatchesConfiguredSite(
-      request.headers,
-      new URL(request.url),
-      configuredComponentOrigin(),
-    );
-  } catch {
-    return false;
-  }
-};
-
 let objectStore: ComponentBundleObjectStore | undefined;
 
 /**
@@ -101,23 +62,18 @@ let objectStore: ComponentBundleObjectStore | undefined;
 const componentBundleObjectStore = (): ComponentBundleObjectStore => {
   if (objectStore !== undefined) return objectStore;
   const supabaseUrl = requiredEnvironmentValue("VORTEX_SUPABASE_URL");
-  const hostname = new URL(supabaseUrl).hostname;
-  const match = /^([a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?)\.supabase\.co$/.exec(hostname);
-  if (match === null || match[1] === undefined)
-    throw new Error("Component bundle Storage requires a hosted Supabase destination project");
-  const destinationProject = match[1];
+  const signing = hostedStorageSigningConfiguration(supabaseUrl, "Component bundle Storage");
   // The component bundle credentials are signed by the destination project's
   // own server-only Storage signing key and carry a distinct token kind, so the
   // bucket policies admit only component bundle operations on one address.
-  const keyId = requiredEnvironmentValue("VORTEX_FILE_STORAGE_SIGNING_KEY_ID");
   const minter = createComponentBundleStorageCredentialMinter({
-    destinationProject,
-    issuer: `https://${destinationProject}.supabase.co/auth/v1`,
-    activeKeyId: keyId,
+    destinationProject: signing.destinationProject,
+    issuer: signing.issuer,
+    activeKeyId: signing.keyId,
     keys: [
       {
-        keyId,
-        signer: requiredEnvironmentValue("VORTEX_FILE_STORAGE_SIGNING_KEY").replace(/\\n/g, "\n"),
+        keyId: signing.keyId,
+        signer: signing.privateKey,
       },
     ],
   });
