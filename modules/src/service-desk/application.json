@@ -2952,7 +2952,7 @@
                          "contractVersion": "1.0.0",
                          "id": "sd_form_flow_1",
                          "key": "sd_form_flow_1",
-                         "description": "Saves the submitted form onto the record being edited through the one Save record task.",
+                         "description": "Saves the edited case and returns to its detail page.",
                          "labels": {
                              "name": "Continue Edit case"
                          },
@@ -2998,6 +2998,26 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "return_to_detail",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "service_desk_case_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record }}"
                                          }
                                      }
                                  }

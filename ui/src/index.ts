@@ -137,6 +137,7 @@ export {
 // Per-Block Control Payload & Event Contracts
 export {
   CONTROL_EVENT_NAMES,
+  equalFormValue,
   parseBooleanInputPayload,
   parseButtonPayload,
   parseChoiceInputPayload,
@@ -278,11 +279,7 @@ export {
 } from "./launcher";
 
 // Launcher, Link-Tile & View-Filter Components
-export {
-  ApplicationLauncher,
-  LinkTiles,
-  ViewFilter,
-} from "./launcher";
+export { ApplicationLauncher, LinkTiles, ViewFilter } from "./launcher";
 
 // Launcher Registrations & Registry
 export {
