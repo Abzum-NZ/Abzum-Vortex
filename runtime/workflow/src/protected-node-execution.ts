@@ -44,6 +44,7 @@ const unavailableAdapterOwnerSchema = z.enum([
   "#101",
   "#113",
   "#666",
+  "#1399",
 ]);
 
 const retainedNodeBindingSchema = z
@@ -232,7 +233,8 @@ const unavailableOwnerForTask = (taskType: string): string | undefined => {
   if (taskType === "connection.call") return "#100";
   if (taskType === "message.acknowledge") return "#101";
   if (taskType === "file.export") return "#113";
-  if (taskType === "event.announce" || taskType === "flow.run_background") return "#666";
+  if (taskType === "event.announce") return "#1399";
+  if (taskType === "flow.run_background") return "#666";
   return undefined;
 };
 

@@ -36,8 +36,8 @@ import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
  * - The retained run is trusted server state read by the caller: the exact run,
  *   its organisation, application, installed release, workflow revision, run-as
  *   policy and the node-to-operation map of that release. The envelope must
- *   match it field for field. An unknown, terminal, withdrawn or mismatched run
- *   refuses before an effect.
+ *   match it field for field. An unknown or mismatched run refuses before an
+ *   effect. A terminal run may only replay a previously recorded safe response.
  * - `initiating_person` yields the retained initiator, which the Access step
  *   re-resolves against current account state before every protected step.
  *   `system_with_source_authority` yields no actor at all: the effective system

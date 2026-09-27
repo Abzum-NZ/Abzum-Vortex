@@ -1,5 +1,5 @@
 -- Issue #664: retain the exact authority and private Kestra mapping for one durable run.
--- The runtime reaches this storage only through the three private functions below.
+-- The runtime reaches this storage only through the private functions below.
 create table vortex_workflow.protected_workflow_runs (
   run_id uuid not null check (vortex_context.is_non_nil_uuid(run_id::text)),
   organization_id uuid not null
