@@ -32,6 +32,14 @@ export const flowTestRunResultSchema = z.discriminatedUnion("status", [
       stopped: builderKeySchema.optional(),
     })
     .strict(),
+  z
+    .object({
+      status: z.literal("paused"),
+      awaiting: z.enum(["form", "confirm"]),
+      taskId: builderKeySchema,
+      outputs: z.record(builderKeySchema, jsonValueSchema),
+    })
+    .strict(),
   z.object({ status: z.literal("failed"), failure: flowTestRunFailureSchema }).strict(),
 ]);
 
@@ -39,6 +47,7 @@ export const flowTestRunTaskOutcomeSchema = z.enum([
   "completed",
   "committed",
   "background_pending",
+  "paused",
   "refused",
   "conflict",
   "validation",

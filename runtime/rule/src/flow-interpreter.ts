@@ -207,7 +207,7 @@ export type FlowTaskTraceObservation = Readonly<{
   taskId: string;
   taskType: string;
   iteration: string;
-  outcome: "completed" | "awaiting" | "interface" | "failed";
+  outcome: "entered" | "completed" | "awaiting" | "interface" | "failed";
   failure?: FlowFailure;
   intent?: FlowInterfaceIntent;
 }>;
@@ -866,9 +866,19 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
         return { kind: "finished", state: snapshot(machine), intents, result };
       }
       // Hand the child's result to the Run flow task in its parent.
-      machine.state.activations = machine.state.activations.slice(0, -1);
-      const parent = topOf(machine);
+      const parent = machine.state.activations[machine.state.activations.length - 2]!;
       const callTaskId = activation.callTaskId!;
+      observe(observer, {
+        flowId: parent.flowId,
+        taskId: callTaskId,
+        taskType: "run_flow",
+        iteration: iterationKey(machine.state),
+        outcome: result.status === "failed" ? "failed" : "completed",
+        ...(result.status === "failed"
+          ? { failure: { ...result.failure, taskId: callTaskId } }
+          : {}),
+      });
+      machine.state.activations = machine.state.activations.slice(0, -1);
       if (result.status === "failed")
         replaceTop(machine, failActivation(parent, { ...result.failure, taskId: callTaskId }));
       else replaceTop(machine, storeTaskOutputs(parent, callTaskId, result.outputs));
@@ -899,6 +909,7 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       iteration: iterationKey(machine.state),
     } as const;
     try {
+      const activationCount = machine.state.activations.length;
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
         if (executed.step.kind === "interface") {
@@ -910,7 +921,9 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
         } else observe(observer, { ...observation, outcome: "awaiting" });
         return executed.step;
       }
-      if (task.type.startsWith("interface.")) {
+      if (task.type === "run_flow" && machine.state.activations.length > activationCount) {
+        observe(observer, { ...observation, outcome: "entered" });
+      } else if (task.type.startsWith("interface.")) {
         const intent = machine.state.pendingIntents.at(-1);
         observe(observer, {
           ...observation,

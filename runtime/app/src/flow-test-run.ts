@@ -143,14 +143,6 @@ const mapTasksForTest = (
       const key = taskKey(flowId, task.id);
       simulatedTasks.add(key);
       simulatedTaskTypes.set(key, task.type);
-      if (task.type === "parallel")
-        return {
-          ...common,
-          type: "sequential",
-          tasks: task.branches.flatMap((branch) =>
-            mapTasksForTest(flowId, branch, simulatedTasks, simulatedTaskTypes),
-          ),
-        };
       return { ...common, type: "sequential", tasks: [] };
     }
     switch (task.type) {
@@ -232,8 +224,8 @@ const runRecordTask = async (
   const supported = new Set(["record.save", "record.create", "record.set_fields"]);
   if (!supported.has(call.taskType))
     return {
-      outcome: "failed",
-      failure: taskFailure("record_task_unavailable", "failed", call.taskId),
+      outcome: "refused",
+      failure: taskFailure("record_task_unavailable", "refused", call.taskId),
     };
 
   const recordTypeId = call.properties.record_type?.value;
@@ -252,6 +244,11 @@ const runRecordTask = async (
     };
 
   const recordValue = call.properties.record?.value;
+  if (call.taskType === "record.set_fields" && typeof recordValue !== "string")
+    return {
+      outcome: "validation",
+      failure: taskFailure("record_target_invalid", "validation", call.taskId),
+    };
   const operation =
     call.taskType === "record.create" ||
     (call.taskType === "record.save" && recordValue === undefined)
@@ -410,6 +407,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         return refusal("preview_unavailable", { kind: "preview" });
       }
       if (
+        !sameId(previewInstallation.previewInstallationId, request.data.previewInstallationId) ||
         !sameId(previewInstallation.organizationId, selection.data.organizationId) ||
         !sameId(previewInstallation.applicationRootId, selection.data.applicationRootId)
       )
@@ -489,9 +487,57 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
       const runId = newRunId();
       const trace: FlowTestRunTaskTraceEntry[] = [];
       const intents: NonNullable<Extract<FlowTestRunResponse, { kind: "finished" }>['intents']> = [];
+      const pendingRunFlows: Array<{
+        flowId: string;
+        taskId: string;
+        iteration: string;
+        traceIndex: number;
+      }> = [];
       const observer: FlowTaskTraceObserver = (observation) => {
         const key = taskKey(observation.flowId, observation.taskId);
         if (observation.outcome === "awaiting") return;
+        if (observation.outcome === "entered") {
+          pendingRunFlows.push({
+            flowId: observation.flowId,
+            taskId: observation.taskId,
+            iteration: observation.iteration,
+            traceIndex: trace.length,
+          });
+          trace.push({
+            flowId: observation.flowId,
+            taskId: observation.taskId,
+            taskType: observation.taskType,
+            iteration: observation.iteration,
+            outcome: "paused",
+          });
+          return;
+        }
+        if (observation.taskType === "run_flow") {
+          let pendingIndex = -1;
+          for (let index = pendingRunFlows.length - 1; index >= 0; index -= 1) {
+            const pending = pendingRunFlows[index]!;
+            if (
+              pending.flowId === observation.flowId &&
+              pending.taskId === observation.taskId &&
+              pending.iteration === observation.iteration
+            ) {
+              pendingIndex = index;
+              break;
+            }
+          }
+          if (pendingIndex !== -1) {
+            const [pending] = pendingRunFlows.splice(pendingIndex, 1);
+            const entry = trace[pending!.traceIndex]!;
+            trace[pending!.traceIndex] = observation.failure === undefined
+              ? { ...entry, outcome: "completed" }
+              : {
+                  ...entry,
+                  outcome: "failed",
+                  failure: failureFromInterpreter(observation.failure),
+                };
+            return;
+          }
+        }
         const intent = observation.intent === undefined ? undefined : asIntent(observation.intent);
         if (intent !== undefined) intents.push(intent);
         const simulated = simulatedTasks.has(key) || observation.outcome === "interface";
@@ -508,6 +554,16 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           ...(intent === undefined ? {} : { intent }),
         });
       };
+      const failPendingRunFlows = (code: string, outcome: FlowTestRunFailure["outcome"]) => {
+        for (const pending of pendingRunFlows) {
+          const entry = trace[pending.traceIndex]!;
+          trace[pending.traceIndex] = {
+            ...entry,
+            outcome,
+            failure: taskFailure(code, outcome, pending.taskId),
+          };
+        }
+      };
 
       const startedAt = clock();
       let step = startFlowRun(
@@ -522,8 +578,15 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         library,
         observer,
       );
+      if (
+        step.kind === "finished" &&
+        step.result.status === "failed" &&
+        step.result.failure.code === "inputs_invalid"
+      )
+        return refusal("invalid_request", { kind: "flow", flowId: requestedFlow.id });
       for (;;) {
-        if (clock() - startedAt > serverMilliseconds)
+        if (clock() - startedAt > serverMilliseconds) {
+          failPendingRunFlows("server_time_limit", "failed");
           return {
             kind: "finished",
             runId,
@@ -535,6 +598,21 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
             trace,
             intents,
           };
+        }
+        if (Date.parse(previewInstallation.expiresAt) <= now().valueOf()) {
+          failPendingRunFlows("preview_expired", "refused");
+          return {
+            kind: "finished",
+            runId,
+            flowId: requestedFlow.id,
+            result: {
+              status: "failed",
+              failure: { outcome: "refused", code: "preview_expired" },
+            },
+            trace,
+            intents,
+          };
+        }
         if (step.kind === "finished") {
           return {
             kind: "finished",
@@ -546,13 +624,19 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           };
         }
         if (step.kind === "interface") {
-          step = resumeFlowRun(
-            step.state,
-            step.awaiting === "form" ? { kind: "cancel" } : { kind: "confirm", confirmed: false },
-            library,
-            observer,
-          );
-          continue;
+          return {
+            kind: "finished",
+            runId,
+            flowId: requestedFlow.id,
+            result: {
+              status: "paused",
+              awaiting: step.awaiting,
+              taskId: step.state.awaiting!.taskId,
+              outputs: {},
+            },
+            trace,
+            intents,
+          };
         }
 
         const call = step.call;
