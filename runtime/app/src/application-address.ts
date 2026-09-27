@@ -33,7 +33,6 @@ import { z } from "zod";
 const reservedTenantSegments = new Set([
   "auth",
   "health",
-  "organizations",
   "signed-in",
   "signin",
   "api",

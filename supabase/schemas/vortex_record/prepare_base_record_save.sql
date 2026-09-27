@@ -22,6 +22,9 @@ declare
   application_content jsonb;
   unsupported boolean := false;
   context_value jsonb;
+  preview_installation jsonb;
+  preview_bounds jsonb;
+  effective_command_id uuid;
   organization_id_value uuid;
   application_root_id_value uuid;
   actor_id_value uuid;
@@ -60,13 +63,23 @@ begin
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
   actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
   correlation_id_value := (context_value ->> 'correlationId')::uuid;
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is not null
+    and preview_installation ->> 'outcome' = 'refused' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  effective_command_id := vortex_record.preview_scoped_command_id_internal(p_command_id);
+  if effective_command_id is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
   fingerprint_value := vortex_record.base_save_command_fingerprint_internal(
     p_command_id, p_operation, p_record_type_id, p_record_id,
     p_expected_concurrency_number, p_submitted_values, p_selected_group_id
   );
 
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_save', p_command_id, p_operation, fingerprint_value,
+    'record_save', effective_command_id, p_operation, fingerprint_value,
     p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, true
   );
   if receipt_claim ->> 'status' is distinct from 'none' then
@@ -96,7 +109,8 @@ begin
       'concurrencyNumber', projection -> 'concurrencyNumber',
       'values', projection -> 'values',
       'correlationId', correlation_id_value,
-      'backgroundDelivery', 'pending',
+      'backgroundDelivery', case when preview_installation is null
+        then 'pending' else 'none' end,
       'replayed', true
     );
   end if;
@@ -104,7 +118,14 @@ begin
   meta := vortex_record.resolve_record_action_context_internal(
     p_record_type_id, p_operation
   );
-  installation := vortex_module.read_current_active_installation();
+  if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+    or (preview_installation is not null and meta ? 'recordType'
+      and meta -> 'recordType' ? 'systemProjection') then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  installation := case when preview_installation is null
+    then vortex_module.read_current_active_installation()
+    else preview_installation end;
 
   select release.compilation_output #> '{canonical,content}'
   into strict module_content
@@ -112,12 +133,20 @@ begin
   where release.root_id = (meta ->> 'moduleRootId')::uuid
     and release.release_revision = (meta ->> 'moduleReleaseRevision')::bigint;
 
-  select release.compilation_output #> '{canonical,content}'
-  into strict application_content
-  from vortex_definition.releases as release
-  where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid
-    and release.release_revision =
-      (installation ->> 'applicationReleaseRevision')::bigint;
+  if preview_installation is null then
+    select release.compilation_output #> '{canonical,content}'
+    into strict application_content
+    from vortex_definition.releases as release
+    where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid
+      and release.release_revision =
+        (installation ->> 'applicationReleaseRevision')::bigint;
+  else
+    application_content :=
+      installation #> '{candidate,compilation,canonical,content}';
+    if pg_catalog.jsonb_typeof(application_content) is distinct from 'object' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+  end if;
 
   unsupported := exists (
     select 1
@@ -190,20 +219,31 @@ begin
         'correlationId', meta -> 'context' -> 'correlationId'
       );
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
-    if decision ->> 'outcome' <> 'allowed' then
-      perform vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', organization_id_value,
-        array[]::uuid[], 'refused'
+    if preview_installation is null then
+      decision := vortex_access.evaluate_organization_record_access_internal(
+        loaded -> 'declaration', p_record_id, loaded -> 'facts'
       );
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused_recorded',
-        'correlationId', correlation_id_value
+      if decision ->> 'outcome' <> 'allowed' then
+        perform vortex_record.append_base_save_activity_internal(
+          p_activity_id, 'update', organization_id_value,
+          array[]::uuid[], 'refused'
+        );
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused_recorded',
+          'correlationId', correlation_id_value
+        );
+      end if;
+      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    else
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (meta ->> 'storageContractId')::uuid,
+        meta -> 'recordType'
       );
+      if preview_bounds is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      bounds := preview_bounds;
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     bounds := bounds || pg_catalog.jsonb_build_object(
       'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
         loaded -> 'facts' -> 'recordTypes', p_record_type_id,
@@ -238,20 +278,31 @@ begin
     if loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
-    if decision ->> 'outcome' <> 'allowed' then
-      perform vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', organization_id_value,
-        array[]::uuid[], 'refused'
+    if loaded ? 'previewInstallationId' then
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (meta ->> 'storageContractId')::uuid,
+        meta -> 'recordType'
       );
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused_recorded',
-        'correlationId', correlation_id_value
+      if preview_bounds is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      bounds := preview_bounds;
+    else
+      decision := vortex_access.evaluate_organization_record_access_internal(
+        loaded -> 'declaration', p_record_id, loaded -> 'facts'
       );
+      if decision ->> 'outcome' <> 'allowed' then
+        perform vortex_record.append_base_save_activity_internal(
+          p_activity_id, 'update', organization_id_value,
+          array[]::uuid[], 'refused'
+        );
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused_recorded',
+          'correlationId', correlation_id_value
+        );
+      end if;
+      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     bounds := bounds || pg_catalog.jsonb_build_object(
       'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
         loaded -> 'facts' -> 'recordTypes', p_record_type_id,
@@ -294,4 +345,4 @@ grant execute on function vortex_record.prepare_base_record_save(
 comment on function vortex_record.prepare_base_record_save(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
-  'Server-only operation-scoped preparation read for one exact active installed base Record save.';
+  'Server-only operation-scoped preparation read for one exact active installed or owner-validated preview base Record save.';
