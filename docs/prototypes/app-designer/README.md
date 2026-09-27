@@ -1,5 +1,7 @@
 # App Designer — canvas-first HTML prototype
 
+> Historical, disposable prototype. Its node-and-edge graph interaction demonstrates UI mechanics only. Production flow definitions use the ordered, nested tasks in [Architecture Decision 1](../../build-plan/architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work); this prototype is not a second authoring contract.
+
 [Open the HTML](index.html) · [Prototype task #323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323) · [Full acceptance plan](../../build-plan/app-designer-html-prototype.md)
 
 ## Current checkpoint

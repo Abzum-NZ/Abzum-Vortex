@@ -12,9 +12,9 @@ These files are definition-source documents, not runtime API messages. Their rea
 |---|---|
 | `fixture-set.json` | Complete manifest, required field types, workflow node catalogue, applications, and cross-application cases. |
 | `definition-resolution-snapshot.json` | Contract `1.0.0` resolution envelope used by the current Application and connection-type sources. |
-| `module-v2-definition-resolution-snapshot.json` | Contract `3.0.0` resolution envelope used by the current Module sources — the sole surviving Module contract. Its file name is retained from an earlier Module generation because fixture tests load it by exact path; its `contractVersion` field is the current value. It carries the same definitions as the `1.0.0` envelope and the same identities plus the graph-owned `rule_node` identities the `3.0.0` Module vocabulary adds, with its own verified fingerprint. |
+| `module-v2-definition-resolution-snapshot.json` | Contract `3.0.0` resolution envelope used by the checked-in Module examples. Its historical file name is retained for existing references; the envelope has its own fingerprint and includes legacy `rule_node` identities. These examples do not define the target flow contract. |
 | `connection-types/` | Every connection type and operation referenced by either application. |
-| `modules/` | Five CRM modules and three Service Desk modules, each independently versioned. Their save rules are `before_save` rule graphs, the only rule representation the current contract accepts. |
+| `modules/` | Five CRM modules and three Service Desk modules, each independently versioned. Their saved `before_save` graphs are historical fixture shapes; [Architecture Decision 1](../../docs/build-plan/architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work) governs the one flow representation. |
 | `applications/` | CRM and Service Desk definitions with exact module bindings, pages, roles, workflows, pipelines, connections, and interfaces. |
 | `scenarios/` | Organisation data and expected outcomes for shared records, collaborative case access, and immediate revocation. |
 | `storage/` | Complete record-type-to-table catalog, physical-name rules, application roots, scoped row examples, and collision tests. |
@@ -25,7 +25,9 @@ These files are definition-source documents, not runtime API messages. Their rea
 
 `current-module-v2-runtime.test.ts` and `validate-fixtures.test.ts` still import `moduleSourceDocumentV2Schema` from `@vortex/contracts`; [#554](https://github.com/Abzum-NZ/Abzum-Vortex/issues/554) consolidated Module authoring onto the single `moduleSourceDocumentSchema` and removed the version-suffixed source schema exports, so those two test files fail to resolve that import. The non-test fixtures in this directory and this guidance describe only the surviving `3.0.0` contract, and the test files in this directory still describe the superseded one. That divergence is a known consequence of #554 recorded here for the reader; it is test code and outside the fixture and guidance scope of [#556](https://github.com/Abzum-NZ/Abzum-Vortex/issues/556).
 
-## Required command
+## Existing fixture command
+
+This command describes retained tooling. The [current fleet policy](../../docs/build-plan/agent-coordination.md) does not require or authorize fixture or test runs for development completion.
 
 ```text
 pnpm fixtures
@@ -33,7 +35,7 @@ pnpm fixtures
 
 Success means every manifest file, source document, resolved identity, exact version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves complete provenance, all twenty-two field types, the complete safe workflow-node catalogue, a verified incoming-message acknowledgement, and qualified reverse-total relationships. The current-bundle runtime test publishes all eight current Module releases and both Application `1.0.0` releases through an in-memory repository adapter, reads them through the shipping consumer service, and prepares representative Company, Contact, and Case values from the returned canonical record types.
 
-The two current resolution snapshots are separate immutable envelopes because Module `3.0.0` and Application `1.0.0` compilation requests accept different snapshot contract versions. Their definitions are equal, and their identities agree except for the graph-owned `rule_node` assignments that only the `3.0.0` identity vocabulary can express; each envelope retains and verifies its own fingerprint over its own contract version, definitions and identities. Dependency releases likewise keep their own resolution evidence rather than being restamped with the consuming Application's fingerprint.
+The two checked-in resolution snapshots are separate immutable envelopes because Module `3.0.0` and Application `1.0.0` compilation requests accept different snapshot contract versions. Their definitions are equal, and their identities agree except for the legacy `rule_node` assignments in the `3.0.0` identity vocabulary; each envelope retains its own fingerprint over its contract version, definitions and identities. Dependency releases likewise keep their own resolution evidence rather than being restamped with the consuming Application's fingerprint.
 
 It also proves that every record type has one storage-contract table, every field has a stable physical column mapping, organisation-shared rows omit an application root, application-contained rows require one, and same-named CRM applications in separate organisations cannot collide.
 
@@ -49,7 +51,7 @@ The validator must never ignore an unresolved reference to accept an incomplete 
 
 ## Explicit field permissions
 
-The [field-access engine task](../../docs/build-plan/issue-37-field-access.md) adds
+The [field-access engine task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) adds
 explicit authored field lists to the 94 record permissions. These are intentional
 fixture definitions, not compiler defaults or rules inferred from application names.
 Native read/export and form permissions enumerate the current fields they need;
@@ -87,4 +89,4 @@ bounds and compilation, not live field enforcement or delivered screens.
 
 ## Change rule
 
-Any fixture change must update its manifest and pass the validator in the same commit. A module or application version changes according to the compatibility rules in the [publication specification](../../docs/specification/03-composition-and-publication.md).
+Keep the manifest aligned with fixture content when these examples change. A module or application version follows the compatibility rules in the [publication specification](../../docs/specification/03-composition-and-publication.md). Fixture validation is not a current development completion gate.

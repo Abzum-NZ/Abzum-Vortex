@@ -1,5 +1,7 @@
 # Fluid builder reuse and Vortex integration
 
+> Historical design note. Its node-and-edge flow canvas description is superseded by the [one flow definition](architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work). Current authoring follows the [Frontend Rule Designer specification](../specification/appendices/frontend-rule-designer.md).
+
 [Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md) · [Page-builder contracts](../specification/appendices/page-builder-contracts.md) · [Frontend flows](../specification/appendices/frontend-rule-designer.md)
 
 The September 2026 inspection identified useful interface patterns in the separate Fluid working tree. That source included uncommitted content, so its base commit did not identify the full inspected prototype. Inspect the actual files and asset/licence provenance before copying them. This document authorizes no changes to that separate repository.
@@ -33,6 +35,6 @@ Buttons, submissions and record gestures bind to Application-owned flows. Editab
 
 ## Authoring layout
 
-Use the [retained App Designer prototype](app-designer-html-prototype.md): persistent application navigation at far left, contextual palette, central page/flow canvas and selection inspector. Explicit labelled ports define flow routes. Pointer, keyboard and semantic edits share protected operations. Application Appearance does not change editor chrome.
+The [retained App Designer prototype](app-designer-html-prototype.md) illustrates persistent application navigation, a contextual palette, central page canvas and selection inspector. Its flow ports and edges are historical simulation details; production flow routes follow ordered, nested tasks in the [ADR](architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work). Pointer, keyboard and semantic edits share protected operations. Application Appearance does not change editor chrome.
 
 #249/#250/#64/#66 provide the composition, binding, application and block foundations; the phase-6 application demonstrates those functional paths; #323/#65 provide the later authoring experience. The current roadmap owns detailed dependencies. Headless composition and runtime do not wait for the visual editor.

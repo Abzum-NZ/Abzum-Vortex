@@ -1,5 +1,7 @@
 # Architecture review — 21 September 2026
 
+> Historical source snapshot. The [25 September architecture decisions](architecture-decisions-2026-09-25.md) supersede this review in part, including its flow, package and system-application design. Current fleet roles and dispatch follow [agent coordination](agent-coordination.md) and [fleet operations](agent-fleet.md).
+
 Vortex needs a connected application runtime more than another foundation or verification programme. Main already contains substantial Definition, Identity, Access, Module and Record implementation. Query, App, the shared UI renderer and several later services are still placeholders. The revised roadmap connects the existing foundations to a real, definition-led application by the end of Phase 6, then adds designers and the remaining platform capabilities.
 
 ## Review baseline and method
@@ -203,7 +205,7 @@ The resulting plan contains 228 remaining implementation leaves. Source inspecti
 
 Each task and child issue has a functional summary, bounded architectural build points, specification/source references, current dependencies, code-reviewable acceptance, planned agent, active-work estimate, pickup number and issue-based worktree/branch metadata.
 
-Use the provider-balanced routing in agent-fleet.md: GLM, Gemini Flash High and Sonnet for suitable implementation; Opus/Sol for difficult work. A separate Opus 5 or Sol agent owns review, fixes, final re-review and closure. Planned model assignment is not evidence that a worker is running.
+Current model routing is in [fleet operations](agent-fleet.md): GPT-6 Luna (Extra High) implements by default; Space Bunny, DeepSeek 4.1 Flash and Sonnet 5 High are overflow. A separate GPT-6 Sol (Extra High) session owns review, fixes, final re-review and closure; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Planned model assignment is not evidence that a worker is running.
 
 Estimates cover active implementation and code-review corrections. At the estimate, the coordinator inspects actual progress, the remaining change and any blocker. A progressing worker continues; elapsed time alone never discards a draft or triggers a duplicate worker.
 
