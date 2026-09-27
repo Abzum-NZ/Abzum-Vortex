@@ -66,8 +66,10 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate read-only service token limited to `abzum-vortex` / `ops_prd` |
 | `VORTEX_EVENT_DISPATCH_WAKEUP_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
 | `VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, the same value whose SHA-256 digest is configured in Vercel and whose raw value is a database server setting |
+| `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64` | Base64 encoding of the protected Vercel runtime-bundle cleanup route address |
+| `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64` | Base64 encoding of the cleanup route bearer credential; its SHA-256 digest is configured on the Vercel route |
 
-These Kestra bootstrap values are stored only as protected Coolify runtime variables. Doppler
+These Kestra bootstrap values are stored as protected Coolify runtime variables. Doppler
 remains the source of record for the database values that the two service tokens can read. The
 Kestra API credential is also provided to the web application so it can reach the engine.
 
@@ -79,6 +81,13 @@ overlapping tick is cancelled because the running one already covers it. The flo
 values: the route address and the route bearer credential. It never receives a database URL,
 migration credential or application secret, and it never reads the database. The route accepts
 only an optional `source` label and refuses any batch or consumer tuning.
+
+`runtime_bundle_cleanup` calls the protected Vercel `POST /api/runtime-bundles/cleanup` route daily
+with concurrency one. It carries only the route URL and bearer credential; Kestra never receives a
+Vortex database URL or credential. Keep the raw bearer credential in the secret manager, set the base64
+route URL and credential as the protected Coolify inputs `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64`
+and `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64`, and configure its lowercase SHA-256 digest
+in the Vercel server-side environment as `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256`.
 
 The same route credential authenticates the normal database-webhook hint: the database server
 carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
