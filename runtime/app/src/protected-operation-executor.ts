@@ -32,7 +32,6 @@ import {
   suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
   duplicateProtectionKeySchema,
-  executionAuthorityContextSchema,
   flowTaskRegistry,
   workflowNodeIdSchema,
   workflowRunIdSchema,
@@ -963,7 +962,6 @@ export const createProtectedOperationExecutor = (
       const identity = protectedOperationIdentitySchema.safeParse(request.operation);
       if (request.executionAuthorityContext !== undefined) {
         // The person-session executor must never downgrade a non-person authority.
-        executionAuthorityContextSchema.safeParse(request.executionAuthorityContext);
         return { outcome: "refused" };
       }
       const session = identitySessionSchema.safeParse(request.session);

@@ -3,9 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   sameId,
-  executionAuthorityContextSchema,
   fieldIdSchema,
-  identitySessionSchema,
   jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
@@ -705,10 +703,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
       // Do not turn a non-person authority into a person session on this adapter.
-      if (executionAuthorityContextSchema.safeParse(caller).success)
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
-      const session = identitySessionSchema.safeParse(caller);
-      if (!session.success) return { kind: "unavailable" };
       const command = protectedQueryCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "available", value: refusal("request_invalid") };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
@@ -720,9 +716,9 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
               resolveContext: resolveQueryCacheContext,
               now,
               // Verified by the request service before this operation runs.
-              sessionExpiresAt: session.data.accessTokenExpiresAt,
+              sessionExpiresAt: caller.accessTokenExpiresAt,
             };
-      return requests.run(session.data, selection, (transaction, scope) =>
+      return requests.run(caller, selection, (transaction, scope) =>
         runCommand(transaction, scope, command.data, continuationKey, cache),
       );
     },
