@@ -2,7 +2,7 @@
 
 Roadmap phases and numeric Pickup Order are planning and reporting metadata: they describe sequence and progress, not dispatch permission. Dependency-ready bounded leaves are dispatched in parallel across phases. The first objective is a visible definition-led application by the end of Phase 6: an authorized user navigates installed pages, browses/opens records, creates/edits a record, invokes declared actions and sees the installed theme. Generic engines render ordinary definitions; application names and business policies are not hardcoded.
 
-[GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Agent coordination](agent-coordination.md) · [Fleet procedure](agent-fleet.md) · [Workflow diagram](fleet-orchestration.html) · [Product specification](../specification/README.md)
+[GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Agent coordination](agent-coordination.md) · [Fleet procedure](agent-fleet.md) · [Architecture decisions](architecture-decisions-2026-09-25.md) · [Authority ledgers design record](authority-ledgers-design-2026-09-25.md) · [Product specification](../specification/README.md)
 
 The GitHub project roadmap is the execution plan. Issue bodies and native dependencies define bounded work. This page explains the phases; it does not duplicate live owner, status or estimate records. The [21 September architecture review](architecture-review-2026-09-21.md) records what was actually present on main at `e4cd4375958b91c55a5bd93b00c86656b98a8d13`.
 

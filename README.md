@@ -12,8 +12,7 @@ Development is carried out by an orchestrated fleet of autonomous coding agents 
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Entry point for every provider |
 | [Agent coordination](docs/build-plan/agent-coordination.md) | Current roles, development acceptance and ownership |
-| [Fleet operations](docs/build-plan/agent-fleet.md) | Strict pickup, bounded assignment, model routing, board updates and recovery |
-| [Orchestration diagram](docs/build-plan/fleet-orchestration.html) | Implementation, reviewer fixes, closure and next-task handoff |
+| [Fleet operations](docs/build-plan/agent-fleet.md) | Dependency-ready pickup, bounded assignment, model routing, board updates and recovery |
 | [Roadmap](docs/build-plan/README.md) | Phase order and Phase 6 visible-application objective |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, Pickup Order and status |
 | [Platform specification](docs/specification/README.md) | Product functionality and architecture |
@@ -23,7 +22,7 @@ Development is carried out by an orchestrated fleet of autonomous coding agents 
 
 ## Development workflow
 
-The GPT 5.6 Sol orchestrator selects the lowest unfinished pickup in the earliest incomplete roadmap phase, confirms a bounded scope and assigns the cheapest capable implementer. A separate Opus 5 or GPT 5.6 Sol reviewer fixes findings itself, re-reviews, integrates the reviewed change through permitted repository operations, updates/closes the assigned issue and reports. The orchestrator reconciles the board/dependencies, releases the agent, cleans the completed worktree and takes the next ordered task.
+One Claude Opus 5.5 session orchestrates planning and architecture, with GPT-6 Sol as its handover. It selects bounded, dependency-ready leaves across phases and fills independent implementation lanes with GPT-6 Luna (Extra High) by default. Space Bunny, DeepSeek 4.1 Flash and Claude Sonnet 5 High are overflow choices when Codex capacity is short. A separate GPT-6 Sol (Extra High) session reviews, fixes findings, re-reviews, integrates the reviewed change through permitted repository operations, updates/closes its assigned issue and reports. Claude Opus 5.5 (Medium) reviews only when Codex is capacity-limited. The orchestrator reconciles the board and dependencies, releases settled agents, safely cleans completed worktrees and refills available lanes.
 
 No tests, database review/execution, hosted verification, proof receipts, Kestra orchestration or Testing/Production deployment is part of this development workflow. Existing tooling and archived runbooks do not introduce extra gates. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
 
@@ -53,7 +52,7 @@ Application workflow steps use protected Vortex operations. Kestra's operational
 | `testing/` | Shared fixtures and existing cross-package utilities |
 | `workflows/kestra/` | Operational flows, scripts and delivery documentation |
 | `tooling/` | Workspace checks and development tools |
-| `docs/` | Specification, roadmap, fleet policy and historical evidence |
+| `docs/` | Specification, roadmap, fleet policy and architecture decisions |
 
 A Vortex module is an application definition; a workspace package is source code. Packages use each other's public interfaces and nothing depends upward; the workspace [boundary checker](tooling/boundaries/check.mjs) records those dependency and environment rules.
 

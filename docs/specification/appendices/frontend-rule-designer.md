@@ -242,8 +242,6 @@ Changing a flow is changing its owner's draft, gated by the builder permissions 
 
 [System applications](core-contract-boundary.md#ordinary-applications-not-core-domains) (IAM, Organisation Administration, Tenant Administration and the Landing Zone) are platform packages installed when an organisation is created, and they cannot be uninstalled. People holding `platform.organization.system_applications.manage` customise them through extension fields, theme, navigation and their own dependent applications and flows, or through an organisation-owned customised copy that replaces the system application's installation. Their protected operations and operation bindings stay platform-owned: a customisation cannot add, remove or retarget a protected-operation binding. Platform upgrades never overwrite customisations.
 
-<a id="node-execution-identity"></a>
-
 ## Run as
 
 This section describes target runtime behaviour. Current-person execution uses the initiating person's protected request context. [#322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) and [#541](https://github.com/Abzum-NZ/Abzum-Vortex/issues/541) implement the scoped execution grants for specified accounts and System actors. Actual row, field, derived-value, file, component and MCP integration remains in the downstream owning tasks; it does not make the identity foundation depend on the later flow engine.
@@ -497,4 +495,4 @@ Component data execution supports Query/Transform/Write/Query/Return, viewer-saf
 | Accessible editor, simulated preview trace, scoped refresh, stale response removal and same controls through MCP, including form Continue, Cancel and Submit | [#59](https://github.com/Abzum-NZ/Abzum-Vortex/issues/59), [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) |
 | Complete declared flows in definition-driven examples, with no business-specific core branches | [#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74), [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) and their later capability owners |
 
-The [delivery plan](../../build-plan/frontend-rule-designer.md) records the dependency order and exact issue updates. This feature does not pre-empt unfinished Access work or require infrastructure maintenance.
+The linked GitHub issues record delivery ownership and dependencies. This feature does not pre-empt unfinished Access work or require infrastructure maintenance.

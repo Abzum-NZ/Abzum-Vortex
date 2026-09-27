@@ -10,7 +10,8 @@ import { spawnSync } from "node:child_process";
 // Replaying each service's own migrations, from the images pinned by the
 // `supabase` CLI version this workspace installs (`supabase` 2.117.0, see
 // pnpm-workspace.yaml), gives the disposable database the real Supabase
-// definitions rather than hand-written stubs. See docs/build-plan issue #1321.
+// definitions rather than hand-written stubs. See issue #1321:
+// https://github.com/Abzum-NZ/Abzum-Vortex/issues/1321
 export const verificationStorageImage = "public.ecr.aws/supabase/storage-api:v1.72.1";
 export const verificationAuthImage = "public.ecr.aws/supabase/gotrue:v2.196.0";
 export const verificationRealtimeImage = "public.ecr.aws/supabase/realtime:v2.130.0";

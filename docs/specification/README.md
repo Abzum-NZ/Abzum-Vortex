@@ -1,8 +1,8 @@
 # Abzum Vortex platform specification
 
-> Development acceptance and fleet roles follow [agent coordination](../build-plan/agent-coordination.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Work through the current [roadmap](../build-plan/README.md) in strict phase and Pickup Order.
+> Development acceptance and fleet roles follow [agent coordination](../build-plan/agent-coordination.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Pick bounded, dependency-ready leaves across the [roadmap](../build-plan/README.md); phase and Pickup Order are reporting metadata, not dispatch gates.
 
-The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) describes configurable data flows, managed behavior, per-node identity and truthful partial outcomes. Current-person flow execution supports the Phase 6 application before the later [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). That task is a prerequisite only for specified-account and System execution. [Delivery ownership](../build-plan/frontend-rule-designer.md) assigns the corresponding early and later implementation work; specification text does not itself establish delivered runtime functionality.
+The [architecture decisions](../build-plan/architecture-decisions-2026-09-25.md) govern the one flow definition, engine and protected operations. Current-person flow execution supports the Phase 6 application before the later [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). That task is a prerequisite only for specified-account and System execution. The [Frontend Rule Designer specification](appendices/frontend-rule-designer.md) describes authoring and execution; specification text does not itself establish delivered runtime functionality.
 
 **Status:** Development specification; architecture decisions added 25 September 2026
 **Date:** 25 September 2026
@@ -13,7 +13,7 @@ The [7 September whole-platform architecture review](../build-plan/architecture-
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear following the owner's approval of initial ownership and automatic deadline refresh. [Record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md) defines these choices, account offboarding/transfers and organisation-bounded record-type policies. The owner selected one Frontend Rule Designer, including configurable component data flows, per-node execution identities and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future unresolved business choice must be recorded there before implementation assumes an answer.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) contains four unanswered authority-ledger questions; their recommendations do not change current requirements without an owner decision. [Record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md) defines the approved initial ownership and deadline-refresh choices, account offboarding/transfers and organisation-bounded record-type policies. The owner selected one Frontend Rule Designer with configurable component data flows, flow-level `runAs` authority and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future unresolved business choice must be recorded in the register before implementation assumes an answer.
 
 ## Architecture review additions
 
@@ -26,9 +26,8 @@ This document is the approved product contract for the current build scope. The 
   - [application packages](appendices/application-packages.md) derived from published applications, with sandboxed custom components (custom scripts only through Vortex super administrators), clean install and uninstall through a registration ledger, and an immutable runtime bundle per installation revision;
   - agent building through the same permission-checked operations.
 
-- [12 September findings and resolutions](../build-plan/spec-task-review-2026-09-12.md): specification/task reconciliation; implementation stays with the named delivery owners.
 
-- [Frontend Rule Designer](appendices/frontend-rule-designer.md): every configurable application action is flow-linked; App Builder supplies editable one-node defaults and custom flows. Includes triggers, shared conditions, typed variables, Page Designer forms, optional collect-first atomic submission, MCP app authoring, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
+- [Frontend Rule Designer](appendices/frontend-rule-designer.md): every configurable application action is flow-linked; App Builder supplies editable one-task defaults and custom flows. Includes triggers, shared conditions, typed variables, Page Designer forms, optional collect-first atomic submission, MCP app authoring, packaged registration and Kestra handoff. Delivery ownership and dependencies live in the linked GitHub issues.
 
 - [Verified recent authentication](appendices/recent-authentication.md): protected actions distinguish actual sign-in and MFA confirmation from token refresh, with provider-neutral evidence and ordinary-session compatibility.
 
@@ -37,7 +36,7 @@ This document is the approved product contract for the current build scope. The 
 - [IAM application](appendices/iam-application.md): all role grants use user-linked requests, reviews and workflows in an ordinary Vortex application, with protected effective assignment and no parallel granting surface.
 - [One organisation-managed role and permission catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue): application registration supplies permission declarations and role templates; explicit organisation assignments control access, and application updates never silently broaden grants.
 - [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and one current application representation.
-- [Review findings, subject coverage and corrected delivery order](../build-plan/architecture-review.md).
+- [Architecture review of 21 September](../build-plan/architecture-review-2026-09-21.md), partly superseded by the [architecture decisions](../build-plan/architecture-decisions-2026-09-25.md).
 - [HR example and workflow-only approvals](appendices/page-builder-contracts.md#hr-example-policy), approved by the owner in this review. This is a normal Vortex application, never hardcoded runtime behavior.
 
 ## How to read this specification
@@ -121,6 +120,8 @@ Words such as “organisation,” “module,” “application,” and “publis
 - Every privileged contract must pass the normative [core contract admission test](appendices/core-contract-boundary.md#admission-test). Business-domain functionality is built as an ordinary Vortex application unless a documented platform invariant makes that impossible.
 
 ## Version history
+
+Earlier entries record the decisions approved at the time. The [25 September architecture decisions](../build-plan/architecture-decisions-2026-09-25.md) supersede older graph and per-node execution wording.
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                    |
 | ------- | -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

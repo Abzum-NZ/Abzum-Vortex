@@ -23,4 +23,4 @@ Use the current GitHub issue as the bounded implementation contract. Already del
 
 The reviewer can trace the user entry point through installed definitions, access decisions, query/record calls, form/action handlers and UI output. All named functionality is implemented with its required states; placeholder methods and hardcoded demo data do not satisfy the scope.
 
-A fresh Opus5/Sol reviewer fixes findings itself and re-reviews before permitted source integration and issue closure. No tests, screenshot, walkthrough, database/hosted review, Testing deployment or Kestra receipt is required. The orchestrator records completion, unblocks the next ordered work and cleans the completed worktree.
+A fresh GPT-6 Sol (Extra High) reviewer fixes findings itself and re-reviews before permitted source integration and issue closure; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. No tests, screenshot, walkthrough, database/hosted review, Testing deployment or Kestra receipt is required. The orchestrator records completion, unblocks dependency-ready work and cleans the completed worktree.
