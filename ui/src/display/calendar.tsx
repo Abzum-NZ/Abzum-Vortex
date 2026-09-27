@@ -363,7 +363,7 @@ const CalendarItemButton = ({
       type="button"
       variant="ghost"
       className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-xs"
-      aria-label={`Open ${label}`}
+      aria-label={`Open ${label}${time === "" ? "" : ` at ${time}`}`}
       onClick={() => events.row_action?.({ event: "row_action", recordId: item.recordId })}
     >
       {content}
