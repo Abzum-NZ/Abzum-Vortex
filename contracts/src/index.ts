@@ -14,6 +14,7 @@ export * from "./application-flow-bindings";
 export * from "./flow-contracts";
 export { workflowRunAsSchema, type WorkflowRunAs } from "./run-as-vocabulary";
 export * from "./form-continuation-contracts";
+export * from "./flow-invocation-contracts";
 export * from "./flow-source-contracts";
 export * from "./flow-task-registry";
 export * from "./default-flow-sources";

@@ -1,4 +1,9 @@
-import type { JsonValue } from "@vortex/contracts";
+import {
+  flowBindingInvocationSchema,
+  type FlowBindingInvocation,
+  type FormContinuationAnswer,
+  type JsonValue,
+} from "@vortex/contracts";
 import { isFlowIntent, type FlowIntent } from "./intents";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
@@ -13,10 +18,6 @@ export type FlowInstallationContext = Readonly<{
   installationRevision: number;
   releaseKey: string;
 }>;
-
-export type FlowAnswer =
-  | Readonly<{ kind: "form_answered"; submitted: boolean; values: JsonValue }>
-  | Readonly<{ kind: "confirmed"; confirmed: boolean }>;
 
 /**
  * The exact evidence the server issued with a paused run, returned with the continuation so the
@@ -62,7 +63,7 @@ export type FlowInvokeClient = Readonly<{
   resume: (
     flowId: string,
     continuation: string,
-    answer: FlowAnswer,
+    answer: FormContinuationAnswer,
     evidence?: FlowResumeEvidence,
   ) => Promise<ServerFlowResponse>;
 }>;
@@ -172,8 +173,10 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
  */
 export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowInvokeClient {
   const endpoint = options.endpoint ?? "/api/flows/invoke";
-  const send = async (invocation: Record<string, unknown>): Promise<ServerFlowResponse> => {
+  const send = async (invocation: FlowBindingInvocation): Promise<ServerFlowResponse> => {
     try {
+      const parsedInvocation = flowBindingInvocationSchema.safeParse(invocation);
+      if (!parsedInvocation.success) return refused;
       const response = await (options.fetchImplementation ?? fetch)(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -184,7 +187,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           tenantShortName: options.address.tenantShortName,
           organizationShortName: options.address.organizationShortName,
           applicationKey: options.address.applicationKey,
-          invocation,
+          invocation: parsedInvocation.data,
         }),
       });
       if (response.status === 401 || response.status === 403 || response.status === 413)

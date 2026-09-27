@@ -8,6 +8,7 @@ import {
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
+  formContinuationAnswerSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
   platformOperationKey,
@@ -234,10 +235,7 @@ const resumeRequestSchema = z
     selection: organizationSelectionCandidateSchema,
     flowId: flowIdSchema,
     continuation: z.string().min(16).max(128),
-    answer: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("form_answered"), submitted: z.boolean(), values: z.unknown() }),
-      z.object({ kind: z.literal("confirmed"), confirmed: z.boolean() }),
-    ]),
+    answer: formContinuationAnswerSchema,
   })
   .strict();
 
@@ -1055,15 +1053,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           unavailable: [],
           sensitive: [],
         };
-        const resume: FlowRunResume =
-          answer.kind === "confirmed"
-            ? { kind: "confirmed", confirmed: answer.confirmed }
-            : {
-                kind: "form_answered",
-                submitted: answer.submitted,
-                values: (answer.values ?? null) as JsonValue,
-              };
-        return await drive(run, resumeFlowRun(state, resume, run.library));
+        return await drive(run, resumeFlowRun(state, answer, run.library));
       } catch {
         return refused;
       }
