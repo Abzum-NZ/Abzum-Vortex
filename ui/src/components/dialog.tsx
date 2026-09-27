@@ -16,13 +16,27 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
+/** A flow surface can sit beside the application root instead of inside its React style context. */
+function findUnambiguousStyleRoot(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+
+  const focusedRoot = document.activeElement?.closest("[data-vortex-style-root]");
+  if (focusedRoot instanceof HTMLElement) return focusedRoot;
+
+  const roots = document.querySelectorAll("[data-vortex-style-root]");
+  const onlyRoot = roots.length === 1 ? roots.item(0) : null;
+  return onlyRoot instanceof HTMLElement ? onlyRoot : null;
+}
+
 function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
   const styleRoot = useVortexStylePortalRoot();
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
+  const fallbackRoot =
+    styleRoot === null && container === undefined ? findUnambiguousStyleRoot() : null;
   return (
     <DialogPrimitive.Portal
       data-slot="dialog-portal"
-      container={container ?? styleRoot?.element ?? undefined}
+      container={container ?? styleRoot?.element ?? fallbackRoot ?? undefined}
       {...props}
     />
   );

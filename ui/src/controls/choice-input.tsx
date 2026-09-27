@@ -81,6 +81,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
   const [searchTerm, setSearchTerm] = useState("");
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [selectOpen, setSelectOpen] = useState(false);
 
   // Only a currently offered option may be registered in the form or submitted.
   const permittedSelected =
@@ -215,7 +216,12 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
               ...options.map((option) => ({ value: option.key, label: option.label })),
             ]}
             value={permittedSelected}
-            onValueChange={change}
+            open={selectOpen}
+            onOpenChange={setSelectOpen}
+            onValueChange={(next) => {
+              change(next);
+              setSelectOpen(false);
+            }}
             name={fieldKey}
             required={required}
             disabled={disabled}
