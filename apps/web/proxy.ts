@@ -8,13 +8,7 @@ import {
   requestMatchesConfiguredSite,
   type IdentitySessionProxyState,
 } from "./app/auth/_lib/session-request-state";
-
-const privateResponse = (response: NextResponse): NextResponse => {
-  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
-  response.headers.set("Expires", "0");
-  response.headers.set("Pragma", "no-cache");
-  return response;
-};
+import { privateResponse } from "./app/_lib/private-response";
 
 export async function proxy(request: NextRequest) {
   const responseFor = (state: IdentitySessionProxyState): NextResponse =>

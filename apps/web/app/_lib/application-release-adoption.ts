@@ -2,15 +2,12 @@ import "server-only";
 
 import {
   createBuilderAuthority,
-  createHumanOrganizationRequestService,
   prepareApplicationRoleTemplatesForHumanRequest,
 } from "@vortex/access";
 import {
   ApplicationInstallationCoordinatorError,
   applicationInstallationActivationRequestSchema,
   createApplicationInstallationCoordinator,
-  createAppTelemetryCollector,
-  createOperationsAlertSink,
   type HumanInstallationDefinitionAccess,
 } from "@vortex/app";
 import {
@@ -24,11 +21,11 @@ import {
   createDatabaseApplicationReleaseAdoptionTargetService,
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/definition";
-import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import {
   installedReleaseCatalogue,
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
+import { appTelemetry as telemetry, humanOrganizationRequests } from "./server-composition";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the
@@ -38,13 +35,7 @@ import {
  * revision or preparation failure leaves the previous active release exactly as it was.
  */
 
-const telemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
-
-const requests = () =>
-  createHumanOrganizationRequestService({
-    identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
-    telemetry,
-  });
+const requests = () => humanOrganizationRequests();
 
 /**
  * The definition access the coordinator reads through when the deployment cannot mint a system
