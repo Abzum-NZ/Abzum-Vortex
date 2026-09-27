@@ -115,10 +115,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   }, [events]);
   const readyRef = useRef(false);
   useEffect(() => {
-    if (readyRef.current) return;
+    if (context.inactive || readyRef.current) return;
     readyRef.current = true;
     eventsRef.current?.form_ready?.({ event: "form_ready" });
-  }, []);
+  }, [context.inactive]);
 
   const resetRef = useRef(false);
   useEffect(() => {
@@ -158,6 +158,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const title = context.accessibleName;
   const fieldsDisabled = context.unavailable || props.data?.status === "disabled";
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
+  if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
+    return (
+      <p role="alert" data-vortex-control="form-container" data-vortex-placement-id={props.placementId}>
+        Record unavailable.
+      </p>
+    );
   return (
     <form
       ref={formRef}

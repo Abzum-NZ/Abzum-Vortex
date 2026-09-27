@@ -5368,6 +5368,26 @@
                 }
               }
             }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "iam_access_request_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
           }
         ],
         "outputs": {
