@@ -35,7 +35,16 @@ import type { FormPayload } from "./projected-data";
  * never names it. The control never computes or reinterprets a rule itself.
  */
 export type FormContainerProps = ControlRenderProps<FormPayload> &
-  Readonly<{ draftFeedback?: FormDraftFeedbackSupply }>;
+  Readonly<{
+    draftFeedback?: FormDraftFeedbackSupply;
+    flowFeedback?: FormFlowFeedback;
+  }>;
+
+/** A safe, final result returned by the form's bound flow. */
+export type FormFlowFeedback = Readonly<{
+  tone: "success" | "problem";
+  text: string;
+}>;
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
 const NON_SUBMITTING_INPUT_TYPES = new Set([
@@ -197,6 +206,15 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         </fieldset>
       </FormScopeContext.Provider>
       <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
+      {props.flowFeedback === undefined ? null : (
+        <p
+          role={props.flowFeedback.tone === "problem" ? "alert" : "status"}
+          aria-live="polite"
+          data-vortex-form-feedback={props.flowFeedback.tone}
+        >
+          {props.flowFeedback.text}
+        </p>
+      )}
     </form>
   );
 }
