@@ -158,7 +158,7 @@
       },
     {
       "id": "event_new_lifecycle_request",
-      "key": "vortex.app.events.vortex_app_tenant_administration_new_lifecycle_request",
+      "key": "vortex.app.tenant_administration.new_lifecycle_request",
       "record_type": "vortex.tenant_administration:organization_lifecycle_request",
       "carries": [],
       "personal_or_sensitive_values_allowed": false
@@ -415,7 +415,7 @@
                 "structure_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
+                    "release_version": "1.4.0"
                   },
                   "settings": {
                     "title": {
@@ -1175,8 +1175,11 @@
         },
         "inputs": {
           "organization_id": {
-            "type": "text",
-            "required": true
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.tenant_administration:organization"
+            ]
           },
           "expected_revision": {
             "type": "whole_number",

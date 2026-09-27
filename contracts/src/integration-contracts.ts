@@ -208,7 +208,7 @@ export const connectionInstanceStatusSchema = z
     connectionTypeVersion: semanticVersionSchema,
     state: z.enum(["pending", "active", "unhealthy", "revoked"]),
     lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
-    revision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    revision: revisionSchema,
     tokenExpiresAt: timestampSchema.optional(),
     authorizedApplicationIds: z.array(applicationRootIdSchema),
     grantedScopes: z.array(z.string().min(1).max(200)),

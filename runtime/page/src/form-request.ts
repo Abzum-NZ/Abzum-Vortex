@@ -1,12 +1,13 @@
 import "server-only";
 
-import type {
-  ComponentFlowBinding,
-  FormContinuationOutcome,
-  FormContinuationRequest,
-  FormContinuationService,
-  IdentitySession,
-  OrganizationSelectionCandidate,
+import {
+  isRecord,
+  type ComponentFlowBinding,
+  type FormContinuationOutcome,
+  type FormContinuationRequest,
+  type FormContinuationService,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 
 /**
@@ -32,9 +33,6 @@ import type {
  */
 
 const maximumFormValues = 500;
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 /** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{

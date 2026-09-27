@@ -1,4 +1,5 @@
 import {
+  isRecord,
   recordLinkValueV2Schema,
   ruleGraphTypedValueSchema,
   type JsonValue,
@@ -90,9 +91,6 @@ const refuse = (reason: BeforeSaveRuleGraphEvaluationErrorReason): never => {
 
 const hasOwn = (value: Readonly<Record<string, unknown>>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const clone = <Value extends JsonValue>(value: Value): Value => structuredClone(value);
 

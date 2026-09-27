@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  databaseRevision,
   clampTelemetryDurationMs,
   correlationIdSchema,
   countersForOutcome,
@@ -25,16 +26,15 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-  type RuntimeDatabaseTransaction,
 } from "@vortex/db";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
-  resolve: (transaction: RuntimeDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
+  resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
 type ChangePreparation = (
-  transaction: RuntimeDatabaseTransaction,
+  transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
 ) => Promise<void>;
 
@@ -70,12 +70,6 @@ type ScopeRow = DatabaseRow & {
   access_version: unknown;
 };
 
-const revision = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
-  return value;
-};
-
 const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("INVALID_SCOPE_RESULT");
   const row = rows[0];
@@ -86,7 +80,7 @@ const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
     ...(row.application_root_id === undefined || row.application_root_id === null
       ? {}
       : { applicationRootId: row.application_root_id }),
-    accessVersion: revision(row.access_version),
+    accessVersion: databaseRevision(row.access_version),
   });
 };
 

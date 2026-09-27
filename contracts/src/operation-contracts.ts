@@ -36,14 +36,12 @@ import {
 import { installedEventDescriptorSchema } from "./module-contracts";
 import type { StandardInstalledEventKind } from "./module-contracts";
 
-const javascriptSafeEventRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
-
 const eventOccurrenceDefinitionReleaseV2Schema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("application"),
       rootId: applicationRootIdSchema,
-      releaseRevision: javascriptSafeEventRevisionSchema,
+      releaseRevision: revisionSchema,
       releaseVersion: semanticVersionSchema,
       contentFingerprint: fingerprintSchema,
       resolutionFingerprint: fingerprintSchema,
@@ -53,7 +51,7 @@ const eventOccurrenceDefinitionReleaseV2Schema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("module"),
       rootId: moduleRootIdSchema,
-      releaseRevision: javascriptSafeEventRevisionSchema,
+      releaseRevision: revisionSchema,
       releaseVersion: semanticVersionSchema,
       contentFingerprint: fingerprintSchema,
       resolutionFingerprint: fingerprintSchema,
@@ -111,12 +109,12 @@ export const eventOccurrenceEnvelopeV2Schema = z
     installation: z
       .object({
         applicationRootId: applicationRootIdSchema,
-        applicationReleaseRevision: javascriptSafeEventRevisionSchema,
+        applicationReleaseRevision: revisionSchema,
         moduleBinding: z
           .object({
             moduleRootId: moduleRootIdSchema,
-            moduleReleaseRevision: javascriptSafeEventRevisionSchema,
-            bindingRevision: javascriptSafeEventRevisionSchema,
+            moduleReleaseRevision: revisionSchema,
+            bindingRevision: revisionSchema,
           })
           .strict(),
       })
@@ -128,7 +126,7 @@ export const eventOccurrenceEnvelopeV2Schema = z
     actorId: actorIdSchema,
     correlationId: correlationIdSchema,
     causationId: platformIdSchema.optional(),
-    recordSequence: javascriptSafeEventRevisionSchema,
+    recordSequence: revisionSchema,
     payload: z.union([
       standardEventOccurrencePayloadV2Schema,
       declaredEventOccurrencePayloadV2Schema,
@@ -373,9 +371,7 @@ export const activeFileAttachmentReferenceSchema = z
     owner: fileRemovalOwnerBindingSchema,
   })
   .strict();
-export type ActiveFileAttachmentReference = z.infer<
-  typeof activeFileAttachmentReferenceSchema
->;
+export type ActiveFileAttachmentReference = z.infer<typeof activeFileAttachmentReferenceSchema>;
 
 export const activeFileShareReferenceSchema = z
   .object({
@@ -387,8 +383,7 @@ export const activeFileShareReferenceSchema = z
   .strict()
   .refine(
     (value) =>
-      value.sourceOrganizationId.toLowerCase() !==
-      value.recipientOrganizationId.toLowerCase(),
+      value.sourceOrganizationId.toLowerCase() !== value.recipientOrganizationId.toLowerCase(),
     {
       path: ["recipientOrganizationId"],
       message: "A file share names a distinct recipient organisation",
@@ -465,9 +460,7 @@ export const fileRemovalEligibilityRequestSchema = z
     fileId: fileIdSchema,
   })
   .strict();
-export type FileRemovalEligibilityRequest = z.infer<
-  typeof fileRemovalEligibilityRequestSchema
->;
+export type FileRemovalEligibilityRequest = z.infer<typeof fileRemovalEligibilityRequestSchema>;
 
 /**
  * Complete current-authority snapshot returned by trusted File-service wiring.
@@ -493,9 +486,7 @@ export const fileRemovalAuthoritySnapshotSchema = z
     expectedRecordRevision: revisionSchema.nullable(),
     activeAttachmentReferences: z.array(activeFileAttachmentReferenceSchema),
     activeShareReferences: z.array(activeFileShareReferenceSchema),
-    activeSourceResponsibilityReferences: z.array(
-      activeFileSourceResponsibilityReferenceSchema,
-    ),
+    activeSourceResponsibilityReferences: z.array(activeFileSourceResponsibilityReferenceSchema),
     holds: z.array(protectedLegalHoldReferenceSchema),
     holdAuthority: fileRemovalHoldAuthoritySnapshotSchema.nullable(),
     recoveryPolicy: fileRemovalRecoveryPolicySnapshotSchema.nullable(),
@@ -503,9 +494,7 @@ export const fileRemovalAuthoritySnapshotSchema = z
     validUntil: timestampSchema,
   })
   .strict();
-export type FileRemovalAuthoritySnapshot = z.infer<
-  typeof fileRemovalAuthoritySnapshotSchema
->;
+export type FileRemovalAuthoritySnapshot = z.infer<typeof fileRemovalAuthoritySnapshotSchema>;
 
 export const fileRemovalEligibilityBindingSchema = z
   .object({
@@ -516,9 +505,7 @@ export const fileRemovalEligibilityBindingSchema = z
     holdPolicyRevision: revisionSchema,
   })
   .strict();
-export type FileRemovalEligibilityBinding = z.infer<
-  typeof fileRemovalEligibilityBindingSchema
->;
+export type FileRemovalEligibilityBinding = z.infer<typeof fileRemovalEligibilityBindingSchema>;
 
 export const fileRemovalEligibleDecisionSchema = z
   .object({
@@ -552,11 +539,7 @@ export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibili
  * Previews and active derived copies are cleaned, the private storage object is
  * deleted, and the file metadata is transitioned to its terminal tombstone.
  */
-export const fileRemovalStageSchema = z.enum([
-  "previews",
-  "storage_object",
-  "metadata",
-]);
+export const fileRemovalStageSchema = z.enum(["previews", "storage_object", "metadata"]);
 export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
 
 /**
@@ -607,9 +590,7 @@ export const fileObjectRemovalPartialStateSchema = z
         message: "Completed removal stages must be the canonical prefix before the current stage",
       });
   });
-export type FileObjectRemovalPartialState = z.infer<
-  typeof fileObjectRemovalPartialStateSchema
->;
+export type FileObjectRemovalPartialState = z.infer<typeof fileObjectRemovalPartialStateSchema>;
 
 /**
  * Content-free terminal receipt for completed permanent file removal.
@@ -648,9 +629,7 @@ export const fileObjectRemovalReceiptSchema = z
         message: "The terminal receipt commits at the same instant as the file tombstone",
       });
   });
-export type FileObjectRemovalReceipt = z.infer<
-  typeof fileObjectRemovalReceiptSchema
->;
+export type FileObjectRemovalReceipt = z.infer<typeof fileObjectRemovalReceiptSchema>;
 
 export const fileRecordSchema = z
   .object({
@@ -687,8 +666,7 @@ export const fileRecordSchema = z
       context.addIssue({
         code: "custom",
         path: ["storageKey"],
-        message:
-          "A private file object path is scoped to its own organisation and file identifier",
+        message: "A private file object path is scoped to its own organisation and file identifier",
       });
 
     const ownerParts = [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
@@ -854,9 +832,7 @@ export const fileUploadRenewalRefusalReasonSchema = z.enum([
   "upload_expired",
   "malformed_request",
 ]);
-export type FileUploadRenewalRefusalReason = z.infer<
-  typeof fileUploadRenewalRefusalReasonSchema
->;
+export type FileUploadRenewalRefusalReason = z.infer<typeof fileUploadRenewalRefusalReasonSchema>;
 
 export const fileUploadCompletionRefusalReasonSchema = z.enum([
   "caller_not_authorized",
@@ -1203,8 +1179,7 @@ const meteringCorrectionIsComplete = (value: MeteringEventShape): boolean =>
   (value.correctsMeteringEventId === undefined) === (value.correctionDirection === undefined);
 const meteringAllocationMessage =
   "Federated consumption has one federated allocation owner and local consumption one local owner";
-const meteringCorrectionMessage =
-  "A correction names both the corrected event and its direction";
+const meteringCorrectionMessage = "A correction names both the corrected event and its direction";
 export const meteringEventSchema = z
   .object({
     meteringEventId: meteringEventIdSchema,

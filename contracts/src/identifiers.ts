@@ -98,7 +98,7 @@ export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine
   "Published definition versions must be stable major.minor.patch versions",
 );
 
-export const revisionSchema = z.number().int().positive();
+export const revisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 export const fingerprintSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 export const timestampSchema = z.iso.datetime({ offset: true });
 
