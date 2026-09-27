@@ -110,6 +110,7 @@ const outcomeNotices: Readonly<Record<string, Notice>> = {
 };
 
 const unavailableNotice: Notice = { tone: "problem", text: "That is not available right now." };
+const maximumVisibleChoices = 500;
 
 /**
  * A run that reached a task the platform cannot run yet. It is not a refusal, so the person is
@@ -582,7 +583,7 @@ function ApplicationPageViewContent({
         setPages((current) => {
           const previous = current[stateKey] ?? choicePayloadFor(placementId, formId);
           const append = event.continuationToken !== undefined && previous !== undefined;
-          const options = append
+          const allOptions = append
             ? [
                 ...new Map(
                   [...(previous.options ?? []), ...(payload.options ?? [])].map((option) => [
@@ -592,9 +593,18 @@ function ApplicationPageViewContent({
                 ).values(),
               ]
             : (payload.options ?? []);
-          const optionEvidence = append
+          const selected = allOptions.find((option) => option.key === payload.value);
+          const recent = allOptions.slice(-maximumVisibleChoices);
+          const options =
+            selected !== undefined && !recent.some((option) => option.key === selected.key)
+              ? [selected, ...recent.slice(1)]
+              : recent;
+          const availableEvidence = append
             ? { ...previous.optionEvidence, ...payload.optionEvidence }
             : (payload.optionEvidence ?? {});
+          const optionEvidence = Object.fromEntries(
+            options.map((option) => [option.key, availableEvidence[option.key]]),
+          );
           return {
             ...current,
             [stateKey]: parseChoiceInputPayload(
