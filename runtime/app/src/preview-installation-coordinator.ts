@@ -13,7 +13,9 @@ import {
   previewInstallationCreateRequestSchema,
   previewInstallationExpiryRequestSchema,
   sessionContextSchema,
+  type ApplicationRootId,
   type IdentitySession,
+  type OrganizationId,
   type PreviewInstallation,
   type PreviewInstallationAddress,
   type PreviewInstallationCandidate,
@@ -175,8 +177,8 @@ export const createPreviewInstallationCoordinator = (
   const runRequest = async <Result>(
     mode: "read" | "change",
     sessionCandidate: IdentitySession,
-    organizationId: string,
-    applicationRootId: string | undefined,
+    organizationId: OrganizationId,
+    applicationRootId: ApplicationRootId | undefined,
     builderRootId: string | undefined,
     operation: (
       transaction: RequestDatabaseTransaction,
@@ -188,7 +190,7 @@ export const createPreviewInstallationCoordinator = (
     if (!session.success)
       throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
     const captured: { failure?: PreviewInstallationCoordinatorError } = {};
-    const runner =
+    const runner: InstallerRequests["run"] =
       mode === "change"
         ? dependencies.installerRequests.runChange
         : dependencies.installerRequests.run;
