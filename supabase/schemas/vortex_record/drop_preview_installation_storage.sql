@@ -62,6 +62,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.drop_preview_installation_storage(uuid) owner to vortex_record_owner;
+
 revoke all on function vortex_record.drop_preview_installation_storage(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter;

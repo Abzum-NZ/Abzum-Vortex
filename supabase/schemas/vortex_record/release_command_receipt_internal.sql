@@ -23,6 +23,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.release_command_receipt_internal(text,uuid) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.release_command_receipt_internal(
   text, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

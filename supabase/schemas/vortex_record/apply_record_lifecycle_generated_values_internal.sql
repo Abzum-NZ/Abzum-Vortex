@@ -101,6 +101,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.apply_record_lifecycle_generated_values_internal(jsonb,boolean,jsonb) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.apply_record_lifecycle_generated_values_internal(
   jsonb, boolean, jsonb
 )
