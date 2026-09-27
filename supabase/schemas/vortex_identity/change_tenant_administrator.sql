@@ -85,8 +85,8 @@ begin
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'change_tenant_administrator',
       p_tenant_id::text, p_assignment_id::text, p_expected_revision::text,
       pg_catalog.array_to_string(capabilities, ','),
-      vortex_context.format_timestamp_utc(p_starts_at),
-      coalesce(vortex_context.format_timestamp_utc(p_expires_at), '')),
+      pg_catalog.to_char(pg_catalog.timezone('UTC', p_starts_at), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+      coalesce(pg_catalog.to_char(pg_catalog.timezone('UTC', p_expires_at), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')),
       'UTF8'), 'sha256'), 'hex');
   select a.revision, a.revoked_at into current_revision, current_revoked_at
   from vortex_identity.tenant_administrator_assignments a
