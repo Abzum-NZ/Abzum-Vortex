@@ -1,9 +1,11 @@
 import { cn } from "../lib/utils";
-import { Loader2Icon } from "lucide-react";
+import { Icon } from "../icons/icon";
+import type { VortexIconProps } from "../icons/icon-names";
 
-function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
+function Spinner({ className, ...props }: VortexIconProps) {
   return (
-    <Loader2Icon
+    <Icon
+      name="loader"
       data-slot="spinner"
       role="status"
       aria-label="Loading"

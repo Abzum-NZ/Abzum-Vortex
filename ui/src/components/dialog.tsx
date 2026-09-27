@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 import { Button } from "./button";
-import { XIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -67,7 +67,7 @@ function DialogContent({
             data-slot="dialog-close"
             render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
           >
-            <XIcon />
+            <Icon name="close" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

@@ -82,15 +82,6 @@ begin
       message = 'Installation is unavailable';
   end if;
 
-  -- The organisation's access-management application is the steward's working way to
-  -- manage access. Any uninstall step that would remove it is refused.
-  if vortex_access.application_is_stewardship_management_application(
-    initial_authority.organization_id, p_root_id
-  ) then
-    raise exception using errcode = '42501',
-      message = 'Installation is required for access management';
-  end if;
-
   select release.* into strict application_release
   from vortex_definition.releases as release
   join vortex_definition.roots as root on root.root_id = release.root_id
@@ -263,4 +254,4 @@ revoke all on function vortex_module.drain_installation(uuid, uuid, bigint, json
 grant execute on function vortex_module.drain_installation(uuid, uuid, bigint, jsonb)
   to vortex_request;
 comment on function vortex_module.drain_installation(uuid, uuid, bigint, jsonb) is
-  'Protected first uninstall step: moves one exact active Application installation to draining, or refuses a Module an installed Application depends on or the organisation access-management Application, recording Activity from the trusted channel.';
+  'Protected first uninstall step: moves one exact active Application installation to draining, or refuses a Module an installed Application depends on, recording Activity from the trusted channel.';

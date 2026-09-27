@@ -101,6 +101,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       pending: context.pending,
       inactive: context.inactive,
       register: registry.register,
+      values: registry.values,
       draftFeedbackFor,
       reportFieldChanged,
     }),

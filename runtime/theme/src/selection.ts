@@ -2,9 +2,14 @@ import "server-only";
 
 import {
   DEFAULT_APPLICATION_THEME_SELECTION,
+  SHADCN_HEADING_FONT_INHERIT,
   applicationThemeSelectionV2Schema,
+  findShadcnFont,
   findShadcnThemeCatalogueOption,
+  isShadcnIconLibrary,
   isShadcnThemeCatalogueBaseRelease,
+  resolveShadcnFontSelection,
+  shadcnFontFamilyKey,
   shadcnThemeCatalogueDimensionKeys,
   themeTokenValueV2Schema,
   type ApplicationThemeSelectionV2,
@@ -134,6 +139,31 @@ const checkSelectionOptions = (
         dimension,
       });
   }
+  if (selection.iconLibrary !== undefined && !isShadcnIconLibrary(selection.iconLibrary))
+    addFailure({
+      code: "UNKNOWN_THEME_OPTION",
+      family: "invalid_value",
+      message: `Theme selection names unknown iconLibrary option "${selection.iconLibrary}"`,
+      dimension: "iconLibrary",
+    });
+  if (selection.bodyFont !== undefined && findShadcnFont(selection.bodyFont) === undefined)
+    addFailure({
+      code: "UNKNOWN_THEME_OPTION",
+      family: "invalid_value",
+      message: `Theme selection names unknown bodyFont option "${selection.bodyFont}"`,
+      dimension: "bodyFont",
+    });
+  if (
+    selection.headingFont !== undefined &&
+    selection.headingFont !== SHADCN_HEADING_FONT_INHERIT &&
+    findShadcnFont(selection.headingFont) === undefined
+  )
+    addFailure({
+      code: "UNKNOWN_THEME_OPTION",
+      family: "invalid_value",
+      message: `Theme selection names unknown headingFont option "${selection.headingFont}"`,
+      dimension: "headingFont",
+    });
 };
 
 /**
@@ -162,6 +192,9 @@ export function validateThemeSelectionOptions(
  * refused option, a missing or extra dimension, and a token override whose key, kind or colour
  * role the selected theme does not allow. The resolved tokens then pass the same contrast and
  * focus checks publication runs, so an override cannot hide focus or lower required contrast.
+ *
+ * The selected body and heading fonts (the catalogue defaults when the selection names none) become
+ * the families of the `body` and `heading` typography tokens.
  *
  * On the catalogue's base release an absent selection resolves as the platform default. On an
  * earlier release an absent selection keeps that release's exact tokens (plus the overrides), as
@@ -232,6 +265,18 @@ export function resolveThemeSelection(
         }
         tokens[tokenKey] = parsed.data;
       }
+    }
+
+    // The selected fonts become the families of the `body` and `heading` typography tokens, so the
+    // theme bridge and the renderer's font loading read one decision. Size, line height and weight
+    // stay the release's, and an authored override of either token still applies below.
+    const fonts = resolveShadcnFontSelection(selection);
+    for (const [key, font] of [
+      ["body", fonts.body],
+      ["heading", fonts.heading],
+    ] as const) {
+      const token = tokens[key];
+      if (token?.kind === "typography") tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
     }
   }
 
