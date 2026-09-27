@@ -2,7 +2,7 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Coverage map](traceability.md) · [Fixture README](../../../testing/fixtures/README.md)
 
-The worked examples are executable acceptance fixtures, not informal illustrations. Their readable JSON is parsed by the production authored-source contracts and converted by the shipping compiler without semantic loss into the same complete contracts used by published definitions. A checked-in immutable resolution snapshot supplies every permanent identifier and exact dependency version; no fixture may contain an unresolved reference.
+The worked examples are checked-in, non-shipping definition references, not development completion gates. Their readable JSON describes source that the production authored-source contracts and compiler must accept without semantic loss into the same complete contracts used by published definitions. A checked-in immutable resolution snapshot supplies every permanent identifier and exact dependency version; no fixture may contain an unresolved reference.
 
 ## Complete fixture set
 
@@ -24,7 +24,7 @@ The fixture set contains two independently versioned applications, eight indepen
 14. A complete storage layout and scope scenario for all record types and fields.
 15. An immutable definition-resolution snapshot containing every fixture alias, permanent identifier, exact definition version and connection operation key.
 
-The complete set is written and validated before Phase 2 implementation. The fixture gate parses, compiles and publication-validates all thirteen documents through shipping code, proves deterministic dependency ordering and provenance coverage, then checks the scenario and storage evidence separately. A partial example cannot pass by weakening reference checks.
+The complete set documents the intended cross-definition references, dependency ordering, provenance and storage scenarios. Published definitions must still refuse unresolved references and incomplete provenance; these examples impose no fixture or test gate on current development.
 
 ## Application and module composition
 

@@ -4,15 +4,13 @@ import {
   clusterIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
-  correlationIdSchema,
 } from "@vortex/contracts";
 import { z } from "zod";
 
 /**
  * The configured development setup manifest. It is the only place the setup names what it
- * provisions: the disposable organisation, the applications it installs, the one operating role
- * the nominated first owner receives and the fixed development identities that make an exact
- * re-run replay instead of repeating.
+ * provisions: the disposable organisation, the applications it installs and the fixed development
+ * identities that make an exact re-run replay instead of repeating.
  *
  * Nothing here is authority. The nominated account arrives from the command line (never from a
  * browser), every write goes through the protected entry points, and the database decides each
@@ -53,37 +51,6 @@ export const developmentSetupManifestSchema = z
       .strict(),
     applicationKeys: z.array(z.enum(shippedApplicationKeys)).min(1),
     /**
-     * The one application whose operating role the first owner receives through the Access-owned
-     * initial operating-role grant, and that role's key. Later access expansion is not this
-     * command: the owner grants further roles through the IAM application.
-     */
-    operatingRole: z
-      .object({
-        applicationKey: z.enum(shippedApplicationKeys),
-        roleKey: z.string(),
-        /** The identity of the new organisation role and of its one standing assignment. */
-        roleId: roleIdSchema,
-        roleAssignmentId: roleAssignmentIdSchema,
-      })
-      .strict(),
-    /**
-     * Further application roles the steward accepts and assigns to themselves through the ordinary
-     * Access administration operations (the initial operating-role grant takes only one role, and
-     * only one whose permissions all belong to its own application).
-     */
-    additionalRoles: z
-      .array(
-        z
-          .object({
-            applicationKey: z.enum(shippedApplicationKeys),
-            roleKey: z.string(),
-            roleId: roleIdSchema,
-            roleAssignmentId: roleAssignmentIdSchema,
-          })
-          .strict(),
-      )
-      .max(10),
-    /**
      * The custom role the steward creates and assigns to themselves so they can install
      * applications (a provisioned steward holds no application-installation permission).
      */
@@ -94,8 +61,6 @@ export const developmentSetupManifestSchema = z
         roleAssignmentId: roleAssignmentIdSchema,
       })
       .strict(),
-    /** The correlation the grant records; reused so an exact retry replays the original result. */
-    setupCorrelationId: correlationIdSchema,
   })
   .strict();
 
@@ -118,8 +83,8 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       timeZone: "Pacific/Auckland",
       currency: "NZD",
     },
-    // In installation order: every shipped application, so the owner's local preview shows all of
-    // them. IAM is the operating application and is installed last with the initial role grant.
+    // Install every shipped application. The nominated steward receives application roles later
+    // through the IAM application.
     applicationKeys: [
       "vortex.app.iam",
       "vortex.app.organisation_administration",
@@ -128,54 +93,9 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
       "vortex.app.service_desk",
       "vortex.app.operations",
     ],
-    operatingRole: {
-      applicationKey: "vortex.app.iam",
-      roleKey: "iam_reviewer",
-      roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d05",
-      roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d06",
-    },
-    additionalRoles: [
-      {
-        applicationKey: "vortex.app.iam",
-        roleKey: "iam_administrator",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0a",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0b",
-      },
-      {
-        applicationKey: "vortex.app.organisation_administration",
-        roleKey: "organisation_administrator",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0c",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0d",
-      },
-      {
-        applicationKey: "vortex.app.tenant_administration",
-        roleKey: "tenant_administrator",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0e",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0f",
-      },
-      {
-        applicationKey: "vortex.app.crm",
-        roleKey: "crm_manager",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d10",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d11",
-      },
-      {
-        applicationKey: "vortex.app.service_desk",
-        roleKey: "service_manager",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d12",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d13",
-      },
-      {
-        applicationKey: "vortex.app.operations",
-        roleKey: "operations_operator",
-        roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d14",
-        roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d15",
-      },
-    ],
     installerRole: {
       roleKey: "application_installer",
       roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d08",
       roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d09",
     },
-    setupCorrelationId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d07",
   });

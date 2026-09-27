@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type MouseEvent, type ReactElement } from "react";
-import { MenuIcon, XIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/contracts";
 import { Button } from "../components/button";
 import {
@@ -230,7 +230,11 @@ export function ApplicationNavigation({
                   onClick={() => setOpen((value) => !value)}
                 >
                   <span>{label}</span>
-                  {open ? <XIcon aria-hidden="true" /> : <MenuIcon aria-hidden="true" />}
+                  {open ? (
+                    <Icon name="close" aria-hidden="true" />
+                  ) : (
+                    <Icon name="menu" aria-hidden="true" />
+                  )}
                 </Button>
                 <SidebarGroupContent>
                   <NavigationList

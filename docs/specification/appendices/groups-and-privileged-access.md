@@ -151,7 +151,7 @@ flowchart TD
 
 Users can end their own activation; authorised administrators can revoke it immediately. These reductions take effect at once and do not wait for any workflow. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
-Permitted administrators can inspect the retained [activation ledger](../../build-plan/issue-40-protected-access-administration.md). It distinguishes the beneficiary, current role label, historical role revision, exact eligibility-source references, fixed activation window and safe policy settings used at activation. Revoked or expired facts remain inspectable when their underlying authority changes. Its active-window label is descriptive, not a claim that access remains effective; only the current Access decision establishes that.
+Permitted administrators can inspect the retained [activation ledger](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). It distinguishes the beneficiary, current role label, historical role revision, exact eligibility-source references, fixed activation window and safe policy settings used at activation. Revoked or expired facts remain inspectable when their underlying authority changes. Its active-window label is descriptive, not a claim that access remains effective; only the current Access decision establishes that.
 
 ## Creating, renaming and retiring Groups
 

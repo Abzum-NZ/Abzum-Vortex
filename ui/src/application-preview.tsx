@@ -5,6 +5,8 @@ import {
   type ComponentSemanticEventKind,
   type FlowEffectKind,
 } from "@vortex/contracts";
+import { Alert, AlertDescription, AlertTitle } from "./components/alert";
+import { Badge } from "./components/badge";
 import {
   DefinitionRenderError,
   validatePlacementTree,
@@ -17,6 +19,7 @@ import {
   type MaterialisedApplicationCompositionV2,
   type PlacementSlotV2,
 } from "./layout-renderer";
+import { cn } from "./lib/utils";
 import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
 import {
   CONTROL_EVENT_NAMES,
@@ -367,7 +370,11 @@ const outcomeLabel = (outcome: ApplicationPreviewOutcome): string => {
 /**
  * Renders one exact draft preview through the shared renderer. Every interaction is a labelled
  * simulation; unavailable releases, content and sample data are shown as outcomes, never silently
- * substituted with arbitrary output.
+ * substituted with arbitrary output. The preview chrome (the draft banner and the unavailable
+ * notice) is drawn with the shadcn Alert and Badge parts in the surrounding designer's style,
+ * while the canvas below is the shared layout renderer's own style root: it paints with the style,
+ * menu and menu accent the draft's application theme selected, so the preview shows the
+ * application's own look rather than the designer's.
  */
 export function ApplicationPreview({
   artifact,
@@ -476,28 +483,34 @@ export function ApplicationPreview({
       data-vortex-preview-mode={artifact.interactionMode}
       data-vortex-preview-root={artifact.rootId}
       data-vortex-preview-draft-revision={artifact.draftRevision}
-      className={className}
+      className={cn("flex flex-col gap-4", className)}
       style={style}
     >
-      <div data-vortex-preview-banner="">
-        <strong>Draft preview (simulated)</strong>
-        <span>
-          Revision {artifact.draftRevision}
-          {artifact.currentReleaseRevision === null
-            ? "; not yet published"
-            : `; current release revision ${artifact.currentReleaseRevision} is not shown`}
-        </span>
-        {artifact.interactions.length === 0 ? null : (
-          <span>{artifact.interactions.length} interaction(s) are simulated</span>
-        )}
-        {artifact.outcomes.length === 0 ? null : (
-          <ul data-vortex-preview-outcomes="">
-            {artifact.outcomes.map((outcome, index) => (
-              <li key={`${outcome.kind}:${index}`}>{outcomeLabel(outcome)}</li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <Alert data-vortex-preview-banner="" role="status">
+        <AlertTitle className="flex flex-wrap items-center gap-2">
+          <span>Draft preview (simulated)</span>
+          <Badge variant="secondary">Revision {artifact.draftRevision}</Badge>
+          {artifact.interactions.length === 0 ? null : (
+            <Badge variant="outline">
+              {artifact.interactions.length} interaction(s) are simulated
+            </Badge>
+          )}
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            {artifact.currentReleaseRevision === null
+              ? "This draft is not yet published."
+              : `Current release revision ${artifact.currentReleaseRevision} is not shown.`}
+          </p>
+          {artifact.outcomes.length === 0 ? null : (
+            <ul data-vortex-preview-outcomes="" className="m-0 flex list-none flex-col gap-1 p-0">
+              {artifact.outcomes.map((outcome, index) => (
+                <li key={`${outcome.kind}:${index}`}>{outcomeLabel(outcome)}</li>
+              ))}
+            </ul>
+          )}
+        </AlertDescription>
+      </Alert>
       {renderFailure === undefined && resolvedSlot !== undefined ? (
         <PageLayoutRenderer
           composition={composition}
@@ -511,14 +524,14 @@ export function ApplicationPreview({
           runtimeInputs={runtimeInputs}
         />
       ) : (
-        <div data-vortex-preview-unavailable="">
-          <p>This draft cannot be previewed as requested.</p>
+        <Alert variant="destructive" data-vortex-preview-unavailable="">
+          <AlertTitle>This draft cannot be previewed as requested.</AlertTitle>
           {renderFailure === undefined ? null : (
-            <p>
+            <AlertDescription>
               {renderFailure.code}: {renderFailure.message}
-            </p>
+            </AlertDescription>
           )}
-        </div>
+        </Alert>
       )}
     </div>
   );

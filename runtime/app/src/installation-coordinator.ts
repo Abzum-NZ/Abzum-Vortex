@@ -1237,8 +1237,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
      * Drains exactly the named active installation: the uninstall command's first step. No new
      * flow, tool call or navigation load resolves a draining installation, while callbacks for
      * work already running keep the exact revision they were started against. A system
-     * application is refused by builder authority; the Access-management application and a
-     * Module an installed application depends on are refused by the protected operation.
+     * application is refused by builder authority; a Module an installed application depends
+     * on is refused by the protected operation.
      */
     async drain(
       session: IdentitySession,
