@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Card, CardFooter, CardHeader, CardTitle } from "../components/card";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
@@ -12,18 +13,16 @@ import {
 } from "./launcher-context";
 import { filterLauncherRows, useLauncherRowFilter } from "./view-filter-context";
 
-const cellText = (
-  cells: Readonly<Record<string, DisplayCellValue>>,
-  key: string,
-): string => {
+const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string): string => {
   const cell = cells[key];
   return cell === undefined ? "" : cellValueToText(cell).trim();
 };
 
 /**
- * Browser-safe launcher tile surface. It renders only the declared name and icon cells of the closed
- * permitted-applications projection (see `permittedApplicationsToListValues`); it never fetches,
- * queries or resolves a destination. Tile activation emits the declared `row_action` with the
+ * Browser-safe launcher tile surface, one shadcn Card per application. It renders only the
+ * declared name and icon cells of the closed permitted-applications projection (see
+ * `permittedApplicationsToListValues`); it never fetches, queries or resolves a destination. The
+ * open control shows only while the declared `row_action` is bound and invocable. Tile activation emits the declared `row_action` with the
  * application's permanent identity, and destination safety remains the bound flow's decision
  * (#619). An enclosing view filter can only hide rows it already received.
  */
@@ -36,60 +35,70 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const values = context.values;
   const rows = values === undefined ? [] : filterLauncherRows(values.rows, filter, nameKey);
   const sidePanel = props.slots.side_panel ?? null;
+  // A tile shows its open control only when the declared row action is bound and invocable.
+  const openable = context.events?.row_action !== undefined;
 
   return (
-    <div className="vortex-launcher-layout">
-      <DisplayStateContainer
-        accessibleName={context.accessibleName}
-        availability={props.availability}
-        projectedData={context.state}
-        emptyMessage="No applications to show"
-      >
-        {values === undefined ? null : (
-          <section
-            data-vortex-display="application-launcher"
-            data-vortex-placement-id={props.placementId}
-            className="vortex-launcher"
-            aria-label={context.accessibleName}
-          >
-            <DisplayHeader
-              title={context.title}
-              accessibleName={context.accessibleName}
-              events={context.events}
-            />
-            {rows.length === 0 ? (
-              <p className="vortex-launcher-empty" role="status">
-                {filter?.emptyMessage ?? "No applications to show"}
-              </p>
-            ) : (
-              <ul className="vortex-launcher-tiles">
-                {rows.map((row) => {
-                  const name = cellText(row.cells, nameKey) || "untitled application";
-                  const icon = cellText(row.cells, iconKey);
-                  return (
-                    <li
-                      key={row.recordId}
-                      data-vortex-record-id={row.recordId}
-                      className="vortex-launcher-tile"
-                    >
-                      {icon === "" ? null : (
-                        <span
-                          className="vortex-launcher-tile-icon"
-                          data-vortex-icon={icon}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className="vortex-launcher-tile-name">{name}</span>
-                      <RowActionControl recordId={row.recordId} name={name} events={context.events} />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-      </DisplayStateContainer>
-      {sidePanel === null ? null : <aside className="vortex-launcher-side-panel">{sidePanel}</aside>}
+    <div className="flex w-full min-w-0 flex-col gap-4 md:flex-row">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <DisplayStateContainer
+          accessibleName={context.accessibleName}
+          availability={props.availability}
+          projectedData={context.state}
+          emptyMessage="No applications to show"
+        >
+          {values === undefined ? null : (
+            <section
+              data-vortex-display="application-launcher"
+              data-vortex-placement-id={props.placementId}
+              className="flex flex-col"
+              aria-label={context.accessibleName}
+            >
+              <DisplayHeader
+                title={context.title}
+                accessibleName={context.accessibleName}
+                events={context.events}
+              />
+              {rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {filter?.emptyMessage ?? "No applications to show"}
+                </p>
+              ) : (
+                <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
+                  {rows.map((row) => {
+                    const name = cellText(row.cells, nameKey) || "untitled application";
+                    const icon = cellText(row.cells, iconKey);
+                    return (
+                      <li key={row.recordId} data-vortex-record-id={row.recordId} className="flex">
+                        <Card size="sm" className="w-full">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              {icon === "" ? null : (
+                                <span data-vortex-icon={icon} aria-hidden="true" />
+                              )}
+                              <span>{name}</span>
+                            </CardTitle>
+                          </CardHeader>
+                          {openable ? (
+                            <CardFooter className="mt-auto">
+                              <RowActionControl
+                                recordId={row.recordId}
+                                name={name}
+                                events={context.events}
+                              />
+                            </CardFooter>
+                          ) : null}
+                        </Card>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
+        </DisplayStateContainer>
+      </div>
+      {sidePanel === null ? null : <aside className="min-w-0 md:w-1/3">{sidePanel}</aside>}
     </div>
   );
 }
