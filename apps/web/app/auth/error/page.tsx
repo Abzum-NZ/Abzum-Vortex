@@ -5,8 +5,8 @@ export default function AuthErrorPage() {
   return (
     <AuthShell
       eyebrow="Unable to continue"
-      title="Request a new link"
-      description="This link is invalid or has expired. Start again to receive a fresh link."
+      title="Unable to complete request"
+      description="This request could not be completed. Start again to receive a new code."
       footer={
         <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
           Return to sign in
