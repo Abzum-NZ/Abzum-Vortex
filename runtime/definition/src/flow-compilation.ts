@@ -309,6 +309,7 @@ const resolveProperty = (
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
       return value;
     default:
+      // Generic values retain their complete shape, including bounded paths on task-output refs.
       return value;
   }
 };

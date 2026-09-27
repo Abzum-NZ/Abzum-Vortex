@@ -1769,8 +1769,13 @@ export const themeCatalogueOptionIdSchema = z
  * One catalogue option id per shadcn/create dimension that #1274 publishes. A selection is
  * strict: every dimension appears exactly once and no other key is admitted. Runtime/theme
  * resolves the selected options into the complete token set and the style id, refusing an unknown
- * id, a refused option or a missing dimension. Fonts and icons are separate dimensions owned by
- * #1277 and #1278 and are absent until those releases land.
+ * id, a refused option or a missing dimension.
+ *
+ * The body and heading fonts (#1277) name fonts of the shadcn/create font catalogue
+ * (contracts/src/shadcn-font-catalogue.ts); the heading font may also be `inherit`, which paints
+ * headings in the body font. They are optional so selections recorded before the font catalogue
+ * keep their meaning: an absent font is the catalogue's default. The icon library is a separate
+ * dimension owned by #1278.
  */
 export const applicationThemeSelectionV2Schema = z
   .object({
@@ -1781,6 +1786,8 @@ export const applicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menuColor: themeCatalogueOptionIdSchema,
     menuAccent: themeCatalogueOptionIdSchema,
+    bodyFont: themeCatalogueOptionIdSchema.optional(),
+    headingFont: themeCatalogueOptionIdSchema.optional(),
   })
   .strict();
 export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelectionV2Schema>;
@@ -1798,6 +1805,8 @@ export const sourceApplicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menu_color: themeCatalogueOptionIdSchema,
     menu_accent: themeCatalogueOptionIdSchema,
+    body_font: themeCatalogueOptionIdSchema.optional(),
+    heading_font: themeCatalogueOptionIdSchema.optional(),
   })
   .strict();
 export type SourceApplicationThemeSelectionV2 = z.infer<
@@ -1815,6 +1824,8 @@ export const canonicalApplicationThemeSelectionV2 = (
   radius: source.radius,
   menuColor: source.menu_color,
   menuAccent: source.menu_accent,
+  ...(source.body_font === undefined ? {} : { bodyFont: source.body_font }),
+  ...(source.heading_font === undefined ? {} : { headingFont: source.heading_font }),
 });
 
 /**

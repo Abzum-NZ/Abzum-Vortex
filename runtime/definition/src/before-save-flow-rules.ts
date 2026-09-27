@@ -112,6 +112,7 @@ const operand = (formula: FlowFormula, path: Path): SourceRuleGraphOperand => {
       return { source: "current_field", field: reference.field };
     if (reference.source === "trigger_previous")
       return { source: "previous_field", field: reference.field };
+    if (reference.source === "task_output") return unsupported(path);
   }
   return unsupported(path);
 };

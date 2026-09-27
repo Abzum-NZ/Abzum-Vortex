@@ -1,8 +1,12 @@
 import type { CSSProperties } from "react";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  findShadcnFontByFamilyKey,
+  resolveShadcnFontSelection,
+  shadcnFontStack,
   type ApplicationContentV2,
   type PlatformThemeTokenRoleKeyV2,
+  type ShadcnFont,
 } from "@vortex/contracts";
 
 /** Resolved #594 application theme, as materialised in application content. */
@@ -44,6 +48,10 @@ export const THEME_VARIABLE_NAMES = [
   "--vortex-heading-font-size",
   "--vortex-heading-line-height",
   "--vortex-heading-font-weight",
+  // The shadcn font variables: the shared stylesheet's `font-sans` and `font-heading` and every
+  // style stylesheet read them, so the selected body and heading fonts reach the shadcn components.
+  "--font-sans-family",
+  "--font-heading-family",
   "--vortex-space-xs",
   "--vortex-space-sm",
   "--vortex-space-md",
@@ -186,6 +194,20 @@ const PLATFORM_DEFAULTS: Readonly<{
   focus: platformColor(PLATFORM_FOCUS_COLOR_ROLE),
 };
 
+/** The catalogue's default body and heading fonts, which a theme without a font of its own paints. */
+const PLATFORM_FONTS = resolveShadcnFontSelection();
+
+/**
+ * The registered release names its typography families by placeholder (`body`, `heading`) rather
+ * than by a catalogue font, so a theme that still carries a placeholder paints the default fonts.
+ */
+const PLATFORM_FAMILY_FONTS: ReadonlyMap<string, ShadcnFont> = new Map(
+  (["body", "heading"] as const).flatMap((key) => {
+    const token = PLATFORM_TOKENS[key];
+    return token?.kind === "typography" ? [[token.family, PLATFORM_FONTS[key]] as const] : [];
+  }),
+);
+
 const PLATFORM_ELEVATION = [
   "none",
   "0 1px 2px rgba(0, 0, 0, 0.12)",
@@ -210,8 +232,33 @@ const plainNumber = (value: number): string | undefined =>
 const fontWeight = (value: number): string | undefined =>
   Number.isInteger(value) && value >= 100 && value <= 900 ? String(value) : undefined;
 
-const fontFamily = (familyKey: string): string | undefined =>
-  BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
+/**
+ * The self-hosted catalogue font a typography family key names: a catalogue font's own key, or a
+ * registered-release placeholder, which stands for the default font. Any other key names a font the
+ * catalogue does not ship, which is painted only from the person's installed fonts.
+ */
+const catalogueFont = (familyKey: string): ShadcnFont | undefined =>
+  findShadcnFontByFamilyKey(familyKey) ?? PLATFORM_FAMILY_FONTS.get(familyKey);
+
+const fontFamily = (familyKey: string): string | undefined => {
+  const font = catalogueFont(familyKey);
+  if (font !== undefined) return shadcnFontStack(font);
+  return BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
+};
+
+/**
+ * The catalogue fonts a resolved theme paints with: the fonts its `body` and `heading` typography
+ * tokens name, the default body font when it has no body token, and the body font for headings when
+ * it has no heading token, exactly as `generateThemeCssVariables` paints them. The renderer links
+ * only these fonts' stylesheets, so a page never downloads a font it does not use.
+ */
+export function resolveThemeFonts(tokens: ThemeTokens = {}): readonly ShadcnFont[] {
+  const body = tokenOfKind(tokens, "body", "typography");
+  const heading = tokenOfKind(tokens, "heading", "typography");
+  const bodyFont = body === undefined ? PLATFORM_FONTS.body : catalogueFont(body.family);
+  const headingFont = heading === undefined ? bodyFont : catalogueFont(heading.family);
+  return [...new Set([bodyFont, headingFont].filter((font) => font !== undefined))];
+}
 
 function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
   const token = tokens[key];
@@ -270,7 +317,10 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * `--muted`, `--accent`, `--chart-1`..`--chart-5`, `--sidebar*`, `--input`, `--ring` and
  * `--destructive` from the matching colour role; `--radius` from `radius_base`. A fill and its
  * `<role>_foreground` (card, popover, accent, sidebar, sidebar_primary, sidebar_accent) change
- * together. `light-dark()` serves forced light, forced dark and the system preference through the
+ * together. `--font-sans-family` and `--font-heading-family` carry the `body` and `heading`
+ * typography families; a catalogue font's family paints its self-hosted face (see
+ * `resolveThemeFonts`), and a theme without a body token paints the default catalogue font.
+ * `light-dark()` serves forced light, forced dark and the system preference through the
  * container's `color-scheme` (a `.dark` ancestor sets it dark), and the shadcn `dark:` variant in
  * ui/src/styles/globals.css follows the same resolved mode, so `.dark` and `prefers-color-scheme`
  * selections resolve the same map.
@@ -330,7 +380,11 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     return PLATFORM_ELEVATION[Math.min(token.level, PLATFORM_ELEVATION.length - 1)] ?? fallback;
   };
 
-  const bodyFamily = (body === undefined ? undefined : fontFamily(body.family)) ?? FONT_FALLBACK;
+  // Without a body token the page paints the default catalogue font, which `resolveThemeFonts`
+  // links for it; the heading paints the body font unless the theme has a heading token.
+  const bodyFamily =
+    body === undefined ? shadcnFontStack(PLATFORM_FONTS.body) : (fontFamily(body.family) ?? FONT_FALLBACK);
+  const headingFamily = (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
 
   // Every shadcn colour comes from the resolved theme when the role is present and well formed,
   // otherwise from the registered platform release, so the bridge holds no second palette.
@@ -378,13 +432,14 @@ export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVar
     "--vortex-font-size": (body === undefined ? undefined : rem(body.sizeRem, 0.5)) ?? "1rem",
     "--vortex-line-height": (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
     "--vortex-font-weight": (body === undefined ? undefined : fontWeight(body.weight)) ?? "400",
-    "--vortex-heading-font-family":
-      (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily,
+    "--vortex-heading-font-family": headingFamily,
     "--vortex-heading-font-size": (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
     "--vortex-heading-line-height":
       (heading === undefined ? undefined : plainNumber(heading.lineHeight)) ?? "1.25",
     "--vortex-heading-font-weight":
       (heading === undefined ? undefined : fontWeight(heading.weight)) ?? "700",
+    "--font-sans-family": bodyFamily,
+    "--font-heading-family": headingFamily,
     "--vortex-space-xs": spacing("space_xs", "0.25rem"),
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),

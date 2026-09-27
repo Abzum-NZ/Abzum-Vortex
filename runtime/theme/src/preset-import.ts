@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  SHADCN_HEADING_FONT_INHERIT,
+  findShadcnFont,
   findShadcnThemeCatalogueOption,
   shadcnThemeCatalogueDimensionKeys,
   sourceApplicationThemeSelectionV2Schema,
@@ -48,13 +50,13 @@ export type ShadcnPresetImportFailure = Readonly<{
     | "MISSING_THEME_RELEASE"
     | "MISSING_STYLE_ASSET"
     | "INVALID_THEME_SELECTION";
-  dimension?: ShadcnThemeCatalogueDimensionKey | undefined;
+  dimension?: ShadcnThemeCatalogueDimensionKey | "bodyFont" | "headingFont" | undefined;
   value?: string | undefined;
   message: string;
 }>;
 
 export type ShadcnPresetDimensionNotYetImportable = Readonly<{
-  dimension: "font" | "fontHeading" | "iconLibrary";
+  dimension: "iconLibrary";
   value: string;
   status: "not_yet_importable";
   message: string;
@@ -147,18 +149,6 @@ const notYetImportableDimensions = (
   decoded: PresetConfig,
 ): readonly ShadcnPresetDimensionNotYetImportable[] =>
   Object.freeze([
-    Object.freeze({
-      dimension: "font" as const,
-      value: decoded.font,
-      status: "not_yet_importable" as const,
-      message: `The font value "${decoded.font}" has no application theme selection dimension yet.`,
-    }),
-    Object.freeze({
-      dimension: "fontHeading" as const,
-      value: decoded.fontHeading,
-      status: "not_yet_importable" as const,
-      message: `The fontHeading value "${decoded.fontHeading}" has no application theme selection dimension yet.`,
-    }),
     Object.freeze({
       dimension: "iconLibrary" as const,
       value: decoded.iconLibrary,
@@ -276,6 +266,23 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     selectedOptions[dimension] = option.id;
   }
 
+  // The preset's `font` is the body font and its `fontHeading` the heading font, which may be
+  // `inherit`; both are offered by the font catalogue rather than the colour and style index.
+  if (findShadcnFont(decoded.font) === undefined)
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "bodyFont",
+      value: decoded.font,
+      message: `The preset font value "${decoded.font}" is not available in the pinned font catalogue.`,
+    });
+  if (decoded.fontHeading !== SHADCN_HEADING_FONT_INHERIT && findShadcnFont(decoded.fontHeading) === undefined)
+    failures.push({
+      code: "UNKNOWN_THEME_OPTION",
+      dimension: "headingFont",
+      value: decoded.fontHeading,
+      message: `The preset fontHeading value "${decoded.fontHeading}" is not available in the pinned font catalogue.`,
+    });
+
   if (failures.length > 0) {
     return {
       status: "refused",
@@ -296,6 +303,8 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     radius: selectedOptions.radius,
     menu_color: selectedOptions.menuColor,
     menu_accent: selectedOptions.menuAccent,
+    body_font: decoded.font,
+    heading_font: decoded.fontHeading,
   });
   if (!parsedSelection.success) {
     return {
