@@ -44,7 +44,7 @@ this behavior to real Phase 3 owners without duplicating existing success entrie
 permitted browsing, aggregate read evidence and remaining service integrations.
 Ordinary record reads are not logged individually merely to generate counts.
 
-When a protected flow node runs under a specified account or system actor, the owning operation records its ordinary operation activity for that effective actor. When an initiating organisation account exists, use of the separate execution delegation also records an initiator-account delegation-use entry with the same correlation identifier. A system-started flow has no fabricated human initiator; its existing Activity entries identify the actual verified system actor and triggering cause. These are linked entries in the existing Activity store, not a new flow envelope, history table or substitute for the operation's own evidence.
+When a protected flow task runs under a specified account or System actor, the owning operation records its ordinary operation activity for that effective actor. When an initiating organisation account exists, use of the separate execution delegation also records an initiator-account delegation-use entry with the same correlation identifier. A system-started flow has no fabricated human initiator; its existing Activity entries identify the actual verified system actor and triggering cause. These are linked entries in the existing Activity store, not a new flow envelope, history table or substitute for the operation's own evidence.
 
 ## Personal-data classification
 

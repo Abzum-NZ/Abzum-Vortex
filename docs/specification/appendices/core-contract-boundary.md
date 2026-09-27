@@ -1,6 +1,6 @@
 # Core contract boundary
 
-Scoped flow execution identities are admitted only as the minimum security primitive needed to execute arbitrary configured applications safely. The [execution-identity contract](frontend-rule-designer.md#node-execution-identity) remains owned by Access; business-role policy stays in ordinary applications. See the [architecture decisions](../../build-plan/architecture-decisions-2026-09-25.md).
+Scoped flow execution identities are admitted only as the minimum security primitive needed to execute arbitrary configured applications safely. The [run-as contract](frontend-rule-designer.md#run-as) remains owned by Access; business-role policy stays in ordinary applications. See the [architecture decisions](../../build-plan/architecture-decisions-2026-09-25.md).
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 

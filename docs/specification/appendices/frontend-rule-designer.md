@@ -242,8 +242,6 @@ Changing a flow is changing its owner's draft, gated by the builder permissions 
 
 [System applications](core-contract-boundary.md#ordinary-applications-not-core-domains) (IAM, Organisation Administration, Tenant Administration and the Landing Zone) are platform packages installed when an organisation is created, and they cannot be uninstalled. People holding `platform.organization.system_applications.manage` customise them through extension fields, theme, navigation and their own dependent applications and flows, or through an organisation-owned customised copy that replaces the system application's installation. Their protected operations and operation bindings stay platform-owned: a customisation cannot add, remove or retarget a protected-operation binding. Platform upgrades never overwrite customisations.
 
-<a id="node-execution-identity"></a>
-
 ## Run as
 
 This section describes target runtime behaviour. Current-person execution uses the initiating person's protected request context. [#322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) and [#541](https://github.com/Abzum-NZ/Abzum-Vortex/issues/541) implement the scoped execution grants for specified accounts and System actors. Actual row, field, derived-value, file, component and MCP integration remains in the downstream owning tasks; it does not make the identity foundation depend on the later flow engine.

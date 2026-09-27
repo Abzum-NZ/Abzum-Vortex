@@ -198,7 +198,7 @@ sequenceDiagram
 
 ### Parity rule
 
-Every meaningful capability offered by a Vortex-owned web interface—including customer applications, Studio, tenant administration and organisation administration—must be represented by the semantic interface map and usable through both governed MCP surfaces. A release test inventories both surfaces and fails on a missing operation, mismatched input, different access result, different validation, different side effect or different activity meaning.
+Every meaningful capability offered by a Vortex-owned web interface—including customer applications, Studio, tenant administration and organisation administration—must be represented by the semantic interface map and usable through both governed MCP surfaces. Each surface must expose the same operations, inputs, access decisions, validation, side effects and activity meaning; independent source review checks that parity.
 
 The reverse is also controlled: the MCP parity surface does not expose a hidden platform or business operation that the same person could not reach through an authorised Vortex interface. Customer-published interfaces and protected system operations remain separate because they serve non-interactive integration and operational purposes.
 
