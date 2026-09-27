@@ -62,6 +62,8 @@ begin
 end
 $function$;
 
+alter function vortex_record.lock_record_change_targets_internal(jsonb,uuid,jsonb) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.lock_record_change_targets_internal(jsonb, uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
