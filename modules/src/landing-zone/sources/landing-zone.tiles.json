@@ -1,0 +1,287 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "mod_landing_zone",
+  "key": "vortex.landing_zone",
+  "kind": "module",
+  "body": {
+    "name": "Landing Zone",
+    "description": "Personal tiles for an organisation account. Internal target names are resolved live, and tile target data grants no access to its target.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_landing_zone_tile",
+        "key": "tile",
+        "name": "Tile",
+        "plural_name": "Tiles",
+        "title_field": "target_kind",
+        "storage_contract_id": "srt_landing_zone_tile",
+        "storage_scope": "application_contained",
+        "ownership_mode": "organisation_account",
+        "standard_actions": ["create", "read", "update", "soft_delete"],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_landing_zone_tile_target_kind",
+            "key": "target_kind",
+            "label": "Target type",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                { "value": "application", "label": "Application" },
+                { "value": "page", "label": "Page" },
+                { "value": "record", "label": "Record" },
+                { "value": "external", "label": "External address" }
+              ]
+            }
+          },
+          {
+            "id": "fld_landing_zone_tile_application_key",
+            "key": "application_key",
+            "label": "Application key",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          },
+          {
+            "id": "fld_landing_zone_tile_page_key",
+            "key": "page_key",
+            "label": "Page key",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          },
+          {
+            "id": "fld_landing_zone_tile_record_type",
+            "key": "record_type",
+            "label": "Record type key",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 200 }
+          },
+          {
+            "id": "fld_landing_zone_tile_record_id",
+            "key": "record_id",
+            "label": "Record identity",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 36, "format": "uuid" }
+          },
+          {
+            "id": "fld_landing_zone_tile_external_address",
+            "key": "external_address",
+            "label": "External HTTPS address",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "web_address",
+            "settings": { "allowed_schemes": ["https"] }
+          },
+          {
+            "id": "fld_landing_zone_tile_label",
+            "key": "label",
+            "label": "Bookmark label",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": { "max_length": 120 }
+          },
+          {
+            "id": "fld_landing_zone_tile_description",
+            "key": "description",
+            "label": "Description",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "long_text",
+            "settings": { "max_length": 500 }
+          },
+          {
+            "id": "fld_landing_zone_tile_open_behaviour",
+            "key": "open_behaviour",
+            "label": "Open behaviour",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                { "value": "replace", "label": "Replace current page" },
+                { "value": "new_page", "label": "Open in a new page" }
+              ]
+            },
+            "default": "replace"
+          },
+          {
+            "id": "fld_landing_zone_tile_is_favourite",
+            "key": "is_favourite",
+            "label": "Favourite",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "yes_no",
+            "settings": {},
+            "default": false
+          },
+          {
+            "id": "fld_landing_zone_tile_favourite_order",
+            "key": "favourite_order",
+            "label": "Favourite order",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "decimal_number",
+            "settings": {
+              "digits_before_decimal": 24,
+              "decimal_places": 12
+            }
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "permissions": [
+      {
+        "id": "perm_landing_zone_tile_create",
+        "key": "vortex.landing_zone.tile.create",
+        "label": "Create tile",
+        "description": "Allows creating tiles owned by the current organisation account.",
+        "record_type": "tile",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "ownership" }] },
+        "field_policy": {
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+          "changeable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"]
+        }
+      },
+      {
+        "id": "perm_landing_zone_tile_read",
+        "key": "vortex.landing_zone.tile.read",
+        "label": "Read tile",
+        "description": "Allows reading tiles owned by the current organisation account.",
+        "record_type": "tile",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "ownership" }] },
+        "field_policy": {
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_landing_zone_tile_update",
+        "key": "vortex.landing_zone.tile.update",
+        "label": "Update tile",
+        "description": "Allows updating tiles owned by the current organisation account.",
+        "record_type": "tile",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "ownership" }] },
+        "field_policy": {
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+          "changeable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"]
+        }
+      },
+      {
+        "id": "perm_landing_zone_tile_delete",
+        "key": "vortex.landing_zone.tile.delete",
+        "label": "Delete tile",
+        "description": "Allows deleting tiles owned by the current organisation account.",
+        "record_type": "tile",
+        "action_kind": "delete",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "ownership" }] },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      }
+    ],
+    "actions": [],
+    "events": [],
+    "flows": [],
+    "extension_points": [],
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_landing_zone_tiles",
+        "key": "landing_zone_tiles",
+        "record_type": "tile",
+        "inputs": [],
+        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          { "field": "favourite_order", "direction": "ascending" },
+          { "field": "target_kind", "direction": "ascending" }
+        ],
+        "page_size": 200,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_landing_zone_favourites",
+        "key": "landing_zone_favourites",
+        "record_type": "tile",
+        "inputs": [],
+        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+        "filter": { "field": "is_favourite", "operator": "equals", "value": true },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          { "field": "favourite_order", "direction": "ascending" },
+          { "field": "target_kind", "direction": "ascending" }
+        ],
+        "page_size": 200,
+        "relationship_hops": 0
+      }
+    ]
+  }
+}

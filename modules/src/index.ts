@@ -7,3 +7,4 @@ export * from "./service-desk";
 export * from "./organisation-administration";
 export * from "./operations";
 export * from "./system-directory";
+export * from "./landing-zone";
