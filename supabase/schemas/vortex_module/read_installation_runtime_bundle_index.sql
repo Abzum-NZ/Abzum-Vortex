@@ -58,6 +58,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.read_installation_runtime_bundle_index(uuid,bigint,integer) owner to vortex_module_owner;
+
 revoke all on function vortex_module.read_installation_runtime_bundle_index(
   uuid, bigint, integer
 ) from public, anon, authenticated, service_role, vortex_runtime,

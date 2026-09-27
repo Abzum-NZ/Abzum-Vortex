@@ -293,6 +293,8 @@ exception
 end
 $function$;
 
+alter function vortex_module.write_installation_runtime_bundle_internal(uuid,bigint,integer,text,jsonb) owner to vortex_module_owner;
+
 revoke all on function vortex_module.write_installation_runtime_bundle_internal(
   uuid, bigint, integer, text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime,

@@ -94,6 +94,8 @@ begin
 end
 $function$;
 
+alter function vortex_module.read_installation_runtime_bundle_parts(uuid,bigint,integer,jsonb) owner to vortex_module_owner;
+
 revoke all on function vortex_module.read_installation_runtime_bundle_parts(
   uuid, bigint, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime,
