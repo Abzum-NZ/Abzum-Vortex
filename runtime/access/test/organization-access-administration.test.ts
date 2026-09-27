@@ -321,6 +321,68 @@ describe("organization Access administration", () => {
     expect(calls[0]?.values).toEqual([id(40), 1, "New label", "New description.", id(21)]);
   });
 
+  it("retires a Group without caller-selected affected authority", async () => {
+    const { calls, service } = serviceFor([
+      {
+        outcome: "completed",
+        organization_id: id(2),
+        group_summary: {
+          groupId: id(8),
+          key: "review_group",
+          label: "Review group",
+          state: "retired",
+          revision: "3",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.retireGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), expectedGroupRevision: 2 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { group: { groupId: id(8), state: "retired", revision: 3 }, accessVersion: 8 },
+    });
+    expect(calls[0]?.values).toEqual([id(8), 2, id(21)]);
+  });
+
+  it("removes one exact Group membership and binds the terminal result", async () => {
+    const { calls, service } = serviceFor([
+      {
+        outcome: "completed",
+        organization_id: id(2),
+        membership_summary: {
+          membershipId: id(30),
+          groupId: id(8),
+          organizationAccountId: id(32),
+          accountDisplayName: "Member",
+          revision: "2",
+          startsAt: "2026-09-01T00:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.removeGroupMembership(
+        verifiedSession,
+        { organizationId: id(2) },
+        { membershipId: id(30), expectedMembershipRevision: 1 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        membership: { membershipId: id(30), state: "revoked", revision: 2 },
+        accessVersion: 8,
+      },
+    });
+    expect(calls[0]?.values).toEqual([id(30), 1, id(21)]);
+  });
+
   it("revises role metadata through the single protected operation", async () => {
     const { calls, service } = serviceFor([
       {
