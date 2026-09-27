@@ -112,6 +112,16 @@
   }
 }
 
+/* The two translucent menu choices soften the shell-owned sidebar surface. */
+@layer utilities {
+  :is([data-vortex-menu="default-translucent"], [data-vortex-menu="inverted-translucent"])
+    [data-slot="sidebar"] {
+    background-color: color-mix(in oklab, var(--sidebar) 70%, transparent);
+    -webkit-backdrop-filter: blur(var(--blur-2xl));
+    backdrop-filter: blur(var(--blur-2xl));
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

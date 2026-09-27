@@ -139,8 +139,8 @@ function NavigationList({
               {renderLink(
                 <a href={item.address} rel="noopener noreferrer" />,
                 <>
-                  <span className="underline underline-offset-4">{item.label}</span>
-                  <span className="ms-auto text-xs text-muted-foreground">External</span>
+                  <span className="min-w-0 truncate underline underline-offset-4">{item.label}</span>
+                  <span className="ms-auto shrink-0 text-xs text-muted-foreground">External</span>
                 </>,
                 false,
               )}
