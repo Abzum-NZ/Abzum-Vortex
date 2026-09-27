@@ -13,7 +13,12 @@ import {
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
 import { AuthShell } from "../../../auth/_components/auth-shell";
+import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import {
+  applicationPageAddressPath as addressPath,
+  organizationAddressPath as launcherPath,
+} from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
@@ -43,28 +48,11 @@ type ApplicationAddressPageProps = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-const addressPath = (
-  tenantShortName: string,
-  organizationShortName: string,
-  applicationKey: string,
-  pageKey: string,
-) =>
-  `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(applicationKey)}/${encodeURIComponent(pageKey)}`;
-
-const launcherPath = (tenantShortName: string, organizationShortName: string) =>
-  `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}`;
-
 export default async function ApplicationAddressPage({
   params,
   searchParams,
 }: ApplicationAddressPageProps) {
-  const identity = await resolveIdentitySession();
-  // Every settled non-active result ends the session through the route that clears its cookies. A
-  // bare sign-in redirect would leave a verified token for an inactive or missing identity in place,
-  // and the sign-in page would send it straight back here. Only a temporarily unavailable read keeps
-  // the session and is answered below.
-  if (identity.kind !== "active" && identity.kind !== "temporarily_unavailable")
-    redirect("/auth/session-ended");
+  const identity = continueSessionOrEnd(await resolveIdentitySession());
 
   const { tenantShortName, organizationShortName, applicationAddress } = await params;
   const addressSegments = applicationAddress ?? [];
@@ -79,9 +67,8 @@ export default async function ApplicationAddressPage({
     "use server";
     if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
     const chooser = launcherPath(tenantShortName, organizationShortName);
-    const currentIdentity = await resolveIdentitySession();
+    const currentIdentity = continueSessionOrEnd(await resolveIdentitySession());
     if (currentIdentity.kind === "temporarily_unavailable") redirect(chooser);
-    if (currentIdentity.kind !== "active") redirect("/auth/session-ended");
 
     const rechecked = await resolveApplicationAddress(
       currentIdentity.session,
@@ -108,10 +95,9 @@ export default async function ApplicationAddressPage({
    */
   async function adoptRelease(formData: FormData): Promise<void> {
     "use server";
-    const currentIdentity = await resolveIdentitySession();
+    const currentIdentity = continueSessionOrEnd(await resolveIdentitySession());
     if (currentIdentity.kind === "temporarily_unavailable")
       redirect(launcherPath(tenantShortName, organizationShortName));
-    if (currentIdentity.kind !== "active") redirect("/auth/session-ended");
 
     const applicationKey = String(formData.get("applicationKey") ?? "");
     const pageKey = String(formData.get("pageKey") ?? "");

@@ -12,10 +12,10 @@ type OrganizationPageProps = Readonly<{
 
 export default async function OrganizationPage({ params }: OrganizationPageProps) {
   const identity = await resolveIdentitySession();
-  // Every settled non-active result ends the session through the route that clears its cookies, so
-  // a verified token for an inactive or missing identity cannot loop back through sign-in.
-  if (identity.kind !== "active" && identity.kind !== "temporarily_unavailable")
+  if (identity.kind === "invalid_session_state" || identity.kind === "expired_or_revoked")
     redirect("/auth/session-ended");
+  if (identity.kind === "missing" || identity.kind === "cluster_identity_inactive")
+    redirect("/auth/sign-in?status=session-ended");
   if (identity.kind === "temporarily_unavailable")
     return (
       <AuthShell
