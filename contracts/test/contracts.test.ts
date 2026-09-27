@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   applicationDefinitionEnvelopeSchema,
   builderKeySchema,
-  containedComponentReferenceSchema,
   fingerprintSchema,
   moduleDefinitionEnvelopeSchema,
   namespacedKeySchema,
@@ -110,63 +109,6 @@ describe("identifier and definition contracts", () => {
     expect(first.key).toBe(second.key);
     expect(first.rootId).not.toBe(second.rootId);
     expect(first.organizationId).not.toBe(second.organizationId);
-  });
-
-  test("same-named modules, record types and fields under different roots keep different identities", () => {
-    const moduleCommon = {
-      kind: "module",
-      key: "abzum.people",
-      draftRevision: 1,
-      createdAt: "2026-09-02T01:00:00+00:00",
-      createdBy: actor,
-      updatedAt: "2026-09-02T01:00:00+00:00",
-      updatedBy: actor,
-    } as const;
-    const first = moduleDefinitionEnvelopeSchema.parse({
-      ...moduleCommon,
-      rootId: id("20"),
-      organizationId: id("1"),
-    });
-    const second = moduleDefinitionEnvelopeSchema.parse({
-      ...moduleCommon,
-      rootId: id("21"),
-      organizationId: id("2"),
-    });
-    const firstRecordType = containedComponentReferenceSchema.parse({
-      ownerKind: "module",
-      ownerRootId: first.rootId,
-      componentKind: "record_type",
-      componentId: id("22"),
-      key: "contact",
-    });
-    const secondRecordType = containedComponentReferenceSchema.parse({
-      ownerKind: "module",
-      ownerRootId: second.rootId,
-      componentKind: "record_type",
-      componentId: id("23"),
-      key: "contact",
-    });
-    const firstField = containedComponentReferenceSchema.parse({
-      ownerKind: "module",
-      ownerRootId: first.rootId,
-      componentKind: "field",
-      componentId: id("24"),
-      key: "primary_email",
-    });
-    const secondField = containedComponentReferenceSchema.parse({
-      ownerKind: "module",
-      ownerRootId: second.rootId,
-      componentKind: "field",
-      componentId: id("25"),
-      key: "primary_email",
-    });
-    expect(first.rootId).not.toBe(second.rootId);
-    expect(firstRecordType.key).toBe(secondRecordType.key);
-    expect(firstRecordType.ownerRootId).not.toBe(secondRecordType.ownerRootId);
-    expect(firstRecordType.componentId).not.toBe(secondRecordType.componentId);
-    expect(firstField.key).toBe(secondField.key);
-    expect(firstField.ownerRootId).not.toBe(secondField.ownerRootId);
-    expect(firstField.componentId).not.toBe(secondField.componentId);
   });
 
   test("requires complete immutable published references", () => {

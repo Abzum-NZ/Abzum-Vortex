@@ -1,8 +1,8 @@
 import {
-  moduleFieldV2Schema,
-  recordTypeDefinitionV2Schema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  moduleFieldV3Schema,
+  recordTypeDefinitionV3Schema,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import { deriveEarliestPendingDeadlineTransitionV2 } from "../src";
@@ -23,10 +23,10 @@ const ids = {
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
-): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -44,7 +44,7 @@ const deadline = (
   fieldId: string,
   dueFieldId: string,
   terminalStatusValues: readonly unknown[] = [],
-): ModuleFieldV2 =>
+): ModuleFieldV3 =>
   field(fieldId, `deadline_${fieldId.slice(-2)}`, "calculation", {
     resultType: "yes_no",
     expression: {
@@ -56,8 +56,8 @@ const deadline = (
     dependencyFieldIds: terminalStatusValues.length === 0 ? [dueFieldId] : [dueFieldId, ids.status],
   });
 
-const recordType = (fields: readonly ModuleFieldV2[]): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const recordType = (fields: readonly ModuleFieldV3[]): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: id(100),
     key: "deadlines",
     singularLabel: "Deadline",
@@ -94,7 +94,7 @@ const recordType = (fields: readonly ModuleFieldV2[]): RecordTypeDefinitionV2 =>
   });
 
 const derive = (
-  fields: readonly ModuleFieldV2[],
+  fields: readonly ModuleFieldV3[],
   finalAuthoritativeFieldValues: Readonly<Record<string, unknown>>,
   organizationTimeZone = "Pacific/Auckland",
 ) =>

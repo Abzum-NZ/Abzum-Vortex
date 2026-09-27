@@ -42,4 +42,4 @@ Assignment-change commands distinguish granting a new exact reviewed role from r
 
 Role-change candidates distinguish editing local details from explicitly accepting permissions. Canonical preparation binds the exact proposed operation and any affected-assignment review; it does not read current authority or grant access. Current-source verification, complete-set comparison, atomic storage and protected caller checks remain separate requirements. Neither a candidate fingerprint nor a successful schema parse completes the governed IAM journey.
 
-The repository retains `pnpm test`, `pnpm fixtures` and `pnpm verify` as tooling references. They are not completion gates for the current development fleet; follow [agent coordination](../docs/build-plan/agent-coordination.md).
+The repository retains `pnpm test` and `pnpm verify` as tooling references. They are not completion gates for the current development fleet; follow [agent coordination](../docs/build-plan/agent-coordination.md).

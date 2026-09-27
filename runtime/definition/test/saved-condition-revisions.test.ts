@@ -1,11 +1,14 @@
-import type { PublishedModuleDefinition, SavedSharingCondition } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import {
   createSavedConditionRevisionFold,
   deriveSavedConditionRevisions,
   foldSavedConditionRelease,
+  type SavedConditionLike,
+  type SavedConditionRevisionInput,
 } from "../src/saved-condition-revisions";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
+
+type ModuleRelease = SavedConditionRevisionInput["history"][number];
 
 const rootId = "10000000-0000-4000-a000-000000000001";
 const condition = (
@@ -13,7 +16,7 @@ const condition = (
   publishedRevision: number,
   key = "eligible",
   declaredFieldIds: string[] = [],
-): SavedSharingCondition =>
+): SavedConditionLike =>
   ({
     conditionId,
     sourceRecordTypeId: "10000000-0000-4000-a000-000000000010",
@@ -24,21 +27,21 @@ const condition = (
     condition: { operator: "and", operands: [] },
     declaredFieldIds,
     publicationTests: [{ name: "accepts", parameters: {}, fieldValues: {}, expected: true }],
-  }) as SavedSharingCondition;
+  }) as SavedConditionLike;
 
 const release = (
   revision: number,
-  conditions: SavedSharingCondition[],
+  conditions: SavedConditionLike[],
   releaseRootId = rootId,
-): PublishedModuleDefinition =>
+): ModuleRelease =>
   ({
     publication: { rootId: releaseRootId, revision },
     content: { sharingConditions: conditions },
     dependencyManifest: [],
     releaseNote: "test",
-  }) as unknown as PublishedModuleDefinition;
+  }) as ModuleRelease;
 
-const derive = (conditions: SavedSharingCondition[], history: PublishedModuleDefinition[] = []) =>
+const derive = (conditions: SavedConditionLike[], history: ModuleRelease[] = []) =>
   deriveSavedConditionRevisions({ rootId, conditions, history });
 
 const expectCode = (operation: () => unknown, code: DefinitionVersionImpactError["code"]) => {
@@ -55,7 +58,7 @@ describe("saved sharing-condition revision derivation", () => {
   const id = "10000000-0000-4000-a000-000000000020";
 
   it("starts at one and performs no history writes", () => {
-    const history: PublishedModuleDefinition[] = [];
+    const history: ModuleRelease[] = [];
     expect(derive([condition(id, 99)], history)).toEqual([{ conditionId: id, revision: 1 }]);
     expect(history).toEqual([]);
   });
