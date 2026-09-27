@@ -232,7 +232,8 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
   bindingsRef.current = eventBindings;
 
   const payloadSignature = useMemo(
-    () => canonicalJson({ values: mappedValues, themeTokens: tokens }),
+    // JSON.stringify orders integer-like keys before other keys in the existing signature.
+    () => JSON.stringify(JSON.parse(canonicalJson({ values: mappedValues, themeTokens: tokens }))),
     [mappedValues, tokens],
   );
 
