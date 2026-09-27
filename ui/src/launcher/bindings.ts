@@ -326,12 +326,14 @@ export function applicationLauncherQueryRowsToListValues(
       fail(`Duplicate launcher application key '${applicationKey}'`, rowLocation);
     seen.add(identity);
 
-    const name = row.cells[headingKey];
-    if (name?.kind !== "text")
-      fail("A launcher query row requires its projected name cell", rowLocation);
-    const icon = row.cells[secondaryKey];
-    if (icon?.kind !== "text")
-      fail("A launcher query row requires its projected icon cell", rowLocation);
+    const projectedName = row.cells[headingKey];
+    const name = projectedName?.kind === "text"
+      ? projectedName
+      : fail("A launcher query row requires its projected name cell", rowLocation);
+    const projectedIcon = row.cells[secondaryKey];
+    const icon = projectedIcon?.kind === "text"
+      ? projectedIcon
+      : fail("A launcher query row requires its projected icon cell", rowLocation);
     displayRows.push(
       Object.freeze({
         recordId: applicationKey,
