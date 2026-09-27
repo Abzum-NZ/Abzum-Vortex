@@ -17,6 +17,7 @@ declare
   scope_row record;
   settings_row record;
   settings_default_application_root_id uuid;
+  settings_extension_values jsonb;
 begin
   -- The projection keeps today's row visibility inside itself: the same fixed
   -- runtime-settings read decision the bespoke reader applies decides whether
@@ -46,14 +47,15 @@ begin
   if p_record_id is not null and p_record_id <> settings_row.organization_id then
     return;
   end if;
-  select settings.default_application_root_id into settings_default_application_root_id
+  select settings.default_application_root_id, settings.extension_values
+  into settings_default_application_root_id, settings_extension_values
   from vortex_identity.organization_runtime_settings as settings
   where settings.organization_id = settings_row.organization_id;
   return query select
     settings_row.organization_id,
     settings_row.organization_id,
     settings_row.revision,
-    pg_catalog.jsonb_build_object(
+    coalesce(settings_extension_values, '{}'::jsonb) || pg_catalog.jsonb_build_object(
       'language', settings_row.language,
       'time_zone', settings_row.time_zone,
       'currency', settings_row.currency,
