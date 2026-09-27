@@ -1,10 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { getIdentityJourneyConfiguration } from "../_lib/authority-configuration";
 import {
   identitySessionCookieDeletions,
   identitySessionCookieProfile,
 } from "../_lib/session-cookie";
 import { requestMatchesConfiguredSite } from "../_lib/session-request-state";
+import { revokeIdentitySession } from "../_lib/session-server";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
 
@@ -38,6 +39,19 @@ export function GET(request: NextRequest): NextResponse {
       response.cookies.set(mutation.name, mutation.value, mutation.options);
   } catch {
     // A fixed safe redirect remains available when configuration is invalid.
+    return response;
+  }
+
+  // Attempt to revoke this browser's provider refresh token after the redirect is sent, so a slow
+  // or unreachable provider never delays or fails local sign-out. The attempt is limited to this
+  // browser's own session:
+  // a request another site triggers can do no more than the cookie clearing above already does,
+  // which is to sign this browser out.
+  const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
+  try {
+    after(() => revokeIdentitySession(sessionCookies).then(() => undefined));
+  } catch {
+    // Outside a request scope nothing can be scheduled; the cookies are still cleared.
   }
   return response;
 }

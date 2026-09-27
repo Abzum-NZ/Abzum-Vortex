@@ -38,6 +38,18 @@ export const flowContractVersion = "1.0.0" as const;
 /** Closed limits from the architecture decisions, exported so one number governs every consumer. */
 export const flowMaximumTaskCount = 100;
 export const flowMaximumTaskNestingDepth = 5;
+/** A task output may select a bounded sequence of named fields from a JSON output. */
+export const flowMaximumTaskOutputPathDepth = 5;
+
+/** The declared type of one JSON object member when its literal shape is known. */
+export const flowJsonMemberType = (
+  value: JsonValue,
+): "text" | "yes_no" | "whole_number" | "decimal_number" | "json" => {
+  if (typeof value === "string") return "text";
+  if (typeof value === "boolean") return "yes_no";
+  if (typeof value === "number") return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
+  return "json";
+};
 export const flowMaximumForEachItemsDurable = 1_000;
 export const flowMaximumForEachItemsOther = 100;
 export const flowMaximumRunFlowDepth = 3;
@@ -90,7 +102,8 @@ const boundedRecord = <Value extends z.ZodType>(value: Value, maximum: number) =
 
 /**
  * A reference resolved to its typed form. Names are declared builder keys; nothing here is ever
- * evaluated as text. `{{ outputs.task.outcome }}` is a task output whose key is `outcome`.
+ * evaluated as text. `{{ outputs.task.outcome }}` is a task output whose key is `outcome`; a
+ * bounded suffix such as `{{ outputs.form.values.label }}` selects named fields from a JSON output.
  */
 export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("input"), name: builderKeySchema }).strict(),
@@ -98,7 +111,12 @@ export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("trigger_record"), field: builderKeySchema }).strict(),
   z.object({ source: z.literal("trigger_previous"), field: builderKeySchema }).strict(),
   z
-    .object({ source: z.literal("task_output"), task: builderKeySchema, key: builderKeySchema })
+    .object({
+      source: z.literal("task_output"),
+      task: builderKeySchema,
+      key: builderKeySchema,
+      path: z.array(builderKeySchema).min(1).max(flowMaximumTaskOutputPathDepth).optional(),
+    })
     .strict(),
   z.object({ source: z.literal("execution_actor") }).strict(),
   z.object({ source: z.literal("execution_now") }).strict(),
@@ -111,7 +129,9 @@ const referencePatterns = {
   variable: new RegExp(`^\\{\\{\\s*vars\\.${referenceName}\\s*\\}\\}$`),
   triggerRecord: new RegExp(`^\\{\\{\\s*trigger\\.record\\.${referenceName}\\s*\\}\\}$`),
   triggerPrevious: new RegExp(`^\\{\\{\\s*trigger\\.previous\\.${referenceName}\\s*\\}\\}$`),
-  taskOutput: new RegExp(`^\\{\\{\\s*outputs\\.${referenceName}\\.${referenceName}\\s*\\}\\}$`),
+  taskOutput: new RegExp(
+    `^\\{\\{\\s*outputs\\.${referenceName}\\.${referenceName}((?:\\.${referenceName})*)\\s*\\}\\}$`,
+  ),
   executionActor: /^\{\{\s*execution\.actor\s*\}\}$/,
   executionNow: /^\{\{\s*execution\.now\s*\}\}$/,
 } as const;
@@ -130,9 +150,16 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
     reference = { source: "trigger_record", field: match[1]! };
   else if ((match = referencePatterns.triggerPrevious.exec(text)))
     reference = { source: "trigger_previous", field: match[1]! };
-  else if ((match = referencePatterns.taskOutput.exec(text)))
-    reference = { source: "task_output", task: match[1]!, key: match[2]! };
-  else if (referencePatterns.executionActor.test(text)) reference = { source: "execution_actor" };
+  else if ((match = referencePatterns.taskOutput.exec(text))) {
+    const path = match[3] === "" ? undefined : match[3]!.slice(1).split(".");
+    reference = {
+      source: "task_output",
+      task: match[1]!,
+      key: match[2]!,
+      ...(path === undefined ? {} : { path }),
+    };
+  } else if (referencePatterns.executionActor.test(text))
+    reference = { source: "execution_actor" };
   else if (referencePatterns.executionNow.test(text)) reference = { source: "execution_now" };
   return reference !== undefined && flowReferenceObjectSchema.safeParse(reference).success
     ? reference
@@ -151,7 +178,9 @@ export const formatFlowReference = (reference: FlowReference): string => {
     case "trigger_previous":
       return `{{ trigger.previous.${reference.field} }}`;
     case "task_output":
-      return `{{ outputs.${reference.task}.${reference.key} }}`;
+      return `{{ outputs.${reference.task}.${reference.key}${
+        reference.path === undefined ? "" : `.${reference.path.join(".")}`
+      } }}`;
     case "execution_actor":
       return "{{ execution.actor }}";
     case "execution_now":
@@ -165,7 +194,7 @@ const referenceTextSchema = z.string().transform((text, context) => {
     context.addIssue({
       code: "custom",
       message:
-        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ execution.actor }} or {{ execution.now }}; text is never evaluated",
+        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }} or {{ execution.now }}; text is never evaluated",
     });
     return z.NEVER;
   }
