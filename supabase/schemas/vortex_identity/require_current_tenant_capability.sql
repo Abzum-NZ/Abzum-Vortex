@@ -31,7 +31,10 @@ begin
             and assignment.revoked_at is null
             and assignment.starts_at <= p_evaluated_at
             and (assignment.expires_at is null or assignment.expires_at > p_evaluated_at)
-            and p_capability_key = any(assignment.capability_keys)
+            and (
+              p_capability_key = any(assignment.capability_keys)
+              or p_capability_key = 'platform.tenant.capability_limits.read'
+            )
         )
       )
   ) then
@@ -46,4 +49,4 @@ revoke all on function vortex_identity.require_current_tenant_capability(uuid, u
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 comment on function vortex_identity.require_current_tenant_capability(uuid, uuid, text, timestamptz) is
-  'Requires one current tenant capability or the independent active Vortex super-administrator assignment.';
+  'Requires one current tenant capability, the default capability-limits read permission for an active tenant administrator, or the independent active Vortex super-administrator assignment.';
