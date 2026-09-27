@@ -351,7 +351,8 @@ const CalendarItemButton = ({
   showTime: boolean;
 }>): ReactElement => {
   const label = item.title.trim() || "Untitled item";
-  const time = showTime ? itemTime(item.start, timeZone) : "";
+  const startTime = itemTime(item.start, timeZone);
+  const time = showTime ? startTime : "";
   const content = (
     <>
       {time === "" ? null : <span className="mr-1 text-muted-foreground">{time}</span>}
@@ -365,7 +366,7 @@ const CalendarItemButton = ({
       type="button"
       variant="ghost"
       className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-xs"
-      aria-label={`Open ${label}${time === "" ? "" : ` at ${time}`}`}
+      aria-label={`Open ${label}${startTime === "" ? "" : ` at ${startTime}`}`}
       onClick={() => events.row_action?.({ event: "row_action", recordId: item.recordId })}
     >
       {content}
