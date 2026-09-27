@@ -497,7 +497,7 @@ export const parseChoiceInputPayload = (
   if (record.optionEvidence !== undefined) {
     const parsed = referenceChoiceSelectionEvidenceMapSchema.safeParse(record.optionEvidence);
     if (!parsed.success || options === undefined)
-      fail("Choice option evidence must map projected options to Query page evidence", location);
+      return fail("Choice option evidence must map projected options to Query page evidence", location);
     if (
       options.some((option) => !Object.hasOwn(parsed.data, option.key)) ||
       Object.keys(parsed.data).some((key) => !options.some((option) => option.key === key))

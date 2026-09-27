@@ -186,9 +186,9 @@ export const applicationHasAuthoredForm = (
     const composition = page.composition;
     if (!isRecord(composition)) continue;
     if ("main" in composition) visitSlot(composition.main);
-    if (isRecord(composition.content))
+    if ("content" in composition && isRecord(composition.content))
       for (const slot of Object.values(composition.content)) visitSlot(slot);
-    if (isRecord(composition.stepContent))
+    if ("stepContent" in composition && isRecord(composition.stepContent))
       for (const slot of Object.values(composition.stepContent)) visitSlot(slot);
   }
   for (const shell of application.shells) visitSlot(shell.layout);
