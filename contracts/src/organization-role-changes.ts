@@ -22,7 +22,6 @@ import {
   roleSchema,
 } from "./organization-access-catalogue";
 
-const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 const normalizedUuid = (value: string): string => value.toLowerCase();
 const representsSameInstant = (left: string, right: string): boolean =>
   Date.parse(left) === Date.parse(right);
@@ -70,7 +69,7 @@ const roleChangePermissionSetSchema = z
 export const organizationRoleNewActivationPolicySchema = z
   .object({
     activationPolicyId: roleActivationPolicyIdSchema,
-    revision: javascriptSafeRevisionSchema,
+    revision: revisionSchema,
     maximumActivationDurationSeconds: z
       .number()
       .finite()
@@ -122,7 +121,7 @@ const roleIdentityFields = {
 const currentTemplateFields = {
   preparedTemplates: preparedApplicationRoleTemplatesSchema,
   sourceRoleId: roleIdSchema,
-  templateContinuityRevision: javascriptSafeRevisionSchema,
+  templateContinuityRevision: revisionSchema,
   permissions: roleChangePermissionSetSchema,
 };
 
@@ -155,7 +154,7 @@ export const organizationRoleChangeCandidateSchema = z.discriminatedUnion("opera
     .object({
       operation: z.literal("revise_metadata_policy"),
       ...roleIdentityFields,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
       ...roleConfigurationFields,
     })
     .strict(),
@@ -163,7 +162,7 @@ export const organizationRoleChangeCandidateSchema = z.discriminatedUnion("opera
     .object({
       operation: z.literal("revise_custom_permissions"),
       ...roleIdentityFields,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
       ...roleConfigurationFields,
       permissions: roleChangePermissionSetSchema,
     })
@@ -172,7 +171,7 @@ export const organizationRoleChangeCandidateSchema = z.discriminatedUnion("opera
     .object({
       operation: z.literal("accept_application_role_revision"),
       ...roleIdentityFields,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
       ...roleConfigurationFields,
       ...currentTemplateFields,
     })
@@ -181,7 +180,7 @@ export const organizationRoleChangeCandidateSchema = z.discriminatedUnion("opera
     .object({
       operation: z.literal("retire_role"),
       ...roleIdentityFields,
-      expectedRoleRevision: javascriptSafeRevisionSchema,
+      expectedRoleRevision: revisionSchema,
     })
     .strict(),
 ]);
@@ -428,7 +427,7 @@ export const organizationRoleChangeResultSchema = z
     ]),
     role: roleSchema,
     createdActivationPolicy: roleActivationPolicyRevisionSchema.optional(),
-    accessVersion: javascriptSafeRevisionSchema,
+    accessVersion: revisionSchema,
     correlationId: correlationIdSchema,
   })
   .strict()

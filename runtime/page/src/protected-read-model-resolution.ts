@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  unavailableResult,
   protectedReadModelBindingV2Schema,
   protectedReadModelDeclarations,
   protectedReadModelPageRequestSchema,
@@ -135,7 +136,6 @@ export type ProtectedReadModelResolution =
   | Readonly<{ kind: "unavailable" }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
-const unavailable = Object.freeze({ kind: "unavailable" as const });
 
 const fromOwner = <Value>(
   model: ProtectedReadModelKey,
@@ -144,7 +144,7 @@ const fromOwner = <Value>(
   result.kind === "available"
     ? { kind: "available", model, value: result.value }
     : result.kind === "temporarily_unavailable"
-      ? unavailable
+      ? unavailableResult
       : refused;
 
 export const createProtectedReadModelResolver = (readers: ProtectedReadModelReaders) => ({
@@ -299,7 +299,7 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
         }
       }
     } catch {
-      return unavailable;
+      return unavailableResult;
     }
   },
 });

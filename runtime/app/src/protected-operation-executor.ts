@@ -31,6 +31,13 @@ import {
   suspendOrganizationAccountCommandSchema,
   suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
+  duplicateProtectionKeySchema,
+  flowTaskRegistry,
+  workflowNodeIdSchema,
+  workflowRunIdSchema,
+  workflowIdSchema,
+  organizationIdSchema,
+  revisionSchema,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -45,10 +52,14 @@ import {
   type TenantId,
 } from "@vortex/contracts";
 import type {
+  createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
   createOrganizationRuntimeSettingsAdministrationService,
   HumanOrganizationRequestResult,
 } from "@vortex/access";
+import { verifiedDurableActorContextSchema } from "@vortex/access";
+import type { DurableActorRequestScope } from "@vortex/access";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 
 /**
@@ -95,6 +106,13 @@ export type ProtectedOperationExecutionRequest = Readonly<{
   effectKey?: ProtectedOperationEffectKey;
 }>;
 
+/** A durable callback names a published operation and its verified run context, never a session. */
+export type DurableProtectedOperationExecutionRequest = Readonly<{
+  operation: ProtectedOperationIdentity;
+  actorContext: unknown;
+  inputs: Readonly<Record<string, unknown>>;
+}>;
+
 /** A value a descriptor can declare for an input or output of a registered operation. */
 export type ProtectedOperationValue = JsonValue;
 
@@ -105,6 +123,25 @@ export type ProtectedOperationExecution =
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
     }>
   | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
+
+const durableActorOperationPurposeSchema = z
+  .object({
+    runId: workflowRunIdSchema,
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
+    workflowId: workflowIdSchema,
+    workflowRevision: revisionSchema,
+    nodeId: workflowNodeIdSchema,
+    attempt: z.number().int().positive(),
+    operationKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+    duplicateProtectionKey: duplicateProtectionKeySchema,
+  })
+  .passthrough();
+
+const durableActorOperationContextSchema = verifiedDurableActorContextSchema.extend({
+  purpose: durableActorOperationPurposeSchema,
+});
 
 type Inputs = Readonly<Record<string, ProtectedOperationValue | undefined>>;
 type Outputs = Readonly<Record<string, ProtectedOperationValue | null | undefined>>;
@@ -129,7 +166,7 @@ type TenantGovernanceRequestScope = Readonly<{
   operations: TenantGovernanceOperations;
 }>;
 
-export type ProtectedOperationExecutorDependencies = Readonly<{
+type ProtectedOperationServices = Readonly<{
   accessAdministration: Pick<
     ReturnType<typeof createOrganizationAccessAdministrationService>,
     | "createGroup"
@@ -166,6 +203,16 @@ export type ProtectedOperationExecutorDependencies = Readonly<{
       operation: (scope: TenantGovernanceRequestScope) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>>;
   }>;
+}>;
+
+export type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
+  /** Services bound to the actor's one request transaction and resolved scope. */
+  durableOperations?: (
+    transaction: RequestDatabaseTransaction,
+    scope: DurableActorRequestScope,
+  ) => ProtectedOperationServices;
+  /** The #663 Access boundary used to re-resolve the durable run actor and current grants. */
+  durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
 }>;
 
 type ProtectedOperationCaller = Readonly<{
@@ -893,59 +940,153 @@ const declaredOutputs = (
 
 export const createProtectedOperationExecutor = (
   dependencies: ProtectedOperationExecutorDependencies,
-) =>
-  Object.freeze({
+) => {
+  const executeWith = async (
+    services: ProtectedOperationServices,
+    request: ProtectedOperationExecutionRequest,
+  ): Promise<ProtectedOperationExecution> => {
+    try {
+      const identity = protectedOperationIdentitySchema.safeParse(request.operation);
+      const session = identitySessionSchema.safeParse(request.session);
+      const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
+      if (!identity.success || !session.success || !selection.success)
+        return { outcome: "refused" };
+      const registered = findPlatformServiceOperation(
+        identity.data.serviceId,
+        identity.data.operationId,
+        identity.data.releaseVersion,
+      );
+      if (registered === undefined) return { outcome: "refused" };
+      const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
+      if (
+        registeredOperation === undefined ||
+        registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
+      )
+        return { outcome: "refused" };
+      if (
+        typeof request.inputs !== "object" ||
+        request.inputs === null ||
+        Array.isArray(request.inputs)
+      )
+        return { outcome: "validation" };
+      const inputs = declaredInputs(registered.descriptor, request.inputs);
+      if (inputs === undefined) return { outcome: "validation" };
+
+      const result = await registeredOperation.execute(
+        services,
+        {
+          session: session.data,
+          selection: selection.data,
+          ...(request.effectKey === undefined ? {} : { effectKey: request.effectKey }),
+        },
+        inputs,
+      );
+      if (result === "validation") return { outcome: "validation" };
+      if (result === "conflict") return { outcome: "conflict" };
+      if (result.kind === "unavailable") return { outcome: "refused" };
+      if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
+      const outputs = declaredOutputs(registered.descriptor, result.value);
+      return outputs === undefined ? { outcome: "failed" } : { outcome: "committed", outputs };
+    } catch {
+      return { outcome: "failed" };
+    }
+  };
+  const execute = (request: ProtectedOperationExecutionRequest): Promise<ProtectedOperationExecution> =>
+    executeWith(dependencies, request);
+
+  return Object.freeze({
     /**
      * Runs one registered protected operation as the initiator. It never throws: every failure is
      * one of the safe results, and only a committed result carries outputs.
      */
-    async execute(request: ProtectedOperationExecutionRequest): Promise<ProtectedOperationExecution> {
+    execute,
+
+    /**
+     * Runs a registered platform-service operation from one verified durable actor context. The
+     * context is re-resolved through #663 before the operation, and a durable callback never gets
+     * to provide an IdentitySession or an organisation selection. Platform-service operations
+     * remain person-owned; a system actor is refused rather than converted into a person.
+     */
+    async executeDurableActor<Result>(
+      request: DurableProtectedOperationExecutionRequest & Readonly<{
+        effect: (
+          transaction: RequestDatabaseTransaction,
+          executeOperation: () => Promise<ProtectedOperationExecution>,
+        ) => Promise<Result>;
+      }>,
+    ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
       try {
+        const durableActorRequest = dependencies.durableActorRequest;
+        const durableOperations = dependencies.durableOperations;
+        const context = durableActorOperationContextSchema.safeParse(request.actorContext);
         const identity = protectedOperationIdentitySchema.safeParse(request.operation);
-        const session = identitySessionSchema.safeParse(request.session);
-        const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
-        if (!identity.success || !session.success || !selection.success)
-          return { outcome: "refused" };
+        if (!durableActorRequest || !durableOperations || !context.success || !identity.success)
+          return { kind: "refused" };
+        const operationCallKey =
+          flowTaskRegistry["operation.call"].protectedOperationKey ??
+          "workflow.task.operation.call";
+        if (context.data.purpose.operationKey !== operationCallKey)
+          return { kind: "refused" };
+
         const registered = findPlatformServiceOperation(
           identity.data.serviceId,
           identity.data.operationId,
           identity.data.releaseVersion,
         );
-        if (registered === undefined) return { outcome: "refused" };
+        if (registered === undefined) return { kind: "refused" };
         const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
         if (
           registeredOperation === undefined ||
           registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
         )
-          return { outcome: "refused" };
-        if (
-          typeof request.inputs !== "object" ||
-          request.inputs === null ||
-          Array.isArray(request.inputs)
-        )
-          return { outcome: "validation" };
-        const inputs = declaredInputs(registered.descriptor, request.inputs);
-        if (inputs === undefined) return { outcome: "validation" };
+          return { kind: "refused" };
 
-        const result = await registeredOperation.execute(
-          dependencies,
-          {
-            session: session.data,
-            selection: selection.data,
-            ...(request.effectKey === undefined ? {} : { effectKey: request.effectKey }),
+        const actorResolution = await durableActorRequest.run(
+          context.data,
+          async (transaction, scope) => {
+            const policy = context.data.policy;
+            if (policy.kind !== "initiating_person" ||
+                scope.actor.kind !== "organization_account" ||
+                scope.actor.organizationAccountId.toLowerCase() !==
+                  policy.initiator.organizationAccountId.toLowerCase())
+              throw Object.assign(new Error("DURABLE_OPERATION_ACTOR_MISMATCH"), { code: "42501" });
+            const session = identitySessionSchema.parse({
+              identityId: policy.initiator.identityId,
+              sessionId: context.data.purpose.runId,
+              authenticationStrength: "single_factor",
+              accessTokenIssuedAt: context.data.issuedAt,
+              accessTokenExpiresAt: context.data.expiresAt,
+            });
+            const selection = organizationSelectionCandidateSchema.parse({
+              organizationId: scope.organizationId,
+              applicationRootId: scope.applicationRootId,
+            });
+            let called = false;
+            return request.effect(transaction, () => {
+              if (called) throw new Error("DURABLE_OPERATION_REPEATED");
+              called = true;
+              return executeWith(durableOperations(transaction, scope), {
+                operation: identity.data,
+                session,
+                selection,
+                inputs: request.inputs,
+                effectKey: {
+                  runId: context.data.purpose.runId,
+                  taskPath: context.data.purpose.nodeId,
+                  iteration: context.data.purpose.duplicateProtectionKey,
+                },
+              });
+            });
           },
-          inputs,
         );
-        if (result === "validation") return { outcome: "validation" };
-        if (result === "conflict") return { outcome: "conflict" };
-        if (result.kind === "unavailable") return { outcome: "refused" };
-        if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
-        const outputs = declaredOutputs(registered.descriptor, result.value);
-        return outputs === undefined ? { outcome: "failed" } : { outcome: "committed", outputs };
+        if (actorResolution.kind === "unavailable") return { kind: "refused" };
+        if (actorResolution.kind === "temporarily_unavailable") return { kind: "failed" };
+        return { kind: "available", value: actorResolution.value };
       } catch {
-        return { outcome: "failed" };
+        return { kind: "failed" };
       }
     },
   });
+};
 
 export type ProtectedOperationExecutor = ReturnType<typeof createProtectedOperationExecutor>;

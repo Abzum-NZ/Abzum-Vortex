@@ -2,7 +2,9 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
+  sameId,
   applicationRootIdSchema,
+  canonicalJson,
   correlationIdSchema,
   identityIdSchema,
   organizationAccountIdSchema,
@@ -36,8 +38,8 @@ import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
  * - The retained run is trusted server state read by the caller: the exact run,
  *   its organisation, application, installed release, workflow revision, run-as
  *   policy and the node-to-operation map of that release. The envelope must
- *   match it field for field. An unknown, terminal, withdrawn or mismatched run
- *   refuses before an effect.
+ *   match it field for field. An unknown or mismatched run refuses before an
+ *   effect. A terminal run may only replay a previously recorded safe response.
  * - `initiating_person` yields the retained initiator, which the Access step
  *   re-resolves against current account state before every protected step.
  *   `system_with_source_authority` yields no actor at all: the effective system
@@ -99,8 +101,7 @@ export const retainedRunAuthoritySchema = z
       .min(1)
       .max(100)
       .refine(
-        (nodes) =>
-          new Set(nodes.map((node) => node.nodeId.toLowerCase())).size === nodes.length,
+        (nodes) => new Set(nodes.map((node) => node.nodeId.toLowerCase())).size === nodes.length,
         { message: "Each node of the retained release appears once" },
       ),
   })
@@ -184,16 +185,9 @@ export type DurableActorContextDependencies = Readonly<{
   clock?: () => Date;
   /** The correlation identifier of this attempt; an invalid value refuses. */
   correlationId: () => string;
+  /** Only a caller that reads a completed effect before any new work may use this. */
+  permitTerminalForReplay?: boolean;
 }>;
-
-const canonicalJson = (value: unknown): string => {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, member]) => member !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return `{${entries.map(([key, member]) => `${JSON.stringify(key)}:${canonicalJson(member)}`).join(",")}}`;
-};
 
 /**
  * The exact bytes an envelope proof covers: every envelope field except the
@@ -218,8 +212,6 @@ const proofMatches = (presented: string, expected: string): boolean => {
   const right = Buffer.from(expected, "utf8");
   return left.length === right.length && timingSafeEqual(left, right);
 };
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const refused = (reason: DurableActorRefusalReason): DurableActorContextResolution => ({
   outcome: "refused",
@@ -274,7 +266,8 @@ export const resolveDurableActorContext = (
     envelope.data.workflowRevision !== retained.workflowRevision
   )
     return refused("run_mismatch");
-  if (retained.state !== "running") return refused("run_not_active");
+  if (retained.state !== "running" && dependencies.permitTerminalForReplay !== true)
+    return refused("run_not_active");
 
   const node = retained.nodes.find((candidate) => sameId(candidate.nodeId, envelope.data.nodeId));
   if (node === undefined) return refused("node_unknown");

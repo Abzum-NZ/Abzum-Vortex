@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { canonicalJson } from "@vortex/contracts";
 
 /**
  * Explicit adoption planning for installed module extensions.
@@ -29,8 +30,7 @@ import { createHash } from "node:crypto";
 
 export const moduleExtensionUpgradeErrorCodes = ["MODULE_EXTENSION_UPGRADE_INPUT_INVALID"] as const;
 
-export type ModuleExtensionUpgradeErrorCode =
-  (typeof moduleExtensionUpgradeErrorCodes)[number];
+export type ModuleExtensionUpgradeErrorCode = (typeof moduleExtensionUpgradeErrorCodes)[number];
 
 /** Unusable caller evidence, which is never a compatibility verdict. */
 export class ModuleExtensionUpgradeError extends Error {
@@ -165,8 +165,7 @@ export const moduleExtensionUpgradeRefusalCodes = [
   "contributed_identity_claimed",
 ] as const;
 
-export type ModuleExtensionUpgradeRefusalCode =
-  (typeof moduleExtensionUpgradeRefusalCodes)[number];
+export type ModuleExtensionUpgradeRefusalCode = (typeof moduleExtensionUpgradeRefusalCodes)[number];
 
 /**
  * One refusal, addressed only by permanent builder-visible identities. It
@@ -234,33 +233,18 @@ export type ModuleExtensionUpgradeRefusal = Readonly<{
 }>;
 
 export type ModuleExtensionUpgradeOutcome =
-  | ModuleExtensionUpgradePlan
-  | ModuleExtensionUpgradeRefusal;
+  ModuleExtensionUpgradePlan | ModuleExtensionUpgradeRefusal;
 
 const compareStrings = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
-const isFilled = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0;
+const isFilled = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 
 // A function declaration, not an arrow constant, so a bare `invalidInput();`
 // statement narrows the evidence checked before it.
 function invalidInput(): never {
   throw new ModuleExtensionUpgradeError("MODULE_EXTENSION_UPGRADE_INPUT_INVALID");
 }
-
-/** Deterministic JSON with sorted object keys, matching the platform's canonical form. */
-const canonicalJson = (value: unknown): string => {
-  if (value === undefined) return "null";
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => compareStrings(left, right));
-  return `{${entries
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-    .join(",")}}`;
-};
 
 const fingerprint = (value: unknown): `sha256:${string}` =>
   `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
@@ -339,8 +323,7 @@ const lowerBoundOf = (segments: readonly number[]): StableVersion =>
 /** The first version above a partial version, or undefined when it is unconstrained. */
 const upperBoundOf = (segments: readonly number[]): StableVersion | undefined => {
   if (segments.length === 0) return undefined;
-  if (segments.length === 1)
-    return Object.freeze([(segments[0] ?? 0) + 1, 0, 0]) as StableVersion;
+  if (segments.length === 1) return Object.freeze([(segments[0] ?? 0) + 1, 0, 0]) as StableVersion;
   return Object.freeze([segments[0] ?? 0, (segments[1] ?? 0) + 1, 0]) as StableVersion;
 };
 
@@ -412,12 +395,13 @@ const comparatorAccepts = (candidate: StableVersion, comparator: RangeComparator
 const rangeAccepts = (expression: string, candidate: string): RequirementVerdict => {
   const version = stableVersion(candidate);
   if (version === undefined) return "unassessable";
-  const alternatives = expression
-    .replace(/(>=|<=|>|<|=|\^|~)\s+(?=[0-9xX*])/g, "$1")
-    .split("||");
+  const alternatives = expression.replace(/(>=|<=|>|<|=|\^|~)\s+(?=[0-9xX*])/g, "$1").split("||");
   let assessable = true;
   for (const alternative of alternatives) {
-    const tokens = alternative.trim().split(/\s+/).filter((token) => token.length > 0);
+    const tokens = alternative
+      .trim()
+      .split(/\s+/)
+      .filter((token) => token.length > 0);
     if (tokens.length === 0) return "satisfied";
     const comparators: RangeComparator[] = [];
     for (const token of tokens) {
@@ -897,11 +881,7 @@ export const planModuleExtensionUpgrade = (
 
     if (binding.kind === "field") {
       if (
-        !contributionFieldExists(
-          nextContributor.content,
-          binding.recordTypeId,
-          binding.fieldId,
-        )
+        !contributionFieldExists(nextContributor.content, binding.recordTypeId, binding.fieldId)
       ) {
         refuseBinding(
           contributionIdentityIsAction(nextContributor.content, binding.contributionId)
@@ -987,10 +967,7 @@ export const planModuleExtensionUpgrade = (
         toReleaseVersion: null,
       }),
     );
-  const transitions = sortedBy(
-    [...arriving, ...leaving],
-    (transition) => transition.moduleRootId,
-  );
+  const transitions = sortedBy([...arriving, ...leaving], (transition) => transition.moduleRootId);
 
   if (refusals.length === 0) {
     const plan = {

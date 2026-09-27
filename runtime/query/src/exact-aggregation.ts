@@ -4,6 +4,7 @@ import {
   compareExactDecimals,
   formatExactDecimal,
   parseExactDecimal,
+  powerOfTen,
   type ExactDecimal,
   type JsonValue,
 } from "@vortex/contracts";
@@ -34,8 +35,6 @@ export const aggregateSupportsFieldType = (operation: Operation, type: FieldType
   return summableTypes.has(type);
 };
 
-const powerOfTen = (exponent: number): bigint => 10n ** BigInt(exponent);
-
 /** Canonical exact text for coefficient × 10^-scale, without a JavaScript number. */
 const scaledText = (coefficient: bigint, scale: number): string => {
   const negative = coefficient < 0n;
@@ -46,7 +45,9 @@ const scaledText = (coefficient: bigint, scale: number): string => {
   return formatExactDecimal(parsed);
 };
 
-const exactSum = (values: readonly ExactDecimal[]): Readonly<{ coefficient: bigint; scale: number }> => {
+const exactSum = (
+  values: readonly ExactDecimal[],
+): Readonly<{ coefficient: bigint; scale: number }> => {
   let scale = 0;
   for (const value of values) if (value.scale > scale) scale = value.scale;
   let coefficient = 0n;
@@ -65,7 +66,10 @@ const exactAverage = (values: readonly ExactDecimal[], decimalPlaces: number): s
   return scaledText(sum.coefficient < 0n ? -quotient : quotient, decimalPlaces);
 };
 
-const exactExtreme = (values: readonly ExactDecimal[], operation: "minimum" | "maximum"): number => {
+const exactExtreme = (
+  values: readonly ExactDecimal[],
+  operation: "minimum" | "maximum",
+): number => {
   let chosen = 0;
   for (let index = 1; index < values.length; index += 1) {
     const order = compareExactDecimals(values[index]!, values[chosen]!);
@@ -80,7 +84,8 @@ const exact = (text: string): ExactDecimal => {
   return parsed;
 };
 
-const codeUnitOrder = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
+const codeUnitOrder = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 /** Date-times order by instant; equal instants order by their text so the result is stable. */
 const dateTimeOrder = (left: string, right: string): number => {
@@ -88,10 +93,7 @@ const dateTimeOrder = (left: string, right: string): number => {
   return difference < 0 ? -1 : difference > 0 ? 1 : codeUnitOrder(left, right);
 };
 
-const numericResult = (
-  values: readonly ExactDecimal[],
-  aggregate: AggregateDescriptor,
-): string => {
+const numericResult = (values: readonly ExactDecimal[], aggregate: AggregateDescriptor): string => {
   if (aggregate.operation === "sum") {
     const sum = exactSum(values);
     return scaledText(sum.coefficient, sum.scale);
@@ -120,7 +122,8 @@ const computeAggregate = (
     if (value !== undefined && value !== null) present.push(value);
   }
   const valueCount = present.length;
-  if (aggregate.operation === "count") return { outcome: "completed", value: valueCount, valueCount };
+  if (aggregate.operation === "count")
+    return { outcome: "completed", value: valueCount, valueCount };
   if (valueCount === 0) return { outcome: "completed", value: null, valueCount };
 
   switch (fieldType) {
@@ -131,7 +134,11 @@ const computeAggregate = (
         return { outcome: "refused", reasonCode: "mixed_currency" };
       const amounts = money.map((value) => exact(value.amount));
       if (aggregate.operation === "minimum" || aggregate.operation === "maximum")
-        return { outcome: "completed", value: money[exactExtreme(amounts, aggregate.operation)]!, valueCount };
+        return {
+          outcome: "completed",
+          value: money[exactExtreme(amounts, aggregate.operation)]!,
+          valueCount,
+        };
       return {
         outcome: "completed",
         value: { amount: numericResult(amounts, aggregate), currency },
@@ -143,14 +150,22 @@ const computeAggregate = (
       // Safe integers print as plain base-10 text, so this is exact.
       const values = numbers.map((value) => exact(String(value)));
       if (aggregate.operation === "minimum" || aggregate.operation === "maximum")
-        return { outcome: "completed", value: numbers[exactExtreme(values, aggregate.operation)]!, valueCount };
+        return {
+          outcome: "completed",
+          value: numbers[exactExtreme(values, aggregate.operation)]!,
+          valueCount,
+        };
       return { outcome: "completed", value: numericResult(values, aggregate), valueCount };
     }
     case "decimal_number": {
       const texts = present as readonly string[];
       const values = texts.map(exact);
       if (aggregate.operation === "minimum" || aggregate.operation === "maximum")
-        return { outcome: "completed", value: texts[exactExtreme(values, aggregate.operation)]!, valueCount };
+        return {
+          outcome: "completed",
+          value: texts[exactExtreme(values, aggregate.operation)]!,
+          valueCount,
+        };
       return { outcome: "completed", value: numericResult(values, aggregate), valueCount };
     }
     case "date":

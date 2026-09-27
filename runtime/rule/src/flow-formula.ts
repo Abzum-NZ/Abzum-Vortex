@@ -2,6 +2,7 @@ import {
   compareExactDecimals,
   formatExactDecimal,
   parseExactDecimal,
+  powerOfTen,
   type ExactDecimal,
   type FlowDateUnit,
   type FlowFormula,
@@ -41,8 +42,6 @@ const textTypes = new Set(["text", "formatted_text", "choice"]);
 const value = (type: string, content: JsonValue): FlowRuntimeValue => ({ type, value: content });
 const yesNo = (content: boolean) => value("yes_no", content);
 
-const powerOfTen = (exponent: number): bigint => 10n ** BigInt(exponent);
-
 const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
   if (candidate.type === "whole_number")
     return typeof candidate.value === "number" && Number.isSafeInteger(candidate.value)
@@ -54,7 +53,11 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
 const absolute = (input: bigint): bigint => (input < 0n ? -input : input);
 
 /** Divides exactly, then rounds the quotient to a whole number in the declared mode. */
-const roundedQuotient = (numerator: bigint, denominator: bigint, mode: FlowRoundingMode): bigint => {
+const roundedQuotient = (
+  numerator: bigint,
+  denominator: bigint,
+  mode: FlowRoundingMode,
+): bigint => {
   if (denominator === 0n) throw new RangeError("division by zero");
   const negative = numerator < 0n !== denominator < 0n;
   const top = absolute(numerator);
@@ -97,11 +100,6 @@ const rescale = (coefficient: bigint, from: number, to: number, mode: FlowRoundi
     ? coefficient * powerOfTen(to - from)
     : roundedQuotient(coefficient, powerOfTen(from - to), mode);
 
-const decimalText = (coefficient: bigint, scale: number): string => {
-  const text = formatExactDecimal({ coefficient, scale } as ExactDecimal);
-  return text;
-};
-
 const resultType = (operands: readonly FlowRuntimeValue[]): string =>
   operands.some((operand) => operand.type === "money") ? "money" : "decimal_number";
 
@@ -137,7 +135,10 @@ const arithmetic = (
     }
     const scaled = rescale(coefficient, currentScale, scale, mode);
     if (absolute(scaled) >= powerOfTen(maximumDecimalDigits)) return undefined;
-    return value(resultType(operands), decimalText(scaled, scale));
+    return value(
+      resultType(operands),
+      formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal),
+    );
   } catch {
     return undefined;
   }
