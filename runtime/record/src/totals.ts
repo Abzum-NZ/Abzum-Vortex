@@ -3,35 +3,25 @@ import {
   moneyValueV2Schema,
   recordTypeDefinitionV3Schema,
   type ConditionNode,
+  type FlowFormula,
   type JsonValue,
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
-import { evaluateTypedConditionV2 } from "@vortex/rule";
-import {
-  addRationals,
-  compareRationals,
-  divideRationals,
-  rationalFromExactText,
-  rationalFromWholeNumber,
-  rationalToExactText,
-  rationalToSafeWholeNumber,
-  roundRationalHalfEven,
-  type ExactRational,
-} from "./exact-arithmetic";
+import { compareFlowText, evaluateFlowFormula, evaluateTypedConditionV2 } from "@vortex/rule";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
-type TotalFieldV2 = Extract<ModuleFieldV3, { type: "total" }>;
+type TotalField = Extract<ModuleFieldV3, { type: "total" }>;
 
-export type RecordRelationshipTotalSourceV2 = Readonly<{
+export type RecordRelationshipTotalSource = Readonly<{
   relationshipId: string;
   sourceRecordType: RecordTypeDefinitionV3;
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[];
 }>;
 
-export type EvaluateRecordTotalsV2Input = Readonly<{
+export type EvaluateRecordTotalsInput = Readonly<{
   recordType: RecordTypeDefinitionV3;
-  relationshipSources: readonly RecordRelationshipTotalSourceV2[];
+  relationshipSources: readonly RecordRelationshipTotalSource[];
 }>;
 
 export type RecordTotalIssueCode =
@@ -53,7 +43,7 @@ export type RecordTotalIssue = Readonly<{
   currencyCodes?: readonly string[];
 }>;
 
-export type EvaluateRecordTotalsV2Result =
+export type EvaluateRecordTotalsResult =
   | Readonly<{
       success: true;
       setValues: Readonly<Record<string, JsonValue>>;
@@ -69,11 +59,6 @@ type ParsedRelationshipSource = Readonly<{
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[];
 }>;
 
-type NumericValue = Readonly<{
-  amount: ExactRational;
-  currency?: string;
-}>;
-
 const issue = (
   code: RecordTotalIssueCode,
   fieldId?: string,
@@ -86,13 +71,40 @@ const issue = (
   ...(currencyCodes === undefined ? {} : { currencyCodes }),
 });
 
-const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+const isValueMap = (candidate: unknown): candidate is Readonly<Record<string, unknown>> =>
+  candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
 
 const fieldResultType = (field: ModuleFieldV3 | undefined): string | undefined =>
   field?.type === "calculation" || field?.type === "total"
     ? field.settings.resultType
     : field?.type;
+
+const formulaTypeOf = (field: ModuleFieldV3): string => {
+  const type = fieldResultType(field);
+  switch (type) {
+    case "yes_no":
+      return "yes_no";
+    case "long_text":
+    case "reference_number":
+    case "email_address":
+    case "phone_number":
+    case "web_address":
+      return "text";
+    case "link":
+    case "link_to_one_of_several":
+      return "record_reference";
+    case "link_to_person":
+      return "organization_account_reference";
+    case "table":
+    case "attachment":
+      return "json";
+    default:
+      return type ?? "json";
+  }
+};
+
+const literal = (type: string, value: JsonValue): FlowFormula =>
+  ({ op: "literal", type, value }) as unknown as FlowFormula;
 
 const conditionFieldIds = (condition: ConditionNode): string[] => {
   const result: string[] = [];
@@ -113,72 +125,19 @@ const conditionFieldIds = (condition: ConditionNode): string[] => {
   return result;
 };
 
-const codePointCompare = (left: string, right: string): number => {
-  const leftPoints = [...left].map((entry) => entry.codePointAt(0)!);
-  const rightPoints = [...right].map((entry) => entry.codePointAt(0)!);
-  const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    const difference = leftPoints[index]! - rightPoints[index]!;
-    if (difference !== 0) return difference;
-  }
-  return leftPoints.length - rightPoints.length;
+const currenciesOf = (field: ModuleFieldV3, values: readonly JsonValue[]): string[] => {
+  if (fieldResultType(field) !== "money") return [];
+  return [
+    ...new Set(
+      values.flatMap((value) => {
+        const parsed = moneyValueV2Schema.safeParse(value);
+        return parsed.success ? [parsed.data.currency] : [];
+      }),
+    ),
+  ].sort(compareFlowText);
 };
 
-const instantParts = (value: unknown): { seconds: number; fraction: string } | undefined => {
-  if (typeof value !== "string") return undefined;
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (!match) return undefined;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  const second = Number(match[6]);
-  if (hour > 23 || minute > 59 || second > 59) return undefined;
-  const local = new Date(0);
-  local.setUTCHours(hour, minute, second, 0);
-  local.setUTCFullYear(year, month - 1, day);
-  if (
-    local.getUTCFullYear() !== year ||
-    local.getUTCMonth() !== month - 1 ||
-    local.getUTCDate() !== day
-  )
-    return undefined;
-  const zone = match[8]!;
-  let offsetMinutes = 0;
-  if (zone !== "Z") {
-    const offsetHours = Number(zone.slice(1, 3));
-    const offsetRemainder = Number(zone.slice(4, 6));
-    if (offsetHours > 23 || offsetRemainder > 59) return undefined;
-    offsetMinutes = (offsetHours * 60 + offsetRemainder) * (zone[0] === "+" ? 1 : -1);
-  }
-  return {
-    seconds: local.getTime() / 1_000 - offsetMinutes * 60,
-    fraction: match[7] ?? "",
-  };
-};
-
-const numericValue = (field: ModuleFieldV3, value: JsonValue): NumericValue | undefined => {
-  const type = fieldResultType(field);
-  if (type === "whole_number") {
-    const amount = rationalFromWholeNumber(value);
-    return amount === undefined ? undefined : { amount };
-  }
-  if (type === "decimal_number") {
-    const amount = rationalFromExactText(value);
-    return amount === undefined ? undefined : { amount };
-  }
-  if (type === "money") {
-    const parsed = moneyValueV2Schema.safeParse(value);
-    if (!parsed.success) return undefined;
-    const amount = rationalFromExactText(parsed.data.amount);
-    return amount === undefined ? undefined : { amount, currency: parsed.data.currency };
-  }
-  return undefined;
-};
-
-const sourceCompatible = (field: TotalFieldV2, sourceField: ModuleFieldV3 | undefined): boolean => {
+const sourceCompatible = (field: TotalField, sourceField: ModuleFieldV3 | undefined): boolean => {
   const sourceType = fieldResultType(sourceField);
   if (field.settings.operation === "count") return sourceField === undefined;
   if (sourceField === undefined) return false;
@@ -214,50 +173,14 @@ const relationshipReaches = (
   );
 };
 
-const compareValues = (
-  resultType: TotalFieldV2["settings"]["resultType"],
-  left: JsonValue,
-  right: JsonValue,
-  sourceField: ModuleFieldV3,
-): number | undefined => {
-  if (resultType === "whole_number" || resultType === "decimal_number") {
-    const leftNumber = numericValue(sourceField, left);
-    const rightNumber = numericValue(sourceField, right);
-    return leftNumber && rightNumber
-      ? compareRationals(leftNumber.amount, rightNumber.amount)
-      : undefined;
-  }
-  if (resultType === "money") {
-    const leftMoney = numericValue(sourceField, left);
-    const rightMoney = numericValue(sourceField, right);
-    return leftMoney && rightMoney
-      ? compareRationals(leftMoney.amount, rightMoney.amount)
-      : undefined;
-  }
-  if (resultType === "yes_no")
-    return typeof left === "boolean" && typeof right === "boolean"
-      ? Number(left) - Number(right)
-      : undefined;
-  if (resultType === "date_time") {
-    const leftInstant = instantParts(left);
-    const rightInstant = instantParts(right);
-    if (leftInstant === undefined || rightInstant === undefined) return undefined;
-    const secondsOrder = leftInstant.seconds - rightInstant.seconds;
-    if (secondsOrder !== 0) return secondsOrder;
-    const precision = Math.max(leftInstant.fraction.length, rightInstant.fraction.length);
-    const fractionOrder = codePointCompare(
-      leftInstant.fraction.padEnd(precision, "0"),
-      rightInstant.fraction.padEnd(precision, "0"),
-    );
-    return fractionOrder || codePointCompare(left as string, right as string);
-  }
-  return typeof left === "string" && typeof right === "string"
-    ? codePointCompare(left, right)
-    : undefined;
-};
+const evaluateFormula = (formula: FlowFormula) =>
+  evaluateFlowFormula(formula, {
+    now: "1970-01-01T00:00:00.000Z",
+    reference: () => undefined,
+  });
 
 const totalResult = (
-  field: TotalFieldV2,
+  field: TotalField,
   sourceField: ModuleFieldV3 | undefined,
   values: readonly JsonValue[],
 ): Readonly<{ value?: JsonValue; issue?: RecordTotalIssue }> => {
@@ -273,14 +196,11 @@ const totalResult = (
       : { value: { amount: "0", currency: field.settings.currency } };
   }
 
-  const numericValues = values.map((value) => numericValue(sourceField, value));
-  if (["sum", "average"].includes(operation) && numericValues.some((value) => !value))
-    return { issue: issue("invalid_source_value", field.fieldId) };
-  const currencies = [
-    ...new Set(numericValues.flatMap((value) => (value?.currency ? [value.currency] : []))),
-  ].sort(codePointCompare);
+  const currencies = currenciesOf(sourceField, values);
   if (resultType === "money" && currencies.length > 1)
-    return { issue: issue("mixed_currency", field.fieldId, ["relationshipSources"], currencies) };
+    return {
+      issue: issue("mixed_currency", field.fieldId, ["relationshipSources"], currencies),
+    };
   if (
     resultType === "money" &&
     field.settings.currency !== undefined &&
@@ -288,54 +208,76 @@ const totalResult = (
   )
     return { issue: issue("money_dimension_mismatch", field.fieldId) };
 
-  if (operation === "sum" || operation === "average") {
-    const parsed = numericValues as NumericValue[];
-    const sum = parsed
-      .slice(1)
-      .reduce((current, value) => addRationals(current, value.amount), parsed[0]!.amount);
-    const result =
-      operation === "average"
-        ? divideRationals(sum, rationalFromWholeNumber(parsed.length)!)!
-        : sum;
-    if (resultType === "whole_number") {
-      const whole = rationalToSafeWholeNumber(result);
-      return whole === undefined
-        ? { issue: issue("non_integral_whole_number", field.fieldId) }
-        : { value: whole };
+  const sourceType = formulaTypeOf(sourceField);
+  const operands = values.map((value) => literal(sourceType, value));
+  if (operation === "minimum" || operation === "maximum") {
+    let selected = values[0]!;
+    for (const candidate of values.slice(1)) {
+      const comparison = evaluateFormula({
+        op: operation === "minimum" ? "lt" : "gt",
+        left: literal(sourceType, candidate),
+        right: literal(sourceType, selected),
+      });
+      if (comparison?.type !== "yes_no" || typeof comparison.value !== "boolean")
+        return { issue: issue("invalid_source_value", field.fieldId) };
+      if (comparison.value) selected = candidate;
     }
-    const amount =
-      operation === "average"
-        ? roundRationalHalfEven(result, field.settings.decimalPlaces!)
-        : rationalToExactText(result);
-    if (amount === undefined) return { issue: issue("invalid_result", field.fieldId) };
-    return resultType === "money"
-      ? { value: { amount, currency: currencies[0]! } }
-      : { value: amount };
+    return { value: selected };
   }
 
-  let selected: JsonValue = values[0]!;
-  for (const value of values.slice(1)) {
-    const comparison = compareValues(resultType, selected, value, sourceField);
-    if (comparison === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
-    if ((operation === "minimum" && comparison > 0) || (operation === "maximum" && comparison < 0))
-      selected = value;
+  const sourcePrecision =
+    18;
+  let sum = evaluateFormula(operands[0]!);
+  if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
+  for (const operand of operands.slice(1)) {
+    sum = evaluateFormula({
+      op: "add",
+      args: [literal(sum.type, sum.value), operand],
+      scale: sourcePrecision,
+      rounding: "half_even",
+    });
+    if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
   }
-  return { value: selected };
+  if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
+  const evaluated =
+    operation === "average"
+      ? evaluateFormula({
+          op: "divide",
+          args: [literal(sum.type, sum.value), literal("whole_number", values.length)],
+          scale: field.settings.decimalPlaces!,
+          rounding: "half_even",
+        })
+      : sum;
+  if (evaluated === undefined) {
+    return {
+      issue:
+        resultType === "whole_number"
+          ? issue("non_integral_whole_number", field.fieldId)
+          : issue("invalid_result", field.fieldId),
+    };
+  }
+  if (resultType === "whole_number") {
+    const whole = Number(evaluated.value);
+    return Number.isSafeInteger(whole)
+      ? { value: whole }
+      : { issue: issue("non_integral_whole_number", field.fieldId) };
+  }
+  return { value: evaluated.value };
 };
 
 /**
- * Evaluates canonical Module V2 totals over supplied related values. It performs
- * no reads, writes, access checks or authoritative-source selection.
+ * Aggregates authoritative related values through the shared flow formula evaluator.
+ * It performs no reads, writes, access checks or authoritative-source selection.
  */
-export const evaluateRecordTotalsV2 = (
-  input: EvaluateRecordTotalsV2Input,
-): EvaluateRecordTotalsV2Result => {
+export const evaluateRecordTotals = (
+  input: EvaluateRecordTotalsInput,
+): EvaluateRecordTotalsResult => {
   const parsedTarget = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   if (!parsedTarget.success || !Array.isArray(input.relationshipSources))
     return { success: false, issues: [issue("invalid_input")] };
 
   const target = parsedTarget.data;
-  const totals = target.fields.filter((field): field is TotalFieldV2 => field.type === "total");
+  const totals = target.fields.filter((field): field is TotalField => field.type === "total");
   const requiredRelationships = new Set(totals.map((field) => field.settings.relationshipId));
   const sources = new Map<string, ParsedRelationshipSource>();
   for (const [sourceIndex, candidate] of input.relationshipSources.entries()) {
