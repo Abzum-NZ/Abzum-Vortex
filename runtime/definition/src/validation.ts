@@ -1,6 +1,7 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  calendarMappingSchema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
   readRecordDetailContract,
@@ -3659,6 +3660,99 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        const block = object(placement.block);
+        const blockKey = registeredBlockReleases.get(
+          `${String(block.blockId)}:${String(block.releaseVersion)}`,
+        )?.key;
+        if (blockKey === "platform.display.calendar") {
+          const settingFieldId = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "field_reference" && typeof property.fieldId === "string"
+              ? property.fieldId
+              : undefined;
+          };
+          const settingChoice = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "choice" && typeof property.value === "string"
+              ? property.value
+              : undefined;
+          };
+          const mappingProperties = object(object(settings.calendar_mapping).properties);
+          const mappingKind = settingChoice(mappingProperties.kind);
+          const startFieldId = settingFieldId(mappingProperties.start_field);
+          const endFieldId = settingFieldId(mappingProperties.end_field);
+          const durationFieldId = settingFieldId(mappingProperties.duration_field);
+          const durationUnit = settingChoice(mappingProperties.duration_unit);
+          const mappingCandidate =
+            mappingKind === "start_end" &&
+            startFieldId !== undefined &&
+            endFieldId !== undefined &&
+            durationFieldId === undefined &&
+            durationUnit === undefined
+              ? { kind: mappingKind, startFieldId, endFieldId }
+              : mappingKind === "start_duration" &&
+                  startFieldId !== undefined &&
+                  endFieldId === undefined &&
+                  durationFieldId !== undefined &&
+                  durationUnit !== undefined
+                ? { kind: mappingKind, startFieldId, durationFieldId, durationUnit }
+                : undefined;
+          const mapping = calendarMappingSchema.safeParse(mappingCandidate);
+          const itemTitleFieldId = settingFieldId(settings.item_title_field);
+          const queryRecordType = records.get(String(object(bound.recordType).recordTypeId));
+          const fieldById = new Map(
+            array(queryRecordType?.fields).map((field) => [
+              String(field.fieldId).toLowerCase(),
+              field,
+            ]),
+          );
+          const selectedFieldIds = new Set(
+            array(bound.selectedFieldIds).map((fieldId) => String(fieldId).toLowerCase()),
+          );
+          let calendarMappingValid = false;
+          if (mapping.success && itemTitleFieldId !== undefined && queryRecordType !== undefined) {
+            const startField = fieldById.get(mapping.data.startFieldId.toLowerCase());
+            const titleField = fieldById.get(itemTitleFieldId.toLowerCase());
+            const dateType = startField?.type;
+            const dateFields =
+              mapping.data.kind === "start_end"
+                ? [startField, fieldById.get(mapping.data.endFieldId.toLowerCase())]
+                : [startField];
+            const durationField =
+              mapping.data.kind === "start_duration"
+                ? fieldById.get(mapping.data.durationFieldId.toLowerCase())
+                : undefined;
+            const durationValid =
+              mapping.data.kind !== "start_duration" ||
+              ((dateType === "date_time" ||
+                (dateType === "date" && mapping.data.durationUnit === "days")) &&
+                durationField?.type === "whole_number");
+            const mappedFieldIds = [
+              mapping.data.startFieldId,
+              ...(mapping.data.kind === "start_end"
+                ? [mapping.data.endFieldId]
+                : [mapping.data.durationFieldId]),
+              itemTitleFieldId,
+            ];
+            calendarMappingValid =
+              (dateType === "date" || dateType === "date_time") &&
+              dateFields.every(
+                (field) =>
+                  field !== undefined &&
+                  field.type === dateType &&
+                  field.filterable === true,
+              ) &&
+              durationValid &&
+              titleField !== undefined &&
+              mappedFieldIds.every((fieldId) =>
+                selectedFieldIds.has(fieldId.toLowerCase()),
+              );
+          }
+          if (!calendarMappingValid)
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
         if (table === undefined && detail === undefined) continue;
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
