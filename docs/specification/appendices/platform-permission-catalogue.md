@@ -13,7 +13,7 @@ Organisation Administration owns the 14 permissions that protect its system reco
 These decisions were recorded on 27 September 2026 and define the declaration and registration design:
 
 1. Keep `ownerKind = platform` and owner `cabe121e-0baf-4084-9471-cce915d460a8`. Move only the authoring location. Record the owning system module as metadata. Keep all permission identities and meaning fingerprints unchanged.
-2. Add `pinnedPermissionId` for a declared permission's permanent identity. Accept it only in platform system-module sources.
+2. Add `pinnedPermissionId` for a declared permission's permanent identity. Accept it only in platform system-module declaration sources, including the declaration-only system core.
 3. Keep permissions without a system record type in the platform system core declaration: connections, security, support and builder permissions.
 4. Register platform permissions from declared data when an organisation is created, independently of module installation.
 5. Seed a declaration table through a migration and have one generic registration function read it. Do not keep catalogue JSON in SQL function bodies.
@@ -31,11 +31,11 @@ The declaration sources and aggregate used by runtime packages are:
 | Aggregate platform permission declarations consumed by runtime packages | `modules/src/platform-permissions.ts` in `@vortex/modules` |
 | Permission declaration schema only | `contracts/src/permissions.ts` in `@vortex/contracts` |
 
-`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/modules`. The `pinnedPermissionId` field preserves an existing permanent ID in platform system-module sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
+`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/modules`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
 
 `sha256:809b4b3ad29ff61ab5ea73c06504909540b8111a2b3c2e1310559a7e9dc2e31e`
 
-At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. Revisions 1-6 remain immutable history; revision 7 is the first revision registered from the seeded declarations. The SQL registration functions do not embed catalogue JSON.
+At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. Revisions 1-6 remain immutable history; revision 7 is the first revision registered from the seeded declarations. The revision 7 registration function must not embed catalogue JSON.
 
 ### Steward minimum and guard
 
