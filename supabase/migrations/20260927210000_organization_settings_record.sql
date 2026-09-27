@@ -431,6 +431,9 @@ comment on function vortex_access.save_organization_settings_record_for_administ
 ) is
   'Protected organisation settings record writer requiring runtime-settings.manage and an exact current revision; the request organisation supplies the singleton identity and extensions are merged with the invariant settings in one transaction.';
 
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_record(
@@ -1332,6 +1335,9 @@ comment on function vortex_record.save_organization_settings_record(
 ) is
   'Closed Record save writer for the organisation_settings system projection: rechecks its installed definition, delegates protected settings authorization and persistence to Access, and records one receipt, Activity and Event.';
 
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
 
 commit;
