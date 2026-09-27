@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent, type ReactElement } from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import { Button } from "../components/button";
 import { Calendar } from "../components/calendar";
 import { Field, FieldLabel } from "../components/field";
@@ -105,7 +105,7 @@ export function DateInput(props: DateInputProps): ReactElement {
             render={<Button variant="outline" size="icon" />}
             disabled={pickerUnavailable}
           >
-            <CalendarIcon aria-hidden="true" />
+            <Icon name="calendar" aria-hidden="true" />
             <span className="sr-only">
               {"Choose date"}
               {chosenDay === undefined ? null : (

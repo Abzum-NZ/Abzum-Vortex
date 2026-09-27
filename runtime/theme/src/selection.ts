@@ -6,6 +6,7 @@ import {
   applicationThemeSelectionV2Schema,
   findShadcnFont,
   findShadcnThemeCatalogueOption,
+  isShadcnIconLibrary,
   isShadcnThemeCatalogueBaseRelease,
   resolveShadcnFontSelection,
   shadcnFontFamilyKey,
@@ -138,6 +139,13 @@ const checkSelectionOptions = (
         dimension,
       });
   }
+  if (selection.iconLibrary !== undefined && !isShadcnIconLibrary(selection.iconLibrary))
+    addFailure({
+      code: "UNKNOWN_THEME_OPTION",
+      family: "invalid_value",
+      message: `Theme selection names unknown iconLibrary option "${selection.iconLibrary}"`,
+      dimension: "iconLibrary",
+    });
   if (selection.bodyFont !== undefined && findShadcnFont(selection.bodyFont) === undefined)
     addFailure({
       code: "UNKNOWN_THEME_OPTION",

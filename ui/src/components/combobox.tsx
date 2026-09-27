@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
-import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import { Icon } from "../icons/icon";
 import { Button } from "./button";
 import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
@@ -56,7 +56,7 @@ function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Prop
       className={cn("cn-combobox-trigger cn-input-group-button cn-input-group-button-size-icon-xs", className)}
       {...props}
     >
-      <ChevronDownIcon className="cn-combobox-trigger-icon" />
+      <Icon name="chevron-down" className="cn-combobox-trigger-icon" />
     </ComboboxPrimitive.Trigger>
   );
 }
@@ -69,7 +69,7 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
       className={cn("cn-combobox-clear cn-input-group-button cn-input-group-button-size-icon-xs", className)}
       {...props}
     >
-      <XIcon className="cn-combobox-clear-icon" />
+      <Icon name="close" className="cn-combobox-clear-icon" />
     </ComboboxPrimitive.Clear>
   );
 }
@@ -149,7 +149,7 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
       <ComboboxPrimitive.ItemIndicator
         render={<span className="cn-combobox-item-indicator" />}
       >
-        <CheckIcon className="cn-combobox-item-indicator-icon" />
+        <Icon name="check" className="cn-combobox-item-indicator-icon" />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>
   );

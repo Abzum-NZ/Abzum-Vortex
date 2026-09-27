@@ -1771,11 +1771,14 @@ export const themeCatalogueOptionIdSchema = z
  * resolves the selected options into the complete token set and the style id, refusing an unknown
  * id, a refused option or a missing dimension.
  *
+ * The icon library (#1278) names one of the shadcn/create icon libraries
+ * (contracts/src/shadcn-icon-libraries.ts). It is optional so selections recorded before the icon
+ * catalogue keep their meaning: an absent icon library is the catalogue default.
+ *
  * The body and heading fonts (#1277) name fonts of the shadcn/create font catalogue
  * (contracts/src/shadcn-font-catalogue.ts); the heading font may also be `inherit`, which paints
  * headings in the body font. They are optional so selections recorded before the font catalogue
- * keep their meaning: an absent font is the catalogue's default. The icon library is a separate
- * dimension owned by #1278.
+ * keep their meaning: an absent font is the catalogue's default.
  */
 export const applicationThemeSelectionV2Schema = z
   .object({
@@ -1786,6 +1789,7 @@ export const applicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menuColor: themeCatalogueOptionIdSchema,
     menuAccent: themeCatalogueOptionIdSchema,
+    iconLibrary: themeCatalogueOptionIdSchema.optional(),
     bodyFont: themeCatalogueOptionIdSchema.optional(),
     headingFont: themeCatalogueOptionIdSchema.optional(),
   })
@@ -1805,6 +1809,7 @@ export const sourceApplicationThemeSelectionV2Schema = z
     radius: themeCatalogueOptionIdSchema,
     menu_color: themeCatalogueOptionIdSchema,
     menu_accent: themeCatalogueOptionIdSchema,
+    icon_library: themeCatalogueOptionIdSchema.optional(),
     body_font: themeCatalogueOptionIdSchema.optional(),
     heading_font: themeCatalogueOptionIdSchema.optional(),
   })
@@ -1824,6 +1829,7 @@ export const canonicalApplicationThemeSelectionV2 = (
   radius: source.radius,
   menuColor: source.menu_color,
   menuAccent: source.menu_accent,
+  ...(source.icon_library === undefined ? {} : { iconLibrary: source.icon_library }),
   ...(source.body_font === undefined ? {} : { bodyFont: source.body_font }),
   ...(source.heading_font === undefined ? {} : { headingFont: source.heading_font }),
 });
