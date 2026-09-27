@@ -431,8 +431,6 @@ comment on function vortex_access.save_organization_settings_record_for_administ
 ) is
   'Protected organisation settings record writer requiring runtime-settings.manage and an exact current revision; the request organisation supplies the singleton identity and extensions are merged with the invariant settings in one transaction.';
 
-set local role vortex_record_adapter;
-
 create or replace function vortex_record.organization_settings_readable_field_ids_internal(
   p_record_type_id uuid,
   p_decision jsonb,
@@ -654,6 +652,8 @@ comment on function vortex_record.organization_settings_readable_field_ids_inter
   uuid, jsonb, jsonb
 ) is
   'Adds an explicit list of declared extension fields to the current reader only for the organisation settings system projection and its exact read permission; every other projection and every undeclared key keeps its existing bounds.';
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_record(
   p_record_type_id uuid,
