@@ -37,6 +37,7 @@ import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/re
 import type { RuntimeDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import {
   createFlowBindingEndpoint,
@@ -131,23 +132,22 @@ const declaresPausedNode = (
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
-    const declaredLength = Number(request.headers.get("content-length") ?? 0);
-    if (declaredLength > maximumRequestBodyLength) return privateResponse({ kind: "refused" }, 413);
-    const text = await request.text();
-    if (text.length > maximumRequestBodyLength) return privateResponse({ kind: "refused" }, 413);
+    const identity = await resolveIdentitySession();
+    if (identity.kind === "temporarily_unavailable")
+      return privateResponse({ kind: "unavailable" }, 503);
+    if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
+
+    const read = await readBoundedRequestText(request, maximumRequestBodyLength);
+    if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
+    if (read.kind === "unreadable") return refusedResponse();
     let parsedBody: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
     try {
-      parsedBody = requestSchema.safeParse(JSON.parse(text));
+      parsedBody = requestSchema.safeParse(JSON.parse(read.text));
     } catch {
       return refusedResponse();
     }
     if (!parsedBody.success) return refusedResponse();
     const body = parsedBody.data;
-
-    const identity = await resolveIdentitySession();
-    if (identity.kind === "temporarily_unavailable")
-      return privateResponse({ kind: "unavailable" }, 503);
-    if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
 
     const address = await resolveApplicationAddress(
       identity.session,
