@@ -22,8 +22,9 @@ const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string
  * Browser-safe launcher tile surface, one shadcn Card per application. It renders only the
  * declared name and icon cells of a closed launcher list (see the launcher bindings); it never
  * fetches, queries or resolves a destination. The open control shows only while the declared
- * `row_action` is bound and invocable. Tile activation emits the declared `row_action` with the
- * application's key, and destination safety remains the server recheck's decision. An enclosing
+ * `row_action` is bound and invocable. Tile activation emits only the row identity: query-bound
+ * application rows use the application key, and the organisation launcher uses the stable root
+ * identity. The addressed application page rechecks either value before opening. An enclosing
  * view filter can only hide rows it already received.
  */
 export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {

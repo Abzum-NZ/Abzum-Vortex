@@ -252,8 +252,8 @@ export function parsePermittedApplicationsLauncherProjection(
 /**
  * Projects an available permitted-applications read into the closed `list` display values the
  * organisation-address `application_launcher` consumes. The row action identity is the
- * application key, and only its name and icon cells are populated, so no page set, projection
- * identity or authority leaks out. Unavailable reads are the caller's own state and never become
+ * application's stable root identity, and only its name and icon cells are populated, so no page
+ * set or authority leaks out. Unavailable reads are the caller's own state and never become
  * launcher rows.
  */
 export function permittedApplicationsToListValues(
@@ -264,7 +264,7 @@ export function permittedApplicationsToListValues(
       name: Object.freeze({ kind: "text", text: application.name }),
       icon: Object.freeze({ kind: "text", text: application.icon }),
     };
-    return Object.freeze({ recordId: application.key, cells: Object.freeze(cells) });
+    return Object.freeze({ recordId: application.applicationRootId, cells: Object.freeze(cells) });
   });
   return Object.freeze({
     kind: "list",

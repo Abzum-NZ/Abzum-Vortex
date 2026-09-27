@@ -58,10 +58,11 @@ export default async function ApplicationAddressPage({
   const addressSegments = applicationAddress ?? [];
 
   /**
-   * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
-   * the application's key; this server action re-resolves the signed-in person's current permitted
-   * applications at this address and opens the matching one, so a withdrawn or refused application
-   * is never opened from stale page data or a crafted key.
+   * Tile activation is the launcher block's declared `row_action` event. A query-bound tile sends
+   * only its application key; the existing organisation launcher may send the application's stable
+   * identity. This server action resolves either identity against the signed-in person's current
+   * permitted applications before opening it, so a withdrawn or refused application is never
+   * opened from stale page data or a crafted value.
    */
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
@@ -77,7 +78,8 @@ export default async function ApplicationAddressPage({
     );
     if (rechecked.kind !== "organization_launcher") redirect(chooser);
     const application = rechecked.read.applications.find(
-      (candidate) => candidate.key === event.recordId,
+      (candidate) =>
+        candidate.key === event.recordId || candidate.applicationRootId === event.recordId,
     );
     if (application === undefined) redirect(chooser);
     redirect(
