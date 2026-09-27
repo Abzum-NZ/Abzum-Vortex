@@ -20,6 +20,9 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
 function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
   if (anchor === null) return null;
 
+  const containingRoot = anchor.closest("[data-vortex-style-root]");
+  if (containingRoot instanceof HTMLElement) return containingRoot;
+
   let sibling = anchor.previousElementSibling;
   while (sibling !== null) {
     if (sibling instanceof HTMLElement && sibling.matches("[data-vortex-style-root]"))
