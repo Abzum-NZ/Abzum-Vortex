@@ -5,6 +5,11 @@ import { formatIsoDate, type DateFormatOptions } from "./date-format";
 
 const DateFormatContext = createContext<DateFormatOptions>({});
 
+/** The effective presentation settings supplied by the current application shell. */
+export function useDateFormatOptions(): DateFormatOptions {
+  return useContext(DateFormatContext);
+}
+
 /** Supplies the organisation or viewer locale and time zone to every date rendered below it. */
 export function DateFormatProvider({
   locale,
@@ -17,5 +22,5 @@ export function DateFormatProvider({
 
 /** Text of one ISO date or timestamp in the surrounding locale and time zone. */
 export function FormattedDate({ iso }: Readonly<{ iso: string }>): ReactElement {
-  return <>{formatIsoDate(iso, useContext(DateFormatContext))}</>;
+  return <>{formatIsoDate(iso, useDateFormatOptions())}</>;
 }
