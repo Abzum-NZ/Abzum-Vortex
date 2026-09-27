@@ -26,7 +26,6 @@ import {
   containedComponentIdSchema,
   recordTypeIdSchema,
   fieldIdSchema,
-  isPlatformPermissionKey,
   isRegisteredWritableSystemProjection,
   PLATFORM_SERVICE_OPERATIONS,
   flowContractVersion,
@@ -63,6 +62,7 @@ import {
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
 } from "@vortex/contracts";
+import { isPlatformPermissionKey } from "@vortex/modules";
 import {
   canonicalJson,
   compareCanonicalStrings,
