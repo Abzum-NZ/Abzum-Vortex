@@ -1017,7 +1017,7 @@ export const loadApplicationPage = async (
       computedStepId,
       first(parameters.step),
     );
-    Object.assign(data, guidedFormInputData(page, recordType, values));
+    Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
     guidedForm = {
       draftId: String(openedDraft.draft.draftId),
       revision: openedDraft.draft.revision,

@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
   createHumanOrganizationRequestService,
+  runOrganizationAccessOperation,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
@@ -17,6 +18,7 @@ import {
   richTextDocumentV2Schema,
   recordIdSchema,
   ruleIdSchema,
+  timestampSchema,
   type IdentitySession,
   type JsonValue,
   type ModuleFieldV3,
@@ -28,6 +30,7 @@ import {
 } from "@vortex/contracts";
 import {
   createPrivateFormDraftService,
+  privateFormDraftLimits,
   type PrivateFormDraft,
   type PrivateFormDraftAuthorityAdapter,
   type PrivateFormDraftFieldValidation,
@@ -732,9 +735,65 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
     for (const step of steps)
       for (const entry of step.fields) fields.set(entry.fieldKey, entry.field);
     const fieldChoices: Record<string, JsonValue[]> = {};
+    const recordTypeReference = page.recordType;
+    if (!isRecord(recordTypeReference) || typeof recordTypeReference.moduleRootId !== "string")
+      return undefined;
+    const moduleRootId = recordTypeReference.moduleRootId;
+    const permissionDecisions = new Map<string, boolean>();
     for (const [fieldKey, field] of fields) {
-      if (field.type === "choice" || field.type === "several_choices")
-        fieldChoices[fieldKey] = field.settings.options.map((option) => option.value);
+      if (field.type !== "choice" && field.type !== "several_choices") continue;
+      const choices: JsonValue[] = [];
+      for (const option of field.settings.options) {
+        const permissionId = option.requiredPermissionId;
+        if (permissionId === undefined) {
+          choices.push(option.value);
+          continue;
+        }
+        const permissionKey = `${moduleRootId.toLowerCase()}:${String(permissionId).toLowerCase()}`;
+        let allowed = permissionDecisions.get(permissionKey);
+        if (allowed === undefined) {
+          const matches = context.permissionRegistration.entries.filter(
+            (entry) =>
+              entry.ownerKind === "module" &&
+              sameId(String(entry.ownerId), moduleRootId) &&
+              sameId(String(entry.permission.permissionId), String(permissionId)),
+          );
+          if (matches.length !== 1 || matches[0] === undefined) return undefined;
+          const entry = matches[0];
+          const declaration: OrganizationAccessDeclaration = {
+            operationKey: "application.page.field_choice.view",
+            action: {
+              actionKind: entry.permission.actionKind,
+              ...(entry.permission.namedAction === undefined
+                ? {}
+                : { namedAction: entry.permission.namedAction }),
+            },
+            target: { kind: "application", applicationRootId: context.applicationRootId },
+            requiredPermission: {
+              applicationRootId: entry.applicationRootId,
+              ownerKind: entry.ownerKind,
+              ownerId: entry.ownerId,
+              permissionId: entry.permission.permissionId,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          };
+          const decision = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            declaration,
+            async () => true,
+          );
+          allowed = decision.outcome === "completed";
+          permissionDecisions.set(permissionKey, allowed);
+        }
+        if (allowed) choices.push(option.value);
+      }
+      // A cleared optional choice remains valid draft input; a missing allowlist would
+      // instead make every value unrestricted in the draft projection.
+      if (choices.length >= privateFormDraftLimits.choicesPerField) return undefined;
+      choices.push(null);
+      fieldChoices[fieldKey] = choices;
     }
     return {
       access,
@@ -947,6 +1006,7 @@ export const guidedFormInputData = (
   page: unknown,
   recordType: RecordTypeDefinitionV3,
   values: Readonly<Record<string, JsonValue>>,
+  dateTimeZones: Readonly<{ personTimeZone?: string; organizationTimeZone?: string }> = {},
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
   if (!isRecord(page) || page.type !== "guided_form" || !isRecord(page.composition)) return {};
   const stepContent = page.composition.stepContent;
@@ -991,11 +1051,15 @@ export const guidedFormInputData = (
                     ? "boolean_input"
                     : control === "date"
                       ? "date_input"
-                      : control === "choice"
-                        ? "choice_input"
-                        : control === "link"
-                          ? "link_input"
-                          : undefined;
+                      : control === "date_time"
+                        ? "date_time_input"
+                        : control === "choice"
+                          ? "choice_input"
+                          : control === "several_choices"
+                            ? "several_choices_input"
+                            : control === "link"
+                              ? "link_input"
+                              : undefined;
           if (kind !== undefined) {
             let displayed: JsonValue = value;
             let usable = true;
@@ -1021,6 +1085,8 @@ export const guidedFormInputData = (
                   /^\d{4}-\d{2}-\d{2}$/.test(value) &&
                   !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) &&
                   new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value);
+            } else if (control === "date_time") {
+              usable = value === null || timestampSchema.safeParse(value).success;
             } else if (control === "choice") {
               usable = value === null || typeof value === "string";
               if (usable && value !== null) {
@@ -1037,6 +1103,34 @@ export const guidedFormInputData = (
                       option.properties.key.value === value,
                   );
               }
+            } else if (control === "several_choices") {
+              const selected = value === null ? [] : value;
+              const options = settings.options;
+              const optionItems =
+                isRecord(options) && options.kind === "list" && Array.isArray(options.items)
+                  ? options.items
+                  : undefined;
+              const maximumSelections = settings.maximum_selections;
+              usable =
+                Array.isArray(selected) &&
+                selected.length <= 200 &&
+                selected.every((choice) => typeof choice === "string") &&
+                new Set(selected).size === selected.length &&
+                optionItems !== undefined &&
+                selected.every((choice) =>
+                  optionItems.some(
+                    (option) =>
+                      isRecord(option) &&
+                      isRecord(option.properties) &&
+                      isRecord(option.properties.key) &&
+                      option.properties.key.value === choice,
+                  ),
+                ) &&
+                (!isRecord(maximumSelections) ||
+                  maximumSelections.kind !== "number" ||
+                  typeof maximumSelections.value !== "number" ||
+                  selected.length <= maximumSelections.value);
+              if (usable) displayed = selected;
             } else if (control === "link") {
               usable =
                 value === null ||
@@ -1046,7 +1140,15 @@ export const guidedFormInputData = (
             } else if (control === "rich_text") {
               usable = value === null || richTextDocumentV2Schema.safeParse(value).success;
             }
-            if (usable) result[placementId] = { status: "ready", values: { kind, value: displayed } };
+            if (usable)
+              result[placementId] = {
+                status: "ready",
+                values: {
+                  kind,
+                  value: displayed,
+                  ...(kind === "date_time_input" ? dateTimeZones : {}),
+                },
+              };
           }
         }
       }
