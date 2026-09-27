@@ -53,8 +53,8 @@ begin
     raise exception using errcode = '22023', message = 'Capability allocation is invalid';
   end if;
   -- The acting person comes only from the bound request context, and the
-  -- authority is tenant administration: an organisation role, delegation or
-  -- organisation administrator can never allocate a limit.
+  -- Authority is the dedicated tenant allocation permission. An organisation
+  -- role, delegation or organisation administrator cannot supply it.
   actor_identity_id := vortex_identity.tenant_request_actor_id();
   request_correlation_id := (vortex_context.current_context() ->> 'correlationId')::uuid;
   perform 1 from vortex_identity.tenants tenant where tenant.tenant_id = p_tenant_id for no key update;
@@ -63,7 +63,7 @@ begin
   end if;
   evaluated_at := pg_catalog.clock_timestamp();
   perform vortex_identity.require_current_tenant_capability(
-    actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
+    actor_identity_id, p_tenant_id, 'platform.tenant.capability_limits.allocate', evaluated_at
   );
   if p_expires_at is not null and p_expires_at <= evaluated_at then
     raise exception using errcode = '22023', message = 'Capability allocation is invalid';
@@ -216,4 +216,4 @@ grant execute on function vortex_access.set_capability_limit_allocation(
 comment on function vortex_access.set_capability_limit_allocation(
   uuid, uuid, uuid, uuid, text, text, numeric, timestamptz, bigint, uuid
 ) is
-  'Tenant-administrator command that allocates, or revises in place, a tenant-wide or organisation limit for one capability, refused above the live platform ceiling; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';
+  'Tenant capability-limits allocation permission command that allocates, or revises in place, a tenant-wide or organisation limit for one capability, refused above the live platform ceiling; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';
