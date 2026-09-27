@@ -21,7 +21,7 @@ flowchart TD
 
 These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or flow can have its own stable identifier and editing history without acquiring an independent live version.
 
-Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](../build-plan/issue-64-application-runtime.md) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](../build-plan/issue-40-protected-access-administration.md), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint. The [consumer handoff](../build-plan/access-consumer-handoffs.md) keeps that concrete composition with its real operation owner; earlier Access foundations do not fabricate the missing caller or permission.
+Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint. The [consumer handoff](../build-plan/access-consumer-handoffs.md) keeps that concrete composition with its real operation owner; earlier Access foundations do not fabricate the missing caller or permission.
 
 ### System applications
 
@@ -141,13 +141,13 @@ in the existing permission-semantic version comparison. Runtime filtering may
 leave an otherwise permitted layout empty: that result is not a new published
 definition and is not rejected by authoring-time required-slot rules.
 
-The [page projection engine](../build-plan/issue-38-page-capability-projection.md)
+The [page projection engine](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38)
 uses the exact published page and current authenticated organisation/application
 context. Installed-page selection, actual web rendering, anonymous public
 authority and MCP transport remain the explicit later consumer integrations in
 that plan; no client supplies its own permission map.
 
-The [application runtime](../build-plan/issue-64-application-runtime.md) supplies
+The [application runtime](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) supplies
 the trusted service identity and exact installed release used to read immutable
 definitions. That service read never grants the person's page or operation access:
 the human request still passes its own current Access checks. The existing

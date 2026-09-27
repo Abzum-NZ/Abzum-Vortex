@@ -63,7 +63,7 @@ The first complete release does not include:
 
 ## Product principles
 
-1. **Organisation separation comes first.** Every storage and request path is tested for separation through [access tests](20-quality-and-acceptance.md).
+1. **Organisation separation comes first.** Every storage and request path enforces the [access and organisation-separation requirements](20-quality-and-acceptance.md#organisation-separation-behavior).
 2. **Nothing hidden becomes live.** Builders work on a draft, validate it, and deliberately publish it through [publication](03-composition-and-publication.md).
 3. **One place owns each decision.** Identity, access, data, files, workflows, and entitlements each have one named owning service in [runtime services](17-runtime-storage-and-caching.md).
 4. **The server rechecks every request.** Page visibility never substitutes for [access enforcement](04-access-and-permissions.md).
@@ -76,5 +76,5 @@ The first complete release does not include:
 ## Acceptance examples
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
-- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [acceptance test](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
+- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
 - No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, approved by both organisations, revocable, independently testable, and enforced by the source organisation's cluster.

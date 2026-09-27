@@ -1,5 +1,7 @@
 # App Designer HTML prototype
 
+> Historical prototype brief. Its node-and-edge canvas is a simulated interaction, not the current flow representation. The [architecture decisions](architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work) and [Frontend Rule Designer specification](../specification/appendices/frontend-rule-designer.md) govern production authoring.
+
 Task: [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323). [Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md) · [Application specification](../specification/07-applications-pages-and-themes.md)
 
 The retained prototype describes the authoring experience scheduled after the phase-6 definition-led application. Current issue dependencies govern pickup. Completion is the scoped implementation plus independent code review, without tests, screenshots as proof or hosted gates.
