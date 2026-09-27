@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  databaseRevision,
   unavailableError,
   sameId,
   organizationRecordAccessDecisionSchema,
@@ -59,12 +60,7 @@ const timestamp = (value: unknown): string | undefined => {
 };
 
 const revision = (value: unknown): number | undefined => {
-  const candidate =
-    typeof value === "bigint"
-      ? Number(value)
-      : typeof value === "string" && /^[1-9][0-9]*$/.test(value)
-        ? Number(value)
-        : value;
+  const candidate = databaseRevision(value);
   return typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 1
     ? candidate
     : undefined;
