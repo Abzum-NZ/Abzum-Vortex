@@ -31,7 +31,7 @@ import { withRuntimeTransaction } from "@vortex/db";
 import { z } from "zod";
 
 const reservedTenantSegments = new Set([
-  "auth", "health", "organizations", "signed-in", "signin", "api",
+  "auth", "health", "signed-in", "signin", "api",
 ]);
 
 export const isReservedTenantSegment = (candidate: string): boolean =>
