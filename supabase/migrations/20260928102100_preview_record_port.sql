@@ -1440,6 +1440,7 @@ declare
 begin
   if p_record_type_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_action_kind is null
     or p_action_kind not in ('create', 'read', 'update', 'delete', 'restore') then
     raise exception using errcode = '22023', message = 'Record action selector is invalid';
   end if;
@@ -1533,7 +1534,20 @@ begin
     or catalogue_row.module_root_id <> target_module_root_id
     or catalogue_row.record_type_id <> p_record_type_id
     or catalogue_row.storage_scope is distinct from (record_type_value ->> 'storageScope')
-    or catalogue_row.physical_schema_token <> 'record_data'
+    or (preview_installation_id_value is null
+      and catalogue_row.physical_schema_token not in ('record_data', 'system_projection'))
+    or (preview_installation_id_value is not null
+      and catalogue_row.physical_schema_token <> 'record_data')
+    or (catalogue_row.physical_schema_token = 'system_projection')
+      is distinct from (record_type_value ? 'systemProjection')
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and catalogue_row.protected_read_model_key
+        is distinct from (record_type_value #>> '{systemProjection,protectedView}'))
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and not coalesce(
+        (record_type_value #> '{standardActions}') ? p_action_kind,
+        false
+      ))
     or (preview_installation_id_value is null and not exists (
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = target_module_root_id

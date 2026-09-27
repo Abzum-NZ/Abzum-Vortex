@@ -3668,7 +3668,7 @@
                                                  "key":  "crm_email",
                                                  "version":  {
                                                                  "selection":  "exact",
-                                                                 "version":  "1.0.0"
+                                                                 "version":  "2.0.0"
                                                              }
                                              },
                                              {
@@ -3681,7 +3681,7 @@
                                                  "key":  "crm_calendar",
                                                  "version":  {
                                                                  "selection":  "exact",
-                                                                 "version":  "1.0.0"
+                                                                 "version":  "2.0.0"
                                                              }
                                              }
                                          ],

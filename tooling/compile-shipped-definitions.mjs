@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -51,7 +52,11 @@ if (!process.argv.includes("--worker")) {
     moduleSourceDocumentSchema,
     applicationSourceDocumentV2Schema,
     connectionTypeSourceDocumentSchema,
+    PLATFORM_CONNECTION_TYPE_RELEASES,
   } = await import("../contracts/src/index.ts");
+  const { compare: compareVersions } = createRequire(
+    path.join(root, "runtime", "definition", "package.json"),
+  )("semver");
 
   if (process.argv.includes("--audit")) {
     const missing = [];
@@ -146,17 +151,21 @@ if (!process.argv.includes("--worker")) {
       }
     }
   }
-  const connectionsRoot = path.join(root, "testing", "fixtures", "connection-types");
-  for (const name of readdirSync(connectionsRoot).filter((entry) => entry.endsWith(".json"))) {
-    const relativePath = `testing/fixtures/connection-types/${name}`;
-    try {
-      const source = connectionTypeSourceDocumentSchema.parse(
-        JSON.parse(readFileSync(path.join(root, relativePath), "utf8")),
-      );
-      sources.push({ path: relativePath, source });
-    } catch (error) {
-      failures.push({ path: relativePath, stage: "source import", error: String(error) });
-    }
+  const connectionPath = "contracts/src/catalogue/platform-connection-type-catalogue.source.json";
+  const currentConnections = new Map();
+  for (const release of PLATFORM_CONNECTION_TYPE_RELEASES) {
+    const current = currentConnections.get(release.source.key);
+    if (!current || compareVersions(release.releaseVersion, current.releaseVersion) > 0)
+      currentConnections.set(release.source.key, release);
+  }
+  for (const release of currentConnections.values()) {
+    const source = connectionTypeSourceDocumentSchema.parse(release.source);
+    sources.push({
+      path: connectionPath,
+      source,
+      rootId: release.rootId,
+      releaseVersion: release.releaseVersion,
+    });
   }
   const kindOrder = { module: 0, connection_type: 1, application: 2 };
   sources.sort(
@@ -164,11 +173,11 @@ if (!process.argv.includes("--worker")) {
       kindOrder[left.source.kind] - kindOrder[right.source.kind] ||
       left.source.key.localeCompare(right.source.key),
   );
-  const definitions = sources.map(({ source }) => ({
+  const definitions = sources.map(({ source, rootId, releaseVersion }) => ({
     kind: source.kind,
     key: source.key,
-    rootId: uuidFor(`root:${source.kind}:${source.key}`),
-    exactVersion: "1.0.0",
+    rootId: rootId ?? uuidFor(`root:${source.kind}:${source.key}`),
+    exactVersion: releaseVersion ?? "1.0.0",
     ...(source.kind === "connection_type"
       ? { operationKeys: source.body.operations.map(({ key }) => key) }
       : {}),
