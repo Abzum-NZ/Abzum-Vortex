@@ -20,7 +20,7 @@ import {
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadApplicationPage } from "../../../_lib/application-page";
+import { loadApplicationPage, loadApplicationTheme } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 
 export const dynamic = "force-dynamic";
@@ -169,17 +169,26 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
 
-  if (resolved.kind === "unavailable")
+  if (resolved.kind === "unavailable") {
     // A refused page and a missing page of an application the viewer may open both show that
-    // application's own not-found page; everything else shows the fixed neutral fallback.
-    return resolved.experience === undefined ? (
-      unavailableFallback
-    ) : (
+    // application's own not-found page, in that application's installed theme; everything else
+    // shows the fixed neutral fallback.
+    if (resolved.experience === undefined) return unavailableFallback;
+    const theme =
+      resolved.read === undefined || resolved.application === undefined
+        ? undefined
+        : await loadApplicationTheme(identity.session, {
+            read: resolved.read,
+            application: resolved.application,
+          });
+    return (
       <ApplicationExperiencePage
         page={resolved.experience.page}
         shells={resolved.experience.shells}
+        theme={theme}
       />
     );
+  }
 
   if (resolved.kind === "organization_launcher") {
     const defaultApplication = resolved.read.applications.find(

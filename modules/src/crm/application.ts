@@ -1,8 +1,8 @@
 import {
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   PLATFORM_BLOCK_RELEASES,
   applicationSourceDocumentV2Schema,
+  sourceApplicationThemeSelectionV2Schema,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
@@ -47,6 +47,23 @@ const dependencies = [...collectBlockReleases(body)]
     };
   });
 
+/**
+ * CRM ships its own catalogue selection rather than the platform default, so an installed
+ * application's theme is visibly its own: the rounded Maia style, the mauve base and theme colours,
+ * violet charts, the large radius and the bold menu accent. Every option is an offered,
+ * non-refused catalogue option, and the combination passes the platform contrast and focus checks
+ * publication runs.
+ */
+const selection = sourceApplicationThemeSelectionV2Schema.parse({
+  style: "maia",
+  base_color: "mauve",
+  theme: "mauve",
+  chart_color: "violet",
+  radius: "large",
+  menu_color: "default",
+  menu_accent: "bold",
+});
+
 const theme = {
   base: {
     kind: "platform_theme" as const,
@@ -55,7 +72,7 @@ const theme = {
     content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
     catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
   },
-  selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  selection,
   token_overrides: {},
 };
 
