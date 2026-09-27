@@ -36,6 +36,7 @@ import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import {
   platformBlockReleaseFingerprints,
+  platformConnectionTypeReleaseFingerprints,
   platformServiceOperationReleaseFingerprints,
   platformThemeReleaseFingerprints,
 } from "./catalogue-release-fingerprints";
@@ -49,6 +50,8 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
+  contentFingerprint?: string;
+  catalogueFingerprint?: string;
 }>;
 
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
@@ -121,6 +124,8 @@ const connectionTypeReleaseDefinitionSchema = z
     source: connectionTypeSourceDocumentSchema,
     rootId: connectionTypeIdSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
+    contentFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+    catalogueFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
   })
   .strict();
 
@@ -336,19 +341,21 @@ const compileConnectionTypeRelease = (
   )[0];
   const connectionOutput =
     compilationOutput?.kind === "connection_type" ? compilationOutput : duplicate();
-  const catalogueFingerprint = fingerprintCanonicalValue({
-    kind: "connection_type",
-    key: definition.source.key,
-    rootId: definition.rootId,
-    releaseVersion: definition.releaseVersion,
-    sourceFingerprint: fingerprintCanonicalValue(definition.source),
-  });
+  const fingerprints = platformConnectionTypeReleaseFingerprints(definition);
+  if (
+    connectionOutput.artifact.contentFingerprint !== fingerprints.contentFingerprint ||
+    (definition.contentFingerprint !== undefined &&
+      definition.contentFingerprint !== fingerprints.contentFingerprint) ||
+    (definition.catalogueFingerprint !== undefined &&
+      definition.catalogueFingerprint !== fingerprints.catalogueFingerprint)
+  )
+    duplicate();
   return deepFreeze({
     key: definition.source.key,
     rootId: definition.rootId,
     releaseVersion: definition.releaseVersion,
-    contentFingerprint: connectionOutput.artifact.contentFingerprint,
-    catalogueFingerprint,
+    contentFingerprint: fingerprints.contentFingerprint,
+    catalogueFingerprint: fingerprints.catalogueFingerprint,
     compilationOutput: connectionOutput,
   });
 };
