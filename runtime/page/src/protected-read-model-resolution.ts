@@ -297,6 +297,8 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
           // of applications the viewer may not reach.
           return refused;
         }
+        case "landing_zone_applications":
+          return refused;
       }
     } catch {
       return unavailableResult;
