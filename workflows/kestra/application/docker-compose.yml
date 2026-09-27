@@ -12,13 +12,13 @@
 # the Workflow adapter at install time, so no operational flow or script is baked
 # into this image.
 #
-# Like the operations stack, both images are pinned to exact tags and
-# multi-platform digests, the Docker socket is not mounted, and no password is
-# written down. Kestra's own PostgreSQL password and its interface basic-auth
-# password are engine bootstrap values supplied by the deployment environment
-# through KESTRA_CONFIGURATION. They are not flow secrets and no variable here
-# has the ENV_ prefix, so a flow definition cannot read them. Code running in
-# this container (a Process runner script or command task) could, which is why
+# The Kestra base images remain pinned to exact tags and multi-platform digests,
+# the Docker socket is not mounted, and no password is written down. Kestra's own
+# PostgreSQL and interface basic-auth passwords are engine bootstrap values
+# supplied by the deployment environment through KESTRA_CONFIGURATION. They are
+# not flow secrets and no variable here has the ENV_ prefix, so a flow definition
+# cannot read them. Code running in this container (a Process runner script or
+# command task) could, which is why
 # customer flows compile only to the protected-operation callback task and no
 # package script may run here without a sandboxed task runner (README.md).
 # Every other value below comes from the environment.
@@ -50,9 +50,11 @@ services:
           memory: 1g
 
   kestra:
-    # The same reviewed upstream image the operations instance derives from,
-    # without the operational Supabase and Doppler tooling that instance adds.
-    image: kestra/kestra:v1.0.57@sha256:bc6704c896afbd846602cd5655c3569fe5953a8c91ccc84d64012545fc204101
+    # The reviewed upstream image plus the Vortex ProtectedCallback plugin.
+    image: vortex/kestra-application:v1.0.57
+    build:
+      context: ../../..
+      dockerfile: workflows/kestra/application/Dockerfile
     restart: unless-stopped
     stop_grace_period: 6m
     user: "root"
@@ -62,6 +64,9 @@ services:
       - /tmp/kestra-application-wd:/tmp/kestra-wd
     environment:
       SERVICE_FQDN_KESTRA_8080: /
+      # A non-secret fixed Vortex route used only by the installed callback
+      # plugin. It is not exposed to flow templates or builder-controlled YAML.
+      VORTEX_PROTECTED_CALLBACK_URL: ${VORTEX_PROTECTED_CALLBACK_URL:?VORTEX_PROTECTED_CALLBACK_URL is required}
       # The only flow secret on this instance. The callback signing key signs the
       # protected-operation envelope Vortex verifies, and authorises nothing
       # else. Kestra exposes a flow secret only when the instance variable begins

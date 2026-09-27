@@ -287,74 +287,6 @@ export const applicationPermissionCatalogueSnapshotSchema = z
       });
   });
 
-export const platformPermissionCatalogueSchema = z
-  .object({
-    catalogueVersion: semanticVersionSchema,
-    ownerKind: z.literal("platform"),
-    ownerId: platformIdSchema,
-    catalogueFingerprint: fingerprintSchema,
-    permissions: z.array(permissionDeclarationSchema).min(1),
-  })
-  .strict();
-
-export const initializePlatformPermissionCatalogueCommandSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    changedBy: actorIdSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const initializePlatformPermissionCatalogueResultSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    registrationRevision: revisionSchema,
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const revisePlatformPermissionCatalogueMetadataCommandSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    expectedRegistrationRevision: z.literal(1),
-    sourceCatalogueVersion: z.literal("1.0.0"),
-    targetCatalogueVersion: z.literal("1.0.1"),
-    changedBy: actorIdSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const revisePlatformPermissionCatalogueMetadataResultSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    sourceCatalogueVersion: z.literal("1.0.0"),
-    targetCatalogueVersion: z.literal("1.0.1"),
-    registrationRevision: z.literal(2),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const adoptShippedPlatformPermissionCatalogueCommandSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    expectedRegistrationRevision: revisionSchema,
-    targetCatalogueVersion: semanticVersionSchema,
-    targetCatalogueFingerprint: fingerprintSchema,
-    changedBy: actorIdSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const adoptShippedPlatformPermissionCatalogueResultSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    sourceCatalogueVersion: semanticVersionSchema,
-    targetCatalogueVersion: semanticVersionSchema,
-    registrationRevision: revisionSchema,
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
 export const applicationPermissionCatalogueSnapshotCommandSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -387,25 +319,6 @@ export type PermissionCatalogueEntry = z.infer<typeof permissionCatalogueEntrySc
 export type PermissionCatalogueLookupResult = z.infer<typeof permissionCatalogueLookupResultSchema>;
 export type ApplicationPermissionCatalogueSnapshot = z.infer<
   typeof applicationPermissionCatalogueSnapshotSchema
->;
-export type PlatformPermissionCatalogue = z.infer<typeof platformPermissionCatalogueSchema>;
-export type InitializePlatformPermissionCatalogueCommand = z.infer<
-  typeof initializePlatformPermissionCatalogueCommandSchema
->;
-export type InitializePlatformPermissionCatalogueResult = z.infer<
-  typeof initializePlatformPermissionCatalogueResultSchema
->;
-export type RevisePlatformPermissionCatalogueMetadataCommand = z.infer<
-  typeof revisePlatformPermissionCatalogueMetadataCommandSchema
->;
-export type RevisePlatformPermissionCatalogueMetadataResult = z.infer<
-  typeof revisePlatformPermissionCatalogueMetadataResultSchema
->;
-export type AdoptShippedPlatformPermissionCatalogueCommand = z.infer<
-  typeof adoptShippedPlatformPermissionCatalogueCommandSchema
->;
-export type AdoptShippedPlatformPermissionCatalogueResult = z.infer<
-  typeof adoptShippedPlatformPermissionCatalogueResultSchema
 >;
 export type ApplicationPermissionCatalogueSnapshotCommand = z.infer<
   typeof applicationPermissionCatalogueSnapshotCommandSchema
