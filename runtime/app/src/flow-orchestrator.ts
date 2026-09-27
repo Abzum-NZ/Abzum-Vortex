@@ -118,9 +118,9 @@ export type FlowNamedAction = Readonly<{
 
 /**
  * The record a surface was rendered for: the page's own subject and the revision the person saw.
- * It is evidence, never authority. A Save record task or named action that uses it still passes
- * the protected path's own access, record type and revision checks, so a forged or stale subject
- * is refused or reported as a conflict.
+ * It is evidence, never authority. A Save record task or named action that uses it first verifies
+ * current read access to the exact record type and identity, then passes the protected path's own
+ * change or action permission and revision checks. A forged or stale subject cannot grant access.
  */
 export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
 
@@ -135,6 +135,15 @@ export type RecordSaveTaskPort = Readonly<{
     selection: OrganizationSelectionCandidate,
     command: SaveRecordCommandV2,
   ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
+}>;
+
+/** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
+export type FlowSubjectReadPort = Readonly<{
+  read(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    subject: Readonly<{ recordTypeId: string; recordId: string }>,
+  ): Promise<"read" | "refused" | "temporarily_unavailable">;
 }>;
 
 /**
@@ -163,6 +172,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   actionRecords?: NamedActionRecordPort;
   /** Runs Save record tasks; without it a Save record task is unavailable. */
   records?: RecordSaveTaskPort;
+  /** Verifies the viewer's read access to a claimed page subject before a protected change. */
+  subjects?: FlowSubjectReadPort;
   continuations: FlowContinuationStore;
   ledger: FlowEffectLedger;
   /**
@@ -603,6 +614,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       const subject = run.subject;
       if (subject === undefined || subject.recordId.toLowerCase() !== recordId.data.toLowerCase())
         return notAvailable(run, call, "the revision of the record the page shows");
+      if (dependencies.subjects === undefined)
+        return notAvailable(run, call, "a protected read of the page's record");
       const command = saveRecordCommandV2Schema.safeParse({
         contractVersion: "2.0.0",
         commandId,
@@ -638,6 +651,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return notAvailable(run, call, "a registered protected operation");
     if (run.subject === undefined)
       return notAvailable(run, call, "the record the action runs on");
+    if (dependencies.subjects === undefined)
+      return notAvailable(run, call, "a protected read of the page's record");
     const command = executeNamedActionCommandV2Schema.safeParse({
       contractVersion: "2.0.0",
       commandId,
@@ -659,6 +674,20 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     call: FlowProtectedTaskCall,
     plan: TaskPlan,
   ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
+    // The subject is supplied by the browser. A fresh read under this initiator's request scope
+    // verifies the exact record type and identity before either protected change is attempted.
+    // The record service still checks change or action permission inside its own transaction.
+    if (plan.kind === "action" || (plan.kind === "save" && plan.command.operation === "update")) {
+      const subject = await dependencies.subjects!.read(run.session, run.selection, {
+        recordTypeId: plan.command.recordTypeId,
+        recordId: plan.command.recordId,
+      });
+      if (subject !== "read")
+        return {
+          result: { outcome: subject === "refused" ? "refused" : "failed" },
+          stored: {},
+        };
+    }
     if (plan.kind === "save") {
       const saved = await dependencies.records!.save(run.session, run.selection, plan.command);
       if (saved.kind !== "available")

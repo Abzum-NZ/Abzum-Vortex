@@ -28,7 +28,11 @@ import {
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
-import { createPageFormRequestAdapter, createPrivateFormSubmitAdapter } from "@vortex/page";
+import {
+  createPageFormRequestAdapter,
+  createPageSubjectReader,
+  createPrivateFormSubmitAdapter,
+} from "@vortex/page";
 import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/record";
 import type { RuntimeDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -187,6 +191,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // #1369, #1370: Save record tasks and named actions run through the record service's own
     // protected paths, under the initiator's verified request and in their own transactions.
     const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
+    const subjectReader = createPageSubjectReader({ identityAuthorityId: authorityId, telemetry });
     const actionRecords = createNamedActionRecordPort({
       identityAuthorityId: authorityId,
       telemetry,
@@ -196,6 +201,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         executor,
         records,
         actionRecords,
+        subjects: {
+          read: async (session, selection, subject) =>
+            (await subjectReader.read(session, selection, subject)).kind,
+        },
         continuations: stores.continuations,
         ledger: stores.ledger,
         // The release was read from the trusted installation for this exact request.
