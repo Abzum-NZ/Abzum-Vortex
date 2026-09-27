@@ -64,6 +64,25 @@ const mutation = (
         acceptedAt: timestamp(row.accepted_at),
       });
 
+const mutationRefusal = (
+  operation: MutationOperation,
+  code: string,
+): VortexSuperAdministratorAssignmentMutationResult | undefined => {
+  const reason =
+    code === "V3141"
+      ? operation === "revoke_vortex_super_administrator"
+        ? "assignment_unavailable"
+        : "identity_unavailable"
+      : code === "V3142"
+        ? "recent_authentication_required"
+        : code === "V3143"
+          ? "duplicate_conflict"
+          : code === "V3102"
+            ? "stale_revision"
+            : undefined;
+  return reason === undefined ? undefined : { outcome: "refused", operation, code: reason };
+};
+
 export type VortexSuperAdministratorAdministrationDependencies =
   HumanOrganizationRequestDependencies;
 
@@ -139,7 +158,7 @@ export const createVortexSuperAdministratorAdministrationService = (
           },
         };
 
-      return requests.runChange(
+      return requests.runChangeWithRefusal(
         verifiedSession.data,
         verifiedSelection.data,
         async (transaction) => {
@@ -152,6 +171,7 @@ export const createVortexSuperAdministratorAdministrationService = (
           `;
           return mutation("grant_vortex_super_administrator", rows.length === 1 ? rows[0] : undefined);
         },
+        (code) => mutationRefusal("grant_vortex_super_administrator", code),
       );
     },
 
@@ -173,7 +193,7 @@ export const createVortexSuperAdministratorAdministrationService = (
           },
         };
 
-      return requests.runChange(
+      return requests.runChangeWithRefusal(
         verifiedSession.data,
         verifiedSelection.data,
         async (transaction) => {
@@ -187,6 +207,7 @@ export const createVortexSuperAdministratorAdministrationService = (
           `;
           return mutation("revoke_vortex_super_administrator", rows.length === 1 ? rows[0] : undefined);
         },
+        (code) => mutationRefusal("revoke_vortex_super_administrator", code),
       );
     },
   });

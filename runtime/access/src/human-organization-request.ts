@@ -150,6 +150,7 @@ export const createHumanOrganizationRequestService = (
     ) => Promise<Result>,
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
+    mapDatabaseRefusal?: (code: string) => Result | undefined,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -271,7 +272,15 @@ export const createHumanOrganizationRequestService = (
       appendTelemetry(correlationId, "success", startedAtMs);
       return { kind: "available", value };
     } catch (error) {
-      if (databaseCode(error) === "V3140" && suspendedAccountResult !== undefined) {
+      const code = databaseCode(error);
+      if (code !== undefined && mapDatabaseRefusal !== undefined) {
+        const refusal = mapDatabaseRefusal(code);
+        if (refusal !== undefined) {
+          appendTelemetry(correlationId, "refused", startedAtMs);
+          return { kind: "available", value: refusal };
+        }
+      }
+      if (code === "V3140" && suspendedAccountResult !== undefined) {
         appendTelemetry(correlationId, "refused", startedAtMs);
         return suspendedAccountResult();
       }
@@ -304,6 +313,17 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("change", session, candidate, operation),
+    runChangeWithRefusal: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      mapDatabaseRefusal: (code: string) => Result | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("change", session, candidate, operation, undefined, undefined, mapDatabaseRefusal),
     runChangePrepared: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

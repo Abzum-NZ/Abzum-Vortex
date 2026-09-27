@@ -234,9 +234,9 @@ export const createConfiguredTenantAdministrationService = (
           operation: "bootstrap_vortex_super_administrator",
           assignmentId: row.assignment_id,
           identityId: row.identity_id,
-          revision: revision(row.revision),
+          revision: databaseRevision(row.revision),
           correlationId: row.correlation_id,
-          acceptedAt: timestamp(row.accepted_at),
+          acceptedAt: databaseTimestamp(row.accepted_at),
         });
       } catch (error) {
         return {

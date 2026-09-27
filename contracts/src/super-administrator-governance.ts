@@ -149,6 +149,7 @@ export const vortexSuperAdministratorAssignmentMutationResultSchema = z.discrimi
         code: z.enum([
           "invalid_command",
           "identity_unavailable",
+          "assignment_unavailable",
           "stale_revision",
           "recent_authentication_required",
           "duplicate_conflict",
