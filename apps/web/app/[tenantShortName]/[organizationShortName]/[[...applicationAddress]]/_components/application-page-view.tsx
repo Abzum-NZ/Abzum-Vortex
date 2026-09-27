@@ -420,6 +420,7 @@ function ApplicationPageViewContent({
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const runtimeInputsRef = useRef<Readonly<Record<string, unknown>>>({});
+  const dialogFormRef = useRef<HTMLDivElement>(null);
   const requestChoicePageRef = useRef<
     (
       placementId: string,
@@ -823,7 +824,7 @@ function ApplicationPageViewContent({
         if (Object.keys(modalInput).length > 0) scopedInputs[placementId] = modalInput;
       }
       return (
-        <div className="flex flex-col gap-4">
+        <div ref={dialogFormRef} className="flex flex-col gap-4">
           <UnsavedWorkProvider>
             <PageLayoutRenderer
               composition={surface.composition}
@@ -839,6 +840,12 @@ function ApplicationPageViewContent({
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={controls.cancel}>
               Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
+            >
+              Continue
             </Button>
           </DialogFooter>
         </div>
