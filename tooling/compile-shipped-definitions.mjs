@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -38,12 +38,14 @@ if (!process.argv.includes("--worker")) {
   const {
     extractApplicationSourceIdentityRequirementsV2,
     extractModuleSourceIdentityRequirementsV3,
+    extractSourceIdentityRequirements,
   } = await import("../runtime/definition/src/source-identities.ts");
   const {
     applicationCompilationRequestV2Schema,
     DEFAULT_PLATFORM_THEME_RELEASE_V2,
     IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
     sourceIdentityKindV2Schema,
+    sourceIdentityKindSchema,
     sourceProvenanceRegistry,
     jsonValueSchema,
     moduleSourceDocumentSchema,
@@ -144,17 +146,39 @@ if (!process.argv.includes("--worker")) {
       }
     }
   }
-  sources.sort((left, right) => left.source.key.localeCompare(right.source.key));
+  const connectionsRoot = path.join(root, "testing", "fixtures", "connection-types");
+  for (const name of readdirSync(connectionsRoot).filter((entry) => entry.endsWith(".json"))) {
+    const relativePath = `testing/fixtures/connection-types/${name}`;
+    try {
+      const source = connectionTypeSourceDocumentSchema.parse(
+        JSON.parse(readFileSync(path.join(root, relativePath), "utf8")),
+      );
+      sources.push({ path: relativePath, source });
+    } catch (error) {
+      failures.push({ path: relativePath, stage: "source import", error: String(error) });
+    }
+  }
+  const kindOrder = { module: 0, connection_type: 1, application: 2 };
+  sources.sort(
+    (left, right) =>
+      kindOrder[left.source.kind] - kindOrder[right.source.kind] ||
+      left.source.key.localeCompare(right.source.key),
+  );
   const definitions = sources.map(({ source }) => ({
     kind: source.kind,
     key: source.key,
     rootId: uuidFor(`root:${source.kind}:${source.key}`),
     exactVersion: "1.0.0",
+    ...(source.kind === "connection_type"
+      ? { operationKeys: source.body.operations.map(({ key }) => key) }
+      : {}),
   }));
   const requirements = sources.flatMap(({ source }) =>
     source.kind === "module"
       ? extractModuleSourceIdentityRequirementsV3(source)
-      : extractApplicationSourceIdentityRequirementsV2(source),
+      : source.kind === "application"
+        ? extractApplicationSourceIdentityRequirementsV2(source)
+        : extractSourceIdentityRequirements(source),
   );
   const identities = requirements.flatMap((requirement) => {
     const identifier =
@@ -174,68 +198,94 @@ if (!process.argv.includes("--worker")) {
   });
   const snapshot = (contractVersion) => {
     const allowedIdentities =
-      contractVersion === "2.0.0"
-        ? identities.filter(({ kind }) => sourceIdentityKindV2Schema.safeParse(kind).success)
-        : identities;
+      contractVersion === "1.0.0"
+        ? identities.filter(({ kind }) => sourceIdentityKindSchema.safeParse(kind).success)
+        : contractVersion === "2.0.0"
+          ? identities.filter(({ kind }) => sourceIdentityKindV2Schema.safeParse(kind).success)
+          : identities;
     const evidence = { contractVersion, definitions, identities: allowedIdentities };
     return { ...evidence, fingerprint: fingerprintCanonicalValue(evidence) };
   };
-  const catalogueEvidence = {
-    contractVersion: "2.0.0",
-    platformBlocks: {
-      ...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
-      releases: [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases].sort((left, right) =>
-        `${left.blockId}@${left.releaseVersion}`.localeCompare(
-          `${right.blockId}@${right.releaseVersion}`,
-        ),
+  const catalogueSnapshotFor = (source) => {
+    const selected = new Set(
+      source.body.platform_block_dependencies.map(
+        (dependency) => `${dependency.block_id}@${dependency.release_version}`,
       ),
-    },
-    platformTheme: DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  };
-  const catalogueSnapshot = {
-    ...catalogueEvidence,
-    fingerprint: fingerprintCanonicalValue(catalogueEvidence),
+    );
+    const catalogueEvidence = {
+      contractVersion: "2.0.0",
+      platformBlocks: {
+        ...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+        releases: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases
+          .filter((release) => selected.has(`${release.blockId}@${release.releaseVersion}`))
+          .sort((left, right) =>
+            `${left.blockId}@${left.releaseVersion}`.localeCompare(
+              `${right.blockId}@${right.releaseVersion}`,
+            ),
+          ),
+      },
+      platformTheme: DEFAULT_PLATFORM_THEME_RELEASE_V2,
+    };
+    return {
+      ...catalogueEvidence,
+      fingerprint: fingerprintCanonicalValue(catalogueEvidence),
+    };
   };
   const outputs = [];
   const results = [];
+  const outputDirectoryIndex = process.argv.indexOf("--output-dir");
+  const outputDirectory =
+    outputDirectoryIndex < 0 ? undefined : process.argv[outputDirectoryIndex + 1];
+  if (outputDirectoryIndex >= 0 && !outputDirectory)
+    throw new Error("--output-dir requires a directory path");
+  if (outputDirectory) mkdirSync(outputDirectory, { recursive: true });
   for (const { path: sourcePath, source } of sources) {
     try {
       const request =
-        source.kind === "module"
-          ? {
-              sourceContractVersion: "3.0.0",
-              validationContractVersion: "3.0.0",
-              source,
-              resolution: snapshot("3.0.0"),
-              draftMetadata,
-              savedConditionRevisions: identities
-                .filter(
-                  ({ definitionKey, kind }) =>
-                    definitionKey === source.key && kind === "sharing_condition",
-                )
-                .map(({ identifier }) => identifier)
-                .filter((identifier, index, all) => all.indexOf(identifier) === index)
-                .map((identifier) => ({ conditionId: identifier, revision: 1 })),
-            }
-          : {
-              sourceContractVersion: "2.0.0",
-              validationContractVersion: "2.0.0",
-              source,
-              resolution: snapshot("2.0.0"),
-              catalogueSnapshot,
-              draftMetadata,
-            };
+        source.kind === "connection_type"
+          ? { source, resolution: snapshot("1.0.0") }
+          : source.kind === "module"
+            ? {
+                sourceContractVersion: "3.0.0",
+                validationContractVersion: "3.0.0",
+                source,
+                resolution: snapshot("3.0.0"),
+                draftMetadata,
+                savedConditionRevisions: identities
+                  .filter(
+                    ({ definitionKey, kind }) =>
+                      definitionKey === source.key && kind === "sharing_condition",
+                  )
+                  .map(({ identifier }) => identifier)
+                  .filter((identifier, index, all) => all.indexOf(identifier) === index)
+                  .map((identifier) => ({ conditionId: identifier, revision: 1 })),
+              }
+            : {
+                sourceContractVersion: "2.0.0",
+                validationContractVersion: "2.0.0",
+                source,
+                resolution: snapshot("2.0.0"),
+                catalogueSnapshot: catalogueSnapshotFor(source),
+                draftMetadata,
+              };
       if (source.kind === "application") {
         const parsed = applicationCompilationRequestV2Schema.safeParse(request);
         if (!parsed.success) throw new Error(JSON.stringify(parsed.error.issues));
       }
       const output = compileDefinitionWithContext(request, { dependencyOutputs: outputs });
       outputs.push(output);
+      const bytes = canonicalJson(output);
+      if (outputDirectory)
+        writeFileSync(
+          path.join(outputDirectory, `${source.kind}--${source.key}.json`),
+          bytes,
+          "utf8",
+        );
       results.push({
         path: sourcePath,
         kind: source.kind,
         key: source.key,
-        sha256: sha256(canonicalJson(output)),
+        sha256: sha256(bytes),
       });
     } catch (error) {
       failures.push({

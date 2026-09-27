@@ -707,13 +707,13 @@ const sourceInterfaceTargetSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("flow")),
-      flow: sourceProvenanceUnchanged(flowAliasSchema),
+      flow: sourceProvenanceTarget(flowAliasSchema, ["flowId"]),
     })
     .strict(),
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("query")),
-      key: sourceProvenanceUnchanged(builderKeySchema),
+      key: sourceProvenanceTarget(builderKeySchema, ["queryId"]),
     })
     .strict(),
 ]);
@@ -1435,7 +1435,7 @@ export const sourceApplicationBodyV2Schema = z
 export const applicationSourceDocumentV2Schema = z
   .object({
     source_contract_version: sourceProvenanceUnchanged(z.literal(applicationSourceContractVersion)),
-    root_alias: sourceProvenanceUnchanged(sourceAliasSchema),
+    root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
     key: sourceProvenanceUnchanged(namespacedKeySchema),
     kind: sourceProvenanceUnchanged(z.literal("application")),
     body: sourceProvenanceUnchanged(

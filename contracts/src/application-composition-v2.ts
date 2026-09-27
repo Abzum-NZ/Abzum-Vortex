@@ -279,68 +279,70 @@ export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValu
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
-          asset_id: sourceProvenanceUnchanged(platformIdSchema),
+          asset_id: sourceProvenanceTarget(platformIdSchema, ["assetId"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("icon")),
-          icon_key: sourceProvenanceUnchanged(builderKeySchema),
+          icon_key: sourceProvenanceTarget(builderKeySchema, ["iconKey"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("theme_token")),
-          token: sourceProvenanceUnchanged(builderKeySchema),
+          token: sourceProvenanceTarget(builderKeySchema, ["tokenKey"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("field_reference")),
-          field: sourceProvenanceUnchanged(sourceQualifiedFieldSchema),
+          field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["fieldId"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
-          relationship: sourceProvenanceUnchanged(sourceQualifiedRelationshipSchema),
+          relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, [
+            "relationshipId",
+          ]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("action_reference")),
-          action: sourceProvenanceUnchanged(namespacedKeySchema),
+          action: sourceProvenanceTarget(namespacedKeySchema, ["actionKey"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("page_reference")),
-          page: sourceProvenanceUnchanged(builderKeySchema),
+          page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("query_reference")),
-          query: sourceProvenanceUnchanged(sourceQualifiedQueryReferenceSchema),
+          query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
-          pipeline: sourceProvenanceUnchanged(builderKeySchema),
+          pipeline: sourceProvenanceTarget(builderKeySchema, ["pipelineId"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
-          record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("record_reference")),
-          record_type: sourceProvenanceUnchanged(sourceQualifiedRecordTypeSchema),
-          record_id: sourceProvenanceUnchanged(z.uuid()),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+          record_id: sourceProvenanceTarget(z.uuid(), ["recordId"]),
         })
         .strict(),
       z
@@ -2514,10 +2516,20 @@ export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.l
         z
           .object({
             desktop: sourceProvenanceUnchanged(
-              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/desktop/#"])),
+              z.array(
+                sourceProvenanceTarget(sourceAliasSchema, [
+                  "order/desktop/#",
+                  "order/tablet/#",
+                  "order/phone/#",
+                ]),
+              ),
             ),
             tablet: sourceProvenanceUnchanged(
-              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#"])).optional(),
+              z
+                .array(
+                  sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#", "order/phone/#"]),
+                )
+                .optional(),
             ),
             phone: sourceProvenanceUnchanged(
               z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/phone/#"])).optional(),
