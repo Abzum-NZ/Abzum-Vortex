@@ -386,9 +386,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return pageFormRequests.resume(session, selection, request);
     };
 
+    const invocation = body.invocation;
+    const selection = {
+      organizationId: address.read.organizationId,
+      applicationRootId: address.application.applicationRootId,
+    };
+    // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
+    // guided page must not start a flow before its final form submit is confirmed.
+    const bindingInstallation = invocation.kind === "binding"
+      ? await readInstalled(identity.session, selection)
+      : undefined;
+    if (invocation.kind === "binding") {
+      if (bindingInstallation === undefined) return refusedResponse();
+      const binding = bindingInstallation.bindings.find((candidate) =>
+        candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
+      );
+      const guided = binding === undefined
+        ? undefined
+        : guidedControls.get(binding.controlId.toLowerCase());
+      if (guided !== undefined &&
+          (guided === null || !guided.summary || binding?.event !== "form_submit"))
+        return refusedResponse();
+    }
+
     const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
-      readInstallation: readInstalled,
+      readInstallation: invocation.kind === "binding"
+        ? async () => bindingInstallation
+        : readInstalled,
       adaptFormSubmit: async (binding, callerInputs, subject) => {
         const guided = guidedControls.get(binding.controlId.toLowerCase());
         if (guided === undefined)
@@ -450,7 +475,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       orchestratorFor,
     });
 
-    const invocation = body.invocation;
     const submittedValues = invocation.kind === "binding" ? invocation.callerInputs.values : undefined;
     const confirmation = isRecord(submittedValues)
       ? guidedFormConfirmationReference(submittedValues[guidedFormConfirmationKey])
@@ -464,10 +488,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         : invocation;
     const result = await endpoint.invoke(
       identity.session,
-      {
-        organizationId: address.read.organizationId,
-        applicationRootId: address.application.applicationRootId,
-      },
+      selection,
       invocationWithStableClick,
     );
     if (result.kind === "refused") return refusedResponse();

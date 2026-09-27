@@ -563,7 +563,12 @@ export const getGuidedFormControlIds = (
     return ids;
   };
   const summaryIds = formIds(summaryRoot.root);
-  const all = new Set(roots.flatMap((entry) => [...formIds(entry.root)]));
+  // Gate step-owned action and display controls as well as form containers, including a form
+  // supplied by a shell, so they cannot invoke a flow before final confirmation.
+  const all = new Set([
+    ...roots.flatMap((entry) => [...entry.pagePlacementIds]),
+    ...roots.flatMap((entry) => [...formIds(entry.root)]),
+  ]);
   const summaryId = [...summaryIds][0];
   return summaryIds.size === 1 && summaryId !== undefined && all.has(summaryId)
     ? { all, summary: summaryId }

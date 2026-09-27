@@ -785,6 +785,7 @@ export type PageLayoutRendererProps = Readonly<{
     onBack: () => void;
     onNext: () => void;
   }>;
+  guidedSummaryValues?: Readonly<Record<string, unknown>>;
   className?: string;
   style?: CSSProperties;
   /**
@@ -832,6 +833,7 @@ export function PageLayoutRenderer({
   pageId,
   activeStepId,
   guidedStepNavigation,
+  guidedSummaryValues,
   className,
   style,
   runtimeInputs,
@@ -952,6 +954,21 @@ export function PageLayoutRenderer({
               {...(className === undefined ? {} : { className })}
               {...(style === undefined ? {} : { style })}
             />
+          )}
+          {activeGuidedStep?.summary !== true || guidedSummaryValues === undefined ? null : (
+            <section aria-label="Review your answers" className="mt-6">
+              <h2 className="text-lg font-semibold">Review your answers</h2>
+              <dl className="mt-3 grid gap-3">
+                {Object.entries(guidedSummaryValues).map(([field, value]) => (
+                  <div key={field} className="rounded-md border p-3">
+                    <dt className="font-medium">{field}</dt>
+                    <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {value === null ? "Empty" : typeof value === "string" ? value : JSON.stringify(value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           )}
           {guidedStepNavigation === undefined ||
           activeGuidedStepIndex < 0 ||

@@ -1055,6 +1055,7 @@ function ApplicationPageViewContent({
         resolvePageHref={resolvePageHref}
         currentPageId={model.pageId}
         activeStepId={model.guidedForm?.activeStepId}
+        guidedSummaryValues={model.guidedForm?.values}
         runtimeInputs={runtimeInputs}
         guidedStepNavigation={
           model.guidedForm === undefined
