@@ -16,9 +16,16 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
-/** A flow surface can sit beside the application root instead of inside its React style context. */
-function findUnambiguousStyleRoot(): HTMLElement | null {
-  if (typeof document === "undefined") return null;
+/** Flow surfaces render immediately after the page root, outside its React style context. */
+function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
+  if (anchor === null) return null;
+
+  let sibling = anchor.previousElementSibling;
+  while (sibling !== null) {
+    if (sibling instanceof HTMLElement && sibling.matches("[data-vortex-style-root]"))
+      return sibling;
+    sibling = sibling.previousElementSibling;
+  }
 
   const focusedRoot = document.activeElement?.closest("[data-vortex-style-root]");
   if (focusedRoot instanceof HTMLElement) return focusedRoot;
@@ -30,15 +37,21 @@ function findUnambiguousStyleRoot(): HTMLElement | null {
 
 function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
   const styleRoot = useVortexStylePortalRoot();
+  const [anchor, setAnchor] = React.useState<HTMLSpanElement | null>(null);
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
-  const fallbackRoot =
-    styleRoot === null && container === undefined ? findUnambiguousStyleRoot() : null;
+  const needsAnchor = styleRoot === null && container === undefined;
+  const fallbackRoot = needsAnchor ? findStyleRoot(anchor) : null;
   return (
-    <DialogPrimitive.Portal
-      data-slot="dialog-portal"
-      container={container ?? styleRoot?.element ?? fallbackRoot ?? undefined}
-      {...props}
-    />
+    <>
+      {needsAnchor && <span ref={setAnchor} hidden aria-hidden="true" />}
+      {(!needsAnchor || anchor !== null) && (
+        <DialogPrimitive.Portal
+          data-slot="dialog-portal"
+          container={container ?? styleRoot?.element ?? fallbackRoot ?? undefined}
+          {...props}
+        />
+      )}
+    </>
   );
 }
 
