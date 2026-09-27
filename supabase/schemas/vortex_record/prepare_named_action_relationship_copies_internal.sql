@@ -261,6 +261,9 @@ begin
   return pg_catalog.jsonb_build_object('outcome', 'planned', 'copies', copies);
 end
 $function$;
+
+alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+
 revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
