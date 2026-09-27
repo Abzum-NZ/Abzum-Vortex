@@ -2181,9 +2181,6 @@
                                                    }
                                }
                            ],
-                 "workflows":  [
-
-                               ],
                  "pipelines":  [
                                    {
                                        "id":  "pipe_sd_case",
@@ -2200,13 +2197,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "triage",
@@ -2216,13 +2207,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "in_progress",
@@ -2232,13 +2217,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "waiting_customer",
@@ -2248,13 +2227,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "resolved",
@@ -2264,13 +2237,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       },
                                                       {
                                                           "key":  "closed",
@@ -2280,13 +2247,7 @@
                                                                             ],
                                                           "exit_actions":  [
 
-                                                                           ],
-                                                          "entry_workflows":  [
-
-                                                                              ],
-                                                          "exit_workflows":  [
-
-                                                                             ]
+                                                                           ]
                                                       }
                                                   ],
                                        "transitions":  [
