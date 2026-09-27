@@ -860,6 +860,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         command,
       );
       if (result.kind !== "available") return result;
+      if (result.value === "conflict") return "conflict";
       if (result.value.outcome === "refused") return { kind: "unavailable" };
       return {
         kind: "available",

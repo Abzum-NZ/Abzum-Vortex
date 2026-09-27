@@ -66,6 +66,14 @@ import {
 
 const unavailableCode = "ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE";
 
+const isStaleOwnProfileRevision = (error: unknown): boolean =>
+  error !== null &&
+  typeof error === "object" &&
+  "code" in error &&
+  error.code === "40001" &&
+  "message" in error &&
+  error.message === "Organization account profile update is stale or unavailable";
+
 type AccountPageRow = DatabaseRow & {
   organization_id: unknown;
   accounts: unknown;
@@ -587,7 +595,7 @@ export const createOrganizationLocalAdministrationService = (
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: UpdateOwnProfileCommand,
-    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> {
+    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult | "conflict">> {
       const command = updateOwnProfileCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
       let activityId: string;
@@ -597,8 +605,10 @@ export const createOrganizationLocalAdministrationService = (
         return { kind: "temporarily_unavailable" };
       }
       return requests.runChange(session, selection, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<ProfileChangeRow>`
+        let row: ProfileChangeRow;
+        try {
+          row = requireOne(
+            await transaction.query<ProfileChangeRow>`
             select outcome, operation, organization_id, organization_account_id,
               account_summary, correlation_id, accepted_at, access_version
             from vortex_access.update_own_profile(
@@ -609,8 +619,12 @@ export const createOrganizationLocalAdministrationService = (
               ${command.data.timeZone ?? null}::text,
               ${activityId}::uuid
             )
-          `,
-        );
+            `,
+          );
+        } catch (error) {
+          if (isStaleOwnProfileRevision(error)) return "conflict" as const;
+          throw error;
+        }
         if (
           typeof row.organization_id !== "string" ||
           !sameId(row.organization_id, scope.organizationId) ||
