@@ -727,7 +727,13 @@ importers:
       '@vortex/ui':
         specifier: workspace:*
         version: link:../ui
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
     devDependencies:
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@24.13.6)(happy-dom@20.14.5)(vite@8.2.2(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
