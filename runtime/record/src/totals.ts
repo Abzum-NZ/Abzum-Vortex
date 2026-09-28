@@ -223,6 +223,16 @@ const totalResult = (
   if (operation === "minimum" || operation === "maximum") {
     let selected: JsonValue = values[0]!;
     for (const candidate of values.slice(1)) {
+      if (sourceType === "yes_no") {
+        const combined = evaluateFormula({
+          op: operation === "minimum" ? "and" : "or",
+          args: [literal(sourceType, candidate), literal(sourceType, selected)],
+        });
+        if (combined?.type !== "yes_no" || typeof combined.value !== "boolean")
+          return { issue: issue("invalid_source_value", field.fieldId) };
+        selected = combined.value;
+        continue;
+      }
       const comparison = evaluateFormula({
         op: operation === "minimum" ? "lt" : "gt",
         left: literal(sourceType, candidate),

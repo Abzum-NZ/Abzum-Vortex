@@ -257,6 +257,21 @@ const moneyParts = (
   return amount === undefined ? undefined : { amount, currency: parsed.data.currency };
 };
 
+const decimalTextFromNumber = (value: number): string => {
+  const text = String(value);
+  const scientific = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/.exec(text);
+  if (!scientific) return text;
+  const digits = scientific[2]! + (scientific[3] ?? "");
+  const decimalIndex = scientific[2]!.length + Number(scientific[4]);
+  const magnitude =
+    decimalIndex <= 0
+      ? `0.${"0".repeat(-decimalIndex)}${digits}`
+      : decimalIndex >= digits.length
+        ? `${digits}${"0".repeat(decimalIndex - digits.length)}`
+        : `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+  return scientific[1] + magnitude;
+};
+
 export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
   condition: ResolvedTypedConditionNode<TSourceOperand>,
   resolveOperand: (entry: TSourceOperand) => ResolvedTypedConditionOperandV2,
@@ -334,8 +349,10 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
         typeof value === "number" && Number.isSafeInteger(value)
           ? "whole_number"
           : "decimal_number";
-      if (type === "decimal_number" && typeof value === "number") value = String(value);
-    } else if (type === "decimal_number" && typeof value === "number") value = String(value);
+      if (type === "decimal_number" && typeof value === "number")
+        value = decimalTextFromNumber(value);
+    } else if (type === "decimal_number" && typeof value === "number")
+      value = decimalTextFromNumber(value);
     else if (type === "record_reference") {
       type = "text";
       if (value !== null) value = recordReferenceIdentity(value) ?? value;

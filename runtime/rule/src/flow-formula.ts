@@ -225,7 +225,12 @@ const arithmetic = (
       operands.every((operand) => operand.type === "whole_number")
     ) {
       const whole = Number(amount);
-      if (!Number.isSafeInteger(whole)) return undefined;
+      if (!Number.isSafeInteger(whole)) {
+        if (!preserveExactArithmetic) return undefined;
+        const result = value("decimal_number", amount);
+        exactValues.set(result, exact);
+        return result;
+      }
       const result = value("whole_number", whole);
       if (preserveExactArithmetic) exactValues.set(result, exact);
       return result;
