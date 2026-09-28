@@ -467,6 +467,7 @@ revoke all on function vortex_identity.change_organization_account_state(uuid, b
 
 comment on function vortex_identity.change_organization_account_state(uuid, bigint, text) is null;
 
+grant execute on function vortex_identity.change_organization_account_state(uuid, bigint, text) to postgres;
 alter function vortex_identity.change_organization_account_state(uuid, bigint, text) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.create_organization_invitation(
