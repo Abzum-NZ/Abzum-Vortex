@@ -18,8 +18,7 @@ revoke execute on function vortex_context.is_non_nil_uuid(text)
   from public, anon, authenticated, service_role;
 grant execute on function vortex_context.is_non_nil_uuid(text)
   to vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter,
-    vortex_module_owner, vortex_access_owner, vortex_file_owner, vortex_page_owner,
-    vortex_workflow_owner;
+    vortex_module_owner, vortex_access_owner, vortex_workflow_owner;
 
 comment on function vortex_context.is_non_nil_uuid(text) is
   'Accepts only a non-nil RFC UUID with a version nibble from 1 through 8 and an RFC variant nibble.';
