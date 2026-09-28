@@ -35,3 +35,6 @@ grant execute on function vortex_access.validation_reference_list(text)
 
 comment on function vortex_access.validation_reference_list(text) is
   'Returns the ordered values of one seeded validation reference list; refuses an unknown or empty list so no check can pass against a missing list.';
+
+alter function vortex_access.validation_reference_list(text)
+  owner to vortex_access_owner;

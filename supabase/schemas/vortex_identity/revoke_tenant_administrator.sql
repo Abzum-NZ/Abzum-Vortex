@@ -106,3 +106,5 @@ grant execute on function vortex_identity.revoke_tenant_administrator(uuid, text
 
 comment on function vortex_identity.revoke_tenant_administrator(uuid, text, uuid, uuid, bigint) is
   'Protected same-tenant tenant-administrator revocation under the bound request context person''s current structural authority, with permanent-manager preservation, exact revision and accepted replay.';
+
+alter function vortex_identity.revoke_tenant_administrator(uuid,text,uuid,uuid,bigint) owner to postgres;
