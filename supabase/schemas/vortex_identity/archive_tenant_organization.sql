@@ -166,3 +166,5 @@ grant execute on function vortex_identity.archive_tenant_organization(uuid, text
 
 comment on function vortex_identity.archive_tenant_organization(uuid, text, uuid, uuid, bigint) is
   'Protected terminal organisation archive with no unresolved direct child, under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.archive_tenant_organization(uuid,text,uuid,uuid,bigint) owner to postgres;

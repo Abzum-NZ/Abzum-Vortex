@@ -178,3 +178,5 @@ grant execute on function vortex_identity.reparent_tenant_organization(uuid, tex
 
 comment on function vortex_identity.reparent_tenant_organization(uuid, text, uuid, uuid, bigint, uuid) is
   'Protected same-tenant adjacency-link-only organisation move under the bound request context person''s current structural authority, exact revision and accepted replay.';
+
+alter function vortex_identity.reparent_tenant_organization(uuid,text,uuid,uuid,bigint,uuid) owner to postgres;
