@@ -2,10 +2,12 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   flowTaskChildLists,
   platformOperationKey,
+  canonicalizeProtectedOperationReferences,
   type DefinitionRuleFailureFamily,
   type FlowDefinition,
   type FlowTask,
   type PlatformServiceOperationCatalogueEntry,
+  type ProtectedOperationReference,
   type SourceFlow,
 } from "@vortex/contracts";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
@@ -34,6 +36,27 @@ export type OperationCallIssue = Readonly<{
   taskId: string;
   ruleCode: DefinitionCompilerRefusalCode;
   family: DefinitionRuleFailureFamily;
+}>;
+
+export type ProtectedOperationReferenceLookups = Readonly<{
+  recordTypesById: ReadonlyMap<string, ProtectedOperationReference>;
+  queriesById: ReadonlyMap<string, ProtectedOperationReference>;
+  relationshipRecordTypeIdsById: ReadonlyMap<string, readonly string[]>;
+}>;
+
+export type FlowNodeOperationReferences = Readonly<{
+  flowId: FlowDefinition["id"];
+  nodeId: FlowTask["id"];
+  taskType: string;
+  operations: readonly ProtectedOperationReference[];
+}>;
+
+export type FlowOperationNodeDescriptor = Readonly<{
+  flowId: FlowDefinition["id"];
+  nodeId: FlowTask["id"];
+  taskType: string;
+  operationId?: string;
+  recordTypeIds: readonly string[];
 }>;
 
 const platformOperations: ReadonlyMap<string, CallableOperationInputs> = new Map(
@@ -68,6 +91,185 @@ const calls = (tasks: readonly FlowTask[]): FlowTask[] =>
     ...(task.type === "operation.call" ? [task] : []),
     ...flowTaskChildLists(task).flatMap((child) => calls(child.tasks)),
   ]);
+
+const flowTasks = (tasks: readonly FlowTask[]): FlowTask[] =>
+  tasks.flatMap((task) => [
+    task,
+    ...flowTaskChildLists(task).flatMap((child) => flowTasks(child.tasks)),
+  ]);
+
+/** Lists the protected Record and Query node identities in one published flow set. */
+export function flowOperationNodeDescriptors(
+  flows: readonly FlowDefinition[],
+): FlowOperationNodeDescriptor[] {
+  const nodes = flows.flatMap((flow) =>
+    [...flowTasks(flow.tasks), ...flowTasks(flow.errors), ...flowTasks(flow.finally)]
+      .filter((task) => task.type === "record.query" || task.type.startsWith("record."))
+      .map((task) => {
+        const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
+        const operationId = task.type === "record.query" ? literalIdentity(properties.query) : undefined;
+        const recordTypeIds =
+          task.type === "record.query" || task.type === "record.link"
+            ? []
+            : [
+                literalIdentity(properties.record_type),
+                ...declaredRecordTypeIds(flow, properties.record),
+                ...declaredRecordTypeIds(flow, properties.changes),
+              ]
+                .filter((recordTypeId): recordTypeId is string => recordTypeId !== undefined)
+                .map((recordTypeId) => recordTypeId.toLowerCase())
+                .filter((recordTypeId, index, ids) => ids.indexOf(recordTypeId) === index)
+                .sort();
+        return {
+          flowId: flow.id,
+          nodeId: task.id,
+          taskType: task.type,
+          ...(operationId === undefined ? {} : { operationId }),
+          recordTypeIds,
+        };
+      }),
+  );
+  const nodeIdentities = nodes.map(
+    (node) => `${String(node.flowId).toLowerCase()}:${node.nodeId.toLowerCase()}`,
+  );
+  if (new Set(nodeIdentities).size !== nodeIdentities.length)
+    throw new Error("Published Record and Query node identities must be unique within each flow");
+  return nodes.sort((left, right) => {
+    const leftFlowId = String(left.flowId).toLowerCase();
+    const rightFlowId = String(right.flowId).toLowerCase();
+    if (leftFlowId !== rightFlowId) return leftFlowId < rightFlowId ? -1 : 1;
+    const leftNodeId = left.nodeId.toLowerCase();
+    const rightNodeId = right.nodeId.toLowerCase();
+    return leftNodeId < rightNodeId ? -1 : leftNodeId > rightNodeId ? 1 : 0;
+  });
+}
+
+const literalIdentity = (value: unknown): string | undefined => {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    value.kind === "literal" &&
+    "literal" in value &&
+    typeof value.literal === "object" &&
+    value.literal !== null &&
+    "type" in value.literal &&
+    value.literal.type === "text" &&
+    "value" in value.literal &&
+    typeof value.literal.value === "string"
+  )
+    return value.literal.value;
+  return undefined;
+};
+
+const declaredRecordTypeIds = (flow: FlowDefinition, value: unknown): readonly string[] => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("kind" in value) ||
+    value.kind !== "reference" ||
+    !("reference" in value) ||
+    typeof value.reference !== "object" ||
+    value.reference === null ||
+    !("source" in value.reference) ||
+    !("name" in value.reference) ||
+    typeof value.reference.name !== "string"
+  )
+    return [];
+  if (value.reference.source === "input")
+    return flow.inputs[value.reference.name]?.recordTypeIds ?? [];
+  if (value.reference.source === "variable")
+    return flow.variables[value.reference.name]?.recordTypeIds ?? [];
+  return [];
+};
+
+/** Derives the exact static Record and Query reference set for every protected flow node. */
+export function flowOperationReferencesByNode(
+  flows: readonly FlowDefinition[],
+  lookups: ProtectedOperationReferenceLookups,
+): FlowNodeOperationReferences[] {
+  const nodes: FlowNodeOperationReferences[] = [];
+  const seenNodeIdentities = new Set<string>();
+
+  const recordReferenceFor = (
+    recordTypeId: string,
+  ): ProtectedOperationReference => {
+    const reference = lookups.recordTypesById.get(recordTypeId.toLowerCase());
+    if (reference === undefined)
+      throw new Error("A published record type has no resolved operation owner");
+    return reference;
+  };
+
+  for (const flow of flows) {
+    for (const task of [
+      ...flowTasks(flow.tasks),
+      ...flowTasks(flow.errors),
+      ...flowTasks(flow.finally),
+    ]) {
+      if (task.type !== "record.query" && !task.type.startsWith("record.")) continue;
+      const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
+      const nodeId = task.id;
+      const identity = `${String(flow.id).toLowerCase()}:${nodeId.toLowerCase()}`;
+      if (seenNodeIdentities.has(identity))
+        throw new Error("Published Record and Query node identities must be unique within each flow");
+      seenNodeIdentities.add(identity);
+
+      if (task.type === "record.query") {
+        const queryId = literalIdentity(properties.query);
+        const reference =
+          queryId === undefined ? undefined : lookups.queriesById.get(queryId.toLowerCase());
+        if (reference === undefined)
+          throw new Error("A published Query node has no resolved operation owner");
+        nodes.push({
+          flowId: flow.id,
+          nodeId,
+          taskType: task.type,
+          operations: canonicalizeProtectedOperationReferences([reference]),
+        });
+        continue;
+      }
+
+      const recordTypeIds: string[] = [];
+      if (task.type === "record.link") {
+        const relationshipId = literalIdentity(properties.relationship);
+        const relatedIds =
+          relationshipId === undefined
+            ? undefined
+            : lookups.relationshipRecordTypeIdsById.get(relationshipId.toLowerCase());
+        if (relatedIds === undefined || relatedIds.length < 2)
+          throw new Error("A published record link has no resolved relationship bounds");
+        recordTypeIds.push(...relatedIds);
+      } else {
+        const recordTypeId = literalIdentity(properties.record_type);
+        if (recordTypeId !== undefined) recordTypeIds.push(recordTypeId);
+        recordTypeIds.push(
+          ...declaredRecordTypeIds(flow, properties.record),
+          ...declaredRecordTypeIds(flow, properties.changes),
+        );
+      }
+
+      nodes.push({
+        flowId: flow.id,
+        nodeId,
+        taskType: task.type,
+        operations: canonicalizeProtectedOperationReferences(
+          [...new Set(recordTypeIds.map((recordTypeId) => recordTypeId.toLowerCase()))].map(
+            (recordTypeId) => recordReferenceFor(recordTypeId),
+          ),
+        ),
+      });
+    }
+  }
+
+  return nodes.sort((left, right) => {
+    const leftFlowId = String(left.flowId).toLowerCase();
+    const rightFlowId = String(right.flowId).toLowerCase();
+    if (leftFlowId !== rightFlowId) return leftFlowId < rightFlowId ? -1 : 1;
+    const leftNodeId = left.nodeId.toLowerCase();
+    const rightNodeId = right.nodeId.toLowerCase();
+    return leftNodeId < rightNodeId ? -1 : leftNodeId > rightNodeId ? 1 : 0;
+  });
+}
 
 export function findOperationCallIssue(
   flows: readonly FlowDefinition[],

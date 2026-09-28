@@ -12,7 +12,10 @@ import {
   type SemanticVersion,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
-import { platformOperationsCalledBy } from "./flow-operation-calls";
+import {
+  flowOperationNodeDescriptors,
+  platformOperationsCalledBy,
+} from "./flow-operation-calls";
 
 type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
 type CustomerDefinitionResolution =
@@ -115,19 +118,41 @@ const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
 };
 
 /**
- * The Application's flows and bindings are contained in its own release, so the only flow targets
- * its manifest pins are the platform-service operations its Call protected operation tasks name.
- * The manifest must hold exactly one entry for each, resolved with this release's own resolution.
- * The operation's release version and fingerprints are the ones publication pinned; they are read
- * from the manifest, never from today's catalogue, so a later catalogue release cannot make an
- * earlier Application release fail its integrity check.
+ * Application flows are contained by their release. The manifest pins each flow, every protected
+ * Record or Query node's canonical operation set, and the platform-service operations named by
+ * protected-operation calls. Each node entry is scoped by both flow and source task identity.
  */
 const exactApplicationFlowTargetsMatch = (
   output: Extract<CustomerDefinitionOutput, { kind: "application" }>,
   manifest: readonly ExactDefinitionDependency[],
 ): boolean => {
-  const expectedSubjects = new Set(
-    platformOperationsCalledBy(output.canonical.content.flows as unknown as FlowDefinition[]).map(
+  const flows = output.canonical.content.flows as unknown as FlowDefinition[];
+  const nodeDescriptors = flowOperationNodeDescriptors(flows);
+  const expectedSubjects = new Set([
+    ...flows.map((flow) =>
+      flowManifestSubject({
+        kind: "application_flow",
+        applicationRootId: output.artifact.rootId,
+        flowId: flow.id,
+        releaseVersion: output.artifact.exactVersion,
+        contentFingerprint: output.artifact.contentFingerprint,
+        resolutionFingerprint: output.resolutionFingerprint,
+      }),
+    ),
+    ...nodeDescriptors.map((node) =>
+      flowManifestSubject({
+        kind: "application_flow_node",
+        applicationRootId: output.artifact.rootId,
+        flowId: node.flowId,
+        nodeId: node.nodeId,
+        operations: [],
+        grantable: false,
+        releaseVersion: output.artifact.exactVersion,
+        contentFingerprint: output.artifact.contentFingerprint,
+        resolutionFingerprint: output.resolutionFingerprint,
+      }),
+    ),
+    ...platformOperationsCalledBy(flows).map(
       (operation) =>
         flowManifestSubject({
           kind: "protected_operation",
@@ -141,19 +166,80 @@ const exactApplicationFlowTargetsMatch = (
           catalogueFingerprint: operation.release.catalogueFingerprint,
         }),
     ),
-  );
+  ]);
   const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
   const actualSubjects = new Set(actual.map(flowManifestSubject));
   if (actualSubjects.size !== actual.length || actualSubjects.size !== expectedSubjects.size)
     return false;
-  return actual.every(
-    (entry) =>
-      entry.kind === "protected_operation" &&
-      entry.operation.owner.kind === "platform_service" &&
-      entry.resolutionFingerprint === output.resolutionFingerprint &&
-      entry.catalogueFingerprint !== undefined &&
-      expectedSubjects.has(flowManifestSubject(entry)),
+  const moduleRootIds = new Set(
+    output.canonical.content.moduleBindings.map((binding) => String(binding.moduleRootId).toLowerCase()),
   );
+  const nodeDescriptorByIdentity = new Map(
+    nodeDescriptors.map((node) => [
+      `${String(node.flowId).toLowerCase()}:${node.nodeId.toLowerCase()}`,
+      node,
+    ]),
+  );
+
+  return actual.every((entry) => {
+    if (entry.resolutionFingerprint !== output.resolutionFingerprint) return false;
+    if (entry.kind === "protected_operation")
+      return (
+        entry.operation.owner.kind === "platform_service" &&
+        entry.catalogueFingerprint !== undefined &&
+        expectedSubjects.has(flowManifestSubject(entry))
+      );
+    if (
+      entry.kind !== "application_flow" &&
+      entry.kind !== "application_flow_node"
+    )
+      return false;
+    if (
+      String(entry.applicationRootId).toLowerCase() !==
+        String(output.artifact.rootId).toLowerCase() ||
+      entry.releaseVersion !== output.artifact.exactVersion ||
+      entry.contentFingerprint !== output.artifact.contentFingerprint ||
+      !expectedSubjects.has(flowManifestSubject(entry))
+    )
+      return false;
+    if (entry.kind === "application_flow") return true;
+
+    const descriptor = nodeDescriptorByIdentity.get(
+      `${String(entry.flowId).toLowerCase()}:${entry.nodeId.toLowerCase()}`,
+    );
+    if (descriptor === undefined) return false;
+    if (
+      descriptor.taskType === "record.query" &&
+      (entry.operations.length !== 1 ||
+        descriptor.operationId === undefined ||
+        String(entry.operations[0]!.operationId).toLowerCase() !== descriptor.operationId.toLowerCase())
+    )
+      return false;
+    if (descriptor.taskType === "record.link") {
+      if (entry.operations.length === 0) return false;
+    } else if (
+      entry.operations.length !== descriptor.recordTypeIds.length ||
+      descriptor.recordTypeIds.some(
+        (recordTypeId) =>
+          !entry.operations.some(
+            (operation) => String(operation.operationId).toLowerCase() === recordTypeId,
+          ),
+      )
+    ) {
+      return false;
+    }
+    if (entry.grantable !== (entry.operations.length > 0)) return false;
+    return entry.operations.every((operation) => {
+      if (operation.owner.kind === "application")
+        return (
+          String(operation.owner.applicationRootId).toLowerCase() ===
+          String(output.artifact.rootId).toLowerCase()
+        );
+      if (operation.owner.kind === "module")
+        return moduleRootIds.has(String(operation.owner.moduleRootId).toLowerCase());
+      return false;
+    });
+  });
 };
 
 const exactApplicationDependenciesMatch = (
@@ -245,7 +331,13 @@ export const releaseManifestMatchesCanonicalContent = (
   output: CustomerDefinitionOutput,
   manifest: readonly ExactDefinitionDependency[],
 ): boolean => {
-  if (output.kind === "application") return exactApplicationDependenciesMatch(output, manifest);
+  if (output.kind === "application") {
+    try {
+      return exactApplicationDependenciesMatch(output, manifest);
+    } catch {
+      return false;
+    }
+  }
   const dependencies = output.canonical.content.dependencies;
   const modules = manifest.filter(
     (entry): entry is Extract<ExactDefinitionDependency, { kind: "module" }> =>

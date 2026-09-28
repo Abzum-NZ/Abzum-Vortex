@@ -135,6 +135,119 @@ export const protectedOperationReferenceSchema = z
   })
   .strict();
 
+const protectedOperationReferenceKey = (reference: ProtectedOperationReference): string => {
+  const ownerId =
+    reference.owner.kind === "application"
+      ? reference.owner.applicationRootId
+      : reference.owner.kind === "module"
+        ? reference.owner.moduleRootId
+        : reference.owner.serviceId;
+  return JSON.stringify([
+    reference.owner.kind,
+    String(ownerId).toLowerCase(),
+    String(reference.operationId).toLowerCase(),
+  ]);
+};
+
+const compareCanonicalKeys = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
+/** Deduplicates and sorts the exact operation set a protected flow node may touch. */
+export const canonicalizeProtectedOperationReferences = (
+  references: readonly ProtectedOperationReference[],
+): ProtectedOperationReference[] => {
+  const unique = new Map<string, ProtectedOperationReference>();
+  for (const reference of references) {
+    const normalized: ProtectedOperationReference = {
+      owner:
+        reference.owner.kind === "application"
+          ? {
+              kind: "application",
+              applicationRootId: reference.owner.applicationRootId.toLowerCase() as typeof reference.owner.applicationRootId,
+            }
+          : reference.owner.kind === "module"
+            ? {
+                kind: "module",
+                moduleRootId: reference.owner.moduleRootId.toLowerCase() as typeof reference.owner.moduleRootId,
+              }
+            : {
+                kind: "platform_service",
+                serviceId: reference.owner.serviceId.toLowerCase() as typeof reference.owner.serviceId,
+              },
+      operationId: reference.operationId.toLowerCase() as typeof reference.operationId,
+    };
+    unique.set(protectedOperationReferenceKey(normalized), normalized);
+  }
+  return [...unique.entries()]
+    .sort(([left], [right]) => compareCanonicalKeys(left, right))
+    .map(([, reference]) => reference);
+};
+
+/** A stored reference set is already deduplicated and in canonical order. */
+export const protectedOperationReferenceSetSchema = z
+  .array(protectedOperationReferenceSchema)
+  .max(21)
+  .superRefine((references, context) => {
+    const canonical = canonicalizeProtectedOperationReferences(references);
+    if (
+      canonical.length !== references.length ||
+      canonical.some(
+        (reference, index) =>
+          protectedOperationReferenceKey(reference) !==
+            protectedOperationReferenceKey(references[index]!) ||
+          JSON.stringify(reference) !== JSON.stringify(references[index]),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Protected operation references must be unique and canonically sorted",
+      });
+  });
+
+export const sameProtectedOperationReferenceSet = (
+  left: readonly ProtectedOperationReference[],
+  right: readonly ProtectedOperationReference[],
+): boolean => {
+  const canonicalLeft = canonicalizeProtectedOperationReferences(left);
+  const canonicalRight = canonicalizeProtectedOperationReferences(right);
+  return (
+    canonicalLeft.length === canonicalRight.length &&
+    canonicalLeft.every(
+      (reference, index) =>
+        protectedOperationReferenceKey(reference) ===
+        protectedOperationReferenceKey(canonicalRight[index]!),
+    )
+  );
+};
+
+const flowNodeOperationReferencesShape = {
+  nodeId: builderKeySchema,
+  operations: protectedOperationReferenceSetSchema,
+  grantable: z.boolean(),
+};
+const refineFlowNodeGrantability = (
+  value: { operations: readonly ProtectedOperationReference[]; grantable: boolean },
+  context: z.RefinementCtx,
+) => {
+  if (value.grantable !== (value.operations.length > 0))
+    context.addIssue({
+      code: "custom",
+      path: ["grantable"],
+      message: "Only a node with a static protected operation reference is grantable",
+    });
+  if (value.operations.some((operation) => operation.owner.kind === "platform_service"))
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: "Record and Query nodes are owned by an Application or Module",
+    });
+};
+
+export const flowNodeOperationReferencesSchema = z
+  .object(flowNodeOperationReferencesShape)
+  .strict()
+  .superRefine(refineFlowNodeGrantability);
+
 /**
  * Exact manifest entries for targets contained by an Application release. These are deliberately
  * separate from Module/connection dependencies: a target is pinned by its permanent owner and
@@ -160,10 +273,11 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
       kind: z.literal("application_flow_node"),
       applicationRootId: applicationRootIdSchema,
       flowId: ruleIdSchema,
-      nodeId: workflowNodeIdSchema,
+      ...flowNodeOperationReferencesShape,
       ...flowTargetDependencyCommon,
     })
-    .strict(),
+    .strict()
+    .superRefine(refineFlowNodeGrantability),
   z
     .object({
       kind: z.literal("application_query"),

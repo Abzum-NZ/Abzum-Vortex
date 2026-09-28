@@ -4,6 +4,7 @@ import {
   applicationCompilationRequestV2Schema,
   applicationCompositionCatalogueSnapshotV2Schema,
   assertModuleContractPair,
+  protectedOperationReferenceSchema,
   customComponentPlacementAllowedV2,
   definitionCompilationOutputSchema,
   definitionPublicationConfirmationSchema,
@@ -38,12 +39,14 @@ import {
   type VersionRequirement,
   type ConnectionTypeId,
   type Fingerprint,
+  type FlowDefinition,
   type ModuleRootId,
   type OrganizationId,
   type PlatformBlockReleaseV2,
   type PlatformId,
   type PlatformThemeReleaseV2,
   type PlatformServiceOperationRelease,
+  type ProtectedOperationReference,
   type Revision,
   type SemanticVersion,
 } from "@vortex/contracts";
@@ -57,7 +60,11 @@ import {
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
 import { compileParsedDefinition } from "./compiler";
-import { platformOperationsCalledBy } from "./flow-operation-calls";
+import {
+  flowOperationReferencesByNode,
+  platformOperationsCalledBy,
+  type ProtectedOperationReferenceLookups,
+} from "./flow-operation-calls";
 import { DefinitionCompilationError } from "./compilation-error";
 import { validateDefinitionSet } from "./validation";
 import {
@@ -895,31 +902,126 @@ const assertNoCycle = async (
 };
 
 /**
- * The exact platform-service operation releases an Application's flows call. The flows and their
- * bindings are contained in the Application's own release, so they add no entries of their own;
- * an operation is the only target outside it, and it is pinned once however many flows call it.
+ * Pins each contained Application flow and protected Record or Query node, with the canonical
+ * operation set resolved from that publication's exact definitions and dependencies. Platform
+ * operations called by flows keep their own exact catalogue release entries.
  */
+const protectedOperationReferenceLookups = (
+  resolution: DefinitionResolution,
+  dependencies: ResolvedDependencies,
+): ProtectedOperationReferenceLookups => {
+  const definitionsByKey = new Map<string, typeof resolution.definitions>();
+  for (const definition of resolution.definitions)
+    definitionsByKey.set(definition.key, [
+      ...(definitionsByKey.get(definition.key) ?? []),
+      definition,
+    ]);
+
+  const recordTypesById = new Map<string, ProtectedOperationReference>();
+  const queriesById = new Map<string, ProtectedOperationReference>();
+  const ownerReferenceFor = (
+    definitionKey: string,
+    operationId: string,
+  ): ProtectedOperationReference => {
+    const owners = (definitionsByKey.get(definitionKey) ?? []).filter(
+      (definition) => definition.kind === "application" || definition.kind === "module",
+    );
+    if (owners.length !== 1) return refuse("DEFINITION_COMPILATION_REFUSED");
+    const owner = owners[0]!;
+    return protectedOperationReferenceSchema.parse({
+      owner:
+        owner.kind === "application"
+          ? { kind: "application", applicationRootId: owner.rootId }
+          : { kind: "module", moduleRootId: owner.rootId },
+      operationId,
+    });
+  };
+  for (const identity of resolution.identities) {
+    if (identity.kind !== "record_type" && identity.kind !== "query") continue;
+    const reference = ownerReferenceFor(identity.definitionKey, identity.identifier);
+    const references = identity.kind === "record_type" ? recordTypesById : queriesById;
+    const key = identity.identifier.toLowerCase();
+    const prior = references.get(key);
+    if (prior !== undefined && JSON.stringify(prior) !== JSON.stringify(reference))
+      return refuse("DEFINITION_COMPILATION_REFUSED");
+    references.set(key, reference);
+  }
+
+  const relationshipRecordTypeIdsById = new Map<string, readonly string[]>();
+  for (const release of dependencies.modules) {
+    const moduleOutput = release.compilationOutput;
+    if (moduleOutput.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
+    for (const recordType of moduleOutput.canonical.content.recordTypes)
+      for (const relationship of recordType.relationships) {
+        const targetIds = relationship.toRecordType
+          ? [String(relationship.toRecordType.recordTypeId)]
+          : relationship.toRecordTypes?.map((target) => String(target.recordTypeId)) ?? [];
+        const recordTypeIds = [String(relationship.fromRecordTypeId), ...targetIds];
+        if (recordTypeIds.length < 2) return refuse("DEFINITION_COMPILATION_REFUSED");
+        const key = String(relationship.relationshipId).toLowerCase();
+        const prior = relationshipRecordTypeIdsById.get(key);
+        if (
+          prior !== undefined &&
+          JSON.stringify([...prior].map((id) => id.toLowerCase()).sort(compareCanonicalStrings)) !==
+            JSON.stringify([...recordTypeIds].map((id) => id.toLowerCase()).sort(compareCanonicalStrings))
+        )
+          return refuse("DEFINITION_COMPILATION_REFUSED");
+        relationshipRecordTypeIdsById.set(key, recordTypeIds);
+      }
+  }
+
+  return { recordTypesById, queriesById, relationshipRecordTypeIdsById };
+};
+
 const flowTargetManifestFor = (
   dependencies: ResolvedDependencies,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
-): ExactDefinitionDependency[] =>
-  output.kind !== "application"
-    ? []
-    : dependencies.platformOperations.map((release) => ({
-        kind: "protected_operation" as const,
-        operation: {
-          owner: { kind: "platform_service" as const, serviceId: release.serviceId },
-          operationId: release.operationId,
-        },
-        releaseVersion: release.releaseVersion,
-        contentFingerprint: release.contentFingerprint,
-        resolutionFingerprint: output.resolutionFingerprint,
-        catalogueFingerprint: release.catalogueFingerprint,
-      }));
+  resolution: DefinitionResolution,
+): ExactDefinitionDependency[] => {
+  if (output.kind !== "application") return [];
+  const flows = output.canonical.content.flows as unknown as FlowDefinition[];
+  const nodeReferences = flowOperationReferencesByNode(
+    flows,
+    protectedOperationReferenceLookups(resolution, dependencies),
+  );
+  const flowEntries: ExactDefinitionDependency[] = flows.map((flow) => ({
+    kind: "application_flow" as const,
+    applicationRootId: output.artifact.rootId,
+    flowId: flow.id,
+    releaseVersion: output.artifact.exactVersion,
+    contentFingerprint: output.artifact.contentFingerprint,
+    resolutionFingerprint: output.resolutionFingerprint,
+  }));
+  const flowNodeEntries: ExactDefinitionDependency[] = nodeReferences.map((node) => ({
+    kind: "application_flow_node" as const,
+    applicationRootId: output.artifact.rootId,
+    flowId: node.flowId,
+    nodeId: node.nodeId,
+    operations: [...node.operations],
+    grantable: node.operations.length > 0,
+    releaseVersion: output.artifact.exactVersion,
+    contentFingerprint: output.artifact.contentFingerprint,
+    resolutionFingerprint: output.resolutionFingerprint,
+  }));
+  const platformOperationEntries: ExactDefinitionDependency[] =
+    dependencies.platformOperations.map((release) => ({
+      kind: "protected_operation" as const,
+      operation: {
+        owner: { kind: "platform_service" as const, serviceId: release.serviceId },
+        operationId: release.operationId,
+      },
+      releaseVersion: release.releaseVersion,
+      contentFingerprint: release.contentFingerprint,
+      resolutionFingerprint: output.resolutionFingerprint,
+      catalogueFingerprint: release.catalogueFingerprint,
+    }));
+  return [...flowEntries, ...flowNodeEntries, ...platformOperationEntries];
+};
 
 const manifestFor = (
   dependencies: ResolvedDependencies,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
+  resolution: DefinitionResolution,
 ): ExactDefinitionDependency[] =>
   sortedManifest([
     ...dependencies.modules.map((release) => ({
@@ -957,7 +1059,7 @@ const manifestFor = (
             catalogueFingerprint: dependencies.compositionV2.platformTheme.catalogueFingerprint,
           },
         ]),
-    ...flowTargetManifestFor(dependencies, output),
+    ...flowTargetManifestFor(dependencies, output, resolution),
   ]);
 
 const buildResolution = (
@@ -1298,7 +1400,7 @@ const prepareFromReader = async (
     contentFingerprint: compilationOutput.artifact.contentFingerprint,
     resolutionFingerprint: compilationOutput.resolutionFingerprint,
     comparisonFingerprint: finalImpact.comparisonFingerprint,
-    dependencyManifest: manifestFor(dependencies, compilationOutput),
+    dependencyManifest: manifestFor(dependencies, compilationOutput, resolution),
     reasons: finalImpact.reasons,
     ...(finalImpact.outcome === "release_required" ? { impact: finalImpact.impact } : {}),
   });

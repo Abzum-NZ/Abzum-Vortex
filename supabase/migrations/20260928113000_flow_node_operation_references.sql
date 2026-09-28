@@ -1,3 +1,8 @@
+-- #1561 stores each protected flow node's canonical Record and Query operation-reference set in its exact release entry.
+begin;
+
+set local role postgres;
+
 create or replace function vortex_definition.append_release(
   p_root_id uuid,
   p_expected_draft_revision bigint,
@@ -956,3 +961,8 @@ grant execute on function vortex_definition.append_release(uuid, bigint, text, j
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
   'Atomically validates and records one compiled Definition release, including exact field-policy ownership, pinned dependencies, and canonical protected-operation references for every flow node, then advances only its root current-release pointer.';
+
+
+reset role;
+
+commit;
