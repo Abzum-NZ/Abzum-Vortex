@@ -1069,29 +1069,41 @@ function LiteralEditor({
 
   if (semanticType === "date_time")
     return (
-      <label>
-        {label}
-        <input
-          aria-invalid={error !== undefined}
-          type="datetime-local"
-          step={1}
-          value={localDateTimeInputValue(operand.value)}
-          onChange={(event) => {
-            const next = event.currentTarget.value;
-            if (next === "") {
-              onCommit(null);
-              return;
-            }
-            const instant = new Date(next);
-            if (Number.isNaN(instant.getTime())) {
-              onInvalid("Enter a valid date and time");
-              return;
-            }
-            onCommit(instant.toISOString());
-          }}
-        />
+      <fieldset>
+        <legend>{label}</legend>
+        <label>
+          Local date and time (whole seconds)
+          <input
+            aria-invalid={error !== undefined}
+            type="datetime-local"
+            step={1}
+            value={localDateTimeInputValue(operand.value)}
+            onChange={(event) => {
+              const next = event.currentTarget.value;
+              if (next === "") {
+                onCommit(null);
+                return;
+              }
+              const instant = new Date(next);
+              if (Number.isNaN(instant.getTime())) {
+                onInvalid("Enter a valid date and time");
+                return;
+              }
+              onCommit(instant.toISOString());
+            }}
+          />
+        </label>
+        <label>
+          Exact instant (ISO 8601 with offset)
+          <input
+            aria-invalid={error !== undefined}
+            type="text"
+            value={literalInputValue(operand.value)}
+            onChange={(event) => onCommit(event.currentTarget.value)}
+          />
+        </label>
         {error && <span role="alert">{error}</span>}
-      </label>
+      </fieldset>
     );
 
   if (semanticType === "money") {
