@@ -234,10 +234,10 @@ def _finish_capture_reader(reader: threading.Thread, stream: Any) -> bool:
     return True
 
 
-def _stop_owned_tree(child: subprocess.Popen[bytes], *, timeout: int) -> bool:
+def _stop_owned_tree(child: subprocess.Popen[bytes], *, timeout: int, require_running: bool = False) -> bool:
     """Stop only a process group created by this invocation, never a name-matched process."""
     if child.poll() is not None:
-        return True
+        return not require_running
     if os.name == "nt":
         taskkill = shutil.which("taskkill.exe") or shutil.which("taskkill")
         if taskkill is None:
@@ -284,6 +284,8 @@ def _git(checkout: Path, args: list[str], *, capture: bool = True) -> CommandRes
 
 def _git_text(checkout: Path, args: list[str]) -> str:
     result = _git(checkout, args)
+    if not result.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "A Git identity check left process cleanup uncertain")
     if result.timed_out or result.exit_code != 0:
         raise PreviewError("git_read_failed", "A read-only Git identity check failed")
     try:
@@ -294,6 +296,8 @@ def _git_text(checkout: Path, args: list[str]) -> str:
 
 def _git_paths(checkout: Path, args: list[str]) -> set[str]:
     result = _git(checkout, args)
+    if not result.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "A Git change check left process cleanup uncertain")
     if result.timed_out or result.exit_code != 0:
         raise PreviewError("git_read_failed", "A read-only Git change check failed")
     return {part.decode("utf-8") for part in result.stdout.split(b"\0") if part}
@@ -417,6 +421,8 @@ def _validate_env_file(raw: str, checkout: Path) -> tuple[Path, dict[str, str]]:
             "--web-env-file must be this checkout's apps/web/.env.development.local",
         )
     ignored = _git(checkout, ["check-ignore", "--quiet", "--", "apps/web/.env.development.local"])
+    if not ignored.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "The Git ignore check left process cleanup uncertain")
     if ignored.timed_out or ignored.exit_code != 0:
         raise PreviewError("env_file_not_ignored", "The local environment file is not Git-ignored")
     values = _read_dotenv(env_file)
@@ -467,6 +473,8 @@ def _validate_pr_remote(repo: str, number: int, sha: str, cwd: Path) -> dict[str
         timeout=30,
         capture_stdout=True,
     )
+    if not result.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "The PR head check left process cleanup uncertain")
     if result.timed_out or result.exit_code != 0:
         raise PreviewError("pr_read_failed", "The read-only pull request head check failed")
     try:
@@ -556,6 +564,7 @@ def _preflight(args: argparse.Namespace) -> dict[str, Any]:
         raise PreviewError("tsx_missing", "The installed web setup runtime is unavailable")
     if shutil.which("node") is None or shutil.which("git") is None:
         raise PreviewError("runtime_missing", "Node.js or Git is unavailable")
+    _server_paths(checkout)
     pair = _pr_pair(args)
     return {
         "checkout": str(checkout),
@@ -623,6 +632,8 @@ def _command_step(
         elapsed_seconds=round(result.elapsed_seconds, 3),
         owned_process_tree_stopped=result.stopped,
     )
+    if not result.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", f"Step {name} left process cleanup uncertain", step=name)
     if result.timed_out:
         raise PreviewError("command_timeout", f"Step {name} exceeded its bounded timeout", step=name)
     if result.exit_code != 0:
@@ -734,6 +745,8 @@ def _listener_pids(port: int, *, cwd: Path, env: dict[str, str]) -> set[int]:
             timeout=10,
             capture_stdout=True,
         )
+        if not result.stopped:
+            raise PreviewError("owned_process_stop_unconfirmed", "The listener query left process cleanup uncertain")
         if result.timed_out or result.exit_code != 0 or len(result.stdout) > MAX_CAPTURED_OUTPUT:
             raise PreviewError("listener_owner_unknown", "Cannot verify the loopback listener owner")
         pids: set[int] = set()
@@ -741,10 +754,11 @@ def _listener_pids(port: int, *, cwd: Path, env: dict[str, str]) -> set[int]:
             for line in result.stdout.decode("utf-8").splitlines():
                 address, raw_pid = line.split("|", 1)
                 ip = ipaddress.ip_address(address)
-                if ip.version == 4 and (ip.is_loopback or ip.is_unspecified):
-                    if not raw_pid.isdigit():
-                        raise ValueError("invalid owning process")
-                    pids.add(int(raw_pid))
+                if not ip.is_loopback:
+                    raise PreviewError("nonlocal_web_listener", "The requested web port has a non-loopback listener")
+                if not raw_pid.isdigit():
+                    raise ValueError("invalid owning process")
+                pids.add(int(raw_pid))
         except (UnicodeError, ValueError):
             raise PreviewError("listener_owner_unknown", "Cannot verify the loopback listener owner") from None
         return pids
@@ -753,14 +767,15 @@ def _listener_pids(port: int, *, cwd: Path, env: dict[str, str]) -> set[int]:
         wanted: set[str] = set()
         target_port = f"{port:04X}"
         try:
-            for line in Path("/proc/net/tcp").read_text(encoding="ascii").splitlines()[1:]:
-                fields = line.split()
-                local = fields[1]
-                state = fields[3]
-                inode = fields[9]
-                address, raw_port = local.split(":", 1)
-                if raw_port == target_port and state == "0A" and address in {"0100007F", "00000000"}:
-                    wanted.add(inode)
+            for table in ("tcp", "tcp6"):
+                for line in (Path("/proc/net") / table).read_text(encoding="ascii").splitlines()[1:]:
+                    fields = line.split()
+                    address, raw_port = fields[1].split(":", 1)
+                    if raw_port != target_port or fields[3] != "0A":
+                        continue
+                    if table == "tcp6" or address != "0100007F":
+                        raise PreviewError("nonlocal_web_listener", "The requested web port has another listener")
+                    wanted.add(fields[9])
         except (OSError, IndexError, UnicodeError, ValueError):
             raise PreviewError("listener_owner_unknown", "Cannot verify the loopback listener owner") from None
         owners: set[int] = set()
@@ -790,20 +805,138 @@ def _listener_pids(port: int, *, cwd: Path, env: dict[str, str]) -> set[int]:
     raise PreviewError("listener_owner_unknown", "Cannot verify the loopback listener owner on this platform")
 
 
-def _assert_owned_listener(
-    child: subprocess.Popen[bytes], port: int, *, cwd: Path, env: dict[str, str]
-) -> set[int]:
+def _process_record(pid: int, *, cwd: Path, env: dict[str, str]) -> dict[str, Any] | None:
+    """Read one process identity without persisting its command line or environment."""
+    if os.name == "nt":
+        powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+        if powershell is None:
+            raise PreviewError("process_identity_unknown", "Cannot verify the owned server process")
+        script = (
+            "$ErrorActionPreference = 'Stop'; "
+            f"$p = Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}'; "
+            "if ($null -ne $p) { "
+            "[pscustomobject]@{ pid = [int]$p.ProcessId; parent = [int]$p.ParentProcessId; "
+            "created = [long]$p.CreationDate.ToUniversalTime().Ticks; "
+            "executable = [string]$p.ExecutablePath; command = [string]$p.CommandLine } "
+            "| ConvertTo-Json -Compress }"
+        )
+        result = _run_process(
+            [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+            cwd=cwd,
+            env=env,
+            timeout=10,
+            capture_stdout=True,
+        )
+        if not result.stopped:
+            raise PreviewError("owned_process_stop_unconfirmed", "The process identity query left cleanup uncertain")
+        if result.timed_out or result.exit_code != 0:
+            raise PreviewError("process_identity_unknown", "Cannot verify the owned server process")
+        if not result.stdout.strip():
+            return None
+        try:
+            record = json.loads(result.stdout.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            raise PreviewError("process_identity_unknown", "Cannot verify the owned server process") from None
+    elif sys.platform.startswith("linux"):
+        process = Path("/proc") / str(pid)
+        try:
+            stat = (process / "stat").read_text(encoding="ascii")
+            fields = stat[stat.rfind(")") + 2 :].split()
+            command = (process / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8")
+            record = {
+                "pid": pid,
+                "parent": int(fields[1]),
+                "created": int(fields[19]),
+                "executable": str((process / "exe").resolve(strict=True)),
+                "command": command,
+            }
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeError, ValueError, IndexError):
+            raise PreviewError("process_identity_unknown", "Cannot verify the owned server process") from None
+    else:
+        raise PreviewError("process_identity_unknown", "Cannot verify the owned server process")
+    if (
+        not isinstance(record, dict)
+        or record.get("pid") != pid
+        or not isinstance(record.get("parent"), int)
+        or not isinstance(record.get("created"), int)
+        or not isinstance(record.get("executable"), str)
+        or not isinstance(record.get("command"), str)
+    ):
+        raise PreviewError("process_identity_unknown", "Cannot verify the owned server process")
+    return record
+
+
+def _same_path(actual: str, expected: Path) -> bool:
+    try:
+        left = Path(actual).resolve(strict=True)
+        right = expected.resolve(strict=True)
+    except OSError:
+        return False
+    return os.path.normcase(str(left)) == os.path.normcase(str(right))
+
+
+def _command_names_path(command: str, path: Path) -> bool:
+    # Both the symlink path passed to Node and the resolved package path are legitimate.
+    candidates = {str(path), str(path.resolve(strict=True))}
+    normalized = command.replace("/", "\\") if os.name == "nt" else command
+    for candidate in candidates:
+        candidate = candidate.replace("/", "\\") if os.name == "nt" else candidate
+        if re.search(r'(?:^|[\s"])' + re.escape(candidate) + r'(?:$|[\s"])', normalized, re.IGNORECASE if os.name == "nt" else 0):
+            return True
+    return False
+
+
+def _server_paths(cwd: Path) -> tuple[Path, Path, Path]:
+    node = shutil.which("node")
+    if node is None:
+        raise PreviewError("runtime_missing", "Node.js is unavailable")
+    cli = cwd / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
+    worker = cli.resolve(strict=True).parents[1] / "server" / "lib" / "start-server.js"
+    if not worker.is_file():
+        raise PreviewError("next_worker_missing", "The installed Next.js server worker is unavailable")
+    return Path(node), cli, worker
+
+
+def _assert_direct_server(child: subprocess.Popen[bytes], *, cwd: Path, env: dict[str, str]) -> dict[str, Any]:
     if child.poll() is not None:
         raise PreviewError("server_exited", "The owned local web server exited during verification", step="server_ready")
+    node, cli, _ = _server_paths(cwd)
+    direct = _process_record(child.pid, cwd=cwd, env=env)
+    if direct is None or not _same_path(direct["executable"], node) or not _command_names_path(direct["command"], cli):
+        raise PreviewError("server_identity_mismatch", "The direct Next.js process identity cannot be confirmed", step="server_ready")
+    return direct
+
+
+def _assert_owned_listener(
+    child: subprocess.Popen[bytes], port: int, *, cwd: Path, env: dict[str, str], expected: tuple[int, int] | None = None
+) -> tuple[int, int]:
+    direct = _assert_direct_server(child, cwd=cwd, env=env)
     pids = _listener_pids(port, cwd=cwd, env=env)
-    if pids != {child.pid}:
+    if len(pids) != 1:
         raise PreviewError("web_listener_owner_mismatch", "Loopback readiness did not belong exclusively to the owned server", step="server_ready")
-    return pids
+    listener_pid = next(iter(pids))
+    node, _, worker = _server_paths(cwd)
+    listener = _process_record(listener_pid, cwd=cwd, env=env)
+    if (
+        listener is None
+        or listener_pid == child.pid
+        or listener["parent"] != child.pid
+        or listener["created"] < direct["created"]
+        or not _same_path(listener["executable"], node)
+        or not _command_names_path(listener["command"], worker)
+    ):
+        raise PreviewError("web_listener_owner_mismatch", "Loopback listener is not the owned Next.js worker", step="server_ready")
+    identity = (listener_pid, listener["created"])
+    if expected is not None and identity != expected:
+        raise PreviewError("web_listener_changed", "The owned Next.js listener changed during verification", step="server_ready")
+    return identity
 
 
 def _await_server(
     child: subprocess.Popen[bytes], base_url: str, port: int, *, cwd: Path, env: dict[str, str], timeout: int
-) -> tuple[float, set[int]]:
+) -> tuple[float, tuple[int, int]]:
     started = time.monotonic()
     deadline = started + timeout
     ready_url = f"{base_url}/auth/sign-in"
@@ -816,6 +949,32 @@ def _await_server(
             return time.monotonic() - started, pids
         time.sleep(0.5)
     raise PreviewError("server_readiness_timeout", "The owned local web server did not return HTTP 200 before timeout", step="server_ready")
+
+
+def _stop_owned_server(
+    child: subprocess.Popen[bytes],
+    listener_identity: tuple[int, int] | None,
+    port: int,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+) -> bool:
+    """Stop the known CLI tree; an unproven worker remains for manual recovery."""
+    try:
+        if child.poll() is None:
+            _assert_direct_server(child, cwd=cwd, env=env)
+            direct_stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"], require_running=True)
+        else:
+            # An exited CLI might have left descendants beyond the known listener.
+            direct_stopped = False
+        listener_gone = True
+        if listener_identity is not None:
+            pid, created = listener_identity
+            current = _process_record(pid, cwd=cwd, env=env)
+            listener_gone = current is None or current["created"] != created
+        return direct_stopped and listener_gone and _port_is_free(port)
+    except PreviewError:
+        return False
 
 
 def _fixture_changes(checkout: Path) -> dict[str, str]:
@@ -864,8 +1023,8 @@ def _write_result(state_dir: Path, run_id: str, document: dict[str, Any]) -> Pat
     return target
 
 
-def _acquire_lock(state_dir: Path, run_id: str, checkout: Path, sha: str) -> tuple[Path, str]:
-    lock = state_dir / "local-preview.lock"
+def _acquire_lock(lock_dir: Path, run_id: str, checkout: Path, sha: str) -> tuple[Path, str]:
+    lock = lock_dir / "local-preview.lock"
     token = secrets.token_hex(24)
     payload = {
         "token": token,
@@ -936,6 +1095,9 @@ def _run(args: argparse.Namespace) -> int:
     state_dir = _resolve_future(args.state_dir, "--state-dir")
     _outside_checkout(state_dir, checkout, "--state-dir")
     _outside_git_worktrees(state_dir, "--state-dir")
+    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    _outside_checkout(lock_dir, checkout, "preview lock directory")
+    _outside_git_worktrees(lock_dir, "preview lock directory")
     if not _safe_email(args.owner_email):
         raise PreviewError("invalid_owner_email", "--owner-email is not a valid email address")
     if os.environ.get("VERCEL") or os.environ.get("CI", "").lower() == "true":
@@ -947,11 +1109,13 @@ def _run(args: argparse.Namespace) -> int:
     run_id = secrets.token_hex(12)
     try:
         state_dir.mkdir(parents=True, exist_ok=True)
+        lock_dir.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             os.chmod(state_dir, 0o700)
+            os.chmod(lock_dir, 0o700)
     except OSError:
         raise PreviewError("state_dir_failed", "Could not prepare the external result directory") from None
-    lock, token = _acquire_lock(state_dir, run_id, checkout, sha)
+    lock, token = _acquire_lock(lock_dir, run_id, checkout, sha)
     log_path = state_dir / f"local-preview-{run_id}.jsonl"
     try:
         log_file = log_path.open("x", encoding="utf-8")
@@ -967,6 +1131,8 @@ def _run(args: argparse.Namespace) -> int:
     server: subprocess.Popen[bytes] | None = None
     server_pid: int | None = None
     server_stopped: bool | None = None
+    listener_identity: tuple[int, int] | None = None
+    preserve_lock = False
     cli = checkout / "node_modules" / "supabase" / "dist" / "supabase.js"
     base_env = _base_env()
     local_values: dict[str, str] = {}
@@ -1107,7 +1273,7 @@ def _run(args: argparse.Namespace) -> int:
             server_env["VORTEX_DEV_SERVICE_ROLE_KEY"] = ""
             server_env["VORTEX_DEV_TEST_PASSWORD"] = ""
         server_pid = server.pid
-        ready_elapsed, listener_pids = _await_server(
+        ready_elapsed, listener_identity = _await_server(
             server,
             base_url,
             args.port,
@@ -1120,7 +1286,7 @@ def _run(args: argparse.Namespace) -> int:
             log_file,
             step="server.ready",
             pid=server.pid,
-            listener_pids=sorted(listener_pids),
+            listener_pids=[listener_identity[0]],
             http_status=200,
             elapsed_seconds=round(ready_elapsed, 3),
             local_url=base_url,
@@ -1128,8 +1294,8 @@ def _run(args: argparse.Namespace) -> int:
 
         adapter = Path(args.browser_adapter).resolve(strict=True)
         _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
-        owner_pids = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env)
-        _record(steps, log_file, step="server.owner.before_browser", pid=server.pid, listener_pids=sorted(owner_pids))
+        owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
+        _record(steps, log_file, step="server.owner.before_browser", pid=server.pid, listener_pids=[owner_identity[0]])
         browser_env = base_env.copy()
         browser_env.update(
             {
@@ -1151,25 +1317,19 @@ def _run(args: argparse.Namespace) -> int:
         )
         browser_evidence = _validate_browser_result(output, sha, run_id, fixtures)
         _record(steps, log_file, step="browser.evidence", evidence=browser_evidence)
-        owner_pids = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env)
-        _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=sorted(owner_pids))
-        if _git_text(checkout, ["rev-parse", "HEAD"]).lower() != sha:
-            raise PreviewError("head_changed", "Candidate HEAD changed during local preview")
-        if _fixture_changes(checkout) != fixtures:
-            raise PreviewError("fixtures_changed", "A declared fixture changed during browser verification")
-        if pair is not None:
-            pr_info = _validate_pr_remote(pair[0], pair[1], sha, checkout)
-            _record(steps, log_file, step="pr.head.after", pr=pr_info)
+        owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
+        _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=[owner_identity[0]])
         status = "PASS"
     except PreviewError as error:
         failure = {"code": error.code, "step": error.step}
+        preserve_lock = error.code == "owned_process_stop_unconfirmed"
     except Exception:
         failure = {"code": "unexpected_failure", "step": None}
+        preserve_lock = True
     finally:
-        if server is not None and server.poll() is None:
-            server_stopped = _stop_owned_tree(server, timeout=RUN_TIMEOUTS["server_stop"])
+        if server is not None:
+            server_stopped = _stop_owned_server(server, listener_identity, args.port, cwd=checkout, env=base_env)
             port_released = _port_is_free(args.port)
-            server_stopped = server_stopped and port_released
             _record(
                 steps,
                 log_file,
@@ -1180,24 +1340,25 @@ def _run(args: argparse.Namespace) -> int:
             )
             if not server_stopped:
                 status = "FAIL"
-                failure = {"code": "owned_server_stop_failed", "step": "server.stop_owned_tree"}
-        elif server is not None:
-            port_released = _port_is_free(args.port)
-            server_stopped = port_released
-            _record(
-                steps,
-                log_file,
-                step="server.stop_owned_tree",
-                pid=server_pid,
-                stopped=server_stopped,
-                port_released=port_released,
-            )
-            if not server_stopped:
+                failure = {"code": "owned_server_stop_unconfirmed", "step": "server.stop_owned_tree"}
+                preserve_lock = True
+        if status == "PASS":
+            try:
+                if _git_text(checkout, ["rev-parse", "HEAD"]).lower() != sha:
+                    raise PreviewError("head_changed", "Candidate HEAD changed during local preview")
+                if _fixture_changes(checkout) != fixtures:
+                    raise PreviewError("fixtures_changed", "A declared fixture changed during browser verification")
+                adapter = _resolve_existing(args.browser_adapter, "--browser-adapter")
+                _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
+                if pair is not None:
+                    pr_info = _validate_pr_remote(pair[0], pair[1], sha, checkout)
+                    _record(steps, log_file, step="pr.head.after", pr=pr_info)
+                _record(steps, log_file, step="final.identity_verified", head_sha=sha, fixtures=fixtures)
+            except PreviewError as error:
                 status = "FAIL"
-                failure = {"code": "server_port_not_released", "step": "server.stop_owned_tree"}
+                failure = {"code": error.code, "step": error.step}
         log_file.close()
 
-    released = _release_lock(lock, token)
     result = {
         "schema": "vortex.local-preview.result.v1",
         "run_id": run_id,
@@ -1217,9 +1378,16 @@ def _run(args: argparse.Namespace) -> int:
         "steps": steps,
         "failure": failure,
         "log_file": str(log_path),
-        "lock_released": released,
+        "lock_released": False,
     }
     result_path = _write_result(state_dir, run_id, result)
+    if not preserve_lock:
+        if _release_lock(lock, token):
+            result["lock_released"] = True
+        else:
+            result["status"] = status = "FAIL"
+            result["failure"] = failure = {"code": "lock_release_failed", "step": "lock.release"}
+        _write_result(state_dir, run_id, result)
     print(json.dumps({"status": status, "result_file": str(result_path), "head_sha": sha, "failure": failure}, sort_keys=True))
     return 0 if status == "PASS" else 2
 
