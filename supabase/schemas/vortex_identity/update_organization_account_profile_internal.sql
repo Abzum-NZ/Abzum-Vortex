@@ -89,3 +89,4 @@ comment on function vortex_identity.update_organization_account_profile_internal
   'Owner-only Identity writer for one active organisation account profile under an exact current revision; changes display name, language and time zone only and advances the account revision.';
 
 alter function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) owner to vortex_identity_owner;
+grant execute on function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) to postgres;

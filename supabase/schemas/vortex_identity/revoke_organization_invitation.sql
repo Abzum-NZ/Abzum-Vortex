@@ -57,3 +57,4 @@ revoke all on function vortex_identity.revoke_organization_invitation(uuid, bigi
 comment on function vortex_identity.revoke_organization_invitation(uuid, bigint) is null;
 
 alter function vortex_identity.revoke_organization_invitation(uuid, bigint) owner to vortex_identity_owner;
+grant execute on function vortex_identity.revoke_organization_invitation(uuid, bigint) to postgres;

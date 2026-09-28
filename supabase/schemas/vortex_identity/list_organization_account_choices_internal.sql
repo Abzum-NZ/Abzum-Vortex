@@ -97,3 +97,4 @@ comment on function vortex_identity.list_organization_account_choices_internal(
 ) is 'Identity-owned bounded picker projection of active accounts in one active organisation: account id and display name only, keyset-paged, no counts.';
 
 alter function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) owner to vortex_identity_owner;
+grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;

@@ -74,3 +74,4 @@ comment on function vortex_identity.list_organization_accounts_for_administratio
 ) is 'Identity-owned bounded organisation-scoped safe account administration projection.';
 
 alter function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) owner to vortex_identity_owner;
+grant execute on function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) to postgres;

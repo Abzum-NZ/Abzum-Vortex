@@ -37,3 +37,4 @@ comment on function vortex_identity.list_organization_invitations_projection_int
   'Identity-owned set-returning safe organisation-invitation projection bounded to the given organisation: the raw invitation secret and its stored fingerprint are never exposed, and the already-decided request scope is the only visibility.';
 
 alter function vortex_identity.list_organization_invitations_projection_internal(uuid) owner to vortex_identity_owner;
+grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;

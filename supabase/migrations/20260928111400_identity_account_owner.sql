@@ -2044,6 +2044,30 @@ comment on function vortex_identity.save_organization_runtime_settings_record_in
 
 alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
 
+-- Existing postgres-owned definers still call these private Identity entry points.
+-- Preserve their execute access after ownership moves to vortex_identity_owner.
+grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;
+grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;
+grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;
+grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;
+grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;
+grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to postgres;
+grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;
+grant execute on function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) to postgres;
+grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
+grant execute on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) to postgres;
+grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;
+grant execute on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) to postgres;
+grant execute on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) to postgres;
+grant execute on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) to postgres;
+grant execute on function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) to postgres;
+grant execute on function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) to postgres;
+grant execute on function vortex_identity.revoke_organization_invitation(uuid, bigint) to postgres;
+grant execute on function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) to postgres;
+grant execute on function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) to postgres;
+grant execute on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) to postgres;
+grant execute on function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) to postgres;
+
 grant select on table vortex_identity.organization_accounts to vortex_identity_owner;
 grant insert (activated_at, changed_at, display_name, identity_id, organization_account_id, organization_id, originating_invitation_id, revision, state, state_change_correlation_id, state_changed_at, state_changed_by) on table vortex_identity.organization_accounts to vortex_identity_owner;
 grant update (activated_at, changed_at, closed_at, closing_at, deleted_at, display_name, language, originating_invitation_id, revision, state, state_change_correlation_id, state_changed_at, state_changed_by, suspended_at, time_zone) on table vortex_identity.organization_accounts to vortex_identity_owner;

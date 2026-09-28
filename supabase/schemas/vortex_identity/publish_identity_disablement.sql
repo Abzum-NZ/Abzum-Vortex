@@ -39,3 +39,4 @@ comment on function vortex_identity.publish_identity_disablement(uuid, uuid, uui
   'Private step of complete_identity_disablement: suspends the subject''s existing cluster-local identity projection.';
 
 alter function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) owner to vortex_identity_owner;
+grant execute on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) to postgres;
