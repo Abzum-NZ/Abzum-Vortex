@@ -10,8 +10,8 @@ import type { FlowDispatchResult, FlowRuntime } from "./flow-runtime";
  * reaches the same run and the effect ledger replays its recorded outcome instead of committing
  * again.
  *
- * The surface's answers travel as the submission envelope the server's form-submit adapter reads
- * (`values`); the client never names a flow input, a node or an outcome.
+ * The surface's field answers and optional owner Group choice travel as the submission envelope
+ * the server's form-submit adapter reads; the client never names a flow input, a node or an outcome.
  */
 
 export type FormFieldAnswers = Readonly<Record<string, unknown>>;
@@ -21,6 +21,7 @@ export type FormBlockRuntime = Readonly<{
   submit: (
     binding: ComponentFlowBinding,
     values: FormFieldAnswers,
+    selectedOwnerGroupId?: string,
   ) => Promise<FlowDispatchResult | undefined>;
   /** The form's mount event, when the placement binds it. */
   ready: (binding: ComponentFlowBinding) => Promise<FlowDispatchResult | undefined>;
@@ -73,9 +74,12 @@ export function createFormBlockRuntime(
   };
 
   return Object.freeze({
-    submit: (binding, values) => {
+    submit: (binding, values, selectedOwnerGroupId) => {
       if (binding.event !== "form_submit") return Promise.resolve(undefined);
-      const callerInputs = { values };
+      const callerInputs = {
+        values,
+        ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
+      };
       return dispatchOnce(
         binding,
         callerInputs,

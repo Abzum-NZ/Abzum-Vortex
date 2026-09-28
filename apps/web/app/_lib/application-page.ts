@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  readCurrentRecordOwnerGroupsAfterAuthorization,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
@@ -1192,6 +1193,72 @@ const loadApplicationPageInternal = async (
             ? { status: "empty" }
             : { status: "ready", values: display.values };
     }
+  }
+
+  // A Group-owned create form needs an explicit owner from the viewer's current
+  // memberships. Every Group returned here is eligible for initial Group ownership;
+  // the Record writer still locks and rechecks the selected membership at save time.
+  const ownershipByRecordType = new Map(
+    context.releaseSet.modules.flatMap((module) =>
+      module.content.recordTypes.map((recordType) =>
+        [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
+      ),
+    ),
+  );
+  const createsGroupRecord = (flowId: string): boolean => {
+    const visited = new Set<string>();
+    const visitFlow = (id: string): boolean => {
+      if (visited.has(id.toLowerCase())) return false;
+      visited.add(id.toLowerCase());
+      const flow = flowsById.get(id.toLowerCase());
+      if (flow === undefined) return false;
+      const visitTasks = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
+        const properties = "properties" in task ? task.properties : undefined;
+        const recordType = properties?.record_type;
+        if (task.type === "record.save" && properties !== undefined &&
+            !Object.hasOwn(properties, "record") && isRecord(recordType) &&
+            recordType.kind === "literal" && isRecord(recordType.literal) &&
+            recordType.literal.type === "text" &&
+            typeof recordType.literal.value === "string" &&
+            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group")
+          return true;
+        if (task.type === "run_flow" &&
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId)))
+          return true;
+        return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
+      });
+      return visitTasks(flow.tasks) || visitTasks(flow.errors) || visitTasks(flow.finally);
+    };
+    return visitFlow(flowId);
+  };
+  const groupCreateBindings = placements.flatMap(({ placementId, placement }) => {
+    const block = placement.block;
+    if (!isRecord(block) || typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) return [];
+    return (bindings[placementId] ?? [])
+      .filter((binding) => binding.event === "form_submit" &&
+        createsGroupRecord(binding.flowId))
+      .map((binding) => ({ formId: placementId, binding }));
+  });
+  if (groupCreateBindings.length > 0) {
+    if (groupCreateBindings.some(({ binding }) =>
+      !binding.callerInputs.includes("selected_owner_group_id")))
+      return { kind: "temporarily_unavailable" };
+    const choices = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      async (transaction, scope) => {
+        return {
+          accessVersion: scope.accessVersion,
+          groups: await readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
+        };
+      },
+    );
+    if (choices.kind !== "available") return choices;
+    if (choices.value.accessVersion !== page.accessVersion)
+      return { kind: "temporarily_unavailable" };
+    for (const formId of new Set(groupCreateBindings.map(({ formId }) => formId)))
+      data[formId] = { status: "ready", values: { kind: "form", ownerGroups: choices.value.groups } };
   }
 
   // A detail or form page offers its subject to the flows it starts; a public page never does.

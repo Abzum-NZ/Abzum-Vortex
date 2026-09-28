@@ -2867,6 +2867,10 @@
                              "values": {
                                  "type": "json",
                                  "required": true
+                             },
+                             "selected_owner_group_id": {
+                                 "type": "text",
+                                 "required": true
                              }
                          },
                          "tasks": [
@@ -2887,6 +2891,13 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     },
+                                     "selected_owner_group_id": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "selected_owner_group_id"
                                          }
                                      }
                                  }
@@ -3484,6 +3495,10 @@
                              "values": {
                                  "kind": "caller",
                                  "name": "values"
+                             },
+                             "selected_owner_group_id": {
+                                 "kind": "caller",
+                                 "name": "selected_owner_group_id"
                              }
                          }
                      },
