@@ -11,7 +11,7 @@ import {
   type RuleGraphValueType,
   type RuleGraphVariableDeclaration,
 } from "@vortex/contracts";
-import { codePointCompare, exactJsonEqual } from "./typed-condition-core";
+import { compareFlowText, flowJsonValuesEqual } from "./flow-formula";
 import {
   evaluateResolvedTypedConditionV2,
   semanticTypeForFieldV2,
@@ -284,7 +284,7 @@ export const evaluateBeforeSaveRuleGraphs = (
     )
     .sort(
       (left, right) =>
-        left.priority - right.priority || codePointCompare(left.ruleId, right.ruleId),
+        left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
     );
   const applicableIds = new Set<string>(applicableGraphs.map((graph) => graph.ruleId));
   if (Object.keys(suppliedByRule).some((ruleId) => !applicableIds.has(ruleId)))
@@ -388,14 +388,14 @@ export const evaluateBeforeSaveRuleGraphs = (
     [...candidate.entries()]
       .filter(([fieldId, value]) => {
         const initialValue = initial.get(fieldId);
-        return initialValue === undefined || !exactJsonEqual(value, initialValue);
+        return initialValue === undefined || !flowJsonValuesEqual(value, initialValue);
       })
-      .sort(([left], [right]) => codePointCompare(left, right))
+      .sort(([left], [right]) => compareFlowText(left, right))
       .map(([fieldId, value]) => [fieldId, clone(value)]),
   );
   const clearFieldIds = [...initial.keys()]
     .filter((fieldId) => !candidate.has(fieldId))
-    .sort(codePointCompare);
+    .sort(compareFlowText);
 
   return { success: true, setValues, clearFieldIds, requirements, warnings };
 };
