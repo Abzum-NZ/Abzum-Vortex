@@ -346,18 +346,25 @@ function includeOwnedDescendants(rows, owned) {
 async function waitForOwnedBrowserRoot(deadline) {
   while (Date.now() < deadline) {
     const rows = browserProcessSnapshot();
-    const roots = rows.filter((row) =>
+    const candidates = rows.filter((row) =>
       row.name.toLowerCase() === "msedge.exe" && row.executableMatch && row.profileMatch &&
       row.createdAt !== null && row.createdAt >= browserSpawnStartedAt - 2_000 &&
       (row.parentPid === process.pid || row.parentPid === edgeProcess?.pid)
     );
-    if (roots.length === 1) {
-      const owned = new Map([[roots[0].pid, roots[0].createdAt]]);
+    const covering = [];
+    for (const candidate of candidates) {
+      const owned = new Map([[candidate.pid, candidate.createdAt]]);
       includeOwnedDescendants(rows, owned);
       if (rows.every((row) => !row.profileMatch || owned.get(row.pid) === row.createdAt)) {
-        ownedProcessIdentities = owned;
-        return roots[0];
+        covering.push({ candidate, owned });
       }
+    }
+    rootCandidateCount = candidates.length;
+    coveringCandidateCount = covering.length;
+    launcherCandidatePresent = candidates.some((row) => row.pid === edgeProcess?.pid);
+    if (covering.length === 1) {
+      ownedProcessIdentities = covering[0].owned;
+      return covering[0].candidate;
     }
     await sleep(Math.min(POLL_INTERVAL_MS, Math.max(1, deadline - Date.now())));
   }
@@ -986,6 +993,9 @@ let ownedProcessIdentities;
 let failureCode = "internal_error";
 let browserLaunchRequested = false;
 let browserStartupPhase = "not_started";
+let rootCandidateCount = 0;
+let coveringCandidateCount = 0;
+let launcherCandidatePresent = false;
 
 async function runBrowserLifecycleProbe() {
   // No application origin is contacted: Edge remains on its unique about:blank page.
@@ -1014,6 +1024,9 @@ async function runBrowserLifecycleProbe() {
     launch_requested: browserLaunchRequested,
     launcher_spawned: browserSpawned,
     ownership_confirmed: ownedProcessIdentities !== undefined,
+    root_candidate_count: rootCandidateCount,
+    covering_candidate_count: coveringCandidateCount,
+    launcher_candidate_present: launcherCandidatePresent,
     browser_cleanup: { confirmed: result.browser_cleanup.confirmed },
     ...(result.reason ? { reason: result.reason } : {}),
   };
