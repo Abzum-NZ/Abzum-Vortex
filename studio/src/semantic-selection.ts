@@ -1,37 +1,36 @@
-import type {
-  ApplicationDraftV2,
-  ApplicationRootId,
-  ContainedComponentId,
-  FlowId,
-  PageId,
-  ShellId,
-} from "@vortex/contracts";
+import type { ApplicationRootId, ApplicationSourceDocumentV2 } from "@vortex/contracts";
+
+/** The editable Application source and its permanent Definition root identity. */
+export type StudioApplicationSelectionDraft = Readonly<{
+  rootId: ApplicationRootId;
+  source: ApplicationSourceDocumentV2;
+}>;
 
 /**
  * The selected authored application item shared by Studio workspace surfaces.
- * Ids come from the Application draft contract; adapter-local node ids and layout
- * coordinates are deliberately absent.
+ * Item aliases come from the current Application source. Puck and React Flow node
+ * ids, canonical compilation ids, and layout coordinates are deliberately absent.
  */
 export type StudioSemanticSelection =
   | Readonly<{ kind: "application"; applicationRootId: ApplicationRootId }>
-  | Readonly<{ kind: "page"; pageId: PageId }>
-  | Readonly<{ kind: "shell"; shellId: ShellId }>
-  | Readonly<{ kind: "navigation"; navigationItemId: ContainedComponentId }>
-  | Readonly<{ kind: "flow"; flowId: FlowId }>
-  | Readonly<{ kind: "placement"; placementId: ContainedComponentId }>;
+  | Readonly<{ kind: "page"; pageAlias: string }>
+  | Readonly<{ kind: "shell"; shellAlias: string }>
+  | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
+  | Readonly<{ kind: "flow"; flowAlias: string }>
+  | Readonly<{ kind: "placement"; placementAlias: string }>;
 
 type PlacementOwner =
-  | Readonly<{ kind: "page"; pageId: PageId }>
-  | Readonly<{ kind: "shell"; shellId: ShellId }>;
+  | Readonly<{ kind: "page"; pageAlias: string }>
+  | Readonly<{ kind: "shell"; shellAlias: string }>;
 
-type PlacementSlotIdentitySource = Readonly<{ placements: Readonly<Record<string, unknown>> }>;
+type SourcePlacementSlot = ApplicationSourceDocumentV2["body"]["shells"][number]["layout"];
 
 type SelectionIndex = Readonly<{
   applicationRootId: ApplicationRootId;
-  pageIds: ReadonlySet<string>;
-  shellIds: ReadonlySet<string>;
-  navigationItemIds: ReadonlySet<string>;
-  flowIds: ReadonlySet<string>;
+  pageAliases: ReadonlySet<string>;
+  shellAliases: ReadonlySet<string>;
+  navigationItemAliases: ReadonlySet<string>;
+  flowAliases: ReadonlySet<string>;
   placementOwners: ReadonlyMap<string, PlacementOwner>;
 }>;
 
@@ -42,24 +41,18 @@ export type StudioSemanticSelectionListener = (
 export interface StudioSemanticSelectionStore {
   /** Returns the current semantic identity, or `null` when the editor cleared selection. */
   getSelection(): StudioSemanticSelection | null;
-  /** Selects an identity present in the current draft; returns false for a stale identity. */
+  /** Selects an identity present in the current source; selecting a page also switches pages. */
   select(selection: StudioSemanticSelection | null): boolean;
-  /** Reconciles identities against the latest draft without retaining or advancing its revision. */
-  reconcile(draft: ApplicationDraftV2): StudioSemanticSelection | null;
+  /** Reconciles identities against the latest source without retaining or advancing its revision. */
+  reconcile(draft: StudioApplicationSelectionDraft): StudioSemanticSelection | null;
   /** Subscribes to shared selection changes. Read the initial value with `getSelection`. */
   subscribe(listener: StudioSemanticSelectionListener): () => void;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-const isPlacementSlot = (value: unknown): value is PlacementSlotIdentitySource =>
-  isRecord(value) && isRecord(value.placements) && "order" in value;
-
 const selectionForOwner = (owner: PlacementOwner): StudioSemanticSelection =>
   owner.kind === "page"
-    ? Object.freeze({ kind: "page", pageId: owner.pageId })
-    : Object.freeze({ kind: "shell", shellId: owner.shellId });
+    ? Object.freeze({ kind: "page", pageAlias: owner.pageAlias })
+    : Object.freeze({ kind: "shell", shellAlias: owner.shellAlias });
 
 const applicationSelection = (applicationRootId: ApplicationRootId): StudioSemanticSelection =>
   Object.freeze({ kind: "application", applicationRootId });
@@ -72,15 +65,15 @@ const normalizeSelection = (
     case "application":
       return Object.freeze({ kind: "application", applicationRootId: selection.applicationRootId });
     case "page":
-      return Object.freeze({ kind: "page", pageId: selection.pageId });
+      return Object.freeze({ kind: "page", pageAlias: selection.pageAlias });
     case "shell":
-      return Object.freeze({ kind: "shell", shellId: selection.shellId });
+      return Object.freeze({ kind: "shell", shellAlias: selection.shellAlias });
     case "navigation":
-      return Object.freeze({ kind: "navigation", navigationItemId: selection.navigationItemId });
+      return Object.freeze({ kind: "navigation", navigationItemAlias: selection.navigationItemAlias });
     case "flow":
-      return Object.freeze({ kind: "flow", flowId: selection.flowId });
+      return Object.freeze({ kind: "flow", flowAlias: selection.flowAlias });
     case "placement":
-      return Object.freeze({ kind: "placement", placementId: selection.placementId });
+      return Object.freeze({ kind: "placement", placementAlias: selection.placementAlias });
     default:
       return undefined;
   }
@@ -92,15 +85,15 @@ const selectionKey = (selection: StudioSemanticSelection | null): string | null 
     case "application":
       return `application:${selection.applicationRootId}`;
     case "page":
-      return `page:${selection.pageId}`;
+      return `page:${selection.pageAlias}`;
     case "shell":
-      return `shell:${selection.shellId}`;
+      return `shell:${selection.shellAlias}`;
     case "navigation":
-      return `navigation:${selection.navigationItemId}`;
+      return `navigation:${selection.navigationItemAlias}`;
     case "flow":
-      return `flow:${selection.flowId}`;
+      return `flow:${selection.flowAlias}`;
     case "placement":
-      return `placement:${selection.placementId}`;
+      return `placement:${selection.placementAlias}`;
   }
 };
 
@@ -112,73 +105,73 @@ const containsSelection = (
     case "application":
       return selection.applicationRootId === index.applicationRootId;
     case "page":
-      return index.pageIds.has(selection.pageId);
+      return index.pageAliases.has(selection.pageAlias);
     case "shell":
-      return index.shellIds.has(selection.shellId);
+      return index.shellAliases.has(selection.shellAlias);
     case "navigation":
-      return index.navigationItemIds.has(selection.navigationItemId);
+      return index.navigationItemAliases.has(selection.navigationItemAlias);
     case "flow":
-      return index.flowIds.has(selection.flowId);
+      return index.flowAliases.has(selection.flowAlias);
     case "placement":
-      return index.placementOwners.has(selection.placementId);
+      return index.placementOwners.has(selection.placementAlias);
   }
 };
 
-const indexDraft = (draft: ApplicationDraftV2): SelectionIndex => {
-  const pageIds = new Set<string>();
-  const shellIds = new Set<string>();
-  const navigationItemIds = new Set<string>();
-  const flowIds = new Set<string>();
+const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
+  const pageAliases = new Set<string>();
+  const shellAliases = new Set<string>();
+  const navigationItemAliases = new Set<string>();
+  const flowAliases = new Set<string>();
   const placementOwners = new Map<string, PlacementOwner>();
 
   const collectNavigation = (
-    items: readonly ApplicationDraftV2["content"]["navigation"][number][],
+    items: readonly ApplicationSourceDocumentV2["body"]["navigation"][number][],
   ): void => {
     for (const item of items) {
-      navigationItemIds.add(item.id);
+      navigationItemAliases.add(item.id);
       if (item.type === "heading") collectNavigation(item.children);
     }
   };
 
-  const collectPlacementSlot = (slot: PlacementSlotIdentitySource, owner: PlacementOwner): void => {
-    for (const [placementId, rawPlacement] of Object.entries(slot.placements)) {
-      placementOwners.set(placementId, owner);
-      if (!isRecord(rawPlacement) || !isRecord(rawPlacement.slots)) continue;
-      for (const nestedSlot of Object.values(rawPlacement.slots))
-        visitCompositionSlots(nestedSlot, owner);
+  const collectPlacementSlot = (slot: SourcePlacementSlot, owner: PlacementOwner): void => {
+    for (const [placementAlias, placement] of Object.entries(slot.placements)) {
+      placementOwners.set(placementAlias, owner);
+      for (const childSlot of Object.values(placement.slots))
+        collectPlacementSlot(childSlot, owner);
     }
   };
 
-  const visitCompositionSlots = (value: unknown, owner: PlacementOwner): void => {
-    if (Array.isArray(value)) {
-      for (const child of value) visitCompositionSlots(child, owner);
-      return;
-    }
-    if (!isRecord(value)) return;
-    if (isPlacementSlot(value)) {
-      collectPlacementSlot(value, owner);
-      return;
-    }
-    for (const child of Object.values(value)) visitCompositionSlots(child, owner);
-  };
-
-  collectNavigation(draft.content.navigation);
-  for (const flow of draft.content.flows) flowIds.add(flow.id);
-  for (const shell of draft.content.shells) {
-    shellIds.add(shell.shellId);
-    visitCompositionSlots(shell.layout, { kind: "shell", shellId: shell.shellId });
+  collectNavigation(draft.source.body.navigation);
+  for (const flow of draft.source.body.flows) flowAliases.add(flow.id);
+  for (const shell of draft.source.body.shells) {
+    shellAliases.add(shell.id);
+    collectPlacementSlot(shell.layout, { kind: "shell", shellAlias: shell.id });
   }
-  for (const page of draft.content.pages) {
-    pageIds.add(page.pageId);
-    visitCompositionSlots(page.composition, { kind: "page", pageId: page.pageId });
+  for (const page of draft.source.body.pages) {
+    pageAliases.add(page.id);
+    const owner = { kind: "page", pageAlias: page.id } as const;
+    const composition = page.composition;
+    if ("step_content" in composition) {
+      if (composition.shell_kind === "default") {
+        for (const slot of Object.values(composition.step_content))
+          collectPlacementSlot(slot, owner);
+      } else {
+        for (const slots of Object.values(composition.step_content))
+          for (const slot of Object.values(slots)) collectPlacementSlot(slot, owner);
+      }
+    } else if (composition.shell_kind === "default") {
+      collectPlacementSlot(composition.main, owner);
+    } else {
+      for (const slot of Object.values(composition.content)) collectPlacementSlot(slot, owner);
+    }
   }
 
   return {
-    applicationRootId: draft.envelope.rootId,
-    pageIds,
-    shellIds,
-    navigationItemIds,
-    flowIds,
+    applicationRootId: draft.rootId,
+    pageAliases,
+    shellAliases,
+    navigationItemAliases,
+    flowAliases,
     placementOwners,
   };
 };
@@ -189,7 +182,7 @@ const indexDraft = (draft: ApplicationDraftV2): SelectionIndex => {
  * [#545](https://github.com/Abzum-NZ/Abzum-Vortex/issues/545).
  */
 export const createStudioSemanticSelectionStore = (
-  initialDraft: ApplicationDraftV2,
+  initialDraft: StudioApplicationSelectionDraft,
 ): StudioSemanticSelectionStore => {
   let index = indexDraft(initialDraft);
   let selection: StudioSemanticSelection | null = applicationSelection(index.applicationRootId);
@@ -210,7 +203,7 @@ export const createStudioSemanticSelectionStore = (
       notify();
       return true;
     },
-    reconcile: (latestDraft: ApplicationDraftV2): StudioSemanticSelection | null => {
+    reconcile: (latestDraft: StudioApplicationSelectionDraft): StudioSemanticSelection | null => {
       const previousIndex = index;
       index = indexDraft(latestDraft);
 
@@ -219,7 +212,7 @@ export const createStudioSemanticSelectionStore = (
         next = applicationSelection(index.applicationRootId);
       } else if (selection !== null && !containsSelection(index, selection)) {
         if (selection.kind === "placement") {
-          const formerOwner = previousIndex.placementOwners.get(selection.placementId);
+          const formerOwner = previousIndex.placementOwners.get(selection.placementAlias);
           const ownerSelection = formerOwner === undefined ? undefined : selectionForOwner(formerOwner);
           next =
             ownerSelection !== undefined && containsSelection(index, ownerSelection)
