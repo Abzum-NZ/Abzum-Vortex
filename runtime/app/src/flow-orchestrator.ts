@@ -6,6 +6,7 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
   flowIdSchema,
+  groupIdSchema,
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
@@ -584,18 +585,27 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       }
       // A task that names a record changes it; one that names none creates a record.
       if (!Object.hasOwn(call.properties, "record")) {
+        const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
+        const selectedGroup = selectedOwnerGroupId === undefined
+          ? undefined
+          : groupIdSchema.safeParse(selectedOwnerGroupId);
+        if (selectedGroup !== undefined && !selectedGroup.success)
+          return { outcome: "validation" };
         const command = saveRecordCommandV2Schema.safeParse({
           contractVersion: "2.0.0",
           commandId,
           operation: "create",
           recordTypeId: recordTypeId.data,
           submittedValues,
+          ...(selectedGroup === undefined ? {} : { selectedOwnerGroupId: selectedGroup.data }),
         });
         return command.success
           ? { plan: { kind: "save", command: command.data } }
           : { outcome: "validation" };
       }
       const recordId = recordIdSchema.safeParse(call.properties.record?.value);
+      if (Object.hasOwn(call.properties, "selected_owner_group_id"))
+        return { outcome: "validation" };
       if (!recordId.success) return { outcome: "validation" };
       // A change is bound to the revision the person saw: the surface's subject. Without it the
       // change cannot be checked against what the person was shown, so it does not run.
