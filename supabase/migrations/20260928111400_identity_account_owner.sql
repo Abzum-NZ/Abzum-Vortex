@@ -1250,6 +1250,8 @@ $function$;
 
 revoke all on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+grant execute on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) to vortex_record_adapter;
+
 comment on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) is
   'Private exclusive lock and state read that opens the account-deletion fence.';
 
