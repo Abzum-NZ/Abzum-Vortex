@@ -122,6 +122,24 @@ CUSTOMER_PROBE_COUNT_FIELDS = (
     "visible_customer_label_count",
 )
 CUSTOMER_PROBE_GROUP_FIELDS = CUSTOMER_PROBE_COUNT_FIELDS[2:]
+CUSTOMER_VISIBILITY_FLAGS = (
+    "self_hidden",
+    "self_aria_hidden",
+    "ancestor_hidden",
+    "ancestor_aria_hidden",
+    "self_display_none",
+    "ancestor_display_none",
+    "self_visibility_hidden",
+    "ancestor_visibility_hidden",
+    "self_opacity_zero",
+    "ancestor_opacity_zero",
+    "no_client_rect",
+    "zero_rect_width",
+    "zero_rect_height",
+    "computed_display_inline",
+    "has_checkbox_class",
+    "has_inline_style",
+)
 RUN_TIMEOUTS = {
     "auth_prepare": 120,
     "supabase_status": 60,
@@ -1646,6 +1664,32 @@ def _browser_report(
                 "capped": raw_probe["capped"],
                 "scope_valid": raw_probe["scope_valid"],
             }
+            if raw_probe["scope_valid"]:
+                raw_visibility = result.get("customer_visibility_probe")
+                visibility_valid = (
+                    isinstance(raw_visibility, dict)
+                    and set(raw_visibility)
+                    == set(CUSTOMER_VISIBILITY_FLAGS) | {"semantic_root_count", "capped", "semantic_root_unique"}
+                    and type(raw_visibility["semantic_root_count"]) is int
+                    and 0 <= raw_visibility["semantic_root_count"] <= 1024
+                    and type(raw_visibility["capped"]) is bool
+                    and type(raw_visibility["semantic_root_unique"]) is bool
+                )
+                if visibility_valid:
+                    assert isinstance(raw_visibility, dict)
+                    unique = raw_visibility["semantic_root_count"] == 1 and not raw_visibility["capped"]
+                    visibility_valid = raw_visibility["semantic_root_unique"] is unique and all(
+                        type(raw_visibility[name]) is bool if unique else raw_visibility[name] is None
+                        for name in CUSTOMER_VISIBILITY_FLAGS
+                    )
+                evidence["customer_visibility_probe_valid"] = visibility_valid
+                if visibility_valid:
+                    evidence["customer_visibility_probe"] = {
+                        "semantic_root_count": raw_visibility["semantic_root_count"],
+                        "capped": raw_visibility["capped"],
+                        "semantic_root_unique": raw_visibility["semantic_root_unique"],
+                        **{name: raw_visibility[name] for name in CUSTOMER_VISIBILITY_FLAGS},
+                    }
 
     if not identity_matches:
         return evidence, False, "browser_evidence_mismatch"
