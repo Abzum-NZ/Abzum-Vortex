@@ -160,3 +160,5 @@ grant execute on function vortex_identity.change_tenant_administrator(uuid, text
 
 comment on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz) is
   'Protected same-tenant tenant-administrator change under the bound request context person''s current structural authority, with database-computed command fingerprint, self-grant refusal, grantor-bounded expiry, exact revision and accepted replay.';
+
+alter function vortex_identity.change_tenant_administrator(uuid,text,uuid,uuid,bigint,jsonb,timestamp with time zone,timestamp with time zone) owner to postgres;

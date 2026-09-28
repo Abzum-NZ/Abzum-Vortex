@@ -19,7 +19,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { equalFormValue, useFormField } from "./form-context";
+import { equalFormValue, useFormField, useFormFieldError } from "./form-context";
 
 export type SeveralChoicesInputProps = ControlRenderProps<SeveralChoicesInputPayload>;
 
@@ -61,7 +61,14 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
   const allowedSelected = selected.filter((key) => options.some((option) => option.key === key));
   const selectedSet = new Set(allowedSelected);
   const atLimit = maximumSelections !== undefined && allowedSelected.length >= maximumSelections;
-  useFormField(fieldKey, props.placementId, allowedSelected);
+  useFormField(
+    fieldKey,
+    props.placementId,
+    allowedSelected,
+    required && allowedSelected.length === 0 ? () => `${label} is required.` : undefined,
+  );
+  const validationError = useFormFieldError(fieldKey);
+  const fieldError = error ?? validationError;
 
   const change = (key: string, checked: boolean): void => {
     if (disabled) return;
@@ -74,7 +81,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
   };
 
-  const described = describedBy(ids, help, error, note, draftFeedback);
+  const described = describedBy(ids, help, fieldError, note, draftFeedback);
   return (
     <Field
       data-vortex-control="several-choices-input"
@@ -85,7 +92,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
       aria-labelledby={ids.label}
       aria-describedby={described["aria-describedby"]}
       aria-required={required || described["aria-required"] === true}
-      aria-invalid={error !== undefined}
+      aria-invalid={fieldError !== undefined}
     >
       <fieldset disabled={disabled} className="flex flex-col gap-2">
         <legend id={ids.label} className="vortex-field-label">
@@ -101,7 +108,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
                   id={optionId}
                   checked={checked}
                   disabled={disabled || (!checked && atLimit)}
-                  aria-invalid={error !== undefined}
+                  aria-invalid={fieldError !== undefined}
                   onCheckedChange={(next) => change(option.key, next === true)}
                 />
                 <FieldLabel htmlFor={optionId}>{option.label}</FieldLabel>
@@ -113,7 +120,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
       <FieldMessages
         ids={ids}
         help={help}
-        error={error}
+        error={fieldError}
         note={note}
         draftFeedback={draftFeedback}
       />
