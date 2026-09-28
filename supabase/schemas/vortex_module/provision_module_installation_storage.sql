@@ -26,9 +26,12 @@ declare
   checked_context jsonb;
   application_release vortex_definition.releases%rowtype;
   stored_binding vortex_module.installation_bindings%rowtype;
+  staged_binding vortex_module.staged_installation_bindings%rowtype;
   provision record;
+  active_application_release_revision bigint;
   next_binding_revision bigint;
   binding_exists boolean;
+  staged_binding_exists boolean;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -131,6 +134,122 @@ begin
     raise exception using errcode = '23514', message = 'Exact application Module binding is unavailable';
   end if;
 
+  select pg_catalog.min(binding.application_release_revision)
+  into active_application_release_revision
+  from vortex_module.installation_bindings as binding
+  where binding.organization_id = permission_decision.organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.state = 'active';
+  if exists (
+    select 1 from vortex_module.installation_bindings as binding
+    where binding.organization_id = permission_decision.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state = 'active'
+      and binding.application_release_revision <> active_application_release_revision
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Active Application installation is mixed';
+  end if;
+  if exists (
+    select 1 from vortex_module.installation_bindings as binding
+    where binding.organization_id = permission_decision.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state = 'draining'
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation is draining';
+  end if;
+
+  if active_application_release_revision is not null then
+    if p_application_release_revision <= active_application_release_revision then
+      raise exception using errcode = '40001',
+        message = 'Application installation candidate is not a newer release';
+    end if;
+    if exists (
+      select 1 from vortex_module.staged_installation_bindings as staged
+      where staged.organization_id = permission_decision.organization_id
+        and staged.application_root_id = p_application_root_id
+        and staged.application_release_revision <> p_application_release_revision
+    ) then
+      raise exception using errcode = '40001',
+        message = 'Application installation candidate changed';
+    end if;
+
+    select binding.* into stored_binding
+    from vortex_module.installation_bindings as binding
+    where binding.organization_id = permission_decision.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = p_module_root_id
+    for update;
+    binding_exists := found;
+    if (binding_exists and stored_binding.binding_revision is distinct from p_expected_binding_revision)
+      or (not binding_exists and p_expected_binding_revision is not null)
+      or (binding_exists and stored_binding.state not in ('active', 'detached')) then
+      raise exception using errcode = '40001',
+        message = 'Module installation binding changed';
+    end if;
+
+    select staged.* into staged_binding
+    from vortex_module.staged_installation_bindings as staged
+    where staged.organization_id = permission_decision.organization_id
+      and staged.application_root_id = p_application_root_id
+      and staged.application_release_revision = p_application_release_revision
+      and staged.module_root_id = p_module_root_id
+    for update;
+    staged_binding_exists := found;
+
+    select storage.* into strict provision
+    from vortex_record.provision_exact_module_storage(
+      p_module_root_id, p_module_release_revision
+    ) as storage;
+
+    if staged_binding_exists then
+      if staged_binding.module_release_revision <> p_module_release_revision
+        or staged_binding.base_binding_revision is distinct from p_expected_binding_revision
+        or staged_binding.base_binding_state is distinct from
+          case when binding_exists then stored_binding.state else null end
+        or staged_binding.storage_contract_ids <> provision.storage_contract_ids then
+        raise exception using errcode = '40001',
+          message = 'Staged Module installation evidence is incompatible';
+      end if;
+      return query select 'provisioned'::text, false, staged_binding.binding_revision,
+        p_application_root_id, p_application_release_revision, p_module_root_id,
+        p_module_release_revision, staged_binding.storage_contract_ids;
+      return;
+    end if;
+
+    if p_expected_binding_revision = 9007199254740991 then
+      raise exception using errcode = '22003',
+        message = 'Module installation binding revision is exhausted';
+    end if;
+    next_binding_revision := coalesce(p_expected_binding_revision, 0) + 1;
+    insert into vortex_module.staged_installation_bindings (
+      organization_id, application_root_id, application_release_revision,
+      module_root_id, module_release_revision, binding_revision,
+      base_binding_revision, base_binding_state, storage_contract_ids
+    ) values (
+      permission_decision.organization_id, p_application_root_id,
+      p_application_release_revision, p_module_root_id, p_module_release_revision,
+      next_binding_revision, p_expected_binding_revision,
+      case when binding_exists then stored_binding.state else null end,
+      provision.storage_contract_ids
+    );
+
+    return query select 'provisioned'::text, true, next_binding_revision,
+      p_application_root_id, p_application_release_revision, p_module_root_id,
+      p_module_release_revision, provision.storage_contract_ids;
+    return;
+  end if;
+
+  if exists (
+    select 1 from vortex_module.staged_installation_bindings as staged
+    where staged.organization_id = permission_decision.organization_id
+      and staged.application_root_id = p_application_root_id
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation candidate changed';
+  end if;
+
   select binding.* into stored_binding
   from vortex_module.installation_bindings as binding
   where binding.organization_id = permission_decision.organization_id
@@ -219,7 +338,7 @@ exception
     raise exception using errcode = 'P0002', message = 'Module installation evidence is unavailable';
   when too_many_rows then
     raise exception using errcode = '55000', message = 'Module installation evidence is ambiguous';
-end
+end;
 $function$;
 
 alter function vortex_module.provision_module_installation_storage(uuid,bigint,uuid,bigint,bigint) owner to vortex_module_owner;
@@ -233,4 +352,4 @@ grant execute on function vortex_module.provision_module_installation_storage(
 ) to vortex_request;
 comment on function vortex_module.provision_module_installation_storage(
   uuid, bigint, uuid, bigint, bigint
-) is 'Protected exact-release storage provisioning; commits only an inactive Module binding.';
+) is 'Protected exact-release storage provisioning; commits inactive first-install bindings and privately stages upgrade bindings while the current release stays active.';
