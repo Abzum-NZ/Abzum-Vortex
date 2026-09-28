@@ -13,7 +13,8 @@ on table vortex_access.organization_roles to vortex_access_owner;
 
 grant select (
   role_kind, privilege_classification, application_root_id, source_catalogue_fingerprint,
-  accepted_registration_revision, source_registration_kind, source_release_revision,
+  accepted_registration_revision, source_registration_kind, source_definition_key,
+  source_release_revision,
   source_release_version, source_validation_contract_version, source_content_fingerprint,
   source_resolution_fingerprint
 ) on table vortex_access.organization_role_revisions to vortex_access_owner;
