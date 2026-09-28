@@ -11,6 +11,7 @@ import {
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
+import { ApplicationFrame } from "./_components/application-frame";
 import { ApplicationPageView } from "./_components/application-page-view";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
@@ -299,7 +300,10 @@ export default async function ApplicationAddressPage({
         ? "The release could not be adopted. The current release is still in use."
         : undefined;
   return (
-    <>
+    <ApplicationFrame
+      theme={page.model.theme}
+      organizationShortName={resolved.read.organizationShortName}
+    >
       {adoptionOutcome === undefined ? null : (
         <p role="status" data-vortex-release-adoption="outcome">
           {adoptionOutcome}
@@ -332,6 +336,6 @@ export default async function ApplicationAddressPage({
           abandon: abandonGuidedFormDraftAction,
         }}
       />
-    </>
+    </ApplicationFrame>
   );
 }
