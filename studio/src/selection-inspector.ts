@@ -1,12 +1,11 @@
 import {
+  applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
 } from "@vortex/contracts";
-import type {
-  StudioApplicationSelectionDraft,
-  StudioSemanticSelection,
-} from "./semantic-selection";
+import type { StudioApplicationDraftHistoryState } from "./application-draft-history";
+import type { StudioSemanticSelection } from "./semantic-selection";
 
 export type StudioSelectionInspectorDescriptor = Readonly<{
   applicationRootId: ApplicationRootId;
@@ -68,12 +67,13 @@ const parseSelection = (
   if (!isObjectRecord(selection)) return undefined;
 
   switch (selection.kind) {
-    case "application":
-      return hasExactKeys(selection, ["kind", "applicationRootId"]) &&
-        typeof selection.applicationRootId === "string" &&
-        selection.applicationRootId.length > 0
-        ? Object.freeze({ kind: "application", applicationRootId: selection.applicationRootId })
+    case "application": {
+      if (!hasExactKeys(selection, ["kind", "applicationRootId"])) return undefined;
+      const parsedRoot = applicationRootIdSchema.safeParse(selection.applicationRootId);
+      return parsedRoot.success
+        ? Object.freeze({ kind: "application", applicationRootId: parsedRoot.data })
         : undefined;
+    }
     case "page":
     case "shell":
     case "navigation":
@@ -194,12 +194,13 @@ const placementCandidates = (
  * retains the authored source object or carries permission state.
  */
 export const resolveStudioSelectionInspectorContext = (
-  draft: StudioApplicationSelectionDraft,
+  draft: Pick<StudioApplicationDraftHistoryState, "rootId" | "source">,
   selection: StudioSemanticSelection | null,
 ): StudioSelectionInspectorResolution => {
   try {
-    if (!isObjectRecord(draft) || typeof draft.rootId !== "string" || draft.rootId.length === 0)
-      return refused("invalid_context");
+    if (!isObjectRecord(draft)) return refused("invalid_context");
+    const parsedRoot = applicationRootIdSchema.safeParse(draft.rootId);
+    if (!parsedRoot.success) return refused("invalid_context");
 
     const parsedSource = applicationSourceDocumentV2Schema.safeParse(draft.source);
     if (!parsedSource.success) return refused("invalid_context");
@@ -209,8 +210,8 @@ export const resolveStudioSelectionInspectorContext = (
     if (parsedSelection === null) return result({ status: "empty" });
 
     if (parsedSelection.kind === "application") {
-      if (parsedSelection.applicationRootId !== draft.rootId) return refused("cross_root");
-      return resolved(draft.rootId as ApplicationRootId, "application", {
+      if (parsedSelection.applicationRootId !== parsedRoot.data) return refused("cross_root");
+      return resolved(parsedRoot.data, "application", {
         alias: source.root_alias,
         label: source.body.name,
         sourcePath: [],
@@ -277,7 +278,7 @@ export const resolveStudioSelectionInspectorContext = (
     const candidate = onlyMatch(candidates);
     if (candidate === null) return result({ status: "missing" });
     if (candidate === undefined) return refused("ambiguous_selection");
-    return resolved(draft.rootId as ApplicationRootId, parsedSelection.kind, candidate);
+    return resolved(parsedRoot.data, parsedSelection.kind, candidate);
   } catch {
     return refused("invalid_context");
   }
