@@ -151,18 +151,22 @@ export const adoptApplicationRelease = async (
   )
     throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_STALE");
   const installationCoordinator = coordinator();
-  await installationCoordinator.prepare(session, {
-    organizationId: activation.organizationId,
-    applicationRootId: activation.applicationRootId,
-    applicationReleaseRevision: activation.applicationReleaseRevision,
-    expectedActiveReleaseRevision: activation.expectedActiveReleaseRevision,
-  });
   try {
+    await installationCoordinator.prepare(session, {
+      organizationId: activation.organizationId,
+      applicationRootId: activation.applicationRootId,
+      applicationReleaseRevision: activation.applicationReleaseRevision,
+      expectedActiveReleaseRevision: activation.expectedActiveReleaseRevision,
+    });
     await installationCoordinator.activate(session, activation);
   } catch (error) {
-    // A failed switch leaves the previous release active. Remove this exact staged candidate so
-    // its bindings do not remain after the adoption attempt has ended.
-    await installationCoordinator.discardPreparation(session, activation);
+    // A failed preparation or switch leaves the previous release active. Remove this exact
+    // inactive candidate when an adoption attempt ends.
+    try {
+      await installationCoordinator.discardPreparation(session, activation);
+    } catch {
+      // The original refusal remains the safe result if cleanup also loses authority.
+    }
     throw error;
   }
 };

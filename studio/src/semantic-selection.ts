@@ -254,11 +254,13 @@ export const traverseStudioSemanticSelectionDraft = (
                       label: authoredLabel(step.name, "Step"),
                     }),
                     () => {
-                      const stepSlots = composition.step_content[step.id];
-                      if (stepSlots === undefined) return;
                       if (composition.shell_kind === "default") {
-                        placementSlot(stepSlots, pageOwner, "main", "Main");
+                        const stepSlot = composition.step_content[step.id];
+                        if (stepSlot === undefined) return;
+                        placementSlot(stepSlot, pageOwner, "main", "Main");
                       } else {
+                        const stepSlots = composition.step_content[step.id];
+                        if (stepSlots === undefined) return;
                         pageSlots(stepSlots, composition.shell, pageOwner);
                       }
                     },
