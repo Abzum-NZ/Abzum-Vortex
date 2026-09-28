@@ -77,9 +77,10 @@ import { z } from "zod";
  * policies the activation gate requires. An upgrade stages a separate exact-release binding while
  * the previous release stays active, then atomically promotes that binding during activation.
  *
- * Withdrawal is one transaction: detach the active binding set (storage and records are retained),
- * append its Activity, then withdraw the permission registration through the Access coordinator,
- * which refuses a change that would leave the organisation without a permanent steward.
+ * Withdrawing an active installation detaches its bindings, retains storage and records, records
+ * Activity, removes its runtime bundles and withdraws its permission registration in one
+ * transaction. Withdrawing a staged candidate removes only that candidate's bindings and then
+ * restores the still-active release's permission registration if needed.
  */
 
 type InstallerRequests = Pick<
@@ -184,7 +185,7 @@ export type ApplicationInstallationPreparationResult = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  /** The provisioned, inactive bindings the initial lifecycle-policy setup names. */
+  /** The provisioned, inactive bindings for the exact prepared release. */
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
 }>;
 
