@@ -201,6 +201,20 @@ export type FlowRunStep =
       result: FlowRunResult;
     }>;
 
+/** Optional, read-only observation of each task the interpreter reaches. */
+export type FlowTaskTraceObservation = Readonly<{
+  flowId: string;
+  taskId: string;
+  taskType: string;
+  iteration: string;
+  outcome: "entered" | "completed" | "awaiting" | "interface" | "failed";
+  failure?: FlowFailure;
+  intent?: FlowInterfaceIntent;
+}>;
+
+/** An observer cannot change interpreter results; observer errors are ignored. */
+export type FlowTaskTraceObserver = (observation: FlowTaskTraceObservation) => void;
+
 export type FlowRunStart = Readonly<{
   runId: string;
   flowId: string;
@@ -814,7 +828,18 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 const snapshot = (machine: Machine): FlowRunState => clone(machine.state) as FlowRunState;
 
 /** Runs the machine until it needs the host or the run is finished. */
-const run = (machine: Machine): FlowRunStep => {
+const observe = (
+  observer: FlowTaskTraceObserver | undefined,
+  observation: FlowTaskTraceObservation,
+): void => {
+  try {
+    observer?.(observation);
+  } catch {
+    // Diagnostics must never change a flow result.
+  }
+};
+
+const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   for (;;) {
     machine.state.steps += 1;
     if (machine.state.steps > maximumSteps) failed("step_limit", "failed");
@@ -841,9 +866,19 @@ const run = (machine: Machine): FlowRunStep => {
         return { kind: "finished", state: snapshot(machine), intents, result };
       }
       // Hand the child's result to the Run flow task in its parent.
-      machine.state.activations = machine.state.activations.slice(0, -1);
-      const parent = topOf(machine);
+      const parent = machine.state.activations[machine.state.activations.length - 2]!;
       const callTaskId = activation.callTaskId!;
+      observe(observer, {
+        flowId: parent.flowId,
+        taskId: callTaskId,
+        taskType: "run_flow",
+        iteration: iterationKey(machine.state),
+        outcome: result.status === "failed" ? "failed" : "completed",
+        ...(result.status === "failed"
+          ? { failure: { ...result.failure, taskId: callTaskId } }
+          : {}),
+      });
+      machine.state.activations = machine.state.activations.slice(0, -1);
       if (result.status === "failed")
         replaceTop(machine, failActivation(parent, { ...result.failure, taskId: callTaskId }));
       else replaceTop(machine, storeTaskOutputs(parent, callTaskId, result.outputs));
@@ -866,11 +901,39 @@ const run = (machine: Machine): FlowRunStep => {
     }
 
     const taskPath = [...frame.path, frame.index];
+    const task = list[frame.index]!;
+    const observation = {
+      flowId: activation.flowId,
+      taskId: task.id,
+      taskType: task.type,
+      iteration: iterationKey(machine.state),
+    } as const;
     try {
-      const executed = execute(machine, list[frame.index]!, taskPath);
-      if (executed.kind === "suspend") return executed.step;
+      const activationCount = machine.state.activations.length;
+      const executed = execute(machine, task, taskPath);
+      if (executed.kind === "suspend") {
+        if (executed.step.kind === "interface") {
+          observe(observer, {
+            ...observation,
+            outcome: "interface",
+            intent: executed.step.intents.find((intent) => intent.taskId === task.id),
+          });
+        } else observe(observer, { ...observation, outcome: "awaiting" });
+        return executed.step;
+      }
+      if (task.type === "run_flow" && machine.state.activations.length > activationCount) {
+        observe(observer, { ...observation, outcome: "entered" });
+      } else if (task.type.startsWith("interface.")) {
+        const intent = machine.state.pendingIntents.at(-1);
+        observe(observer, {
+          ...observation,
+          outcome: "interface",
+          ...(intent?.taskId === task.id ? { intent } : {}),
+        });
+      } else observe(observer, { ...observation, outcome: "completed" });
     } catch (error) {
       if (!(error instanceof Failed)) throw error;
+      observe(observer, { ...observation, outcome: "failed", failure: error.failure });
       // Leave the task list at the failure; the errors handler and finally still run.
       const current = topOf(machine);
       replaceTop(machine, failActivation(current, error.failure));
@@ -890,9 +953,9 @@ const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
   };
 };
 
-const drive = (machine: Machine): FlowRunStep => {
+const drive = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   try {
-    return run(machine);
+    return run(machine, observer);
   } catch (error) {
     if (error instanceof Failed) return failedStep(machine, error.failure);
     throw error;
@@ -904,7 +967,11 @@ const drive = (machine: Machine): FlowRunStep => {
  * inputs the binding supplied and are checked against the flow's declarations; the host supplies
  * the run id, the instant and the actor from its own trusted context.
  */
-export const startFlowRun = (start: FlowRunStart, library: FlowLibrary): FlowRunStep => {
+export const startFlowRun = (
+  start: FlowRunStart,
+  library: FlowLibrary,
+  observer?: FlowTaskTraceObserver,
+): FlowRunStep => {
   const state: FlowRunState = {
     version: flowRunStateVersion,
     runId: start.runId,
@@ -931,7 +998,7 @@ export const startFlowRun = (start: FlowRunStart, library: FlowLibrary): FlowRun
     throw error;
   }
   machine.state.activations = [newActivation(flow, inputs, "")];
-  return drive(machine);
+  return drive(machine, observer);
 };
 
 /**
@@ -943,6 +1010,7 @@ export const resumeFlowRun = (
   previous: FlowRunState,
   resume: FlowRunResume,
   library: FlowLibrary,
+  observer?: FlowTaskTraceObserver,
 ): FlowRunStep => {
   const machine: Machine = { state: clone(previous), library };
   const awaiting = machine.state.awaiting;
@@ -967,7 +1035,7 @@ export const resumeFlowRun = (
           ...outputs,
         }),
       );
-      return drive(machine);
+      return drive(machine, observer);
     }
     // A refused, conflict or invalid outcome is branched on only when the task allows it.
     const branchable =
@@ -976,7 +1044,7 @@ export const resumeFlowRun = (
       resume.outcome === "validation";
     if (awaiting.allowRefusal && branchable) {
       replaceTop(machine, storeTaskOutputs(activation, awaiting.taskId, outputs));
-      return drive(machine);
+      return drive(machine, observer);
     }
     replaceTop(
       machine,
@@ -986,7 +1054,7 @@ export const resumeFlowRun = (
         taskId: awaiting.taskId,
       }),
     );
-    return drive(machine);
+    return drive(machine, observer);
   }
 
   if (awaiting.kind === "form") {
@@ -1008,7 +1076,7 @@ export const resumeFlowRun = (
           code: "inputs_invalid",
           taskId: awaiting.taskId,
         }));
-        return drive(machine);
+        return drive(machine, observer);
       }
     }
     replaceTop(
@@ -1018,7 +1086,7 @@ export const resumeFlowRun = (
         values: typed("json", values),
       }),
     );
-    return drive(machine);
+    return drive(machine, observer);
   }
 
   if (resume.kind !== "confirm") return mismatch();
@@ -1026,7 +1094,7 @@ export const resumeFlowRun = (
     machine,
     storeTaskOutputs(activation, awaiting.taskId, { confirmed: typed("yes_no", resume.confirmed) }),
   );
-  return drive(machine);
+  return drive(machine, observer);
 };
 
 /** A finished step for a run the host must stop itself, such as one that exhausted its server time. */
