@@ -108,3 +108,6 @@ grant execute on function vortex_access.list_organization_permissions_projection
 
 comment on function vortex_access.list_organization_permissions_projection(uuid, integer) is
   'Registered permission projection: returns every current registered permission catalogue entry the fixed platform.organization.permissions.read decision admits, with the organisation, a stable record identity derived from the exact owner-qualified permission, the active registration revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Registration provenance, fingerprints, record-scope evidence and audit columns are never projected.';
+
+alter function vortex_access.list_organization_permissions_projection(uuid, integer)
+  owner to vortex_access_owner;
