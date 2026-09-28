@@ -57,6 +57,7 @@ Verification is proportional to what the PR changes, and the reviewer runs it on
 | `supabase/migrations` or `supabase/schemas` | Disposable database replay (as the non-superuser `postgres` role, like `supabase db reset`) |
 | `modules/src/*/application.json` or module sources | Definition validator plus the offline publication compile, and a check that every create form plus its flow supplies every required field |
 | Definitions, migrations or `apps/web/scripts/development-setup` | **Monitor preview check PASS** on the exact head: fresh `db reset` plus `setup:local` on the shared preview stack. Request it and wait for the monitor's PR comment. |
+| Pages, forms or definitions (`apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/`, `contracts/src/`) | **Monitor browser smoke PASS** on the exact head (owner decision, 28 Sep 2026): after the preview reset, headless Edge signs in, opens the CRM Companies list, opens New company and saves. The watcher runs it automatically with the preview check and reports it in the same PR comment. |
 
 After every merge batch the orchestrator runs the full workspace typecheck on main. The monitor smoke-tests main after every merge that touches definitions, migrations or development setup. A failure on main stops further merges of that kind until it is fixed.
 
