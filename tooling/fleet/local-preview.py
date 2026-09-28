@@ -1673,6 +1673,7 @@ def _browser_report(
                     and type(raw_visibility["semantic_root_count"]) is int
                     and 0 <= raw_visibility["semantic_root_count"] <= 1024
                     and type(raw_visibility["capped"]) is bool
+                    and (not raw_visibility["capped"] or raw_visibility["semantic_root_count"] == 1024)
                     and type(raw_visibility["semantic_root_unique"]) is bool
                 )
                 if visibility_valid:
