@@ -51,6 +51,9 @@ begin
 end
 $function$;
 
+alter function vortex_record.append_record_lifecycle_activity_internal(uuid, text, uuid[])
+  owner to postgres;
+
 revoke all on function vortex_record.append_record_lifecycle_activity_internal(
   uuid, text, uuid[]
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
