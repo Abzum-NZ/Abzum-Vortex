@@ -2005,6 +2005,8 @@ def _browser_report(
         if "screenshot" in result:
             return evidence, cleanup_confirmed, "browser_screenshot_unexpected"
     else:
+        if result_value == "PASS" and safe_stage != "complete":
+            return evidence, cleanup_confirmed, "browser_screenshot_invalid"
         failure_before_capture = (
             result_value == "FAIL"
             and safe_stage not in {"default_style_comparison", "complete"}
