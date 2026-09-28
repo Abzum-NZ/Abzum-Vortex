@@ -1673,6 +1673,7 @@ def _browser_report(
     cleanup_confirmed = bool(
         cleanup_valid and raw_cleanup["confirmed"] and identity_matches and checks_valid and result_valid and reason_valid
     )
+    report_fields_valid = identity_matches and checks_valid and result_valid and reason_valid and cleanup_valid
     evidence: dict[str, Any] = {
         "schema": "vortex.local-preview.browser.v1",
         "result": result_value if result_value in ("PASS", "FAIL") else "INVALID",
@@ -1688,6 +1689,7 @@ def _browser_report(
     }
     if identity_matches:
         evidence.update({"head_sha": sha, "run_nonce": run_nonce, "fixtures": fixtures})
+    if report_fields_valid:
         evidence["theme_metrics_valid"] = theme_metrics_valid
         if theme_metrics_valid:
             assert isinstance(raw_theme_metrics, dict)
