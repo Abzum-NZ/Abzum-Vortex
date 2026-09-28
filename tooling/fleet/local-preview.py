@@ -43,6 +43,44 @@ REQUIRED_BROWSER_CHECKS = (
     "new_company",
     "save_company",
 )
+SAFE_BROWSER_REASONS = frozenset(
+    {
+        "ambiguous_control",
+        "browser_connect_failed",
+        "browser_exit_unconfirmed",
+        "browser_protocol_invalid",
+        "browser_start_failed",
+        "browser_start_timeout",
+        "candidate_checkout_unavailable",
+        "candidate_head_mismatch",
+        "candidate_head_unavailable",
+        "company_name_unavailable",
+        "company_save_unconfirmed",
+        "company_type_unavailable",
+        "devtools_instance_mismatch",
+        "devtools_target_ambiguous",
+        "devtools_unavailable",
+        "edge_not_found",
+        "fixture_mismatch",
+        "fixture_size_limit",
+        "internal_error",
+        "invalid_arguments",
+        "invalid_fixture_fingerprints",
+        "invalid_head_sha",
+        "invalid_origin",
+        "invalid_run_nonce",
+        "navigation_failed",
+        "navigation_timeout",
+        "page_state_unavailable",
+        "page_unavailable",
+        "profile_cleanup_failed",
+        "required_control_unavailable",
+        "run_timeout",
+        "sign_in_timeout",
+        "step_timeout",
+        "unexpected_origin",
+    }
+)
 RUN_TIMEOUTS = {
     "auth_prepare": 120,
     "supabase_status": 60,
@@ -202,12 +240,12 @@ def _run_process(
                 stopped = False
             reader_stopped = _finish_capture_reader(reader, child.stdout)
             stopped = stopped and reader_stopped
-            return CommandResult(125, time.monotonic() - started, stdout=bytes(captured), stopped=stopped)
+            return CommandResult(125, time.monotonic() - started, stopped=stopped)
         if child.poll() is not None:
             if not _finish_capture_reader(reader, child.stdout):
                 return CommandResult(125, time.monotonic() - started, stdout=bytes(captured), stopped=False)
             if overflow.is_set() or read_failed.is_set():
-                return CommandResult(125, time.monotonic() - started, stdout=bytes(captured))
+                return CommandResult(125, time.monotonic() - started)
             return CommandResult(child.returncode or 0, time.monotonic() - started, stdout=bytes(captured))
         if time.monotonic() >= deadline:
             stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
@@ -1062,33 +1100,118 @@ def _release_lock(lock: Path, token: str) -> bool:
         return False
 
 
-def _validate_browser_result(
+def _browser_report(
     raw: bytes, sha: str, run_nonce: str, fixtures: dict[str, str]
-) -> dict[str, Any]:
-    if len(raw) > 64 * 1024:
-        raise PreviewError("browser_output_too_large", "The browser adapter output exceeded its safe limit", step="browser_smoke")
+) -> tuple[dict[str, Any] | None, bool, str | None]:
+    """Keep only verified identity, known reason codes, checks, and cleanup attestation."""
+    if len(raw) > MAX_CAPTURED_OUTPUT:
+        return None, False, "browser_output_too_large"
     try:
         result = json.loads(raw.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError):
-        raise PreviewError("browser_output_invalid", "The pinned browser adapter did not return its JSON result contract", step="browser_smoke") from None
+        return None, False, "browser_output_invalid"
     if not isinstance(result, dict) or result.get("schema") != "vortex.local-preview.browser.v1":
-        raise PreviewError("browser_contract_invalid", "The browser adapter result schema is not supported", step="browser_smoke")
-    if result.get("head_sha") != sha or result.get("run_nonce") != run_nonce:
-        raise PreviewError("browser_evidence_mismatch", "Browser evidence does not name the exact candidate SHA and run nonce", step="browser_smoke")
-    if result.get("fixtures") != fixtures:
-        raise PreviewError("browser_evidence_mismatch", "Browser evidence does not name the exact fixture fingerprints", step="browser_smoke")
-    checks = result.get("checks")
-    if not isinstance(checks, dict) or any(checks.get(name) is not True for name in REQUIRED_BROWSER_CHECKS):
-        raise PreviewError("browser_checks_failed", "Browser evidence lacks a required PASS for sign-in, list, create form, or save", step="browser_smoke")
-    if result.get("result") != "PASS":
-        raise PreviewError("browser_result_failed", "The browser adapter did not declare PASS", step="browser_smoke")
-    return {
-        "schema": result["schema"],
-        "head_sha": sha,
-        "run_nonce": result["run_nonce"],
-        "fixtures": fixtures,
-        "checks": {name: True for name in REQUIRED_BROWSER_CHECKS},
+        return None, False, "browser_contract_invalid"
+
+    head_matches = result.get("head_sha") == sha
+    nonce_matches = result.get("run_nonce") == run_nonce
+    fixtures_match = result.get("fixtures") == fixtures
+    identity_matches = head_matches and nonce_matches and fixtures_match
+    result_value = result.get("result")
+    raw_checks = result.get("checks")
+    checks = (
+        {name: raw_checks[name] for name in REQUIRED_BROWSER_CHECKS if name in raw_checks and type(raw_checks[name]) is bool}
+        if isinstance(raw_checks, dict)
+        else {}
+    )
+    checks_valid = isinstance(raw_checks, dict) and all(
+        name not in raw_checks or type(raw_checks[name]) is bool for name in REQUIRED_BROWSER_CHECKS
+    )
+    reason = result.get("reason")
+    safe_reason = reason if isinstance(reason, str) and reason in SAFE_BROWSER_REASONS else None
+    result_valid = result_value in ("PASS", "FAIL")
+    reason_valid = (result_value == "PASS" and reason is None) or (
+        result_value == "FAIL" and safe_reason is not None
+    )
+    raw_cleanup = result.get("browser_cleanup")
+    cleanup_valid = (
+        isinstance(raw_cleanup, dict)
+        and set(raw_cleanup) == {"confirmed"}
+        and type(raw_cleanup["confirmed"]) is bool
+    )
+    cleanup_confirmed = bool(
+        cleanup_valid and raw_cleanup["confirmed"] and identity_matches and checks_valid and result_valid and reason_valid
+    )
+    evidence: dict[str, Any] = {
+        "schema": "vortex.local-preview.browser.v1",
+        "result": result_value if result_value in ("PASS", "FAIL") else "INVALID",
+        "head_sha_matches": head_matches,
+        "run_nonce_matches": nonce_matches,
+        "fixtures_match": fixtures_match,
+        "checks": checks,
+        "browser_cleanup": (
+            {"adapter_claimed": raw_cleanup["confirmed"], "runner_confirmed": cleanup_confirmed}
+            if cleanup_valid
+            else None
+        ),
     }
+    if identity_matches:
+        evidence.update({"head_sha": sha, "run_nonce": run_nonce, "fixtures": fixtures})
+    if safe_reason is not None and identity_matches:
+        evidence["reason"] = safe_reason
+
+    if not identity_matches:
+        return evidence, False, "browser_evidence_mismatch"
+    if not checks_valid or not result_valid:
+        return evidence, False, "browser_contract_invalid"
+    if not reason_valid:
+        return evidence, False, "browser_reason_invalid"
+    if not cleanup_valid:
+        return evidence, False, "browser_cleanup_attestation_missing"
+    return evidence, cleanup_confirmed, None
+
+
+def _final_identity_checks(
+    checkout: Path,
+    sha: str,
+    fixtures: dict[str, str],
+    adapter_path: str,
+    adapter_hash: str,
+    pair: tuple[str, int] | None,
+) -> tuple[dict[str, Any], bool]:
+    """Read final source identity after cleanup, even for an otherwise failed run."""
+    checked: dict[str, Any] = {}
+    uncertain_process = False
+    try:
+        checked["head_matches"] = _git_text(checkout, ["rev-parse", "HEAD"]).lower() == sha
+    except PreviewError as error:
+        checked["head_matches"] = None
+        checked["head_error"] = error.code
+        uncertain_process = uncertain_process or error.code == "owned_process_stop_unconfirmed"
+    if fixtures:
+        try:
+            checked["fixtures_match"] = _fixture_changes(checkout) == fixtures
+        except PreviewError as error:
+            checked["fixtures_match"] = None
+            checked["fixtures_error"] = error.code
+            uncertain_process = uncertain_process or error.code == "owned_process_stop_unconfirmed"
+    else:
+        checked["fixtures_match"] = None
+    try:
+        adapter = _resolve_existing(adapter_path, "--browser-adapter")
+        checked["adapter_matches"] = _sha256(adapter).lower() == adapter_hash.lower()
+    except PreviewError as error:
+        checked["adapter_matches"] = None
+        checked["adapter_error"] = error.code
+    if pair is not None:
+        try:
+            _validate_pr_remote(pair[0], pair[1], sha, checkout)
+            checked["pr_matches"] = True
+        except PreviewError as error:
+            checked["pr_matches"] = None
+            checked["pr_error"] = error.code
+            uncertain_process = uncertain_process or error.code == "owned_process_stop_unconfirmed"
+    return checked, uncertain_process
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -1130,8 +1253,12 @@ def _run(args: argparse.Namespace) -> int:
     steps: list[dict[str, Any]] = []
     status = "FAIL"
     failure: dict[str, Any] | None = None
-    fixtures: dict[str, str] = {}
+    fixtures: dict[str, str] = dict(preflight["fixtures"])
     browser_evidence: dict[str, Any] | None = None
+    browser_invoked = False
+    browser_cleanup_confirmed = False
+    browser_reason: str | None = None
+    final_identity: dict[str, Any] | None = None
     server: subprocess.Popen[bytes] | None = None
     server_pid: int | None = None
     server_stopped: bool | None = None
@@ -1309,24 +1436,55 @@ def _run(args: argparse.Namespace) -> int:
                 "VORTEX_PREVIEW_FIXTURE_FINGERPRINTS": json.dumps(fixtures, sort_keys=True),
             }
         )
-        output = _command_step(
-            "browser.smoke",
+        browser_invoked = True
+        browser_command = _run_process(
             [node, str(adapter)],
             cwd=checkout,
             env=browser_env,
             timeout=RUN_TIMEOUTS["browser_smoke"],
-            steps=steps,
-            log_file=log_file,
             capture_stdout=True,
         )
-        browser_evidence = _validate_browser_result(output, sha, run_id, fixtures)
-        _record(steps, log_file, step="browser.evidence", evidence=browser_evidence)
+        _record(
+            steps,
+            log_file,
+            step="browser.smoke",
+            exit_code=browser_command.exit_code,
+            timed_out=browser_command.timed_out,
+            elapsed_seconds=round(browser_command.elapsed_seconds, 3),
+            owned_process_tree_stopped=browser_command.stopped,
+        )
+        browser_evidence, browser_cleanup_confirmed, contract_error = _browser_report(
+            browser_command.stdout, sha, run_id, fixtures
+        )
+        browser_cleanup_confirmed = browser_cleanup_confirmed and browser_command.stopped and not browser_command.timed_out
+        if browser_evidence is not None:
+            if browser_evidence["browser_cleanup"] is not None:
+                browser_evidence["browser_cleanup"]["runner_confirmed"] = browser_cleanup_confirmed
+            browser_reason = browser_evidence.get("reason")
+            _record(steps, log_file, step="browser.evidence", evidence=browser_evidence)
+        if not browser_command.stopped:
+            raise PreviewError("owned_process_stop_unconfirmed", "The browser adapter process tree did not stop", step="browser.smoke")
+        if browser_command.timed_out:
+            raise PreviewError("command_timeout", "The browser adapter exceeded its bounded timeout", step="browser.smoke")
+        if contract_error is not None:
+            raise PreviewError(contract_error, "The browser adapter returned invalid structured evidence", step="browser.smoke")
+        if not browser_cleanup_confirmed:
+            raise PreviewError("browser_cleanup_unconfirmed", "Owned browser cleanup was not confirmed", step="browser.smoke")
+        if browser_command.exit_code != 0:
+            raise PreviewError("browser_adapter_failed", "The browser adapter exited nonzero", step="browser.smoke")
+        assert browser_evidence is not None
+        if browser_evidence["result"] != "PASS":
+            raise PreviewError("browser_result_failed", "The browser adapter did not declare PASS", step="browser.smoke")
+        if any(browser_evidence["checks"].get(name) is not True for name in REQUIRED_BROWSER_CHECKS):
+            raise PreviewError("browser_checks_failed", "Browser evidence lacks a required PASS", step="browser.smoke")
         owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
         _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=[owner_identity[0]])
         status = "PASS"
     except PreviewError as error:
         failure = {"code": error.code, "step": error.step}
-        preserve_lock = error.code == "owned_process_stop_unconfirmed"
+        if browser_reason is not None:
+            failure["adapter_reason"] = browser_reason
+        preserve_lock = preserve_lock or error.code == "owned_process_stop_unconfirmed"
     except Exception:
         failure = {"code": "unexpected_failure", "step": None}
         preserve_lock = True
@@ -1346,21 +1504,26 @@ def _run(args: argparse.Namespace) -> int:
                 status = "FAIL"
                 failure = {"code": "owned_server_stop_unconfirmed", "step": "server.stop_owned_tree"}
                 preserve_lock = True
-        if status == "PASS":
-            try:
-                if _git_text(checkout, ["rev-parse", "HEAD"]).lower() != sha:
-                    raise PreviewError("head_changed", "Candidate HEAD changed during local preview")
-                if _fixture_changes(checkout) != fixtures:
-                    raise PreviewError("fixtures_changed", "A declared fixture changed during browser verification")
-                adapter = _resolve_existing(args.browser_adapter, "--browser-adapter")
-                _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
-                if pair is not None:
-                    pr_info = _validate_pr_remote(pair[0], pair[1], sha, checkout)
-                    _record(steps, log_file, step="pr.head.after", pr=pr_info)
-                _record(steps, log_file, step="final.identity_verified", head_sha=sha, fixtures=fixtures)
-            except PreviewError as error:
+        try:
+            final_identity, final_process_uncertain = _final_identity_checks(
+                checkout, sha, fixtures, args.browser_adapter, args.browser_adapter_sha256, pair
+            )
+            preserve_lock = preserve_lock or final_process_uncertain
+        except Exception:
+            final_identity = {"error": "unexpected_failure"}
+            preserve_lock = True
+        _record(steps, log_file, step="final.identity_checked", checks=final_identity)
+        required_identity = ("head_matches", "fixtures_match", "adapter_matches")
+        if pair is not None:
+            required_identity += ("pr_matches",)
+        if status == "PASS" and any(final_identity.get(key) is not True for key in required_identity):
+            status = "FAIL"
+            failure = {"code": "final_identity_unconfirmed", "step": "final.identity_checked"}
+        if browser_invoked and not browser_cleanup_confirmed:
+            preserve_lock = True
+            if status == "PASS":
                 status = "FAIL"
-                failure = {"code": error.code, "step": error.step}
+                failure = {"code": "browser_cleanup_unconfirmed", "step": "browser.smoke"}
         log_file.close()
 
     result = {
@@ -1378,6 +1541,9 @@ def _run(args: argparse.Namespace) -> int:
             "sha256": preflight["browser_adapter_sha256"],
         },
         "browser_evidence": browser_evidence,
+        "browser_invoked": browser_invoked,
+        "browser_cleanup_confirmed": browser_cleanup_confirmed if browser_invoked else None,
+        "final_identity": final_identity,
         "server": {"pid": server_pid, "stopped": server_stopped},
         "steps": steps,
         "failure": failure,
