@@ -1959,6 +1959,7 @@ const applicationInterfaceFieldType = (
   const type = applicationFieldType(pair);
   if (!pair) return type;
   if (type === "whole_number" || type === "number") return "number";
+  if (type === "decimal_number" || type === "money") return type;
   if (type === "boolean") return "boolean";
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
   return undefined;
@@ -3900,7 +3901,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       );
     const interfaceActionInputType = (type: unknown, moduleBound = false): string | undefined => {
       const value = String(type);
-      if (moduleBound && ["decimal_number", "money"].includes(value)) return undefined;
+      if (moduleBound && ["decimal_number", "money"].includes(value)) return value;
       if (moduleBound && value === "formatted_text") return "formatted_text";
       if (["text", "formatted_text", "choice"].includes(value)) return "text";
       if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
