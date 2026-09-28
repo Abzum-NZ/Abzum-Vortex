@@ -1633,6 +1633,11 @@ def _browser_report(
                     raw_probe["scope_valid"]
                     or all(raw_probe[name] == 0 for name in CUSTOMER_PROBE_GROUP_FIELDS)
                 )
+                and raw_probe["visible_candidate_count"] <= raw_probe["checkbox_candidate_count"]
+                and raw_probe["customer_name_match_count"] <= raw_probe["checkbox_candidate_count"]
+                and raw_probe["visible_customer_match_count"] <= raw_probe["visible_candidate_count"]
+                and raw_probe["visible_customer_match_count"] <= raw_probe["customer_name_match_count"]
+                and raw_probe["disabled_customer_match_count"] <= raw_probe["visible_customer_match_count"]
             )
         evidence["customer_control_probe_valid"] = probe_valid
         if probe_valid:
