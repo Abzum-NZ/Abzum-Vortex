@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdtemp, open as openFile, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
 const SCHEMA = "vortex.local-preview.browser.v1";
 const EDGE_EXECUTABLE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
@@ -11,6 +11,7 @@ const POWERSHELL_EXECUTABLE = "C:/Windows/System32/WindowsPowerShell/v1.0/powers
 const APP_PATH = "/abzum/abzum/vortex.app.crm";
 const SERVICE_DESK_PATH = "/abzum/abzum/vortex.app.service_desk/service_desk_overview";
 const TOTAL_TIMEOUT_MS = 300_000;
+const SCREENSHOT_TOTAL_TIMEOUT_MS = 360_000;
 const STARTUP_TIMEOUT_MS = 20_000;
 const COMMAND_TIMEOUT_MS = 10_000;
 const NAVIGATION_TIMEOUT_MS = 45_000;
@@ -18,6 +19,10 @@ const POLL_INTERVAL_MS = 300;
 const PROFILE_PREFIX = "vortex-preview-edge-";
 const MAX_FIXTURE_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_FIXTURE_BYTES = 128 * 1024 * 1024;
+const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
+const MAX_SCREENSHOT_DIMENSION = 8192;
+const SCREENSHOT_BASENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,47}\.png$/;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const THEME_CHECK_NAMES = [
   "maia_root",
   "maia_active_menu",
@@ -195,9 +200,86 @@ function parseInputs() {
       fail("invalid_fixture_fingerprints");
   }
 
+  const screenshotOutput = process.env.VORTEX_PREVIEW_SCREENSHOT_OUTPUT;
+  const screenshotStateDir = process.env.VORTEX_PREVIEW_SCREENSHOT_STATE_DIR;
+  let screenshotTarget = null;
+  if (screenshotOutput !== undefined || screenshotStateDir !== undefined) {
+    if (
+      typeof screenshotOutput !== "string" || screenshotOutput.length === 0 || screenshotOutput.length > 4096 ||
+      typeof screenshotStateDir !== "string" || screenshotStateDir.length === 0 || screenshotStateDir.length > 4096 ||
+      !isAbsolute(screenshotOutput) || !isAbsolute(screenshotStateDir) ||
+      [screenshotOutput, screenshotStateDir].some((path) => path.split(/[\\/]/).some((segment) => segment === "." || segment === ".."))
+    )
+      fail("screenshot_artifact_failed");
+    const outputPath = resolve(screenshotOutput);
+    const statePath = resolve(screenshotStateDir);
+    const samePath = process.platform === "win32"
+      ? outputPath.toLowerCase() === resolve(statePath, basename(outputPath)).toLowerCase()
+      : dirname(outputPath) === statePath;
+    const base = basename(outputPath);
+    const reserved = new Set([
+      "CON", "PRN", "AUX", "NUL",
+      ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`),
+      ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`),
+    ]);
+    if (
+      !samePath || !SCREENSHOT_BASENAME_PATTERN.test(base) ||
+      reserved.has(base.slice(0, -4).toUpperCase())
+    )
+      fail("screenshot_artifact_failed");
+    screenshotTarget = { outputPath, statePath };
+  }
+
   result.head_sha = rawHeadSha;
   result.run_nonce = rawNonce;
-  return { origin: parsedOrigin.origin, headSha: rawHeadSha, fixtureMap };
+  return { origin: parsedOrigin.origin, headSha: rawHeadSha, fixtureMap, screenshotTarget };
+}
+
+function samePath(left, right) {
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+async function assertRegularPathWithoutReparse(pathname, { directory = false } = {}) {
+  const absolute = resolve(pathname);
+  const root = parse(absolute).root;
+  let cursor = root;
+  const parts = relative(root, absolute).split(sep).filter(Boolean);
+  if (parts.length === 0) fail("screenshot_artifact_failed");
+  for (let index = 0; index < parts.length; index += 1) {
+    cursor = join(cursor, parts[index]);
+    let info;
+    try {
+      info = await lstat(cursor);
+    } catch {
+      fail("screenshot_artifact_failed");
+    }
+    if (info.isSymbolicLink() || (index < parts.length - 1 && !info.isDirectory()))
+      fail("screenshot_artifact_failed");
+    let actual;
+    try {
+      actual = await realpath(cursor);
+    } catch {
+      fail("screenshot_artifact_failed");
+    }
+    if (!samePath(actual, cursor)) fail("screenshot_artifact_failed");
+    if (index === parts.length - 1 && directory && !info.isDirectory())
+      fail("screenshot_artifact_failed");
+  }
+  return absolute;
+}
+
+async function verifyScreenshotTarget(target) {
+  if (!target) return;
+  const statePath = await assertRegularPathWithoutReparse(target.statePath, { directory: true });
+  const outputPath = resolve(target.outputPath);
+  if (!samePath(dirname(outputPath), statePath)) fail("screenshot_artifact_failed");
+  try {
+    await lstat(outputPath);
+    fail("screenshot_artifact_failed");
+  } catch (error) {
+    if (error instanceof SafeFailure) throw error;
+    if (error?.code !== "ENOENT") fail("screenshot_artifact_failed");
+  }
 }
 
 function verifyCandidateHead(headSha) {
@@ -1023,6 +1105,147 @@ function themePageExpression(expectedPath, body) {
   })()`;
 }
 
+function companiesScreenshotRowExpression(expectedPath, generatedName) {
+  return themePageExpression(expectedPath, `
+    if (!isMaiaRoot(root)) return { retryable: false };
+    const tables = root.querySelectorAll('[data-vortex-display="table"] table[data-slot="table"].cn-table');
+    if (tables.length !== 1) return { retryable: false };
+    const table = tables[0];
+    if (!visible(table)) return { retryable: true };
+    const headRows = table.querySelectorAll('thead[data-slot="table-header"] tr');
+    if (headRows.length !== 1) return { retryable: headRows.length === 0 };
+    const headers = headRows[0].querySelectorAll('th[data-slot="table-head"]');
+    if (headers.length === 0 || headers.length > 128) return { retryable: headers.length === 0 };
+    const companyHeaders = [...headers].filter((header) =>
+      visible(header) && normalizeName(textForName(header)) === "Company name");
+    if (companyHeaders.length === 0) return { retryable: true };
+    if (companyHeaders.length !== 1) return { retryable: false };
+    const header = companyHeaders[0];
+    const headerIndex = header.cellIndex;
+    if (!Number.isInteger(headerIndex) || headerIndex < 0 || headerIndex >= 128)
+      return { retryable: false };
+    const bodies = table.querySelectorAll('tbody[data-slot="table-body"]');
+    if (bodies.length !== 1) return { retryable: bodies.length === 0 };
+    const rows = bodies[0].querySelectorAll('tr[data-slot="table-row"]');
+    if (rows.length > 128) return { retryable: false };
+    if (rows.length === 0) return { retryable: true };
+    const matches = [];
+    for (const row of rows) {
+      const cells = row.querySelectorAll('td[data-slot="table-cell"]');
+      if (cells.length > 128) return { retryable: false };
+      const corresponding = [...cells].filter((cell) => cell.cellIndex === headerIndex);
+      if (corresponding.length > 1) return { retryable: false };
+      if (corresponding.length === 1 && String(textForName(corresponding[0]) ?? "").trim() === ${JSON.stringify(generatedName)})
+        matches.push(row);
+    }
+    if (matches.length > 1) return { retryable: false };
+    if (matches.length === 0) return { retryable: true };
+    const row = matches[0];
+    row.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    const rect = row.getBoundingClientRect();
+    const finite = [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height].every(Number.isFinite);
+    const onScreen = finite && rect.width > 0 && rect.height > 0 &&
+      rect.width <= 8192 && rect.height <= 8192 && rect.right > 0 && rect.bottom > 0 &&
+      rect.left < innerWidth && rect.top < innerHeight;
+    return { valid: visible(row) && onScreen };
+  `);
+}
+
+async function assertCompaniesScreenshotContext(pathname) {
+  const frameUrl = await devtools.mainFrameUrl();
+  let current;
+  try {
+    current = new URL(frameUrl);
+  } catch {
+    fail("companies_row_unavailable");
+  }
+  if (current.origin !== currentOrigin) fail("unexpected_origin");
+  if (current.pathname !== pathname) fail("companies_row_unavailable");
+  const observation = await devtools.evaluate(themePageExpression(pathname, `
+    return { valid: isMaiaRoot(root) };
+  `));
+  if (observation?.valid !== true) fail("companies_row_unavailable");
+}
+
+async function waitForCompaniesScreenshotRow(pathname, generatedName) {
+  const deadline = Math.min(Date.now() + 30_000, runDeadline);
+  const expression = companiesScreenshotRowExpression(pathname, generatedName);
+  while (Date.now() < deadline) {
+    const observation = await devtools.evaluate(expression);
+    if (observation?.valid === true) return;
+    if (observation?.retryable !== true) fail("companies_row_unavailable");
+    await sleep(Math.min(POLL_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+  }
+  fail("companies_row_unavailable");
+}
+
+function validatePngBytes(bytes) {
+  if (
+    !Buffer.isBuffer(bytes) || bytes.length < 33 || bytes.length > MAX_SCREENSHOT_BYTES ||
+    !bytes.subarray(0, 8).equals(PNG_SIGNATURE) ||
+    bytes.readUInt32BE(8) !== 13 || bytes.toString("ascii", 12, 16) !== "IHDR"
+  )
+    fail("screenshot_artifact_failed");
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (width < 1 || height < 1 || width > MAX_SCREENSHOT_DIMENSION || height > MAX_SCREENSHOT_DIMENSION)
+    fail("screenshot_artifact_failed");
+}
+
+async function captureCompaniesScreenshot(pathname, generatedName, target) {
+  await assertCompaniesScreenshotContext(pathname);
+  await waitForCompaniesScreenshotRow(pathname, generatedName);
+  await assertCompaniesScreenshotContext(pathname);
+  const response = await devtools.send(
+    "Page.captureScreenshot",
+    { format: "png", fromSurface: true, captureBeyondViewport: false },
+    Math.min(30_000, remainingRunTime()),
+  );
+  await assertCompaniesScreenshotContext(pathname);
+  const encoded = response?.data;
+  const maxEncodedLength = Math.ceil(MAX_SCREENSHOT_BYTES / 3) * 4;
+  if (
+    typeof encoded !== "string" || encoded.length < 44 || encoded.length > maxEncodedLength ||
+    encoded.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)
+  )
+    fail("screenshot_artifact_failed");
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.toString("base64") !== encoded) fail("screenshot_artifact_failed");
+  validatePngBytes(bytes);
+
+  await verifyScreenshotTarget(target);
+  let handle;
+  try {
+    handle = await openFile(target.outputPath, "wx", 0o600);
+    await handle.writeFile(bytes);
+    await handle.sync();
+    const opened = await handle.stat();
+    const fileInfo = await lstat(target.outputPath);
+    const stateReal = await realpath(target.statePath);
+    const fileReal = await realpath(target.outputPath);
+    if (
+      !opened.isFile() || fileInfo.isSymbolicLink() || !fileInfo.isFile() ||
+      opened.size !== bytes.length || fileInfo.size !== bytes.length ||
+      !samePath(stateReal, target.statePath) || !samePath(fileReal, target.outputPath) ||
+      !samePath(dirname(fileReal), stateReal)
+    )
+      fail("screenshot_artifact_failed");
+  } catch (error) {
+    if (error instanceof SafeFailure) throw error;
+    fail("screenshot_artifact_failed");
+  } finally {
+    try {
+      await handle?.close();
+    } catch {
+      // The runner independently validates the artifact after this process exits.
+    }
+  }
+  result.screenshot = {
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    bytes: bytes.length,
+  };
+}
+
 function recordThemeMetrics(measurement, names) {
   if (!measurement || typeof measurement !== "object") fail("theme_check_failed");
   for (const name of names) {
@@ -1588,9 +1811,10 @@ async function runBrowserCheck() {
   transientThemeKeys = { comparisonKey, saveStateKey };
   currentOrigin = inputs.origin;
   verifyCandidateHead(inputs.headSha);
-  runDeadline = Date.now() + TOTAL_TIMEOUT_MS;
+  runDeadline = Date.now() + (inputs.screenshotTarget ? SCREENSHOT_TOTAL_TIMEOUT_MS : TOTAL_TIMEOUT_MS);
   await verifyFixtureContents(inputs.fixtureMap);
   result.fixtures = inputs.fixtureMap;
+  await verifyScreenshotTarget(inputs.screenshotTarget);
   await startBrowser(currentOrigin);
 
   result.action_stage = "sign_in";
@@ -1742,6 +1966,12 @@ async function runBrowserCheck() {
   );
   result.checks.save_company = true;
 
+  if (inputs.screenshotTarget) {
+    result.action_stage = "companies_screenshot";
+    await navigateTo(companiesPath, companiesPath);
+    await captureCompaniesScreenshot(companiesPath, name, inputs.screenshotTarget);
+  }
+
   result.action_stage = "default_style_comparison";
   await navigateTo(SERVICE_DESK_PATH, SERVICE_DESK_PATH);
   await inspectNovaAndCompare(SERVICE_DESK_PATH, comparisonKey);
@@ -1823,6 +2053,7 @@ if (args.length === 1 && args[0] === "--help") {
   process.stdout.write(
     "Usage: node tooling/fleet/local-preview-browser.mjs [--browser-lifecycle-probe]\n" +
       "Reads VORTEX_PREVIEW_BASE_URL, VORTEX_PREVIEW_HEAD_SHA, VORTEX_PREVIEW_RUN_NONCE, and VORTEX_PREVIEW_FIXTURE_FINGERPRINTS.\n" +
+      "Screenshot capture is opt-in through VORTEX_PREVIEW_SCREENSHOT_OUTPUT and VORTEX_PREVIEW_SCREENSHOT_STATE_DIR.\n" +
       "--browser-lifecycle-probe launches only about:blank and emits separate lifecycle evidence.\n" +
       "--help does not launch Edge or emit browser evidence.\n",
   );

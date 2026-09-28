@@ -20,6 +20,8 @@ import shutil
 import shlex
 import signal
 import socket
+import stat
+import struct
 import subprocess
 import sys
 import threading
@@ -27,6 +29,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +47,9 @@ DIAGNOSTIC_HELPER_SHA256 = "0faeee5d13256b283bacc71688add055b29bed58f5d9049e0f20
 MAX_SETUP_STATE_BYTES = 1024 * 1024
 MAX_NEXT_ENV_BYTES = 1024 * 1024
 MAX_AUTH_USERS_RESPONSE = 2 * 1024 * 1024
+MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
+MAX_SCREENSHOT_DIMENSION = 8192
+SCREENSHOT_BASENAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,47}\.png\Z")
 AUTH_USERS_PAGE_SIZE = 200
 AUTH_USERS_MAX_PAGES = 10
 NEXT_DEVELOPMENT_ENV_FILES = (
@@ -104,6 +110,7 @@ SAFE_BROWSER_REASONS = frozenset(
         "company_name_unavailable",
         "company_save_unconfirmed",
         "company_type_unavailable",
+        "companies_row_unavailable",
         "devtools_instance_mismatch",
         "devtools_target_ambiguous",
         "devtools_unavailable",
@@ -124,6 +131,7 @@ SAFE_BROWSER_REASONS = frozenset(
         "required_control_unavailable",
         "run_timeout",
         "sign_in_timeout",
+        "screenshot_artifact_failed",
         "step_timeout",
         "theme_check_failed",
         "unexpected_origin",
@@ -142,6 +150,7 @@ SAFE_BROWSER_ACTION_STAGES = frozenset(
         "customer_value",
         "save_control",
         "save_confirmation",
+        "companies_screenshot",
         "maia_root",
         "maia_active_menu",
         "maia_table",
@@ -268,6 +277,175 @@ def _resolve_future(raw: str, label: str) -> Path:
     if not path.is_absolute():
         raise PreviewError("invalid_path", f"{label} must be an absolute path")
     return path.resolve(strict=False)
+
+
+def _is_reparse_point(info: os.stat_result) -> bool:
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & reparse_flag)
+
+
+def _reject_reparse_components(path: Path, label: str) -> None:
+    """Reject symlink/reparse components before resolving an artifact destination."""
+    if not path.is_absolute():
+        raise PreviewError("screenshot_path_invalid", f"{label} must be absolute")
+    cursor = Path(path.anchor)
+    parts = path.parts[1:]
+    for index, part in enumerate(parts):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            cursor = cursor.parent
+            continue
+        cursor = cursor / part
+        try:
+            info = cursor.lstat()
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            raise PreviewError("screenshot_path_invalid", f"{label} path cannot be inspected") from None
+        if _is_reparse_point(info):
+            raise PreviewError("screenshot_path_invalid", f"{label} cannot contain a symlink or reparse point")
+        if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise PreviewError("screenshot_path_invalid", f"{label} parent path is not a directory")
+
+
+def _prepare_screenshot_target(args: argparse.Namespace, checkout: Path) -> tuple[Path, Path] | None:
+    raw_target = getattr(args, "screenshot_output", None)
+    if raw_target is None:
+        return None
+    raw_state = str(args.state_dir)
+    if any(
+        len(raw_path) > 4096 or any(ord(character) < 0x20 for character in raw_path)
+        for raw_path in (raw_target, raw_state)
+    ):
+        raise PreviewError("screenshot_path_invalid", "Screenshot paths are invalid or too long")
+    target_input = Path(raw_target).expanduser()
+    state_input = Path(raw_state).expanduser()
+    if not target_input.is_absolute() or not state_input.is_absolute():
+        raise PreviewError("screenshot_path_invalid", "Screenshot and state paths must be absolute")
+    if any(
+        segment in {".", ".."}
+        for raw_path in (raw_target, raw_state)
+        for segment in raw_path.replace("/", "\\").split("\\")
+    ):
+        raise PreviewError("screenshot_path_invalid", "Screenshot paths cannot contain dot segments")
+    if not SCREENSHOT_BASENAME_PATTERN.fullmatch(target_input.name):
+        raise PreviewError("screenshot_path_invalid", "Screenshot output must use a conservative PNG basename")
+    if target_input.stem.upper() in {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{index}" for index in range(1, 10)),
+        *(f"LPT{index}" for index in range(1, 10)),
+    }:
+        raise PreviewError("screenshot_path_invalid", "Screenshot output basename is reserved by the operating system")
+    _reject_reparse_components(state_input, "--state-dir")
+    _reject_reparse_components(target_input, "--screenshot-output")
+    state_dir = state_input.resolve(strict=False)
+    target = target_input.resolve(strict=False)
+    if target.parent != state_dir or target.name != target_input.name:
+        raise PreviewError("screenshot_path_invalid", "Screenshot output must be a direct child of --state-dir")
+    _outside_checkout(state_dir, checkout, "--state-dir")
+    _outside_git_worktrees(state_dir, "--state-dir")
+
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(state_dir, 0o700)
+    except OSError:
+        raise PreviewError("screenshot_state_dir_invalid", "The private screenshot state directory is unavailable") from None
+    _reject_reparse_components(state_dir, "--state-dir")
+    try:
+        state_info = state_dir.lstat()
+    except OSError:
+        raise PreviewError("screenshot_state_dir_invalid", "The private screenshot state directory is unavailable") from None
+    if _is_reparse_point(state_info) or not stat.S_ISDIR(state_info.st_mode):
+        raise PreviewError("screenshot_state_dir_invalid", "The screenshot state path is not a regular directory")
+    try:
+        if state_dir.resolve(strict=True) != state_dir:
+            raise PreviewError("screenshot_state_dir_invalid", "The screenshot state directory is not canonical")
+    except OSError:
+        raise PreviewError("screenshot_state_dir_invalid", "The private screenshot state directory is unavailable") from None
+    if os.name != "nt" and stat.S_IMODE(state_info.st_mode) & 0o077:
+        raise PreviewError("screenshot_state_dir_invalid", "The screenshot state directory is not private")
+    try:
+        target.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        raise PreviewError("screenshot_path_invalid", "Screenshot output cannot be inspected") from None
+    else:
+        raise PreviewError("screenshot_path_exists", "Screenshot output must not already exist")
+    return state_dir, target
+
+
+def _verified_screenshot_metadata(
+    state_dir: Path, target: Path, report: Any
+) -> dict[str, Any] | None:
+    """Revalidate a completed adapter PNG after its process and browser have exited."""
+    if not isinstance(report, dict) or set(report) != {"sha256", "bytes"}:
+        return None
+    reported_hash = report.get("sha256")
+    reported_bytes = report.get("bytes")
+    if (
+        not isinstance(reported_hash, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", reported_hash)
+        or type(reported_bytes) is not int
+        or reported_bytes < 33
+        or reported_bytes > MAX_SCREENSHOT_BYTES
+    ):
+        return None
+    if target.parent != state_dir or target.name == "" or not SCREENSHOT_BASENAME_PATTERN.fullmatch(target.name):
+        return None
+    try:
+        _outside_git_worktrees(state_dir, "screenshot state directory")
+        _reject_reparse_components(state_dir, "screenshot state directory")
+        _reject_reparse_components(target, "screenshot artifact")
+        if state_dir.resolve(strict=True) != state_dir or target.resolve(strict=True) != target:
+            return None
+        before = target.lstat()
+        if _is_reparse_point(before) or not stat.S_ISREG(before.st_mode):
+            return None
+        if before.st_size != reported_bytes or before.st_size > MAX_SCREENSHOT_BYTES:
+            return None
+        with target.open("rb") as artifact:
+            opened = os.fstat(artifact.fileno())
+            if _is_reparse_point(opened) or not stat.S_ISREG(opened.st_mode):
+                return None
+            payload = artifact.read(MAX_SCREENSHOT_BYTES + 1)
+            after = os.fstat(artifact.fileno())
+        final = target.lstat()
+    except (OSError, PreviewError):
+        return None
+    stable = all(
+        left == right
+        for left, right in (
+            (before.st_dev, opened.st_dev),
+            (before.st_ino, opened.st_ino),
+            (opened.st_dev, after.st_dev),
+            (opened.st_ino, after.st_ino),
+            (after.st_dev, final.st_dev),
+            (after.st_ino, final.st_ino),
+            (before.st_size, after.st_size),
+            (before.st_mtime_ns, after.st_mtime_ns),
+            (after.st_size, final.st_size),
+        )
+    )
+    if (
+        not stable
+        or _is_reparse_point(final)
+        or not stat.S_ISREG(final.st_mode)
+        or len(payload) != reported_bytes
+        or len(payload) > MAX_SCREENSHOT_BYTES
+        or payload[:8] != b"\x89PNG\r\n\x1a\n"
+        or payload[8:12] != b"\x00\x00\x00\x0d"
+        or payload[12:16] != b"IHDR"
+        or (zlib.crc32(payload[12:29]) & 0xFFFFFFFF) != int.from_bytes(payload[29:33], "big")
+        or hashlib.sha256(payload).hexdigest() != reported_hash
+    ):
+        return None
+    width, height = struct.unpack(">II", payload[16:24])
+    if width < 1 or height < 1 or width > MAX_SCREENSHOT_DIMENSION or height > MAX_SCREENSHOT_DIMENSION:
+        return None
+    return {"sha256": reported_hash, "bytes": reported_bytes}
 
 
 def _sha256(path: Path) -> str:
@@ -722,6 +900,10 @@ def _add_diagnostic_args(parser: argparse.ArgumentParser, *, live: bool) -> None
     if live:
         parser.add_argument("--owner-id", required=True, help="Exact disposable local Auth UUID returned by diagnose-preflight")
         parser.add_argument("--confirm-rotate-owner-id", required=True, help="Repeat --owner-id to authorize only its local password rotation")
+        parser.add_argument(
+            "--screenshot-output",
+            help="Optional new private PNG directly under --state-dir; only diagnose-existing accepts this",
+        )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -1618,7 +1800,13 @@ def _release_lock(lock: Path, token: str) -> bool:
 
 
 def _browser_report(
-    raw: bytes, sha: str, run_nonce: str, fixtures: dict[str, str]
+    raw: bytes,
+    sha: str,
+    run_nonce: str,
+    fixtures: dict[str, str],
+    *,
+    screenshot_target: Path | None = None,
+    adapter_process_stopped: bool = True,
 ) -> tuple[dict[str, Any] | None, bool, str | None]:
     """Keep only verified identity, known diagnostics, checks, and cleanup attestation."""
     if len(raw) > MAX_CAPTURED_OUTPUT:
@@ -1813,6 +2001,32 @@ def _browser_report(
         return evidence, False, "browser_cleanup_attestation_missing"
     if not theme_metrics_valid:
         return evidence, cleanup_confirmed, "browser_theme_contract_invalid"
+    if screenshot_target is None:
+        if "screenshot" in result:
+            return evidence, cleanup_confirmed, "browser_screenshot_unexpected"
+    else:
+        failure_before_capture = (
+            result_value == "FAIL"
+            and safe_stage not in {"default_style_comparison", "complete"}
+            and "screenshot" not in result
+        )
+        if failure_before_capture:
+            # Preserve a failure from before capture completed; the diagnostic still fails without the artifact.
+            pass
+        else:
+            if not adapter_process_stopped or not cleanup_confirmed:
+                return evidence, cleanup_confirmed, "browser_screenshot_invalid"
+            screenshot_valid_stage = safe_stage in {"companies_screenshot", "default_style_comparison", "complete"}
+            if not screenshot_valid_stage or checks.get("save_company") is not True:
+                return evidence, cleanup_confirmed, "browser_screenshot_invalid"
+            screenshot_metadata = _verified_screenshot_metadata(
+                screenshot_target.parent,
+                screenshot_target,
+                result.get("screenshot"),
+            )
+            if screenshot_metadata is None:
+                return evidence, cleanup_confirmed, "browser_screenshot_invalid"
+            evidence["screenshot"] = screenshot_metadata
     return evidence, cleanup_confirmed, None
 
 
@@ -2218,14 +2432,25 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         raise PreviewError("diagnostic_rotation_confirmation_mismatch", "The rotation confirmation must repeat --owner-id")
     if os.environ.get("VERCEL") or os.environ.get("CI", "").lower() == "true":
         raise PreviewError("noninteractive_environment", "Diagnostic runner refuses Vercel or CI environments")
+    screenshot_target: Path | None = None
+    screenshot_state_dir: Path | None = None
+    if args.screenshot_output is not None:
+        checkout_hint, _, _ = _checkout_and_sha(args.checkout, args.sha)
+        screenshot_paths = _prepare_screenshot_target(args, checkout_hint)
+        assert screenshot_paths is not None
+        screenshot_state_dir, screenshot_target = screenshot_paths
     preflight = _diagnostic_preflight(args)
     if preflight["owner_id"] != owner_id:
         raise PreviewError("diagnostic_owner_mismatch", "The pinned UUID differs from the unique disposable local user")
     checkout = Path(preflight["checkout"])
     sha = preflight["head_sha"]
-    state_dir = _resolve_future(args.state_dir, "--state-dir")
+    state_dir = screenshot_state_dir or _resolve_future(args.state_dir, "--state-dir")
     _outside_checkout(state_dir, checkout, "--state-dir")
     _outside_git_worktrees(state_dir, "--state-dir")
+    if screenshot_target is not None:
+        validated_paths = _prepare_screenshot_target(args, checkout)
+        if validated_paths != (state_dir, screenshot_target):
+            raise PreviewError("screenshot_path_invalid", "Screenshot destination changed during preflight")
     lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
     _outside_checkout(lock_dir, checkout, "preview lock directory")
     _outside_git_worktrees(lock_dir, "preview lock directory")
@@ -2372,6 +2597,13 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
                 "VORTEX_PREVIEW_FIXTURE_FINGERPRINTS": json.dumps(fixtures, sort_keys=True),
             }
         )
+        if screenshot_target is not None:
+            browser_env.update(
+                {
+                    "VORTEX_PREVIEW_SCREENSHOT_OUTPUT": str(screenshot_target),
+                    "VORTEX_PREVIEW_SCREENSHOT_STATE_DIR": str(state_dir),
+                }
+            )
         browser_invoked = True
         browser_command = _run_process(
             [node, str(adapter)],
@@ -2390,7 +2622,12 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             owned_process_tree_stopped=browser_command.stopped,
         )
         browser_evidence, browser_cleanup_confirmed, contract_error = _browser_report(
-            browser_command.stdout, sha, run_id, fixtures
+            browser_command.stdout,
+            sha,
+            run_id,
+            fixtures,
+            screenshot_target=screenshot_target,
+            adapter_process_stopped=browser_command.stopped and not browser_command.timed_out,
         )
         browser_cleanup_confirmed = browser_cleanup_confirmed and browser_command.stopped and not browser_command.timed_out
         if browser_evidence is not None:
