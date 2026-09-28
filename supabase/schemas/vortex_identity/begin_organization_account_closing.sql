@@ -54,5 +54,5 @@ revoke all on function vortex_identity.begin_organization_account_closing(uuid, 
 comment on function vortex_identity.begin_organization_account_closing(uuid, bigint) is
   'Owner-only active/suspended/closed-to-closing transition; Access composes it with version invalidation and stewardship.';
 
-grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;
 alter function vortex_identity.begin_organization_account_closing(uuid, bigint) owner to vortex_identity_owner;
+grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;

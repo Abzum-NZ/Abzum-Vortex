@@ -18,5 +18,5 @@ revoke all on function vortex_identity.identity_is_disabled(uuid) from public, a
 comment on function vortex_identity.identity_is_disabled(uuid) is
   'Private environment-wide disabled fact: true only after a completed identity disablement.';
 
-grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;
 alter function vortex_identity.identity_is_disabled(uuid) owner to vortex_identity_owner;
+grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;

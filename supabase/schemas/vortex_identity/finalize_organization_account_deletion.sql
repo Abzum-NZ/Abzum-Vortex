@@ -54,5 +54,5 @@ grant execute on function vortex_identity.finalize_organization_account_deletion
 comment on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) is
   'Private closing-to-deleted transition, reachable only through the Record deletion fence after its inventory proves nothing is owned.';
 
-grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;
 alter function vortex_identity.finalize_organization_account_deletion(uuid, bigint) owner to vortex_identity_owner;
+grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;

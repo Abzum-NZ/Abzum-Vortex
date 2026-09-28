@@ -64,5 +64,5 @@ revoke all on function vortex_identity.update_organization_runtime_settings_inte
 
 comment on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) is null;
 
-grant execute on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) to postgres;
 alter function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) owner to vortex_identity_owner;
+grant execute on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) to postgres;
