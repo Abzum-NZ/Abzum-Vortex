@@ -77,19 +77,27 @@ const parseCandidateFacts = (candidate: unknown): CandidateFacts | undefined => 
     candidate.applicationRootId === null
       ? null
       : parseIdentifier(applicationRootIdSchema, candidate.applicationRootId);
+  if (candidate.applicationRootId !== undefined && applicationRootId === undefined) return undefined;
 
   if (candidate.kind === "record") {
+    const recordTypeId = parseIdentifier(recordTypeIdSchema, candidate.recordTypeId);
+    const recordId = parseIdentifier(recordIdSchema, candidate.recordId);
+    if (recordTypeId === undefined || recordId === undefined) return undefined;
+
     return {
       kind: "record",
       tenantId,
       organizationId,
       applicationRootId,
-      recordTypeId: parseIdentifier(recordTypeIdSchema, candidate.recordTypeId),
-      recordId: parseIdentifier(recordIdSchema, candidate.recordId),
+      recordTypeId,
+      recordId,
       fileId: undefined,
       ownerState: "present",
     };
   }
+
+  const fileId = parseIdentifier(fileIdSchema, candidate.fileId);
+  if (fileId === undefined) return undefined;
 
   const owner = candidate.owner;
   if (owner === null) {
@@ -100,23 +108,29 @@ const parseCandidateFacts = (candidate: unknown): CandidateFacts | undefined => 
       applicationRootId,
       recordTypeId: undefined,
       recordId: undefined,
-      fileId: parseIdentifier(fileIdSchema, candidate.fileId),
+      fileId,
       ownerState: "absent",
     };
   }
 
   if (isRecord(owner)) {
+    const recordTypeId = parseIdentifier(recordTypeIdSchema, owner.recordTypeId);
+    const recordId = parseIdentifier(recordIdSchema, owner.recordId);
+    if (recordTypeId === undefined || recordId === undefined) return undefined;
+
     return {
       kind: "file",
       tenantId,
       organizationId,
       applicationRootId,
-      recordTypeId: parseIdentifier(recordTypeIdSchema, owner.recordTypeId),
-      recordId: parseIdentifier(recordIdSchema, owner.recordId),
-      fileId: parseIdentifier(fileIdSchema, candidate.fileId),
+      recordTypeId,
+      recordId,
+      fileId,
       ownerState: "present",
     };
   }
+
+  if (owner !== undefined) return undefined;
 
   return {
     kind: "file",
@@ -125,7 +139,7 @@ const parseCandidateFacts = (candidate: unknown): CandidateFacts | undefined => 
     applicationRootId,
     recordTypeId: undefined,
     recordId: undefined,
-    fileId: parseIdentifier(fileIdSchema, candidate.fileId),
+    fileId,
     ownerState: "unknown",
   };
 };
