@@ -181,7 +181,16 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
     name: "IAM",
     description:
       "Ordinary access request and request item records for the IAM application. These records describe intent only; they confer no access.",
-    dependencies: [],
+    dependencies: [
+      {
+        dependency_key: "system_directory",
+        module: "vortex.system_directory",
+        version: {
+          selection: "exact",
+          version: "1.0.0",
+        },
+      },
+    ],
     record_types: [
       {
         id: "rt_iam_access_request",

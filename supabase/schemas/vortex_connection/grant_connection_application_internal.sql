@@ -103,3 +103,5 @@ revoke all on function
 
 grant execute on function
   vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) to vortex_runtime;
+
+grant execute on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) to vortex_connection_owner;

@@ -1,4 +1,5 @@
 import {
+  type BlockPropertySchemaV2Contract,
   type FieldInputControlKey,
   type PlatformBlockReleaseV2,
   platformBlockReleaseV2Schema,
@@ -167,6 +168,11 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.DRAW
 /** Exact immutable metadata release for the general container block. */
 export const CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.CONTAINER_BLOCK_RELEASE);
 
+/** Menu sizing, placement and breakpoint overrides for a definition-owned shell. */
+export const CONTAINER_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.CONTAINER_BLOCK_RELEASE_1_1_0,
+);
+
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEADING_BLOCK_RELEASE);
 
@@ -177,6 +183,11 @@ export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEA
  */
 export const APPLICATION_NAVIGATION_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
   sources.APPLICATION_NAVIGATION_BLOCK_RELEASE,
+);
+
+/** Account context and actions rendered where an application places this block. */
+export const APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 );
 
 /** Exact immutable metadata release for the form container block. */
@@ -196,9 +207,88 @@ export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sou
 export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.FIELD_INPUT_BLOCK_RELEASE);
 
 /**
+ * The derived settings needed only when a field input delegates to a typed field control. These
+ * properties are compiled from the bound module field, never authored into an application source.
+ */
+const derivedFieldInputRelease = (
+  base: PlatformBlockReleaseV2,
+  properties: readonly BlockPropertySchemaV2Contract[],
+): PlatformBlockReleaseV2 => {
+  const overrides = new Map(properties.map((property) => [property.key, property] as const));
+  const remaining = properties.filter(
+    (property) => !base.properties.some((candidate) => candidate.key === property.key),
+  );
+  return deepFreeze({
+    ...base,
+    properties: [
+      ...base.properties.map((property) => overrides.get(property.key) ?? property),
+      ...remaining,
+    ],
+  });
+};
+
+const derivedChoiceOptionsProperty: BlockPropertySchemaV2Contract = {
+  kind: "list",
+  key: "options",
+  label: "Options",
+  help: "Declared field values offered by this input",
+  required: false,
+  minimumItems: 0,
+  maximumItems: 200,
+  item: {
+    kind: "group",
+    key: "option",
+    label: "Option",
+    required: true,
+    properties: [
+      {
+        kind: "text",
+        key: "key",
+        label: "Value",
+        help: "Exact option value declared by the module field",
+        required: true,
+        minLength: 1,
+        maxLength: 120,
+      },
+      {
+        kind: "text",
+        key: "label",
+        label: "Label",
+        required: true,
+        minLength: 1,
+        maxLength: 120,
+      },
+    ],
+  },
+};
+
+const severalChoicesMaximumSelectionsProperty: BlockPropertySchemaV2Contract = {
+  key: "maximum_selections",
+  label: "Maximum selections",
+  kind: "number",
+  integer: true,
+  minimum: 1,
+  maximum: 200,
+  required: false,
+};
+
+const dateTimeDisplayTimeZoneProperty: BlockPropertySchemaV2Contract = {
+  key: "display_time_zone",
+  label: "Display time zone",
+  kind: "choice",
+  options: [
+    { key: "person", label: "Person" },
+    { key: "organization", label: "Organization" },
+    { key: "utc", label: "UTC" },
+  ],
+  required: false,
+};
+
+/**
  * The existing input release each derived automatic field control delegates to. The compiler
  * validates the derived settings against this release's declared properties, and the renderer
- * draws the placement with this release's metadata, so both read one mapping.
+ * draws the placement with this release's metadata, so both read one mapping. Date-time and
+ * several-choice aliases add closed settings that are derived from their module field contracts.
  */
 export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey, PlatformBlockReleaseV2>> =
   Object.freeze({
@@ -207,7 +297,12 @@ export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey,
     number: NUMBER_INPUT_BLOCK_RELEASE,
     boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
     date: DATE_INPUT_BLOCK_RELEASE,
-    choice: CHOICE_INPUT_BLOCK_RELEASE,
+    date_time: derivedFieldInputRelease(DATE_INPUT_BLOCK_RELEASE, [dateTimeDisplayTimeZoneProperty]),
+    choice: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [derivedChoiceOptionsProperty]),
+    several_choices: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [
+      derivedChoiceOptionsProperty,
+      severalChoicesMaximumSelectionsProperty,
+    ]),
     link: LINK_INPUT_BLOCK_RELEASE,
   });
 
@@ -268,18 +363,20 @@ export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
-/** All two immutable general layout block releases. */
+/** All three immutable general layout block releases. */
 export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
   HEADING_BLOCK_RELEASE,
 ]);
 
-/** The one immutable application navigation block release, placed in a shell's layout. */
+/** The two immutable application navigation block releases, placed in a shell's layout. */
 export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 ]);
 
-/** All thirty-nine immutable platform block releases registered for the page builder. */
+/** All forty-one immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

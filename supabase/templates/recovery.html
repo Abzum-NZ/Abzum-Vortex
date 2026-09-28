@@ -1,4 +1,5 @@
 <h2>Reset your password</h2>
-<p>Follow this link to choose a new password.</p>
-<p><a href="{{ .ConfirmationURL }}">Choose a new password</a></p>
+<p>Open the recovery page and enter the email address and six-digit code below, then choose a new password.</p>
+<p><strong>{{ .Token }}</strong></p>
+<p><a href="{{ .SiteURL }}/auth/update-password">Open the recovery page</a></p>
 <p>If you did not request this, you can ignore this email.</p>

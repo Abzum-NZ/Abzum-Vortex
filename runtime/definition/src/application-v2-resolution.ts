@@ -17,6 +17,7 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
       | "page"
       | "pipeline"
       | "flow"
+      | "event"
       | "flow_node"
       | "flow_edge"
       | "flow_binding",
@@ -47,8 +48,8 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
 
 /**
  * The exact module-field metadata the compiler derives one automatic field input from: its stable
- * key, its label, whether it is required, its module field type, its declared format (text fields
- * only), its choices (choice fields only) and the record types it targets (link fields only).
+ * key, label, requirement, module field type, declared format, choices and type-specific settings
+ * the automatic input needs. Link fields also carry their resolved target record types.
  */
 export type FieldInputSourceField = Readonly<{
   key: string;
@@ -56,6 +57,8 @@ export type FieldInputSourceField = Readonly<{
   required: boolean;
   type: string;
   textFormat?: string | undefined;
+  displayTimeZone?: "person" | "organization" | "utc" | undefined;
+  maximumSelections?: number | undefined;
   choices: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{
     state: "resolved";

@@ -89,3 +89,7 @@ comment on function vortex_file.record_file_download_grant(
   uuid, uuid, uuid, uuid, uuid, jsonb, text, uuid, timestamptz
 ) is
   'Records one unclaimed short-lived read grant for the request actor on an active clean attached file.';
+
+alter function vortex_file.record_file_download_grant(
+  uuid, uuid, uuid, uuid, uuid, jsonb, text, uuid, timestamptz
+) owner to vortex_file_owner;
