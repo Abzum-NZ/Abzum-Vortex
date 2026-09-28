@@ -721,6 +721,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               "Creates the incident from the submitted Create incident form through the one Save record task.",
             recordType: incidentRecordType,
             mode: "create",
+            ownershipMode: "none",
           }),
           labels: { name: "Create incident" },
         },
