@@ -8,6 +8,10 @@
       "contentFingerprint": "sha256:a037ae7de71c4a342ea23ab394bb59b3541b2f77f52d4416395a0b151cacfef3",
       "catalogueFingerprint": "sha256:cdc84ff01a15e9487a30362d114d816c9de55e0289fcefe8c75585ac8a061a00"
     },
+    "11d1a889-531f-4880-a1a4-5dda5289e5ff:1.2.0": {
+      "contentFingerprint": "sha256:3f4f5743c2e8e2bebe30751c9f9fce130e53fe38b7e08959449c34bfd552b8ea",
+      "catalogueFingerprint": "sha256:2a317bd96172e81e08c1465a5e9285890803a239e6be2ffe27626f653ed3f174"
+    },
     "148f420f-f7db-4145-80f4-3d3fa036096b:1.0.0": {
       "contentFingerprint": "sha256:467d05800b26b6030b0a6a85d4f66c467083773ec478e2bc5e827bbc84707ef1",
       "catalogueFingerprint": "sha256:4d076a70f9f28e5b20735d212f4957c1eac3709f6dde80de3ae59794ca4e899e"
