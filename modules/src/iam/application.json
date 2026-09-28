@@ -352,6 +352,13 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_iam_open_person",
+        "key": "vortex.app.iam.open_person",
+        "record_type": "vortex.system_directory:person",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_retire_role",
         "key": "vortex.app.iam.retire_role",
         "record_type": "vortex.system_directory:role",
@@ -880,8 +887,10 @@
         "id": "page_iam_people",
         "key": "iam_people",
         "name": "People",
-        "type": "dashboard",
+        "type": "list",
+        "record_type": "vortex.system_directory:person",
         "permission": "platform.organization.accounts.read",
+        "query": "vortex.system_directory:people",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_iam",
@@ -919,9 +928,18 @@
               "iam_people_region": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.3.0"
                 },
                 "settings": {
+                  "row_click": {
+                    "kind": "group",
+                    "properties": {
+                      "event_id": {
+                        "kind": "text",
+                        "value": "event_iam_open_person"
+                      }
+                    }
+                  },
                   "title": {
                     "kind": "text",
                     "value": "People (organisation accounts)"
@@ -1007,6 +1025,111 @@
               ]
             }
           } }
+        }
+      },
+      {
+        "id": "page_iam_person_detail",
+        "key": "iam_person_detail",
+        "name": "Person detail",
+        "type": "detail",
+        "record_type": "vortex.system_directory:person",
+        "permission": "platform.organization.accounts.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "iam_person_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Person detail"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Display name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "iam_person_detail"
+                ]
+              }
+            }
+          }
         }
       },
       {
@@ -5938,6 +6061,51 @@
         ],
         "outputs": {}
       },
+      {
+        "contractVersion": "1.0.0",
+        "id": "iam_open_person",
+        "key": "iam_open_person",
+        "description": "Opens the clicked person's own detail page with the record identity the clicked row carries.",
+        "labels": {
+          "name": "Open person"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "iam_person_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
     {
       "contractVersion": "1.0.0",
       "id": "navigate_new_access_request",
@@ -6267,6 +6435,19 @@
         "event_id": "event_iam_open_access_request",
         "event": "row_clicked",
         "flow": "iam_open_access_request",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "row_binding_iam_open_person",
+        "control": "iam_people_region",
+        "event_id": "event_iam_open_person",
+        "event": "row_clicked",
+        "flow": "iam_open_person",
         "inputs": {
           "record_id": {
             "kind": "caller",
