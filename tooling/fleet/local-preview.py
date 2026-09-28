@@ -447,7 +447,11 @@ def _validate_env_file(raw: str, checkout: Path) -> tuple[Path, dict[str, str]]:
     if values.get("NODE_ENV", "development") == "production" or values.get("CI", "").lower() == "true":
         raise PreviewError("nonlocal_environment", "The local web environment cannot be production or CI")
     for name, value in values.items():
-        if name.startswith(("VORTEX_", "SUPABASE_")) and name.endswith(("_URL", "_ORIGIN")):
+        if (
+            name != "VORTEX_RUNTIME_DATABASE_URL"
+            and name.startswith(("VORTEX_", "SUPABASE_"))
+            and name.endswith(("_URL", "_ORIGIN"))
+        ):
             expected_port = 54321 if name in {"VORTEX_SUPABASE_URL", "SUPABASE_URL"} else None
             _loopback_url(value, name, port=expected_port)
         if name == "VORTEX_RUNTIME_DATABASE_URL":
