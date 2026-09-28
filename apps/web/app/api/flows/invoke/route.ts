@@ -469,7 +469,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               held.event === "form_submit" &&
               held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase()))
           return undefined;
-        return adaptFormSubmit(binding, { values: draft.values }, subject);
+        return adaptFormSubmit(binding, {
+          values: draft.values,
+          ...(callerInputs.selectedOwnerGroupId === undefined
+            ? {}
+            : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
+        }, subject);
       },
       continueForm,
       orchestratorFor,
