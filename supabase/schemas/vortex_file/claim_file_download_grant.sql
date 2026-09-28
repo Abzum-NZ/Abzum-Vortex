@@ -69,3 +69,5 @@ grant execute on function vortex_file.claim_file_download_grant(uuid) to vortex_
 
 comment on function vortex_file.claim_file_download_grant(uuid) is
   'Claims an unexpired read grant of the request actor exactly once with its current FileRecord.';
+
+alter function vortex_file.claim_file_download_grant(uuid) owner to vortex_file_owner;
