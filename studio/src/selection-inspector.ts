@@ -171,10 +171,11 @@ const placementCandidates = (
     const pagePath = ["body", "pages", index] as const;
     if (page.type === "guided_form") {
       const composition = page.composition;
-      for (const [stepAlias, content] of Object.entries(composition.step_content)) {
-        if (composition.shell_kind === "default") {
+      if (composition.shell_kind === "default") {
+        for (const [stepAlias, content] of Object.entries(composition.step_content))
           visitSlot(content, [...pagePath, "composition", "step_content", stepAlias]);
-        } else {
+      } else {
+        for (const [stepAlias, content] of Object.entries(composition.step_content)) {
           for (const [slotAlias, slot] of Object.entries(content))
             visitSlot(slot, [
               ...pagePath,

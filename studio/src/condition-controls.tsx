@@ -1416,7 +1416,7 @@ function TreeEditor({
         <LiteralEditor
           operand={operand}
           semanticType={type}
-          collectionElementType={collectionType}
+          {...(collectionType === undefined ? {} : { collectionElementType: collectionType })}
           path={pathToOperand}
           validation={validation}
           onCommit={commitLiteral}
