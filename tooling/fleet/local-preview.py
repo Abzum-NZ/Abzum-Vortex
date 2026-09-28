@@ -41,9 +41,16 @@ DIAGNOSTIC_OWNER_EMAIL = "codex-preview@vortex.test"
 DIAGNOSTIC_STATUS = "DIAGNOSTIC_COMPLETE"
 DIAGNOSTIC_HELPER_SHA256 = "0faeee5d13256b283bacc71688add055b29bed58f5d9049e0f209e84580fd987"
 MAX_SETUP_STATE_BYTES = 1024 * 1024
+MAX_NEXT_ENV_BYTES = 1024 * 1024
 MAX_AUTH_USERS_RESPONSE = 2 * 1024 * 1024
 AUTH_USERS_PAGE_SIZE = 200
 AUTH_USERS_MAX_PAGES = 10
+NEXT_DEVELOPMENT_ENV_FILES = (
+    ".env.development.local",
+    ".env.local",
+    ".env.development",
+    ".env",
+)
 REQUIRED_BROWSER_CHECKS = (
     "sign_in",
     "companies_list",
@@ -418,6 +425,37 @@ def _read_dotenv(path: Path) -> dict[str, str]:
     return values
 
 
+def _forbidden_next_admin_key(name: str) -> bool:
+    upper = name.upper()
+    return (
+        "SERVICE_ROLE" in upper
+        or upper.endswith("SECRET_KEY")
+        or upper.endswith("SERVICE_KEY")
+        or re.search(r"(?:^|_)ADMIN(?:_[A-Z0-9]+)*(?:_KEY|_TOKEN|_SECRET|_PASSWORD)$", upper) is not None
+    )
+
+
+def _validate_next_env_sources(checkout: Path, primary_values: dict[str, str]) -> None:
+    """Reject admin credentials in every dotenv file Next dev can auto-load."""
+    web = checkout / "apps" / "web"
+    for filename in NEXT_DEVELOPMENT_ENV_FILES:
+        path = web / filename
+        if not path.exists() and not path.is_symlink():
+            continue
+        try:
+            if path.is_symlink() or not path.is_file() or not _inside(path.resolve(strict=True), checkout):
+                raise PreviewError("invalid_env_file", "A Next development environment source is not a regular checkout file")
+            if path.stat().st_size > MAX_NEXT_ENV_BYTES:
+                raise PreviewError("invalid_env_file", "A Next development environment source exceeds its size limit")
+        except PreviewError:
+            raise
+        except OSError:
+            raise PreviewError("invalid_env_file", "A Next development environment source is unavailable") from None
+        values = primary_values if filename == ".env.development.local" else _read_dotenv(path)
+        if any(_forbidden_next_admin_key(name) for name in values):
+            raise PreviewError("next_env_admin_key_forbidden", "A Next development environment source contains an admin credential key")
+
+
 def _loopback_url(value: str, label: str, *, port: int | None = None) -> str:
     try:
         parsed = urlsplit(value)
@@ -487,6 +525,7 @@ def _validate_env_file(raw: str, checkout: Path) -> tuple[Path, dict[str, str]]:
     if ignored.timed_out or ignored.exit_code != 0:
         raise PreviewError("env_file_not_ignored", "The local environment file is not Git-ignored")
     values = _read_dotenv(env_file)
+    _validate_next_env_sources(checkout, values)
     required = (
         "VORTEX_IDENTITY_AUTHORITY_ID",
         "VORTEX_SUPABASE_URL",
@@ -936,7 +975,7 @@ def _diagnostic_auth_json(
 
 def _diagnostic_page_metadata(
     headers: dict[str, str | None], api_url: str, page: int, count: int
-) -> int | None:
+) -> tuple[int | None, int | None, bool]:
     """Reject contradictory or malformed pagination metadata; never follow Link URLs."""
     total_text = headers["total"]
     total: int | None = None
@@ -947,6 +986,8 @@ def _diagnostic_page_metadata(
         if total > AUTH_USERS_PAGE_SIZE * AUTH_USERS_MAX_PAGES:
             raise PreviewError("diagnostic_owner_lookup_incomplete", "Local Auth user list exceeds the bounded scan")
     link_text = headers["link"]
+    last_page: int | None = None
+    has_next = False
     if link_text:
         seen_relations: set[str] = set()
         for part in link_text.split(","):
@@ -973,17 +1014,28 @@ def _diagnostic_page_metadata(
                 or len(query["per_page"]) != 1
                 or linked_page < 1
                 or linked_size != AUTH_USERS_PAGE_SIZE
+                or (relation == "first" and linked_page != 1)
+                or (relation == "prev" and (page == 1 or linked_page != page - 1))
                 or (relation == "next" and linked_page != page + 1)
                 or (relation == "next" and count == 0)
+                or (relation == "last" and count > 0 and linked_page < page)
             ):
                 raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth pagination link is invalid")
-    return total
+            if relation == "next":
+                has_next = True
+            if relation == "last":
+                last_page = linked_page
+                if last_page > AUTH_USERS_MAX_PAGES:
+                    raise PreviewError("diagnostic_owner_lookup_incomplete", "Local Auth user list exceeds the bounded scan")
+    return total, last_page, has_next
 
 
 def _find_diagnostic_owner(api_url: str, service_key: str) -> str:
     matches: list[str] = []
     seen_users: set[str] = set()
     total_expected: int | None = None
+    advertised_last: int | None = None
+    preceding_next = False
     completed = False
     for page in range(1, AUTH_USERS_MAX_PAGES + 1):
         document, headers = _diagnostic_auth_json(
@@ -995,11 +1047,21 @@ def _find_diagnostic_owner(api_url: str, service_key: str) -> str:
         users = document.get("users")
         if not isinstance(users, list) or len(users) > AUTH_USERS_PAGE_SIZE:
             raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list has an invalid page")
-        total = _diagnostic_page_metadata(headers, api_url, page, len(users))
+        total, last_page, has_next = _diagnostic_page_metadata(headers, api_url, page, len(users))
         if total is not None:
             if total_expected is not None and total != total_expected:
                 raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user count changed during lookup")
             total_expected = total
+        if last_page is not None:
+            if advertised_last is not None and last_page != advertised_last:
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth last-page metadata changed")
+            advertised_last = last_page
+        if len(users) == 0 and (
+            preceding_next or (advertised_last is not None and advertised_last > page)
+        ):
+            raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth advertised users beyond the terminal page")
+        if len(users) > 0 and advertised_last is not None and advertised_last < page:
+            raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth returned users beyond its last page")
         for user in users:
             if not isinstance(user, dict) or not isinstance(user.get("id"), str):
                 raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list has an invalid entry")
@@ -1017,6 +1079,7 @@ def _find_diagnostic_owner(api_url: str, service_key: str) -> str:
         if len(users) == 0:
             completed = True
             break
+        preceding_next = has_next
     if not completed:
         raise PreviewError("diagnostic_owner_lookup_incomplete", "Local Auth user list did not end within the bounded scan")
     if total_expected is not None and len(seen_users) != total_expected:
@@ -1727,6 +1790,9 @@ def _run(args: argparse.Namespace) -> int:
             }
         )
         test_password = ""
+        _, next_local_values = _validate_env_file(args.web_env_file, checkout)
+        if next_local_values != local_values:
+            raise PreviewError("env_file_changed", "The local web environment changed before Next startup")
         # Recheck the local stack without passing its admin key to the Next child.
         _, server_key = _supabase_status(
             checkout, node, cli, base_env, steps, log_file, "supabase.status.browser"
@@ -2024,6 +2090,9 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
                 "NEXT_TELEMETRY_DISABLED": "1",
             }
         )
+        _, next_local_values = _validate_env_file(args.web_env_file, checkout)
+        if next_local_values != local_values:
+            raise PreviewError("env_file_changed", "The local web environment changed before Next startup")
         next_entry = checkout / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
         try:
             server = subprocess.Popen(
