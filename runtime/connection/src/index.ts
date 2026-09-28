@@ -9,3 +9,4 @@ export * from "./connection-instance-state";
 export * from "./connection-readiness";
 export * from "./administration";
 export * from "./connection-instance-reader";
+export * from "./outbound-target-policy";
