@@ -1161,12 +1161,6 @@ def _run(args: argparse.Namespace) -> int:
             raise PreviewError("fixture_fingerprint_mismatch", "Prepared fixture bytes changed after preflight")
         _record(steps, log_file, step="fixtures.verified", fixtures=fixtures)
 
-        api_url, pre_reset_key = _supabase_status(
-            checkout, node, cli, base_env, steps, log_file, "supabase.status.before"
-        )
-        if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
-            raise PreviewError("supabase_url_mismatch", "The running local Supabase URL differs from the local app URL")
-        pre_reset_key = ""
         _command_step(
             "auth.prepare",
             [node, str(checkout / "tooling" / "supabase" / "ensure-local-signing-key.mjs")],
@@ -1176,6 +1170,12 @@ def _run(args: argparse.Namespace) -> int:
             steps=steps,
             log_file=log_file,
         )
+        api_url, pre_reset_key = _supabase_status(
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.before"
+        )
+        if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
+            raise PreviewError("supabase_url_mismatch", "The running local Supabase URL differs from the local app URL")
+        pre_reset_key = ""
         _ensure_setup_state_absent(checkout)
         _command_step(
             "database.reset.local",
