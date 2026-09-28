@@ -1312,14 +1312,75 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
           : baseRadius === null || baseRadius <= 0
             ? "base_radius"
             : null;
+    let foregroundProbe = null;
+    const foregroundSentinels = [];
+    try {
+      const addForegroundSentinel = (parent, declarations) => {
+        const sentinel = makeSentinel(parent, { "color-scheme": "inherit", ...declarations });
+        foregroundSentinels.push(sentinel);
+        return sentinel;
+      };
+      const rootPrimaryForeground = getComputedStyle(root)
+        .getPropertyValue("--sidebar-primary-foreground").trim();
+      const sidebarStyle = getComputedStyle(sidebar);
+      const sidebarPrimaryForeground = sidebarStyle.getPropertyValue("--sidebar-primary-foreground").trim();
+      const sidebarAccentForeground = sidebarStyle.getPropertyValue("--sidebar-accent-foreground").trim();
+      const anchorStyle = getComputedStyle(link);
+      const anchorAccentForeground = anchorStyle.getPropertyValue("--sidebar-accent-foreground").trim();
+      const accentForegroundColor = getComputedStyle(addForegroundSentinel(sidebar, {
+        color: "var(--sidebar-accent-foreground)",
+      })).color;
+      const primaryForegroundColor = getComputedStyle(addForegroundSentinel(sidebar, {
+        color: "var(--sidebar-primary-foreground)",
+      })).color;
+      const darkSchemeColor = getComputedStyle(addForegroundSentinel(sidebar, {
+        color: "rgb(4, 5, 6)",
+      })).color;
+      const lightSchemeColor = getComputedStyle(addForegroundSentinel(sidebar, {
+        color: "rgb(1, 2, 3)",
+      })).color;
+      const inheritedSchemeColor = getComputedStyle(addForegroundSentinel(sidebar, {
+        color: "light-dark(rgb(1, 2, 3), rgb(4, 5, 6))",
+      })).color;
+      const labels = link.querySelectorAll(":scope > span");
+      if (labels.length === 1 && visible(labels[0])) {
+        const labelColor = getComputedStyle(labels[0]).color;
+        foregroundProbe = {
+          root_primary_foreground_present: rootPrimaryForeground !== "",
+          sidebar_primary_foreground_present: sidebarPrimaryForeground !== "",
+          sidebar_accent_foreground_present: sidebarAccentForeground !== "",
+          anchor_accent_foreground_present: anchorAccentForeground !== "",
+          anchor_matches_accent_foreground: sidebarAccentForeground !== "" &&
+            anchorAccentForeground !== "" && accentForegroundColor !== "" &&
+            anchorStyle.color === accentForegroundColor,
+          label_matches_anchor: anchorStyle.color !== "" && labelColor === anchorStyle.color,
+          accent_matches_primary_foreground: sidebarAccentForeground !== "" &&
+            sidebarPrimaryForeground !== "" && accentForegroundColor !== "" &&
+            primaryForegroundColor !== "" && accentForegroundColor === primaryForegroundColor,
+          sidebar_dark_scheme_resolved: darkSchemeColor !== lightSchemeColor &&
+            inheritedSchemeColor === darkSchemeColor,
+        };
+      }
+    } catch {
+      foregroundProbe = null;
+    } finally {
+      for (const sentinel of foregroundSentinels) {
+        try {
+          sentinel.remove();
+        } catch {}
+      }
+    }
     return {
       valid: failedPredicate === null,
       ...(failedPredicate === null ? {} : { failed_predicate: failedPredicate }),
       maia_menu_radius_px: menuRadius,
       maia_base_radius_px: baseRadius,
+      ...(foregroundProbe ? { maia_foreground_probe: foregroundProbe } : {}),
     };
   })()`;
   const observation = await devtools.evaluate(expression);
+  if (observation?.maia_foreground_probe && typeof observation.maia_foreground_probe === "object")
+    result.maia_foreground_probe = observation.maia_foreground_probe;
   if (observation?.valid === false && MAIA_ACTIVE_MENU_FAILURE_PREDICATES.has(observation.failed_predicate))
     result.maia_active_menu_failed_predicate = observation.failed_predicate;
   recordThemeMetrics(observation, ["maia_menu_radius_px", "maia_base_radius_px"]);

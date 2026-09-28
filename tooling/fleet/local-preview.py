@@ -179,6 +179,16 @@ SAFE_MAIA_MENU_FAILED_PREDICATES = frozenset(
         "comparison_state",
     }
 )
+MAIA_FOREGROUND_PROBE_FIELDS = (
+    "root_primary_foreground_present",
+    "sidebar_primary_foreground_present",
+    "sidebar_accent_foreground_present",
+    "anchor_accent_foreground_present",
+    "anchor_matches_accent_foreground",
+    "label_matches_anchor",
+    "accent_matches_primary_foreground",
+    "sidebar_dark_scheme_resolved",
+)
 CUSTOMER_PROBE_COUNT_FIELDS = (
     "form_count",
     "group_count",
@@ -1922,6 +1932,18 @@ def _browser_report(
         evidence["maia_active_menu_failed_predicate_valid"] = predicate_valid
         if predicate_valid:
             evidence["maia_active_menu_failed_predicate"] = predicate
+    if report_fields_valid:
+        raw_foreground_probe = result.get("maia_foreground_probe")
+        foreground_probe_valid = (
+            isinstance(raw_foreground_probe, dict)
+            and set(raw_foreground_probe) == set(MAIA_FOREGROUND_PROBE_FIELDS)
+            and all(type(raw_foreground_probe[name]) is bool for name in MAIA_FOREGROUND_PROBE_FIELDS)
+        )
+        evidence["maia_foreground_probe_valid"] = foreground_probe_valid
+        if foreground_probe_valid:
+            evidence["maia_foreground_probe"] = {
+                name: raw_foreground_probe[name] for name in MAIA_FOREGROUND_PROBE_FIELDS
+            }
     if (
         identity_matches
         and result_value == "FAIL"
