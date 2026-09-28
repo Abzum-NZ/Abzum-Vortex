@@ -89,10 +89,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const [generation, setGeneration] = useState(0);
   const [ownerGroupChoice, setOwnerGroupChoice] = useState<string | undefined>();
   const [ownerGroupError, setOwnerGroupError] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Readonly<Record<string, string>>>({});
   const [registry] = useState(() => createFormFieldRegistry(context.location));
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
+  const validationAttemptedRef = useRef(false);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
   const resetBaseline = useCallback(() => {
@@ -109,6 +111,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
     if (supplied) setFeedbackTick((current) => current + 1);
+    if (validationAttemptedRef.current)
+      setValidationErrors(registry.validationErrors());
     const baseline = baselineRef.current;
     if (baseline !== undefined)
       unsavedWorkRegistry?.setDirty(
@@ -127,6 +131,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     (fieldKey: string) => fieldDraftFeedback(feedback, fieldKey),
     [feedback],
   );
+  const fieldErrorFor = useCallback(
+    (fieldKey: string) => validationErrors[fieldKey],
+    [validationErrors],
+  );
 
   const scope: FormScope = useMemo(
     () => ({
@@ -134,10 +142,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       inactive: context.inactive,
       register: registry.register,
       values: registry.values,
+      fieldErrorFor,
       draftFeedbackFor,
       reportFieldChanged,
     }),
-    [context.pending, context.inactive, registry, draftFeedbackFor, reportFieldChanged],
+    [context.pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
   );
 
   const events = context.events;
@@ -167,6 +176,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (context.inactive) return;
+    validationAttemptedRef.current = true;
+    const nextValidationErrors = registry.validationErrors();
+    setValidationErrors(nextValidationErrors);
+    if (Object.keys(nextValidationErrors).length > 0) return;
     if (ownerGroups !== undefined && selectedOwnerGroupId === undefined) {
       setOwnerGroupError(true);
       return;
@@ -200,6 +213,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     resetRef.current = true;
     setOwnerGroupChoice(undefined);
     setOwnerGroupError(false);
+    validationAttemptedRef.current = false;
+    setValidationErrors({});
     setGeneration((current) => current + 1);
     events?.form_reset?.({ event: "form_reset" });
   };

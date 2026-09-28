@@ -490,6 +490,9 @@ revoke all on function vortex_event.append_record_occurrences_for_resolved_insta
 )
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_adapter;
+grant execute on function vortex_event.append_record_occurrences_for_resolved_installation_internal(
+  uuid, uuid, jsonb, jsonb
+) to vortex_event_owner;
 comment on function vortex_event.append_record_occurrences_for_resolved_installation_internal(
   uuid, uuid, jsonb, jsonb
 ) is

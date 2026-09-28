@@ -39,6 +39,9 @@ begin
 end
 $function$;
 
+alter function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text)
+  owner to postgres;
+
 revoke all on function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_owner, vortex_module_owner;
 grant execute on function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text)
