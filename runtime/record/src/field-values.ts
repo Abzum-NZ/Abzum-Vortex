@@ -493,6 +493,14 @@ const normalizeValue = (
       field.fieldId,
     );
   const normalized = leaf.data as JsonValue;
+  if (
+    policy === "final" &&
+    field.type === "several_choices" &&
+    field.required &&
+    Array.isArray(normalized) &&
+    normalized.length === 0
+  )
+    return issue(context, "required_field_missing", path, field.fieldId);
   if (field.type === "attachment" && policy === "final") {
     const files = normalized as FileId[];
     if (

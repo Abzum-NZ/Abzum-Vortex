@@ -72,6 +72,8 @@ export type ProjectedComponentData<Values> =
 export type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   fieldLabels?: Readonly<Record<string, string>>;
+  /** Public option labels for fields whose stored value is a several-choice list. */
+  fieldChoiceLabels?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readableFieldIds?: readonly string[];
 }>;
 
@@ -92,8 +94,26 @@ const projectDate = (value: string): ProjectedCellValue =>
  * fit its declared format is shown as plain text, and a structured value that is not a display
  * value at all is shown as empty; neither ever reaches the component as raw JSON.
  */
-const projectCell = (value: JsonValue, format: RecordsDisplayFormat): ProjectedCellValue => {
+const projectCell = (
+  value: JsonValue,
+  format: RecordsDisplayFormat,
+  choiceLabels?: Readonly<Record<string, string>>,
+): ProjectedCellValue => {
   if (value === null) return empty;
+  if (Array.isArray(value) && choiceLabels !== undefined) {
+    if (
+      value.length === 0 ||
+      value.some((entry) => typeof entry !== "string") ||
+      new Set(value).size !== value.length
+    )
+      return empty;
+    const labels = value.map((entry) =>
+      typeof entry === "string" && hasOwn(choiceLabels, entry) ? choiceLabels[entry] : undefined,
+    );
+    return labels.some((label) => label === undefined)
+      ? empty
+      : { kind: "text", text: labels.join(", ") };
+  }
   switch (format) {
     case "number":
     case "currency":
@@ -227,7 +247,12 @@ export const projectRecordDetailData = (
     if (stored === undefined) continue;
     const label = headingFor(declared.field, declared.label, input.fieldLabels);
     if (label === undefined) return undefined;
-    fields.push({ key: declared.field, label, value: projectCell(stored.value, declared.format) });
+    const choiceLabels = input.fieldChoiceLabels?.[declared.field.toLowerCase()];
+    fields.push({
+      key: declared.field,
+      label,
+      value: projectCell(stored.value, declared.format, choiceLabels),
+    });
   }
   return fields.length === 0
     ? { status: "empty" }
