@@ -22,7 +22,7 @@ declare
   record_type_id_value uuid;
   context_organization_id uuid;
   context_application_root_id uuid;
-  storage_contract_id uuid;
+  v_storage_contract_id uuid;
   physical_table_token text;
   storage_scope text;
   access_sql text;
@@ -48,7 +48,7 @@ declare
   fast_field_ids text[] := array[]::text[];
   fields_by_id jsonb := '{}'::jsonb;
   field_item jsonb;
-  field_id text;
+  field_key text;
   field_type text;
   mapping_row vortex_record.field_storage_mappings%rowtype;
   fast_path boolean := false;
@@ -142,9 +142,9 @@ begin
       or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    field_id := pg_catalog.lower(field_item #>> '{}');
-    field_type := coalesce(fields_by_id -> field_id ->> 'type', '');
-    if field_id = any (group_ids)
+    field_key := pg_catalog.lower(field_item #>> '{}');
+    field_type := coalesce(fields_by_id -> field_key ->> 'type', '');
+    if field_key = any (group_ids)
       or field_type not in (
         'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
         'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
@@ -152,10 +152,10 @@ begin
       ) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    group_ids := pg_catalog.array_append(group_ids, field_id);
-    if not (field_id = any (summary_field_ids)) then
-      summary_field_ids := pg_catalog.array_append(summary_field_ids, field_id);
-      fast_field_ids := pg_catalog.array_append(fast_field_ids, field_id);
+    group_ids := pg_catalog.array_append(group_ids, field_key);
+    if not (field_key = any (summary_field_ids)) then
+      summary_field_ids := pg_catalog.array_append(summary_field_ids, field_key);
+      fast_field_ids := pg_catalog.array_append(fast_field_ids, field_key);
     end if;
   end loop;
 
@@ -204,7 +204,7 @@ begin
   if prepared_plan ->> 'outcome' is distinct from 'prepared' then
     return prepared_plan;
   end if;
-  storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+  v_storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
   physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
   storage_scope := prepared_plan #>> '{storage,storageScope}';
   access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
@@ -280,16 +280,16 @@ begin
     );
 
   if fast_path then
-    foreach field_id in array fast_field_ids loop
+    foreach field_key in array fast_field_ids loop
       select mapping.* into mapping_row
       from vortex_record.field_storage_mappings as mapping
-      where mapping.storage_contract_id = storage_contract_id
-        and mapping.field_id = field_id::uuid;
+      where mapping.storage_contract_id = v_storage_contract_id
+        and mapping.field_id = field_key::uuid;
       if not found or mapping_row.state <> 'active' then
         fast_path_fields_valid := false;
         exit;
       end if;
-      field_type := fields_by_id -> field_id ->> 'type';
+      field_type := fields_by_id -> field_key ->> 'type';
       fast_path_fields_valid := fast_path_fields_valid and case field_type
         when 'whole_number' then mapping_row.database_value_type = 'integer'
         when 'decimal_number' then mapping_row.database_value_type = 'decimal'
@@ -328,7 +328,7 @@ begin
         else pg_catalog.format('pg_catalog.to_jsonb(stored.%I)', mapping_row.physical_column_token)
       end;
       expression_pairs := pg_catalog.array_append(
-        expression_pairs, pg_catalog.format('%L, %s', field_id, value_expression)
+        expression_pairs, pg_catalog.format('%L, %s', field_key, value_expression)
       );
     end loop;
     fast_path := fast_path_fields_valid;
@@ -502,16 +502,16 @@ begin
     aggregate_object_sql := aggregate_object_sql || pg_catalog.format('%L, %s', aggregate_alias, aggregate_result_sql);
   end loop;
 
-  foreach field_id in array group_ids loop
+  foreach field_key in array group_ids loop
     group_value_pairs := pg_catalog.array_append(
       group_value_pairs,
-      pg_catalog.format('%L, candidate.projected_values -> %L', field_id, field_id)
+      pg_catalog.format('%L, candidate.projected_values -> %L', field_key, field_key)
     );
     group_by_terms := pg_catalog.array_append(
-      group_by_terms, pg_catalog.format('(candidate.projected_values -> %L)', field_id)
+      group_by_terms, pg_catalog.format('(candidate.projected_values -> %L)', field_key)
     );
     group_presence_terms := pg_catalog.array_append(
-      group_presence_terms, pg_catalog.format('(candidate.projected_values ? %L)', field_id)
+      group_presence_terms, pg_catalog.format('(candidate.projected_values ? %L)', field_key)
     );
   end loop;
   group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
