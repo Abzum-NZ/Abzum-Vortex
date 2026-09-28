@@ -90,3 +90,5 @@ grant execute on function vortex_identity.list_organizations_projection(
 
 comment on function vortex_identity.list_organizations_projection(uuid, integer) is
   'Registered organisation projection: returns every organisation of the current viewer''s own tenant under the fixed platform.tenant.hierarchy.read capability, the exact rule the tenant-structure reader applies, with the organisation the record is read in, the organisation identity, the organisation revision and the safe projected attribute values keyed by lowercase field key, or no row when the capability refuses the viewer. Creation and state-change evidence are never projected.';
+
+alter function vortex_identity.list_organizations_projection(uuid,integer) owner to postgres;

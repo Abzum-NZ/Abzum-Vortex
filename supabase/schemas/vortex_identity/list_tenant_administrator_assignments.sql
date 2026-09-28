@@ -47,3 +47,5 @@ grant execute on function vortex_identity.list_tenant_administrator_assignments(
 
 comment on function vortex_identity.list_tenant_administrator_assignments(uuid, integer, uuid) is
   'Bounded deterministic same-tenant assignment read under the bound request context person''s exact administrators.read capability.';
+
+alter function vortex_identity.list_tenant_administrator_assignments(uuid,integer,uuid) owner to postgres;
