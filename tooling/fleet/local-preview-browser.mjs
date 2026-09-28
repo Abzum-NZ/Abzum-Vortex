@@ -257,37 +257,62 @@ async function waitForOwnedDevTools(profilePath, edgeProcess, spawnFailed, deadl
   fail("browser_start_timeout");
 }
 
-async function waitForPageTarget(port, edgeProcess, deadline) {
-  const endpoint = `http://127.0.0.1:${port}/json/list`;
+function ownedDevToolsSocket(rawSocketUrl, port, expectedPath, code) {
+  let socketUrl;
+  try {
+    socketUrl = new URL(rawSocketUrl);
+  } catch {
+    fail(code);
+  }
+  if (
+    socketUrl.protocol !== "ws:" ||
+    !["127.0.0.1", "localhost"].includes(socketUrl.hostname) ||
+    socketUrl.port !== String(port) ||
+    socketUrl.pathname !== expectedPath ||
+    socketUrl.search !== "" ||
+    socketUrl.hash !== ""
+  )
+    fail(code);
+  // Never follow a DevTools-supplied hostname. The private profile names the local port and path.
+  return `ws://127.0.0.1:${port}${expectedPath}`;
+}
+
+async function waitForPageTarget(port, browserPath, edgeProcess, deadline) {
+  const base = `http://127.0.0.1:${port}`;
   while (Date.now() < deadline) {
     if (edgeProcess.exitCode !== null || edgeProcess.signalCode !== null) fail("browser_start_failed");
     try {
-      const response = await fetch(endpoint, {
+      const versionResponse = await fetch(`${base}/json/version`, {
         redirect: "error",
-        signal: AbortSignal.timeout(2_000),
+        signal: AbortSignal.timeout(Math.min(2_000, Math.max(1, deadline - Date.now()))),
       });
-      if (response.ok) {
-        const targets = await response.json();
-        if (!Array.isArray(targets)) fail("devtools_unavailable");
-        const pages = targets.filter((target) => target?.type === "page" && target.url === "about:blank");
-        if (pages.length > 1) fail("devtools_target_ambiguous");
-        if (pages.length === 1) {
-          let socketUrl;
-          try {
-            socketUrl = new URL(pages[0].webSocketDebuggerUrl);
-          } catch {
-            fail("devtools_unavailable");
+      if (versionResponse.ok) {
+        const version = await versionResponse.json();
+        ownedDevToolsSocket(
+          version?.webSocketDebuggerUrl,
+          port,
+          browserPath,
+          "devtools_instance_mismatch",
+        );
+        const response = await fetch(`${base}/json/list`, {
+          redirect: "error",
+          signal: AbortSignal.timeout(Math.min(2_000, Math.max(1, deadline - Date.now()))),
+        });
+        if (response.ok) {
+          const targets = await response.json();
+          if (!Array.isArray(targets)) fail("devtools_unavailable");
+          const pages = targets.filter((target) => target?.type === "page" && target.url === "about:blank");
+          if (pages.length > 1) fail("devtools_target_ambiguous");
+          if (pages.length === 1) {
+            const pagePath = new URL(pages[0].webSocketDebuggerUrl).pathname;
+            if (!/^\/devtools\/page\/[A-Za-z0-9_-]+$/.test(pagePath)) fail("devtools_unavailable");
+            return ownedDevToolsSocket(
+              pages[0].webSocketDebuggerUrl,
+              port,
+              pagePath,
+              "devtools_unavailable",
+            );
           }
-          if (
-            socketUrl.protocol !== "ws:" ||
-            socketUrl.hostname !== "127.0.0.1" ||
-            socketUrl.port !== String(port) ||
-            !/^\/devtools\/page\/[A-Za-z0-9_-]+$/.test(socketUrl.pathname) ||
-            socketUrl.search !== "" ||
-            socketUrl.hash !== ""
-          )
-            fail("devtools_unavailable");
-          return socketUrl.href;
         }
       }
     } catch (error) {
@@ -305,6 +330,7 @@ class DevToolsClient {
     this.sequence = 0;
     this.pending = new Map();
     this.remoteOriginDetected = false;
+    this.protocolInvalid = false;
     this.closed = false;
     socket.addEventListener("message", (event) => this.onMessage(event.data));
     socket.addEventListener("close", () => this.onClose());
@@ -335,10 +361,23 @@ class DevToolsClient {
     try {
       message = JSON.parse(String(data));
     } catch {
-      this.rejectPending("browser_protocol_invalid");
+      this.invalidateProtocol();
+      return;
+    }
+    if (
+      message === null ||
+      typeof message !== "object" ||
+      Array.isArray(message) ||
+      (message.id === undefined && typeof message.method !== "string")
+    ) {
+      this.invalidateProtocol();
       return;
     }
     if (message.id !== undefined) {
+      if (!Number.isInteger(message.id)) {
+        this.invalidateProtocol();
+        return;
+      }
       const pending = this.pending.get(message.id);
       if (!pending) return;
       clearTimeout(pending.timer);
@@ -347,15 +386,52 @@ class DevToolsClient {
       else pending.resolve(message.result ?? {});
       return;
     }
+    if (message.method === "Network.requestWillBeSent" || message.method === "Network.webSocketCreated") {
+      const requestUrl = message.method === "Network.requestWillBeSent"
+        ? message.params?.request?.url
+        : message.params?.url;
+      if (!this.allowedBrowserRequest(requestUrl)) {
+        this.remoteOriginDetected = true;
+        result.reason = "unexpected_origin";
+      }
+    }
     if (message.method === "Page.frameNavigated" && message.params?.frame?.parentId === undefined) {
-      const frameUrl = message.params.frame.url;
+      const frameUrl = message.params?.frame?.url;
+      if (typeof frameUrl !== "string") {
+        this.invalidateProtocol();
+        return;
+      }
       if (frameUrl !== "about:blank") {
         try {
-          if (new URL(frameUrl).origin !== this.origin) this.remoteOriginDetected = true;
+          if (new URL(frameUrl).origin !== this.origin) {
+            this.remoteOriginDetected = true;
+            result.reason = "unexpected_origin";
+          }
         } catch {
           this.remoteOriginDetected = true;
+          result.reason = "unexpected_origin";
         }
       }
+    }
+  }
+
+  invalidateProtocol() {
+    this.protocolInvalid = true;
+    result.reason = "browser_protocol_invalid";
+    this.rejectPending("browser_protocol_invalid");
+  }
+
+  allowedBrowserRequest(rawUrl) {
+    try {
+      const url = new URL(rawUrl);
+      if (url.href === "about:blank" || url.protocol === "data:") return true;
+      if (url.protocol === "blob:") return url.origin === this.origin;
+      if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol)) return false;
+      // The sign-in fixture calls local Supabase on another port. A request outside
+      // loopback fails the evidence; the main frame remains origin-pinned.
+      return ["127.0.0.1", "[::1]"].includes(url.hostname);
+    } catch {
+      return false;
     }
   }
 
@@ -373,6 +449,7 @@ class DevToolsClient {
   }
 
   send(method, params = {}, timeoutLimit = COMMAND_TIMEOUT_MS) {
+    if (this.protocolInvalid) return Promise.reject(new SafeFailure("browser_protocol_invalid"));
     if (this.socket.readyState !== WebSocket.OPEN || this.closed) return Promise.reject(new SafeFailure("browser_disconnected"));
     const id = ++this.sequence;
     const timeoutMs = Math.max(1, Math.min(timeoutLimit, remainingRunTime()));
@@ -393,6 +470,7 @@ class DevToolsClient {
   }
 
   async mainFrameUrl(allowBlank = false) {
+    if (this.protocolInvalid) fail("browser_protocol_invalid");
     if (this.remoteOriginDetected) fail("unexpected_origin");
     const tree = await this.send("Page.getFrameTree");
     const frameUrl = tree.frameTree?.frame?.url;
@@ -551,7 +629,7 @@ async function startBrowser(origin) {
   const activePort = await waitForOwnedDevTools(profilePath, edgeProcess, () => spawnFailed, startupDeadline);
   const port = activePort.port;
   browserEndpoint = `ws://127.0.0.1:${port}${activePort.browserPath}`;
-  const socketUrl = await waitForPageTarget(port, edgeProcess, startupDeadline);
+  const socketUrl = await waitForPageTarget(port, activePort.browserPath, edgeProcess, startupDeadline);
   let socket;
   try {
     socket = new WebSocket(socketUrl);
@@ -562,6 +640,7 @@ async function startBrowser(origin) {
   await devtools.waitUntilOpen(startupDeadline);
   await devtools.send("Page.enable");
   await devtools.send("Runtime.enable");
+  await devtools.send("Network.enable");
 }
 
 async function delayForExit(child, timeoutMs) {
@@ -652,8 +731,8 @@ async function runBrowserCheck() {
   const signInPath = "/auth/sign-in";
   await navigateTo(signInPath, signInPath);
   const signInButton = 'button,[role="button"]';
-  await waitForUniqueControl(signInButton, "Local test sign-in", "document", 60_000);
-  await clickUniqueControl(signInButton, "Local test sign-in");
+  await waitForUniqueControl(signInButton, "Local test sign-in (development only)", "document", 60_000);
+  await clickUniqueControl(signInButton, "Local test sign-in (development only)");
   await waitFor(
     `!location.pathname.startsWith("/auth")`,
     60_000,
