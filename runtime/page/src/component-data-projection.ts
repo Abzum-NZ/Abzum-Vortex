@@ -72,8 +72,10 @@ export type ProjectedComponentData<Values> =
 export type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   fieldLabels?: Readonly<Record<string, string>>;
-  /** Public option labels for fields whose stored value is a several-choice list. */
-  fieldChoiceLabels?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Authorized options in definition order for fields whose stored value is a several-choice list. */
+  fieldChoiceLabels?: Readonly<
+    Record<string, readonly Readonly<{ value: string; label: string }>[]>
+  >;
   readableFieldIds?: readonly string[];
 }>;
 
@@ -97,22 +99,26 @@ const projectDate = (value: string): ProjectedCellValue =>
 const projectCell = (
   value: JsonValue,
   format: RecordsDisplayFormat,
-  choiceLabels?: Readonly<Record<string, string>>,
+  choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
 ): ProjectedCellValue => {
   if (value === null) return empty;
   if (Array.isArray(value) && choiceLabels !== undefined) {
+    const selected = value.filter((entry): entry is string => typeof entry === "string");
     if (
-      value.length === 0 ||
-      value.some((entry) => typeof entry !== "string") ||
-      new Set(value).size !== value.length
+      selected.length === 0 ||
+      selected.length !== value.length ||
+      new Set(selected).size !== selected.length ||
+      selected.some((entry) => !choiceLabels.some((option) => option.value === entry))
     )
       return empty;
-    const labels = value.map((entry) =>
-      typeof entry === "string" && hasOwn(choiceLabels, entry) ? choiceLabels[entry] : undefined,
-    );
-    return labels.some((label) => label === undefined)
-      ? empty
-      : { kind: "text", text: labels.join(", ") };
+    const selectedSet = new Set(selected);
+    return {
+      kind: "text",
+      text: choiceLabels
+        .filter((option) => selectedSet.has(option.value))
+        .map((option) => option.label)
+        .join(", "),
+    };
   }
   switch (format) {
     case "number":

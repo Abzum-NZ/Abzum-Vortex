@@ -808,7 +808,11 @@ const finalizeRecordFieldCandidateV2Internal = (
     if (
       field.required &&
       (requiredGeneratedFieldIds.has(field.fieldId) || !generatedFieldTypes.has(field.type)) &&
-      !present
+      !present &&
+      !context.issues.some(
+        (existing) =>
+          existing.code === "required_field_missing" && existing.fieldId === field.fieldId,
+      )
     )
       issue(
         context,

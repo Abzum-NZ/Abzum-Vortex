@@ -501,23 +501,21 @@ const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
 const fieldChoiceLabelsOf = (
   module: ModuleRelease,
   allowedPermissions: ReadonlySet<string>,
-): Record<string, Readonly<Record<string, string>>> =>
+): Record<string, readonly Readonly<{ value: string; label: string }>[]> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
       recordType.fields.flatMap((field) => {
-        if (field.type !== "choice" && field.type !== "several_choices") return [];
-        const labels = Object.fromEntries(
-          field.settings.options.flatMap((option) => {
-            const permissionId = option.requiredPermissionId;
-            const permissionKey =
-              permissionId === undefined
-                ? undefined
-                : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
-            return permissionKey === undefined || allowedPermissions.has(permissionKey)
-              ? [[option.value, option.label] as const]
-              : [];
-          }),
-        );
+        if (field.type !== "several_choices") return [];
+        const labels = field.settings.options.flatMap((option) => {
+          const permissionId = option.requiredPermissionId;
+          const permissionKey =
+            permissionId === undefined
+              ? undefined
+              : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+          return permissionKey === undefined || allowedPermissions.has(permissionKey)
+            ? [{ value: option.value, label: option.label }]
+            : [];
+        });
         return [[String(field.fieldId).toLowerCase(), labels] as const];
       }),
     ),
@@ -537,6 +535,7 @@ const logPlacementFailure = (
     | "subject_not_addressed"
     | "subject_unavailable"
     | "subject_refused"
+    | "detail_record_type_unavailable"
     | "detail_command_invalid"
     | "detail_query_unavailable"
     | "detail_query_refused",
@@ -740,7 +739,7 @@ const loadApplicationPageInternal = async (
       for (const field of recordType.fields) {
         if (
           !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          (field.type !== "choice" && field.type !== "several_choices")
+          field.type !== "several_choices"
         )
           continue;
         for (const option of field.settings.options) {
@@ -1214,6 +1213,18 @@ const loadApplicationPageInternal = async (
       continue;
     }
 
+    const queryRecordType = bound.query.recordType;
+    const detailModule = queryRecordType.state === "resolved"
+      ? context.releaseSet.modules.find((module) =>
+          sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
+        )
+      : undefined;
+    if (detailModule === undefined) {
+      logPlacementFailure(address, placementId, "detail_record_type_unavailable");
+      data[placementId] = { status: "error" };
+      continue;
+    }
+
     // A Record detail reads only the inputs its bound query declares, from the page's own query
     // string; the Query engine validates each against the declared type and refuses the rest.
     const inputValues: Record<string, JsonValue> = {};
@@ -1252,8 +1263,8 @@ const loadApplicationPageInternal = async (
       const display = projectRecordDetailData(
         {
           settings,
-          fieldLabels,
-          fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
+          fieldLabels: fieldLabelsOf(detailModule),
+          fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
         },
         rows,
       );
