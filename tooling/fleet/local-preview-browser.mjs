@@ -9,6 +9,7 @@ const SCHEMA = "vortex.local-preview.browser.v1";
 const EDGE_EXECUTABLE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const POWERSHELL_EXECUTABLE = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
 const APP_PATH = "/abzum/abzum/vortex.app.crm";
+const SERVICE_DESK_PATH = "/abzum/abzum/vortex.app.service_desk/service_desk_overview";
 const TOTAL_TIMEOUT_MS = 240_000;
 const STARTUP_TIMEOUT_MS = 20_000;
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -17,6 +18,30 @@ const POLL_INTERVAL_MS = 300;
 const PROFILE_PREFIX = "vortex-preview-edge-";
 const MAX_FIXTURE_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_FIXTURE_BYTES = 128 * 1024 * 1024;
+const THEME_CHECK_NAMES = [
+  "maia_root",
+  "maia_active_menu",
+  "maia_table",
+  "secondary_button",
+  "customer_dimensions",
+  "primary_rest",
+  "primary_hover",
+  "large_radius",
+  "default_style_distinct",
+];
+const THEME_METRIC_NAMES = [
+  "customer_computed_width_px",
+  "customer_computed_height_px",
+  "customer_rect_width_px",
+  "customer_rect_height_px",
+  "maia_table_header_padding_px",
+  "maia_table_border_px",
+  "maia_base_radius_px",
+  "maia_menu_radius_px",
+  "nova_base_radius_px",
+  "nova_menu_radius_px",
+];
+const MAX_THEME_METRIC_PX = 256;
 
 const result = {
   schema: SCHEMA,
@@ -24,7 +49,8 @@ const result = {
   head_sha: "",
   run_nonce: "",
   fixtures: {},
-  checks: {},
+  checks: Object.fromEntries(THEME_CHECK_NAMES.map((name) => [name, false])),
+  theme_metrics: {},
   action_stage: "not_started",
   browser_cleanup: { confirmed: false },
 };
@@ -873,6 +899,430 @@ async function waitForPathname(expectedPath, timeoutMs) {
   fail("navigation_timeout");
 }
 
+const themeStyleHelpers = `
+const metricPx = (value) => {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) && number >= 0 && number <= ${MAX_THEME_METRIC_PX} ? number : null;
+};
+const visibleColor = (value) => {
+  const color = String(value ?? "").trim().toLowerCase();
+  if (!color || color === "transparent") return false;
+  if (color.startsWith("rgba(")) {
+    const channels = color.slice(5, -1).split(",");
+    if (channels.length === 4) {
+      const alpha = Number.parseFloat(channels[3]);
+      return Number.isFinite(alpha) && alpha > 0;
+    }
+  }
+  const slash = color.lastIndexOf("/");
+  if (slash >= 0) {
+    const alphaToken = color.slice(slash + 1).split(")")[0].trim();
+    const alpha = Number.parseFloat(alphaToken);
+    return Number.isFinite(alpha) && alpha > 0;
+  }
+  return true;
+};
+const makeSentinel = (parent, declarations) => {
+  const sentinel = document.createElement("span");
+  sentinel.setAttribute("aria-hidden", "true");
+  sentinel.style.setProperty("all", "initial", "important");
+  for (const [property, value] of Object.entries({
+    position: "fixed",
+    left: "-10000px",
+    top: "-10000px",
+    display: "block",
+    visibility: "hidden",
+    pointerEvents: "none",
+    width: "1px",
+    height: "1px",
+    ...declarations,
+  })) sentinel.style.setProperty(property, value, "important");
+  parent.appendChild(sentinel);
+  return sentinel;
+};
+const readSentinel = (parent, property, value, computedProperty) => {
+  const sentinel = makeSentinel(parent, { [property]: value });
+  try {
+    return getComputedStyle(sentinel).getPropertyValue(computedProperty).trim();
+  } finally {
+    sentinel.remove();
+  }
+};
+const activeNavigationLink = (root, navigationId) => {
+  const items = root.querySelectorAll('[data-vortex-navigation-item-id="' + navigationId + '"]');
+  if (items.length !== 1) return null;
+  const links = items[0].querySelectorAll('a[data-slot="sidebar-menu-button"][aria-current="page"]');
+  if (links.length !== 1) return null;
+  const link = links[0];
+  if (!visible(link) || !link.hasAttribute("data-active") || link.getAttribute("data-active") === "false") return null;
+  return link;
+};
+const isMaiaRoot = (root) => root.getAttribute("data-vortex-style") === "maia" &&
+  root.getAttribute("data-vortex-menu") === "default" &&
+  root.getAttribute("data-vortex-menu-accent") === "bold" &&
+  (root.matches("[data-vortex-theme]") || root.querySelector("[data-vortex-theme]") !== null);
+const isNovaRoot = (root) => root.getAttribute("data-vortex-style") === "nova" &&
+  root.getAttribute("data-vortex-menu") === "default" &&
+  root.getAttribute("data-vortex-menu-accent") === "subtle" &&
+  (root.matches("[data-vortex-theme]") || root.querySelector("[data-vortex-theme]") !== null);
+const themeCompanyForms = (root) => {
+  const forms = root.querySelectorAll("form");
+  if (forms.length > 64) return null;
+  return [...forms].filter((form) => {
+    if (!visible(form)) return false;
+    const names = [...form.querySelectorAll('input[type="text"],input:not([type]),textarea,[role="textbox"]')]
+      .filter((control) => visible(control) && accessibleName(control) === "Company name");
+    const types = [...form.querySelectorAll('[role="group"]')]
+      .filter((group) => visible(group) && accessibleName(group) === "Company type");
+    return names.length === 1 && types.length === 1;
+  });
+};
+`;
+
+function themePageExpression(expectedPath, body) {
+  return `(() => {
+    ${accessibleNameHelpers}
+    ${themeStyleHelpers}
+    if (location.pathname !== ${JSON.stringify(expectedPath)}) return { valid: false };
+    const roots = document.querySelectorAll('[data-vortex-style-root][data-vortex-style]');
+    if (roots.length !== 1) return { valid: false };
+    const root = roots[0];
+    ${body}
+  })()`;
+}
+
+function recordThemeMetrics(measurement, names) {
+  if (!measurement || typeof measurement !== "object") fail("theme_check_failed");
+  for (const name of names) {
+    const value = measurement[name];
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_THEME_METRIC_PX)
+      fail("theme_check_failed");
+    result.theme_metrics[name] = value;
+  }
+}
+
+function requireThemeCheck(name, condition) {
+  if (!THEME_CHECK_NAMES.includes(name) || condition !== true) fail("theme_check_failed");
+  result.checks[name] = true;
+}
+
+async function inspectMaiaRoot(pathname) {
+  const expression = themePageExpression(pathname, `
+    return { valid: isMaiaRoot(root) };
+  `);
+  const observation = await devtools.evaluate(expression);
+  requireThemeCheck("maia_root", observation?.valid);
+}
+
+async function inspectMaiaActiveMenu(pathname, comparisonKey) {
+  const expression = themePageExpression(pathname, `
+    if (!isMaiaRoot(root)) return { valid: false };
+    const link = activeNavigationLink(root, "nav_crm_companies");
+    const sidebar = link?.closest('[data-slot="sidebar"]');
+    if (!link || !sidebar || !root.contains(sidebar)) return { valid: false };
+    const activeStyle = getComputedStyle(link);
+    const menuColor = activeStyle.backgroundColor;
+    const menuRadius = metricPx(activeStyle.borderTopLeftRadius);
+    let accentColor = "";
+    let primaryColor = "";
+    let baseRadius = null;
+    try {
+      accentColor = readSentinel(sidebar, "background-color", "var(--sidebar-accent)", "background-color");
+      primaryColor = readSentinel(root, "background-color", "var(--vortex-primary)", "background-color");
+      baseRadius = metricPx(readSentinel(root, "border-radius", "var(--radius)", "border-top-left-radius"));
+    } catch {
+      return { valid: false };
+    }
+    const colorsMatch = visibleColor(menuColor) && menuColor === accentColor && visibleColor(primaryColor);
+    let persisted = false;
+    try {
+      if (sessionStorage.getItem(${JSON.stringify(comparisonKey)}) === null) {
+        sessionStorage.setItem(${JSON.stringify(comparisonKey)}, JSON.stringify({ menuBackground: menuColor, primaryBackground: primaryColor }));
+        persisted = true;
+      }
+    } catch {
+      persisted = false;
+    }
+    return {
+      valid: colorsMatch && persisted && menuRadius !== null && menuRadius > 0 && baseRadius !== null && baseRadius > 0,
+      maia_menu_radius_px: menuRadius,
+      maia_base_radius_px: baseRadius,
+    };
+  `);
+  const observation = await devtools.evaluate(expression);
+  recordThemeMetrics(observation, ["maia_menu_radius_px", "maia_base_radius_px"]);
+  requireThemeCheck("maia_active_menu", observation?.valid);
+}
+
+async function inspectMaiaTable(pathname) {
+  const expression = themePageExpression(pathname, `
+    if (!isMaiaRoot(root)) return { valid: false };
+    const tableContainers = root.querySelectorAll('[data-vortex-display="table"] table[data-slot="table"].cn-table');
+    if (tableContainers.length !== 1) return { valid: false };
+    const table = tableContainers[0];
+    const tableRect = table.getBoundingClientRect();
+    if (!visible(table) || !Number.isFinite(tableRect.width) || !Number.isFinite(tableRect.height) ||
+      tableRect.width <= 0 || tableRect.height <= 0 || tableRect.width > 8192 || tableRect.height > 8192)
+      return { valid: false };
+    const headers = table.querySelectorAll('thead[data-slot="table-header"] th[data-slot="table-head"]');
+    if (headers.length === 0 || headers.length > 128) return { valid: false };
+    const header = [...headers].find((candidate) => visible(candidate) && !candidate.querySelector('input[type="checkbox"],[role="checkbox"]'));
+    const row = header?.closest("tr");
+    if (!header || !row) return { valid: false };
+    const headerStyle = getComputedStyle(header);
+    const rowStyle = getComputedStyle(row);
+    const inlineStart = metricPx(headerStyle.paddingInlineStart);
+    const inlineEnd = metricPx(headerStyle.paddingInlineEnd);
+    const expectedPadding = metricPx(readSentinel(root, "padding-inline", "calc(var(--spacing, 0.25rem) * 3)", "padding-inline-start"));
+    const headerPadding = inlineStart !== null && inlineEnd !== null ? (inlineStart + inlineEnd) / 2 : null;
+    const borderWidth = metricPx(rowStyle.borderBottomWidth);
+    const paddingMatches = expectedPadding !== null && inlineStart !== null && inlineEnd !== null &&
+      Math.abs(inlineStart - expectedPadding) <= 0.75 && Math.abs(inlineEnd - expectedPadding) <= 0.75;
+    return {
+      valid: paddingMatches && rowStyle.borderBottomStyle === "solid" && borderWidth !== null && borderWidth > 0,
+      maia_table_header_padding_px: headerPadding,
+      maia_table_border_px: borderWidth,
+    };
+  `);
+  const observation = await devtools.evaluate(expression);
+  recordThemeMetrics(observation, ["maia_table_header_padding_px", "maia_table_border_px"]);
+  requireThemeCheck("maia_table", observation?.valid);
+}
+
+async function inspectSecondaryButton(pathname) {
+  const expression = themePageExpression(pathname, `
+    if (!isMaiaRoot(root)) return { valid: false };
+    const buttons = root.querySelectorAll('button,[role="button"]');
+    if (buttons.length > 128) return { valid: false };
+    const matches = [...buttons].filter((button) => visible(button) && accessibleName(button) === "New company");
+    if (matches.length !== 1) return { valid: false };
+    const button = matches[0];
+    const style = getComputedStyle(button);
+    let expectedBackground = "";
+    try {
+      expectedBackground = readSentinel(root, "background-color", "var(--vortex-secondary)", "background-color");
+    } catch {
+      return { valid: false };
+    }
+    return {
+      valid: button.getAttribute("data-vortex-variant") === "secondary" &&
+        !button.disabled && button.getAttribute("aria-disabled") !== "true" &&
+        visibleColor(style.backgroundColor) && style.backgroundColor === expectedBackground,
+    };
+  `);
+  const observation = await devtools.evaluate(expression);
+  requireThemeCheck("secondary_button", observation?.valid);
+}
+
+async function inspectCustomerDimensions(pathname) {
+  const expression = themePageExpression(pathname, `
+    if (!isMaiaRoot(root)) return { valid: false };
+    const forms = themeCompanyForms(root);
+    if (!forms || forms.length !== 1) return { valid: false };
+    const groups = forms[0].querySelectorAll('[role="group"]');
+    if (groups.length > 64) return { valid: false };
+    const typeGroups = [...groups].filter((group) => visible(group) && accessibleName(group) === "Company type");
+    if (typeGroups.length !== 1) return { valid: false };
+    const group = typeGroups[0];
+    const roots = group.querySelectorAll('[role="checkbox"][data-slot="checkbox"]');
+    if (roots.length > 64) return { valid: false };
+    const customerRoots = [...roots].filter((candidate) => accessibleName(candidate) === "Customer");
+    if (customerRoots.length !== 1) return { valid: false };
+    const checkbox = customerRoots[0];
+    const field = checkbox.closest('[data-slot="field"][role="group"]');
+    if (!field || !group.contains(field) || field.querySelectorAll('[role="checkbox"][data-slot="checkbox"]').length !== 1)
+      return { valid: false };
+    const labels = field.querySelectorAll("label");
+    if (labels.length > 64) return { valid: false };
+    const associated = [...labels].some((label) => visible(label) && normalizeName(textForName(label)) === "Customer" &&
+      label.htmlFor !== "" && [...field.querySelectorAll('input[type="checkbox"]')].some((input) => input.id === label.htmlFor));
+    if (!associated || !visible(checkbox)) return { valid: false };
+    const style = getComputedStyle(checkbox);
+    const rect = checkbox.getBoundingClientRect();
+    const computedWidth = metricPx(style.width);
+    const computedHeight = metricPx(style.height);
+    const rectWidth = metricPx(rect.width);
+    const rectHeight = metricPx(rect.height);
+    return {
+      valid: computedWidth !== null && computedWidth > 0 && computedHeight !== null && computedHeight > 0 &&
+        rectWidth !== null && rectWidth > 0 && rectHeight !== null && rectHeight > 0,
+      customer_computed_width_px: computedWidth,
+      customer_computed_height_px: computedHeight,
+      customer_rect_width_px: rectWidth,
+      customer_rect_height_px: rectHeight,
+    };
+  `);
+  const observation = await devtools.evaluate(expression);
+  recordThemeMetrics(observation, [
+    "customer_computed_width_px",
+    "customer_computed_height_px",
+    "customer_rect_width_px",
+    "customer_rect_height_px",
+  ]);
+  requireThemeCheck("customer_dimensions", observation?.valid);
+}
+
+function saveRestExpression(pathname, comparisonKey, saveStateKey) {
+  return themePageExpression(pathname, `
+    if (!isMaiaRoot(root)) return { valid: false };
+    const forms = themeCompanyForms(root);
+    if (!forms || forms.length !== 1) return { valid: false };
+    const candidates = forms[0].querySelectorAll('button[type="submit"],[role="button"]');
+    if (candidates.length > 128) return { valid: false };
+    const matches = [...candidates].filter((button) => visible(button) && accessibleName(button) === "Save");
+    if (matches.length !== 1) return { valid: false };
+    const button = matches[0];
+    if (button.disabled || button.getAttribute("aria-disabled") === "true" ||
+      button.getAttribute("data-vortex-variant") !== "primary" || Object.prototype.hasOwnProperty.call(window, ${JSON.stringify(saveStateKey)}))
+      return { valid: false };
+    button.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    const style = getComputedStyle(button);
+    let expectedBackground = "";
+    try {
+      expectedBackground = readSentinel(root, "background-color", "var(--vortex-primary)", "background-color");
+    } catch {
+      return { valid: false };
+    }
+    const borderWidth = metricPx(style.borderTopWidth);
+    const rect = button.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const inViewport = rect.width > 0 && rect.height > 0 && x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
+    let persisted = false;
+    try {
+      const prior = JSON.parse(sessionStorage.getItem(${JSON.stringify(comparisonKey)}) || "null");
+      if (prior && typeof prior.menuBackground === "string" && !prior.primaryBackground) {
+        sessionStorage.setItem(${JSON.stringify(comparisonKey)}, JSON.stringify({
+          menuBackground: prior.menuBackground,
+          primaryBackground: expectedBackground,
+        }));
+        persisted = true;
+      }
+    } catch {
+      persisted = false;
+    }
+    const valid = inViewport && persisted && visibleColor(style.backgroundColor) &&
+      style.backgroundColor === expectedBackground && visibleColor(style.color) && visibleColor(style.borderTopColor) &&
+      borderWidth !== null && borderWidth > 0;
+    if (valid) Object.defineProperty(window, ${JSON.stringify(saveStateKey)}, {
+      value: { button, root, restBoxShadow: style.boxShadow }, configurable: true,
+    });
+    return { valid, x, y };
+  `);
+}
+
+function saveHoverExpression(pathname, saveStateKey) {
+  return themePageExpression(pathname, `
+    const state = window[${JSON.stringify(saveStateKey)}];
+    if (!isMaiaRoot(root) || !state || !state.button || state.root !== root ||
+      !state.button.isConnected || !state.root.contains(state.button) || state.button.disabled ||
+      state.button.getAttribute("data-vortex-variant") !== "primary" || !visible(state.button))
+      return { valid: false, hovered: false, inset: false, changed: false, background_matches: false };
+    const style = getComputedStyle(state.button);
+    let expectedBackground = "";
+    try {
+      expectedBackground = readSentinel(state.root, "background-color", "var(--vortex-primary)", "background-color");
+    } catch {
+      return { valid: false, hovered: false, inset: false, changed: false, background_matches: false };
+    }
+    return {
+      valid: true,
+      hovered: state.button.matches(":hover"),
+      inset: style.boxShadow.toLowerCase().includes("inset"),
+      changed: style.boxShadow !== state.restBoxShadow,
+      background_matches: visibleColor(style.backgroundColor) && style.backgroundColor === expectedBackground,
+    };
+  `);
+}
+
+async function waitForPrimaryHover(pathname, saveStateKey) {
+  const deadline = Math.min(Date.now() + 2_000, runDeadline);
+  while (Date.now() < deadline) {
+    const observation = await devtools.evaluate(saveHoverExpression(pathname, saveStateKey));
+    if (!observation?.valid) fail("theme_check_failed");
+    if (observation.hovered === true && observation.inset === true && observation.changed === true &&
+      observation.background_matches === true) return;
+    await sleep(Math.min(50, Math.max(1, deadline - Date.now())));
+  }
+  fail("theme_check_failed");
+}
+
+function savePointerAwayExpression(pathname, saveStateKey) {
+  return themePageExpression(pathname, `
+    const state = window[${JSON.stringify(saveStateKey)}];
+    return {
+      valid: Boolean(isMaiaRoot(root) && state?.root === root && state.button?.isConnected &&
+        state.root.contains(state.button) && !state.button.disabled &&
+        state.button.getAttribute("data-vortex-variant") === "primary" && visible(state.button)),
+      hovered: Boolean(state?.button?.matches(":hover")),
+    };
+  `);
+}
+
+function clearSaveStateExpression(pathname, saveStateKey) {
+  return themePageExpression(pathname, `
+    try {
+      const state = window[${JSON.stringify(saveStateKey)}];
+      if (state?.button?.isConnected && state.root?.contains(state.button)) delete state.button;
+      delete window[${JSON.stringify(saveStateKey)}];
+      return { valid: true };
+    } catch {
+      return { valid: false };
+    }
+  `);
+}
+
+async function inspectNovaAndCompare(pathname, comparisonKey) {
+  const expression = themePageExpression(pathname, `
+    if (!isNovaRoot(root)) {
+      try { sessionStorage.removeItem(${JSON.stringify(comparisonKey)}); } catch {}
+      return { valid: false };
+    }
+    const link = activeNavigationLink(root, "nav_sd_home");
+    const sidebar = link?.closest('[data-slot="sidebar"]');
+    if (!link || !sidebar || !root.contains(sidebar)) {
+      try { sessionStorage.removeItem(${JSON.stringify(comparisonKey)}); } catch {}
+      return { valid: false };
+    }
+    const menuStyle = getComputedStyle(link);
+    const menuColor = menuStyle.backgroundColor;
+    const menuRadius = metricPx(menuStyle.borderTopLeftRadius);
+    let accentColor = "";
+    let primaryColor = "";
+    let baseRadius = null;
+    let prior = null;
+    try {
+      accentColor = readSentinel(sidebar, "background-color", "var(--sidebar-accent)", "background-color");
+      primaryColor = readSentinel(root, "background-color", "var(--vortex-primary)", "background-color");
+      baseRadius = metricPx(readSentinel(root, "border-radius", "var(--radius)", "border-top-left-radius"));
+      prior = JSON.parse(sessionStorage.getItem(${JSON.stringify(comparisonKey)}) || "null");
+    } catch {
+      prior = null;
+    } finally {
+      try { sessionStorage.removeItem(${JSON.stringify(comparisonKey)}); } catch {}
+    }
+    const menuMatches = visibleColor(menuColor) && menuColor === accentColor && menuRadius !== null && menuRadius > 0;
+    const primaryDiffers = typeof prior?.primaryBackground === "string" && visibleColor(primaryColor) &&
+      prior.primaryBackground !== primaryColor;
+    const menuDiffers = typeof prior?.menuBackground === "string" && visibleColor(menuColor) &&
+      prior.menuBackground !== menuColor;
+    return {
+      valid: menuMatches && baseRadius !== null && baseRadius > 0 && primaryDiffers && menuDiffers,
+      default_style_distinct: primaryDiffers && menuDiffers,
+      large_radius: baseRadius !== null && baseRadius > 0 &&
+        Number.isFinite(${JSON.stringify(result.theme_metrics.maia_base_radius_px ?? null)}) &&
+        ${JSON.stringify(result.theme_metrics.maia_base_radius_px ?? null)} > baseRadius &&
+        Math.abs(${JSON.stringify(result.theme_metrics.maia_menu_radius_px ?? null)} - menuRadius) > 0.25,
+      nova_base_radius_px: baseRadius,
+      nova_menu_radius_px: menuRadius,
+    };
+  `);
+  const observation = await devtools.evaluate(expression);
+  recordThemeMetrics(observation, ["nova_base_radius_px", "nova_menu_radius_px"]);
+  requireThemeCheck("default_style_distinct", observation?.valid === true && observation?.default_style_distinct === true);
+  requireThemeCheck("large_radius", observation?.valid === true && observation?.large_radius === true);
+}
+
 let currentOrigin = "";
 
 async function startBrowser(origin) {
@@ -1066,6 +1516,8 @@ async function closeOwnedBrowser() {
 
 async function runBrowserCheck() {
   const inputs = parseInputs();
+  const comparisonKey = `__vortex_preview_theme_${result.run_nonce}`;
+  const saveStateKey = `__vortex_preview_save_${result.run_nonce}`;
   currentOrigin = inputs.origin;
   verifyCandidateHead(inputs.headSha);
   runDeadline = Date.now() + TOTAL_TIMEOUT_MS;
@@ -1092,6 +1544,15 @@ async function runBrowserCheck() {
   await waitForUniqueControl(signInButton, "New company", "document", 60_000);
   result.checks.companies_list = true;
 
+  result.action_stage = "maia_root";
+  await inspectMaiaRoot(companiesPath);
+  result.action_stage = "maia_active_menu";
+  await inspectMaiaActiveMenu(companiesPath, comparisonKey);
+  result.action_stage = "maia_table";
+  await inspectMaiaTable(companiesPath);
+  result.action_stage = "secondary_button";
+  await inspectSecondaryButton(companiesPath);
+
   result.action_stage = "new_company_click";
   await clickUniqueControl(signInButton, "New company");
   result.action_stage = "company_create_route";
@@ -1102,6 +1563,8 @@ async function runBrowserCheck() {
   result.action_stage = "customer_control";
   await waitForUniqueControl('input[type="checkbox"],[role="checkbox"]', "Customer", "company-type", 30_000);
   result.checks.new_company = true;
+  result.action_stage = "customer_dimensions";
+  await inspectCustomerDimensions(createPath);
 
   result.action_stage = "company_name_value";
   const name = `Codex preview ${result.run_nonce.slice(0, 20)} ${randomUUID()}`;
@@ -1130,6 +1593,67 @@ async function runBrowserCheck() {
 
   result.action_stage = "save_control";
   await waitForUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form", 15_000);
+  result.action_stage = "primary_rest";
+  const rest = await devtools.evaluate(saveRestExpression(createPath, comparisonKey, saveStateKey));
+  if (
+    rest?.valid !== true || !Number.isFinite(rest.x) || !Number.isFinite(rest.y) ||
+    rest.x < 0 || rest.y < 0 || rest.x > 8192 || rest.y > 8192
+  )
+    fail("theme_check_failed");
+  requireThemeCheck("primary_rest", true);
+
+  result.action_stage = "primary_hover";
+  let pointerMayBeOverSave = false;
+  let saveStateCleared = false;
+  try {
+    pointerMayBeOverSave = true;
+    await devtools.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: rest.x,
+      y: rest.y,
+      button: "none",
+      buttons: 0,
+      pointerType: "mouse",
+    });
+    await waitForPrimaryHover(createPath, saveStateKey);
+    await devtools.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: 0,
+      y: 0,
+      button: "none",
+      buttons: 0,
+      pointerType: "mouse",
+    });
+    const pointerAway = await devtools.evaluate(savePointerAwayExpression(createPath, saveStateKey));
+    if (pointerAway?.valid !== true || pointerAway.hovered !== false) fail("theme_check_failed");
+    pointerMayBeOverSave = false;
+    requireThemeCheck("primary_hover", true);
+  } finally {
+    if (pointerMayBeOverSave) {
+      try {
+        await devtools.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: 0,
+          y: 0,
+          button: "none",
+          buttons: 0,
+          pointerType: "mouse",
+        });
+      } catch {
+        // The owned browser is closed by the outer lifecycle even when pointer recovery fails.
+      }
+    }
+    try {
+      const cleared = await devtools.evaluate(clearSaveStateExpression(createPath, saveStateKey));
+      saveStateCleared = cleared?.valid === true;
+    } catch {
+      // Transient page state is not evidence and cannot replace the original failure.
+    }
+  }
+  if (!saveStateCleared) fail("theme_check_failed");
+
+  result.action_stage = "save_control";
+  await waitForUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form", 15_000);
   await clickUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form");
   result.action_stage = "save_confirmation";
   const nameLiteral = JSON.stringify(name);
@@ -1139,7 +1663,10 @@ async function runBrowserCheck() {
     "company_save_unconfirmed",
   );
   result.checks.save_company = true;
-  result.action_stage = "complete";
+
+  result.action_stage = "default_style_comparison";
+  await navigateTo(SERVICE_DESK_PATH, SERVICE_DESK_PATH);
+  await inspectNovaAndCompare(SERVICE_DESK_PATH, comparisonKey);
 }
 
 async function writeResult() {
@@ -1148,9 +1675,15 @@ async function writeResult() {
     result.checks.companies_list === true &&
     result.checks.new_company === true &&
     result.checks.save_company === true &&
+    THEME_CHECK_NAMES.every((name) => result.checks[name] === true) &&
+    THEME_METRIC_NAMES.every((name) => {
+      const value = result.theme_metrics[name];
+      return Number.isFinite(value) && value > 0 && value <= MAX_THEME_METRIC_PX;
+    }) &&
     result.browser_cleanup.confirmed === true &&
     !result.reason;
   result.result = passed ? "PASS" : "FAIL";
+  if (passed) result.action_stage = "complete";
   if (!passed && !result.reason) result.reason = failureCode;
   process.stdout.write(`${JSON.stringify(result)}\n`);
   process.exitCode = passed ? 0 : 1;
