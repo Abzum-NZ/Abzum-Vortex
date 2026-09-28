@@ -48,3 +48,5 @@ grant execute on function vortex_file.read_file_upload(uuid) to vortex_request;
 
 comment on function vortex_file.read_file_upload(uuid) is
   'Reads one upload of the request organisation with its current grant and revision.';
+
+alter function vortex_file.read_file_upload(uuid) owner to vortex_file_owner;

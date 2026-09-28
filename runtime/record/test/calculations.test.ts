@@ -1,8 +1,8 @@
 import {
-  moduleFieldV2Schema,
-  recordTypeDefinitionV2Schema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  moduleFieldV3Schema,
+  recordTypeDefinitionV3Schema,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import { evaluateRecordCalculationsV2 } from "../src";
@@ -12,11 +12,11 @@ const id = (value: number) => `71000000-0000-4000-8000-${value.toString().padSta
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
   required = false,
-): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,
@@ -60,7 +60,7 @@ const calculation = (
   expression: unknown,
   dependencyFieldIds: readonly string[],
   options: { decimalPlaces?: number; required?: boolean } = {},
-): ModuleFieldV2 =>
+): ModuleFieldV3 =>
   field(
     fieldId,
     key,
@@ -74,7 +74,7 @@ const calculation = (
     options.required,
   );
 
-const baseFields = (): ModuleFieldV2[] => [
+const baseFields = (): ModuleFieldV3[] => [
   field(ids.title, "title", "text", { maxLength: 100 }, true),
   field(ids.surname, "surname", "text", { maxLength: 100 }),
   field(ids.exact, "exact", "decimal_number", { digitsBeforeDecimal: 30, decimalPlaces: 12 }),
@@ -103,7 +103,7 @@ const baseFields = (): ModuleFieldV2[] => [
   }),
 ];
 
-const allCalculationFields = (): ModuleFieldV2[] => [
+const allCalculationFields = (): ModuleFieldV3[] => [
   calculation(
     ids.joined,
     "joined",
@@ -207,8 +207,8 @@ const allCalculationFields = (): ModuleFieldV2[] => [
   ),
 ];
 
-const recordType = (fields: readonly ModuleFieldV2[]): RecordTypeDefinitionV2 =>
-  recordTypeDefinitionV2Schema.parse({
+const recordType = (fields: readonly ModuleFieldV3[]): RecordTypeDefinitionV3 =>
+  recordTypeDefinitionV3Schema.parse({
     recordTypeId: id(900),
     key: "calculation_record",
     singularLabel: "Calculation record",
@@ -228,7 +228,7 @@ const clock = {
   organizationLocalDate: "2026-02-28",
 } as const;
 
-describe("Module V2 record calculations", () => {
+describe("Module V3 record calculations", () => {
   it("evaluates all six forms in dependency order with exact rounding and explicit time", () => {
     const result = evaluateRecordCalculationsV2({
       recordType: recordType([...baseFields(), ...allCalculationFields()]),
@@ -418,7 +418,7 @@ describe("Module V2 record calculations", () => {
       }),
     ).toEqual({ success: true, setValues: {}, clearFieldIds: [ids.divided] });
 
-    const required = moduleFieldV2Schema.parse({ ...optional, required: true });
+    const required = moduleFieldV3Schema.parse({ ...optional, required: true });
     expect(
       evaluateRecordCalculationsV2({
         recordType: recordType([...baseFields(), required]),
@@ -448,7 +448,7 @@ describe("Module V2 record calculations", () => {
         [ids.whole],
         { ...(decimalPlaces === undefined ? {} : { decimalPlaces }) },
       );
-    const run = (candidate: ModuleFieldV2) =>
+    const run = (candidate: ModuleFieldV3) =>
       evaluateRecordCalculationsV2({
         recordType: recordType([...baseFields(), candidate]),
         authoritativeFieldValues: { [ids.title]: "Division", [ids.whole]: 1 },

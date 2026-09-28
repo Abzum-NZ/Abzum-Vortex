@@ -9,6 +9,7 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   platformOperationKey,
   protectedOperationRequestSchema,
+  protectedOperationReferenceSetSchema,
   stableDefinitionReleaseVersionSchema,
   workflowExecutionReferenceSchema,
   workflowNodeIdSchema,
@@ -53,12 +54,46 @@ const retainedNodeBindingSchema = z
     taskType: z.string().min(1).max(100),
     operationKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
     operation: protectedOperationIdentitySchema.optional(),
+    operations: protectedOperationReferenceSetSchema.optional(),
+    grantable: z.boolean().optional(),
     unavailableOwner: unavailableAdapterOwnerSchema.optional(),
   })
   .strict()
   .superRefine((binding, context) => {
     if (binding.taskType === "operation.call" && binding.operation === undefined)
       context.addIssue({ code: "custom", path: ["operation"], message: "A protected operation binding is required" });
+    const carriesOperationReferences =
+      binding.taskType === "record.query" || binding.taskType.startsWith("record.");
+    if (
+      carriesOperationReferences !== (binding.operations !== undefined) ||
+      carriesOperationReferences !== (binding.grantable !== undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "Record and Query nodes retain their published operation reference set",
+      });
+    if (
+      binding.operations !== undefined &&
+      binding.grantable !== (binding.operations.length > 0)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["grantable"],
+        message: "Only a node with a static protected operation reference is grantable",
+      });
+    if (binding.taskType === "record.query" && binding.operations?.length !== 1)
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "A Query node retains exactly one query operation reference",
+      });
+    if (binding.operations?.some((operation) => operation.owner.kind === "platform_service"))
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "Record and Query references are owned by an Application or Module",
+      });
   });
 
 const kestraExecutionBindingSchema = z
