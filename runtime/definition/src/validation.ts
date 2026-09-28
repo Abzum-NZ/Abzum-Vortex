@@ -24,6 +24,7 @@ import {
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
+  definitionRuleFailureFamilyByCode,
   builderKeySchema,
   platformIdSchema,
   namespacedKeySchema,
@@ -45,6 +46,7 @@ import {
   type DefinitionPublicationContext,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
+  type DefinitionValidationErrorCode,
   type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowTask,
@@ -258,23 +260,9 @@ const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
 };
 
 const schemaFailureFamily = {
-  definition_required_value: "required_value",
-  definition_invalid_value: "invalid_value",
-  definition_unsupported_choice: "unsupported_choice",
-  definition_unknown_property: "unknown_property",
-  definition_too_few_items: "too_few_items",
-  definition_too_many_items: "too_many_items",
-  definition_duplicate_key: "duplicate_key",
-  definition_broken_reference: "broken_reference",
-  definition_unresolved_reference: "unresolved_reference",
-  definition_scope_conflict: "scope_conflict",
-  definition_incompatible_version: "incompatible_version",
-  definition_dependency_cycle: "dependency_cycle",
-  definition_unsafe_content: "unsafe_content",
-  definition_incompatible_change: "incompatible_change",
-  definition_more_errors: "more_errors",
+  ...definitionRuleFailureFamilyByCode,
   definition_validation_failed: "invalid_value",
-} as const satisfies Record<string, DefinitionRuleFailure["family"]>;
+} as const satisfies Record<DefinitionValidationErrorCode, DefinitionRuleFailure["family"]>;
 
 const sourceCollectionLocationKind = {
   record_types: "record_type",
