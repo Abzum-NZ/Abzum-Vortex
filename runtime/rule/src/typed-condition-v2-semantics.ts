@@ -270,7 +270,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       validate(node.condition);
       return;
     }
-    if (node.kind !== "comparison") refuse("operator_refused");
+    if (node.kind !== "comparison") return refuse("operator_refused");
     const operator = node.operator;
     const left = resolveOperand(node.left);
     const right = node.right === undefined ? undefined : resolveOperand(node.right);
@@ -376,7 +376,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
     let leftFormula = formulaLiteral(left);
     if (node.operator === "is_empty" || node.operator === "is_not_empty") {
       if (left.missing || Array.isArray(left.value)) {
-        const empty = left.missing;
+        const empty = left.missing === true;
         return {
           op: "literal",
           type: "yes_no",
@@ -463,6 +463,6 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
     reference: () => undefined,
   });
   if (result?.type !== "yes_no" || typeof result.value !== "boolean")
-    refuse("operator_refused");
+    return refuse("operator_refused");
   return result.value;
 };
