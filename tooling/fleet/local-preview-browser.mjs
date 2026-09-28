@@ -663,6 +663,71 @@ function locatorExpression(selector, name, scope = "document", action = "inspect
   return `(() => { ${accessibleNameHelpers} ${setup} const matches = [...root.querySelectorAll(${JSON.stringify(selector)})].filter((element) => visible(element) && accessibleName(element) === ${JSON.stringify(name)}); const count = matches.length; const disabled = count === 1 && (matches[0].disabled === true || matches[0].getAttribute("aria-disabled") === "true"); const checked = count === 1 && (matches[0].checked === true || matches[0].getAttribute("aria-checked") === "true"); ${actionResult} })()`;
 }
 
+function customerControlProbeExpression() {
+  return `(() => { ${accessibleNameHelpers}
+    const maximum = 1024;
+    const forms = companyForms();
+    const groups = forms.length === 1
+      ? [...forms[0].querySelectorAll('[role="group"]')]
+          .filter((group) => visible(group) && accessibleName(group) === "Company type")
+      : [];
+    const scopeValid = forms.length === 1 && groups.length === 1;
+    const candidates = scopeValid
+      ? [...groups[0].querySelectorAll('input[type="checkbox"],[role="checkbox"]')]
+      : [];
+    const visibleCandidates = candidates.filter(visible);
+    const namedCandidates = candidates.filter((element) => accessibleName(element) === "Customer");
+    const visibleNamed = namedCandidates.filter(visible);
+    const disabledNamed = visibleNamed.filter((element) =>
+      element.disabled === true || element.getAttribute("aria-disabled") === "true");
+    const labels = scopeValid
+      ? [...groups[0].querySelectorAll("label")]
+          .filter((label) => visible(label) && normalizeName(textForName(label)) === "Customer")
+      : [];
+    const counts = {
+      form_count: forms.length,
+      group_count: groups.length,
+      checkbox_candidate_count: candidates.length,
+      visible_candidate_count: visibleCandidates.length,
+      customer_name_match_count: namedCandidates.length,
+      visible_customer_match_count: visibleNamed.length,
+      disabled_customer_match_count: disabledNamed.length,
+      visible_customer_label_count: labels.length,
+    };
+    const capped = Object.values(counts).some((count) => count > maximum);
+    return {
+      ...Object.fromEntries(Object.entries(counts).map(([key, count]) => [key, Math.min(count, maximum)])),
+      capped,
+      scope_valid: scopeValid,
+    };
+  })()`;
+}
+
+async function captureCustomerControlProbe() {
+  if (result.action_stage !== "customer_control" || !devtools) return;
+  try {
+    const probe = await devtools.evaluate(customerControlProbeExpression());
+    const names = [
+      "form_count", "group_count", "checkbox_candidate_count", "visible_candidate_count",
+      "customer_name_match_count", "visible_customer_match_count",
+      "disabled_customer_match_count", "visible_customer_label_count",
+    ];
+    if (
+      !probe || typeof probe !== "object" ||
+      typeof probe.capped !== "boolean" || typeof probe.scope_valid !== "boolean" ||
+      names.some((name) => !Number.isInteger(probe[name]) || probe[name] < 0 || probe[name] > 1024) ||
+      probe.scope_valid !== (probe.form_count === 1 && probe.group_count === 1) ||
+      (!probe.scope_valid && names.slice(2).some((name) => probe[name] !== 0))
+    ) return;
+    result.customer_control_probe = Object.fromEntries([
+      ...names.map((name) => [name, probe[name]]),
+      ["capped", probe.capped], ["scope_valid", probe.scope_valid],
+    ]);
+  } catch {
+    // A failed diagnostic read cannot replace the original browser failure.
+  }
+}
+
 async function waitFor(expression, timeoutMs, timeoutCode = "step_timeout") {
   const deadline = Math.min(Date.now() + timeoutMs, runDeadline);
   while (Date.now() < deadline) {
@@ -1071,6 +1136,7 @@ if (args.length === 1 && args[0] === "--help") {
     } catch (error) {
       failureCode = safeReason(error);
       result.reason ??= failureCode;
+      await captureCustomerControlProbe();
     }
   }
   try {
