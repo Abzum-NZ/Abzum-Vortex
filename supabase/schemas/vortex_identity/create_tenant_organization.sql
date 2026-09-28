@@ -290,3 +290,5 @@ grant execute on function vortex_identity.create_tenant_organization(uuid, text,
 
 comment on function vortex_identity.create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text) is
   'Creates one tenant organisation for the bound request context person with an explicit existing steward, runtime settings and delivered Access composition.';
+
+alter function vortex_identity.create_tenant_organization(uuid,text,uuid,uuid,text,text,uuid,text,text,text,text,text,text,text,text) owner to postgres;
