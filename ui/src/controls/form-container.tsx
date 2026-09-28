@@ -87,10 +87,14 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
   const [generation, setGeneration] = useState(0);
+  const [ownerGroupChoice, setOwnerGroupChoice] = useState<string | undefined>();
+  const [ownerGroupError, setOwnerGroupError] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Readonly<Record<string, string>>>({});
   const [registry] = useState(() => createFormFieldRegistry(context.location));
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
+  const validationAttemptedRef = useRef(false);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
   const resetBaseline = useCallback(() => {
@@ -107,10 +111,15 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
     if (supplied) setFeedbackTick((current) => current + 1);
+    if (validationAttemptedRef.current)
+      setValidationErrors(registry.validationErrors());
     const baseline = baselineRef.current;
     if (baseline !== undefined)
-      unsavedWorkRegistry?.setDirty(formId, !equalFormValue(registry.values(), baseline));
-  }, [formId, registry, supplied, unsavedWorkRegistry]);
+      unsavedWorkRegistry?.setDirty(
+        formId,
+        !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
+      );
+  }, [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry]);
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores
@@ -122,6 +131,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     (fieldKey: string) => fieldDraftFeedback(feedback, fieldKey),
     [feedback],
   );
+  const fieldErrorFor = useCallback(
+    (fieldKey: string) => validationErrors[fieldKey],
+    [validationErrors],
+  );
 
   const scope: FormScope = useMemo(
     () => ({
@@ -129,10 +142,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       inactive: context.inactive,
       register: registry.register,
       values: registry.values,
+      fieldErrorFor,
       draftFeedbackFor,
       reportFieldChanged,
     }),
-    [context.pending, context.inactive, registry, draftFeedbackFor, reportFieldChanged],
+    [context.pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
   );
 
   const events = context.events;
@@ -162,7 +176,19 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (context.inactive) return;
-    events?.form_submit?.({ event: "form_submit", values: registry.values() });
+    validationAttemptedRef.current = true;
+    const nextValidationErrors = registry.validationErrors();
+    setValidationErrors(nextValidationErrors);
+    if (Object.keys(nextValidationErrors).length > 0) return;
+    if (ownerGroups !== undefined && selectedOwnerGroupId === undefined) {
+      setOwnerGroupError(true);
+      return;
+    }
+    events?.form_submit?.({
+      event: "form_submit",
+      values: registry.values(),
+      ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
+    });
   };
 
   // Enter in a single-line field always uses the one submit path, with or without a Submit button.
@@ -185,12 +211,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     baselineRef.current = undefined;
     unsavedWorkRegistry?.setDirty(formId, false);
     resetRef.current = true;
+    setOwnerGroupChoice(undefined);
+    setOwnerGroupError(false);
+    validationAttemptedRef.current = false;
+    setValidationErrors({});
     setGeneration((current) => current + 1);
     events?.form_reset?.({ event: "form_reset" });
   };
 
   const title = context.accessibleName;
-  const fieldsDisabled = context.unavailable || props.data?.status === "disabled";
+  const ownerGroups = props.data?.status === "ready" ? props.data.values.ownerGroups : undefined;
+  const selectedOwnerGroupId = ownerGroups?.length === 1
+    ? ownerGroups[0]?.groupId
+    : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
+      ? ownerGroupChoice
+      : undefined;
+  const fieldsDisabled = context.unavailable || props.data?.status === "disabled" ||
+    ownerGroups?.length === 0;
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
   if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
     return (
@@ -224,6 +261,51 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         <p data-vortex-field-note className="text-sm text-muted-foreground">
           {note}
         </p>
+      )}
+      {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
+        <p role="alert" className="text-sm text-muted-foreground">
+          You need current membership in an active Group before you can create this record.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {ownerGroups.length === 1 ? (
+            <p className="text-sm">
+              <span className="font-medium">Owner Group: </span>{ownerGroups[0]?.label}
+            </p>
+          ) : (
+            <>
+              <label htmlFor={`${feedbackId}-owner-group`} className="text-sm font-medium">
+                Owner Group
+              </label>
+              <select
+                id={`${feedbackId}-owner-group`}
+                value={selectedOwnerGroupId ?? ""}
+                onChange={(event) => {
+                  const groupId = event.target.value || undefined;
+                  setOwnerGroupChoice(groupId);
+                  setOwnerGroupError(false);
+                  const baseline = baselineRef.current;
+                  if (baseline !== undefined)
+                    unsavedWorkRegistry?.setDirty(
+                      formId,
+                      groupId !== undefined || !equalFormValue(registry.values(), baseline),
+                    );
+                }}
+                disabled={fieldsDisabled}
+                aria-invalid={ownerGroupError}
+                className="rounded border px-2 py-1 text-sm"
+              >
+                <option value="">Select a Group</option>
+                {ownerGroups.map((group) => (
+                  <option key={group.groupId} value={group.groupId}>{group.label}</option>
+                ))}
+              </select>
+            </>
+          )}
+          {ownerGroupError ? (
+            <p role="alert" className="text-sm text-destructive">Select an owner Group.</p>
+          ) : null}
+        </div>
       )}
       <FormScopeContext.Provider value={scope}>
         <fieldset

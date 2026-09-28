@@ -37,7 +37,9 @@ import {
   ApplicationInstallationLifecycleError,
   ModuleInstallationStorageError,
   createApplicationInstallationLifecycleRepository,
+  createInstallationRuntimeBundleCleanupRepository,
   createModuleInstallationStorageRepository,
+  type InstallationRuntimeBundleRemovalReport,
 } from "@vortex/module";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -198,6 +200,7 @@ export type ApplicationInstallationWithdrawalResult = Readonly<{
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  runtimeBundles: InstallationRuntimeBundleRemovalReport;
 }>;
 
 export type ApplicationInstallationDrainResult = Readonly<{
@@ -1217,6 +1220,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               );
           }
 
+          // Bundle registrations belong to Module and are removed only after this installation's
+          // bindings have left active service. The report keeps the exact bundle keys and counts.
+          const runtimeBundles = await createInstallationRuntimeBundleCleanupRepository(
+            transaction,
+          ).removeInstallation(request.applicationRootId);
+
           // Last: withdrawing the registration advances the Access version.
           const access = await changeAccess(
             transaction,
@@ -1235,6 +1244,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             applicationRootId: request.applicationRootId,
             applicationReleaseRevision: request.applicationReleaseRevision,
             moduleBindings: detached?.moduleBindings ?? releaseBindings,
+            runtimeBundles,
           } satisfies ApplicationInstallationWithdrawalResult;
         },
       );

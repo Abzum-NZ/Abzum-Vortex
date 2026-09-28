@@ -239,6 +239,14 @@ const compilePropertyValue = (
 ): BlockPropertyValueV2Contract => {
   let compiled: unknown;
   switch (authored.kind) {
+    case "text":
+      // Table behaviours name the same event as their flow bindings. Keep both in the release's
+      // permanent identity space so a rendered row can dispatch its declared binding.
+      compiled =
+        schema.key === "event_id"
+          ? { kind: "text", value: resolution.identity("event", authored.value) }
+          : authored;
+      break;
     case "asset_reference":
       compiled = { kind: authored.kind, assetId: authored.asset_id };
       break;

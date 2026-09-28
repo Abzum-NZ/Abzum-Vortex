@@ -209,3 +209,8 @@ grant execute on function
     uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, jsonb, bigint, integer, integer,
     uuid, uuid, uuid, text, timestamptz, timestamptz
   ) to vortex_request;
+
+alter function vortex_file.reserve_file_upload(
+  uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, jsonb, bigint, integer, integer,
+  uuid, uuid, uuid, text, timestamptz, timestamptz
+) owner to postgres;

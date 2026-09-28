@@ -50,3 +50,5 @@ revoke all on function vortex_identity.require_current_tenant_capability(uuid, u
 
 comment on function vortex_identity.require_current_tenant_capability(uuid, uuid, text, timestamptz) is
   'Requires one current tenant capability, the default capability-limits read permission for an active tenant administrator, or the independent active Vortex super-administrator assignment.';
+
+alter function vortex_identity.require_current_tenant_capability(uuid,uuid,text,timestamp with time zone) owner to postgres;
