@@ -33,5 +33,8 @@ revoke all on function vortex_page.private_form_draft_purge_internal(uuid, integ
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_purge_internal(uuid, integer) is
+  'Deletes a bounded batch of expired private form drafts for one organization.';
+
 grant execute on function vortex_page.private_form_draft_purge_internal(uuid, integer)
   to vortex_page_owner;

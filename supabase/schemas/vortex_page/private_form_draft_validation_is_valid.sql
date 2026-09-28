@@ -35,5 +35,8 @@ revoke all on function vortex_page.private_form_draft_validation_is_valid(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_validation_is_valid(jsonb) is
+  'Validates bounded private form draft validation state.';
+
 grant execute on function vortex_page.private_form_draft_validation_is_valid(jsonb)
   to vortex_page_owner;

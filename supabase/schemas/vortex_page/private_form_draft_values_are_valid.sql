@@ -21,5 +21,8 @@ revoke all on function vortex_page.private_form_draft_values_are_valid(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_values_are_valid(jsonb) is
+  'Validates bounded private form draft field values.';
+
 grant execute on function vortex_page.private_form_draft_values_are_valid(jsonb)
   to vortex_page_owner;

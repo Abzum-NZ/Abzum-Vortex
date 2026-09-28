@@ -19,5 +19,8 @@ revoke all on function vortex_page.private_form_draft_key_is_valid(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_key_is_valid(text) is
+  'Checks whether a private form draft field key uses an accepted key format.';
+
 grant execute on function vortex_page.private_form_draft_key_is_valid(text)
   to vortex_page_owner;

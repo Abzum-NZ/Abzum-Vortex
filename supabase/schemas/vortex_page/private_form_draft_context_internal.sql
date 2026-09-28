@@ -54,5 +54,8 @@ revoke all on function vortex_page.private_form_draft_context_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_context_internal() is
+  'Resolves the validated human request scope and active Application installation for private form drafts.';
+
 alter function vortex_page.private_form_draft_context_internal()
   owner to vortex_page_owner;

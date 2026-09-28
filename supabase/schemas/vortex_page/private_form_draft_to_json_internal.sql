@@ -40,5 +40,9 @@ revoke all on function vortex_page.private_form_draft_to_json_internal(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
+comment on function vortex_page.private_form_draft_to_json_internal(
+  vortex_page.form_drafts, text
+) is 'Converts one private form draft row to its canonical JSON result.';
+
 grant execute on function vortex_page.private_form_draft_to_json_internal(vortex_page.form_drafts, text)
   to vortex_page_owner;
