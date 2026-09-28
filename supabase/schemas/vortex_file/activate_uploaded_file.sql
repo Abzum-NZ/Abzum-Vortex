@@ -139,3 +139,6 @@ revoke execute on function
 
 grant execute on function
   vortex_file.activate_uploaded_file(uuid, bigint, uuid, uuid, uuid, uuid, uuid) to vortex_request;
+
+alter function vortex_file.activate_uploaded_file(uuid, bigint, uuid, uuid, uuid, uuid, uuid)
+  owner to vortex_file_owner;

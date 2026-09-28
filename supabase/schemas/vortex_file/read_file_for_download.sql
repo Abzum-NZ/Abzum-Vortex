@@ -27,3 +27,5 @@ grant execute on function vortex_file.read_file_for_download(uuid) to vortex_req
 
 comment on function vortex_file.read_file_for_download(uuid) is
   'Reads the canonical FileRecord of one file of the request organisation.';
+
+alter function vortex_file.read_file_for_download(uuid) owner to vortex_file_owner;

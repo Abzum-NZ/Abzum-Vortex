@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  ApplicationAccountActionsProvider,
   createFlowInvokeClient,
   createFlowRuntime,
   createFormBlockRuntime,
@@ -14,6 +15,7 @@ import {
   useFlowIntentHost,
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,
+  type ApplicationAccountActions,
   type ControlSemanticEvent,
   type DisplaySemanticEvent,
   type FlowDispatchResult,
@@ -49,6 +51,7 @@ import {
 } from "@vortex/app/component-result-state";
 import { containedComponentIdSchema } from "@vortex/contracts";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
+import { signOut } from "../../../../auth/actions";
 
 type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 import type {
@@ -1379,6 +1382,18 @@ function ApplicationPageViewContent({
     subject,
   ]);
 
+  const accountActions: ApplicationAccountActions = {
+    organizationName: application.organizationShortName,
+    chooseOrganization: async () => {
+      if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
+      router.push("/signed-in");
+    },
+    signOut: async () => {
+      if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
+      await signOut();
+    },
+  };
+
   return (
     <>
       {notice === undefined ? null : (
@@ -1386,6 +1401,7 @@ function ApplicationPageViewContent({
           {notice.text}
         </p>
       )}
+      <ApplicationAccountActionsProvider actions={accountActions}>
       <PageLayoutRenderer
         composition={model.page as unknown as ProjectedPageCapability}
         registry={platformComponentRegistry}
@@ -1415,6 +1431,7 @@ function ApplicationPageViewContent({
               },
             })}
       />
+      </ApplicationAccountActionsProvider>
       {intentHostElement}
       <Dialog
         open={leavePromptOpen}
