@@ -47,6 +47,9 @@ begin
 end
 $function$;
 
+alter function vortex_module.append_application_installation_activity_internal(uuid, uuid, text)
+  owner to postgres;
+
 revoke all on function vortex_module.append_application_installation_activity_internal(
   uuid, uuid, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
