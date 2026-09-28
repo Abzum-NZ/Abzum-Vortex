@@ -2,19 +2,21 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  fieldIdSchema,
   flowDurableOnlyTaskTypeKeys,
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
   flowTestRunRequestSchema,
   formContinuationIntentSchema,
+  groupIdSchema,
   identitySessionSchema,
   jsonValueSchema,
+  moduleDefinitionConsumerReadResultV3Schema,
   organizationAccountIdSchema,
   organizationSelectionCandidateSchema,
   previewInstallationAddressSchema,
   previewRecordReadCommandV1Schema,
+  recordTypeIdSchema,
   saveRecordCommandV2Schema,
   type FlowDefinition,
   type FlowTask,
@@ -24,6 +26,7 @@ import {
   type FlowTestRunTaskOutcome,
   type FlowTestRunTaskTraceEntry,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationAddress,
@@ -70,6 +73,13 @@ type PreviewInstallationReader = Readonly<{
 export type FlowTestRunDependencies = Readonly<{
   previews: PreviewInstallationReader;
   records: PreviewRecordTaskPort;
+  /** Reads the exact published Module release pinned by the preview, not the current release. */
+  readPinnedModuleRelease(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    moduleRootId: string,
+    releaseRevision: number,
+  ): Promise<unknown | undefined>;
   /** Returns the account from the active, validated request context, never from caller input. */
   resolvePreviewerOrganizationAccountId(
     session: IdentitySession,
@@ -214,34 +224,116 @@ const resultOutcome = (code: string): TaskExecution["outcome"] =>
       ? "validation"
       : "refused";
 
+const previewFieldIds = async (
+  dependencies: FlowTestRunDependencies,
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  previewInstallation: PreviewInstallation,
+  recordTypeId: string,
+  cache: Map<string, ReadonlyMap<string, string>>,
+): Promise<ReadonlyMap<string, string> | undefined> => {
+  const key = recordTypeId.toLowerCase();
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  const identities = previewInstallation.storageIdentities.filter((identity) =>
+    sameId(identity.recordTypeId, recordTypeId),
+  );
+  if (identities.length !== 1) return undefined;
+  const identity = identities[0]!;
+  const pins = previewInstallation.resolvedModules.filter((module) =>
+    sameId(module.moduleRootId, identity.moduleRootId) &&
+    module.moduleReleaseRevision === identity.moduleReleaseRevision,
+  );
+  if (pins.length !== 1) return undefined;
+
+  try {
+    const candidate = await dependencies.readPinnedModuleRelease(
+      session,
+      selection,
+      identity.moduleRootId,
+      identity.moduleReleaseRevision,
+    );
+    const parsed = moduleDefinitionConsumerReadResultV3Schema.safeParse(candidate);
+    if (
+      !parsed.success ||
+      !sameId(parsed.data.organizationId, previewInstallation.organizationId) ||
+      !sameId(parsed.data.rootId, identity.moduleRootId) ||
+      parsed.data.releaseRevision !== identity.moduleReleaseRevision ||
+      parsed.data.releaseVersion !== pins[0]!.releaseVersion
+    ) return undefined;
+    const recordTypes = parsed.data.content.recordTypes.filter((recordType) =>
+      sameId(recordType.recordTypeId, recordTypeId),
+    );
+    if (recordTypes.length !== 1) return undefined;
+    const fieldIds = new Map<string, string>();
+    for (const field of recordTypes[0]!.fields) {
+      for (const name of [field.key, field.fieldId]) {
+        const alias = name.toLowerCase();
+        if (fieldIds.has(alias) && !sameId(fieldIds.get(alias)!, field.fieldId))
+          return undefined;
+        fieldIds.set(alias, field.fieldId);
+      }
+    }
+    cache.set(key, fieldIds);
+    return fieldIds;
+  } catch {
+    return undefined;
+  }
+};
+
 const runRecordTask = async (
   dependencies: FlowTestRunDependencies,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   previewInstallation: PreviewInstallation,
   call: FlowProtectedTaskCall,
+  fieldIdsCache: Map<string, ReadonlyMap<string, string>>,
 ): Promise<TaskExecution> => {
   const supported = new Set(["record.save", "record.create", "record.set_fields"]);
   if (!supported.has(call.taskType))
     return {
       outcome: "refused",
-      failure: taskFailure("record_task_unavailable", "refused", call.taskId),
+      failure: taskFailure(
+        `${call.taskType.replace(".", "_")}_unavailable_in_preview_test_run`,
+        "refused",
+        call.taskId,
+      ),
     };
 
-  const recordTypeId = call.properties.record_type?.value;
+  const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
   const values = call.properties.values?.value;
   if (
-    typeof recordTypeId !== "string" ||
+    !recordTypeId.success ||
     !emptyObject(values) ||
-    !Object.entries(values).every(
-      ([fieldId, value]) =>
-        fieldIdSchema.safeParse(fieldId).success && jsonValueSchema.safeParse(value).success,
-    )
+    !Object.values(values).every((value) => jsonValueSchema.safeParse(value).success)
   )
     return {
       outcome: "validation",
       failure: taskFailure("record_values_invalid", "validation", call.taskId),
     };
+  const fieldIds = await previewFieldIds(
+    dependencies,
+    session,
+    selection,
+    previewInstallation,
+    recordTypeId.data,
+    fieldIdsCache,
+  );
+  if (fieldIds === undefined)
+    return {
+      outcome: "refused",
+      failure: taskFailure("record_type_unavailable", "refused", call.taskId),
+    };
+  const submittedValues: Record<string, JsonValue> = {};
+  for (const [name, value] of Object.entries(values)) {
+    const fieldId = fieldIds.get(name.toLowerCase());
+    if (fieldId === undefined || Object.hasOwn(submittedValues, fieldId))
+      return {
+        outcome: "validation",
+        failure: taskFailure("record_values_invalid", "validation", call.taskId),
+      };
+    submittedValues[fieldId] = value as JsonValue;
+  }
 
   const recordValue = call.properties.record?.value;
   if (call.taskType === "record.set_fields" && typeof recordValue !== "string")
@@ -254,6 +346,19 @@ const runRecordTask = async (
     (call.taskType === "record.save" && recordValue === undefined)
       ? "create"
       : "update";
+  const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
+  const selectedGroup = selectedOwnerGroupId === undefined
+    ? undefined
+    : groupIdSchema.safeParse(selectedOwnerGroupId);
+  if (
+    (selectedGroup !== undefined && !selectedGroup.success) ||
+    (operation === "update" && Object.hasOwn(call.properties, "selected_owner_group_id"))
+  )
+    return {
+      outcome: "validation",
+      failure: taskFailure("record_owner_group_invalid", "validation", call.taskId),
+    };
+  const selectedOwnerGroup = selectedGroup?.success ? selectedGroup.data : undefined;
   if (operation === "update" && typeof recordValue !== "string")
     return {
       outcome: "validation",
@@ -265,7 +370,7 @@ const runRecordTask = async (
     const readCommand = previewRecordReadCommandV1Schema.safeParse({
       contractVersion: "1.0.0",
       previewInstallationId: previewInstallation.previewInstallationId,
-      recordTypeId,
+      recordTypeId: recordTypeId.data,
       recordId: recordValue,
     });
     if (!readCommand.success)
@@ -303,11 +408,11 @@ const runRecordTask = async (
     commandId: randomUUID(),
     previewInstallationId: previewInstallation.previewInstallationId,
     operation,
-    recordTypeId,
-    submittedValues: values,
+    recordTypeId: recordTypeId.data,
+    submittedValues,
     ...(operation === "update"
       ? { recordId: recordValue, expectedConcurrencyNumber }
-      : {}),
+      : selectedOwnerGroup === undefined ? {} : { selectedOwnerGroupId: selectedOwnerGroup }),
   };
   const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
   if (!command.success)
@@ -486,6 +591,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
       const library: FlowLibrary = (flowId) => testFlows.get(flowId);
       const runId = newRunId();
       const trace: FlowTestRunTaskTraceEntry[] = [];
+      const fieldIdsCache = new Map<string, ReadonlyMap<string, string>>();
       const intents: NonNullable<Extract<FlowTestRunResponse, { kind: "finished" }>['intents']> = [];
       const pendingRunFlows: Array<{
         flowId: string;
@@ -648,6 +754,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
             selection.data,
             previewInstallation,
             call,
+            fieldIdsCache,
           );
         } else execution = { outcome: "completed" };
         const traceOutcome: FlowTestRunTaskOutcome = call.taskType.startsWith("record.")
