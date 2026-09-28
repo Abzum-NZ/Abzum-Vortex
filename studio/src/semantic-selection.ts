@@ -19,9 +19,60 @@ export type StudioSemanticSelection =
   | Readonly<{ kind: "flow"; flowAlias: string }>
   | Readonly<{ kind: "placement"; placementAlias: string }>;
 
-type PlacementOwner =
-  | Readonly<{ kind: "page"; pageAlias: string }>
-  | Readonly<{ kind: "shell"; shellAlias: string }>;
+export type StudioSemanticPlacementOwner = Extract<
+  StudioSemanticSelection,
+  { kind: "page" | "shell" }
+>;
+
+export type StudioSemanticSelectionTraversalNode =
+  | Readonly<{
+      kind: "application";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "application" }>;
+    }>
+  | Readonly<{
+      kind: "section";
+      section: "navigation" | "flows" | "shells" | "pages";
+      label: string;
+    }>
+  | Readonly<{
+      kind: "navigation";
+      itemType: "heading" | "page" | "external";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "navigation" }>;
+    }>
+  | Readonly<{
+      kind: "flow";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "flow" }>;
+    }>
+  | Readonly<{
+      kind: "shell";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "shell" }>;
+    }>
+  | Readonly<{
+      kind: "page";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "page" }>;
+    }>
+  | Readonly<{ kind: "guided_step"; label: string }>
+  | Readonly<{ kind: "slot"; label: string }>
+  | Readonly<{
+      kind: "placement";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "placement" }>;
+      owner: StudioSemanticPlacementOwner;
+    }>;
+
+export type StudioSemanticSelectionTraversalEvent = Readonly<{
+  phase: "enter" | "exit";
+  node: StudioSemanticSelectionTraversalNode;
+}>;
+
+export type StudioSemanticSelectionTraversalListener = (
+  event: StudioSemanticSelectionTraversalEvent,
+) => void;
 
 type SourcePlacementSlot = ApplicationSourceDocumentV2["body"]["shells"][number]["layout"];
 
@@ -31,7 +82,7 @@ type SelectionIndex = Readonly<{
   shellAliases: ReadonlySet<string>;
   navigationItemAliases: ReadonlySet<string>;
   flowAliases: ReadonlySet<string>;
-  placementOwners: ReadonlyMap<string, PlacementOwner>;
+  placementOwners: ReadonlyMap<string, StudioSemanticPlacementOwner>;
 }>;
 
 export type StudioSemanticSelectionListener = (
@@ -49,13 +100,193 @@ export interface StudioSemanticSelectionStore {
   subscribe(listener: StudioSemanticSelectionListener): () => void;
 }
 
-const selectionForOwner = (owner: PlacementOwner): StudioSemanticSelection =>
-  owner.kind === "page"
-    ? Object.freeze({ kind: "page", pageAlias: owner.pageAlias })
-    : Object.freeze({ kind: "shell", shellAlias: owner.shellAlias });
-
-const applicationSelection = (applicationRootId: ApplicationRootId): StudioSemanticSelection =>
+const applicationSelection = (
+  applicationRootId: ApplicationRootId,
+): Extract<StudioSemanticSelection, { kind: "application" }> =>
   Object.freeze({ kind: "application", applicationRootId });
+
+const authoredLabel = (value: string | undefined, fallback: string): string => {
+  const label = value?.trim();
+  return label ? label : fallback;
+};
+
+const readableKey = (value: string | undefined, fallback: string): string => {
+  const key = value?.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+  if (!key) return fallback;
+  return key[0]!.toUpperCase() + key.slice(1);
+};
+
+/**
+ * Walks the authored Application once in display order, exposing only safe labels,
+ * semantic selections, and owner context. Studio surfaces share this walk so the
+ * outline and selection store cannot develop different identity or ordering rules.
+ */
+export const traverseStudioSemanticSelectionDraft = (
+  draft: StudioApplicationSelectionDraft,
+  listener: StudioSemanticSelectionTraversalListener,
+): void => {
+  const visit = (
+    node: StudioSemanticSelectionTraversalNode,
+    children?: () => void,
+  ): void => {
+    listener(Object.freeze({ phase: "enter", node }));
+    children?.();
+    listener(Object.freeze({ phase: "exit", node }));
+  };
+
+  const placementSlot = (
+    slot: SourcePlacementSlot,
+    owner: StudioSemanticPlacementOwner,
+    label: string,
+  ): void => {
+    visit(Object.freeze({ kind: "slot", label }), () => {
+      for (const placementAlias of slot.order.desktop) {
+        const placement = slot.placements[placementAlias];
+        if (placement === undefined) continue;
+        const selection = Object.freeze({ kind: "placement", placementAlias } as const);
+        visit(
+          Object.freeze({
+            kind: "placement",
+            label: `Placement ${readableKey(placementAlias, "item")}`,
+            selection,
+            owner,
+          }),
+          () => {
+            for (const [slotKey, childSlot] of Object.entries(placement.slots))
+              placementSlot(childSlot, owner, readableKey(slotKey, "Content"));
+          },
+        );
+      }
+    });
+  };
+
+  const shellForAlias = (alias: string) =>
+    draft.source.body.shells.find((shell) => shell.id === alias);
+
+  const pageSlots = (
+    slots: Readonly<Record<string, SourcePlacementSlot>>,
+    shellAlias: string,
+    owner: StudioSemanticPlacementOwner,
+  ): void => {
+    const shell = shellForAlias(shellAlias);
+    const visited = new Set<string>();
+    for (const contentSlot of shell?.content_slots ?? []) {
+      const slot = slots[contentSlot.id];
+      if (slot === undefined) continue;
+      visited.add(contentSlot.id);
+      placementSlot(slot, owner, authoredLabel(contentSlot.label, "Content"));
+    }
+    for (const [slotAlias, slot] of Object.entries(slots)) {
+      if (visited.has(slotAlias)) continue;
+      placementSlot(slot, owner, readableKey(slotAlias, "Content"));
+    }
+  };
+
+  const navigation = (
+    items: readonly ApplicationSourceDocumentV2["body"]["navigation"][number][],
+  ): void => {
+    for (const item of items) {
+      const selection = Object.freeze({
+        kind: "navigation",
+        navigationItemAlias: item.id,
+      } as const);
+      const fallback =
+        item.type === "heading"
+          ? "Navigation heading"
+          : item.type === "page"
+            ? "Page link"
+            : "External link";
+      visit(
+        Object.freeze({
+          kind: "navigation",
+          itemType: item.type,
+          label: authoredLabel(item.label, fallback),
+          selection,
+        }),
+        item.type === "heading" ? () => navigation(item.children) : undefined,
+      );
+    }
+  };
+
+  const rootSelection = applicationSelection(draft.rootId);
+  visit(
+    Object.freeze({
+      kind: "application",
+      label: authoredLabel(draft.source.body.name, "Application"),
+      selection: rootSelection,
+    }),
+    () => {
+      visit(Object.freeze({ kind: "section", section: "navigation", label: "Navigation" }), () =>
+        navigation(draft.source.body.navigation),
+      );
+      visit(Object.freeze({ kind: "section", section: "shells", label: "Shells" }), () => {
+        for (const shell of draft.source.body.shells) {
+          const owner = Object.freeze({ kind: "shell", shellAlias: shell.id } as const);
+          const selection = owner;
+          visit(
+            Object.freeze({
+              kind: "shell",
+              label: authoredLabel(shell.name, "Shell"),
+              selection,
+            }),
+            () => placementSlot(shell.layout, owner, "Layout"),
+          );
+        }
+      });
+      visit(Object.freeze({ kind: "section", section: "pages", label: "Pages" }), () => {
+        for (const page of draft.source.body.pages) {
+          const pageOwner = Object.freeze({ kind: "page", pageAlias: page.id } as const);
+          visit(
+            Object.freeze({
+              kind: "page",
+              label: authoredLabel(page.name, "Page"),
+              selection: pageOwner,
+            }),
+            () => {
+              if (page.type === "guided_form") {
+                const composition = page.composition;
+                for (const step of page.steps) {
+                  visit(
+                    Object.freeze({
+                      kind: "guided_step",
+                      label: authoredLabel(step.name, "Step"),
+                    }),
+                    () => {
+                      const stepSlots = composition.step_content[step.id];
+                      if (stepSlots === undefined) return;
+                      if (composition.shell_kind === "default") {
+                        placementSlot(stepSlots, pageOwner, "Main");
+                      } else {
+                        pageSlots(stepSlots, composition.shell, pageOwner);
+                      }
+                    },
+                  );
+                }
+              } else {
+                const composition = page.composition;
+                if (composition.shell_kind === "default")
+                  placementSlot(composition.main, pageOwner, "Main");
+                else pageSlots(composition.content, composition.shell, pageOwner);
+              }
+            },
+          );
+        }
+      });
+      visit(Object.freeze({ kind: "section", section: "flows", label: "Flows" }), () => {
+        for (const flow of draft.source.body.flows) {
+          const selection = Object.freeze({ kind: "flow", flowAlias: flow.id } as const);
+          visit(
+            Object.freeze({
+              kind: "flow",
+              label: readableKey(flow.key, "Flow"),
+              selection,
+            }),
+          );
+        }
+      });
+    },
+  );
+};
 
 const normalizeSelection = (
   selection: StudioSemanticSelection | null,
@@ -122,49 +353,28 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
   const shellAliases = new Set<string>();
   const navigationItemAliases = new Set<string>();
   const flowAliases = new Set<string>();
-  const placementOwners = new Map<string, PlacementOwner>();
+  const placementOwners = new Map<string, StudioSemanticPlacementOwner>();
 
-  const collectNavigation = (
-    items: readonly ApplicationSourceDocumentV2["body"]["navigation"][number][],
-  ): void => {
-    for (const item of items) {
-      navigationItemAliases.add(item.id);
-      if (item.type === "heading") collectNavigation(item.children);
+  traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
+    if (phase !== "enter") return;
+    switch (node.kind) {
+      case "navigation":
+        navigationItemAliases.add(node.selection.navigationItemAlias);
+        break;
+      case "flow":
+        flowAliases.add(node.selection.flowAlias);
+        break;
+      case "shell":
+        shellAliases.add(node.selection.shellAlias);
+        break;
+      case "page":
+        pageAliases.add(node.selection.pageAlias);
+        break;
+      case "placement":
+        placementOwners.set(node.selection.placementAlias, node.owner);
+        break;
     }
-  };
-
-  const collectPlacementSlot = (slot: SourcePlacementSlot, owner: PlacementOwner): void => {
-    for (const [placementAlias, placement] of Object.entries(slot.placements)) {
-      placementOwners.set(placementAlias, owner);
-      for (const childSlot of Object.values(placement.slots))
-        collectPlacementSlot(childSlot, owner);
-    }
-  };
-
-  collectNavigation(draft.source.body.navigation);
-  for (const flow of draft.source.body.flows) flowAliases.add(flow.id);
-  for (const shell of draft.source.body.shells) {
-    shellAliases.add(shell.id);
-    collectPlacementSlot(shell.layout, { kind: "shell", shellAlias: shell.id });
-  }
-  for (const page of draft.source.body.pages) {
-    pageAliases.add(page.id);
-    const owner = { kind: "page", pageAlias: page.id } as const;
-    const composition = page.composition;
-    if ("step_content" in composition) {
-      if (composition.shell_kind === "default") {
-        for (const slot of Object.values(composition.step_content))
-          collectPlacementSlot(slot, owner);
-      } else {
-        for (const slots of Object.values(composition.step_content))
-          for (const slot of Object.values(slots)) collectPlacementSlot(slot, owner);
-      }
-    } else if (composition.shell_kind === "default") {
-      collectPlacementSlot(composition.main, owner);
-    } else {
-      for (const slot of Object.values(composition.content)) collectPlacementSlot(slot, owner);
-    }
-  }
+  });
 
   return {
     applicationRootId: draft.rootId,
@@ -212,8 +422,7 @@ export const createStudioSemanticSelectionStore = (
         next = applicationSelection(index.applicationRootId);
       } else if (selection !== null && !containsSelection(index, selection)) {
         if (selection.kind === "placement") {
-          const formerOwner = previousIndex.placementOwners.get(selection.placementAlias);
-          const ownerSelection = formerOwner === undefined ? undefined : selectionForOwner(formerOwner);
+          const ownerSelection = previousIndex.placementOwners.get(selection.placementAlias);
           next =
             ownerSelection !== undefined && containsSelection(index, ownerSelection)
               ? ownerSelection
