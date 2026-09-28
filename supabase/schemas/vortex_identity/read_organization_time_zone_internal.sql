@@ -26,8 +26,11 @@ $function$;
 revoke all on function vortex_identity.read_organization_time_zone_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+
 grant execute on function vortex_identity.read_organization_time_zone_internal(uuid)
   to vortex_record_adapter;
 
 comment on function vortex_identity.read_organization_time_zone_internal(uuid) is
   'Private reader of one organisation''s configured time zone, or null when its runtime settings are not set up; callable only by the record adapter with the organisation of its own validated request context.';
+
+alter function vortex_identity.read_organization_time_zone_internal(uuid) owner to vortex_identity_owner;
