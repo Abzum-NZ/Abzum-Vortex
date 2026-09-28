@@ -31,9 +31,13 @@ begin
 end
 $function$;
 
+alter function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;
+
 revoke all on function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamptz)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
 grant execute on function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamptz)
   to vortex_request;
+
 comment on function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamptz) is
   'Human request entry point for registering a connection instance in the request context organisation; delegates to register_connection_instance_internal and returns the new revision.';

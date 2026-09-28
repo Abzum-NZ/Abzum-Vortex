@@ -66,6 +66,8 @@ begin
 end
 $function$;
 
+alter function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) owner to vortex_connection_owner;
+
 comment on function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) is null;
 
 revoke all on function

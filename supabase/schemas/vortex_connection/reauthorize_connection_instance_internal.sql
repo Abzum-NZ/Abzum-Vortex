@@ -83,6 +83,8 @@ begin
 end
 $function$;
 
+alter function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
+
 comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is null;
 
 revoke all on function

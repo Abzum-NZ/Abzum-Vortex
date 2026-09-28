@@ -14,7 +14,10 @@ begin
 end
 $function$;
 
+alter function vortex_connection.assert_human_administration_request() owner to vortex_connection_owner;
+
 revoke all on function vortex_connection.assert_human_administration_request()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
 comment on function vortex_connection.assert_human_administration_request() is
   'Refuses any caller whose request context is not a human request; used by the connection administration entry points.';

@@ -20,9 +20,13 @@ begin
 end
 $function$;
 
+alter function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
+
 revoke all on function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
 grant execute on function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid)
   to vortex_request;
+
 comment on function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid) is
   'Human request entry point for revoking an application grant on a connection instance; delegates to revoke_connection_application_internal.';
