@@ -67,4 +67,6 @@ revoke all on function vortex_identity.change_organization_account_state(uuid, b
 comment on function vortex_identity.change_organization_account_state(uuid, bigint, text) is null;
 
 alter function vortex_identity.change_organization_account_state(uuid, bigint, text) owner to vortex_identity_owner;
+set role vortex_identity_owner;
 grant execute on function vortex_identity.change_organization_account_state(uuid, bigint, text) to postgres;
+reset role;

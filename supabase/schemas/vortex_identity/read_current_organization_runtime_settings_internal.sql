@@ -35,4 +35,6 @@ revoke all on function vortex_identity.read_current_organization_runtime_setting
 comment on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) is null;
 
 alter function vortex_identity.read_current_organization_runtime_settings_internal(uuid) owner to vortex_identity_owner;
+set role vortex_identity_owner;
 grant execute on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) to postgres;
+reset role;
