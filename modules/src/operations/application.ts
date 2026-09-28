@@ -1,9 +1,11 @@
 import {
+  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   applicationSourceDocumentV2Schema,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -388,13 +390,19 @@ const applicationShell = {
             text: { kind: "text", value: "Operations" },
             level: { kind: "choice", value: "one" },
           }),
+          shell_account: placement(APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE),
         }),
         content: slot({
           shell_body: placement(
-            CONTAINER_BLOCK_RELEASE,
+            CONTAINER_BLOCK_RELEASE_1_1_0,
             {
               direction: { kind: "choice", value: "row" },
               gap: { kind: "choice", value: "medium" },
+              menu_width: { kind: "number", value: 16 },
+              menu_placement: { kind: "choice", value: "sticky" },
+              tablet_menu_width: { kind: "number", value: 14 },
+              phone_direction: { kind: "choice", value: "column" },
+              phone_menu_placement: { kind: "choice", value: "flow" },
             },
             {
               menu: slot({

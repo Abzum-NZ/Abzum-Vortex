@@ -168,6 +168,11 @@ export const DRAWER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.DRAW
 /** Exact immutable metadata release for the general container block. */
 export const CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.CONTAINER_BLOCK_RELEASE);
 
+/** Menu sizing, placement and breakpoint overrides for a definition-owned shell. */
+export const CONTAINER_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.CONTAINER_BLOCK_RELEASE_1_1_0,
+);
+
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEADING_BLOCK_RELEASE);
 
@@ -178,6 +183,11 @@ export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEA
  */
 export const APPLICATION_NAVIGATION_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
   sources.APPLICATION_NAVIGATION_BLOCK_RELEASE,
+);
+
+/** Account context and actions rendered where an application places this block. */
+export const APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 );
 
 /** Exact immutable metadata release for the form container block. */
@@ -353,18 +363,20 @@ export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
-/** All two immutable general layout block releases. */
+/** All three immutable general layout block releases. */
 export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
   HEADING_BLOCK_RELEASE,
 ]);
 
-/** The one immutable application navigation block release, placed in a shell's layout. */
+/** The two immutable application navigation block releases, placed in a shell's layout. */
 export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 ]);
 
-/** All thirty-nine immutable platform block releases registered for the page builder. */
+/** All forty-one immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
