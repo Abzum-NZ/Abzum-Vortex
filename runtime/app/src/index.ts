@@ -9,6 +9,7 @@ import { createIdentityDisablementCoordinator } from "./identity-disablement";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createAppTelemetryCollector } from "./telemetry";
@@ -52,6 +53,13 @@ export {
   type InstalledRuntimeContextErrorCode,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+
+export {
+  createViewerSafeRecordLinkService,
+  type ViewerSafeRecordLinkInstalledContextLoaderFactory,
+  type ViewerSafeRecordLinkService,
+  type ViewerSafeRecordLinkServiceDependencies,
+} from "./viewer-safe-record-link";
 
 export {
   componentContextMismatchCodes,
@@ -227,6 +235,7 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createPreviewInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  createViewerSafeRecordLinkService,
   createComponentContextResolver,
   createComponentEventDispatcher,
   createIdentityDisablementCoordinator,

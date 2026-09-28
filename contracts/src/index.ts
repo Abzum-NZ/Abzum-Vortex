@@ -62,6 +62,7 @@ export * from "./permissions";
 export * from "./permission-registry";
 export * from "./record-lifecycle-policy";
 export * from "./record-ownership-compatibility";
+export * from "./record-links";
 export * from "./records";
 export * from "./runtime-primitives";
 export * from "./record-share-operations";
