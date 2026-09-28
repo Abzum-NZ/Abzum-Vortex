@@ -953,11 +953,14 @@ const protectedOperationReferenceLookups = (
     if (moduleOutput.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
     for (const recordType of moduleOutput.canonical.content.recordTypes)
       for (const relationship of recordType.relationships) {
-        const targetIds = relationship.toRecordType
-          ? [String(relationship.toRecordType.recordTypeId)]
-          : relationship.toRecordTypes?.map((target) => String(target.recordTypeId)) ?? [];
-        const recordTypeIds = [String(relationship.fromRecordTypeId), ...targetIds];
-        if (recordTypeIds.length < 2) return refuse("DEFINITION_COMPILATION_REFUSED");
+        const targets = relationship.toRecordType
+          ? [relationship.toRecordType]
+          : relationship.toRecordTypes ?? [];
+        const resolvedTargets = targets.filter((target) => target.state === "resolved");
+        const recordTypeIds =
+          targets.length > 0 && resolvedTargets.length === targets.length
+            ? [String(relationship.fromRecordTypeId), ...resolvedTargets.map((target) => String(target.recordTypeId))]
+            : [];
         const key = String(relationship.relationshipId).toLowerCase();
         const prior = relationshipRecordTypeIdsById.get(key);
         if (

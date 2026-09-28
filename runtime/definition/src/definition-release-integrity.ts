@@ -182,9 +182,9 @@ const exactApplicationFlowTargetsMatch = (
   );
 
   return actual.every((entry) => {
-    if (entry.resolutionFingerprint !== output.resolutionFingerprint) return false;
     if (entry.kind === "protected_operation")
       return (
+        entry.resolutionFingerprint === output.resolutionFingerprint &&
         entry.operation.owner.kind === "platform_service" &&
         entry.catalogueFingerprint !== undefined &&
         expectedSubjects.has(flowManifestSubject(entry))
@@ -194,6 +194,7 @@ const exactApplicationFlowTargetsMatch = (
       entry.kind !== "application_flow_node"
     )
       return false;
+    if (entry.resolutionFingerprint !== output.resolutionFingerprint) return false;
     if (
       String(entry.applicationRootId).toLowerCase() !==
         String(output.artifact.rootId).toLowerCase() ||
@@ -215,9 +216,7 @@ const exactApplicationFlowTargetsMatch = (
         String(entry.operations[0]!.operationId).toLowerCase() !== descriptor.operationId.toLowerCase())
     )
       return false;
-    if (descriptor.taskType === "record.link") {
-      if (entry.operations.length === 0) return false;
-    } else if (
+    if (descriptor.taskType !== "record.link" && descriptor.taskType !== "record.query" && (
       entry.operations.length !== descriptor.recordTypeIds.length ||
       descriptor.recordTypeIds.some(
         (recordTypeId) =>
@@ -225,7 +224,7 @@ const exactApplicationFlowTargetsMatch = (
             (operation) => String(operation.operationId).toLowerCase() === recordTypeId,
           ),
       )
-    ) {
+    )) {
       return false;
     }
     if (entry.grantable !== (entry.operations.length > 0)) return false;

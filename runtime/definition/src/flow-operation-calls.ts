@@ -275,8 +275,8 @@ export function flowOperationReferencesByNode(
           relationshipId === undefined
             ? undefined
             : lookups.relationshipRecordTypeIdsById.get(relationshipId.toLowerCase());
-        if (relatedIds === undefined || relatedIds.length < 2)
-          throw new Error("A published record link has no resolved relationship bounds");
+        if (relatedIds === undefined)
+          throw new Error("A published record link has no resolved relationship");
         recordTypeIds.push(...relatedIds);
       } else {
         const recordTypeId = literalIdentity(properties.record_type);

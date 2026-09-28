@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { workflowValueTypeSchema } from "./catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
-import { flowBindingInputSchema, flowBindingSchema } from "./flow-contracts";
+import { flowBindingInputSchema, flowBindingSchema, flowIdSchema } from "./flow-contracts";
 import { flowAliasSchema } from "./flow-source-contracts";
 import {
   actorIdSchema,
@@ -263,7 +263,7 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("application_flow"),
       applicationRootId: applicationRootIdSchema,
-      flowId: ruleIdSchema,
+      flowId: flowIdSchema,
       ...flowTargetDependencyCommon,
     })
     .strict(),
@@ -271,7 +271,7 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("application_flow_node"),
       applicationRootId: applicationRootIdSchema,
-      flowId: ruleIdSchema,
+      flowId: flowIdSchema,
       ...flowNodeOperationReferencesShape,
       ...flowTargetDependencyCommon,
     })
