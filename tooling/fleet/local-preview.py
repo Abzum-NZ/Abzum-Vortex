@@ -81,6 +81,22 @@ SAFE_BROWSER_REASONS = frozenset(
         "unexpected_origin",
     }
 )
+SAFE_BROWSER_ACTION_STAGES = frozenset(
+    {
+        "not_started",
+        "sign_in",
+        "companies_list",
+        "new_company_click",
+        "company_create_route",
+        "company_name_control",
+        "customer_control",
+        "company_name_value",
+        "customer_value",
+        "save_control",
+        "save_confirmation",
+        "complete",
+    }
+)
 RUN_TIMEOUTS = {
     "auth_prepare": 120,
     "supabase_status": 60,
@@ -1103,7 +1119,7 @@ def _release_lock(lock: Path, token: str) -> bool:
 def _browser_report(
     raw: bytes, sha: str, run_nonce: str, fixtures: dict[str, str]
 ) -> tuple[dict[str, Any] | None, bool, str | None]:
-    """Keep only verified identity, known reason codes, checks, and cleanup attestation."""
+    """Keep only verified identity, known diagnostics, checks, and cleanup attestation."""
     if len(raw) > MAX_CAPTURED_OUTPUT:
         return None, False, "browser_output_too_large"
     try:
@@ -1129,6 +1145,8 @@ def _browser_report(
     )
     reason = result.get("reason")
     safe_reason = reason if isinstance(reason, str) and reason in SAFE_BROWSER_REASONS else None
+    raw_stage = result.get("action_stage")
+    safe_stage = raw_stage if isinstance(raw_stage, str) and raw_stage in SAFE_BROWSER_ACTION_STAGES else None
     result_valid = result_value in ("PASS", "FAIL")
     reason_valid = (result_value == "PASS" and reason is None) or (
         result_value == "FAIL" and safe_reason is not None
@@ -1159,6 +1177,10 @@ def _browser_report(
         evidence.update({"head_sha": sha, "run_nonce": run_nonce, "fixtures": fixtures})
     if safe_reason is not None and identity_matches:
         evidence["reason"] = safe_reason
+    if identity_matches and "action_stage" in result:
+        evidence["action_stage_valid"] = safe_stage is not None
+        if safe_stage is not None:
+            evidence["action_stage"] = safe_stage
 
     if not identity_matches:
         return evidence, False, "browser_evidence_mismatch"
@@ -1258,6 +1280,7 @@ def _run(args: argparse.Namespace) -> int:
     browser_invoked = False
     browser_cleanup_confirmed = False
     browser_reason: str | None = None
+    browser_stage: str | None = None
     final_identity: dict[str, Any] | None = None
     server: subprocess.Popen[bytes] | None = None
     server_pid: int | None = None
@@ -1461,6 +1484,7 @@ def _run(args: argparse.Namespace) -> int:
             if browser_evidence["browser_cleanup"] is not None:
                 browser_evidence["browser_cleanup"]["runner_confirmed"] = browser_cleanup_confirmed
             browser_reason = browser_evidence.get("reason")
+            browser_stage = browser_evidence.get("action_stage")
             _record(steps, log_file, step="browser.evidence", evidence=browser_evidence)
         if not browser_command.stopped:
             raise PreviewError("owned_process_stop_unconfirmed", "The browser adapter process tree did not stop", step="browser.smoke")
@@ -1484,6 +1508,8 @@ def _run(args: argparse.Namespace) -> int:
         failure = {"code": error.code, "step": error.step}
         if browser_reason is not None:
             failure["adapter_reason"] = browser_reason
+        if browser_stage is not None:
+            failure["adapter_action_stage"] = browser_stage
         preserve_lock = preserve_lock or error.code == "owned_process_stop_unconfirmed"
     except Exception:
         failure = {"code": "unexpected_failure", "step": None}
