@@ -1370,6 +1370,7 @@ function ApplicationPageViewContent({
     model.bindings,
     model.data,
     model.guidedForm,
+    placementEventNames,
     router,
     refreshPlacements,
     runBinding,
