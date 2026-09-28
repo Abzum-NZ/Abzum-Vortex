@@ -849,6 +849,34 @@ const contextOperandToken = (permission: StudioConditionOperandPermission): stri
 const operandToken = (operand: ConditionOperand): string =>
   operand.source === "value" ? "value" : referenceKey(operand);
 
+const describeOperand = (
+  operand: ConditionOperand,
+  context: StudioConditionControlsContext,
+): string => {
+  if (operand.source === "value") return JSON.stringify(operand.value) ?? "null";
+  const permission = context.allowedOperands.find(
+    (candidate) => permissionKey(candidate) === referenceKey(operand),
+  );
+  return permission ? permission.label : "Unavailable operand";
+};
+
+const describeCondition = (
+  condition: ConditionNode,
+  context: StudioConditionControlsContext,
+): string => {
+  if (condition.kind === "not")
+    return `not (${describeCondition(condition.condition, context)})`;
+  if (condition.kind === "all" || condition.kind === "any") {
+    const joiningWord = condition.kind === "all" ? " and " : " or ";
+    return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
+  }
+  const left = describeOperand(condition.left, context);
+  const operator = operatorLabels[condition.operator];
+  return condition.right === undefined
+    ? `${left} ${operator}`
+    : `${left} ${operator} ${describeOperand(condition.right, context)}`;
+};
+
 const displayRole = (role: StudioConditionOperandRole): string => roleLabels[role];
 
 const errorForPath = (
@@ -899,7 +927,7 @@ const localDateTimeInputValue = (value: JsonValue): string => {
   const pad = (part: number): string => String(part).padStart(2, "0");
   const year = String(instant.getFullYear()).padStart(4, "0");
   const date = `${year}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}`;
-  const time = `${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
+  const time = `${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}`;
   return `${date}T${time}`;
 };
 
@@ -1046,6 +1074,7 @@ function LiteralEditor({
         <input
           aria-invalid={error !== undefined}
           type="datetime-local"
+          step={1}
           value={localDateTimeInputValue(operand.value)}
           onChange={(event) => {
             const next = event.currentTarget.value;
@@ -1345,23 +1374,42 @@ function TreeEditor({
           : undefined
         : undefined;
     const pathToOperand = [...path, side];
+    const commitLiteral = (value: JsonValue) => {
+      const replacement: ConditionOperand = { source: "value", value };
+      if (side === "left") onReplace({ ...condition, left: replacement }, pathToOperand);
+      else onReplace({ ...condition, right: replacement }, pathToOperand);
+    };
+    if (operand.value === null) {
+      const initial = defaultLiteralForType(type);
+      const editableValue: JsonValue = initial === null
+        ? type === "money"
+          ? { amount: "", currency: "" }
+          : type === "record_reference" || type === "opaque_json"
+            ? {}
+            : ""
+        : initial ?? "";
+      return (
+        <button type="button" onClick={() => commitLiteral(editableValue)}>
+          Set literal value (currently null)
+        </button>
+      );
+    }
     return (
-      <LiteralEditor
-        operand={operand}
-        semanticType={type}
-        collectionElementType={collectionType}
-        path={pathToOperand}
-        validation={validation}
-        onCommit={(value) => {
-          const replacement: ConditionOperand = { source: "value", value };
-          if (side === "left") onReplace({ ...condition, left: replacement }, pathToOperand);
-          else onReplace({ ...condition, right: replacement }, pathToOperand);
-        }}
-        onInvalid={(message) => {
-          const issue = makeIssue("invalid_literal", pathToOperand, message);
-          onInvalid(issue);
-        }}
-      />
+      <>
+        <button type="button" onClick={() => commitLiteral(null)}>Use null literal</button>
+        <LiteralEditor
+          operand={operand}
+          semanticType={type}
+          collectionElementType={collectionType}
+          path={pathToOperand}
+          validation={validation}
+          onCommit={commitLiteral}
+          onInvalid={(message) => {
+            const issue = makeIssue("invalid_literal", pathToOperand, message);
+            onInvalid(issue);
+          }}
+        />
+      </>
     );
   };
 
@@ -1528,6 +1576,9 @@ export function StudioConditionControls({
         </div>
       ) : (
         <>
+          <p aria-live="polite">
+            <strong>Preview:</strong> {describeCondition(current, context)}
+          </p>
           <TreeEditor
             condition={current}
             context={context}
