@@ -184,6 +184,10 @@ Each Kestra request carries the execution, task, attempt, tenant, organisation, 
 
 Vortex records an application side effect and its duplicate key before acknowledging it. Repeating the same request returns the existing result without applying the side effect again. The response is completed, already completed, waiting, retryable failure, or permanent refusal. Kestra uses that response to advance its authoritative execution state.
 
+The published release retains one canonical operation-reference set in each protected `application_flow_node` entry. The entry keys the source task ID within its exact flow; the durable compiler attaches that set to the corresponding retained callback node. A Query node has exactly one reference: the query's owning Application or Module and its query ID. A Record node's references identify its statically bounded record types by owner and record-type ID: the task's `record_type`, both record types at a `record.link` relationship's ends, or the declared `recordTypeIds` of a record-reference or change-list input. Each set is deduplicated and canonically sorted. A node without a static type bound retains an empty set and is marked not grantable; it may run as the person, but cannot receive a run-as grant. There is no first-type fallback or platform-wide apply-record reference. Existing `operation.call` identity and release pinning remain unchanged.
+
+The durable compiler accepts this map as trusted input from the exact published release and carries each set into the retained node binding. It does not infer an owner from an ID or task label. A run-as grant is pinned to the exact flow, node, actor, and complete current reference set; a changed set after republication invalidates the grant.
+
 ## Asking a person
 
 The durable **Wait for a person** task pauses for one published form response with assignee rules, due time and timeout path. Only an authorised responder can submit it. Kestra waits for the protected completion signal and remains authoritative for the overall run state.
