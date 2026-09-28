@@ -466,8 +466,7 @@ begin
       end if;
 
       if supplied_kind = 'application_flow_node' then
-        if pg_catalog.jsonb_array_length(supplied_dependency -> 'operations') > 21
-          or (supplied_dependency ->> 'grantable')::boolean is distinct from
+        if (supplied_dependency ->> 'grantable')::boolean is distinct from
             (pg_catalog.jsonb_array_length(supplied_dependency -> 'operations') > 0) then
           raise exception using errcode = '22023',
             message = 'Definition flow node operation references have an invalid grantability shape';
@@ -507,6 +506,12 @@ begin
                 end
               )
             )
+            or pg_catalog.jsonb_typeof(
+              operation.value -> 'owner' -> case operation.value #>> '{owner,kind}'
+                when 'application' then 'applicationRootId'
+                else 'moduleRootId'
+              end
+            ) is distinct from 'string'
         ) then
           raise exception using errcode = '22023',
             message = 'Definition flow node operation reference has an invalid owner shape';

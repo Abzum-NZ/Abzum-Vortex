@@ -186,7 +186,6 @@ export const canonicalizeProtectedOperationReferences = (
 /** A stored reference set is already deduplicated and in canonical order. */
 export const protectedOperationReferenceSetSchema = z
   .array(protectedOperationReferenceSchema)
-  .max(21)
   .superRefine((references, context) => {
     const canonical = canonicalizeProtectedOperationReferences(references);
     if (
