@@ -166,7 +166,13 @@ export const createStudioApplicationDraftHistoryController = (
 
   const notify = (): void => {
     const state = getState();
-    for (const listener of [...listeners]) listener(state);
+    for (const listener of [...listeners]) {
+      try {
+        listener(state);
+      } catch {
+        // A subscriber must not interrupt a state transition or strand an in-flight save.
+      }
+    }
   };
 
   return Object.freeze({
@@ -228,7 +234,7 @@ export const createStudioApplicationDraftHistoryController = (
           returnedSource === undefined ||
           parsed.data.rootId !== rootId ||
           parsed.data.organizationId !== organizationId ||
-          parsed.data.draftRevision <= expectedDraftRevision ||
+          parsed.data.draftRevision !== expectedDraftRevision + 1 ||
           parsed.data.key !== key ||
           !sameValue(returnedSource, submittedSource)
         ) {
