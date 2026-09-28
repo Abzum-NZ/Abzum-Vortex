@@ -295,7 +295,7 @@ function browserProcessSnapshot() {
   if (!Array.isArray(value?.rows)) fail("browser_exit_unconfirmed");
   return value.rows.map((row) => {
     if (
-      !Number.isInteger(row?.pid) || row.pid < 1 ||
+      !Number.isInteger(row?.pid) || row.pid < 0 ||
       !Number.isInteger(row.parent_pid) || row.parent_pid < 0 ||
       typeof row.name !== "string" ||
       typeof row.profile_match !== "boolean" ||
@@ -305,6 +305,16 @@ function browserProcessSnapshot() {
       fail("browser_exit_unconfirmed");
     const createdAt = row.created_utc === null ? null : Date.parse(row.created_utc);
     if (createdAt !== null && !Number.isFinite(createdAt)) fail("browser_exit_unconfirmed");
+    if (row.pid === 0) {
+      // Windows reports this one OS pseudo-process in Win32_Process. It cannot
+      // own Edge or a profile; every other PID-zero shape remains an error.
+      if (
+        row.parent_pid !== 0 || row.name !== "System Idle Process" ||
+        row.profile_match || row.executable_match
+      )
+        fail("browser_exit_unconfirmed");
+      return null;
+    }
     return {
       pid: row.pid,
       parentPid: row.parent_pid,
@@ -313,7 +323,7 @@ function browserProcessSnapshot() {
       profileMatch: row.profile_match,
       executableMatch: row.executable_match,
     };
-  });
+  }).filter((row) => row !== null);
 }
 
 function includeOwnedDescendants(rows, owned) {
