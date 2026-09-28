@@ -9,6 +9,7 @@ export const maximumOutboundRedirects = 5;
 export const outboundTargetPolicyLimits = Object.freeze({
   allowedHosts: 256,
   resolvedAddresses: 64,
+  addressLength: 45,
   urlLength: 8_192,
 });
 
@@ -100,7 +101,7 @@ const ipv4Range = (first: string, last: string): readonly [number, number] => {
   return Object.freeze([firstNumber, lastNumber]);
 };
 
-// IANA IPv4 special-purpose ranges that are not globally reachable, plus all multicast.
+// IANA IPv4 special-purpose ranges, including service anycast, plus all multicast.
 const nonPublicIpv4Ranges: readonly (readonly [number, number])[] = Object.freeze([
   ipv4Range("0.0.0.0", "0.255.255.255"),
   ipv4Range("10.0.0.0", "10.255.255.255"),
@@ -108,11 +109,13 @@ const nonPublicIpv4Ranges: readonly (readonly [number, number])[] = Object.freez
   ipv4Range("127.0.0.0", "127.255.255.255"),
   ipv4Range("169.254.0.0", "169.254.255.255"),
   ipv4Range("172.16.0.0", "172.31.255.255"),
-  ipv4Range("192.0.0.0", "192.0.0.8"),
-  ipv4Range("192.0.0.11", "192.0.0.255"),
+  ipv4Range("192.0.0.0", "192.0.0.255"),
   ipv4Range("192.0.2.0", "192.0.2.255"),
+  ipv4Range("192.31.196.0", "192.31.196.255"),
+  ipv4Range("192.52.193.0", "192.52.193.255"),
   ipv4Range("192.88.99.0", "192.88.99.255"),
   ipv4Range("192.168.0.0", "192.168.255.255"),
+  ipv4Range("192.175.48.0", "192.175.48.255"),
   ipv4Range("198.18.0.0", "198.19.255.255"),
   ipv4Range("198.51.100.0", "198.51.100.255"),
   ipv4Range("203.0.113.0", "203.0.113.255"),
@@ -203,9 +206,10 @@ const publicIpv6Prefixes: readonly Ipv6Prefix[] = Object.freeze(
   ].map(([network, length]) => ipv6Prefix(network as string, length as number)),
 );
 
-// The documentation block is carved out of the broader 2001:c00::/23 allocation.
+// Special-purpose blocks inside otherwise allocated global-unicast space.
 const nonPublicIpv6Prefixes: readonly Ipv6Prefix[] = Object.freeze([
   ipv6Prefix("2001:db8::", 32),
+  ipv6Prefix("2620:4f:8000::", 48),
 ]);
 
 const isPublicAddress = (address: string): boolean => {
@@ -311,16 +315,27 @@ export function validateOutboundTarget(
   if (!allowedHosts.has(hostname)) return refuse("host_not_allowed");
   if (
     input.resolvedAddresses.length < 1 ||
-    input.resolvedAddresses.length > outboundTargetPolicyLimits.resolvedAddresses ||
-    input.resolvedAddresses.some((address) => typeof address !== "string" || isIP(address) === 0)
+    input.resolvedAddresses.length > outboundTargetPolicyLimits.resolvedAddresses
   ) {
     return refuse("invalid_dns_answers");
   }
-  if (input.resolvedAddresses.some((address) => !isPublicAddress(address))) {
+  // Spreading makes holes explicit and validates exactly the values returned to the caller.
+  const addresses = [...input.resolvedAddresses];
+  if (
+    addresses.some(
+      (address) =>
+        typeof address !== "string" ||
+        address.length > outboundTargetPolicyLimits.addressLength ||
+        isIP(address) === 0,
+    )
+  ) {
+    return refuse("invalid_dns_answers");
+  }
+  if (addresses.some((address) => !isPublicAddress(address))) {
     return refuse("non_public_address");
   }
 
-  const addresses = Object.freeze([...input.resolvedAddresses]);
+  Object.freeze(addresses);
   const target = Object.freeze({
     url: parsedUrl.href,
     hostname,
