@@ -25,6 +25,7 @@ const result = {
   run_nonce: "",
   fixtures: {},
   checks: {},
+  action_stage: "not_started",
   browser_cleanup: { confirmed: false },
 };
 
@@ -698,7 +699,11 @@ async function navigateTo(pathname, expectedPath) {
   const target = new URL(pathname, currentOrigin).href;
   const response = await devtools.send("Page.navigate", { url: target });
   if (response.errorText) fail("navigation_failed");
-  const deadline = Math.min(Date.now() + NAVIGATION_TIMEOUT_MS, runDeadline);
+  await waitForPathname(expectedPath, NAVIGATION_TIMEOUT_MS);
+}
+
+async function waitForPathname(expectedPath, timeoutMs) {
+  const deadline = Math.min(Date.now() + timeoutMs, runDeadline);
   while (Date.now() < deadline) {
     const frameUrl = await devtools.mainFrameUrl(true);
     if (frameUrl !== "about:blank") {
@@ -913,6 +918,7 @@ async function runBrowserCheck() {
   result.fixtures = inputs.fixtureMap;
   await startBrowser(currentOrigin);
 
+  result.action_stage = "sign_in";
   const signInPath = "/auth/sign-in";
   await navigateTo(signInPath, signInPath);
   const signInButton = 'button,[role="button"]';
@@ -925,16 +931,24 @@ async function runBrowserCheck() {
   );
   result.checks.sign_in = true;
 
+  result.action_stage = "companies_list";
   const companiesPath = `${APP_PATH}/crm_companies`;
   await navigateTo(companiesPath, companiesPath);
   await waitForUniqueControl(signInButton, "New company", "document", 60_000);
   result.checks.companies_list = true;
 
+  result.action_stage = "new_company_click";
   await clickUniqueControl(signInButton, "New company");
+  result.action_stage = "company_create_route";
+  const createPath = `${APP_PATH}/crm_company_create`;
+  await waitForPathname(createPath, 30_000);
+  result.action_stage = "company_name_control";
   await waitForUniqueControl('input[type="text"],input:not([type]),textarea,[role="textbox"]', "Company name", "company-form", 30_000);
+  result.action_stage = "customer_control";
   await waitForUniqueControl('input[type="checkbox"],[role="checkbox"]', "Customer", "company-type", 30_000);
   result.checks.new_company = true;
 
+  result.action_stage = "company_name_value";
   const name = `Codex preview ${result.run_nonce.slice(0, 20)} ${randomUUID()}`;
   const setName = await devtools.evaluate(
     locatorExpression(
@@ -948,6 +962,7 @@ async function runBrowserCheck() {
   if (setName.scopeCount > 1 || setName.count > 1) fail("ambiguous_control");
   if (setName.scopeCount !== 1 || setName.count !== 1 || !setName.set) fail("company_name_unavailable");
 
+  result.action_stage = "customer_value";
   const customerSelector = 'input[type="checkbox"],[role="checkbox"]';
   const customerState = await devtools.evaluate(locatorExpression(customerSelector, "Customer", "company-type"));
   if (customerState.scopeCount > 1 || customerState.count > 1) fail("ambiguous_control");
@@ -958,8 +973,10 @@ async function runBrowserCheck() {
     await waitFor(`(${checked}).checked === true`, 5_000, "company_type_unavailable");
   }
 
+  result.action_stage = "save_control";
   await waitForUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form", 15_000);
   await clickUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form");
+  result.action_stage = "save_confirmation";
   const nameLiteral = JSON.stringify(name);
   await waitFor(
     `location.pathname.includes("crm_company_detail") && (document.body?.innerText ?? "").includes(${nameLiteral})`,
@@ -967,6 +984,7 @@ async function runBrowserCheck() {
     "company_save_unconfirmed",
   );
   result.checks.save_company = true;
+  result.action_stage = "complete";
 }
 
 async function writeResult() {
