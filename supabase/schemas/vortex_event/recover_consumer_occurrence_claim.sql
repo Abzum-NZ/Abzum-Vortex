@@ -88,6 +88,9 @@ begin
 end
 $function$;
 
+alter function vortex_event.recover_consumer_occurrence_claim(text, uuid, integer, uuid)
+  owner to vortex_event_owner;
+
 revoke all on function vortex_event.recover_consumer_occurrence_claim(text, uuid, integer, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_adapter;
