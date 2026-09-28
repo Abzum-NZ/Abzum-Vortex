@@ -28,6 +28,7 @@ export {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+export { readCurrentRecordOwnerGroupsAfterAuthorization } from "./record-owner-groups";
 export {
   createVortexSuperAdministratorAdministrationService,
   type VortexSuperAdministratorAdministrationDependencies,
