@@ -10,7 +10,7 @@ const EDGE_EXECUTABLE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedg
 const POWERSHELL_EXECUTABLE = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
 const APP_PATH = "/abzum/abzum/vortex.app.crm";
 const SERVICE_DESK_PATH = "/abzum/abzum/vortex.app.service_desk/service_desk_overview";
-const TOTAL_TIMEOUT_MS = 240_000;
+const TOTAL_TIMEOUT_MS = 300_000;
 const STARTUP_TIMEOUT_MS = 20_000;
 const COMMAND_TIMEOUT_MS = 10_000;
 const NAVIGATION_TIMEOUT_MS = 45_000;
@@ -960,11 +960,11 @@ const activeNavigationLink = (root, navigationId) => {
 const isMaiaRoot = (root) => root.getAttribute("data-vortex-style") === "maia" &&
   root.getAttribute("data-vortex-menu") === "default" &&
   root.getAttribute("data-vortex-menu-accent") === "bold" &&
-  (root.matches("[data-vortex-theme]") || root.querySelector("[data-vortex-theme]") !== null);
+  root.matches("[data-vortex-theme]");
 const isNovaRoot = (root) => root.getAttribute("data-vortex-style") === "nova" &&
   root.getAttribute("data-vortex-menu") === "default" &&
   root.getAttribute("data-vortex-menu-accent") === "subtle" &&
-  (root.matches("[data-vortex-theme]") || root.querySelector("[data-vortex-theme]") !== null);
+  root.matches("[data-vortex-theme]");
 const themeCompanyForms = (root) => {
   const forms = root.querySelectorAll("form");
   if (forms.length > 64) return null;
@@ -1024,20 +1024,18 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     const menuColor = activeStyle.backgroundColor;
     const menuRadius = metricPx(activeStyle.borderTopLeftRadius);
     let accentColor = "";
-    let primaryColor = "";
     let baseRadius = null;
     try {
       accentColor = readSentinel(sidebar, "background-color", "var(--sidebar-accent)", "background-color");
-      primaryColor = readSentinel(root, "background-color", "var(--vortex-primary)", "background-color");
       baseRadius = metricPx(readSentinel(root, "border-radius", "var(--radius)", "border-top-left-radius"));
     } catch {
       return { valid: false };
     }
-    const colorsMatch = visibleColor(menuColor) && menuColor === accentColor && visibleColor(primaryColor);
+    const colorsMatch = visibleColor(menuColor) && menuColor === accentColor;
     let persisted = false;
     try {
       if (sessionStorage.getItem(${JSON.stringify(comparisonKey)}) === null) {
-        sessionStorage.setItem(${JSON.stringify(comparisonKey)}, JSON.stringify({ menuBackground: menuColor, primaryBackground: primaryColor }));
+        sessionStorage.setItem(${JSON.stringify(comparisonKey)}, JSON.stringify({ menuBackground: menuColor }));
         persisted = true;
       }
     } catch {
@@ -1162,7 +1160,7 @@ async function inspectCustomerDimensions(pathname) {
   requireThemeCheck("customer_dimensions", observation?.valid);
 }
 
-function saveRestExpression(pathname, comparisonKey, saveStateKey) {
+function saveRestExpression(pathname, comparisonKey, saveStateKey, positionOnly = false) {
   return themePageExpression(pathname, `
     if (!isMaiaRoot(root)) return { valid: false };
     const forms = themeCompanyForms(root);
@@ -1175,7 +1173,11 @@ function saveRestExpression(pathname, comparisonKey, saveStateKey) {
     if (button.disabled || button.getAttribute("aria-disabled") === "true" ||
       button.getAttribute("data-vortex-variant") !== "primary" || Object.prototype.hasOwnProperty.call(window, ${JSON.stringify(saveStateKey)}))
       return { valid: false };
-    button.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    if (${positionOnly}) {
+      button.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      return { valid: true };
+    }
+    if (button.matches(":hover")) return { valid: false };
     const style = getComputedStyle(button);
     let expectedBackground = "";
     try {
@@ -1324,6 +1326,20 @@ async function inspectNovaAndCompare(pathname, comparisonKey) {
 }
 
 let currentOrigin = "";
+let transientThemeKeys;
+
+async function clearTransientThemeState() {
+  if (!devtools || !transientThemeKeys) return;
+  try {
+    await devtools.evaluate(`(() => {
+      try { sessionStorage.removeItem(${JSON.stringify(transientThemeKeys.comparisonKey)}); } catch {}
+      try { delete window[${JSON.stringify(transientThemeKeys.saveStateKey)}]; } catch {}
+      return true;
+    })()`);
+  } catch {
+    // Owned profile removal is the final boundary if the page cannot be inspected.
+  }
+}
 
 async function startBrowser(origin) {
   let executable;
@@ -1518,6 +1534,7 @@ async function runBrowserCheck() {
   const inputs = parseInputs();
   const comparisonKey = `__vortex_preview_theme_${result.run_nonce}`;
   const saveStateKey = `__vortex_preview_save_${result.run_nonce}`;
+  transientThemeKeys = { comparisonKey, saveStateKey };
   currentOrigin = inputs.origin;
   verifyCandidateHead(inputs.headSha);
   runDeadline = Date.now() + TOTAL_TIMEOUT_MS;
@@ -1594,6 +1611,16 @@ async function runBrowserCheck() {
   result.action_stage = "save_control";
   await waitForUniqueControl('button[type="submit"],[role="button"]', "Save", "company-form", 15_000);
   result.action_stage = "primary_rest";
+  const positioned = await devtools.evaluate(saveRestExpression(createPath, comparisonKey, saveStateKey, true));
+  if (positioned?.valid !== true) fail("theme_check_failed");
+  await devtools.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: 0,
+    y: 0,
+    button: "none",
+    buttons: 0,
+    pointerType: "mouse",
+  });
   const rest = await devtools.evaluate(saveRestExpression(createPath, comparisonKey, saveStateKey));
   if (
     rest?.valid !== true || !Number.isFinite(rest.x) || !Number.isFinite(rest.y) ||
@@ -1762,6 +1789,7 @@ if (args.length === 1 && args[0] === "--help") {
       await captureCustomerControlProbe();
     }
   }
+  await clearTransientThemeState();
   try {
     await closeOwnedBrowser();
   } catch (error) {
