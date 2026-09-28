@@ -7,6 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 const SCHEMA = "vortex.local-preview.browser.v1";
 const EDGE_EXECUTABLE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+const POWERSHELL_EXECUTABLE = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
 const APP_PATH = "/abzum/abzum/vortex.app.crm";
 const TOTAL_TIMEOUT_MS = 240_000;
 const STARTUP_TIMEOUT_MS = 20_000;
@@ -24,6 +25,7 @@ const result = {
   run_nonce: "",
   fixtures: {},
   checks: {},
+  browser_cleanup: { confirmed: false },
 };
 
 class SafeFailure extends Error {
@@ -242,11 +244,120 @@ function parseActivePort(contents) {
   return { port, browserPath };
 }
 
-async function waitForOwnedDevTools(profilePath, edgeProcess, spawnFailed, deadline) {
+// CIM inspects command lines locally but emits only sanitized process identity facts.
+// The private profile path travels on stdin, never in the probe's command line.
+const PROCESS_SNAPSHOT_SCRIPT = String.raw`
+$ErrorActionPreference = 'Stop'
+$spec = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$profilePattern = '(?i)(?:^|\s)"?--user-data-dir="?' + [regex]::Escape([string]$spec.profile) + '(?="|\s|$)'
+$rows = @(Get-CimInstance Win32_Process | ForEach-Object {
+  $created = if ($null -eq $_.CreationDate) { $null } else { $_.CreationDate.ToUniversalTime().ToString('o') }
+  $commandLine = [string]$_.CommandLine
+  [pscustomobject]@{
+    pid = [int]$_.ProcessId
+    parent_pid = [int]$_.ParentProcessId
+    name = [string]$_.Name
+    created_utc = $created
+    profile_match = [regex]::IsMatch($commandLine, $profilePattern)
+    executable_match = [string]::Equals([string]$_.ExecutablePath, [string]$spec.executable, [StringComparison]::OrdinalIgnoreCase)
+  }
+})
+@{ rows = $rows } | ConvertTo-Json -Depth 4 -Compress
+`;
+
+function browserProcessSnapshot() {
+  const probeEnvironment = {};
+  for (const key of [
+    "SystemRoot", "WINDIR", "PATH", "Path", "PSModulePath", "TEMP", "TMP",
+    "USERPROFILE", "APPDATA", "LOCALAPPDATA", "ComSpec",
+  ])
+    if (process.env[key] !== undefined) probeEnvironment[key] = process.env[key];
+  const probe = spawnSync(
+    POWERSHELL_EXECUTABLE,
+    ["-NoProfile", "-NonInteractive", "-Command", PROCESS_SNAPSHOT_SCRIPT],
+    {
+      input: JSON.stringify({ profile: profilePath, executable: EDGE_EXECUTABLE.replaceAll("/", "\\") }),
+      encoding: "utf8",
+      env: probeEnvironment,
+      windowsHide: true,
+      timeout: 5_000,
+      maxBuffer: 1024 * 1024,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
+  if (probe.error || probe.status !== 0) fail("browser_exit_unconfirmed");
+  let value;
+  try {
+    value = JSON.parse(probe.stdout.trim());
+  } catch {
+    fail("browser_exit_unconfirmed");
+  }
+  if (!Array.isArray(value?.rows)) fail("browser_exit_unconfirmed");
+  return value.rows.map((row) => {
+    if (
+      !Number.isInteger(row?.pid) || row.pid < 1 ||
+      !Number.isInteger(row.parent_pid) || row.parent_pid < 0 ||
+      typeof row.name !== "string" ||
+      typeof row.profile_match !== "boolean" ||
+      typeof row.executable_match !== "boolean" ||
+      (row.created_utc !== null && typeof row.created_utc !== "string")
+    )
+      fail("browser_exit_unconfirmed");
+    const createdAt = row.created_utc === null ? null : Date.parse(row.created_utc);
+    if (createdAt !== null && !Number.isFinite(createdAt)) fail("browser_exit_unconfirmed");
+    return {
+      pid: row.pid,
+      parentPid: row.parent_pid,
+      name: row.name,
+      createdAt,
+      profileMatch: row.profile_match,
+      executableMatch: row.executable_match,
+    };
+  });
+}
+
+function includeOwnedDescendants(rows, owned) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      const parentCreatedAt = owned.get(row.parentPid);
+      if (
+        parentCreatedAt === undefined || owned.has(row.pid) ||
+        row.createdAt === null || row.createdAt < parentCreatedAt
+      )
+        continue;
+      owned.set(row.pid, row.createdAt);
+      changed = true;
+    }
+  }
+}
+
+async function waitForOwnedBrowserRoot(deadline) {
+  while (Date.now() < deadline) {
+    const rows = browserProcessSnapshot();
+    const roots = rows.filter((row) =>
+      row.name.toLowerCase() === "msedge.exe" && row.executableMatch && row.profileMatch &&
+      row.createdAt !== null && row.createdAt >= browserSpawnStartedAt - 2_000 &&
+      (row.parentPid === process.pid || row.parentPid === edgeProcess?.pid)
+    );
+    if (roots.length === 1) {
+      const owned = new Map([[roots[0].pid, roots[0].createdAt]]);
+      includeOwnedDescendants(rows, owned);
+      if (rows.every((row) => !row.profileMatch || owned.get(row.pid) === row.createdAt)) {
+        ownedProcessIdentities = owned;
+        return roots[0];
+      }
+    }
+    await sleep(Math.min(POLL_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+  }
+  fail("browser_start_failed");
+}
+
+async function waitForOwnedDevTools(profilePath, spawnFailed, deadline) {
   const activePortPath = join(profilePath, "DevToolsActivePort");
   while (Date.now() < deadline) {
-    if (spawnFailed() || edgeProcess.exitCode !== null || edgeProcess.signalCode !== null)
-      fail("browser_start_failed");
+    if (spawnFailed()) fail("browser_start_failed");
     try {
       return parseActivePort(await readFile(activePortPath, "utf8"));
     } catch {
@@ -277,10 +388,9 @@ function ownedDevToolsSocket(rawSocketUrl, port, expectedPath, code) {
   return `ws://127.0.0.1:${port}${expectedPath}`;
 }
 
-async function waitForPageTarget(port, browserPath, edgeProcess, deadline) {
+async function waitForPageTarget(port, browserPath, deadline) {
   const base = `http://127.0.0.1:${port}`;
   while (Date.now() < deadline) {
-    if (edgeProcess.exitCode !== null || edgeProcess.signalCode !== null) fail("browser_start_failed");
     try {
       const versionResponse = await fetch(`${base}/json/version`, {
         redirect: "error",
@@ -598,11 +708,13 @@ async function startBrowser(origin) {
   if (!executable.isFile()) fail("edge_not_found");
 
   profilePath = await mkdtemp(join(tmpdir(), PROFILE_PREFIX));
+  browserSpawnStartedAt = Date.now();
   try {
     edgeProcess = spawn(
       EDGE_EXECUTABLE,
       [
         "--headless=new",
+        "--edge-skip-compat-layer-relaunch",
         "--remote-debugging-address=127.0.0.1",
         "--remote-debugging-port=0",
         `--user-data-dir=${profilePath}`,
@@ -626,10 +738,11 @@ async function startBrowser(origin) {
   });
 
   const startupDeadline = Math.min(Date.now() + STARTUP_TIMEOUT_MS, runDeadline);
-  const activePort = await waitForOwnedDevTools(profilePath, edgeProcess, () => spawnFailed, startupDeadline);
+  const activePort = await waitForOwnedDevTools(profilePath, () => spawnFailed, startupDeadline);
+  await waitForOwnedBrowserRoot(startupDeadline);
   const port = activePort.port;
+  const socketUrl = await waitForPageTarget(port, activePort.browserPath, startupDeadline);
   browserEndpoint = `ws://127.0.0.1:${port}${activePort.browserPath}`;
-  const socketUrl = await waitForPageTarget(port, activePort.browserPath, edgeProcess, startupDeadline);
   let socket;
   try {
     socket = new WebSocket(socketUrl);
@@ -643,22 +756,19 @@ async function startBrowser(origin) {
   await devtools.send("Network.enable");
 }
 
-async function delayForExit(child, timeoutMs) {
-  if (!child || child.pid === undefined) return spawnFailed;
-  if (child.exitCode !== null || child.signalCode !== null) return true;
-  return new Promise((resolveExit) => {
-    let settled = false;
-    const finish = (exited) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      child.removeListener("exit", onExit);
-      resolveExit(exited);
-    };
-    const onExit = () => finish(true);
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    child.once("exit", onExit);
-  });
+async function waitForOwnedTreeExit(deadline) {
+  let clearSnapshots = 0;
+  while (Date.now() < deadline) {
+    const rows = browserProcessSnapshot();
+    includeOwnedDescendants(rows, ownedProcessIdentities);
+    const ownedStillLive = rows.some((row) => ownedProcessIdentities.get(row.pid) === row.createdAt);
+    const profileStillUsed = rows.some((row) => row.profileMatch);
+    const launcherStillLive = edgeProcess?.exitCode === null && edgeProcess?.signalCode === null;
+    clearSnapshots = ownedStillLive || profileStillUsed || launcherStillLive ? 0 : clearSnapshots + 1;
+    if (clearSnapshots >= 2) return true;
+    await sleep(Math.min(POLL_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+  }
+  return false;
 }
 
 async function removeOwnedProfile() {
@@ -688,35 +798,85 @@ async function removeOwnedProfile() {
   } catch {
     fail("profile_cleanup_failed");
   }
+  try {
+    await lstat(profilePath);
+    fail("profile_cleanup_failed");
+  } catch (error) {
+    if (error instanceof SafeFailure || error?.code !== "ENOENT") fail("profile_cleanup_failed");
+  }
+}
+
+async function verifiedCleanupEndpoint() {
+  if (!browserEndpoint) return false;
+  const endpoint = new URL(browserEndpoint);
+  try {
+    const response = await fetch(`http://127.0.0.1:${endpoint.port}/json/version`, {
+      redirect: "error",
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!response.ok) return false;
+    const version = await response.json();
+    ownedDevToolsSocket(
+      version?.webSocketDebuggerUrl,
+      Number(endpoint.port),
+      endpoint.pathname,
+      "devtools_instance_mismatch",
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function closeOwnedBrowser() {
-  let exited = !edgeProcess || (spawnFailed && !browserSpawned);
-  if (edgeProcess && (edgeProcess.exitCode !== null || edgeProcess.signalCode !== null)) exited = true;
-  if (edgeProcess && browserSpawned && !exited) {
-    if (browserEndpoint) {
-      let cleanupClient;
-      try {
-        const cleanupSocket = new WebSocket(browserEndpoint);
-        cleanupClient = new DevToolsClient(cleanupSocket, currentOrigin);
-        await cleanupClient.waitUntilOpen(Date.now() + 3_000);
-        await cleanupClient.send("Browser.close", {}, 3_000);
-      } catch {
-        // Keep an uncertain browser and its private profile for the owner to recover.
-      } finally {
-        cleanupClient?.closeSocket();
-      }
+  if (!profilePath) {
+    result.browser_cleanup.confirmed = true;
+    return;
+  }
+  if (!browserSpawned && (spawnFailed || !edgeProcess)) {
+    await removeOwnedProfile();
+    result.browser_cleanup.confirmed = true;
+    return;
+  }
+  if (!ownedProcessIdentities) {
+    devtools?.closeSocket();
+    edgeProcess?.unref();
+    result.reason = "browser_exit_unconfirmed";
+    return;
+  }
+  const beforeClose = browserProcessSnapshot();
+  includeOwnedDescendants(beforeClose, ownedProcessIdentities);
+  if (beforeClose.some((row) => row.profileMatch && ownedProcessIdentities.get(row.pid) !== row.createdAt)) {
+    devtools?.closeSocket();
+    edgeProcess?.unref();
+    result.reason = "browser_exit_unconfirmed";
+    return;
+  }
+  const browserRootPid = ownedProcessIdentities.keys().next().value;
+  const browserRootLive = beforeClose.some((row) =>
+    row.pid === browserRootPid && ownedProcessIdentities.get(row.pid) === row.createdAt && row.profileMatch
+  );
+  if (browserRootLive && await verifiedCleanupEndpoint()) {
+    let cleanupClient;
+    try {
+      const cleanupSocket = new WebSocket(browserEndpoint);
+      cleanupClient = new DevToolsClient(cleanupSocket, currentOrigin);
+      await cleanupClient.waitUntilOpen(Date.now() + 3_000);
+      await cleanupClient.send("Browser.close", {}, 3_000);
+    } catch {
+      // A failed close request is not exit proof; inspect the owned process tree below.
+    } finally {
+      cleanupClient?.closeSocket();
     }
-    exited = await delayForExit(edgeProcess, 5_000);
   }
   devtools?.closeSocket();
-  if (!exited) {
+  if (!(await waitForOwnedTreeExit(Date.now() + 20_000))) {
     edgeProcess?.unref();
-    result.result = "FAIL";
     result.reason = "browser_exit_unconfirmed";
     return;
   }
   await removeOwnedProfile();
+  result.browser_cleanup.confirmed = true;
 }
 
 async function runBrowserCheck() {
@@ -790,6 +950,7 @@ async function writeResult() {
     result.checks.companies_list === true &&
     result.checks.new_company === true &&
     result.checks.save_company === true &&
+    result.browser_cleanup.confirmed === true &&
     !result.reason;
   result.result = passed ? "PASS" : "FAIL";
   if (!passed && !result.reason) result.reason = failureCode;
@@ -802,6 +963,8 @@ let profilePath;
 let browserEndpoint = "";
 let browserSpawned = false;
 let spawnFailed = false;
+let browserSpawnStartedAt = 0;
+let ownedProcessIdentities;
 let failureCode = "internal_error";
 
 const args = process.argv.slice(2);
@@ -828,6 +991,8 @@ if (args.length === 1 && args[0] === "--help") {
     failureCode = safeReason(error, "profile_cleanup_failed");
     result.result = "FAIL";
     result.reason = failureCode;
+    devtools?.closeSocket();
+    edgeProcess?.unref();
   }
   await writeResult();
 }
