@@ -5,14 +5,14 @@ import {
   type RecordTypeDefinitionV3,
   type SaveRecordCommandV2,
 } from "@vortex/contracts";
-import { evaluateRecordCalculationsV2 } from "./calculations";
+import { evaluateRecordCalculations } from "./calculations";
 import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
   type RecordFieldValuePendingCheck,
   type PrepareRecordFieldValuesV2Result,
 } from "./field-values";
-import { evaluateRecordTotalsV2 } from "./totals";
+import { evaluateRecordTotals } from "./totals";
 
 export type LockedRelationshipTotalRecord = Readonly<{
   recordKey: string;
@@ -286,7 +286,7 @@ export const calculateLockedRelationshipTotalSave = (
     const record = records.get(node.recordKey)!;
     const values = valuesByRecord.get(node.recordKey)!;
     if (node.field.type === "total") {
-      const evaluated = evaluateRecordTotalsV2({
+      const evaluated = evaluateRecordTotals({
         recordType: totalRecordType(record.recordType, node.field.fieldId),
         relationshipSources: record.relationshipSources.map((source) => ({
           relationshipId: source.relationshipId,
@@ -312,7 +312,7 @@ export const calculateLockedRelationshipTotalSave = (
       const evaluationFieldIds: ReadonlySet<string> = new Set(
         evaluationRecordType.fields.map((field) => field.fieldId),
       );
-      const evaluated = evaluateRecordCalculationsV2({
+      const evaluated = evaluateRecordCalculations({
         recordType: evaluationRecordType,
         authoritativeFieldValues: Object.fromEntries(
           Object.entries(values).filter(([fieldId]) => evaluationFieldIds.has(fieldId)),
