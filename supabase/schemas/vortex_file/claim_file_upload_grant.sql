@@ -76,3 +76,5 @@ grant execute on function vortex_file.claim_file_upload_grant(uuid) to vortex_re
 
 comment on function vortex_file.claim_file_upload_grant(uuid) is
   'Issues the one Storage credential of a current, unexpired grant for the uploader of a pending upload.';
+
+alter function vortex_file.claim_file_upload_grant(uuid) owner to vortex_file_owner;
