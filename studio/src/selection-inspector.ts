@@ -169,8 +169,8 @@ const placementCandidates = (
 
   source.body.pages.forEach((page, index) => {
     const pagePath = ["body", "pages", index] as const;
-    const composition = page.composition;
-    if ("step_content" in composition) {
+    if (page.type === "guided_form") {
+      const composition = page.composition;
       for (const [stepAlias, content] of Object.entries(composition.step_content)) {
         if (composition.shell_kind === "default") {
           visitSlot(content, [...pagePath, "composition", "step_content", stepAlias]);
@@ -185,10 +185,10 @@ const placementCandidates = (
             ]);
         }
       }
-    } else if (composition.shell_kind === "default") {
-      visitSlot(composition.main, [...pagePath, "composition", "main"]);
+    } else if (page.composition.shell_kind === "default") {
+      visitSlot(page.composition.main, [...pagePath, "composition", "main"]);
     } else {
-      for (const [slotAlias, slot] of Object.entries(composition.content))
+      for (const [slotAlias, slot] of Object.entries(page.composition.content))
         visitSlot(slot, [...pagePath, "composition", "content", slotAlias]);
     }
   });
