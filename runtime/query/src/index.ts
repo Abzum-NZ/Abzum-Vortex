@@ -48,6 +48,13 @@ export {
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
 
+export {
+  createViewerSafeRecordLinkReadService,
+  viewerSafeRecordLinkTitleReadResultSchema,
+  type ViewerSafeRecordLinkReadService,
+  type ViewerSafeRecordLinkTitleReadResult,
+} from "./viewer-safe-record-link-read";
+
 export type { QueryContinuationKey } from "./continuation-token";
 
 export {
