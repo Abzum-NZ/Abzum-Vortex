@@ -20,8 +20,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -30,3 +28,4 @@ grant execute on function vortex_connection.grant_connection_application_for_adm
 
 comment on function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) is
   'Human request entry point for granting an application use of a connection instance; delegates to grant_connection_application_internal.';
+alter function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;

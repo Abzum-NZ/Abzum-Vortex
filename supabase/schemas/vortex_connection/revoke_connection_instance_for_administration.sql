@@ -20,8 +20,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -30,3 +28,4 @@ grant execute on function vortex_connection.revoke_connection_instance_for_admin
 
 comment on function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) is
   'Human request entry point for disabling a connection instance at an expected revision; delegates to revoke_connection_instance_internal.';
+alter function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) owner to vortex_connection_owner;

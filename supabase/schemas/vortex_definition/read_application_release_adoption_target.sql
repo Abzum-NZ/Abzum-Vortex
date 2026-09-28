@@ -88,8 +88,6 @@ begin
 end
 $function$;
 
-alter function vortex_definition.read_application_release_adoption_target(uuid) owner to vortex_definition_owner;
-
 revoke all on function vortex_definition.read_application_release_adoption_target(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 
@@ -98,3 +96,4 @@ grant execute on function vortex_definition.read_application_release_adoption_ta
 
 comment on function vortex_definition.read_application_release_adoption_target(uuid) is
   'Returns the published-current release identity an organisation with an installed application may deliberately adopt, for a caller holding platform.organization.applications.manage.';
+alter function vortex_definition.read_application_release_adoption_target(uuid) owner to vortex_definition_owner;

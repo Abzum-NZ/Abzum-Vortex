@@ -90,8 +90,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) owner to vortex_connection_owner;
-
 comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is null;
 
 revoke all on function
@@ -99,3 +97,4 @@ revoke all on function
 
 grant execute on function
   vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) to vortex_runtime;
+alter function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) owner to vortex_connection_owner;

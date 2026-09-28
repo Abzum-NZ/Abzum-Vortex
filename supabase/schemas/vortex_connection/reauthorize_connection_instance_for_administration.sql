@@ -24,8 +24,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamptz)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -34,3 +32,4 @@ grant execute on function vortex_connection.reauthorize_connection_instance_for_
 
 comment on function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamptz) is
   'Human request entry point for a revision-checked credential rotation or reauthorisation; delegates to reauthorize_connection_instance_internal.';
+alter function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;

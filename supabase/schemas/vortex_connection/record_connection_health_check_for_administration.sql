@@ -22,8 +22,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -32,3 +30,4 @@ grant execute on function vortex_connection.record_connection_health_check_for_a
 
 comment on function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) is
   'Human request entry point for recording a revision-checked connection health outcome; delegates to record_connection_health_check_internal.';
+alter function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) owner to vortex_connection_owner;

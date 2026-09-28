@@ -165,11 +165,10 @@ exception
 end
 $function$;
 
-alter function vortex_connection.assert_connection_administration_authority(jsonb) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.assert_connection_administration_authority(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_connection.assert_connection_administration_authority(jsonb) is null;
+alter function vortex_connection.assert_connection_administration_authority(jsonb) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.enforce_grant_application_root.
 create or replace function vortex_connection.enforce_grant_application_root()
@@ -1303,13 +1302,14 @@ begin
 end
 $function$;
 
-alter function vortex_connection.assert_human_administration_request() owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.assert_human_administration_request()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_connection.assert_human_administration_request()
+  to postgres;
 
 comment on function vortex_connection.assert_human_administration_request() is
   'Refuses any caller whose request context is not a human request; used by the connection administration entry points.';
+alter function vortex_connection.assert_human_administration_request() owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.grant_connection_application_for_administration.
 create or replace function vortex_connection.grant_connection_application_for_administration(
@@ -1334,8 +1334,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1344,6 +1342,7 @@ grant execute on function vortex_connection.grant_connection_application_for_adm
 
 comment on function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) is
   'Human request entry point for granting an application use of a connection instance; delegates to grant_connection_application_internal.';
+alter function vortex_connection.grant_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.reauthorize_connection_instance_for_administration.
 create or replace function vortex_connection.reauthorize_connection_instance_for_administration(
@@ -1372,8 +1371,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamptz)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1382,6 +1379,7 @@ grant execute on function vortex_connection.reauthorize_connection_instance_for_
 
 comment on function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamptz) is
   'Human request entry point for a revision-checked credential rotation or reauthorisation; delegates to reauthorize_connection_instance_internal.';
+alter function vortex_connection.reauthorize_connection_instance_for_administration(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.reauthorize_connection_instance_internal.
 create or replace function vortex_connection.reauthorize_connection_instance_internal(
@@ -1469,8 +1467,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
-
 comment on function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) is null;
 
 revoke all on function
@@ -1478,6 +1474,7 @@ revoke all on function
 
 grant execute on function
   vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamptz) to vortex_runtime;
+alter function vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamp with time zone) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.record_connection_health_check_for_administration.
 create or replace function vortex_connection.record_connection_health_check_for_administration(
@@ -1504,8 +1501,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1514,6 +1509,7 @@ grant execute on function vortex_connection.record_connection_health_check_for_a
 
 comment on function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) is
   'Human request entry point for recording a revision-checked connection health outcome; delegates to record_connection_health_check_internal.';
+alter function vortex_connection.record_connection_health_check_for_administration(uuid, bigint, text, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.record_connection_health_check_internal.
 create or replace function vortex_connection.record_connection_health_check_internal(
@@ -1608,8 +1604,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) owner to vortex_connection_owner;
-
 comment on function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) is null;
 
 revoke all on function
@@ -1617,6 +1611,7 @@ revoke all on function
 
 grant execute on function
   vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) to vortex_runtime;
+alter function vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.register_connection_instance_for_administration.
 create or replace function vortex_connection.register_connection_instance_for_administration(
@@ -1652,8 +1647,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamptz)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1662,6 +1655,7 @@ grant execute on function vortex_connection.register_connection_instance_for_adm
 
 comment on function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamptz) is
   'Human request entry point for registering a connection instance in the request context organisation; delegates to register_connection_instance_internal and returns the new revision.';
+alter function vortex_connection.register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.register_connection_instance_internal.
 create or replace function vortex_connection.register_connection_instance_internal(
@@ -1734,8 +1728,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;
-
 comment on function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) is null;
 
 revoke all on function
@@ -1743,6 +1735,7 @@ revoke all on function
 
 grant execute on function
   vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz) to vortex_runtime;
+alter function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.revoke_connection_application_for_administration.
 create or replace function vortex_connection.revoke_connection_application_for_administration(
@@ -1767,8 +1760,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1777,6 +1768,7 @@ grant execute on function vortex_connection.revoke_connection_application_for_ad
 
 comment on function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid) is
   'Human request entry point for revoking an application grant on a connection instance; delegates to revoke_connection_application_internal.';
+alter function vortex_connection.revoke_connection_application_for_administration(uuid, uuid, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.revoke_connection_application_internal.
 create or replace function vortex_connection.revoke_connection_application_internal(
@@ -1847,8 +1839,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) owner to vortex_connection_owner;
-
 comment on function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) is null;
 
 revoke all on function
@@ -1856,6 +1846,7 @@ revoke all on function
 
 grant execute on function
   vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) to vortex_runtime;
+alter function vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.revoke_connection_instance_for_administration.
 create or replace function vortex_connection.revoke_connection_instance_for_administration(
@@ -1880,8 +1871,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -1890,6 +1879,7 @@ grant execute on function vortex_connection.revoke_connection_instance_for_admin
 
 comment on function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) is
   'Human request entry point for disabling a connection instance at an expected revision; delegates to revoke_connection_instance_internal.';
+alter function vortex_connection.revoke_connection_instance_for_administration(uuid, bigint, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.revoke_connection_instance_internal.
 create or replace function vortex_connection.revoke_connection_instance_internal(
@@ -1966,8 +1956,6 @@ begin
 end
 $function$;
 
-alter function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) owner to vortex_connection_owner;
-
 comment on function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) is null;
 
 revoke all on function
@@ -1975,6 +1963,7 @@ revoke all on function
 
 grant execute on function
   vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) to vortex_runtime;
+alter function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_connection.validated_administration_context.
 create or replace function vortex_connection.validated_administration_context(p_organization_id uuid)
@@ -2004,13 +1993,14 @@ begin
 end;
 $function$;
 
-alter function vortex_connection.validated_administration_context(uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.validated_administration_context(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_connection.validated_administration_context(uuid)
+  to postgres;
 
 comment on function vortex_connection.validated_administration_context(uuid) is
   'Returns a matching validated system context or a matching human context with connection administration authority.';
+alter function vortex_connection.validated_administration_context(uuid) owner to vortex_connection_owner;
 
 -- Canonical vortex_definition.read_application_release_adoption_release_set.
 create or replace function vortex_definition.read_application_release_adoption_release_set(
@@ -2075,8 +2065,6 @@ begin
 end
 $function$;
 
-alter function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) owner to vortex_definition_owner;
-
 revoke all on function vortex_definition.read_application_release_adoption_release_set(uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime;
 
@@ -2085,6 +2073,7 @@ grant execute on function vortex_definition.read_application_release_adoption_re
 
 comment on function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) is
   'Returns the exact bound Application and Module release set for one root and revision to a caller holding platform.organization.applications.manage in the validated human application context.';
+alter function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) owner to vortex_definition_owner;
 
 -- Canonical vortex_definition.read_application_release_adoption_target.
 create or replace function vortex_definition.read_application_release_adoption_target(
@@ -2177,8 +2166,6 @@ begin
 end
 $function$;
 
-alter function vortex_definition.read_application_release_adoption_target(uuid) owner to vortex_definition_owner;
-
 revoke all on function vortex_definition.read_application_release_adoption_target(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 
@@ -2187,6 +2174,7 @@ grant execute on function vortex_definition.read_application_release_adoption_ta
 
 comment on function vortex_definition.read_application_release_adoption_target(uuid) is
   'Returns the published-current release identity an organisation with an installed application may deliberately adopt, for a caller holding platform.organization.applications.manage.';
+alter function vortex_definition.read_application_release_adoption_target(uuid) owner to vortex_definition_owner;
 
 -- Canonical vortex_connection.grant_connection_application_internal.
 create or replace function vortex_connection.grant_connection_application_internal(
@@ -2298,6 +2286,7 @@ grant execute on function
 grant execute on function vortex_connection.grant_connection_application_internal(uuid, uuid, uuid) to vortex_connection_owner;
 
 -- Canonical vortex_access.evaluate_organization_permission_eligibility.
+set local role vortex_access_owner;
 create or replace function vortex_access.evaluate_organization_permission_eligibility(
   p_declaration jsonb
 )
@@ -2952,6 +2941,7 @@ comment on function vortex_access.evaluate_organization_permission_eligibility(j
 
 alter function vortex_access.evaluate_organization_permission_eligibility(jsonb)
   owner to vortex_access_owner;
+reset role;
 
 -- Canonical vortex_context.validated_service_context.
 create or replace function vortex_context.validated_service_context()
@@ -2988,6 +2978,7 @@ comment on function vortex_context.validated_service_context() is
   'Dispatches an established request context through the authoritative human or system validator.';
 
 -- Canonical vortex_module.read_active_installation_for_scope_internal.
+set local role vortex_module_owner;
 create or replace function vortex_module.read_active_installation_for_scope_internal(
   p_organization_id uuid,
   p_application_root_id uuid
@@ -3118,6 +3109,7 @@ grant execute on function vortex_module.read_active_installation_for_scope_inter
 
 comment on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid) is
   'Resolves the complete exact active Module binding set for one already-validated organisation/Application scope.';
+reset role;
 
 -- Grant access to the non-canonical cross-schema helper functions used by these definers.
 grant usage on schema vortex_context, vortex_access to vortex_connection_owner;

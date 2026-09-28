@@ -25,10 +25,11 @@ begin
 end;
 $function$;
 
-alter function vortex_connection.validated_administration_context(uuid) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.validated_administration_context(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_connection.validated_administration_context(uuid)
+  to postgres;
 
 comment on function vortex_connection.validated_administration_context(uuid) is
   'Returns a matching validated system context or a matching human context with connection administration authority.';
+alter function vortex_connection.validated_administration_context(uuid) owner to vortex_connection_owner;

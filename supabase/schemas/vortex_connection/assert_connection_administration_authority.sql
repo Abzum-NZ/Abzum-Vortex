@@ -46,8 +46,7 @@ exception
 end
 $function$;
 
-alter function vortex_connection.assert_connection_administration_authority(jsonb) owner to vortex_connection_owner;
-
 revoke all on function vortex_connection.assert_connection_administration_authority(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_connection.assert_connection_administration_authority(jsonb) is null;
+alter function vortex_connection.assert_connection_administration_authority(jsonb) owner to vortex_connection_owner;
