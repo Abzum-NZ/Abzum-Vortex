@@ -150,5 +150,19 @@ export const adoptApplicationRelease = async (
     activation.applicationReleaseRevision <= activation.expectedActiveReleaseRevision
   )
     throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_STALE");
-  await coordinator().activate(session, activation);
+  const installationCoordinator = coordinator();
+  await installationCoordinator.prepare(session, {
+    organizationId: activation.organizationId,
+    applicationRootId: activation.applicationRootId,
+    applicationReleaseRevision: activation.applicationReleaseRevision,
+    expectedActiveReleaseRevision: activation.expectedActiveReleaseRevision,
+  });
+  try {
+    await installationCoordinator.activate(session, activation);
+  } catch (error) {
+    // A failed switch leaves the previous release active. Remove this exact staged candidate so
+    // its bindings do not remain after the adoption attempt has ended.
+    await installationCoordinator.discardPreparation(session, activation);
+    throw error;
+  }
 };
