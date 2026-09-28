@@ -17,7 +17,7 @@ import {
 } from "./identifiers";
 import type { RuleGraphNode } from "./rule-graph-contracts";
 
-/**
+/*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building
  * block of every flow is registered once, with where it may run, what it does to the world, its
  * typed properties, outputs and outcomes, its default policy and how it compiles for Kestra.
@@ -28,8 +28,6 @@ import type { RuleGraphNode } from "./rule-graph-contracts";
  * so publication can check the run location of every task in a flow; their shapes stay in
  * `flow-contracts.ts`.
  */
-export const flowTaskRegistryContractVersion = "1.0.0" as const;
-
 /**
  * Where a task may run.
  * - `browser`: in the page; interface and pure tasks only.
@@ -752,22 +750,6 @@ export const flowTaskRegistry: Readonly<Record<FlowTaskTypeKey, FlowTaskTypeDefi
       ]),
     ) as Record<FlowTaskTypeKey, FlowTaskTypeDefinition>,
   );
-
-/** Checks the catalogue against its own schema; a failure names the task type and the rule. */
-export const validateFlowTaskRegistry = (
-  registry: Readonly<Record<string, FlowTaskTypeDefinition>> = flowTaskRegistry,
-): { type: string; message: string }[] =>
-  Object.entries(registry).flatMap(([key, definition]) => {
-    const result = flowTaskTypeDefinitionSchema.safeParse(definition);
-    const issues: { type: string; message: string }[] = result.success
-      ? []
-      : result.error.issues.map((issue) => ({
-          type: key,
-          message: `${issue.path.join(".")}: ${issue.message}`,
-        }));
-    if (definition.type !== key) issues.push({ type: key, message: "type: must equal its key" });
-    return issues;
-  });
 
 // ─── Current step catalogues, each mapped to exactly one task type ───────────────────────────
 

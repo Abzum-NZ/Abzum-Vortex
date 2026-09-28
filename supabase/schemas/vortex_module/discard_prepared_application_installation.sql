@@ -227,7 +227,7 @@ exception
   when invalid_text_representation or numeric_value_out_of_range then
     raise exception using errcode = '22023',
       message = 'Application installation discard command is invalid';
-end
+end;
 $function$;
 
 alter function vortex_module.discard_prepared_application_installation(uuid,bigint) owner to vortex_module_owner;

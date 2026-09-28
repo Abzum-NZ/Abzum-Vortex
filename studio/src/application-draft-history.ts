@@ -5,23 +5,18 @@ import {
   type ApplicationSourceDocumentV2,
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
+  platformIdSchema,
 } from "@vortex/contracts";
-
-type DeepReadonly<Value> = Value extends (...arguments_: never[]) => unknown
-  ? Value
-  : Value extends readonly unknown[]
-    ? { readonly [Index in keyof Value]: DeepReadonly<Value[Index]> }
-    : Value extends object
-      ? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
-      : Value;
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
-export type StudioApplicationDraftSaveCommand = Readonly<
-  Pick<SaveDefinitionDraftCommand, "rootId" | "expectedDraftRevision"> & {
-    source: ApplicationSourceDocumentV2;
-  }
->;
+type StudioApplicationSourceSnapshot = Readonly<ApplicationSourceDocumentV2>;
+
+export type StudioApplicationDraftSaveCommand = Readonly<{
+  rootId: SaveDefinitionDraftCommand["rootId"];
+  expectedDraftRevision: SaveDefinitionDraftCommand["expectedDraftRevision"];
+  source: ApplicationSourceDocumentV2;
+}>;
 
 /** The only write boundary used by Studio application draft history. */
 export interface StudioApplicationDefinitionDraftPort {
@@ -38,7 +33,7 @@ export type StudioApplicationDraftSaveOutcome =
 export type StudioApplicationDraftHistoryState = Readonly<{
   rootId: ApplicationRootId;
   draftRevision: number;
-  source: DeepReadonly<ApplicationSourceDocumentV2>;
+  source: StudioApplicationSourceSnapshot;
   canUndo: boolean;
   canRedo: boolean;
   isDirty: boolean;
@@ -63,23 +58,26 @@ export interface StudioApplicationDraftHistoryController {
 
 const snapshotSource = (
   source: ApplicationSourceDocumentV2,
-): DeepReadonly<ApplicationSourceDocumentV2> => {
+): StudioApplicationSourceSnapshot => {
   // Definition persists authored source as JSON, which omits optional undefined properties.
-  const snapshot = JSON.parse(JSON.stringify(source)) as ApplicationSourceDocumentV2;
-  return deepFreeze(snapshot);
+  const serialized: unknown = JSON.parse(JSON.stringify(source));
+  return deepFreeze(applicationSourceDocumentV2Schema.parse(serialized));
 };
 
-const deepFreeze = <Value>(value: Value): DeepReadonly<Value> => {
+const deepFreeze = <Value>(value: Value): Readonly<Value> => {
   if (value !== null && typeof value === "object") {
     for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
+    return Object.freeze(value);
   }
-  return value as DeepReadonly<Value>;
+  return value;
 };
 
 const mutableSourceCopy = (
-  source: DeepReadonly<ApplicationSourceDocumentV2>,
-): ApplicationSourceDocumentV2 => structuredClone(source) as ApplicationSourceDocumentV2;
+  source: StudioApplicationSourceSnapshot,
+): ApplicationSourceDocumentV2 => {
+  const cloned: unknown = structuredClone(source);
+  return applicationSourceDocumentV2Schema.parse(cloned);
+};
 
 const sameValue = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
@@ -211,7 +209,7 @@ export const createStudioApplicationDraftHistoryController = (
       const expectedDraftRevision = draftRevision;
       const submittedSource = history[historyIndex]!;
       const command: StudioApplicationDraftSaveCommand = Object.freeze({
-        rootId: rootId as SaveDefinitionDraftCommand["rootId"],
+        rootId: platformIdSchema.parse(rootId),
         expectedDraftRevision,
         source: mutableSourceCopy(submittedSource),
       });
