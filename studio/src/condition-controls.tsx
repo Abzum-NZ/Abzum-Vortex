@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   builderKeySchema,
   conditionMaximumNestingDepth,
@@ -91,6 +92,8 @@ export type StudioConditionControlsContext = Readonly<{
   parameterDeclarations: readonly StudioConditionParameterDeclaration[];
   /** Literal values are opt-in so each host can apply its own authoring policy. */
   allowLiteralValues: boolean;
+  /** An omitted operator list permits the current Rule V2 operator catalogue. */
+  allowedOperators?: readonly StudioConditionOperator[];
 }>;
 
 export type StudioConditionOperator = ComparisonCondition["operator"];
@@ -282,6 +285,21 @@ const contextIssues = (
     typeof context.allowLiteralValues !== "boolean"
   )
     return [makeIssue("invalid_context", [], "The condition host context is invalid")];
+
+  if (context.allowedOperators !== undefined) {
+    if (!Array.isArray(context.allowedOperators))
+      issues.push(makeIssue("invalid_context", ["allowedOperators"], "Allowed operators must be a list"));
+    else {
+      const seenOperators = new Set<string>();
+      for (const [index, operator] of context.allowedOperators.entries()) {
+        if (typeof operator !== "string" || !Object.prototype.hasOwnProperty.call(operatorLabels, operator))
+          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An allowed operator is invalid"));
+        if (seenOperators.has(operator))
+          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An operator is listed more than once"));
+        seenOperators.add(operator);
+      }
+    }
+  }
 
   const validTypes = new Set<StudioConditionParameterType>([
     "text",
@@ -568,6 +586,13 @@ const operatorAcceptsOperands = (
     return elementType !== undefined && canBeType(left, elementType);
   }
   const type = sharedType(left, right);
+  if (type === "money" && left.source === "value" && right.source === "value" &&
+    left.literal !== null && right.literal !== null) {
+    const leftMoney = moneyValueV2Schema.safeParse(left.literal);
+    const rightMoney = moneyValueV2Schema.safeParse(right.literal);
+    if (leftMoney.success && rightMoney.success &&
+      leftMoney.data.currency !== rightMoney.data.currency) return false;
+  }
   return type !== undefined && orderableTypes.has(type);
 };
 
@@ -579,7 +604,7 @@ const defaultLiteralForType = (type: StudioConditionSemanticType | undefined): J
     case "decimal_number":
       return "0";
     case "money":
-      return { amount: "0", currency: "NZD" };
+      return null;
     case "boolean":
       return false;
     case "date":
@@ -638,10 +663,13 @@ export function studioConditionOperatorsFor(
 ): readonly StudioConditionOperatorOption[] {
   if (contextIssues(context).length > 0) return [];
   const leftInfo = infoForOperand(left, context);
-  if (!leftInfo) return operatorOptions.filter((option) => option.arity === "unary");
+  if (!leftInfo) return [];
   return operatorOptions.filter((option) => {
+    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(option.operator)) return false;
     if (option.arity === "unary") return true;
-    const rightCandidates = right === undefined ? candidateRightOperands(left, context) : [right];
+    const rightCandidates = right === undefined
+      ? candidateRightOperands(left, context)
+      : [right, ...candidateRightOperands(left, context)];
     return rightCandidates.some((candidate) => {
       const rightInfo = infoForOperand(candidate, context);
       return rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo);
@@ -676,9 +704,18 @@ export function createInitialStudioCondition(
   )
     return undefined;
   if (contextIssues(context).length > 0) return undefined;
-  const operand = context.allowedOperands[0]?.operand ??
-    (context.allowLiteralValues ? literalOperand("text") : undefined);
-  return operand ? { kind: "comparison", operator: "is_empty", left: operand } : undefined;
+  const operands = context.allowedOperands.map((entry) => entry.operand);
+  if (context.allowLiteralValues) operands.push(literalOperand("text"));
+  for (const operand of operands) {
+    const options = studioConditionOperatorsFor(operand, undefined, context);
+    const option = options.find((entry) => entry.arity === "unary") ?? options[0];
+    if (!option) continue;
+    if (option.arity === "unary")
+      return { kind: "comparison", operator: option.operator, left: operand };
+    const right = defaultRightForOperator(option.operator, operand, context);
+    if (right) return { kind: "comparison", operator: option.operator, left: operand, right };
+  }
+  return undefined;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -769,6 +806,8 @@ export function validateStudioCondition(
 
     const left = checkOperand(condition.left, "left");
     const right = condition.right === undefined ? undefined : checkOperand(condition.right, "right");
+    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(condition.operator))
+      issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not permitted by the host"));
     if (
       !unaryOperators.has(condition.operator) &&
       left !== undefined &&
@@ -784,6 +823,24 @@ export function validateStudioCondition(
 const pathEquals = (left: ConditionPath, right: ConditionPath): boolean =>
   left.length === right.length && left.every((part, index) => part === right[index]);
 
+const hasLiteralAtPath = (condition: ConditionNode | undefined, path: ConditionPath): boolean => {
+  const value = path.reduce<unknown>((current, part) => {
+    if (Array.isArray(current) && typeof part === "number") return current[part];
+    if (isRecord(current) && typeof part === "string") return current[part];
+    return undefined;
+  }, condition);
+  return isRecord(value) && value.source === "value";
+};
+
+const withDraftIssues = (
+  validation: StudioConditionValidation,
+  draftIssues: readonly StudioConditionValidationIssue[],
+): StudioConditionValidation => ({
+  ...validation,
+  issues: [...validation.issues, ...draftIssues],
+  isValid: validation.isValid && draftIssues.length === 0,
+});
+
 const contextOperandToken = (permission: StudioConditionOperandPermission): string => permissionKey(permission);
 
 const operandToken = (operand: ConditionOperand): string =>
@@ -796,20 +853,6 @@ const errorForPath = (
   path: ConditionPath,
 ): string | undefined =>
   validation.issues.find((issue) => pathEquals(issue.path, path))?.message;
-
-const selectOperand = (
-  token: string,
-  previous: ConditionOperand,
-  context: StudioConditionControlsContext,
-): ConditionOperand => {
-  if (token === "value") {
-    const otherType = previous.source === "value" ? semanticTypeForLiteral(previous.value) :
-      infoForOperand(previous, context)?.semanticType;
-    return literalOperand(otherType);
-  }
-  const option = context.allowedOperands.find((entry) => contextOperandToken(entry) === token);
-  return option?.operand ?? previous;
-};
 
 const infoForExpectedLiteral = (
   operand: ConditionOperand,
@@ -1003,7 +1046,7 @@ function LiteralEditor({
   if (semanticType === "money") {
     const current = isRecord(operand.value) ? operand.value : {};
     const amount = typeof current.amount === "string" ? current.amount : "";
-    const currency = typeof current.currency === "string" ? current.currency : "NZD";
+    const currency = typeof current.currency === "string" ? current.currency : "";
     return (
       <fieldset>
         <legend>{label}</legend>
@@ -1091,7 +1134,7 @@ type TreeEditorProps = Readonly<{
   validation: StudioConditionValidation;
   path: ConditionPath;
   remainingOperandCount: number;
-  onReplace: (condition: ConditionNode) => void;
+  onReplace: (condition: ConditionNode, resolvedPath?: ConditionPath) => void;
   onRemove?: () => void;
   onInvalid: (issue: StudioConditionValidationIssue) => void;
 }>;
@@ -1154,10 +1197,10 @@ function TreeEditor({
               validation={validation}
               path={childPath}
               remainingOperandCount={remainingOperandCount}
-              onReplace={(next) => {
+              onReplace={(next, resolvedPath) => {
                 const conditions = [...condition.conditions];
                 conditions[index] = next;
-                onReplace({ ...condition, conditions });
+                onReplace({ ...condition, conditions }, resolvedPath);
               }}
               onRemove={() => {
                 if (condition.conditions.length <= 1) return;
@@ -1203,7 +1246,7 @@ function TreeEditor({
           validation={validation}
           path={[...path, "condition"]}
           remainingOperandCount={remainingOperandCount}
-          onReplace={(next) => onReplace({ kind: "not", condition: next })}
+          onReplace={(next, resolvedPath) => onReplace({ kind: "not", condition: next }, resolvedPath)}
           onInvalid={onInvalid}
         />
         <button type="button" onClick={() => onReplace(condition.condition)}>
@@ -1224,37 +1267,45 @@ function TreeEditor({
       condition.right !== undefined ||
       remainingOperandCount > 0,
   );
-  const currentOperatorAvailable = availableOperators.some((option) => option.operator === condition.operator);
+  const currentOperatorAvailable = leftInfo !== undefined && (
+    unaryOperators.has(condition.operator) ||
+    (condition.right !== undefined && operatorAcceptsOperands(
+      condition.operator,
+      leftInfo,
+      infoForOperand(condition.right, context),
+    ))
+  );
   const operatorIssue = errorForPath(validation, [...path, "operator"]);
-  const changeOperand = (key: "left" | "right", token: string) => {
-    const current = key === "left" ? condition.left : condition.right;
-    const other = key === "left" ? condition.right : condition.left;
-    if (!current) return;
-    const selected = selectOperand(token, other ?? current, context);
-    if (key === "left") {
-      const nextRight = condition.right;
-      const nextOperator = unaryOperators.has(condition.operator)
-        ? condition.operator
-        : studioConditionOperatorsFor(selected, nextRight, context).some((option) => option.operator === condition.operator)
-          ? condition.operator
-          : "is_empty";
-      if (unaryOperators.has(nextOperator)) {
-        onReplace({ kind: "comparison", operator: nextOperator, left: selected });
-      } else if (nextRight) {
-        onReplace({ kind: "comparison", operator: nextOperator, left: selected, right: nextRight });
-      }
-      return;
-    }
-    const nextRight = selectOperand(token, condition.left, context);
-    const nextOperator = studioConditionOperatorsFor(condition.left, nextRight, context).some(
-      (option) => option.operator === condition.operator,
-    )
-      ? condition.operator
-      : "equals";
-    const safeOperator = studioConditionOperatorsFor(condition.left, nextRight, context).some(
-      (option) => option.operator === nextOperator,
-    ) ? nextOperator : "is_empty";
-    onReplace({ kind: "comparison", operator: safeOperator, left: condition.left, ...(unaryOperators.has(safeOperator) ? {} : { right: nextRight }) });
+  const compatibleOperand = (side: "left" | "right", candidate: ConditionOperand): boolean => {
+    if (unaryOperators.has(condition.operator)) return side === "left";
+    const other = side === "left" ? condition.right : condition.left;
+    if (!other) return false;
+    const left = infoForOperand(side === "left" ? candidate : other, context);
+    const right = infoForOperand(side === "right" ? candidate : other, context);
+    return left !== undefined && right !== undefined &&
+      operatorAcceptsOperands(condition.operator, left, right);
+  };
+  const literalChoice = (side: "left" | "right"): ConditionOperand | undefined => {
+    if (!context.allowLiteralValues) return undefined;
+    const other = side === "left" ? condition.right : condition.left;
+    const type = other ? infoForOperand(other, context)?.semanticType : undefined;
+    const candidates: ConditionOperand[] = [
+      literalOperand(type),
+      { source: "value", value: null },
+      { source: "value", value: [] },
+      literalOperand("text"),
+    ];
+    return candidates.find((candidate) => compatibleOperand(side, candidate));
+  };
+  const changeOperand = (side: "left" | "right", token: string) => {
+    const selected = token === "value"
+      ? literalChoice(side)
+      : context.allowedOperands.find(
+          (entry) => contextOperandToken(entry) === token && compatibleOperand(side, entry.operand),
+        )?.operand;
+    if (!selected) return;
+    if (side === "left") onReplace({ ...condition, left: selected }, [...path, side]);
+    else onReplace({ ...condition, right: selected }, [...path, side]);
   };
 
   const literalEditor = (
@@ -1281,8 +1332,8 @@ function TreeEditor({
         validation={validation}
         onCommit={(value) => {
           const replacement: ConditionOperand = { source: "value", value };
-          if (side === "left") onReplace({ ...condition, left: replacement });
-          else onReplace({ ...condition, right: replacement });
+          if (side === "left") onReplace({ ...condition, left: replacement }, pathToOperand);
+          else onReplace({ ...condition, right: replacement }, pathToOperand);
         }}
         onInvalid={(message) => {
           const issue = makeIssue("invalid_literal", pathToOperand, message);
@@ -1298,10 +1349,13 @@ function TreeEditor({
     if (!operand) return null;
     const pathToOperand = [...path, side];
     const operandError = errorForPath(validation, pathToOperand);
-    const referenceOptions = context.allowedOperands;
-    const currentReferencePermitted =
-      operand.source === "value" ||
-      referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
+    const referenceOptions = context.allowedOperands.filter((option) =>
+      compatibleOperand(side, option.operand),
+    );
+    const selectableLiteral = literalChoice(side);
+    const currentSelectable = operand.source === "value"
+      ? selectableLiteral !== undefined
+      : referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
     return (
       <fieldset>
         <legend>{side === "left" ? "Left operand" : "Right operand"}</legend>
@@ -1312,9 +1366,9 @@ function TreeEditor({
           value={operandToken(operand)}
           onChange={(event) => changeOperand(side, event.currentTarget.value)}
         >
-          {operand.source !== "value" && !currentReferencePermitted && (
+          {!currentSelectable && (
             <option value={operandToken(operand)} disabled>
-              Current operand (not permitted)
+              Current operand (not available)
             </option>
           )}
           {referenceOptions.map((option, index) => (
@@ -1322,8 +1376,7 @@ function TreeEditor({
               {option.label} ({displayRole(option.role)})
             </option>
           ))}
-          {context.allowLiteralValues && <option value="value">Literal value</option>}
-          {operand.source === "value" && !context.allowLiteralValues && <option value="value" disabled>Literal value (not permitted)</option>}
+          {selectableLiteral && <option value="value">Literal value</option>}
         </select>
         </label>
         {operandError && <span role="alert">{operandError}</span>}
@@ -1403,10 +1456,17 @@ export function StudioConditionControls({
   label = "Condition controls",
   onChange,
 }: StudioConditionControlsProps) {
-  const validation = validateStudioCondition(value, context);
-  const emit = (next: ConditionNode | undefined) => {
+  const [draftIssues, setDraftIssues] = useState<readonly StudioConditionValidationIssue[]>([]);
+  const baseValidation = validateStudioCondition(value, context);
+  const activeDraftIssues = draftIssues.filter((issue) => hasLiteralAtPath(baseValidation.condition, issue.path));
+  const validation = withDraftIssues(baseValidation, activeDraftIssues);
+  const emit = (next: ConditionNode | undefined, resolvedPath?: ConditionPath) => {
     const nextValidation = validateStudioCondition(next, context);
-    onChange(nextValidation.condition, nextValidation);
+    const remainingIssues = activeDraftIssues.filter((issue) =>
+      !pathEquals(issue.path, resolvedPath ?? []) && hasLiteralAtPath(nextValidation.condition, issue.path),
+    );
+    setDraftIssues(remainingIssues);
+    onChange(nextValidation.condition, withDraftIssues(nextValidation, remainingIssues));
   };
   const current = validation.condition;
   const initial = createInitialStudioCondition(context);
@@ -1443,15 +1503,12 @@ export function StudioConditionControls({
             remainingOperandCount={
               conditionMaximumOperandCount - conditionOperandCount(current)
             }
-            onReplace={(next) => emit(next)}
+            onReplace={emit}
             onInvalid={(issue) => {
               const nextValidation = validateStudioCondition(current, context);
-              const issues = [...nextValidation.issues, issue];
-              onChange(nextValidation.condition, {
-                condition: nextValidation.condition,
-                issues,
-                isValid: false,
-              });
+              const issues = [...activeDraftIssues.filter((entry) => !pathEquals(entry.path, issue.path)), issue];
+              setDraftIssues(issues);
+              onChange(nextValidation.condition, withDraftIssues(nextValidation, issues));
             }}
           />
           <div>
