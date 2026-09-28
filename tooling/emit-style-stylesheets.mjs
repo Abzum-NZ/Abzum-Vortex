@@ -244,8 +244,12 @@ for (const { option, css } of compiled) {
   // style paints with these rules, an inner root (a preview canvas) paints with its own, and no rule
   // here reaches either. Without it, two nested roots carrying different attributes would both match
   // and the later stylesheet in the document would win, which is not a decision anyone made.
-  const scope = `@scope ([data-vortex-style="${option.id}"]) to ([data-vortex-style])`;
-  const sheet = `@layer ${VORTEX_STYLE_LAYER} {\n${scope} {\n${css}\n}\n}\n`;
+  // The limit must be a descendant of this root. Without :scope, the root matches its own
+  // limit and the scope is empty. The compiled selectors also name the root, but selectors
+  // inside @scope are relative to it, so use :scope instead of looking for a second root.
+  const scope = `@scope ([data-vortex-style="${option.id}"]) to (:scope [data-vortex-style])`;
+  const scopedCss = css.replaceAll(`[data-vortex-style="${option.id}"]`, ":scope");
+  const sheet = `@layer ${VORTEX_STYLE_LAYER} {\n${scope} {\n${scopedCss}\n}\n}\n`;
   await writeFile(
     path.join(OUTPUT_DIRECTORY, `${option.id}.css`),
     `${header(option.id, option)}\n${sheet}`,
@@ -262,7 +266,11 @@ const platformDefault = compiled.find(({ option }) => option.id === PLATFORM_DEF
 if (platformDefault === undefined)
   throw new Error(`The catalogue offers no "${PLATFORM_DEFAULT_STYLE}" style for the platform default`);
 const defaultScope = `@scope (:root) to ([data-vortex-style]:not([data-vortex-style="${PLATFORM_DEFAULT_STYLE}"]))`;
-const defaultSheet = `${defaultScope} {\n${platformDefault.css}\n}\n`;
+const defaultCss = platformDefault.css.replaceAll(
+  `[data-vortex-style="${PLATFORM_DEFAULT_STYLE}"]`,
+  ":scope",
+);
+const defaultSheet = `${defaultScope} {\n${defaultCss}\n}\n`;
 await writeFile(
   DEFAULT_OUTPUT_FILE,
   `${defaultHeader(platformDefault.option)}\n${defaultSheet}`,
