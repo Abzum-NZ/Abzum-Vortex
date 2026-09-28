@@ -173,6 +173,11 @@ export const CONTAINER_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
   sources.CONTAINER_BLOCK_RELEASE_1_1_0,
 );
 
+/** Adds an optional main landmark to a container's content region. */
+export const CONTAINER_BLOCK_RELEASE_1_2_0: PlatformBlockReleaseV2 = release(
+  sources.CONTAINER_BLOCK_RELEASE_1_2_0,
+);
+
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEADING_BLOCK_RELEASE);
 
@@ -363,10 +368,11 @@ export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
-/** All three immutable general layout block releases. */
+/** All immutable general layout block releases. */
 export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_1_0,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
   HEADING_BLOCK_RELEASE,
 ]);
 
