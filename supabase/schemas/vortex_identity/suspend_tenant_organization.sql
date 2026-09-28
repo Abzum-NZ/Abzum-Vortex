@@ -159,3 +159,5 @@ grant execute on function vortex_identity.suspend_tenant_organization(uuid, text
 
 comment on function vortex_identity.suspend_tenant_organization(uuid, text, uuid, uuid, bigint) is
   'Protected non-cascading active-to-suspended organisation transition under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.suspend_tenant_organization(uuid,text,uuid,uuid,bigint) owner to postgres;

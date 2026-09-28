@@ -184,3 +184,5 @@ grant execute on function vortex_identity.reactivate_tenant_organization(uuid, t
 
 comment on function vortex_identity.reactivate_tenant_organization(uuid, text, uuid, uuid, bigint) is
   'Protected stewardship-ready suspended-to-active organisation transition under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.reactivate_tenant_organization(uuid,text,uuid,uuid,bigint) owner to postgres;
