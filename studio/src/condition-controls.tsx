@@ -1230,7 +1230,7 @@ function TreeEditor({
             Add not group
           </button>
           {onRemove && (
-            <button type="button" disabled={condition.conditions.length <= 1} onClick={onRemove}>
+            <button type="button" onClick={onRemove}>
               Remove group
             </button>
           )}
