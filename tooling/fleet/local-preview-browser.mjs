@@ -718,8 +718,11 @@ async function startBrowser(origin) {
   if (!executable.isFile()) fail("edge_not_found");
 
   profilePath = await mkdtemp(join(tmpdir(), PROFILE_PREFIX));
+  browserStartupPhase = "profile_created";
   browserSpawnStartedAt = Date.now();
   try {
+    browserLaunchRequested = true;
+    browserStartupPhase = "launch_requested";
     edgeProcess = spawn(
       EDGE_EXECUTABLE,
       [
@@ -749,9 +752,12 @@ async function startBrowser(origin) {
 
   const startupDeadline = Math.min(Date.now() + STARTUP_TIMEOUT_MS, runDeadline);
   const activePort = await waitForOwnedDevTools(profilePath, () => spawnFailed, startupDeadline);
+  browserStartupPhase = "devtools_port_ready";
   await waitForOwnedBrowserRoot(startupDeadline);
+  browserStartupPhase = "owner_identified";
   const port = activePort.port;
   const socketUrl = await waitForPageTarget(port, activePort.browserPath, startupDeadline);
+  browserStartupPhase = "page_target_ready";
   browserEndpoint = `ws://127.0.0.1:${port}${activePort.browserPath}`;
   let socket;
   try {
@@ -761,9 +767,11 @@ async function startBrowser(origin) {
   }
   devtools = new DevToolsClient(socket, origin);
   await devtools.waitUntilOpen(startupDeadline);
+  browserStartupPhase = "devtools_connected";
   await devtools.send("Page.enable");
   await devtools.send("Runtime.enable");
   await devtools.send("Network.enable");
+  browserStartupPhase = "ready";
 }
 
 async function waitForOwnedTreeExit(deadline) {
@@ -976,15 +984,54 @@ let spawnFailed = false;
 let browserSpawnStartedAt = 0;
 let ownedProcessIdentities;
 let failureCode = "internal_error";
+let browserLaunchRequested = false;
+let browserStartupPhase = "not_started";
+
+async function runBrowserLifecycleProbe() {
+  // No application origin is contacted: Edge remains on its unique about:blank page.
+  currentOrigin = "http://127.0.0.1";
+  runDeadline = Date.now() + STARTUP_TIMEOUT_MS + 30_000;
+  try {
+    await startBrowser(currentOrigin);
+  } catch (error) {
+    result.reason ??= safeReason(error);
+  }
+  try {
+    await closeOwnedBrowser();
+  } catch (error) {
+    result.reason ??= safeReason(error, "profile_cleanup_failed");
+    devtools?.closeSocket();
+    edgeProcess?.unref();
+  }
+  const confirmed =
+    browserStartupPhase === "ready" &&
+    result.browser_cleanup.confirmed === true &&
+    !result.reason;
+  const probeResult = {
+    schema: "vortex.local-preview.browser-lifecycle.v1",
+    result: confirmed ? "LIFECYCLE_CONFIRMED" : "FAIL",
+    startup_phase: browserStartupPhase,
+    launch_requested: browserLaunchRequested,
+    launcher_spawned: browserSpawned,
+    ownership_confirmed: ownedProcessIdentities !== undefined,
+    browser_cleanup: { confirmed: result.browser_cleanup.confirmed },
+    ...(result.reason ? { reason: result.reason } : {}),
+  };
+  process.stdout.write(`${JSON.stringify(probeResult)}\n`);
+  process.exitCode = confirmed ? 0 : 1;
+}
 
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--help") {
   process.stdout.write(
-    "Usage: node tooling/fleet/local-preview-browser.mjs\n" +
+    "Usage: node tooling/fleet/local-preview-browser.mjs [--browser-lifecycle-probe]\n" +
       "Reads VORTEX_PREVIEW_BASE_URL, VORTEX_PREVIEW_HEAD_SHA, VORTEX_PREVIEW_RUN_NONCE, and VORTEX_PREVIEW_FIXTURE_FINGERPRINTS.\n" +
+      "--browser-lifecycle-probe launches only about:blank and emits separate lifecycle evidence.\n" +
       "--help does not launch Edge or emit browser evidence.\n",
   );
   process.exitCode = 0;
+} else if (args.length === 1 && args[0] === "--browser-lifecycle-probe") {
+  await runBrowserLifecycleProbe();
 } else {
   if (args.length !== 0) failureCode = "invalid_arguments";
   else {
