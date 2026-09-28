@@ -851,7 +851,7 @@ async function closeOwnedBrowser() {
   if (!ownedProcessIdentities) {
     devtools?.closeSocket();
     edgeProcess?.unref();
-    result.reason = "browser_exit_unconfirmed";
+    result.reason ??= "browser_exit_unconfirmed";
     return;
   }
   const beforeClose = browserProcessSnapshot();
@@ -859,7 +859,7 @@ async function closeOwnedBrowser() {
   if (beforeClose.some((row) => row.profileMatch && ownedProcessIdentities.get(row.pid) !== row.createdAt)) {
     devtools?.closeSocket();
     edgeProcess?.unref();
-    result.reason = "browser_exit_unconfirmed";
+    result.reason ??= "browser_exit_unconfirmed";
     return;
   }
   const browserRootPid = ownedProcessIdentities.keys().next().value;
@@ -882,7 +882,7 @@ async function closeOwnedBrowser() {
   devtools?.closeSocket();
   if (!(await waitForOwnedTreeExit(Date.now() + 20_000))) {
     edgeProcess?.unref();
-    result.reason = "browser_exit_unconfirmed";
+    result.reason ??= "browser_exit_unconfirmed";
     return;
   }
   await removeOwnedProfile();
@@ -992,7 +992,7 @@ if (args.length === 1 && args[0] === "--help") {
       await runBrowserCheck();
     } catch (error) {
       failureCode = safeReason(error);
-      if (failureCode !== "internal_error") result.reason = failureCode;
+      result.reason = failureCode;
     }
   }
   try {
@@ -1000,7 +1000,7 @@ if (args.length === 1 && args[0] === "--help") {
   } catch (error) {
     failureCode = safeReason(error, "profile_cleanup_failed");
     result.result = "FAIL";
-    result.reason = failureCode;
+    result.reason ??= failureCode;
     devtools?.closeSocket();
     edgeProcess?.unref();
   }
