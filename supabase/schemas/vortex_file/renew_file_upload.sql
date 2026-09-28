@@ -90,3 +90,6 @@ revoke execute on function
 
 grant execute on function
   vortex_file.renew_file_upload(uuid, bigint, uuid, uuid, text, timestamptz) to vortex_request;
+
+alter function vortex_file.renew_file_upload(uuid, bigint, uuid, uuid, text, timestamptz)
+  owner to vortex_file_owner;

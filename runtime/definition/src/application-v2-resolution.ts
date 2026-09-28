@@ -17,6 +17,7 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
       | "page"
       | "pipeline"
       | "flow"
+      | "event"
       | "flow_node"
       | "flow_edge"
       | "flow_binding",

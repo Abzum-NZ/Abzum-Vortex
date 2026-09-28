@@ -10,6 +10,7 @@ import {
   flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
+  protectedOperationReferenceSetSchema,
   isFlowControlTask,
   isUuidText,
   organizationIdSchema,
@@ -17,6 +18,7 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
+  builderKeySchema,
   type ApplicationRootId,
   type FlowDefinition,
   type FlowFormula,
@@ -28,6 +30,7 @@ import {
   type FlowValue,
   type JsonValue,
   type OrganizationId,
+  type ProtectedOperationReference,
   type ProtectedOperationRequest,
   type SemanticVersion,
 } from "@vortex/contracts";
@@ -67,6 +70,8 @@ export type KestraFlowIdentity = Readonly<{
 export type KestraFlowCompilerInput = Readonly<{
   definition: FlowDefinition;
   identity: KestraFlowIdentity;
+  /** Trusted operation references resolved from this exact published release, keyed by source task id. */
+  operationReferences: ReadonlyMap<string, readonly ProtectedOperationReference[]>;
   childFlowRevisions?: Readonly<Record<string, number>>;
 }>;
 
@@ -142,6 +147,8 @@ export type KestraFlowNodeBinding = Readonly<{
   operationKey: string;
   taskType: string;
   operation?: Readonly<{ serviceId: string; operationId: string; releaseVersion: string }>;
+  operations?: readonly ProtectedOperationReference[];
+  grantable?: boolean;
 }>;
 
 /**
@@ -329,6 +336,7 @@ type CompileContext = {
   readonly identity: KestraFlowIdentity;
   readonly flow: FlowDefinition;
   readonly childFlowRevisions: ReadonlyMap<string, number>;
+  readonly operationReferences: ReadonlyMap<string, readonly ProtectedOperationReference[]>;
   readonly allowedTemplateTokens: Set<string>;
   readonly nodes: KestraFlowNodeBinding[];
   /** True inside a loop body, where each iteration reads its own sibling outputs. */
@@ -430,6 +438,7 @@ const protectedCallbackTask = (
   taskType = operationKey,
   operation?: KestraFlowNodeBinding["operation"],
   runtimeValues: CallbackRuntimeValues = {},
+  operations?: readonly ProtectedOperationReference[],
 ): KestraCompiledTask => {
   const binding = callbackBinding(ctx, nodeId, operationKey, inputs);
   ctx.allowedTemplateTokens.add(kestraCallbackKeyReference);
@@ -442,6 +451,9 @@ const protectedCallbackTask = (
     operationKey: binding.operationKey,
     taskType,
     ...(operation === undefined ? {} : { operation }),
+    ...(operations === undefined
+      ? {}
+      : { operations, grantable: operations.length > 0 }),
   });
   return {
     id: taskId,
@@ -1025,6 +1037,7 @@ const compileRegisteredTask = (
     properties: jsonOf(task.properties),
   };
   if (task.allowRefusal === true) inputs.allow_refusal = true;
+  const operations = ctx.operationReferences.get(String(task.id).toLowerCase());
   return ok([
     protectedCallbackTask(
       ctx,
@@ -1033,6 +1046,9 @@ const compileRegisteredTask = (
       operationKey,
       inputs,
       task.type,
+      undefined,
+      {},
+      operations,
     ),
   ]);
 };
@@ -1232,6 +1248,67 @@ const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number
   return revisions;
 };
 
+const protectedOperationNodes = (definition: FlowDefinition): readonly FlowTask[] => {
+  const visit = (tasks: readonly FlowTask[]): FlowTask[] =>
+    tasks.flatMap((task) => [task, ...flowTaskChildLists(task).flatMap((child) => visit(child.tasks))]);
+  return [
+    ...visit(definition.tasks),
+    ...visit(definition.errors),
+    ...visit(definition.finally),
+  ].filter((task) => task.type === "record.query" || task.type.startsWith("record."));
+};
+
+const literalTextIdentity = (value: FlowValue | undefined): string | undefined =>
+  value?.kind === "literal" &&
+  value.literal.type === "text" &&
+  typeof value.literal.value === "string"
+    ? value.literal.value
+    : undefined;
+
+const parseOperationReferences = (
+  candidate: unknown,
+  definition: FlowDefinition,
+): ReadonlyMap<string, readonly ProtectedOperationReference[]> | undefined => {
+  if (!(candidate instanceof Map)) return undefined;
+  const parsed = new Map<string, readonly ProtectedOperationReference[]>();
+  for (const [nodeId, references] of candidate.entries()) {
+    const parsedNodeId = builderKeySchema.safeParse(nodeId);
+    const parsedReferences = protectedOperationReferenceSetSchema.safeParse(references);
+    if (!parsedNodeId.success || !parsedReferences.success) return undefined;
+    const key = String(parsedNodeId.data).toLowerCase();
+    if (parsed.has(key) || parsedReferences.data.some((reference) => reference.owner.kind === "platform_service"))
+      return undefined;
+    parsed.set(key, parsedReferences.data);
+  }
+
+  const nodes = protectedOperationNodes(definition);
+  if (nodes.length !== parsed.size) return undefined;
+  for (const task of nodes) {
+    const references = parsed.get(String(task.id).toLowerCase());
+    if (references === undefined) return undefined;
+    const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
+    if (task.type === "record.query") {
+      const queryId = literalTextIdentity(properties.query);
+      if (
+        references.length !== 1 ||
+        queryId === undefined ||
+        String(references[0]!.operationId).toLowerCase() !== queryId.toLowerCase()
+      )
+        return undefined;
+    } else {
+      const recordTypeId = literalTextIdentity(properties.record_type);
+      if (
+        recordTypeId !== undefined &&
+        !references.some(
+          (reference) => String(reference.operationId).toLowerCase() === recordTypeId.toLowerCase(),
+        )
+      )
+        return undefined;
+    }
+  }
+  return parsed;
+};
+
 /**
  * Compiles one exact published durable flow and its installation identity into
  * a deterministic inactive Kestra flow candidate, or refuses with a stable
@@ -1246,7 +1323,7 @@ const parseChildFlowRevisions = (candidate: unknown): ReadonlyMap<string, number
 export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilation => {
   if (
     !isRecord(inputCandidate) ||
-    !hasOnlyKeys(inputCandidate, ["definition", "identity", "childFlowRevisions"])
+    !hasOnlyKeys(inputCandidate, ["definition", "identity", "operationReferences", "childFlowRevisions"])
   )
     return refused("invalid_input");
 
@@ -1265,6 +1342,11 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   const parsedDefinition = flowSchema.safeParse(neutralizeLabelDelimiters(inputCandidate.definition));
   if (!parsedDefinition.success) return refused("invalid_definition");
   const definition = parsedDefinition.data;
+  const operationReferences = parseOperationReferences(
+    inputCandidate.operationReferences,
+    definition,
+  );
+  if (operationReferences === undefined) return refused("invalid_input");
 
   // Only durable flows run on Kestra; every other execution kind runs in Vortex.
   if (definition.execution !== "durable") return refused("not_durable");
@@ -1279,6 +1361,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
     identity,
     flow: definition,
     childFlowRevisions,
+    operationReferences,
     allowedTemplateTokens: new Set<string>(),
     nodes: [],
     insideLoop: false,
