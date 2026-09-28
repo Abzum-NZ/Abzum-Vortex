@@ -135,7 +135,7 @@ begin
 
   if found then
     if current_principal.organization_id is distinct from p_organization_id then
-      raise exception using errcode = '23505', message = 'Flow run-as principal identity is unavailable';
+      raise exception using errcode = '42501', message = 'Flow run-as principal scope is unavailable';
     end if;
     if p_expected_revision is null then
       raise exception using errcode = '23505', message = 'Flow run-as principal already exists';
