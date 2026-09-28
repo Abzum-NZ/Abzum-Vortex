@@ -419,6 +419,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       record_type: required("record_type_id"),
       record: optional("record_reference"),
       values: required("field_values"),
+      selected_owner_group_id: optional("text"),
     },
     outputs: [output("record", "record_reference")],
     kestra: "protected_callback",

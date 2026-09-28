@@ -2,11 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   moduleDefinitionConsumerReadResultV3Schema,
-  moduleFieldV2Schema,
+  moduleFieldV3Schema,
   ruleGraphSchema,
   type JsonValue,
   type ModuleDefinitionConsumerReadResultV3,
-  type ModuleFieldV2,
+  type ModuleFieldV3,
   type RuleGraph,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
@@ -24,8 +24,8 @@ const relatedFieldId = id(44);
 const obsoleteFieldId = id(45);
 const generatedFieldId = id(46);
 
-const field = (fieldId: string, key: string, type: string, settings: unknown): ModuleFieldV2 =>
-  moduleFieldV2Schema.parse({
+const field = (fieldId: string, key: string, type: string, settings: unknown): ModuleFieldV3 =>
+  moduleFieldV3Schema.parse({
     fieldId,
     key,
     label: key,

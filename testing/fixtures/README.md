@@ -1,92 +1,19 @@
-# Complete definition fixtures
+# Remaining fixture data
 
-[Worked examples](../../docs/specification/appendices/worked-examples.md) · [Development roadmap](../../docs/build-plan/README.md#phases)
-
-This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. The eight current Module sources use the sole current source and validation contract `3.0.0`; the two Application sources and three connection-type sources retain contract `1.0.0`. The set is the reference contract example: it is shaped to pass the production source parser, deterministic compiler and publication validator. It is existing repository material, not a development completion gate.
-
-These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict production schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape. The shipping [compiler](../../runtime/definition/src/compiler.ts) resolves each alias and version requirement only from the checked-in immutable snapshot, then the [publication validator](../../runtime/definition/src/validation.ts) proves cross-definition semantics before any runtime service may accept the result.
+The shipped CRM and Service Desk definition sources live under `modules/src/crm` and `modules/src/service-desk`. Tests that need those definitions read the shipped files directly. This directory does not keep a second definition corpus or a separate fixture test command.
 
 ## Contents
 
-| Path | Purpose |
-|---|---|
-| `fixture-set.json` | Complete manifest, required field types, workflow node catalogue, applications, and cross-application cases. |
-| `definition-resolution-snapshot.json` | Contract `1.0.0` resolution envelope used by the current Application and connection-type sources. |
-| `module-v2-definition-resolution-snapshot.json` | Contract `3.0.0` resolution envelope used by the checked-in Module examples. Its historical file name is retained for existing references; the envelope has its own fingerprint and includes legacy `rule_node` identities. These examples do not define the target flow contract. |
-| `connection-types/` | Every connection type and operation referenced by either application. |
-| `modules/` | Five CRM modules and three Service Desk modules, each independently versioned. Their saved `before_save` graphs are historical fixture shapes; [Architecture Decision 1](../../docs/build-plan/architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work) governs the one flow representation. |
-| `applications/` | CRM and Service Desk definitions with exact module bindings, pages, roles, workflows, pipelines, connections, and interfaces. |
-| `scenarios/` | Organisation data and expected outcomes for shared records, collaborative case access, and immediate revocation. |
-| `storage/` | Complete record-type-to-table catalog, physical-name rules, application roots, scoped row examples, and collision tests. |
-| `validate-fixtures.test.ts` | Shipping-code compilation plus manifest, scenario, storage, coverage, and policy proof. |
-| `current-module-v2-runtime.test.ts` | In-memory-adapter proof using the shipping Definition publication and consumer-read services, followed by Record V2 value preparation against returned canonical record types. |
-| `current-module-v3-before-save-runtime.test.ts` | Publishes a Module release carrying a before-save rule graph and hands its published release to the Rule engine, proving the graph resolves a requirement and corrects the final candidate. |
-| `historical/module-v1/` | Immutable pre-migration Module V1 source and resolution evidence used only by historical read, restore, comparison, and conversion tests. |
+- `rule-graphs/` contains authored and canonical graph examples used by the live Rule graph contracts and evaluator.
+- `scenarios/cross-application-sharing.json` records cross-application sharing cases.
+- `storage/record-storage-layout.json` records storage layout examples.
 
-`current-module-v2-runtime.test.ts` and `validate-fixtures.test.ts` still import `moduleSourceDocumentV2Schema` from `@vortex/contracts`; [#554](https://github.com/Abzum-NZ/Abzum-Vortex/issues/554) consolidated Module authoring onto the single `moduleSourceDocumentSchema` and removed the version-suffixed source schema exports, so those two test files fail to resolve that import. The non-test fixtures in this directory and this guidance describe only the surviving `3.0.0` contract, and the test files in this directory still describe the superseded one. That divergence is a known consequence of #554 recorded here for the reader; it is test code and outside the fixture and guidance scope of [#556](https://github.com/Abzum-NZ/Abzum-Vortex/issues/556).
-
-## Existing fixture command
-
-This command describes retained tooling. The [current fleet policy](../../docs/build-plan/agent-coordination.md) does not require or authorize fixture or test runs for development completion.
-
-```text
-pnpm fixtures
-```
-
-Success means every manifest file, source document, resolved identity, exact version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves complete provenance, all twenty-two field types, the complete safe workflow-node catalogue, a verified incoming-message acknowledgement, and qualified reverse-total relationships. The current-bundle runtime test publishes all eight current Module releases and both Application `1.0.0` releases through an in-memory repository adapter, reads them through the shipping consumer service, and prepares representative Company, Contact, and Case values from the returned canonical record types.
-
-The two checked-in resolution snapshots are separate immutable envelopes because Module `3.0.0` and Application `1.0.0` compilation requests accept different snapshot contract versions. Their definitions are equal, and their identities agree except for the legacy `rule_node` assignments in the `3.0.0` identity vocabulary; each envelope retains its own fingerprint over its contract version, definitions and identities. Dependency releases likewise keep their own resolution evidence rather than being restamped with the consuming Application's fingerprint.
-
-It also proves that every record type has one storage-contract table, every field has a stable physical column mapping, organisation-shared rows omit an application root, application-contained rows require one, and same-named CRM applications in separate organisations cannot collide.
-
-The validator must never ignore an unresolved reference to accept an incomplete example. These tests do not claim a live database publication adapter, provisioned Record storage, or rendered application UI.
-
-## Cross-application behaviour
-
-- CRM and Service Desk bind the same CRM Organisations and CRM People module versions. Company and Contact records are organisation-wide records, not copies.
-- Service Desk cases remain application-contained source records.
-- CRM binds the Service Desk Cases definition only so it can understand records received through a grant; the binding itself grants no data access.
-- The fixture grant exposes a limited set of case fields, permits changes only to status and priority, and permits only the published public-comment action.
-- Revocation removes the case from CRM on the next access check and leaves no recipient record, summary record, search entry, offline value, or cross-request cached value.
+These files are example data. They are not a separate development acceptance gate.
 
 ## Explicit field permissions
 
-The [field-access engine task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) adds
-explicit authored field lists to the 94 record permissions. These are intentional
-fixture definitions, not compiler defaults or rules inferred from application names.
-Native read/export and form permissions enumerate the current fields they need;
-form changes exclude generated reference numbers, calculations and totals. Named
-actions declare only their own subject reads/changes. Content-free deletion,
-restoration and sharing authority use empty lists. Adding a field later never
-silently adds it to a permission.
-
-Sensitive Contact notes are excluded from ordinary read/export/create/update.
-The existing `view_sensitive_notes` identity is corrected from an unused named
-action placeholder to an explicit read permission for `notes` only. This is an
-intentional meaning change in these editable fixtures, not a rewrite of a stored
-historical release. A future trusted read binding must explicitly include this
-alternative and evaluate its own complete scope; Service Desk roles do not hold
-it. No sensitive-notes write operation is invented.
-
-The existing discount-approval permission declares read access to its amount,
-discount and calculated result, with no change authority. It still lacks a real
-named-action definition: [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
-and [definition-first application proof #327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327)
-must resolve that explicit fixture gap before claiming executable approval.
-The same handoff covers the sensitive-notes alternative read binding.
-
-The approved Case Summary grant is unchanged: six readable fields and changes to
-status/priority only. Native Service Desk policies can include more fields, but
-the source grant still restricts CRM. The fixture checks prove these declared
-bounds and compilation, not live field enforcement or delivered screens.
-
-## Physical storage rule
-
-- The same validated record-type lineage uses one table across organisations and application bindings.
-- `organisation_id` separates every organisation's records. `application_root_id` additionally separates application-contained records.
-- A different or structurally forked record-type lineage uses a different table even when every visible name is identical.
-- Table and field names come only from immutable storage tokens. Organisation, application, module, record-type, and field display names never become SQL identifiers.
+The shipped definition sources declare field access explicitly. Native read and export permissions enumerate readable fields, form changes exclude generated values, and sharing grants limit the recipient to their declared fields and actions. New fields do not gain access through a default.
 
 ## Change rule
 
-Keep the manifest aligned with fixture content when these examples change. A module or application version follows the compatibility rules in the [publication specification](../../docs/specification/03-composition-and-publication.md). Fixture validation is not a current development completion gate.
+Update a shipped definition in `modules/src` when its contract changes. Keep graph examples here only while live Rule graph code consumes them.

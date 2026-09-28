@@ -42,3 +42,5 @@ grant execute on function vortex_identity.list_tenant_hierarchy(uuid, integer, u
 
 comment on function vortex_identity.list_tenant_hierarchy(uuid, integer, uuid) is
   'Bounded deterministic same-tenant structural hierarchy read under the bound request context person''s exact hierarchy.read capability.';
+
+alter function vortex_identity.list_tenant_hierarchy(uuid,integer,uuid) owner to postgres;

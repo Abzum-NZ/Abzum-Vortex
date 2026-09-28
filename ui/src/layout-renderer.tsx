@@ -52,6 +52,7 @@ import {
   type RuntimeInputsByPlacement,
 } from "./registry";
 import { DateFormatProvider } from "./display/date-format-context";
+import { Button } from "./components/button";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
 
@@ -779,6 +780,12 @@ export type PageLayoutRendererProps = Readonly<{
   shells?: readonly ApplicationShellV2[];
   pageId?: string;
   activeStepId?: string;
+  guidedStepNavigation?: Readonly<{
+    disabled?: boolean;
+    onBack: () => void;
+    onNext: () => void;
+  }>;
+  guidedSummaryValues?: Readonly<Record<string, unknown>>;
   className?: string;
   style?: CSSProperties;
   /**
@@ -825,6 +832,8 @@ export function PageLayoutRenderer({
   shells = [],
   pageId,
   activeStepId,
+  guidedStepNavigation,
+  guidedSummaryValues,
   className,
   style,
   runtimeInputs,
@@ -890,6 +899,15 @@ export function PageLayoutRenderer({
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
   };
 
+  const guidedSteps =
+    "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
+  const activeGuidedStepIndex =
+    activeStepId === undefined
+      ? -1
+      : (guidedSteps?.findIndex((step) => step.id === activeStepId) ?? -1);
+  const activeGuidedStep =
+    activeGuidedStepIndex < 0 ? undefined : guidedSteps?.[activeGuidedStepIndex];
+
   // The theme root serves runtime pages and preview canvases alike; React hoists and
   // de-duplicates the one shared stylesheet however many layouts render, and the resolved style's
   // own stylesheet with it. Only the resolved style is linked, and the server emits both the link
@@ -936,6 +954,46 @@ export function PageLayoutRenderer({
               {...(className === undefined ? {} : { className })}
               {...(style === undefined ? {} : { style })}
             />
+          )}
+          {activeGuidedStep?.summary !== true || guidedSummaryValues === undefined ? null : (
+            <section aria-label="Review your answers" className="mt-6">
+              <h2 className="text-lg font-semibold">Review your answers</h2>
+              <dl className="mt-3 grid gap-3">
+                {Object.entries(guidedSummaryValues).map(([field, value]) => (
+                  <div key={field} className="rounded-md border p-3">
+                    <dt className="font-medium">{field}</dt>
+                    <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {value === null ? "Empty" : typeof value === "string" ? value : JSON.stringify(value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+          {guidedStepNavigation === undefined ||
+          activeGuidedStepIndex < 0 ||
+          guidedSteps === undefined ? null : (
+            <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
+              <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
+                <span className="block font-medium text-foreground">{activeGuidedStep?.name}</span>
+                <span>Step {activeGuidedStepIndex + 1} of {guidedSteps.length}</span>
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={guidedStepNavigation.disabled || activeGuidedStepIndex === 0}
+                onClick={guidedStepNavigation.onBack}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                disabled={guidedStepNavigation.disabled}
+                onClick={guidedStepNavigation.onNext}
+              >
+                {activeGuidedStep?.summary === true ? "Confirm" : "Next"}
+              </Button>
+            </nav>
           )}
         </DateFormatProvider>
       </IconLibraryProvider>

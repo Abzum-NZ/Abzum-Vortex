@@ -1,21 +1,15 @@
 import {
   moduleSourceDocumentSchema,
-  tenantStructuralCapabilityKeys,
   type ModuleSourceDocument,
 } from "@vortex/contracts";
 
-// The tenant, organisation and tenant-administrator system record types are
-// read-only projections of protected Identity facts. They declare only safe,
-// projected fields; they have no ordinary write path, and their changes go
-// through the tenant governance service's protected operations, never through
-// the record. Row visibility stays inside each registered reader: the
-// organisations of the caller's own tenant need the fixed
-// platform.tenant.hierarchy.read capability on that tenant, the tenant
-// projection lists exactly the active tenants the caller's effective
-// structural administrator assignment already lists, and
-// tenant administrators need the fixed
-// platform.tenant.administrators.read capability. Grant, revocation and
-// correlation evidence is never projected.
+// Tenant Administration keeps its local tenant projection; the shared
+// organisation and tenant-administrator projections live in System Directory.
+// Every projection is read-only and exposes only safe, projected fields. The
+// registered readers apply current tenant and viewer authority; tenant lists
+// include only active tenants the caller's effective structural administrator
+// assignment can already read. Changes remain protected operations and never
+// use ordinary record writes.
 const tenantAllFields = [
   "organization_id",
   "revision",
@@ -25,47 +19,6 @@ const tenantAllFields = [
   "state_changed_at",
   "created_at",
 ];
-const organizationAllFields = [
-  "organization_id",
-  "revision",
-  "tenant_id",
-  "parent_organization_id",
-  "short_name",
-  "display_name",
-  "state",
-  "state_changed_at",
-  "created_at",
-];
-const tenantAdministratorAllFields = [
-  "organization_id",
-  "revision",
-  "tenant_id",
-  "identity_id",
-  "capability_keys",
-  "starts_at",
-  "expires_at",
-  "state",
-];
-// The tenant capabilities the projection can return, in the
-// canonical order the private tenant writer accepts.
-const tenantCapabilityPermissionLabels: Record<
-  (typeof tenantStructuralCapabilityKeys)[number],
-  string
-> = {
-  "platform.tenant.administrators.manage": "Manage tenant administrators",
-  "platform.tenant.administrators.read": "Read tenant administrators",
-  "platform.tenant.capability_limits.allocate": "Allocate capability limits",
-  "platform.tenant.capability_limits.read": "Read capability limits",
-  "platform.tenant.hierarchy.read": "Read tenant hierarchy",
-  "platform.tenant.organizations.create": "Create organisations",
-  "platform.tenant.organizations.lifecycle": "Change organisation lifecycle",
-  "platform.tenant.organizations.rename": "Rename organisations",
-  "platform.tenant.organizations.reparent": "Move organisations",
-};
-const tenantCapabilityPermissionOptions = tenantStructuralCapabilityKeys.map((value) => ({
-  value,
-  label: tenantCapabilityPermissionLabels[value],
-}));
 const tenantStateOptions = [
   { value: "active", label: "Active" },
   { value: "suspended", label: "Suspended" },
@@ -74,10 +27,9 @@ const tenantStateOptions = [
 ] as const;
 
 /**
- * Read-only tenant, organisation and tenant-administrator system records
- * project protected Identity facts. The ordinary query path reads those
- * projections; tenant structure changes use tenant governance's protected
- * operations, never ordinary record writes.
+ * Tenant Administration keeps a local tenant projection; organisation and tenant
+ * administrator projections are read from System Directory. Structure changes
+ * use protected tenant governance operations, never ordinary record writes.
  */
 export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse({
   source_contract_version: "3.0.0",
@@ -88,7 +40,13 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
     name: "Tenant Administration",
     description:
       "Tenant structure and direct protected actions for a tenant administrator.",
-    dependencies: [],
+    dependencies: [
+      {
+        dependency_key: "system_directory",
+        module: "vortex.system_directory",
+        version: { selection: "exact", version: "1.0.0" },
+      },
+    ],
     record_types: [
       {
         id: "rt_tenant",
@@ -211,287 +169,6 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         ],
         relationships: [],
       },
-      {
-        id: "rt_tenant_admin_organization",
-        key: "organization",
-        name: "Organisation",
-        plural_name: "Organisations",
-        title_field: "display_name",
-        storage_contract_id: "srt_tenant_admin_organization",
-        storage_scope: "organisation_shared",
-        ownership_mode: "none",
-        standard_actions: ["read"],
-        custom_actions: [],
-        system_projection: {
-          protected_view: "tenant_structure",
-          organization_field: "organization_id",
-          revision_field: "revision",
-          filterable_fields: ["state"],
-          sortable_fields: [
-            "short_name",
-            "display_name",
-            "state",
-            "state_changed_at",
-            "created_at",
-          ],
-        },
-        fields: [
-          {
-            id: "fld_organization_organization_id",
-            key: "organization_id",
-            label: "Organisation",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_organization_revision",
-            key: "revision",
-            label: "Revision",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "whole_number",
-            settings: {},
-          },
-          {
-            id: "fld_organization_tenant_id",
-            key: "tenant_id",
-            label: "Tenant",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_organization_parent_id",
-            key: "parent_organization_id",
-            label: "Parent organisation",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_organization_short_name",
-            key: "short_name",
-            label: "Short name",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            search_priority: "first",
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 63 },
-          },
-          {
-            id: "fld_organization_display_name",
-            key: "display_name",
-            label: "Display name",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            search_priority: "normal",
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 120 },
-          },
-          {
-            id: "fld_organization_state",
-            key: "state",
-            label: "State",
-            required: false,
-            unique: false,
-            filterable: true,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "choice",
-            settings: { options: [...tenantStateOptions] },
-          },
-          {
-            id: "fld_organization_state_changed_at",
-            key: "state_changed_at",
-            label: "State changed at",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "date_time",
-            settings: { display_time_zone: "organisation" },
-          },
-          {
-            id: "fld_organization_created_at",
-            key: "created_at",
-            label: "Created at",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "date_time",
-            settings: { display_time_zone: "organisation" },
-          },
-        ],
-        relationships: [],
-      },
-      {
-        id: "rt_tenant_administrator",
-        key: "tenant_administrator",
-        name: "Tenant administrator",
-        plural_name: "Tenant administrators",
-        title_field: "identity_id",
-        storage_contract_id: "srt_tenant_admin_administrator",
-        storage_scope: "organisation_shared",
-        ownership_mode: "none",
-        standard_actions: ["read"],
-        custom_actions: [],
-        system_projection: {
-          protected_view: "tenant_administrators",
-          organization_field: "organization_id",
-          revision_field: "revision",
-          filterable_fields: ["state"],
-          sortable_fields: ["starts_at", "expires_at", "state"],
-        },
-        fields: [
-          {
-            id: "fld_tenant_administrator_organization_id",
-            key: "organization_id",
-            label: "Organisation",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_tenant_administrator_revision",
-            key: "revision",
-            label: "Revision",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "whole_number",
-            settings: {},
-          },
-          {
-            id: "fld_tenant_administrator_tenant_id",
-            key: "tenant_id",
-            label: "Tenant",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_tenant_administrator_identity_id",
-            key: "identity_id",
-            label: "Identity",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            search_priority: "first",
-            personal_data: "personal",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 36 },
-          },
-          {
-            id: "fld_tenant_administrator_capability_keys",
-            key: "capability_keys",
-            label: "Capabilities",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: false,
-            personal_data: "none",
-            public_display: "refused",
-            type: "several_choices",
-            settings: { options: [...tenantCapabilityPermissionOptions] },
-          },
-          {
-            id: "fld_tenant_administrator_starts_at",
-            key: "starts_at",
-            label: "Starts at",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "date_time",
-            settings: { display_time_zone: "organisation" },
-          },
-          {
-            id: "fld_tenant_administrator_expires_at",
-            key: "expires_at",
-            label: "Expires at",
-            required: false,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "date_time",
-            settings: { display_time_zone: "organisation" },
-          },
-          {
-            id: "fld_tenant_administrator_state",
-            key: "state",
-            label: "State",
-            required: false,
-            unique: false,
-            filterable: true,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "choice",
-            settings: {
-              options: [
-                { value: "scheduled", label: "Scheduled" },
-                { value: "active", label: "Active" },
-                { value: "expired", label: "Expired" },
-                { value: "revoked", label: "Revoked" },
-              ],
-            },
-          },
-        ],
-        relationships: [],
-      },
     ],
     permissions: [
       {
@@ -505,87 +182,12 @@ export const tenantAdministrationModule: ModuleSourceDocument = moduleSourceDocu
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: { readable_fields: tenantAllFields, changeable_fields: [] },
       },
-      {
-        id: "perm_organization_read",
-        key: "vortex.tenant_administration.organization.read",
-        label: "Read organisations",
-        description:
-          "Allows reading the protected organisation projection as a system record.",
-        record_type: "organization",
-        action_kind: "read",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: organizationAllFields, changeable_fields: [] },
-      },
-      {
-        id: "perm_tenant_administrator_read",
-        key: "vortex.tenant_administration.tenant_administrator.read",
-        label: "Read tenant administrators",
-        description:
-          "Allows reading the protected tenant-administrator projection as a system record.",
-        record_type: "tenant_administrator",
-        action_kind: "read",
-        administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: {
-          readable_fields: tenantAdministratorAllFields,
-          changeable_fields: [],
-        },
-      },
     ],
     actions: [],
     events: [],
     flows: [],
     extension_points: [],
     sharing_conditions: [],
-    queries: [
-      {
-        "id": "qry_organizations",
-        "key": "organizations",
-        "record_type": "organization",
-        "inputs": [],
-        "select": [
-          "display_name",
-          "short_name",
-          "state",
-          "state_changed_at",
-          "created_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "display_name",
-            "direction": "ascending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      },
-      {
-        "id": "qry_tenant_administrators",
-        "key": "tenant_administrators",
-        "record_type": "tenant_administrator",
-        "inputs": [],
-        "select": [
-          "identity_id",
-          "starts_at",
-          "expires_at",
-          "state"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
-          {
-            "field": "starts_at",
-            "direction": "ascending"
-          }
-        ],
-        "page_size": 50,
-        "relationship_hops": 0
-      }
-    ],
+    queries: [],
   },
 });
