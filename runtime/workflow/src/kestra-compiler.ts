@@ -1298,11 +1298,10 @@ const parseOperationReferences = (
     } else {
       const recordTypeId = literalTextIdentity(properties.record_type);
       if (
-        (recordTypeId !== undefined &&
-          !references.some(
-            (reference) => String(reference.operationId).toLowerCase() === recordTypeId.toLowerCase(),
-          )) ||
-      (task.type === "record.link" && references.length === 0)
+        recordTypeId !== undefined &&
+        !references.some(
+          (reference) => String(reference.operationId).toLowerCase() === recordTypeId.toLowerCase(),
+        )
       )
         return undefined;
     }
