@@ -36,7 +36,7 @@ import {
   parseBeforeSaveRuleSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
-import { evaluateRecordCalculationsV2 } from "./calculations";
+import { evaluateRecordCalculations } from "./calculations";
 import { isDateDeadlineDueFieldV2 } from "./deadline-transitions";
 import {
   finalizeRecordFieldCandidateV2,
@@ -319,7 +319,7 @@ export const calculateAndFinalize = (
       issues: [{ code: "invalid_input", path: ["organizationRuntimeSettings"] }],
     };
 
-  const calculations = evaluateRecordCalculationsV2({
+  const calculations = evaluateRecordCalculations({
     recordType: prepared.recordType,
     authoritativeFieldValues: ruleCandidateValues,
     clock: { instant: issuedAt, organizationLocalDate },
