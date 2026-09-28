@@ -34,3 +34,4 @@ revoke execute on function vortex_identity.tenant_administrator_grant_expiry_cap
 comment on function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) is 'Private: the earliest time the actor loses any of the given tenant capabilities or platform.tenant.administrators.manage, from current assignments; null when none of them expires.';
 
 alter function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) owner to vortex_identity_owner;
+grant execute on function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) to postgres;

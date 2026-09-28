@@ -29,3 +29,4 @@ revoke execute on function vortex_identity.tenant_has_permanent_manager(uuid,tim
 comment on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) is 'Identity-owned current permanent tenant-manager predicate shared by protected tenant operations.';
 
 alter function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) owner to vortex_identity_owner;
+grant execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) to postgres;
