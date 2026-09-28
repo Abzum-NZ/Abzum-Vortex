@@ -111,6 +111,17 @@ SAFE_BROWSER_ACTION_STAGES = frozenset(
         "complete",
     }
 )
+CUSTOMER_PROBE_COUNT_FIELDS = (
+    "form_count",
+    "group_count",
+    "checkbox_candidate_count",
+    "visible_candidate_count",
+    "customer_name_match_count",
+    "visible_customer_match_count",
+    "disabled_customer_match_count",
+    "visible_customer_label_count",
+)
+CUSTOMER_PROBE_GROUP_FIELDS = CUSTOMER_PROBE_COUNT_FIELDS[2:]
 RUN_TIMEOUTS = {
     "auth_prepare": 120,
     "supabase_status": 60,
@@ -1594,6 +1605,42 @@ def _browser_report(
         evidence["action_stage_valid"] = safe_stage is not None
         if safe_stage is not None:
             evidence["action_stage"] = safe_stage
+    if (
+        identity_matches
+        and result_value == "FAIL"
+        and safe_stage == "customer_control"
+        and checks_valid
+        and reason_valid
+        and cleanup_valid
+    ):
+        raw_probe = result.get("customer_control_probe")
+        probe_valid = (
+            isinstance(raw_probe, dict)
+            and set(raw_probe) == set(CUSTOMER_PROBE_COUNT_FIELDS) | {"capped", "scope_valid"}
+            and all(
+                type(raw_probe[name]) is int and 0 <= raw_probe[name] <= 1024
+                for name in CUSTOMER_PROBE_COUNT_FIELDS
+            )
+            and type(raw_probe["capped"]) is bool
+            and type(raw_probe["scope_valid"]) is bool
+        )
+        if probe_valid:
+            assert isinstance(raw_probe, dict)
+            probe_valid = (
+                raw_probe["scope_valid"] == (raw_probe["form_count"] == 1 and raw_probe["group_count"] == 1)
+                and (raw_probe["form_count"] == 1 or raw_probe["group_count"] == 0)
+                and (
+                    raw_probe["scope_valid"]
+                    or all(raw_probe[name] == 0 for name in CUSTOMER_PROBE_GROUP_FIELDS)
+                )
+            )
+        evidence["customer_control_probe_valid"] = probe_valid
+        if probe_valid:
+            evidence["customer_control_probe"] = {
+                **{name: raw_probe[name] for name in CUSTOMER_PROBE_COUNT_FIELDS},
+                "capped": raw_probe["capped"],
+                "scope_valid": raw_probe["scope_valid"],
+            }
 
     if not identity_matches:
         return evidence, False, "browser_evidence_mismatch"
