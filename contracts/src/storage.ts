@@ -22,11 +22,6 @@ export const recordStorageColumnTokenSchema = z
   .length(34)
   .regex(/^f_[a-f0-9]{32}$/, "Record field tokens retain the complete field identity");
 
-export const physicalStorageTokenSchema = z.union([
-  recordStorageTableTokenSchema,
-  recordStorageColumnTokenSchema,
-]);
-
 export const compatibleRevisionRangeSchema = z
   .object({ firstRevision: revisionSchema, lastRevision: revisionSchema.optional() })
   .strict()

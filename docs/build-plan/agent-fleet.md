@@ -1,175 +1,161 @@
 # Fleet operations
 
-Read [agent coordination](agent-coordination.md) first. This procedure governs the main orchestrator (one session of Claude Opus 5.5, GPT-6 Sol as handover), GPT-6 Luna implementers and GPT-6 Sol reviewers.
+Read [agent coordination](agent-coordination.md) first: it sets the current Codex Desktop control plane, roles, capacity, lifecycle and verification. This file gives the procedure. The lead coordinates native Codex subagents in the Desktop session; no Orca dispatch, separate headless agent fleet, custom app-server or external scheduler is part of current operations. Deterministic local helpers may cache, journal or run requested checks, but cannot form a second coordinator.
 
-## Ready-work dispatch algorithm
+The coordination root is `C:/Users/vijay/.codex/fleet/Abzum-Vortex`. Keep machine-specific checkout and process facts in the checkpoint, not in this policy.
 
-1. On startup/resume, inspect current coordinator/run, workers and worktrees. Adopt ownership only through supported Orca operations. Never duplicate a live or uncertain worker. Reconcile ownership ambiguity before dispatching the affected issue. Pending reports or status writes for one issue remain in the reconciliation journal and do not stop independent eligible work.
-2. Read all pages of the configured authoritative roadmap project: required leaves, phase, status, native blockers, parent relationships and Pickup Order metadata. The concrete repository and project identifiers belong in coordinator runtime state, not this policy. Cache the queue for the cycle. Refresh active/next items at each transition and the complete queue every 30 minutes or after a roadmap change. A partial view cannot establish an empty queue or completed required leaves.
-3. Scan every non-rollup, non-cancelled leaf across all phases. Reviewed but unmerged is unfinished. Phase and Pickup Order are planning and reporting metadata, not dispatch gates; implementation eligibility is governed by actual dependencies, bounded scope, exclusive owning paths and available capacity.
-4. Keep active work in place, then dispatch every dependency-ready, independently bounded leaf whose owning paths do not overlap an active editor until the lane target is full. Phase never limits that selection; prefer lower Pickup Order only to break ties between equally ready leaves. A leaf is ineligible only because of a real dependency, overlapping ownership, unresolved scope or unavailable capacity.
-5. Confirm the selected leaf's real native blockers and required children are complete. Correct stale dependency descriptions against source/spec with a recorded reason. Never delete a real dependency merely to make the task Ready.
-6. A dependency cycle or contradictory native dependency is a planning blocker. Pickup Order may remain missing, duplicated or out of sequence because it is reporting metadata; never wait for or renumber it before dispatching Ready work.
-7. Read current source and shape enough eligible leaves to maintain eight active implementer lanes by default, or up to twelve when isolation and capacity are clear. Shaping makes each issue clear and bounded, and splits it into sub-issues when it is larger than one session (see [shape before dispatch](agent-coordination.md#shape-before-dispatch)). Already implemented functionality goes to a bounded GPT-6 Sol source review and completion reconciliation, not reimplementation. Otherwise select routing/estimate and dispatch the implementer.
-8. Treat implementer and reviewer capacity as separate pools. Up to six independent GPT-6 Sol (Extra High) review-and-fix sessions may run concurrently; Opus 5.5 (Medium) substitutes only when Codex is capacity-limited. Start a reviewer for every handed-off candidate in the same cycle; when the review queue exceeds free review lanes, fill review lanes before opening new implementer lanes. A candidate waiting for repository status or integration does not consume an implementer lane and does not pause independent work elsewhere in the queue.
-9. After any candidate handoff, reviewed integration, issue closure, board reconciliation or cleanup, immediately recompute eligibility and refill open lanes. Phase 6 means implemented definition-led UI, not deployment or hosted evidence; phase completion is a reporting rollup, not a dispatch gate.
+## Resume and dispatch
 
-Phase labels and Pickup Order are preserved as planning/reporting metadata, while real dependencies, bounded scope, exclusive ownership and capacity determine readiness. Resolve external blockers or name the exact action needed; keep every independent Ready leaf across the queue moving. Provider changes and revised estimates never change readiness. Do not go silently idle or claim an empty queue while eligible work or an unfilled lane remains.
+1. **Resume.** Read the checkpoint and append-only journal. Reconcile native child status, actual processes, managed worktrees, open PR heads, Project state, locks and pending writes. Treat an uncertain worker as active until investigated; do not duplicate work because a session looks idle.
+2. **Snapshot.** Refresh the slim, fully paginated roadmap Project snapshot at the active cadence in [Agent coordination](agent-coordination.md#board-continuity-and-rate-limits), after structural changes, and from event read-backs between snapshots. Refresh native relationships separately.
+3. **Choose.** Keep a small verified pickup ledger of two or three shaped leaves. A leaf is eligible only when its current comments and native blockers agree, its premise holds in current source, its scope is bounded, its owning paths do not overlap an active editor, and capacity exists. Current-phase blockers and Pickup Order break ties. Never remove a real dependency to make an issue Ready.
+4. **Actionable review first.** Give an unreviewed candidate priority when its handoff is complete and an independent Sol reviewer can make progress in an assigned managed worktree. Send a fully gated merge packet promptly to the lead. Preserve a PR blocked on external access, another owner or incomplete checks with an exact next action; its wait does not hold an otherwise verified, independent implementation leaf. Merge readiness does not permit a worker to merge; the lead makes the final decision.
+5. **Fill only useful capacity.** Default to one implementer, one reviewer and one flexible child when the live capacity supports it. Dispatch an idle implementer to a verified leaf in the same active turn. If none qualifies, shape the highest-value Backlog candidate and record the missing prerequisite. Dispatch another implementer only if paths are disjoint and review is keeping up. For a review backlog, prefer one implementer and two reviewers. Reserve a child for an independent phase walkthrough. Do not claim empty work or dispatch capacity from partial data.
+6. **Shape and assign.** Follow [Shape before dispatch](agent-coordination.md#shape-before-dispatch). Existing implementation goes to independent review and reconciliation, not reimplementation. Assign a lead-owned isolated managed worktree, branch, issue and explicit owning paths before the child edits.
+7. **Recompute.** After a handoff, merge, closure, board transition or blocker, refresh the affected evidence and reconsider eligible work in the same active turn. Preserve a blocked child's unique work, release its slot and continue independent leaves. Do not run an always-on poller.
 
-## Models and capacity
+The current Desktop session exposes up to three child slots; verify the actual limit at each session and never imply more capacity. A child does not inherit a private checkout or durable background execution automatically. Native work may be interrupted by user input, app closure, context or shared usage limits. Preserve a recovery point and keep coordination claims honest.
 
-| Work | Preferred model |
+## Native subagent handoffs
+
+Every handoff records issue and outcome, complete dependencies, acceptance, scope boundaries, assigned worktree and branch, migration reservation if any, actual model and reasoning effort, and the exact requested deliverable. Use the issue's complete context, not an abbreviated summary. Workers report evidence and blockers to the lead.
+
+- **Read-only inventory or summary:** Luna, Extra High, only when delegation saves work; supply exact sources and questions. Require source evidence for claims and keep it bounded.
+- **Implementation:** Luna, Extra High for implementation, self-review and corrections. The lead assigns the managed worktree and checks ownership and path boundaries. The implementer validates definitions when needed, commits, and returns the complete self-review packet, candidate SHA, changed paths, acceptance mapping, validator result, limitations, and whether a PR was opened.
+- **Review and fix:** fresh Sol, High for ordinary bounded review; Extra High for privilege, authentication, SQL ownership, tenant boundaries, transactions, architecture or unresolved cross-layer failures. Use a separate session and worktree after the implementer stops. The reviewer reads the live issue and all comments, specification, complete diff, current main and affected callers; fixes findings; re-reads changed context; re-reviews; and returns the exact-head verdict, checks and limitations to the lead. It never merges. Reuse the same independent reviewer for later acceptance of its candidate when appropriate.
+- **Planning:** Sol, High or Extra High for bounded architecture options and issue shaping. Astra, High is an exceptional consultation only for a named unresolved decision. No external model is dispatched under current policy.
+- **Independent monitor:** Sol, High when needed for preview evidence or phase acceptance. Keep it independent from implementation. It does not become a permanent service.
+
+Reasoning is selected by risk. Keep Luna Extra High for implementation and corrections. Sol High ordinary review is a measured pilot, while sensitive review stays Extra High; neither changes independence or verification. Record actual model and effort; do not infer them from the plan label. Compare rework and acceptance before changing routing further. Optimize cost per accepted change, not the number of simultaneous agents.
+
+Before independent review, the Luna handoff names the full candidate and base SHAs, changed paths, acceptance-to-source mapping, focused final-diff and caller self-review, actual findings and corrections (or reviewed cases when none), edge cases, checks with exit codes, and pending limits. The lead returns an incomplete packet to the same Luna session; it does not invent evidence or spend a Sol slot on an incomplete handoff. See the [implementer template](#implementer-handoff-template).
+
+## Branches, worktrees and migrations
+
+- One issue has one editor and one lead-assigned isolated managed worktree at a time. Base new work on current `origin/main`. Create branches with `--no-track`; use the `codex/` branch prefix unless the owner or repository procedure says otherwise. A reviewer uses its own isolated managed worktree on the PR branch.
+- Never push to main. Push only with the explicit refspec `git push origin HEAD:refs/heads/<branch>`. Verify that the branch has no upstream tracking `origin/main`. Main is protected, including for administrators.
+- Before merge, the lead verifies the PR head, base and review are current. Update from `origin/main` when required, inspect merge changes, rerun checks invalidated by the new head, and re-read the candidate immediately before the protected merge. A changed head invalidates prior review or check evidence.
+- When the exact-head review and all required check and preview evidence are complete, the lead attempts the protected PR merge in that active turn. Classify a failed merge as changed head or base, missing evidence, conflict, protection or integration access; record one owner and next action. Never use another identity or executor to bypass a real 403.
+- Before dispatching a migration, compute the next free number from current `origin/main` and reserve it in the checkpoint. Every child takes its number only from the lead. Renumber before merge if it sorts before an existing main migration.
+- Preserve untracked, uncommitted, unpushed and otherwise unique work before considering worktree cleanup. Do not remove a worktree while a child or process uses it. Retain uncertain work with an owner, reason and next action. No recursive delete by computed path, no primary-checkout removal and no cleanup against main. Never blindly revert dependent migration or subsequent work.
+
+## Heavy checks and locks
+
+Heavy checks are scoped typecheck, web build and database replay. There are two total slots; at most one database replay may run at a time. Use `heavy.lock` for any heavy check and `heavy.lock2` for typecheck or build only. Do not start when less than 3 GB of memory is free.
+
+The lead owns locks and queue state. Each reservation records owner identity, process start time, task and commit; release it as soon as the command ends. A stale timestamp alone never licenses stealing a lock. Confirm the owner process has exited and the reservation is no longer active before recovery. Reviewer asks the lead for a lock; the lead serializes the request and returns the grant. The lead coordinates priority and the current phase's blockers. Never start a heavy check merely to satisfy a stale label; use the exact verification requirements and candidate SHA.
+
+## Preview checks and browser smoke
+
+The shared preview stack is local. The lead assigns one independent preview owner at a time; no concurrent database reset or setup operation is allowed. Capture the stack state and exact commit before each check.
+
+For definitions, migrations or `apps/web/scripts/development-setup`, require independent preview PASS on the exact full head: fresh `db reset` and `setup:local`. For pages, forms or definitions in `apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/` or `contracts/src/`, also require independent headless Edge smoke PASS on that head after preview reset: sign in, open the CRM Companies list, open New company and save. Do not assume an automatic watcher exists. The lead assigns one independent preview owner. The source reviewer may own the run only if it did not author or fix the product candidate under verification; otherwise assign a separate monitor. A FAIL, skipped run, mismatched SHA or unavailable stack means do not merge.
+
+After any merge that touches definitions, migrations or development setup, independently smoke-test main. A main failure holds further merges of that kind until the cause is diagnosed and a corrective PR is verified. The phase walkthrough is a separate independent browser acceptance run; reserve a child slot and pause conflicting preview operations while it runs.
+
+## Issue metadata
+
+Each implementation leaf title starts `#<issue>` and the issue includes its phase label, numeric Pickup Order and:
+
+- Summary
+- Already built
+- Remaining work
+- Scope boundaries
+- Acceptance criteria
+- Specification references
+- Blocked by and Blocks
+
+No test instructions or proof checklists. Parent estimates total their children. The lead records the actual session/model/effort, implementation and review estimates, assigned worktree and branch, UTC start and finish, PR and candidate/reviewed/merged SHAs, checks, preview owner, migration reservation and blocker in the checkpoint.
+
+## Project board and API budget
+
+The lead is the sole board writer. At each transition, journal the intended Project mutation before sending it, update only changed fields, read back the affected row and append evidence to the local journal. If a write is pending, report the board as STALE and keep the pending operation through restart.
+
+| Event | Project state |
 | --- | --- |
-| Main orchestrator, planning and architecture | One session of Claude Opus 5.5 (High); GPT-6 Sol (Codex - Extra High) as handover |
-| All bounded implementation (schemas, catalogues, adapters, services, UI components, pages and wiring) | GPT-6 Luna (Codex - Extra High) |
-| Overflow implementation when Codex capacity is short | OpenCode Space Bunny, DeepSeek 4.1 Flash (`deepseek/deepseek-flash`, when funded) or Claude Sonnet 5 (High) |
-| Planning, architecture and complex design decisions | Claude Opus 5.5 (High) |
-| All final reviews, fixes and re-reviews | GPT-6 Sol (Codex - Extra High), a separate session from the implementer; Claude Opus 5.5 (Medium) only when Codex is capacity-limited |
+| Leaf shaped and dependency-ready | Ready, with planned role and estimate where available |
+| Implementer actually starts | In progress, with actual session/model and start time |
+| PR opened | In review, substate awaiting reviewer |
+| Reviewer starts, fixes or verifies | In review with the truthful substate |
+| Blocked, failed or reassigned | Truthful status, exact cause and next action; clear the old owner |
+| Leaf PR merged and issue closed | Done after board read-back; update dependents and parent rollups |
 
-Choose the cheapest capable model within the assigned role. Before dispatch, review handoff and each 30-minute active checkpoint, read `orca account list --json` for Claude and Codex session and weekly usage, reset times, freshness and errors. OpenCode and Antigravity capacity may require observing the actual provider response. Unknown quota is not unlimited. Capacity guidance does not permit ignoring real dependencies, unresolved scope or exclusive ownership. Avoid routine implementation below 25% weekly remaining; preserve 15% for essential coordination/review. No automatic credit purchases or resets. If qualified reviewers are unavailable, remain In review with a capacity blocker; do not substitute a cheaper reviewer or claim Done.
+Worker stages and parent or phase rollups are different facts: a parent's status follows verified child outcomes, and a phase stays open until independent end-to-end acceptance. A rollup can become Done after its required children and acceptance complete, its issue closes and its board row is read back; it need not have its own PR. A reviewed local branch without a PR is a preserved substate, not a mergeable PR or Done item. Reconcile the whole Project hourly when budget allows. An open issue is never Done; a closed issue is Done or Not planned. Never infer progress from a partial board read or an agent's claim.
 
-Treat a provider concurrency, rate-limit or model-unavailable response as a capacity result, not a tool-approval denial. One capacity response does not settle the attempt: retry the same terminal several times at about 20-second spacing and record each actual provider response. Only after repeated confirmed capacity failures preserve the branch/worktree, settle that attempt and move implementation to the next cheapest suitable authorized workhorse or an offered fallback, without waiting for user direction. Real permission and repository-protection denials remain non-bypassable: do not retry unchanged, change controls or route through another executor to evade them.
+REST and GraphQL budgets are separate. Trust live headers and GraphQL error arrays, even on HTTP 200. Cache Project item, field and option IDs and share the cache. Refresh active PR facts conditionally about every 60–90 seconds only while useful. Coalesce and serialize writes, status first, with one targeted read-back. Reserve 20% of the hourly GraphQL budget for live transitions. Honor Retry-After and reset headers with bounded backoff and jitter. When exhausted, journal pending work, check if the write already succeeded before retrying, and wait for reset. Never rotate credentials to defeat a limit. Unknown, stale or partial evidence never means an empty backlog, PASS or permission to merge.
 
-Model roles (owner decision, 27 September 2026): GPT-6 Luna at Extra High effort is the regular workhorse and fills the implementer lanes; overflow goes to OpenCode Space Bunny, DeepSeek 4.1 Flash (when funded) or Claude Sonnet 5 High only when Codex capacity is short. Use only `deepseek/deepseek-flash` for DeepSeek, never DeepSeek Pro. Unknown usage telemetry is not proof that an installed provider cannot execute; use a real bounded launch to establish availability when that model is the best fit, then record the actual result. GPT-6 Sol is reserved for review and fixing; Opus 5.5 for planning, architecture and orchestration.
+## Retired fleet artifacts
 
-Verify actual model/effort in launch/session; planned labels are not execution facts. Resolve provider and model identifiers from the current Orca runtime configuration at dispatch, confirm the actual session identity, and record it in the checkpoint. Never label another version as the requested model. Reassignment updates planned agent, estimate, actual worktree display name, issue metadata and parent row together. Retain an existing branch name accurately when appropriate.
+The Orca handover is complete; its archived inventories and reports are evidence, not instructions to restart those services. Do not dispatch through Orca, launch a headless Codex CLI agent fleet or attach new work to an old run. Preserve unique work from old branches and checkouts. Reuse an old checkout only after proving no session or process relies on it; use Codex-managed worktrees for new work. A heartbeat is a recovery reminder while the app runs, not unattended fleet execution.
 
-## Workhorse terminal launch
-
-Launch each provider through its normal supported path and judge readiness by actual session state rather than cosmetic output.
-
-| Provider | Normal launch | Readiness and recovery |
-| --- | --- | --- |
-| Antigravity, only when separately assigned | `agy-trusted.cmd` | Ready when the session reports `agentWait: None`. The sign-in banner is cosmetic; it is not a blocker, a capacity result or a permission denial. This launch note does not add a model to the implementation routing above. |
-| OpenCode Space Bunny or DeepSeek 4.1 Flash | Orca's OpenCode agent, configured to run `opencode-orca-headless.cmd` | Every turn uses native ARM64 `opencode run` and continues the same session. The terminal shows a plain line prompt and an `OC` title that says working or ready. Confirm the actual selected model and turn start. If it returns to the shell prompt without a handoff, check the configured agent command before relaunching. |
-
-A confirmed OpenCode concurrency-capacity response is a capacity result on an otherwise healthy terminal: retry the same worker several times at about 20-second spacing rather than relaunching it or reclassifying it as a permission problem. After repeated confirmed capacity failures, preserve work, settle the old owner and reassign the leaf to another authorized workhorse. If an OpenCode worker returns to the shell prompt without a handoff, preserve its leaf and confirm `C:\Users\vijay\.orca\bin\opencode-orca-headless.cmd` is still the agent command in Orca Settings > Agents > OpenCode. Relaunch that leaf once and reassign it if the relaunch fails again. Run `C:\Users\vijay\.orca\bin\opencode-fix-arch.cmd` only after an OpenCode upgrade or reinstall, after settling and preserving every active OpenCode worker, because the repair stops all OpenCode processes. Then relaunch or reassign every interrupted leaf, verify actual starts and reconcile owner/session/board metadata. Do not use historical Herdr instructions.
-
-## Metadata
-
-Each leaf title starts #<issue>. Include phase label, numerical pickup, plain Summary, Already built, Remaining work, Scope boundaries, functional Acceptance criteria, specification references, Blocked by and Blocks. No test instructions or proof checklists.
-
-Record planned implementer, reviewer, active-minute implementation/review estimates, actual worktree/branch, current owner, task/dispatch/session, UTC start/finish, last useful progress, PR/reviewed/merged commits and blocker. Worktree display name: #<issue> - <agent>. Default new branch: codex/<issue>-<agent-slug>; always record the branch actually created. Parent estimates total children, not additional effort. Queued/blocked minutes are separate from active time.
-
-## Board reconciliation
-
-Orchestrator owns shared board state. An implementer or reviewer writes only its own assigned issue's row at its own transitions (see the no-choke-point rules); a reviewer also updates and closes its assigned issue and manages its PR. Update at every event:
-
-| Event | Board action |
-| --- | --- |
-| Dependency-ready issue bounded | Ready, planned model/estimate, no active owner yet |
-| Actual worker start | Implementer writes In progress and UTC start; orchestrator records actual model/dispatch/branch |
-| Implementation complete | Implementer writes In review; orchestrator records candidate commit, clears the implementer and starts the reviewer |
-| Reviewer starts/fixes | Reviewer records itself as Current owner; orchestrator records review/fix substate and current candidate |
-| Blocker/provider failure/exit | Truthful stage, exact reason, owner, next action and resume condition; clear dead owner |
-| Reassignment | Issue, parent row and board reflect new actual agent/estimate/worktree |
-| Reviewer reports merged/closed | Reviewer writes Done, finish time and no active owner; orchestrator reads it back, adds merge/review references and refreshes dependent eligibility |
-| Cleanup/phase completion | Lifecycle outcome recorded, parent/phase rolled up from completed required leaves |
-
-Issue closure and project writes are separate. Resolve the coordinator-state root from the current checkpoint/runtime configuration and maintain one short `board-reconciliation.jsonl` entry per event there: issue, intended fields, source commit/PR, UTC and pending/done. Read back the affected issue/item after writing. On interruption, inspect current state and retry only missing authorized updates; do not duplicate comments or repeatedly reopen/close an issue. Mark transient failure board-sync-pending. Pending writes for one issue do not stop independent eligible leaves; retain and retry them through the journal. Use a local note, not a new coordination database/service.
-
-After each reviewed merge and issue closure, write the board event immediately and read back its fields. A rate limit or temporary API failure leaves an explicit pending event with the reported reset/retry time; check fresh API capacity rather than trusting an old reset estimate. Drain pending events as soon as the API recovers, including while other agents work. A closed issue still showing In review or In progress, or a started worker still showing Backlog or Ready, is board drift to repair at this transition, not at a later phase boundary.
-
-Before each scheduled progress report, use the latest shared complete paginated Project and native-relationship snapshot, plus all verified targeted event deltas since its source time, to refresh `monitor-progress.json`. The coordinator schedules one complete refresh within each reporting interval and after a structural roadmap change; the monitor does not duplicate it. Exclude rollup parents, phase epics, cancelled/duplicate/not-planned leaves and administrative PRs. Count a leaf only with review, main-merge, issue-closure and board-readback evidence. Write the counts and percentages for the full roadmap and Phases 1–6 atomically with complete-snapshot and delta timestamps; explain denominator changes. Board Done alone is not completion evidence. If a required source is unavailable or the complete snapshot has aged beyond the reporting interval, leave the previous verified snapshot intact, report STALE with cause and next retry time, and refresh automatically once capacity returns; never silently reuse an old percentage after a successful full read.
-
-### GitHub Project API budget
-
-Roadmap Project mutations and reads use the same GraphQL point budget across the coordinator, monitor and manual scripts. Treat the `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers from an actual GraphQL response, plus its `errors` array, as authoritative. `gh api rate_limit` may show a cached GraphQL bucket that disagrees with the live response. Any unexpected nonempty GraphQL `errors` array fails that operation or page even with HTTP 200 or partial `data`; primary exhaustion may appear as `RATE_LIMITED`, another rate-limit type, or an API-rate-limit message and zero remaining points. Record remaining points, observed UTC, reset time and the attempted operation in the reconciliation journal. On exhaustion, retain pending writes with their exact intended values and make the first retry only after the reset; keep them pending with bounded backoff if that retry also fails. Do not poll or repeatedly fetch full Project pages before then. Recheck fresh headers after the reset because the reported reset may change.
-
-The orchestrator is the only session that runs complete Project fetches and writes shared rows; implementers and reviewers make only their own row's targeted write and readback. A monitor reads the coordinator's complete timestamped Project snapshot and targeted board readbacks; it does not start another full pagination while that snapshot is current or the coordinator is fetching it. Share one complete result between readiness, board audit and progress calculation. Run it on coordinator startup, a structural roadmap change, and a scheduled snapshot cycle no more often than the monitor reporting cadence. Never rerun the full audit after each single-field repair; inspect the touched item instead. Refresh the full snapshot again when capacity permits if the complete source is older than its reporting interval. A transient unavailable source makes the percentage explicitly STALE with cause and retry time; it does not make a partially fetched board current.
-
-Split complete refreshes into a slim paginated Project inventory (item ID, issue number/state/updatedAt and required board fields) and a separate native-relationship pass. Do not nest wide `fieldValues`, `subIssues`, `blockedBy` and `blocking` connections beneath every Project item: connection cost multiplies across pages even when results are sparse and can exhaust the hourly budget after a few refreshes. Issue `updatedAt` changes invalidate that issue's cached relationships; fetch those and uncached open issues immediately for readiness. Also sweep every required leaf's native relationships separately at least once per reporting interval, because a relationship change made outside the coordinator might not change the expected issue timestamp. A snapshot cannot be called complete once any relationship entry exceeds that interval; label the percentage STALE until the sweep succeeds. Keep page cursors and source times; atomically publish the snapshot only after every required page and relationship is present. A targeted event readback does not require a whole-project refresh.
-
-Keep a local cache of verified issue-to-Project-item IDs, field IDs, option IDs and last readback values. For each worker start, handoff, review, merge or closure, coalesce queued changes for that issue and compare with the last verified row. Write only changed fields. Give Status and Current owner priority over descriptive fields so the visible board reflects the real stage promptly. Batch a bounded group of changed-field mutations through one GraphQL request using aliases/variables; inspect every mutation result and GraphQL error. Include the touched item's fields in the final mutation response when supported, or make one targeted readback after the batch. Mark only confirmed fields done in `board-reconciliation.jsonl`; retain any partial write. Update dependent and parent rows from the same event without re-reading all Project items. This reduces requests and redundant writes without skipping a required board field.
-
-Before a complete scan, query the live GraphQL budget and reserve at least one fifth of the current hourly limit for new board transitions. If the scan would consume the reserve, defer that scan, keep processing essential targeted updates, and report the complete snapshot's timestamp. At reset, drain pending event changes first, then take one complete snapshot, audit it and atomically update `monitor-progress.json`. Space mutation requests to respect GitHub's secondary limits; on a secondary limit or transient server error, honor `Retry-After` if supplied, otherwise back off exponentially instead of creating a retry storm. Never let a report or audit loop consume the points needed to keep live statuses current. If other API clients exhaust the shared bucket despite this budget, record the concrete external capacity block; no system can write a GitHub board while GitHub rejects its API.
-
-Every 15 minutes while active, compare actual workers with board owners and completion reports using targeted readbacks. Correct missing transitions and stale owner claims, then refill idle lanes. A shared complete roadmap refresh runs within the scheduled reporting interval and when its topology changes; it is queue maintenance, not an acceptance gate. The external monitor consumes that shared snapshot and reports drift to this coordinator; it never becomes another board writer or duplicate full-scan client.
-
-## Stall recovery
+## Stall and failure recovery
 
 | Observation | Action |
 | --- | --- |
-| Ambiguous send/start | Inspect original receipt/session/dispatch; never duplicate launch |
-| Worker awaiting ordinary scope answer | Answer immediately; escalate unresolved product choices once |
-| No useful progress for 15 minutes | Inspect edits/session; ask one bounded status question if unclear |
-| Estimate reached or 30-minute checkpoint | Record completed/remaining scope and cause; adjust estimate or narrow within this issue |
-| Productive worker exceeds estimate | Continue; time alone never terminates a worker |
-| Provider concurrency or capacity response | Retry the same terminal several times at about 20-second spacing; do not relaunch, settle or reclassify it as a permission denial |
-| Repeatedly confirmed capacity failure or quota refusal | Preserve work, settle/stop old attempt through Orca, reassign the same issue to another workhorse or offered fallback and update metadata |
-| Antigravity sign-in banner with `agentWait: None` | Treat the session as ready; do not relaunch, reassign or report a blocker |
-| OpenCode returns to the shell prompt without a handoff | Preserve the leaf and check Orca's OpenCode agent command override; relaunch that leaf once, then reassign it if the relaunch fails again |
-| OpenCode upgrade or reinstall | Settle and preserve all active OpenCode workers before running the ARM64 repair once; then relaunch or reassign interrupted leaves and reconcile ownership |
-| Reviewer finds defects | Reviewer fixes and re-reviews itself; no implementer ping-pong |
-| Conflicting editors/stale main | Establish exclusive ownership; reviewer resolves and re-reviews candidate |
-| Real permission/repository rejection | Name exact rule/action and supported resolution; no unchanged retry loop or bypass |
-| No eligible work in queue | Report every active/blocking leaf and accountable action; do not claim completion while any required work remains |
+| Child asks a scope question | Lead records the answer in the issue or PR and updates scope before the child continues |
+| A real design gap blocks work | Use a bounded Sol analysis; owner decides product questions, then relaunch from the recorded decision |
+| No useful progress during an active turn | Inspect native status, branch and worktree; ask one bounded question if unclear |
+| Child ends without a PR or report | Read available handoff evidence, preserve work, and inspect the branch before resuming or reassigning |
+| A blocker stops a child | Preserve its branch and handoff, record the exact unblock condition, release its slot, and dispatch unrelated verified work in the same active turn |
+| Provider capacity or rate limit | Retry the same session a few times about 20 seconds apart; then preserve work and reassign only after repeated confirmation |
+| Reviewer finds defects | Reviewer fixes and re-reviews in its assigned worktree |
+| Branch is behind main | Update the candidate, inspect changed code and rerun affected verification |
+| Preview or browser check fails | Do not merge; diagnose and fix through a PR, then rerun on its new SHA |
+| Permission, tool-approval or protection rejection | Report exact action and cause; do not retry unchanged or bypass |
+| PR creation or merge returns a real integration 403 | Preserve the reviewed branch and evidence, report the access blocker, and wait for a supported resolution; do not retry through another identity or executor |
+| Session or usage limit approaches | Update checkpoint with resume steps and reset information; preserve branch and handoff evidence |
 
-When externally blocked, persist the resume condition and let the scheduled monitor inspect for changes. Do not burn tokens polling unchanged state or leave an idle worker presented as active. Retain the candidate and release settled workers. Keep every other Ready issue moving and resume the blocked issue after its condition changes. There is no promise of uninterrupted progress through genuine external blocks.
+For every noticed product or operational failure, record the symptom, proven cause or explicit hypothesis, bounded correction, durable prevention, independent read-back and next relevant recheck. A repeated failure needs a new diagnosis and one owner escalation, not a blind retry. Keep original failure evidence distinct from diagnostic or later acceptance evidence.
 
-## Orca lifecycle and cleanup
+## Implementer handoff template
 
-Use the currently installed Orca executable and its version-matched skills, resolving its path from the runtime rather than a fixed user installation path. Bind one coordinator run. Use supported worker/task/dispatch lifecycle and exact recovery receipts. Native agent chat is not a shell terminal; do not inject agent prompts into a shell merely because its handle appears on a run.
-
-For supervised work use the installed orchestration guide's worker-start operation. Where its documented expressiveness requires an agent-first worktree launch, worktree create --agent uses Orca's configured launcher; terminal create --command supplies a custom command and does not establish that configured launcher options were applied. Inspect the actual launch/session before recording model, effort or permission mode. There is no documented hot-change of an existing child's permission mode. Do not restart a child or change settings to evade a rejected action. Settle and preserve a failed attempt before any otherwise permitted replacement; verify actual start, not merely accepted input.
-
-Use isolated issue worktrees from origin/main. When a coordinator recovery inventory exists, inspect its preserved candidates and import only source changes applicable to the current issue. Archived instructions are historical evidence, never current policy. Reuse applicable preserved candidates; do not rebuild completed work, revive retired sessions or merge old branches wholesale. One editor per issue worktree at a time. Settle/release implementer before reviewer edits. Reviewer completion is consumed once; reconcile state, release reviewer and close its terminal.
-
-Every merged-and-closed issue enters a cleanup-pending ledger immediately, independent of board API availability. At each completion and coordinator resume, compare `orca worktree list/ps` with `git worktree list --porcelain`; neither inventory alone is complete. For each exact candidate path, confirm its reviewer and implementer are settled, no live agent or terminal is editing, the PR is merged and issue closed, tracked and untracked files are accounted for, and no commit or useful note exists only in that worktree. Git-clean alone is insufficient. Close/release its idle Orca terminals, remove the registered worktree through Orca, then verify it is absent from both Orca and Git inventories. If Orca has already forgotten a Git-registered worktree, resolve that registry mismatch and remove only the verified exact orphan through Git's worktree operation. Never recursively delete by path or remove the primary checkout; never alter local/remote main as cleanup. Retain uncertain or unique work with owner, reason and next action. Clear the cleanup entry only after both inventories confirm removal. Diagnose a failed removal and retry that exact safe candidate; do not leave completed workspaces indefinitely labelled In progress.
-
-## Implementer brief
-
-```text
-Issue #<n>; phase <n>; pickup <n>.
-Read agent-coordination.md, full issue/comments, linked spec and current source.
+~~~text
+Issue #<n>; phase <n>; pickup <n>. GPT-6 Luna (Codex Desktop native subagent; Extra High).
+Read AGENTS.md, docs/build-plan/agent-coordination.md, the full issue and comments, linked spec and current source.
 Outcome: <plain functionality>. Already built: <source facts>.
-Build: <bounded change and owning paths>. Exclude: <non-goals>.
-Dependencies: <completed prerequisites>. Acceptance: <inspectable code behavior>.
-Actual model/effort, estimate, worktree/branch, task/dispatch: <values>.
-Implement this issue, commit/push candidate, then stop editing.
-Write everything in English only: code, comments, strings, commit messages, PR text and issue comments.
-Never write Chinese or any other non-English text; rewrite any such output in English before committing.
-No tests or test edits, builds/typechecks/lint, DB execution/review,
-hosted verification, Kestra or deployment. Do not change permissions or protections.
-Board row: <Project item ID and Status/Current owner/start field IDs>.
-When your task starts, set your own issue row to In progress with the UTC start.
-Report functionality, candidate commit/PR, acceptance mapping and limitations.
-Set your own issue row to In review, then request GPT-6 Sol (Extra High) review handoff; Opus 5.5 (Medium) reviews only when Codex is capacity-limited.
-No issue closure, merge, or edits to any other board row.
-```
+Build: <bounded change>. Owning paths: <paths>. Exclude: <non-goals>.
+Dependencies (complete): <list>. Acceptance: <inspectable behavior>.
+Assigned managed worktree/branch: <path> / codex/<issue>-<slug>. Migration numbers: <range or none>.
+If modules/src changes, run the definition validator and fix every failure before committing.
+Do not run heavy checks or create, edit or run tests.
+Review the full final diff and affected callers, correct findings, and report the cases reviewed even if none were found. Commit and report the full candidate and base SHAs, changed paths, acceptance mapping, findings and corrections, edge cases, checks with exit codes, pending limits and actual runtime model/effort. Push only with an explicit branch refspec; never push to main. Open a PR if assigned.
+English only. No Project-field writes, issue closure or merges.
+Return: PR if opened, complete self-review packet, candidate commit, validator result and limitations.
+If a real scope or design question blocks you, preserve unique work, report the exact issue to the lead and stop without a partial PR. A PR-creation 403 is an integration blocker, not a reason to delete a reviewable local candidate.
+~~~
 
-## Reviewer brief and completion
+## Reviewer handoff template
 
-```text
-You are the independent GPT-6 Sol (Extra High) review-and-fix owner of #<issue>, or Claude Opus 5.5 (Medium) only when Codex is capacity-limited.
-Candidate/worktree/branch: <actual>. Issue/spec: <links>. Implementer settled.
-Board row: <Project item ID and Status/Current owner/finish field IDs>. Record yourself as Current owner now.
-First read the complete live GitHub issue, every comment and linked spec.
-Then review the entire candidate change, current main and affected callers against bounded acceptance.
-Fix findings yourself; commit and re-review the final candidate.
-Check the whole change, its commit messages, the PR title and body, and your issue comments for
-non-English text, and replace every occurrence with English. Search the diff with:
-  git diff origin/main...HEAD | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{s.split('\n').forEach((l,i)=>{if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(l))console.log(i+1+': '+l)})})"
-A change with non-English text is not ready to merge.
-No tests or test edits, builds/typechecks/lint, DB/hosted reviews,
-proof receipts, Kestra or deployment. Do not change permissions or protections.
-Open the candidate PR if absent. Integrate reviewed PR into main through permitted repository operations.
-If blocked, report exact cause; do not close the issue or claim Done.
-After merge, update assigned issue with implemented outcome/final review and close completed.
-After closure, set your own issue row to Done, clear Current owner and record the finish time.
-Do not modify other project rows or unrelated issues. Send once to orchestrator:
-  Issue/phase/pickup; PR; final reviewed commit; merge commit; verified issue closure; row readback or pending write.
-  Functionality built; findings fixed and re-reviewed; remaining limitations.
-  Please verify these facts, reconcile shared board state, unblock dependents, roll up parents, release both settled agents,
-  clean the safe completed worktree, recompute the eligible queue across phases,
-  and refill every open implementation and review lane.
-Stop editing and idle for release; use Orca's exact completion contract.
-```
+~~~text
+You are the independent GPT-6 Sol (Codex Desktop native subagent, High for ordinary bounded review; Extra High for sensitive work) reviewer/fixer for issue #<n>, PR #<pr or unavailable>.
+The implementer has stopped. Use your separately assigned managed worktree on the preserved candidate or PR branch.
+Read the complete live issue and comments, linked spec, whole diff, current main and affected callers.
+Fix your findings, commit, and re-review the final source. Check English in the diff, commits, PR and comments.
+Verify the exact final SHA as agent-coordination.md “Verification before merge” requires:
+scoped typecheck; web build if web/ui/imported runtime changed; disposable replay if supabase changed;
+definition validator and publication compile when definitions changed; independent preview PASS on exact SHA
+for definitions, migrations or development setup; browser smoke on exact SHA for listed UI paths.
+Request the heavy-check lock from the lead. Return one exact-head evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
+Do not write Project fields, close issues or merge. The lead owns those actions.
+If blocked, return the exact cause to the lead and stop without merging.
+~~~
 
-## Checkpoint and reports
+## Checkpoint, journal and reporting
 
-The coordinator owns a durable checkpoint outside disposable worktrees. Discover the existing coordinator-state root from runtime configuration; if none exists, create one under the current Orca home and record its resolved path. Read `checkpoint.md` and the reconciliation journal on startup before dispatch, reconciling them against live state. Never delete them during worktree cleanup.
+Keep the checkpoint and append-only journal in the coordination root, outside worktrees. The checkpoint is facts, not policy. Record:
 
-Keep actual UTC, coordinator/run/session, current phase, every running/reviewing leaf, worker/reviewer, candidate/worktree/branch, reviewed/merged commits, status, progress time, estimates, blocker/resume condition, pending board writes, cleanup-pending and deliberately retained worktrees, last complete progress snapshot, and the next eligible queue in one checkpoint. It records facts, not new policy. Replace settled worker and obsolete API-capacity claims at each transition.
+- UTC time, coordinator identity and current session;
+- each live child session, role, actual model and effort, issue, worktree/branch, stage and handoff status;
+- open PRs, current full heads, review, verification and preview state;
+- lock and heavy-check queue state;
+- migration reservations and pending board writes;
+- preserved work and cleanup decisions;
+- blockers with resume conditions and next shaped leaves.
 
-Every scheduled check reports findings even unchanged: a list of currently running tasks with actual agent/model/stage/elapsed estimate; tasks completed since the previous scheduled run; reviewed versus merged work; issue/board accuracy; blockers/actions; open lane count and why any lane is idle; next eligible issues across the queue; provider usage freshness; verified task-count progress percentages for the overall roadmap and the Phase 1-6 milestone; and progress toward the visible definition-led Phase 6 outcome. Never infer a percentage from a partial board page or say work is moving while idle.
+Append transition events and replace checkpoint snapshots atomically. Update at each material transition, periodically while active and before a known session limit or shutdown. On resume, compare checkpoint and journal with current Desktop child status, actual processes, worktrees, PR heads, board state, pending writes and locks. An uncertain worker is active until investigated. If a session is unavailable, recover from its preserved branch and handoff evidence in a fresh session; never claim its conversation was imported.
+
+Owner reports include: tasks with evidence; actual capacity, running children and reasons for idle slots; accepted progress and PR/review age; and coordination issues with cause and correction. State stale sources and limitations. Never infer completion from a summary, partial board read or child claim.
+
+## Independent monitor
+
+An independent Sol child may verify preview facts, run required browser smokes, conduct phase acceptance and compare evidence with the full final SHA. It reports findings and corrections to the lead. It does not dispatch work, write Project fields or merge. No monitor runs continuously unless a separate owner instruction establishes that work.

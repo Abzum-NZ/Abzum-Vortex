@@ -13,6 +13,7 @@ declare
   read_loaded jsonb;
   read_decision jsonb;
   read_bounds jsonb;
+  preview_bounds jsonb;
   readable_field_ids jsonb;
   meta jsonb;
   changeable_field_ids jsonb := '[]'::jsonb;
@@ -32,20 +33,55 @@ begin
     p_record_type_id, 'read', p_record_id, null
   );
   if read_loaded ->> 'outcome' <> 'loaded'
-    or pg_catalog.jsonb_typeof(read_loaded -> 'declaration') <> 'object' then
+    or (not (read_loaded ? 'previewInstallationId')
+      and pg_catalog.jsonb_typeof(read_loaded -> 'declaration') <> 'object') then
     return null;
   end if;
-  read_decision := vortex_access.evaluate_organization_record_access_internal(
-    read_loaded -> 'declaration', p_record_id, read_loaded -> 'facts'
-  );
-  if read_decision ->> 'outcome' <> 'allowed' then
-    return null;
+  if read_loaded ? 'previewInstallationId' then
+    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+    preview_bounds := vortex_record.preview_record_field_bounds_internal(
+      p_record_type_id, (meta ->> 'storageContractId')::uuid,
+      meta -> 'recordType'
+    );
+    if preview_bounds is null then
+      return null;
+    end if;
+    read_bounds := preview_bounds;
+  else
+    read_decision := vortex_access.evaluate_organization_record_access_internal(
+      read_loaded -> 'declaration', p_record_id, read_loaded -> 'facts'
+    );
+    if read_decision ->> 'outcome' <> 'allowed' then
+      return null;
+    end if;
+    read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
   end if;
-  read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
   readable_field_ids := vortex_record.project_derived_readable_field_ids_internal(
     read_loaded, p_record_type_id, p_record_id,
     read_bounds -> 'readableFieldIds', read_bounds -> 'readableFieldIds', '[]'::jsonb
   );
+
+  if read_loaded ? 'previewInstallationId' then
+    select coalesce(
+      pg_catalog.jsonb_agg(projected.value order by projected.value), '[]'::jsonb
+    )
+    into changeable_field_ids
+    from pg_catalog.jsonb_array_elements_text(readable_field_ids) as projected(value)
+    where exists (
+      select 1
+      from pg_catalog.jsonb_array_elements_text(
+        preview_bounds -> 'changeableFieldIds'
+      ) as changeable(value)
+      where pg_catalog.lower(changeable.value) = pg_catalog.lower(projected.value)
+    );
+    if pg_catalog.jsonb_array_length(changeable_field_ids) > 0 then
+      actions := array['update'];
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'changeableFieldIds', changeable_field_ids,
+      'actions', pg_catalog.to_jsonb(actions)
+    );
+  end if;
 
   meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
   if meta #>> '{recordType,key}' = 'organization_settings'
@@ -139,4 +175,4 @@ revoke all on function vortex_record.read_record_capabilities(uuid, uuid)
 grant execute on function vortex_record.read_record_capabilities(uuid, uuid) to vortex_request;
 
 comment on function vortex_record.read_record_capabilities(uuid, uuid) is
-  'Fixed record capabilities adapter: for one record readable under the caller''s own current authority, the record action kinds update, delete and restore whose own exact-record decisions allow it, and the fields the update decision lets the caller change, narrowed to the fields read_record projects; returns null for a missing, foreign or unreadable record, identically.';
+  'Fixed record capabilities adapter: for one live record readable under the caller''s current authority or one owner-readable preview record, returns only permitted update, delete and restore actions and changeable fields; preview capabilities are limited to supported updates, and missing, foreign or unreadable records return null.';

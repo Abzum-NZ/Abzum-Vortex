@@ -1,5 +1,6 @@
 import path from "node:path";
 import { loadWorkspace, validateGraph, validateImports } from "./package-graph.mjs";
+import { validateDesignValues } from "./design-values.mjs";
 import { validateSqlCanonical } from "./sql-canonical.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -7,6 +8,7 @@ const packages = await loadWorkspace(root);
 const errors = [
   ...validateGraph(packages),
   ...(await validateImports(packages)),
+  ...(await validateDesignValues(root)),
   ...(await validateSqlCanonical(root)),
 ];
 

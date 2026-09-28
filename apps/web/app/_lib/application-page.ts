@@ -1,6 +1,11 @@
 import "server-only";
 
-import type { HumanOrganizationRequestDependencies } from "@vortex/access";
+import {
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  readCurrentRecordOwnerGroupsAfterAuthorization,
+  runOrganizationAccessOperation,
+  type HumanOrganizationRequestDependencies,
+} from "@vortex/access";
 import {
   createHumanInstalledRuntimeContextLoader,
   type InstalledRuntimeContext,
@@ -24,20 +29,26 @@ import {
   createStoredPageCapabilityService,
   projectRecordDetailData,
   type PageSubjectReadResult,
+  type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
 } from "@vortex/page";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
+  flowTaskChildLists,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
+  timestampSchema,
+  organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
+  type FlowTask,
   type IdentitySession,
   type JsonValue,
+  type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
@@ -46,6 +57,20 @@ import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
+import {
+  computeGuidedFormStepId,
+  getGuidedFormFlowId,
+  getGuidedFormRecordType,
+  getGuidedFormStepFields,
+  getGuidedFormVisiblePlacementIds,
+  guidedFormDraftScope,
+  guidedFormInitialValues,
+  guidedFormInputData,
+  earlierGuidedStepId,
+  openGuidedFormDraft,
+  visibleGuidedFormValues,
+  visibleGuidedFormValidation,
+} from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 
 /**
@@ -78,8 +103,19 @@ export type ApplicationPageModel = Readonly<{
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
+  /** Data placements to re-read after a write from each installed flow binding. */
+  refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  guidedForm?: Readonly<{
+    draftId: string;
+    revision: number;
+    flowId: string;
+    activeStepId: string;
+    computedStepId: string;
+    values: Readonly<Record<string, JsonValue>>;
+    validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
+  }>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
   /**
@@ -102,6 +138,7 @@ export type ApplicationPageModel = Readonly<{
     tenantShortName: string;
     organizationShortName: string;
     applicationKey: string;
+    pageKey: string;
     installationRevision: number;
     releaseKey: string;
   }>;
@@ -111,6 +148,26 @@ export type ApplicationPageResult =
   | Readonly<{ kind: "available"; model: ApplicationPageModel }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
+
+export type ApplicationPagePlacementReadResult =
+  | Readonly<{
+      kind: "available";
+      data: Readonly<Record<string, PageDataState>>;
+      editFormBaselines: Readonly<
+        Record<string, Readonly<Record<string, JsonValue>> | null>
+      >;
+      subject: ApplicationPageModel["subject"] | null;
+    }>
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+export type ApplicationPageLoaderAddress = Readonly<{
+  tenantShortName: string;
+  organizationShortName: string;
+  read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+  application: PermittedApplication;
+  pageKey: string;
+}>;
 
 type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
@@ -128,6 +185,54 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+
+const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
+  const block = placement.block;
+  return (
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+      Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+        sameId(release.blockId, block.blockId as string),
+      ))
+  );
+};
+
+type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
+type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
+type PermissionEntry = InstalledRuntimeContext["permissionRegistration"]["entries"][number];
+type DateTimeZones = { personTimeZone?: string; organizationTimeZone?: string };
+
+const fieldForPlacement = (
+  placement: Readonly<Record<string, unknown>>,
+  modules: InstalledRuntimeContext["releaseSet"]["modules"],
+): Readonly<{ module: ModuleRelease; field: ModuleField }> | undefined => {
+  const settings = placement.settings;
+  if (!isRecord(settings) || !isRecord(settings.field)) return undefined;
+  const reference = settings.field;
+  if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
+    return undefined;
+  for (const module of modules)
+    for (const recordType of module.content.recordTypes) {
+      const field = recordType.fields.find((candidate) =>
+        sameId(String(candidate.fieldId), reference.fieldId as string),
+      );
+      if (field !== undefined) return { module, field };
+    }
+  return undefined;
+};
+
+const fieldControl = (placement: Readonly<Record<string, unknown>>): string | undefined => {
+  const settings = placement.settings;
+  const block = placement.block;
+  return isRecord(settings) && isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
+    isRecord(settings.control) && settings.control.kind === "choice" &&
+    typeof settings.control.value === "string"
+    ? settings.control.value
+    : undefined;
+};
 
 /** Every placement of the projected page with its stable identity, in document order. */
 const collectPlacements = (
@@ -170,6 +275,7 @@ const projectEditField = (
   placement: Readonly<Record<string, unknown>>,
   recordType: InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["recordTypes"][number],
   values: Readonly<Record<string, JsonValue>>,
+  dateTimeZones: DateTimeZones,
 ): Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined => {
   const settings = placement.settings;
   const block = placement.block;
@@ -234,6 +340,14 @@ const projectEditField = (
       }
       kind = "date_input";
       break;
+    case "date_time":
+      if (
+        stored !== null &&
+        !(typeof stored === "string" && timestampSchema.safeParse(stored).success)
+      )
+        return undefined;
+      kind = "date_time_input";
+      break;
     case "choice":
       if (stored !== null && typeof stored !== "string") return undefined;
       if (stored !== null) {
@@ -254,6 +368,47 @@ const projectEditField = (
       }
       kind = "choice_input";
       break;
+    case "several_choices": {
+      const selected = stored === null ? [] : stored;
+      if (
+        !Array.isArray(selected) ||
+        selected.length > 200 ||
+        !selected.every((choice) => typeof choice === "string") ||
+        new Set(selected).size !== selected.length
+      )
+        return undefined;
+      const options = settings.options;
+      if (
+        !isRecord(options) ||
+        options.kind !== "list" ||
+        !Array.isArray(options.items)
+      )
+        return undefined;
+      const optionItems: unknown[] = options.items;
+      if (
+        !selected.every((choice) =>
+          optionItems.some(
+            (item) =>
+              isRecord(item) &&
+              isRecord(item.properties) &&
+              isRecord(item.properties.key) &&
+              item.properties.key.value === choice,
+          ),
+        )
+      )
+        return undefined;
+      const maximumSelections = settings.maximum_selections;
+      if (
+        isRecord(maximumSelections) &&
+        maximumSelections.kind === "number" &&
+        typeof maximumSelections.value === "number" &&
+        selected.length > maximumSelections.value
+      )
+        return undefined;
+      displayed = selected;
+      kind = "several_choices_input";
+      break;
+    }
     case "link":
       if (
         stored !== null &&
@@ -290,8 +445,17 @@ const projectEditField = (
   }
   return {
     key: field.key,
-    value: displayed,
-    data: { status: "ready", values: { kind, value: displayed } },
+    value:
+      kind === "text_input" &&
+      stored === null &&
+      isRecord(settings.input_type) &&
+      settings.input_type.value === "email"
+        ? null
+        : displayed,
+    data: {
+      status: "ready",
+      values: { kind, value: displayed, ...(kind === "date_time_input" ? dateTimeZones : {}) },
+    },
   };
 };
 
@@ -312,7 +476,6 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
   }
 };
 
-type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
 const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
@@ -326,6 +489,14 @@ const findModuleQuery = (
     if (query !== undefined) return { module, query };
   }
   return undefined;
+};
+
+const resolvedQueryRecordTypeId = (
+  context: InstalledRuntimeContext,
+  queryId: string,
+): string | undefined => {
+  const recordType = findModuleQuery(context, queryId)?.query.recordType;
+  return recordType?.state === "resolved" ? String(recordType.recordTypeId) : undefined;
 };
 
 const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
@@ -354,6 +525,29 @@ const launcherCellKey = (
     : fallback;
 };
 
+const fieldChoiceLabelsOf = (
+  module: ModuleRelease,
+  allowedPermissions: ReadonlySet<string>,
+): Record<string, readonly Readonly<{ value: string; label: string }>[]> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field) => {
+        if (field.type !== "several_choices") return [];
+        const labels = field.settings.options.flatMap((option) => {
+          const permissionId = option.requiredPermissionId;
+          const permissionKey =
+            permissionId === undefined
+              ? undefined
+              : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+          return permissionKey === undefined || allowedPermissions.has(permissionKey)
+            ? [{ value: option.value, label: option.label }]
+            : [];
+        });
+        return [[String(field.fieldId).toLowerCase(), labels] as const];
+      }),
+    ),
+  );
+
 /**
  * Logs one data placement that could not be loaded, server side only: the application, page and
  * placement identities that are already in the address, and a fixed reason code. Never a message,
@@ -368,6 +562,7 @@ const logPlacementFailure = (
     | "subject_not_addressed"
     | "subject_unavailable"
     | "subject_refused"
+    | "detail_record_type_unavailable"
     | "detail_command_invalid"
     | "detail_query_unavailable"
     | "detail_query_refused"
@@ -458,16 +653,11 @@ export const loadApplicationTheme = async (
   }
 };
 
-export const loadApplicationPage = async (
+const loadApplicationPageInternal = async (
   session: IdentitySession,
-  address: Readonly<{
-    tenantShortName: string;
-    organizationShortName: string;
-    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
-    application: PermittedApplication;
-    pageKey: string;
-  }>,
+  address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
+  selectedPlacementIds?: ReadonlySet<string>,
 ): Promise<ApplicationPageResult> => {
   const dependencies = requestDependencies();
   const continuationKey = getQueryContinuationKey();
@@ -484,10 +674,13 @@ export const loadApplicationPage = async (
 
   // The offered release is read under the viewer's own application scope. A refusal or an absent
   // target reads as "nothing to adopt"; publishing a release alone never changes this page.
-  const adoptionTarget = await readApplicationReleaseAdoption(session, {
-    organizationId: context.organizationId,
-    applicationRootId: context.applicationRootId,
-  });
+  const adoptionTarget =
+    selectedPlacementIds === undefined
+      ? await readApplicationReleaseAdoption(session, {
+          organizationId: context.organizationId,
+          applicationRootId: context.applicationRootId,
+        })
+      : undefined;
 
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "unavailable" };
@@ -501,7 +694,167 @@ export const loadApplicationPage = async (
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
   if (projectedPage.value === undefined) return { kind: "unavailable" };
-  const page = projectedPage.value;
+  // The page capability projection is authoritative, but its derived choice settings still
+  // contain every declared option. Work on a copy so gated options never reach the browser.
+  const page = structuredClone(projectedPage.value);
+  const allPlacements = collectPlacements(page);
+  const choicePlacements: Array<{
+    options: Record<string, unknown>;
+    items: unknown[];
+    permissionKeys: readonly (string | undefined)[];
+  }> = [];
+  const gatedPermissions = new Map<string, PermissionEntry>();
+  let needsDateTimeZones = false;
+  for (const { placement } of allPlacements) {
+    const control = fieldControl(placement);
+    if (control === "date_time") needsDateTimeZones = true;
+    if (control !== "choice" && control !== "several_choices") continue;
+    const source = fieldForPlacement(placement, context.releaseSet.modules);
+    const settings = placement.settings;
+    const options = isRecord(settings) ? settings.options : undefined;
+    if (
+      source === undefined ||
+      (source.field.type !== "choice" && source.field.type !== "several_choices") ||
+      source.field.type !== control ||
+      !isRecord(options) ||
+      options.kind !== "list" ||
+      !Array.isArray(options.items) ||
+      options.items.length !== source.field.settings.options.length
+    )
+      return { kind: "temporarily_unavailable" };
+    const permissionKeys: Array<string | undefined> = [];
+    for (const [index, declared] of source.field.settings.options.entries()) {
+      const item = options.items[index];
+      if (
+        !isRecord(item) ||
+        !isRecord(item.properties) ||
+        !isRecord(item.properties.key) ||
+        !isRecord(item.properties.label) ||
+        item.properties.key.value !== declared.value ||
+        item.properties.label.value !== declared.label
+      )
+        return { kind: "temporarily_unavailable" };
+      const permissionId = declared.requiredPermissionId;
+      if (permissionId === undefined) {
+        permissionKeys.push(undefined);
+        continue;
+      }
+      const key = `${String(source.module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+      const matches = context.permissionRegistration.entries.filter(
+        (entry) =>
+          entry.ownerKind === "module" &&
+          sameId(String(entry.ownerId), String(source.module.rootId)) &&
+          sameId(String(entry.permission.permissionId), String(permissionId)),
+      );
+      if (matches.length !== 1 || matches[0] === undefined)
+        return { kind: "temporarily_unavailable" };
+      gatedPermissions.set(key, matches[0]);
+      permissionKeys.push(key);
+    }
+    choicePlacements.push({ options, items: options.items, permissionKeys });
+  }
+
+  const displayedFieldIds = new Set(
+    allPlacements.flatMap(({ placement }) => {
+      const settings = placement.settings;
+      if (!isRecord(settings)) return [];
+      const detail = readRecordDetailContract(
+        settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+      );
+      return detail?.fields.map((field) => field.field.toLowerCase()) ?? [];
+    }),
+  );
+  for (const module of context.releaseSet.modules)
+    for (const recordType of module.content.recordTypes)
+      for (const field of recordType.fields) {
+        if (
+          !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
+          field.type !== "several_choices"
+        )
+          continue;
+        for (const option of field.settings.options) {
+          const permissionId = option.requiredPermissionId;
+          if (permissionId === undefined) continue;
+          const key = `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+          const matches = context.permissionRegistration.entries.filter(
+            (entry) =>
+              entry.ownerKind === "module" &&
+              sameId(String(entry.ownerId), String(module.rootId)) &&
+              sameId(String(entry.permission.permissionId), String(permissionId)),
+          );
+          if (matches.length !== 1 || matches[0] === undefined)
+            return { kind: "temporarily_unavailable" };
+          gatedPermissions.set(key, matches[0]);
+        }
+      }
+
+  let dateTimeZones: DateTimeZones = {};
+  let allowedPermissions = new Set<string>();
+  if (needsDateTimeZones || gatedPermissions.size > 0) {
+    const authorized = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      async (transaction, scope) => {
+        const zones: DateTimeZones = {};
+        if (needsDateTimeZones) {
+          const profileRows = await transaction.query<{ time_zone: unknown }>`
+            select time_zone from vortex_access.read_own_profile()
+          `;
+          if (profileRows.length !== 1 || profileRows[0] === undefined)
+            throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
+          const profileZone = profileRows[0].time_zone;
+          if (profileZone !== null) {
+            const parsed = organizationRuntimeSettingsSchema.shape.timeZone.safeParse(profileZone);
+            if (!parsed.success) throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
+            zones.personTimeZone = parsed.data;
+          }
+          const organizationSettings =
+            await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+          if (organizationSettings !== undefined)
+            zones.organizationTimeZone = organizationSettings.timeZone;
+        }
+        const allowed: string[] = [];
+        for (const [key, entry] of gatedPermissions) {
+          const declaration: OrganizationAccessDeclaration = {
+            operationKey: "application.page.field_choice.view",
+            action: {
+              actionKind: entry.permission.actionKind,
+              ...(entry.permission.namedAction === undefined
+                ? {}
+                : { namedAction: entry.permission.namedAction }),
+            },
+            target: { kind: "application", applicationRootId: context.applicationRootId },
+            requiredPermission: {
+              applicationRootId: entry.applicationRootId,
+              ownerKind: entry.ownerKind,
+              ownerId: entry.ownerId,
+              permissionId: entry.permission.permissionId,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          };
+          const decision = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            declaration,
+            async () => true,
+          );
+          if (decision.outcome === "completed") allowed.push(key);
+        }
+        return { zones, allowed, accessVersion: scope.accessVersion };
+      },
+    );
+    if (authorized.kind !== "available") return authorized;
+    if (page.accessVersion !== authorized.value.accessVersion)
+      return { kind: "temporarily_unavailable" };
+    dateTimeZones = authorized.value.zones;
+    allowedPermissions = new Set(authorized.value.allowed);
+  }
+  for (const choice of choicePlacements)
+    choice.options.items = choice.items.filter((_, index) => {
+      const key = choice.permissionKeys[index];
+      return key === undefined || allowedPermissions.has(key);
+    });
 
   const navigation = await createStoredNavigationProjectionService({
     ...dependencies,
@@ -519,16 +872,78 @@ export const loadApplicationPage = async (
   const subjectType =
     (pageDefinition.type === "detail" ||
       pageDefinition.type === "public" ||
-      pageDefinition.type === "form") &&
+      pageDefinition.type === "form" ||
+      pageDefinition.type === "guided_form") &&
     pageDefinition.recordType?.state === "resolved"
       ? pageDefinition.recordType
       : undefined;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  if (
+    pageDefinition.type === "guided_form" &&
+    first(parameters[pageSubjectParameter]) !== undefined &&
+    !subjectId.success
+  )
+    return { kind: "unavailable" };
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
 
-  const placements = collectPlacements(page);
+  if (
+    selectedPlacementIds !== undefined &&
+    [...selectedPlacementIds].some(
+      (requestedId) => !allPlacements.some((entry) => sameId(entry.placementId, requestedId)),
+    )
+  )
+    return { kind: "unavailable" };
+  const editFormPlacementIds = new Set(
+    allPlacements.flatMap(({ placementId, placement }) => {
+      const block = placement.block;
+      const isFormContainer =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
+      const submitsPageRecord = application.content.flowBindings.some(
+        (binding) =>
+          sameId(binding.controlId, placementId) &&
+          binding.event === "form_submit" &&
+          Object.values(binding.flow.inputs).some(
+            (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
+          ),
+      );
+      return isFormContainer && submitsPageRecord ? [placementId] : [];
+    }),
+  );
+  // A form baseline is valid only when every declared field was projected. A selected field also
+  // needs its owning form's subject read, even though only the requested field is returned.
+  const selectedForProjection =
+    selectedPlacementIds === undefined ? undefined : new Set(selectedPlacementIds);
+  if (selectedForProjection !== undefined)
+    for (const { placementId, placement, formId } of allPlacements) {
+      const editFormId = editFormPlacementIds.has(placementId)
+        ? placementId
+        : formId !== undefined && editFormPlacementIds.has(formId)
+          ? formId
+          : undefined;
+      if (editFormId === undefined) continue;
+      if (
+        selectedForProjection.has(editFormId.toLowerCase()) ||
+        (isEditFieldPlacement(placement) &&
+          selectedForProjection.has(placementId.toLowerCase()))
+      ) {
+        selectedForProjection.add(editFormId.toLowerCase());
+        for (const entry of allPlacements)
+          if (
+            entry.formId !== undefined &&
+            sameId(entry.formId, editFormId) &&
+            isEditFieldPlacement(entry.placement)
+          )
+            selectedForProjection.add(entry.placementId.toLowerCase());
+      }
+    }
+  const placements =
+    selectedForProjection === undefined
+      ? allPlacements
+      : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
   const hasQueryBoundLauncher = placements.some(
     ({ placement }) =>
       isApplicationLauncherPlacement(placement) && typeof placement.queryId === "string",
@@ -540,7 +955,166 @@ export const loadApplicationPage = async (
         address.organizationShortName,
       )
     : undefined;
+  const permittedApplicationKeys =
+    permittedApplicationsRead?.kind === "available"
+      ? permittedApplicationsRead.applications.map((application) => application.key)
+      : undefined;
+
+  const pageSubjectRecordTypeId =
+    subjectType === undefined ? undefined : String(subjectType.recordTypeId);
+  const recordTypeByPlacement = new Map<string, string>();
+  const dataPlacementsByRecordType = new Map<string, string[]>();
+  const editFormDataPlacementIds = new Map<string, string[]>();
+  const addDataPlacement = (recordTypeId: string, placementId: string): void => {
+    const key = recordTypeId.toLowerCase();
+    const current = dataPlacementsByRecordType.get(key) ?? [];
+    if (!current.some((candidate) => sameId(candidate, placementId)))
+      dataPlacementsByRecordType.set(key, [...current, placementId]);
+  };
+  for (const { placementId, placement } of allPlacements) {
+    if (placement.readModel !== undefined) continue;
+    const block = placement.block;
+    if (
+      pageSubjectRecordTypeId !== undefined &&
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+
+    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+    const tableContract = readRecordsTableContract(settings);
+    const detailContract =
+      tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    if (tableContract === undefined && detailContract === undefined) continue;
+
+    const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+    const recordTypeId =
+      queryId === undefined
+        ? detailContract === undefined || pageDefinition.type === "form"
+          ? undefined
+          : pageSubjectRecordTypeId
+        : resolvedQueryRecordTypeId(context, queryId);
+    if (recordTypeId === undefined) continue;
+    recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
+    addDataPlacement(recordTypeId, placementId);
+  }
+  if (pageSubjectRecordTypeId !== undefined) {
+    for (const formId of editFormPlacementIds) {
+      const formDataPlacementIds = [formId];
+      for (const { placementId, placement, formId: ownerFormId } of allPlacements) {
+        if (ownerFormId === undefined || !sameId(ownerFormId, formId)) continue;
+        if (!isEditFieldPlacement(placement)) continue;
+        recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+        formDataPlacementIds.push(placementId);
+      }
+      editFormDataPlacementIds.set(formId.toLowerCase(), formDataPlacementIds);
+    }
+  }
+
+  const refreshPlacementsByBinding: Record<string, readonly string[]> = {};
+  const flowsById = new Map(
+    application.content.flows.map((flow) => [String(flow.id).toLowerCase(), flow] as const),
+  );
+  const actionRecordTypes = new Map(
+    [
+      ...application.content.actions,
+      ...context.releaseSet.modules.flatMap((module) => module.content.actions),
+    ].map((action) => [String(action.key).toLowerCase(), String(action.subjectRecordTypeId)] as const),
+  );
+  const flowWrittenRecordTypes = (flowId: string): readonly string[] => {
+    const types = new Set<string>();
+    const visited = new Set<string>();
+    const literal = (task: FlowTask, name: string): string | undefined => {
+      const properties = "properties" in task ? task.properties : undefined;
+      const value = properties?.[name];
+      return isRecord(value) && value.kind === "literal" && isRecord(value.literal) &&
+        value.literal.type === "text" && typeof value.literal.value === "string"
+        ? value.literal.value
+        : undefined;
+    };
+    const visitFlow = (id: string): void => {
+      const key = id.toLowerCase();
+      if (visited.has(key)) return;
+      visited.add(key);
+      const flow = flowsById.get(key);
+      if (flow === undefined) return;
+      const visitTasks = (tasks: readonly FlowTask[]): void => {
+        for (const task of tasks) {
+          if (task.type === "run_flow")
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId));
+          if (
+            [
+              "record.save",
+              "record.create",
+              "record.set_fields",
+              "record.delete",
+              "record.restore",
+              "record.changes",
+            ].includes(task.type)
+          ) {
+            const recordType = literal(task, "record_type");
+            if (recordType !== undefined) types.add(recordType);
+          } else if (task.type === "operation.call") {
+            const operation = literal(task, "operation");
+            const recordType =
+              operation === undefined ? undefined : actionRecordTypes.get(operation.toLowerCase());
+            if (recordType !== undefined) types.add(recordType);
+          }
+          for (const child of flowTaskChildLists(task)) visitTasks(child.tasks);
+        }
+      };
+      visitTasks(flow.tasks);
+      visitTasks(flow.errors);
+      visitTasks(flow.finally);
+    };
+    visitFlow(flowId);
+    return [...types];
+  };
+  for (const { placementId, formId } of allPlacements) {
+    const held = application.content.flowBindings.filter((binding) =>
+      sameId(String(binding.controlId), placementId),
+    );
+    if (held.length === 0) continue;
+    const sourceRecordTypeId =
+      recordTypeByPlacement.get(placementId.toLowerCase()) ??
+      (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase())) ??
+      pageSubjectRecordTypeId;
+    const editFormId =
+      editFormPlacementIds.has(placementId)
+        ? placementId
+        : formId !== undefined && editFormPlacementIds.has(formId)
+          ? formId
+          : undefined;
+    for (const binding of held) {
+      const writtenTypes = flowWrittenRecordTypes(String(binding.flow.flowId));
+      const targetTypes =
+        writtenTypes.length > 0
+          ? writtenTypes
+          : sourceRecordTypeId === undefined
+            ? []
+            : [sourceRecordTypeId];
+      const queryTargets = targetTypes.flatMap((recordTypeId) =>
+        dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
+      );
+      const formTargets =
+        editFormId === undefined ||
+        pageSubjectRecordTypeId === undefined ||
+        !targetTypes.some((recordTypeId) => sameId(recordTypeId, pageSubjectRecordTypeId))
+          ? []
+          : (editFormDataPlacementIds.get(editFormId.toLowerCase()) ?? []);
+      const targets = [...new Set([...queryTargets, ...formTargets])];
+      if (targets.length > 0) refreshPlacementsByBinding[String(binding.bindingId)] = targets;
+    }
+  }
+
   const data: Record<string, PageDataState> = {};
+  for (const { placementId, placement } of placements)
+    if (fieldControl(placement) === "date_time")
+      data[placementId] = {
+        status: "ready",
+        values: { kind: "date_time_input", ...dateTimeZones },
+      };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   for (const { placementId, placement } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
@@ -573,14 +1147,6 @@ export const loadApplicationPage = async (
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
     if (tableContract === undefined && detailContract === undefined && !queryBoundLauncher) continue;
-    if (queryBoundLauncher && permittedApplicationsRead?.kind !== "available") {
-      data[placementId] =
-        permittedApplicationsRead?.kind === "temporarily_unavailable"
-          ? { status: "error" }
-          : { status: "refused", reason: "not_permitted" };
-      continue;
-    }
-
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
     // record read path under the viewer's own authority. A public page shows no more than its
@@ -615,7 +1181,12 @@ export const loadApplicationPage = async (
       const display = projectRecordDetailData(
         {
           settings,
-          ...(subjectModule === undefined ? {} : { fieldLabels: fieldLabelsOf(subjectModule) }),
+          ...(subjectModule === undefined
+            ? {}
+            : {
+                fieldLabels: fieldLabelsOf(subjectModule),
+                fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule, allowedPermissions),
+              }),
           ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
         },
         [subject.row],
@@ -640,6 +1211,30 @@ export const loadApplicationPage = async (
     const fieldLabels = fieldLabelsOf(bound.module);
 
     if (queryBoundLauncher) {
+      if (permittedApplicationKeys === undefined) {
+        data[placementId] =
+          permittedApplicationsRead?.kind === "temporarily_unavailable"
+            ? { status: "error" }
+            : { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const target = bound.query.recordType;
+      if (target.state !== "resolved") {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      const targetModule = context.releaseSet.modules.find((module) =>
+        sameId(String(module.rootId), String(target.moduleRootId)),
+      );
+      const targetRecordType = targetModule?.content.recordTypes.find((recordType) =>
+        sameId(String(recordType.recordTypeId), String(target.recordTypeId)),
+      );
+      if (targetRecordType === undefined) {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
       const inputValues: Record<string, JsonValue> = {};
       for (const declared of bound.query.inputs) {
         const raw = first(parameters[declared.key]);
@@ -709,9 +1304,7 @@ export const loadApplicationPage = async (
       }
 
       const fieldKeys = new Map(
-        bound.module.content.recordTypes.flatMap((recordType) =>
-          recordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
-        ),
+        targetRecordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
       );
       const launcherRows: ApplicationLauncherQueryRow[] = queryRows.map((row) => {
         const cells: Record<string, { kind: "text"; text: string }> = {};
@@ -723,9 +1316,6 @@ export const loadApplicationPage = async (
         const key = cells.key;
         return { applicationKey: key?.kind === "text" ? key.text : undefined, cells };
       });
-      const permittedApplicationKeys = permittedApplicationsRead.applications.map(
-        (application) => application.key,
-      );
       const values = applicationLauncherQueryRowsToListValues(
         launcherRows,
         permittedApplicationKeys,
@@ -783,6 +1373,18 @@ export const loadApplicationPage = async (
       continue;
     }
 
+    const queryRecordType = bound.query.recordType;
+    const detailModule = queryRecordType.state === "resolved"
+      ? context.releaseSet.modules.find((module) =>
+          sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
+        )
+      : undefined;
+    if (detailModule === undefined) {
+      logPlacementFailure(address, placementId, "detail_record_type_unavailable");
+      data[placementId] = { status: "error" };
+      continue;
+    }
+
     // A Record detail reads only the inputs its bound query declares, from the page's own query
     // string; the Query engine validates each against the declared type and refuses the rest.
     const inputValues: Record<string, JsonValue> = {};
@@ -818,7 +1420,14 @@ export const loadApplicationPage = async (
       data[placementId] = { status: "refused", reason: "not_permitted" };
     } else {
       const rows: readonly ProtectedQueryRow[] = result.value.rows;
-      const display = projectRecordDetailData({ settings, fieldLabels }, rows);
+      const display = projectRecordDetailData(
+        {
+          settings,
+          fieldLabels: fieldLabelsOf(detailModule),
+          fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
+        },
+        rows,
+      );
       data[placementId] =
         display === undefined
           ? { status: "refused", reason: "not_found" }
@@ -828,9 +1437,82 @@ export const loadApplicationPage = async (
     }
   }
 
+  // A Group-owned create form needs an explicit owner from the viewer's current
+  // memberships. Every Group returned here is eligible for initial Group ownership;
+  // the Record writer still locks and rechecks the selected membership at save time.
+  const ownershipByRecordType = new Map(
+    context.releaseSet.modules.flatMap((module) =>
+      module.content.recordTypes.map((recordType) =>
+        [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
+      ),
+    ),
+  );
+  const createsGroupRecord = (flowId: string): boolean => {
+    const visited = new Set<string>();
+    const visitFlow = (id: string): boolean => {
+      if (visited.has(id.toLowerCase())) return false;
+      visited.add(id.toLowerCase());
+      const flow = flowsById.get(id.toLowerCase());
+      if (flow === undefined) return false;
+      const visitTasks = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
+        const properties = "properties" in task ? task.properties : undefined;
+        const recordType = properties?.record_type;
+        if (task.type === "record.save" && properties !== undefined &&
+            !Object.hasOwn(properties, "record") && isRecord(recordType) &&
+            recordType.kind === "literal" && isRecord(recordType.literal) &&
+            recordType.literal.type === "text" &&
+            typeof recordType.literal.value === "string" &&
+            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group")
+          return true;
+        if (task.type === "run_flow" &&
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId)))
+          return true;
+        return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
+      });
+      return visitTasks(flow.tasks) || visitTasks(flow.errors) || visitTasks(flow.finally);
+    };
+    return visitFlow(flowId);
+  };
+  const groupCreateBindings = placements.flatMap(({ placementId, placement }) => {
+    const block = placement.block;
+    if (!isRecord(block) || typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) return [];
+    return (bindings[placementId] ?? [])
+      .filter((binding) => binding.event === "form_submit" &&
+        createsGroupRecord(binding.flowId))
+      .map((binding) => ({ formId: placementId, binding }));
+  });
+  if (groupCreateBindings.length > 0) {
+    if (groupCreateBindings.some(({ binding }) =>
+      !binding.callerInputs.includes("selected_owner_group_id")))
+      return { kind: "temporarily_unavailable" };
+    const choices = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      async (transaction, scope) => {
+        return {
+          accessVersion: scope.accessVersion,
+          groups: await readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
+        };
+      },
+    );
+    if (choices.kind !== "available") return choices;
+    if (choices.value.accessVersion !== page.accessVersion)
+      return { kind: "temporarily_unavailable" };
+    for (const formId of new Set(groupCreateBindings.map(({ formId }) => formId)))
+      data[formId] = { status: "ready", values: { kind: "form", ownerGroups: choices.value.groups } };
+  }
+
   // A detail or form page offers its subject to the flows it starts; a public page never does.
   const subjectRow =
-    subjectType !== undefined && pageDefinition.type !== "public" && subjectId.success
+    (selectedForProjection === undefined ||
+      pageDefinition.type === "guided_form" ||
+      [...editFormPlacementIds].some((placementId) =>
+        selectedForProjection.has(placementId.toLowerCase()),
+      )) &&
+    subjectType !== undefined &&
+    pageDefinition.type !== "public" &&
+    subjectId.success
       ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
       : undefined;
   const subject =
@@ -838,9 +1520,80 @@ export const loadApplicationPage = async (
       ? { recordId: String(subjectRow.row.recordId), revision: subjectRow.row.revision }
       : undefined;
 
-  // An edit form is the form whose installed submit binding takes a page record. Its fields are
-  // projected from the same authorized subject read used for the page revision, and only from the
-  // form's visible, declared fields on that record type. An incomplete read disables the form.
+  let guidedForm: ApplicationPageModel["guidedForm"];
+  if (pageDefinition.type === "guided_form") {
+    const subjectCandidate = first(parameters[pageSubjectParameter]);
+    if (subjectCandidate !== undefined) {
+      if (subjectRow?.kind === "temporarily_unavailable")
+        return { kind: "temporarily_unavailable" };
+      if (subjectRow?.kind !== "read" || subject === undefined)
+        return { kind: "unavailable" };
+    }
+    const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
+    if (recordType === undefined) return { kind: "unavailable" };
+    const shells = context.releaseSet.application.content.shells;
+    const declaredStepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+    );
+    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
+    const stepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+      page,
+    );
+    const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
+    if (
+      declaredStepFields === undefined ||
+      visiblePlacementIds === undefined ||
+      stepFields === undefined ||
+      declaredStepFields.some((step) =>
+        step.fields.some(
+          (field) => field.required && !visiblePlacementIds.has(field.placementId.toLowerCase()),
+        ),
+      ) ||
+      flowId === undefined
+    )
+      return { kind: "unavailable" };
+    const draftScope = guidedFormDraftScope(
+      String(pageDefinition.pageId),
+      flowId,
+      subject?.recordId,
+    );
+    const openedDraft = await openGuidedFormDraft(
+      session,
+      selection,
+      draftScope,
+      guidedFormInitialValues(
+        stepFields,
+        subjectRow?.kind === "read" ? subjectRow.row.values : undefined,
+      ),
+    );
+    if (openedDraft.kind !== "available") return openedDraft;
+    const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
+    const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
+    if (computedStepId === undefined) return { kind: "unavailable" };
+    const activeStepId = earlierGuidedStepId(
+      stepFields,
+      computedStepId,
+      first(parameters.step),
+    );
+    Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
+    guidedForm = {
+      draftId: String(openedDraft.draft.draftId),
+      revision: openedDraft.draft.revision,
+      flowId,
+      activeStepId,
+      computedStepId,
+      values,
+      validation: visibleGuidedFormValidation(openedDraft.draft.validation, stepFields),
+    };
+  }
+
+  // Detail and ordinary form edit surfaces project their fields from the authorized subject read.
+  // Guided-form fields instead come from the person's revisioned draft above.
   const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
   const subjectRecordType = context.releaseSet.modules
     .flatMap((module) => module.content.recordTypes)
@@ -849,53 +1602,53 @@ export const loadApplicationPage = async (
         subjectType !== undefined &&
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
-  for (const { placementId, placement } of placements) {
-    const block = placement.block;
-    if (
-      !isRecord(block) ||
-      typeof block.blockId !== "string" ||
-      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      continue;
-    const editBinding = bindings[placementId]?.some(
-      (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
-    );
-    if (!editBinding) continue;
-    if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    const fields = placements.filter((entry) => {
-      if (entry.formId !== placementId || entry.placementId === placementId) return false;
-      const fieldBlock = entry.placement.block;
-      if (!isRecord(fieldBlock) || typeof fieldBlock.blockId !== "string") return false;
-      const blockId = fieldBlock.blockId;
-      return (
-        sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
-        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
-          sameId(release.blockId, blockId),
-        )
+  if (pageDefinition.type !== "guided_form") {
+    for (const { placementId, placement } of placements) {
+      if (!editFormPlacementIds.has(placementId)) continue;
+      const block = placement.block;
+      if (
+        !isRecord(block) ||
+        typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+      )
+        continue;
+      const editBinding = bindings[placementId]?.some(
+        (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
       );
-    });
-    const baseline: Record<string, JsonValue> = {};
-    const projected: Record<string, PageDataState> = {};
-    let complete = true;
-    for (const entry of fields) {
-      const field = projectEditField(entry.placement, subjectRecordType, subjectRow.row.values);
-      if (field === undefined || Object.hasOwn(baseline, field.key)) {
-        complete = false;
-        break;
+      if (!editBinding) continue;
+      if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
       }
-      baseline[field.key] = field.value;
-      projected[entry.placementId] = field.data;
+      const fields = placements.filter((entry) => {
+        if (entry.formId !== placementId || entry.placementId === placementId) return false;
+        return isEditFieldPlacement(entry.placement);
+      });
+      const baseline: Record<string, JsonValue> = {};
+      const projected: Record<string, PageDataState> = {};
+      let complete = true;
+      for (const entry of fields) {
+        const field = projectEditField(
+          entry.placement,
+          subjectRecordType,
+          subjectRow.row.values,
+          dateTimeZones,
+        );
+        if (field === undefined || Object.hasOwn(baseline, field.key)) {
+          complete = false;
+          break;
+        }
+        baseline[field.key] = field.value;
+        projected[entry.placementId] = field.data;
+      }
+      if (!complete) {
+        data[placementId] = { status: "disabled", reason: "Record unavailable" };
+        continue;
+      }
+      Object.assign(data, projected);
+      data[placementId] = { status: "ready", values: { kind: "form" } };
+      editFormBaselines[placementId] = baseline;
     }
-    if (!complete) {
-      data[placementId] = { status: "disabled", reason: "Record unavailable" };
-      continue;
-    }
-    Object.assign(data, projected);
-    data[placementId] = { status: "ready", values: { kind: "form" } };
-    editFormBaselines[placementId] = baseline;
   }
 
   const permittedKeys = new Set(address.application.pageKeys);
@@ -909,7 +1662,9 @@ export const loadApplicationPage = async (
       navigation: navigation.value,
       data,
       bindings,
+      refreshPlacementsByBinding,
       editFormBaselines,
+      ...(guidedForm === undefined ? {} : { guidedForm }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
@@ -928,6 +1683,7 @@ export const loadApplicationPage = async (
         tenantShortName: address.tenantShortName,
         organizationShortName: address.organizationShortName,
         applicationKey: address.application.key,
+        pageKey: address.pageKey,
         installationRevision: context.applicationReleaseRevision,
         releaseKey: [
           application.releaseVersion,
@@ -937,4 +1693,35 @@ export const loadApplicationPage = async (
       },
     },
   };
+};
+
+export const loadApplicationPage = (
+  session: IdentitySession,
+  address: ApplicationPageLoaderAddress,
+  parameters: SearchParameters,
+): Promise<ApplicationPageResult> => loadApplicationPageInternal(session, address, parameters);
+
+/** Loads only the requested placements through the same protected page, Query and Record reads. */
+export const loadApplicationPagePlacements = async (
+  session: IdentitySession,
+  address: ApplicationPageLoaderAddress,
+  parameters: SearchParameters,
+  placementIds: readonly string[],
+): Promise<ApplicationPagePlacementReadResult> => {
+  const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
+  const loaded = await loadApplicationPageInternal(session, address, parameters, requestedIds);
+  if (loaded.kind !== "available") return loaded;
+
+  const loadedData = Object.entries(loaded.model.data);
+  const loadedBaselines = Object.entries(loaded.model.editFormBaselines);
+  const data: Record<string, PageDataState> = {};
+  const editFormBaselines: Record<string, Readonly<Record<string, JsonValue>> | null> = {};
+  for (const placementId of requestedIds) {
+    const entry = loadedData.find(([candidate]) => sameId(candidate, placementId));
+    const displayId = entry?.[0] ?? placementId;
+    const baseline = loadedBaselines.find(([candidate]) => sameId(candidate, placementId));
+    data[displayId] = entry?.[1] ?? { status: "error" };
+    editFormBaselines[displayId] = baseline?.[1] ?? null;
+  }
+  return { kind: "available", data, editFormBaselines, subject: loaded.model.subject ?? null };
 };

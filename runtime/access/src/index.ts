@@ -28,6 +28,7 @@ export {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+export { readCurrentRecordOwnerGroupsAfterAuthorization } from "./record-owner-groups";
 export {
   createVortexSuperAdministratorAdministrationService,
   type VortexSuperAdministratorAdministrationDependencies,
@@ -212,6 +213,26 @@ export {
   type RegisterFlowExecutionBindingCommand,
   type RevokeFlowExecutionBindingCommand,
 } from "./flow-execution-bindings";
+export {
+  flowRunAsPrincipalAdministratorAuthoritySchema,
+  flowRunAsPrincipalErrorCodes,
+  FlowRunAsPrincipalError,
+  flowRunAsPrincipalMutationResultSchema,
+  flowRunAsPrincipalReadResultSchema,
+  readFlowRunAsPrincipalForRun,
+  readFlowRunAsPrincipalForRunCommandSchema,
+  registerFlowRunAsPrincipal,
+  registerFlowRunAsPrincipalCommandSchema,
+  revokeFlowRunAsPrincipal,
+  revokeFlowRunAsPrincipalCommandSchema,
+  type FlowRunAsPrincipalAdministratorAuthority,
+  type FlowRunAsPrincipalErrorCode,
+  type FlowRunAsPrincipalMutationResult,
+  type FlowRunAsPrincipalReadResult,
+  type ReadFlowRunAsPrincipalForRunCommand,
+  type RegisterFlowRunAsPrincipalCommand,
+  type RevokeFlowRunAsPrincipalCommand,
+} from "./flow-run-as-principals";
 export {
   meteringEventErrorCodes,
   meteringEventRecordResultSchema,

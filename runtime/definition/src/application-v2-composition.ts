@@ -4,7 +4,6 @@ import {
   applicationThemeV2Schema,
   canonicalApplicationThemeSelectionV2,
   blockPropertyValueV2Schema,
-  builderKeySchema,
   guidedFormPageCompositionV2Schema,
   isRepeatableSlotIdentityV2,
   findFieldInputBinding,
@@ -240,6 +239,14 @@ const compilePropertyValue = (
 ): BlockPropertyValueV2Contract => {
   let compiled: unknown;
   switch (authored.kind) {
+    case "text":
+      // Table behaviours name the same event as their flow bindings. Keep both in the release's
+      // permanent identity space so a rendered row can dispatch its declared binding.
+      compiled =
+        schema.key === "event_id"
+          ? { kind: "text", value: resolution.identity("event", authored.value) }
+          : authored;
+      break;
     case "asset_reference":
       compiled = { kind: authored.kind, assetId: authored.asset_id };
       break;
@@ -361,6 +368,11 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
         settings: inputType === undefined ? {} : { input_type: { kind: "choice", value: inputType } },
       };
     }
+    case "email_address":
+      return {
+        control: "text",
+        settings: { input_type: { kind: "choice", value: "email" } },
+      };
     case "long_text":
       return { control: "text", settings: { multiline: { kind: "boolean", value: true } } };
     case "formatted_text":
@@ -374,13 +386,23 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
       return { control: "boolean", settings: {} };
     case "date":
       return { control: "date", settings: {} };
-    case "choice":
-      // The choice control keys its options by builder key; a field whose stored option values
-      // are not builder keys cannot be offered exactly, so it is refused rather than rewritten.
-      if (!field.choices.every((choice) => builderKeySchema.safeParse(choice.key).success))
-        reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+    case "date_time":
       return {
-        control: "choice",
+        control: "date_time",
+        settings:
+          field.displayTimeZone === undefined
+            ? {}
+            : {
+                display_time_zone: {
+                  kind: "choice",
+                  value: field.displayTimeZone,
+                },
+              },
+      };
+    case "choice":
+    case "several_choices":
+      return {
+        control: field.type,
         settings: {
           options: {
             kind: "list",
@@ -392,6 +414,14 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
               },
             })),
           },
+          ...(field.type === "several_choices" && field.maximumSelections !== undefined
+            ? {
+                maximum_selections: {
+                  kind: "number",
+                  value: field.maximumSelections,
+                },
+              }
+            : {}),
         },
       };
     case "link":

@@ -36,7 +36,7 @@ import {
   parseBeforeSaveRuleSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
-import { evaluateRecordCalculationsV2 } from "./calculations";
+import { evaluateRecordCalculations } from "./calculations";
 import { isDateDeadlineDueFieldV2 } from "./deadline-transitions";
 import {
   finalizeRecordFieldCandidateV2,
@@ -319,7 +319,7 @@ export const calculateAndFinalize = (
       issues: [{ code: "invalid_input", path: ["organizationRuntimeSettings"] }],
     };
 
-  const calculations = evaluateRecordCalculationsV2({
+  const calculations = evaluateRecordCalculations({
     recordType: prepared.recordType,
     authoritativeFieldValues: ruleCandidateValues,
     clock: { instant: issuedAt, organizationLocalDate },
@@ -559,6 +559,8 @@ const persist = async (
   parentMutations: readonly RelationshipTotalParentMutation[] = [],
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
+    if (command.previewInstallationId !== undefined)
+      return { outcome: "refused", reasonCode: "field_refused" };
     const registration = writableSystemProjection(recordType);
     if (
       command.operation !== "update" ||
@@ -587,19 +589,19 @@ const persist = async (
   }
 
   const rows = await transaction.query<SaveRow>`
-    select vortex_record.save_base_record_with_relationship_totals(
-      ${command.commandId}::uuid,
-      ${command.operation}::text,
-      ${command.recordTypeId}::uuid,
-      ${command.operation === "update" ? command.recordId : null}::uuid,
-      ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
-      ${JSON.stringify(command.submittedValues)}::text::jsonb,
-      ${JSON.stringify(finalValues)}::text::jsonb,
-      ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
-      ${activityId}::uuid,
-      ${occurrenceId}::uuid,
-      ${JSON.stringify(parentMutations)}::text::jsonb
-    ) as result
+      select vortex_record.save_base_record_with_relationship_totals(
+        ${command.commandId}::uuid,
+        ${command.operation}::text,
+        ${command.recordTypeId}::uuid,
+        ${command.operation === "update" ? command.recordId : null}::uuid,
+        ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
+        ${JSON.stringify(command.submittedValues)}::text::jsonb,
+        ${JSON.stringify(finalValues)}::text::jsonb,
+        ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
+        ${activityId}::uuid,
+        ${occurrenceId}::uuid,
+        ${JSON.stringify(parentMutations)}::text::jsonb
+      ) as result
   `;
   const candidate = one(rows).result;
   if (typeof candidate !== "object" || candidate === null)
@@ -742,11 +744,17 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           caller,
           selection,
           async (transaction, _scope, issuedAt) => {
-            const totalPreparation = await prepareRelationshipTotals(
-              transaction,
-              command.data,
-              activityId,
-            );
+            await transaction.query`
+              select pg_catalog.set_config(
+                'vortex_record.preview_installation_id',
+                ${command.data.previewInstallationId ?? ""},
+                true
+              )
+            `;
+            const totalPreparation =
+              command.data.previewInstallationId === undefined
+                ? await prepareRelationshipTotals(transaction, command.data, activityId)
+                : { outcome: "not_required" as const };
             if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
             if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
             if (totalPreparation.outcome === "conflict")
@@ -857,7 +865,12 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             }
 
             const unsupportedChecks = values.pendingChecks.filter(
-              (check) => check.kind !== "record_reference",
+              (check) =>
+                check.kind !== "record_reference" &&
+                !(
+                  command.data.previewInstallationId !== undefined &&
+                  check.kind === "choice_permission"
+                ),
             );
             if (unsupportedChecks.length > 0) {
               if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))

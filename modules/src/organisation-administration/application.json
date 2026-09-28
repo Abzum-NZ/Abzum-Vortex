@@ -16,6 +16,14 @@
           "version": "1.0.0"
         },
         "purpose": "primary"
+      },
+      {
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_record_display"
       }
     ],
     "permissions": [
@@ -71,6 +79,34 @@
         "action_kind": "named",
         "named_action": "record_privacy_request",
         "administrative": false
+      },
+      {
+        "id": "app_permission_person_read",
+        "key": "vortex.organisation_administration.person.read",
+        "label": "Read people",
+        "description": "Allows reading the protected organisation-account projection as a system record.",
+        "record_type": "vortex.system_directory:person",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["organization_id", "revision", "display_name", "state", "language", "time_zone"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "app_permission_organization_invitation_read",
+        "key": "vortex.organisation_administration.organization_invitation.read",
+        "label": "Read organisation invitations",
+        "description": "Allows reading the protected organisation-invitation projection as a system record.",
+        "record_type": "vortex.system_directory:organization_invitation",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["organization_id", "revision", "invited_email", "state", "invited_at", "expires_at"],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -224,28 +260,28 @@
       {
         "id": "event_suspend_account",
         "key": "vortex.app.organisation_administration.suspend_account",
-        "record_type": "vortex.organisation_administration:person",
+        "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_reactivate_account",
         "key": "vortex.app.organisation_administration.reactivate_account",
-        "record_type": "vortex.organisation_administration:person",
+        "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_close_account",
         "key": "vortex.app.organisation_administration.close_account",
-        "record_type": "vortex.organisation_administration:person",
+        "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_revoke_invitation",
         "key": "vortex.app.organisation_administration.revoke_invitation",
-        "record_type": "vortex.organisation_administration:organization_invitation",
+        "record_type": "vortex.system_directory:organization_invitation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
@@ -331,11 +367,32 @@
                         }
                       },
                       "slots": {}
+                    },
+                    "shell_account": {
+                      "block": {
+                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {},
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
                     }
                   },
                   "order": {
                     "desktop": [
-                      "shell_heading"
+                      "shell_heading",
+                      "shell_account"
                     ]
                   }
                 },
@@ -344,7 +401,7 @@
                     "shell_body": {
                       "block": {
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.0.0"
+                        "release_version": "1.2.0"
                       },
                       "settings": {
                         "direction": {
@@ -354,6 +411,30 @@
                         "gap": {
                           "kind": "choice",
                           "value": "medium"
+                        },
+                        "menu_width": {
+                          "kind": "number",
+                          "value": 16
+                        },
+                        "menu_placement": {
+                          "kind": "choice",
+                          "value": "sticky"
+                        },
+                        "content_landmark": {
+                          "kind": "boolean",
+                          "value": true
+                        },
+                        "tablet_menu_width": {
+                          "kind": "number",
+                          "value": 14
+                        },
+                        "phone_direction": {
+                          "kind": "choice",
+                          "value": "column"
+                        },
+                        "phone_menu_placement": {
+                          "kind": "choice",
+                          "value": "flow"
                         }
                       },
                       "theme_overrides": {},
@@ -559,7 +640,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:person.display_name"
+                              "field": "vortex.system_directory:person.display_name"
                             },
                             "label": {
                               "kind": "text",
@@ -572,7 +653,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:person.state"
+                              "field": "vortex.system_directory:person.state"
                             },
                             "label": {
                               "kind": "text",
@@ -585,7 +666,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:person.language"
+                              "field": "vortex.system_directory:person.language"
                             },
                             "label": {
                               "kind": "text",
@@ -598,7 +679,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:person.time_zone"
+                              "field": "vortex.system_directory:person.time_zone"
                             },
                             "label": {
                               "kind": "text",
@@ -666,7 +747,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.organisation_administration:people"
+                  "query": "vortex.system_directory:people"
                 }
               },
               "order": {
@@ -738,7 +819,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_invitation.invited_email"
+                              "field": "vortex.system_directory:organization_invitation.invited_email"
                             },
                             "label": {
                               "kind": "text",
@@ -751,7 +832,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_invitation.state"
+                              "field": "vortex.system_directory:organization_invitation.state"
                             },
                             "label": {
                               "kind": "text",
@@ -764,7 +845,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_invitation.invited_at"
+                              "field": "vortex.system_directory:organization_invitation.invited_at"
                             },
                             "label": {
                               "kind": "text",
@@ -777,7 +858,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_invitation.expires_at"
+                              "field": "vortex.system_directory:organization_invitation.expires_at"
                             },
                             "label": {
                               "kind": "text",
@@ -819,7 +900,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.organisation_administration:organization_invitations"
+                  "query": "vortex.system_directory:organization_invitations"
                 },
                 "form_create_invitation": {
                   "block": {
@@ -2043,7 +2124,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:person"
+              "vortex.system_directory:person"
             ]
           },
           "expected_revision": {
@@ -2101,7 +2182,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:person"
+              "vortex.system_directory:person"
             ]
           },
           "expected_revision": {
@@ -2159,7 +2240,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:person"
+              "vortex.system_directory:person"
             ]
           },
           "expected_revision": {
@@ -2272,7 +2353,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:organization_invitation"
+              "vortex.system_directory:organization_invitation"
             ]
           },
           "expected_revision": {

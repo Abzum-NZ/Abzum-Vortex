@@ -30,6 +30,8 @@ declare
   facts jsonb;
   decision jsonb;
   bounds jsonb;
+  preview_installation jsonb;
+  preview_bounds jsonb;
   changeable text[];
   submitted_id uuid;
   relationship_value jsonb;
@@ -48,7 +50,14 @@ begin
 
   begin
     meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
-    if pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object' then
+    preview_installation :=
+      vortex_record.read_current_preview_installation_internal();
+    if pg_catalog.jsonb_typeof(meta -> 'recordType') <> 'object'
+      or (preview_installation is null
+        and pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object')
+      or (preview_installation is not null
+        and (preview_installation ->> 'outcome' = 'refused'
+          or meta -> 'recordType' ? 'systemProjection')) then
       refusal_reason := 'record_unavailable';
       raise exception using errcode = 'P4020', message = refusal_reason;
     end if;
@@ -97,11 +106,17 @@ begin
           refusal_reason := 'generated_field_not_submittable';
           raise exception using errcode = 'P4020', message = refusal_reason;
         end if;
-        input_value := pg_catalog.to_jsonb(vortex_record.allocate_reference_number_internal(
-          (context_value ->> 'organizationId')::uuid,
-          (meta ->> 'storageContractId')::uuid,
-          field_id_value, app_scope, field_item -> 'settings'
-        ));
+        input_value := pg_catalog.to_jsonb(case when preview_installation is null
+          then vortex_record.allocate_reference_number_internal(
+            (context_value ->> 'organizationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, app_scope, field_item -> 'settings'
+          )
+          else vortex_record.allocate_preview_reference_number_internal(
+            (preview_installation ->> 'previewInstallationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, field_item -> 'settings'
+          ) end);
         final_values := final_values || pg_catalog.jsonb_build_object(
           pg_catalog.lower(field_id_value::text), input_value
         );
@@ -210,14 +225,26 @@ begin
     facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
       'binding', meta -> 'declaration' -> 'recordBinding'
     );
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', record_id_value, facts
-    );
-    if decision ->> 'outcome' <> 'allowed' then
-      refusal_reason := 'access_refused';
-      raise exception using errcode = 'P4020', message = refusal_reason;
+    if preview_installation is null then
+      decision := vortex_access.evaluate_organization_record_access_internal(
+        meta -> 'declaration', record_id_value, facts
+      );
+      if decision ->> 'outcome' <> 'allowed' then
+        refusal_reason := 'access_refused';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    else
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (meta ->> 'storageContractId')::uuid,
+        meta -> 'recordType'
+      );
+      if preview_bounds is null then
+        refusal_reason := 'record_unavailable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := preview_bounds;
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
     select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
     into changeable
     from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);

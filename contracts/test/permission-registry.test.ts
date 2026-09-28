@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  adoptShippedPlatformPermissionCatalogueCommandSchema,
-  adoptShippedPlatformPermissionCatalogueResultSchema,
   applicationPermissionCatalogueSnapshotSchema,
-  initializePlatformPermissionCatalogueCommandSchema,
-  initializePlatformPermissionCatalogueResultSchema,
   permissionCatalogueLookupCommandSchema,
   permissionCatalogueLookupResultSchema,
   permissionRegistryMutationCommandSchema,
@@ -55,45 +51,6 @@ const candidate = {
 } as const;
 
 describe("permission registry contracts", () => {
-  it("models explicit organisation-local platform catalogue initialisation", () => {
-    expect(
-      initializePlatformPermissionCatalogueCommandSchema.parse({
-        organizationId: id(1),
-        changedBy: id(8),
-        correlationId: id(9),
-      }),
-    ).toBeDefined();
-    expect(
-      initializePlatformPermissionCatalogueResultSchema.parse({
-        organizationId: id(1),
-        registrationRevision: 1,
-        accessVersion: 2,
-      }),
-    ).toBeDefined();
-  });
-
-  it("selects a shipped catalogue successor without accepting caller-authored entries", () => {
-    expect(
-      adoptShippedPlatformPermissionCatalogueCommandSchema.parse({
-        organizationId: id(1),
-        expectedRegistrationRevision: 2,
-        targetCatalogueVersion: "1.1.0",
-        targetCatalogueFingerprint: fingerprint("a"),
-        changedBy: id(8),
-        correlationId: id(9),
-      }),
-    ).not.toHaveProperty("permissions");
-    expect(
-      adoptShippedPlatformPermissionCatalogueResultSchema.parse({
-        organizationId: id(1),
-        sourceCatalogueVersion: "1.0.1",
-        targetCatalogueVersion: "1.1.0",
-        registrationRevision: 3,
-        accessVersion: 4,
-      }),
-    ).toBeDefined();
-  });
-
   it("retains exact owner, application context and release evidence", () => {
     expect(preparedApplicationPermissionRegistrationSchema.parse(candidate)).toEqual(candidate);
     expect(

@@ -232,6 +232,8 @@ export const incomingMessageSchema = z
 export const interfaceValueTypeSchema = z.enum([
   "text",
   "number",
+  "decimal_number",
+  "money",
   "boolean",
   "date",
   "date_time",

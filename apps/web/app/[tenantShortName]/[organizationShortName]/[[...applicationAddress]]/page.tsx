@@ -22,6 +22,11 @@ import {
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage, loadApplicationTheme } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
+import {
+  abandonGuidedFormDraftAction,
+  advanceGuidedFormStepAction,
+  confirmGuidedFormAction,
+} from "./guided-form-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -199,6 +204,7 @@ export default async function ApplicationAddressPage({
         page={resolved.experience.page}
         shells={resolved.experience.shells}
         theme={theme}
+        organizationName={resolved.read?.organizationShortName ?? "Organisation"}
       />
     );
   }
@@ -316,12 +322,18 @@ export default async function ApplicationAddressPage({
             name="expectedActiveReleaseRevision"
             value={adoption.installedReleaseRevision}
           />
-          <button type="submit">
-            Adopt release {adoption.offeredReleaseVersion}
-          </button>
+          <button type="submit">Adopt release {adoption.offeredReleaseVersion}</button>
         </form>
       )}
-      <ApplicationPageView model={page.model} onOpenApplication={openApplication} />
+      <ApplicationPageView
+        model={page.model}
+        onOpenApplication={openApplication}
+        guidedFormActions={{
+          advance: advanceGuidedFormStepAction,
+          confirm: confirmGuidedFormAction,
+          abandon: abandonGuidedFormDraftAction,
+        }}
+      />
     </>
   );
 }

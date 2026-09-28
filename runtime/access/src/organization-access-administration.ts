@@ -60,6 +60,8 @@ import {
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
+  organizationStewardshipAppointmentCommandSchema,
+  organizationStewardshipAppointmentResultSchema,
   type AddOrganizationAdministrationMembershipCommand,
   type AssignOrganizationAdministrationRoleAssignmentCommand,
   type ChangeOrganizationAdministrationGroupResult,
@@ -96,6 +98,8 @@ import {
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationRoleChangeCandidate,
   type OrganizationSelectionCandidate,
+  type OrganizationStewardshipAppointmentCommand,
+  type OrganizationStewardshipAppointmentResult,
   type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
   type PrepareOrganizationAdministrationRoleChangeCommand,
@@ -264,6 +268,13 @@ type DelegationAuthorityChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
   delegation_summary: unknown;
+  access_version: unknown;
+};
+
+type StewardshipAppointmentRow = DatabaseRow & {
+  outcome: unknown;
+  organization_id: unknown;
+  appointment_summary: unknown;
   access_version: unknown;
 };
 
@@ -1200,6 +1211,60 @@ export const createOrganizationAccessAdministrationService = (
       );
     },
 
+    appointOrganizationSteward: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: OrganizationStewardshipAppointmentCommand,
+    ): Promise<HumanOrganizationRequestResult<OrganizationStewardshipAppointmentResult>> => {
+      const command = organizationStewardshipAppointmentCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return mapRecordedRefusal(
+        requests.runChange(session, candidate, async (transaction, scope) => {
+          const row = requireOne(
+            await transaction.query<StewardshipAppointmentRow>`
+              select outcome, organization_id, appointment_summary, access_version
+              from vortex_access.appoint_organization_steward_for_administration(
+                ${command.data.organizationAccountId}::uuid,
+                ${command.data.expectedAccountRevision}::bigint
+              )
+            `,
+          );
+          if (
+            isRecordedRefusal(
+              row,
+              row.appointment_summary,
+              scope.organizationId,
+              scope.accessVersion,
+            )
+          )
+            return recordedRefusal;
+          const summary =
+            typeof row.appointment_summary === "object" &&
+            row.appointment_summary !== null &&
+            !Array.isArray(row.appointment_summary)
+              ? row.appointment_summary
+              : {};
+          const parsed = organizationStewardshipAppointmentResultSchema.safeParse({
+            ...summary,
+            operation: "appoint_organization_steward",
+            outcome: row.outcome,
+            accessVersion: databaseRevision(row.access_version),
+          });
+          const expectedAccessVersion =
+            row.outcome === "changed" ? scope.accessVersion + 2 : scope.accessVersion;
+          if (
+            typeof row.organization_id !== "string" ||
+            !sameId(row.organization_id, scope.organizationId) ||
+            !parsed.success ||
+            !sameId(parsed.data.organizationAccountId, command.data.organizationAccountId) ||
+            parsed.data.accessVersion !== expectedAccessVersion
+          )
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return parsed.data;
+        }),
+      );
+    },
+
     revokeRoleAssignment: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -1399,8 +1464,13 @@ export const createOrganizationAccessAdministrationService = (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       commandCandidate: UpdateOwnProfileCommand,
-    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult>> =>
+    ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult | "conflict">> =>
       localAdministration.updateOwnProfile(session, candidate, commandCandidate),
+
+    readOwnProfile: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+    ) => localAdministration.readOwnProfile(session, candidate),
 
     createOrganizationInvitation: async (
       session: IdentitySession,

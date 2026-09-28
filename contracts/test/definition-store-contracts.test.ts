@@ -9,13 +9,13 @@ import {
 
 const moduleSource = JSON.parse(
   fs.readFileSync(
-    path.resolve(import.meta.dirname, "../../testing/fixtures/modules/crm.tags.json"),
+    path.resolve(import.meta.dirname, "../../modules/src/crm/sources/crm.tags.json"),
     "utf8",
   ),
 );
 const applicationSource = JSON.parse(
   fs.readFileSync(
-    path.resolve(import.meta.dirname, "../../testing/fixtures/applications/crm.json"),
+    path.resolve(import.meta.dirname, "../../modules/src/crm/application.json"),
     "utf8",
   ),
 );
@@ -58,7 +58,7 @@ describe("definition-store contracts", () => {
         organizationId: "20000000-0000-4000-8000-000000000001",
         key: "example.module",
         draftRevision: 1,
-        sourceContractVersion: "1.0.0",
+        sourceContractVersion: "3.0.0",
         sourceFingerprint: `sha256:${"a".repeat(64)}`,
         source: moduleSource,
         createdAt: "2026-09-04T00:00:00Z",
@@ -77,7 +77,7 @@ describe("definition-store contracts", () => {
         organizationId: "20000000-0000-4000-8000-000000000001",
         key: applicationSource.key,
         draftRevision: 1,
-        sourceContractVersion: "1.0.1",
+        sourceContractVersion: "9.9.9",
         sourceFingerprint: `sha256:${"a".repeat(64)}`,
         source: applicationSource,
         createdAt: "2026-09-04T00:00:00Z",

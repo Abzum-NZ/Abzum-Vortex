@@ -24,6 +24,7 @@ import {
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
+  definitionRuleFailureFamilyByCode,
   builderKeySchema,
   platformIdSchema,
   namespacedKeySchema,
@@ -45,6 +46,7 @@ import {
   type DefinitionPublicationContext,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
+  type DefinitionValidationErrorCode,
   type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowTask,
@@ -258,23 +260,9 @@ const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
 };
 
 const schemaFailureFamily = {
-  definition_required_value: "required_value",
-  definition_invalid_value: "invalid_value",
-  definition_unsupported_choice: "unsupported_choice",
-  definition_unknown_property: "unknown_property",
-  definition_too_few_items: "too_few_items",
-  definition_too_many_items: "too_many_items",
-  definition_duplicate_key: "duplicate_key",
-  definition_broken_reference: "broken_reference",
-  definition_unresolved_reference: "unresolved_reference",
-  definition_scope_conflict: "scope_conflict",
-  definition_incompatible_version: "incompatible_version",
-  definition_dependency_cycle: "dependency_cycle",
-  definition_unsafe_content: "unsafe_content",
-  definition_incompatible_change: "incompatible_change",
-  definition_more_errors: "more_errors",
+  ...definitionRuleFailureFamilyByCode,
   definition_validation_failed: "invalid_value",
-} as const satisfies Record<string, DefinitionRuleFailure["family"]>;
+} as const satisfies Record<DefinitionValidationErrorCode, DefinitionRuleFailure["family"]>;
 
 const sourceCollectionLocationKind = {
   record_types: "record_type",
@@ -1971,6 +1959,7 @@ const applicationInterfaceFieldType = (
   const type = applicationFieldType(pair);
   if (!pair) return type;
   if (type === "whole_number" || type === "number") return "number";
+  if (type === "decimal_number" || type === "money") return type;
   if (type === "boolean") return "boolean";
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
   return undefined;
@@ -3077,17 +3066,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ),
       ].map((action) => [String(action.key), action]),
     );
-    const moduleActionValuePairs = new Map(
-      boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).actions).map(
-          (action) =>
-            [
-              String(action.key),
-              { action },
-            ] as const,
-        ),
-      ),
-    );
     const publicPermissionSafe = (permissionKey: unknown) => {
       const permission = permissionMap.get(String(permissionKey));
       return permission !== undefined && permission.administrative !== true;
@@ -3910,12 +3888,11 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         String(query.key),
         queriesByKey.has(String(query.key)) ? undefined : query,
       );
-    const interfaceActionInputType = (type: unknown, moduleBound = false): string | undefined => {
+    const interfaceActionInputType = (type: unknown): string | undefined => {
       const value = String(type);
-      if (moduleBound && ["decimal_number", "money"].includes(value)) return undefined;
-      if (moduleBound && value === "formatted_text") return "formatted_text";
-      if (["text", "formatted_text", "choice"].includes(value)) return "text";
-      if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
+      if (["decimal_number", "money", "formatted_text"].includes(value)) return value;
+      if (["text", "choice"].includes(value)) return "text";
+      if (["number", "whole_number"].includes(value)) return "number";
       if (value === "yes_no") return "boolean";
       if (value === "date" || value === "date_time") return value;
       if (["record_reference", "organization_account_reference"].includes(value))
@@ -3992,10 +3969,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           committingTask?.type === "operation.call" ? committingLiteral("operation") : undefined;
         const targetAction =
           calledOperationKey === undefined ? undefined : actions.get(calledOperationKey);
-        const targetActionPair =
-          calledOperationKey === undefined
-            ? undefined
-            : moduleActionValuePairs.get(calledOperationKey);
         const startedFlowId =
           committingTask?.type === "flow.run_background" ? committingLiteral("flow") : undefined;
         const targetKind: "action" | "query" | "start" | undefined =
@@ -4077,8 +4050,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               const descriptor = bindingsForInput[0];
               return (
                 descriptor?.required === input.required &&
-                descriptor?.type ===
-                  interfaceActionInputType(input.type, targetActionPair !== undefined)
+                descriptor?.type === interfaceActionInputType(input.type)
               );
             });
           // The interface supplies the flow's inputs, which the flow passes to the named action by
@@ -4092,8 +4064,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 const declaration = targetFlow.inputs[key];
                 return (
                   declaration !== undefined &&
-                  object(bindingsForInput[0]).type ===
-                    interfaceActionInputType(declaration.type, targetActionPair !== undefined)
+                  object(bindingsForInput[0]).type === interfaceActionInputType(declaration.type)
                 );
               }) &&
               flowInputs.every(
