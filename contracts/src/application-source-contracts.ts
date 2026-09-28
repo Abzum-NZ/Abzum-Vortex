@@ -315,6 +315,8 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
 const sourceInterfaceValueTypeSchema = z.enum([
   "text",
   "number",
+  "decimal_number",
+  "money",
   "boolean",
   "date",
   "date_time",
