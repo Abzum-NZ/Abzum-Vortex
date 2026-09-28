@@ -2883,13 +2883,12 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         )
           refuseSummaryField("vortex.definition.module_query_extrema_field_type", field);
       }
-      // Grouping decides the row shape, so a grouped query returns and orders by its grouping
-      // keys only, and a total needs a grouping key to belong to.
+      // A grouped query returns and orders by its grouping keys only. An ungrouped
+      // summary can still return totals over all permitted rows.
       const groupingValid =
-        groupByFieldIds.length > 0
-          ? selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
-            sortFieldIds.every((id) => groupByFieldIds.includes(id))
-          : aggregateAliases.length === 0;
+        groupByFieldIds.length === 0 ||
+        (selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
+          sortFieldIds.every((id) => groupByFieldIds.includes(id)));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
         return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
