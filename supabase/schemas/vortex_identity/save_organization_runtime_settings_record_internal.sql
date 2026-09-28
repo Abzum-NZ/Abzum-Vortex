@@ -161,7 +161,10 @@ revoke all on function vortex_identity.save_organization_runtime_settings_record
   uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter;
+
 comment on function vortex_identity.save_organization_runtime_settings_record_internal(
   uuid, bigint, jsonb, jsonb
 ) is
   'Private revision-checked Identity writer for one organisation settings record, merging invariant field patches and declared extension values in the same settings row.';
+
+alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
