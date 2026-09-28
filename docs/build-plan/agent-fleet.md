@@ -110,7 +110,8 @@ For every noticed product or operational failure, record the symptom, proven cau
 ## Implementer handoff template
 
 ~~~text
-Issue #<n>; phase <n>; pickup <n>. GPT-6 Luna (Codex Desktop native subagent; Extra High).
+Issue #<n>; phase <n>; pickup <n>. GPT-6 Luna, Extra High; execution host: <native Desktop or lead-authorized Orca overflow>.
+Ownership: <native agent/session ID, or Orca task + dispatch + terminal + process identity>; lead: <Desktop lead ID>. Record actual runtime model and effort with evidence; requested settings alone are not proof.
 Read AGENTS.md, docs/build-plan/agent-coordination.md, the full issue and comments, linked spec and current source.
 Outcome: <plain functionality>. Already built: <source facts>.
 Build: <bounded change>. Owning paths: <paths>. Exclude: <non-goals>.
