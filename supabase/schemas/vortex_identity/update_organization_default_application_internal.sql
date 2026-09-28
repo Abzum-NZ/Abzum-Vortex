@@ -68,6 +68,4 @@ comment on function vortex_identity.update_organization_default_application_inte
   'Private Identity writer for the exact organisation default application reference; requires the current settings revision and reports an unchanged value without advancing it.';
 
 alter function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) to postgres;
-reset role;

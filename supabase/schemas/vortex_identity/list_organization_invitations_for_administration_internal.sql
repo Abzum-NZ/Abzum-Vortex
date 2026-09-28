@@ -82,6 +82,4 @@ comment on function vortex_identity.list_organization_invitations_for_administra
 ) is 'Identity-owned bounded organisation-scoped safe invitation projection without secret or fingerprint.';
 
 alter function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) to postgres;
-reset role;

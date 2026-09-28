@@ -48,6 +48,4 @@ comment on function vortex_identity.read_organization_account_for_administration
 ) is 'Identity-owned exact organisation-scoped safe account administration projection.';
 
 alter function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) to postgres;
-reset role;

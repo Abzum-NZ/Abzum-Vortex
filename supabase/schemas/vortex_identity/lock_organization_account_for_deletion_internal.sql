@@ -32,6 +32,4 @@ comment on function vortex_identity.lock_organization_account_for_deletion_inter
   'Private exclusive lock and state read that opens the account-deletion fence.';
 
 alter function vortex_identity.lock_organization_account_for_deletion_internal(uuid) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) to postgres;
-reset role;

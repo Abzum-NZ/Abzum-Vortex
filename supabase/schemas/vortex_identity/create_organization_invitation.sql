@@ -68,6 +68,4 @@ revoke all on function vortex_identity.create_organization_invitation(text, text
 comment on function vortex_identity.create_organization_invitation(text, text, timestamptz) is null;
 
 alter function vortex_identity.create_organization_invitation(text, text, timestamptz) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;
-reset role;

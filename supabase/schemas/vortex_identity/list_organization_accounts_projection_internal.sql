@@ -55,6 +55,4 @@ comment on function vortex_identity.list_organization_accounts_projection_intern
   'Identity-owned set-returning safe organisation-account projection bounded to the given organisation: every account in administration mode, or only active accounts with their display name and state in member mode; identity, originating invitation and state-change evidence are never exposed, and the already-decided request scope is the only visibility.';
 
 alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) owner to vortex_identity_owner;
-set role vortex_identity_owner;
 grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
-reset role;
