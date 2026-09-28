@@ -51,6 +51,8 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
       ? parseExactDecimal(String(candidate.value))
       : undefined;
   if (candidate.type === "money") {
+    // Flow literals carry an amount; stored Record values also carry a currency.
+    if (typeof candidate.value === "string") return parseExactDecimal(candidate.value);
     const money = moneyValueV2Schema.safeParse(candidate.value);
     return money.success ? parseExactDecimal(money.data.amount) : undefined;
   }
@@ -181,6 +183,9 @@ const arithmetic = (
   });
   if (parsed.some((entry) => entry === undefined)) return undefined;
   const moneyOperands = operands.filter((operand) => operand.type === "money");
+  const textMoneyOperands = moneyOperands.filter((operand) => typeof operand.value === "string");
+  if (textMoneyOperands.length > 0 && textMoneyOperands.length !== moneyOperands.length)
+    return undefined;
   const currencies = moneyOperands.map(currencyOf);
   const commonCurrency =
     currencies.length > 0 &&
@@ -190,13 +195,14 @@ const arithmetic = (
   const dimensionsValid =
     operator === "add" || operator === "subtract"
       ? moneyOperands.length === 0 ||
-        (moneyOperands.length === operands.length && commonCurrency !== undefined)
+        (moneyOperands.length === operands.length &&
+          (textMoneyOperands.length === moneyOperands.length || commonCurrency !== undefined))
       : operator === "multiply"
         ? moneyOperands.length <= 1
         : moneyOperands.length === 0 ||
           (moneyOperands.length === 1 &&
             operands[0]?.type === "money" &&
-            commonCurrency !== undefined);
+            (textMoneyOperands.length === 1 || commonCurrency !== undefined));
   if (!dimensionsValid) return undefined;
   let exact = parsed[0]!;
   try {
@@ -216,6 +222,11 @@ const arithmetic = (
     );
     if (commonCurrency !== undefined) {
       const result = value("money", { amount, currency: commonCurrency });
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
+    }
+    if (textMoneyOperands.length > 0) {
+      const result = value("money", amount);
       if (preserveExactArithmetic) exactValues.set(result, exact);
       return result;
     }
@@ -419,7 +430,10 @@ const compare = (
     if (left.type === "money" && right.type === "money") {
       const leftCurrency = currencyOf(left);
       const rightCurrency = currencyOf(right);
-      if (leftCurrency === undefined || rightCurrency === undefined) return undefined;
+      if (leftCurrency === undefined || rightCurrency === undefined) {
+        if (typeof left.value !== "string" || typeof right.value !== "string")
+          return undefined;
+      }
       if (leftCurrency !== rightCurrency) return "equal_only_different";
     }
     return compareExactDecimals(leftDecimal, rightDecimal);
