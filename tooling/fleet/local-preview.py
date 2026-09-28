@@ -153,6 +153,23 @@ SAFE_BROWSER_ACTION_STAGES = frozenset(
         "complete",
     }
 )
+SAFE_MAIA_MENU_FAILED_PREDICATES = frozenset(
+    {
+        "wrong_route",
+        "root_count",
+        "root_theme",
+        "nav_item_count",
+        "current_link_count",
+        "link_not_visible",
+        "inactive_link",
+        "sidebar_scope",
+        "sentinel_resolution",
+        "menu_radius",
+        "base_radius",
+        "menu_background",
+        "comparison_state",
+    }
+)
 CUSTOMER_PROBE_COUNT_FIELDS = (
     "form_count",
     "group_count",
@@ -1702,6 +1719,21 @@ def _browser_report(
         evidence["action_stage_valid"] = safe_stage is not None
         if safe_stage is not None:
             evidence["action_stage"] = safe_stage
+    if report_fields_valid and (
+        (result_value == "FAIL" and safe_stage == "maia_active_menu" and safe_reason == "theme_check_failed")
+        or "maia_active_menu_failed_predicate" in result
+    ):
+        predicate = result.get("maia_active_menu_failed_predicate")
+        predicate_valid = (
+            result_value == "FAIL"
+            and safe_stage == "maia_active_menu"
+            and safe_reason == "theme_check_failed"
+            and type(predicate) is str
+            and predicate in SAFE_MAIA_MENU_FAILED_PREDICATES
+        )
+        evidence["maia_active_menu_failed_predicate_valid"] = predicate_valid
+        if predicate_valid:
+            evidence["maia_active_menu_failed_predicate"] = predicate
     if (
         identity_matches
         and result_value == "FAIL"
