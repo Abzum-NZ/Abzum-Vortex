@@ -1109,6 +1109,7 @@ function companiesScreenshotRowExpression(expectedPath, generatedName) {
   return themePageExpression(expectedPath, `
     if (!isMaiaRoot(root)) return { retryable: false };
     const tables = root.querySelectorAll('[data-vortex-display="table"] table[data-slot="table"].cn-table');
+    if (tables.length === 0) return { retryable: true };
     if (tables.length !== 1) return { retryable: false };
     const table = tables[0];
     if (!visible(table)) return { retryable: true };
@@ -1901,8 +1902,6 @@ async function runBrowserCheck() {
   await inspectMaiaRoot(companiesPath);
   result.action_stage = "maia_active_menu";
   await inspectMaiaActiveMenu(companiesPath, comparisonKey);
-  result.action_stage = "maia_table";
-  await inspectMaiaTable(companiesPath);
   result.action_stage = "secondary_button";
   await inspectSecondaryButton(companiesPath);
 
@@ -2027,9 +2026,13 @@ async function runBrowserCheck() {
   );
   result.checks.save_company = true;
 
+  result.action_stage = "maia_table";
+  await navigateTo(companiesPath, companiesPath);
+  await waitForCompaniesScreenshotRow(companiesPath, name);
+  await inspectMaiaTable(companiesPath);
+
   if (inputs.screenshotTarget) {
     result.action_stage = "companies_screenshot";
-    await navigateTo(companiesPath, companiesPath);
     await captureCompaniesScreenshot(companiesPath, name, inputs.screenshotTarget);
   }
 
