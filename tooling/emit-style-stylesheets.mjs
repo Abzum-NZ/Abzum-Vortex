@@ -244,9 +244,9 @@ for (const { option, css } of compiled) {
   // style paints with these rules, an inner root (a preview canvas) paints with its own, and no rule
   // here reaches either. Without it, two nested roots carrying different attributes would both match
   // and the later stylesheet in the document would win, which is not a decision anyone made.
-  // The limit must be a descendant of this root. Without :scope, the root matches its own
-  // limit and the scope is empty. The compiled selectors also name the root, but selectors
-  // inside @scope are relative to it, so use :scope instead of looking for a second root.
+  // The limit explicitly selects descendant style roots. The compiled selectors also name the
+  // root, but selectors inside @scope are relative to it, so use :scope instead of looking for
+  // a second root.
   const scope = `@scope ([data-vortex-style="${option.id}"]) to (:scope [data-vortex-style])`;
   const scopedCss = css.replaceAll(`[data-vortex-style="${option.id}"]`, ":scope");
   const sheet = `@layer ${VORTEX_STYLE_LAYER} {\n${scope} {\n${scopedCss}\n}\n}\n`;
