@@ -28,7 +28,7 @@ declare
   query_item jsonb;
   record_type_item jsonb;
   record_type_id_value uuid;
-  storage_contract_id uuid;
+  v_storage_contract_id uuid;
   mapping_row vortex_record.field_storage_mappings%rowtype;
   field_item jsonb;
   fields_by_id jsonb := '{}'::jsonb;
@@ -265,7 +265,7 @@ begin
     p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
     'storage', prepared_plan
   );
-  storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+  v_storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
   physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
   storage_scope := prepared_plan #>> '{storage,storageScope}';
   access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
@@ -346,7 +346,7 @@ begin
     end if;
     select mapping.* into mapping_row
     from vortex_record.field_storage_mappings as mapping
-    where mapping.storage_contract_id = storage_contract_id
+    where mapping.storage_contract_id = v_storage_contract_id
       and mapping.field_id = field_key::uuid;
     if not found or mapping_row.state <> 'active' then
       raise exception using errcode = '55000',
@@ -367,7 +367,7 @@ begin
     if read_time_field then
       read_time_clock := coalesce(read_time_clock, vortex_record.read_time_clock_internal());
       read_time_sql := vortex_record.read_time_deadline_expression_internal(
-        storage_contract_id, fields_by_id -> field_key #> '{settings,expression}',
+        v_storage_contract_id, fields_by_id -> field_key #> '{settings,expression}',
         read_time_clock
       );
       if read_time_sql is null then

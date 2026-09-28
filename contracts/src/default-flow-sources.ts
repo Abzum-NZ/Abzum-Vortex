@@ -35,6 +35,8 @@ export type DefaultSaveFlowInput = DefaultFlowIdentity &
     recordType: string;
     /** `create` saves the form's values as a new record; `update` saves them onto `record`. */
     mode: "create" | "update";
+    /** The published record type's ownership mode determines whether create needs a Group. */
+    ownershipMode: "none" | "organization_account" | "group" | "inherited";
   }>;
 
 /**
@@ -55,6 +57,9 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
       ? { record: { type: "record_reference", recordTypeIds: [input.recordType], required: true } }
       : {}),
     values: { type: "json", required: true },
+    ...(input.mode === "create" && input.ownershipMode === "group"
+      ? { selected_owner_group_id: { type: "text", required: true } }
+      : {}),
   },
   variables: {},
   triggers: [],
@@ -69,6 +74,14 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
           ? { record: { kind: "reference", reference: { source: "input", name: "record" } } }
           : {}),
         values: { kind: "reference", reference: { source: "input", name: "values" } },
+        ...(input.mode === "create" && input.ownershipMode === "group"
+          ? {
+              selected_owner_group_id: {
+                kind: "reference",
+                reference: { source: "input", name: "selected_owner_group_id" },
+              },
+            }
+          : {}),
       },
     },
   ],

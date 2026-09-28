@@ -12,6 +12,7 @@ export * from "./shadcn-font-catalogue";
 export * from "./platform-service-operation-catalogue";
 export * from "./application-flow-bindings";
 export * from "./flow-contracts";
+export * from "./flow-run-as-principal";
 export * from "./form-continuation-contracts";
 export * from "./flow-invocation-contracts";
 export * from "./flow-source-contracts";

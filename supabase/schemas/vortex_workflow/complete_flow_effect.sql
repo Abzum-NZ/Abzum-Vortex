@@ -41,6 +41,8 @@ begin
 end
 $function$;
 
+alter function vortex_workflow.complete_flow_effect(uuid,uuid,uuid,text,text,text,jsonb) owner to vortex_workflow_owner;
+
 revoke all on function vortex_workflow.complete_flow_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
