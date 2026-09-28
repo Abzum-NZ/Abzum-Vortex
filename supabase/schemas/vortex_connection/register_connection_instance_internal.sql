@@ -75,3 +75,4 @@ revoke all on function
 
 grant execute on function
   vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz) to vortex_runtime;
+alter function vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamp with time zone) owner to vortex_connection_owner;

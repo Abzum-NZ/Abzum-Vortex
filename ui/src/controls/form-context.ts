@@ -5,7 +5,11 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
 
-type FormField = Readonly<{ placementId: string; read: () => TypedFieldValue }>;
+type FormField = Readonly<{
+  placementId: string;
+  read: () => TypedFieldValue;
+  validate?: () => string | undefined;
+}>;
 
 /** The enclosing form's field registry and activation state. */
 export type FormScope = Readonly<{
@@ -17,6 +21,8 @@ export type FormScope = Readonly<{
   register: (fieldKey: string, field: FormField) => () => void;
   /** The current typed value of every registered field, by field key. */
   values: () => Readonly<Record<string, TypedFieldValue>>;
+  /** The current local validation message for one field key, when a submit was refused. */
+  fieldErrorFor: (fieldKey: string) => string | undefined;
   /** Located draft feedback for one field key, or nothing when none applies now. */
   draftFeedbackFor: (fieldKey: string) => FormFieldDraftFeedback | undefined;
   /** Reports that a field's value or registration changed, so settled feedback is rechecked. */
@@ -61,6 +67,7 @@ export const useFormScope = (): FormScope | undefined => useContext(FormScopeCon
 export function createFormFieldRegistry(location: DefinitionRenderErrorLocation): Readonly<{
   register: FormScope["register"];
   values: () => Readonly<Record<string, TypedFieldValue>>;
+  validationErrors: () => Readonly<Record<string, string>>;
 }> {
   const fields = new Map<string, FormField>();
   return {
@@ -81,6 +88,15 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
       Object.freeze(
         Object.fromEntries([...fields].map(([fieldKey, field]) => [fieldKey, field.read()])),
       ),
+    validationErrors: () =>
+      Object.freeze(
+        Object.fromEntries(
+          [...fields].flatMap(([fieldKey, field]) => {
+            const message = field.validate?.();
+            return message === undefined ? [] : [[fieldKey, message] as const];
+          }),
+        ),
+      ),
   };
 }
 
@@ -90,13 +106,20 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
  * is written during render, so a form reading its registry in the same pass sees
  * the published value; a rebuilt but equal object is not a change.
  */
-export function useFormField(fieldKey: string, placementId: string, value: TypedFieldValue): void {
+export function useFormField(
+  fieldKey: string,
+  placementId: string,
+  value: TypedFieldValue,
+  validate?: () => string | undefined,
+): void {
   const scope = useFormScope();
   const register = scope?.register;
   const reportFieldChanged = scope?.reportFieldChanged;
   const valueRef = useRef(value);
+  const validateRef = useRef(validate);
   const previousRef = useRef(value);
   valueRef.current = value;
+  validateRef.current = validate;
   useEffect(() => {
     if (equalFormValue(previousRef.current, value)) return;
     previousRef.current = value;
@@ -105,7 +128,11 @@ export function useFormField(fieldKey: string, placementId: string, value: Typed
   // A field that mounts, remounts on reset or leaves also changes which values
   // settled feedback is compared with.
   useEffect(() => {
-    const unregister = register?.(fieldKey, { placementId, read: () => valueRef.current });
+    const unregister = register?.(fieldKey, {
+      placementId,
+      read: () => valueRef.current,
+      validate: () => validateRef.current?.(),
+    });
     reportFieldChanged?.();
     return () => {
       unregister?.();
@@ -113,3 +140,7 @@ export function useFormField(fieldKey: string, placementId: string, value: Typed
     };
   }, [register, reportFieldChanged, fieldKey, placementId]);
 }
+
+/** The local field-specific submit error, when the enclosing form has one. */
+export const useFormFieldError = (fieldKey: string): string | undefined =>
+  useFormScope()?.fieldErrorFor(fieldKey);
