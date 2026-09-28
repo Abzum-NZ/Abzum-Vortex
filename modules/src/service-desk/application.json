@@ -2626,11 +2626,32 @@
                                      }
                                    },
                                    "slots": {}
+                                 },
+                                 "shell_account": {
+                                   "block": {
+                                     "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {},
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
                                  }
                                },
                                "order": {
                                  "desktop": [
-                                   "shell_heading"
+                                   "shell_heading",
+                                   "shell_account"
                                  ]
                                }
                              },
@@ -2639,7 +2660,7 @@
                                  "shell_body": {
                                    "block": {
                                      "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                     "release_version": "1.0.0"
+                                     "release_version": "1.1.0"
                                    },
                                    "settings": {
                                      "direction": {
@@ -2649,6 +2670,26 @@
                                      "gap": {
                                        "kind": "choice",
                                        "value": "medium"
+                                     },
+                                     "menu_width": {
+                                       "kind": "number",
+                                       "value": 16
+                                     },
+                                     "menu_placement": {
+                                       "kind": "choice",
+                                       "value": "sticky"
+                                     },
+                                     "tablet_menu_width": {
+                                       "kind": "number",
+                                       "value": 14
+                                     },
+                                     "phone_direction": {
+                                       "kind": "choice",
+                                       "value": "column"
+                                     },
+                                     "phone_menu_placement": {
+                                       "kind": "choice",
+                                       "value": "flow"
                                      }
                                    },
                                    "theme_overrides": {},
@@ -2867,6 +2908,10 @@
                              "values": {
                                  "type": "json",
                                  "required": true
+                             },
+                             "selected_owner_group_id": {
+                                 "type": "text",
+                                 "required": true
                              }
                          },
                          "tasks": [
@@ -2887,6 +2932,13 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     },
+                                     "selected_owner_group_id": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "selected_owner_group_id"
                                          }
                                      }
                                  }
@@ -3484,6 +3536,10 @@
                              "values": {
                                  "kind": "caller",
                                  "name": "values"
+                             },
+                             "selected_owner_group_id": {
+                                 "kind": "caller",
+                                 "name": "selected_owner_group_id"
                              }
                          }
                      },

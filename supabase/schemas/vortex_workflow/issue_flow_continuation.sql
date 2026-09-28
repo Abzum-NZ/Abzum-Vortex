@@ -59,6 +59,8 @@ begin
 end
 $function$;
 
+alter function vortex_workflow.issue_flow_continuation(text,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_workflow_owner;
+
 revoke all on function vortex_workflow.issue_flow_continuation(
   text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

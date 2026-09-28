@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
@@ -38,6 +39,14 @@ import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
+import { loadApplicationPage } from "../../../_lib/application-page";
+import {
+  getGuidedFormControlIds,
+  getGuidedFormFlowId,
+  guidedFormConfirmationKey,
+  guidedFormConfirmationReference,
+  verifiesGuidedFormConfirmation,
+} from "../../../_lib/guided-form-steps";
 import {
   createFlowBindingEndpoint,
   type InstalledFlowBindings,
@@ -80,6 +89,13 @@ const requestSchema = z
 // One neutral answer for everything that is not a run or a reload: an unknown, foreign or
 // withdrawn binding, an unresolved address and a request that does not parse look the same.
 const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const guidedClickId = (draftId: string, revision: number, bindingId: string): string => {
+  const hex = createHash("sha256").update(JSON.stringify([draftId, revision, bindingId])).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+};
 
 /**
  * The session is a cookie, so a run is accepted only from this site's own pages: a browser always
@@ -213,6 +229,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ...(runId === undefined ? {} : { newRunId: () => runId }),
       });
 
+    const guidedControls = new Map<string, Readonly<{
+      pageKey: string;
+      pageId: string;
+      flowId?: string;
+      summary: boolean;
+    }> | null>();
+
     /** The trusted active installation for the initiator's own selection; never from the request. */
     const readInstalled = async (
       session: IdentitySession,
@@ -226,6 +249,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           transaction,
         ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
         const application = releaseSet.application;
+        guidedControls.clear();
+        for (const page of application.content.pages) {
+          if (page.type !== "guided_form") continue;
+          const controls = getGuidedFormControlIds(page, application.content.shells);
+          if (controls === undefined) throw new Error("INVALID_GUIDED_FORM_CONTROLS");
+          const flowId = getGuidedFormFlowId(
+            page,
+            application.content.flowBindings,
+            application.content.shells,
+          );
+          for (const controlId of controls.all) {
+            const key = controlId.toLowerCase();
+            guidedControls.set(key, guidedControls.has(key) ? null : {
+              pageKey: page.key,
+              pageId: String(page.pageId),
+              ...(flowId === undefined ? {} : { flowId }),
+              summary: key === controls.summary,
+            });
+          }
+        }
         const flows = new Map<string, unknown>();
         for (const flow of [
           ...application.content.flows,
@@ -399,47 +442,138 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     };
 
+    const invocation = body.invocation;
+    const selection = {
+      organizationId: address.read.organizationId,
+      applicationRootId: address.application.applicationRootId,
+    };
+    // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
+    // guided page must not start a flow before its final form submit is confirmed.
+    const bindingInstallation = invocation.kind === "binding"
+      ? await readInstalled(identity.session, selection)
+      : undefined;
+    if (invocation.kind === "binding") {
+      if (bindingInstallation === undefined) return refusedResponse();
+      const binding = bindingInstallation.bindings.find((candidate) =>
+        candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
+      );
+      const guided = binding === undefined
+        ? undefined
+        : guidedControls.get(binding.controlId.toLowerCase());
+      if (guided !== undefined &&
+          (guided === null || !guided.summary || binding?.event !== "form_submit"))
+        return refusedResponse();
+    }
+
     const adaptFormSubmit = createPrivateFormSubmitAdapter();
     const endpoint = createFlowBindingEndpoint({
-      readInstallation: readInstalled,
+      readInstallation: invocation.kind === "binding"
+        ? async () => bindingInstallation
+        : readInstalled,
       adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
-        if (installation.applicationContent === undefined || installation.modules === undefined)
+        const resolveValues = (values: unknown) => {
+          if (installation.applicationContent === undefined || installation.modules === undefined)
+            return undefined;
+          return resolveReferenceChoiceFormValues({
+            service: referenceChoices,
+            session: identity.session,
+            selection,
+            application: installation.applicationContent,
+            modules: installation.modules,
+            formId: binding.controlId,
+            values,
+            ...(callerInputs.choiceEvidence === undefined
+              ? {}
+              : { evidence: callerInputs.choiceEvidence }),
+          });
+        };
+        const guided = guidedControls.get(binding.controlId.toLowerCase());
+        if (guided === undefined) {
+          if (isRecord(callerInputs.values) &&
+              Object.hasOwn(callerInputs.values, guidedFormConfirmationKey))
+            return undefined;
+          const resolvedValues = await resolveValues(callerInputs.values);
+          if (resolvedValues === undefined) return undefined;
+          const adapterInputs: Record<string, unknown> = { ...callerInputs };
+          delete adapterInputs.choiceEvidence;
+          return adaptFormSubmit(binding, { ...adapterInputs, values: resolvedValues }, subject);
+        }
+        if (guided === null || !guided.summary || guided.flowId === undefined ||
+            guided.flowId.toLowerCase() !== String(binding.flow.flowId).toLowerCase())
           return undefined;
-        const resolvedValues = await resolveReferenceChoiceFormValues({
-          service: referenceChoices,
-          session: identity.session,
-          selection: {
-            organizationId: address.read.organizationId,
-            applicationRootId: address.application.applicationRootId,
-          },
-          application: installation.applicationContent,
-          modules: installation.modules,
-          formId: binding.controlId,
-          values: callerInputs.values,
-          ...(callerInputs.choiceEvidence === undefined
-            ? {}
-            : { evidence: callerInputs.choiceEvidence }),
-        });
+        const submitted = callerInputs.values;
+        if (!isRecord(submitted) || Object.keys(submitted).length !== 1 ||
+            !Object.hasOwn(submitted, guidedFormConfirmationKey))
+          return undefined;
+        const proof = submitted[guidedFormConfirmationKey];
+        const reference = guidedFormConfirmationReference(proof);
+        if (reference === undefined) return undefined;
+        if (!(await verifiesGuidedFormConfirmation(proof, {
+          pageId: guided.pageId,
+          flowId: guided.flowId,
+          sessionId: identity.session.sessionId,
+          identityId: identity.session.identityId,
+          organizationId: address.read.organizationId,
+          applicationRootId: address.application.applicationRootId,
+          ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
+        }))) return undefined;
+        const page = await loadApplicationPage(identity.session, {
+          tenantShortName: body.tenantShortName,
+          organizationShortName: body.organizationShortName,
+          read: address.read,
+          application: address.application,
+          pageKey: guided.pageKey,
+        }, subject === undefined ? {} : { record_id: subject.recordId });
+        if (page.kind !== "available") return undefined;
+        const model = page.model;
+        const draft = model.guidedForm;
+        const summary = Array.isArray(model.page.steps)
+          ? model.page.steps.find((step) => isRecord(step) && step.summary === true)
+          : undefined;
+        if (draft === undefined || summary === undefined ||
+            String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
+            !isRecord(summary) || typeof summary.id !== "string" ||
+            draft.computedStepId !== summary.id ||
+            model.invocation.installationRevision !== body.invocation.installationRevision ||
+            model.invocation.releaseKey !== body.invocation.releaseKey ||
+            draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
+            draft.revision !== reference.revision ||
+            draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||
+            (model.subject?.recordId.toLowerCase() ?? null) !==
+              (subject?.recordId.toLowerCase() ?? null) ||
+            (subject !== undefined && model.subject?.revision !== subject.revision) ||
+            !(model.bindings[binding.controlId] ?? []).some((held) =>
+              held.event === "form_submit" &&
+              held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase()))
+          return undefined;
+        const resolvedValues = await resolveValues(draft.values);
         if (resolvedValues === undefined) return undefined;
-        const adapterInputs: Record<string, unknown> = { ...callerInputs };
-        delete adapterInputs.choiceEvidence;
-        return adaptFormSubmit(
-          binding,
-          { ...adapterInputs, values: resolvedValues },
-          subject,
-        );
+        return adaptFormSubmit(binding, {
+          values: resolvedValues,
+          ...(callerInputs.selectedOwnerGroupId === undefined
+            ? {}
+            : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
+        }, subject);
       },
       continueForm,
       orchestratorFor,
     });
 
+    const submittedValues = invocation.kind === "binding" ? invocation.callerInputs.values : undefined;
+    const confirmation = isRecord(submittedValues)
+      ? guidedFormConfirmationReference(submittedValues[guidedFormConfirmationKey])
+      : undefined;
+    const invocationWithStableClick =
+      invocation.kind === "binding" && confirmation !== undefined
+        ? {
+            ...invocation,
+            clickId: guidedClickId(confirmation.draftId, confirmation.revision, invocation.bindingId),
+          }
+        : invocation;
     const result = await endpoint.invoke(
       identity.session,
-      {
-        organizationId: address.read.organizationId,
-        applicationRootId: address.application.applicationRootId,
-      },
-      body.invocation,
+      selection,
+      invocationWithStableClick,
     );
     if (result.kind === "refused") return refusedResponse();
     return privateResponse(result, result.kind === "reload" ? 409 : 200);

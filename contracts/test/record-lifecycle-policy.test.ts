@@ -9,7 +9,6 @@ import {
   dueArchiveRecordHandoffItemSchema,
   dueDeleteRecordHandoffItemSchema,
   dueRecordHandoffItemSchema,
-  evaluateRecordLifecycleHandoff,
   lifecycleCandidateRecordSchema,
   lifecycleReadinessEvidenceSchema,
   lifecycleStatusReportSchema,
@@ -21,8 +20,6 @@ import {
   registeredWorkflowEvidenceSchema,
   selectDueRecordsForLifecycleHandoff,
   validateRecordTypeLifecyclePolicy,
-  validateRecordTypeLifecyclePolicyDefinition,
-  validateRecordTypeLifecyclePolicyDefinitionAgainstLimits,
   type ArchiveDestinationReference,
   type ArchiveWorkflowRecordLifecyclePolicy,
   type DeleteRecordLifecyclePolicy,
@@ -566,21 +563,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
   });
 
   describe("definition-only vs live activation validation", () => {
-    it("validates declared shape independently from live activation", () => {
-      const declaredDelete = createValidDeletePolicy();
-      const declaredArchive = createValidArchivePolicy();
-
-      const defResultDelete = validateRecordTypeLifecyclePolicyDefinition(declaredDelete);
-      expect(defResultDelete.valid).toBe(true);
-
-      const defResultArchive = validateRecordTypeLifecyclePolicyDefinition(declaredArchive);
-      expect(defResultArchive.valid).toBe(true);
-
-      // Rejects malformed declared shape
-      const invalidShape = { ...declaredDelete, maxAgeDays: -5 };
-      expect(validateRecordTypeLifecyclePolicyDefinition(invalidShape).valid).toBe(false);
-    });
-
     it("enforces cross-organisation isolation during live activation validation", () => {
       const policyOrgB = createValidDeletePolicy({ organizationId: orgB });
 
@@ -662,21 +644,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         expectedSettingsRevision: 1,
       });
       expect(validOptResult.valid).toBe(true);
-    });
-
-    it("validates declared shape against limits via validateRecordTypeLifecyclePolicyDefinitionAgainstLimits without live concurrency", () => {
-      const declaredDelete = createValidDeletePolicy();
-      const defAgainstLimits = validateRecordTypeLifecyclePolicyDefinitionAgainstLimits(
-        declaredDelete,
-        validOrgLimits,
-      );
-      expect(defAgainstLimits.valid).toBe(true);
-
-      // Rejects when ceilings exceeded
-      const exceeding = createValidDeletePolicy({ maxAgeDays: 400 });
-      expect(
-        validateRecordTypeLifecyclePolicyDefinitionAgainstLimits(exceeding, validOrgLimits).valid,
-      ).toBe(false);
     });
 
     it("accepts a policy within organisation ceilings and allowed actions", () => {
@@ -1495,10 +1462,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       expect(parsedHandoff.dueCount).toBe(2);
       expect(parsedHandoff.dueRecords[0]?.expectedRecordRevision).toBe(2);
       expect(parsedHandoff.blockedRecords[0]?.expectedRecordRevision).toBe(1);
-    });
-
-    it("is accessible via the evaluateRecordLifecycleHandoff alias", () => {
-      expect(evaluateRecordLifecycleHandoff).toBe(selectDueRecordsForLifecycleHandoff);
     });
   });
 

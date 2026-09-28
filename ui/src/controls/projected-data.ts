@@ -1,6 +1,7 @@
 import {
   builderKeySchema,
   referenceChoiceSelectionEvidenceMapSchema,
+  groupIdSchema,
   richTextDocumentV2Schema,
   timestampSchema,
   type BlockPropertyValueV2Contract,
@@ -71,7 +72,11 @@ export type ControlSemanticEvent =
     }>
   | Readonly<{ event: "form_ready" }>
   | Readonly<{ event: "form_reset" }>
-  | Readonly<{ event: "form_submit"; values: Readonly<Record<string, TypedFieldValue>> }>
+  | Readonly<{
+      event: "form_submit";
+      values: Readonly<Record<string, TypedFieldValue>>;
+      selectedOwnerGroupId?: string;
+    }>
   | Readonly<{ event: "tab_changed"; tabKey: string }>;
 
 export type ControlEventHandler = (event: ControlSemanticEvent) => void | Promise<void>;
@@ -179,7 +184,10 @@ export type DialogPayload = Readonly<{ kind: "dialog"; open: boolean }>;
 export type DrawerPayload = Readonly<{ kind: "drawer"; open: boolean }>;
 
 /** The ready values a form container accepts; a form's values come from its own fields. */
-export type FormPayload = Readonly<{ kind: "form" }>;
+export type FormPayload = Readonly<{
+  kind: "form";
+  ownerGroups?: readonly Readonly<{ groupId: string; label: string }>[];
+}>;
 
 export type TextInputData = ControlDataState<TextInputPayload>;
 export type LinkInputData = ControlDataState<LinkInputPayload>;
@@ -777,8 +785,22 @@ export const parseFormPayload = (
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "form")
     return fail(`Expected 'form' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind"], location);
-  return Object.freeze({ kind: "form" });
+  requireExactKeys(record, ["kind", "ownerGroups"], location);
+  if (record.ownerGroups === undefined) return Object.freeze({ kind: "form" });
+  if (!Array.isArray(record.ownerGroups))
+    return fail("Owner Groups must be a list", location);
+  const ownerGroups = record.ownerGroups.map((candidate) => {
+    const group = requireRecord(candidate, "An owner Group must be an object", location);
+    requireExactKeys(group, ["groupId", "label"], location);
+    const groupId = groupIdSchema.safeParse(group.groupId);
+    if (!groupId.success) return fail("An owner Group identifier is invalid", location);
+    const label = requireString(group.label, "An owner Group label must be text", location);
+    if (label.length === 0) return fail("An owner Group label is empty", location);
+    return Object.freeze({ groupId: groupId.data, label });
+  });
+  if (new Set(ownerGroups.map((group) => group.groupId)).size !== ownerGroups.length)
+    return fail("An owner Group is repeated", location);
+  return Object.freeze({ kind: "form", ownerGroups: Object.freeze(ownerGroups) });
 };
 
 /**

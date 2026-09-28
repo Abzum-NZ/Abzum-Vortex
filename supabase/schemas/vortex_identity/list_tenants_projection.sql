@@ -86,3 +86,5 @@ grant execute on function vortex_identity.list_tenants_projection(
 
 comment on function vortex_identity.list_tenants_projection(uuid, integer) is
   'Registered tenant projection: returns every active tenant the current viewer''s effective structural administrator assignment already lists, the exact rule the tenant launcher applies, with the organisation the record is read in, the tenant identity, the tenant revision and the safe projected attribute values keyed by lowercase field key, or no row when the viewer has no effective assignment. Capability and change evidence is never projected.';
+
+alter function vortex_identity.list_tenants_projection(uuid,integer) owner to postgres;
