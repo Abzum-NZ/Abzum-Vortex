@@ -703,6 +703,71 @@ function customerControlProbeExpression() {
   })()`;
 }
 
+const customerVisibilityFlags = [
+  "self_hidden", "self_aria_hidden", "ancestor_hidden", "ancestor_aria_hidden",
+  "self_display_none", "ancestor_display_none", "self_visibility_hidden", "ancestor_visibility_hidden",
+  "self_opacity_zero", "ancestor_opacity_zero", "no_client_rect", "zero_rect_width",
+  "zero_rect_height", "computed_display_inline", "has_checkbox_class", "has_inline_style",
+];
+
+function customerVisibilityProbeExpression() {
+  return `(() => { ${accessibleNameHelpers}
+    const maximum = 1024;
+    const flags = ${JSON.stringify(customerVisibilityFlags)};
+    const forms = companyForms();
+    const groups = forms.length === 1
+      ? [...forms[0].querySelectorAll('[role="group"]')]
+          .filter((group) => visible(group) && accessibleName(group) === "Company type")
+      : [];
+    const roots = groups.length === 1
+      ? [...groups[0].querySelectorAll('[role="checkbox"][data-slot="checkbox"]')]
+          .filter((root) => {
+            if (accessibleName(root) !== "Customer") return false;
+            const field = root.closest('[data-slot="field"][role="group"]');
+            if (!field || !groups[0].contains(field)) return false;
+            if (field.querySelectorAll('[role="checkbox"][data-slot="checkbox"]').length !== 1) return false;
+            return [...field.querySelectorAll("label")].some((label) =>
+              visible(label) && normalizeName(textForName(label)) === "Customer" &&
+              label.htmlFor !== "" &&
+              [...field.querySelectorAll('input[type="checkbox"]')].some((input) => input.id === label.htmlFor));
+          })
+      : [];
+    const count = roots.length;
+    const unique = count === 1;
+    const probe = {
+      semantic_root_count: Math.min(count, maximum), capped: count > maximum,
+      semantic_root_unique: unique,
+      ...Object.fromEntries(flags.map((name) => [name, null])),
+    };
+    if (!unique) return probe;
+    const root = roots[0];
+    const ancestors = [];
+    for (let node = root.parentElement; node instanceof Element; node = node.parentElement) ancestors.push(node);
+    const rootStyle = getComputedStyle(root);
+    const ancestorStyles = ancestors.map((node) => getComputedStyle(node));
+    const rect = root.getBoundingClientRect();
+    return {
+      ...probe,
+      self_hidden: root.hidden,
+      self_aria_hidden: root.getAttribute("aria-hidden") === "true",
+      ancestor_hidden: ancestors.some((node) => node.hidden),
+      ancestor_aria_hidden: ancestors.some((node) => node.getAttribute("aria-hidden") === "true"),
+      self_display_none: rootStyle.display === "none",
+      ancestor_display_none: ancestorStyles.some((style) => style.display === "none"),
+      self_visibility_hidden: rootStyle.visibility === "hidden",
+      ancestor_visibility_hidden: ancestorStyles.some((style) => style.visibility === "hidden"),
+      self_opacity_zero: rootStyle.opacity === "0",
+      ancestor_opacity_zero: ancestorStyles.some((style) => style.opacity === "0"),
+      no_client_rect: root.getClientRects().length === 0,
+      zero_rect_width: rect.width <= 0,
+      zero_rect_height: rect.height <= 0,
+      computed_display_inline: rootStyle.display === "inline",
+      has_checkbox_class: root.classList.contains("cn-checkbox"),
+      has_inline_style: root.hasAttribute("style"),
+    };
+  })()`;
+}
+
 async function captureCustomerControlProbe() {
   if (result.action_stage !== "customer_control" || !devtools) return;
   try {
@@ -723,6 +788,31 @@ async function captureCustomerControlProbe() {
       ...names.map((name) => [name, probe[name]]),
       ["capped", probe.capped], ["scope_valid", probe.scope_valid],
     ]);
+    if (!probe.scope_valid) return;
+    try {
+      const visibility = await devtools.evaluate(customerVisibilityProbeExpression());
+      if (
+        !visibility || typeof visibility !== "object" ||
+        !Number.isInteger(visibility.semantic_root_count) ||
+        visibility.semantic_root_count < 0 || visibility.semantic_root_count > 1024 ||
+        typeof visibility.capped !== "boolean" ||
+        (visibility.capped && visibility.semantic_root_count !== 1024) ||
+        typeof visibility.semantic_root_unique !== "boolean" ||
+        visibility.semantic_root_unique !== (visibility.semantic_root_count === 1 && !visibility.capped) ||
+        customerVisibilityFlags.some((name) =>
+          visibility.semantic_root_unique
+            ? typeof visibility[name] !== "boolean"
+            : visibility[name] !== null)
+      ) return;
+      result.customer_visibility_probe = Object.fromEntries([
+        ["semantic_root_count", visibility.semantic_root_count],
+        ["capped", visibility.capped],
+        ["semantic_root_unique", visibility.semantic_root_unique],
+        ...customerVisibilityFlags.map((name) => [name, visibility[name]]),
+      ]);
+    } catch {
+      // Failure-only visibility evidence must not replace the original failure.
+    }
   } catch {
     // A failed diagnostic read cannot replace the original browser failure.
   }
