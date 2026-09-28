@@ -159,3 +159,7 @@ comment on function vortex_activity.read_organization_activity_aggregates(
   timestamptz, timestamptz, text, uuid, text, uuid, text, text, text
 ) is
   'Returns bounded group counts over the same protected Activity filters and projection as read_organization_activity_page.';
+
+alter function vortex_activity.read_organization_activity_aggregates(
+  timestamptz, timestamptz, text, uuid, text, uuid, text, text, text
+) owner to vortex_activity_owner;
