@@ -1,0 +1,20 @@
+# Local preview browser adapter
+
+`tooling/fleet/local-preview-browser.mjs` is the browser-only adapter for the Codex-owned local preview runner in issue #1702. The runner prepares the candidate checkout, server, database, and declared fixture fingerprints. This adapter independently checks the candidate `HEAD`, validates the supplied origin, nonce, and fixture-map shape, then owns one headless Edge instance for the sign-in, Companies list, New company, and save steps.
+
+The adapter uses Node 24 built-ins only. It starts the pinned executable `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe` with a new private profile, loopback-only DevTools address, and port `0`. It discovers the DevTools port from that profile's `DevToolsActivePort` file and connects only to the uniquely launched `about:blank` page. It never attaches to an existing browser or prints credentials, page text, raw errors, environment values, or the profile path.
+
+The runner passes no credential arguments and provides these environment variables:
+
+- `VORTEX_PREVIEW_BASE_URL`: an HTTP origin on `127.0.0.1` or `::1`, with an explicit port and no path, query, or fragment.
+- `VORTEX_PREVIEW_HEAD_SHA`: the full 40-character candidate SHA; it must equal `git rev-parse --verify HEAD` in the prepared checkout.
+- `VORTEX_PREVIEW_RUN_NONCE`: a nonempty, bounded ASCII invocation nonce.
+- `VORTEX_PREVIEW_FIXTURE_FINGERPRINTS`: a JSON object mapping safe relative fixture paths to 64-character SHA-256 fingerprints. The adapter validates every entry and independently hashes every provided regular file within the prepared checkout before launch, then echoes the exact validated map. It accepts additional prepared fixtures without assigning them hard-coded roles. The runner owns checkout-to-server identity and fixture preparation.
+
+The sign-in button, Companies list action, form fields, and Save action must each have one visible, enabled match for their exact accessible name. The required Company type is explicitly set to the `Customer` option; there is no fallback to the first input or checkbox. The generated company name includes the run nonce and a fresh UUID, and success requires that exact name on a CRM company detail route.
+
+Readiness, DevTools commands, navigation, individual steps, and the overall invocation have fixed deadlines. A second control match, unavailable required control, nonlocal origin, missing or malformed DevTools state, candidate SHA mismatch, timeout, failed save, or uncertain browser exit fails closed. The result contains only safe reason codes and steps actually completed. PASS requires all four checks; exit status is `0` only for PASS. `--help` is side-effect free and is not browser evidence.
+
+On shutdown the adapter requests `Browser.close` and waits a bounded time for the exact child process to exit. It removes only the profile directory created by this invocation, after confirming the process exited and the resolved directory is the expected direct child of the OS temporary directory. If exit is uncertain, the result is FAIL and the profile is preserved for the owner; the adapter does not issue a broad process kill or delete an unverified path.
+
+Implementation validation is source-only. `node --check` and `--help` do not run Edge, start the preview server, access the database, or prove browser acceptance. A real run requires independent review and the lead's explicit preview ownership grant on the exact candidate SHA.
