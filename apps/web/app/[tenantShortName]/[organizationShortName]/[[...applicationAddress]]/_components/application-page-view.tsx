@@ -142,7 +142,8 @@ const outcomeNotices: Readonly<Record<string, Notice>> = {
 };
 
 const unavailableNotice: Notice = { tone: "problem", text: "That is not available right now." };
-const maximumVisibleChoices = 500;
+// The UI parser accepts at most 200 options in one projected choice payload.
+const maximumVisibleChoices = 200;
 
 /**
  * A run that reached a task the platform cannot run yet. It is not a refusal, so the person is
