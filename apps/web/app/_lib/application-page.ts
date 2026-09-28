@@ -498,6 +498,29 @@ const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
     ),
   );
 
+const fieldChoiceLabelsOf = (
+  module: ModuleRelease,
+  allowedPermissions: ReadonlySet<string>,
+): Record<string, readonly Readonly<{ value: string; label: string }>[]> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field) => {
+        if (field.type !== "several_choices") return [];
+        const labels = field.settings.options.flatMap((option) => {
+          const permissionId = option.requiredPermissionId;
+          const permissionKey =
+            permissionId === undefined
+              ? undefined
+              : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+          return permissionKey === undefined || allowedPermissions.has(permissionKey)
+            ? [{ value: option.value, label: option.label }]
+            : [];
+        });
+        return [[String(field.fieldId).toLowerCase(), labels] as const];
+      }),
+    ),
+  );
+
 /**
  * Logs one data placement that could not be loaded, server side only: the application, page and
  * placement identities that are already in the address, and a fixed reason code. Never a message,
@@ -512,6 +535,7 @@ const logPlacementFailure = (
     | "subject_not_addressed"
     | "subject_unavailable"
     | "subject_refused"
+    | "detail_record_type_unavailable"
     | "detail_command_invalid"
     | "detail_query_unavailable"
     | "detail_query_refused",
@@ -699,6 +723,40 @@ const loadApplicationPageInternal = async (
     }
     choicePlacements.push({ options, items: options.items, permissionKeys });
   }
+
+  const displayedFieldIds = new Set(
+    allPlacements.flatMap(({ placement }) => {
+      const settings = placement.settings;
+      if (!isRecord(settings)) return [];
+      const detail = readRecordDetailContract(
+        settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+      );
+      return detail?.fields.map((field) => field.field.toLowerCase()) ?? [];
+    }),
+  );
+  for (const module of context.releaseSet.modules)
+    for (const recordType of module.content.recordTypes)
+      for (const field of recordType.fields) {
+        if (
+          !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
+          field.type !== "several_choices"
+        )
+          continue;
+        for (const option of field.settings.options) {
+          const permissionId = option.requiredPermissionId;
+          if (permissionId === undefined) continue;
+          const key = `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
+          const matches = context.permissionRegistration.entries.filter(
+            (entry) =>
+              entry.ownerKind === "module" &&
+              sameId(String(entry.ownerId), String(module.rootId)) &&
+              sameId(String(entry.permission.permissionId), String(permissionId)),
+          );
+          if (matches.length !== 1 || matches[0] === undefined)
+            return { kind: "temporarily_unavailable" };
+          gatedPermissions.set(key, matches[0]);
+        }
+      }
 
   let dateTimeZones: DateTimeZones = {};
   let allowedPermissions = new Set<string>();
@@ -1079,7 +1137,12 @@ const loadApplicationPageInternal = async (
       const display = projectRecordDetailData(
         {
           settings,
-          ...(subjectModule === undefined ? {} : { fieldLabels: fieldLabelsOf(subjectModule) }),
+          ...(subjectModule === undefined
+            ? {}
+            : {
+                fieldLabels: fieldLabelsOf(subjectModule),
+                fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule, allowedPermissions),
+              }),
           ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
         },
         [subject.row],
@@ -1150,6 +1213,18 @@ const loadApplicationPageInternal = async (
       continue;
     }
 
+    const queryRecordType = bound.query.recordType;
+    const detailModule = queryRecordType.state === "resolved"
+      ? context.releaseSet.modules.find((module) =>
+          sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
+        )
+      : undefined;
+    if (detailModule === undefined) {
+      logPlacementFailure(address, placementId, "detail_record_type_unavailable");
+      data[placementId] = { status: "error" };
+      continue;
+    }
+
     // A Record detail reads only the inputs its bound query declares, from the page's own query
     // string; the Query engine validates each against the declared type and refuses the rest.
     const inputValues: Record<string, JsonValue> = {};
@@ -1185,7 +1260,14 @@ const loadApplicationPageInternal = async (
       data[placementId] = { status: "refused", reason: "not_permitted" };
     } else {
       const rows: readonly ProtectedQueryRow[] = result.value.rows;
-      const display = projectRecordDetailData({ settings, fieldLabels }, rows);
+      const display = projectRecordDetailData(
+        {
+          settings,
+          fieldLabels: fieldLabelsOf(detailModule),
+          fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
+        },
+        rows,
+      );
       data[placementId] =
         display === undefined
           ? { status: "refused", reason: "not_found" }
