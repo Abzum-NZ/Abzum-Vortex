@@ -4,15 +4,20 @@ import {
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
 } from "@vortex/contracts";
-import type { StudioApplicationDraftHistoryState } from "./application-draft-history";
 import type { StudioSemanticSelection } from "./semantic-selection";
+
+/** The current Application draft, whether supplied by history or a direct source load. */
+export type StudioSelectionInspectorDraft = Readonly<{
+  rootId: ApplicationRootId;
+  source: unknown;
+}>;
 
 export type StudioSelectionInspectorDescriptor = Readonly<{
   applicationRootId: ApplicationRootId;
   alias: string;
   kind: StudioSemanticSelection["kind"];
   label: string;
-  /** RFC 6901 JSON pointer into the authored Application source document. */
+  /** RFC 6901 JSON pointer into this draft; the alias is the identity across edits. */
   sourcePath: string;
 }>;
 
@@ -107,8 +112,11 @@ const jsonPointer = (path: SourcePath): string =>
         .map((segment) => String(segment).replace(/~/g, "~0").replace(/\//g, "~1"))
         .join("/")}`;
 
-const readableKey = (key: string): string =>
-  key.replace(/[._:/-]+/g, " ").replace(/\s+/g, " ").trim() || key;
+const readableKey = (value: string, fallback: string): string => {
+  const key = value.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+  if (!key) return fallback;
+  return key[0]!.toUpperCase() + key.slice(1);
+};
 
 const resolved = (
   applicationRootId: ApplicationRootId,
@@ -147,7 +155,7 @@ const placementCandidates = (
       if (placementAlias === alias)
         matches.push({
           alias: placementAlias,
-          label: readableKey(placement.block.block_id),
+          label: `Placement ${readableKey(placementAlias, "item")}`,
           sourcePath: placementPath,
         });
       for (const [slotKey, childSlot] of Object.entries(placement.slots))
@@ -194,7 +202,7 @@ const placementCandidates = (
  * retains the authored source object or carries permission state.
  */
 export const resolveStudioSelectionInspectorContext = (
-  draft: Pick<StudioApplicationDraftHistoryState, "rootId" | "source">,
+  draft: StudioSelectionInspectorDraft,
   selection: StudioSemanticSelection | null,
 ): StudioSelectionInspectorResolution => {
   try {
@@ -264,7 +272,7 @@ export const resolveStudioSelectionInspectorContext = (
           flow.id === parsedSelection.alias
             ? [{
                 alias: flow.id,
-                label: flow.description?.trim() || readableKey(flow.key),
+                label: readableKey(flow.key, "Flow"),
                 sourcePath: ["body", "flows", index],
               }]
             : [],
