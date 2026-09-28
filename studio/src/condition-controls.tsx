@@ -704,7 +704,7 @@ export function createInitialStudioCondition(
   )
     return undefined;
   if (contextIssues(context).length > 0) return undefined;
-  const operands = context.allowedOperands.map((entry) => entry.operand);
+  const operands: ConditionOperand[] = context.allowedOperands.map((entry) => entry.operand);
   if (context.allowLiteralValues) operands.push(literalOperand("text"));
   for (const operand of operands) {
     const options = studioConditionOperatorsFor(operand, undefined, context);
@@ -822,6 +822,9 @@ export function validateStudioCondition(
 
 const pathEquals = (left: ConditionPath, right: ConditionPath): boolean =>
   left.length === right.length && left.every((part, index) => part === right[index]);
+
+const pathStartsWith = (path: ConditionPath, prefix: ConditionPath): boolean =>
+  prefix.length <= path.length && prefix.every((part, index) => part === path[index]);
 
 const hasLiteralAtPath = (condition: ConditionNode | undefined, path: ConditionPath): boolean => {
   const value = path.reduce<unknown>((current, part) => {
@@ -1207,7 +1210,7 @@ function TreeEditor({
                 onReplace({
                   ...condition,
                   conditions: condition.conditions.filter((_, childIndex) => childIndex !== index),
-                });
+                }, path);
               }}
               onInvalid={onInvalid}
             />
@@ -1249,7 +1252,7 @@ function TreeEditor({
           onReplace={(next, resolvedPath) => onReplace({ kind: "not", condition: next }, resolvedPath)}
           onInvalid={onInvalid}
         />
-        <button type="button" onClick={() => onReplace(condition.condition)}>
+        <button type="button" onClick={() => onReplace(condition.condition, path)}>
           Remove not
         </button>
         {onRemove && (
@@ -1437,6 +1440,16 @@ function TreeEditor({
           Remove condition
         </button>
       )}
+      <button
+        type="button"
+        disabled={createInitialStudioCondition(context) === undefined}
+        onClick={() => {
+          const replacement = createInitialStudioCondition(context);
+          if (replacement) onReplace(replacement, path);
+        }}
+      >
+        Reset comparison
+      </button>
     </fieldset>
   );
 }
@@ -1463,7 +1476,8 @@ export function StudioConditionControls({
   const emit = (next: ConditionNode | undefined, resolvedPath?: ConditionPath) => {
     const nextValidation = validateStudioCondition(next, context);
     const remainingIssues = activeDraftIssues.filter((issue) =>
-      !pathEquals(issue.path, resolvedPath ?? []) && hasLiteralAtPath(nextValidation.condition, issue.path),
+      (resolvedPath === undefined || !pathStartsWith(issue.path, resolvedPath)) &&
+      hasLiteralAtPath(nextValidation.condition, issue.path),
     );
     setDraftIssues(remainingIssues);
     onChange(nextValidation.condition, withDraftIssues(nextValidation, remainingIssues));
