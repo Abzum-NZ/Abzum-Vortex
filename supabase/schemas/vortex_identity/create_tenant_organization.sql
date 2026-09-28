@@ -40,6 +40,8 @@ declare
   new_role_id uuid := pg_catalog.gen_random_uuid();
   new_role_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_delegation_id uuid := pg_catalog.gen_random_uuid();
+  new_group_id uuid := pg_catalog.gen_random_uuid();
+  new_membership_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   resulting_access_version bigint;
   result_subject_ids uuid[];
@@ -243,6 +245,19 @@ begin
     new_correlation_id
   ) as adopted;
 
+  -- The initial steward has one current Group for Group-owned records.
+  perform 1 from vortex_access.coordinate_organization_group_change(
+    'create_group', new_organization_id, new_group_id, null,
+    'organisation_owners', 'Organisation owners', new_account_id,
+    new_correlation_id
+  );
+  select changed.access_version into resulting_access_version
+  from vortex_access.coordinate_organization_group_membership_change(
+    'add_membership', new_organization_id, new_membership_id, null,
+    new_group_id, new_account_id, evaluated_at, null, null,
+    new_account_id, new_correlation_id
+  ) as changed;
+
   set constraints
     vortex_access.permission_continuities_evidence,
     vortex_access.organization_role_revisions_evidence
@@ -289,4 +304,4 @@ grant execute on function vortex_identity.create_tenant_organization(uuid, text,
   to vortex_runtime;
 
 comment on function vortex_identity.create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text) is
-  'Creates one tenant organisation for the bound request context person with an explicit existing steward, runtime settings and delivered Access composition.';
+  'Creates one tenant organisation for the bound request context person with an explicit existing steward, runtime settings, delivered Access composition and an initial current owner Group membership for that steward.';
