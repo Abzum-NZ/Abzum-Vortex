@@ -46,6 +46,9 @@ revoke all on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_access.resolve_system_actor_grant_internal(
+  uuid, text, uuid, uuid, text
+) to vortex_event_owner;
 
 comment on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text
