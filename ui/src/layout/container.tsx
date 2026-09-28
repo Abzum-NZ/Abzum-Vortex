@@ -124,7 +124,6 @@ export function Container(props: ContainerProps): ReactElement {
   return (
     <div
       data-vortex-control="container"
-      data-vortex-placement-id={props.placementId}
       data-vortex-direction={direction}
       data-vortex-gap={gap}
       {...(menuGeometryDeclared ? { "data-vortex-container-scope": scope } : {})}

@@ -382,7 +382,7 @@ export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Obje
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 ]);
 
-/** All forty-one immutable platform block releases registered for the page builder. */
+/** All immutable platform block releases registered for the page builder. */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,
