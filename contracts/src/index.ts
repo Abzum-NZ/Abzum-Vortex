@@ -23,7 +23,6 @@ export * from "./automation-contracts";
 export * from "./catalogues";
 export * from "./canonical-json";
 export * from "./common";
-export * from "./contract-index";
 export * from "./definitions";
 export * from "./definition-source";
 export * from "./definition-compilation-contracts";
