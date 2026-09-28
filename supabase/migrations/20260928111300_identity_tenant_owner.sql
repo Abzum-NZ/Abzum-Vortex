@@ -3380,7 +3380,6 @@ revoke execute on function vortex_identity.tenant_administrator_grant_expiry_cap
 comment on function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) is 'Private: the earliest time the actor loses any of the given tenant capabilities or platform.tenant.administrators.manage, from current assignments; null when none of them expires.';
 
 alter function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) owner to vortex_identity_owner;
-grant execute on function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) to postgres;
 
 -- Canonical source: vortex_identity.tenant_capabilities_from_json.
 create or replace function vortex_identity.tenant_capabilities_from_json(p_capabilities jsonb)
@@ -3435,7 +3434,6 @@ revoke execute on function vortex_identity.tenant_has_permanent_manager(uuid,tim
 comment on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) is 'Identity-owned current permanent tenant-manager predicate shared by protected tenant operations.';
 
 alter function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) owner to vortex_identity_owner;
-grant execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) to postgres;
 
 -- Canonical source: vortex_identity.tenant_request_actor_id.
 create or replace function vortex_identity.tenant_request_actor_id()
@@ -3580,5 +3578,11 @@ revoke execute on function vortex_identity.validate_tenant_lifecycle() from publ
 comment on function vortex_identity.validate_tenant_lifecycle() is null;
 
 alter function vortex_identity.validate_tenant_lifecycle() owner to vortex_identity_owner;
+
+-- Preserve calls from the existing postgres-owned Identity definers.
+set local role vortex_identity_owner;
+grant execute on function vortex_identity.tenant_administrator_grant_expiry_cap(uuid,uuid,text[],timestamp with time zone) to postgres;
+grant execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) to postgres;
+reset role;
 
 commit;
