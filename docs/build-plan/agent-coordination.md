@@ -1,125 +1,96 @@
 # Agent coordination
 
-Effective 27 September 2026. This is the authoritative development workflow. [Fleet operations](agent-fleet.md) has the procedures, launch mechanics, templates and scripts. The [roadmap](README.md) defines the phases. The latest direct instruction from the owner takes precedence over both.
+Effective 28 September 2026. This is the authoritative development workflow for the Vortex roadmap. [Fleet operations](agent-fleet.md) gives the operating procedure; the [roadmap](README.md) defines phases. The latest direct owner instruction takes precedence over these documents. External models and Orca dispatch are not part of the current workflow. Any future external-model use requires separate direct owner instruction and a policy update.
 
 ## Objective
 
 Build the roadmap outcome from dependency-ready, bounded work. By the end of Phase 6, an authorized user can sign in and use installed applications whose navigation, pages, records, forms, actions and theme come from definitions. A static mockup, or source that only type-checks, does not meet this objective. Phase labels are planning and reporting metadata, not dispatch gates.
 
-## Roles and ownership
+## Control plane, roles and ownership
 
-| Role | Model | Owns | Never |
+Codex Desktop is the control plane. The lead uses native Codex subagents for bounded work. Deterministic local helpers may persist evidence, cache data, format status and run requested checks; they do not choose priorities, dispatch agents or form a second scheduler or agent fleet.
+
+| Role | Model and effort | Owns | Boundaries |
 | --- | --- | --- | --- |
-| **Main orchestrator** (one session) | GPT-6 Sol (Codex), **High** effort | Readiness, shaping and routing, dispatch, the heavy-run queue, merges of verified PRs when a reviewer cannot, **every board write**, agent lifecycle, cleanup, checkpoint, progress reports | Product implementation |
-| **Planner** (on request) | Claude Opus 5.5, High effort | Shaping large or unclear issues, architecture options, design records, split proposals | Coordination, dispatch, merges, board writes, implementation |
-| **Implementer** | GPT-6 Luna (Codex), **Extra High** effort | One bounded issue in its own worktree: implementation commit, pushed branch, PR and handoff report | Heavy checks, merges, issue closure, board writes, other issues |
-| **Reviewer and fixer** | GPT-6 Sol (Codex), **Extra High** effort, a different session from the implementer | Independent review, fixing its own findings, re-review, verification before merge, merge, issue update and closure | Other issues, board writes, sending ordinary fixes back to the implementer |
-| **Monitor** (independent) | Claude, separate session | Preview-stack checks and post-merge smoke, the phase walkthrough, throughput and drift checks, corrections to the orchestrator, reports to the owner | Dispatch, merges, board writes (except an owner-requested reconciliation) |
+| Lead | GPT-6 Sol, High | Readiness, scope, priority, dispatch, migration allocation, shared checkpoint and journal, every Project-field write, final merge decisions, cleanup decisions and owner reports | Does not implement product changes in parallel with an assigned editor |
+| Read-only helper | GPT-6 Luna, Medium | Bounded inventories, source summaries and backlog hygiene with evidence | No edits, board writes or completion claims based only on summaries |
+| Implementer | GPT-6 Luna, Extra High initially | One bounded issue in its lead-assigned isolated managed worktree; implementation and handoff evidence | No Project-field writes or merges; no work outside assigned paths |
+| Reviewer and fixer | Fresh independent GPT-6 Sol, Extra High initially | Review the full change, fix findings in its own isolated worktree, re-review and return verification evidence | Must be a different session from the implementer; no Project-field writes or merges |
+| Planner | GPT-6 Sol, High or Extra High | Difficult cross-layer design analysis and issue shaping | Bounded planning only; no implementation or board writes |
+| Independent monitor | GPT-6 Sol, High (Medium for read-only inventory) | Independent preview evidence and phase acceptance | Created only when needed; no dispatch, board writes or merges |
+| Exceptional design consultation | GPT-6 Astra, High | A specific unresolved design question when Sol analysis is insufficient | Optional and exceptional, not routine implementation |
 
-Overflow when Codex capacity is short: OpenCode Space Bunny, DeepSeek 4.1 Flash (`deepseek/deepseek-flash`, when funded) or Claude Sonnet 5 High implement; Claude Opus 5.5 (Medium) reviews. Never DeepSeek Pro. Never use GPT-6 Sol or Opus 5.5 for routine implementation.
+The lead is the sole Project-board writer and merge owner. Workers return evidence to the lead. The lead alone updates Project fields, closes issues and merges PRs. Reviewers may fix their own findings, but their verdict and check evidence go to the lead for the merge decision. Product decisions remain recorded on the issue or PR.
 
-## Capacity targets
+The current Desktop session offers up to three child slots in addition to the lead. Check the actual limit before dispatch and record actual model and reasoning effort. Do not treat the limit as a target or imply unlimited capacity. The default allocation is one implementer, one independent reviewer and one flexible slot. Give an unreviewed PR priority over new implementation. Use the flexible slot for another implementer only when its paths are disjoint and review is keeping up. For a review backlog, prefer one implementer and two reviewers. Reserve a child slot for an independent monitor during a phase walkthrough. Do not fill idle slots without useful bounded work.
 
-- **Implementers:** 6–8 active Luna lanes, up to 12 when enough bounded, non-overlapping, dependency-ready leaves exist. Leaves come from any phase; a wait on one PR must not idle lanes that could take independent work.
-- **Reviewers:** up to **10** concurrent Sol review-and-fix lanes. When the review queue is longer than the free review lanes, open review lanes before new implementer lanes.
-- **Heavy checks:** two slots (typecheck and build on either; database replays on one at a time), under the memory floor in [fleet operations](agent-fleet.md#heavy-checks-and-locks).
-- **Service levels:**
-  - a reviewer starts within **10 minutes** of a PR opening;
-  - a merge follows within **one cycle** of review, verification and preview all passing;
-  - a finished lane is refilled within one cycle;
-  - 2–3 shaped leaves are kept ready at all times.
+Every child needs a lead-assigned isolated managed worktree before editing. A child does not automatically have a private checkout or durable background execution. The lead confirms the checkout, branch, owning paths and active editor before work starts. One issue has one editor at a time.
 
 ## Required lifecycle
 
-1. **Pick:** scan unfinished leaves across all phases for real dependency readiness and non-overlapping owning paths. Prefer the current phase's blockers first, then lower Pickup Order. Fill every free lane.
-2. **Shape:** make the issue clear and bounded before dispatch ([shape before dispatch](#shape-before-dispatch)). Hand large, unclear or architectural issues to the planner first.
-3. **Assign:** create an isolated worktree from `origin/main` with `--no-track`. Assign the migration number range from `origin/main` if one is needed. Launch the lane headless. Record the actual model, worktree, branch, terminal and start time, and write the board row.
-4. **Implement:** the implementer changes only the agreed owning paths, runs the definition validator when it touches application definitions, commits, pushes its branch with an explicit refspec, opens the PR and reports. It runs no heavy checks.
-5. **Review and fix:** in the same cycle, a fresh Sol reviewer reads the complete issue, every comment, the linked specification, the whole diff, current main and affected callers. It fixes its own findings and re-reviews the final source. Missing product decisions go to the orchestrator, which answers **in the issue or PR** (the owner decides real product questions). After asking, the lane re-reads the issue or PR before its next step.
-6. **Verify:** the reviewer runs [verification before merge](#verification-before-merge) on the final head.
-7. **Merge and close:** the reviewer updates the branch from main (the branch must be up to date), merges, updates the issue with the delivered outcome and closes it, then sends one completion report. If the merge fails because main moved, it merges main again, re-checks anything the merge changed, and retries.
-8. **Reconcile, refill and clean:**
-   - write the board row and read it back;
-   - unblock dependents and roll up parents;
-   - release both agents and close their terminals;
-   - remove the finished worktrees safely;
-   - refill every free lane;
-   - update the checkpoint.
+1. **Resume and reconcile:** read the checkpoint and append-only journal; compare them with native agent status, processes, managed worktrees, open PRs, board state, locks and pending writes. Investigate uncertain workers before dispatching duplicate work.
+2. **Choose and shape:** scan unfinished leaves for actual dependency readiness and non-overlapping paths. Prefer blockers in the current phase, then Pickup Order. Shape the complete issue before assigning it. Send an unclear or cross-layer design question to a bounded Sol planning session.
+3. **Assign:** create or select a lead-owned isolated managed worktree from current `origin/main` with a non-tracking branch. Reserve migration numbers in the checkpoint when needed. Record the assigned session, actual model and effort, worktree, branch, issue, scope and start time.
+4. **Implement:** the Luna child edits only assigned paths, runs the definition validator when application definitions change, then commits and returns the branch, commit, acceptance mapping and limitations. It may push an explicit branch ref and open a PR when assigned. It does not run heavy checks, write Project fields, close issues or merge.
+5. **Review and fix:** after implementation has stopped, a fresh Sol session reads the live issue and all comments, linked specification, whole diff, current main and affected callers. It reviews and fixes its own findings in a separate assigned worktree, re-reviews the resulting source and returns its verdict and exact evidence to the lead.
+6. **Verify:** obtain every applicable check in [Verification before merge](#verification-before-merge) against the complete final commit. Preview and browser evidence must name that full commit SHA.
+7. **Merge and close:** the lead immediately re-reads the PR head, base, review and required checks. It merges only the reviewed, verified head through normal protected PR merging. If main moved, update the candidate, inspect the changed merge and revalidate affected behavior. A changed head invalidates prior approval. The lead updates the issue and board after merge.
+8. **Reconcile and preserve:** the lead writes and reads back the Project row, unblocks dependents, rolls up parents, updates the checkpoint, and releases only settled worktrees after confirming unique work is preserved.
 
 ## Verification before merge
 
-Verification is proportional to what the PR changes, and the reviewer runs it on the exact final head.
+Verification is proportional to the change and must run against the exact final head.
 
 | The PR changes | Required before merge |
 | --- | --- |
-| Any TypeScript | Scoped typecheck: `pnpm -r --no-bail --filter "...[origin/main]" typecheck` (changed packages plus dependents). Full workspace typecheck instead when the PR removes types, reasons or exports, or changes `contracts/`. |
-| `apps/web`, `ui` or runtime packages the web app imports | `pnpm --filter @vortex/web build` |
-| `supabase/migrations` or `supabase/schemas` | Disposable database replay (as the non-superuser `postgres` role, like `supabase db reset`) |
-| `modules/src/*/application.json` or module sources | Definition validator plus the offline publication compile, and a check that every create form plus its flow supplies every required field |
-| Definitions, migrations or `apps/web/scripts/development-setup` | **Monitor preview check PASS** on the exact head: fresh `db reset` plus `setup:local` on the shared preview stack. Request it and wait for the monitor's PR comment. |
-| Pages, forms or definitions (`apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/`, `contracts/src/`) | **Monitor browser smoke PASS** on the exact head (owner decision, 28 Sep 2026): after the preview reset, headless Edge signs in, opens the CRM Companies list, opens New company and saves. The watcher runs it automatically with the preview check and reports it in the same PR comment. |
+| Any TypeScript | Scoped typecheck: `pnpm -r --no-bail --filter "...[origin/main]" typecheck` (changed packages plus dependents). Use full workspace typecheck instead if the PR removes types, reasons or exports, or changes `contracts/`. |
+| `apps/web`, `ui` or runtime packages imported by the web app | `pnpm --filter @vortex/web build` |
+| `supabase/migrations` or `supabase/schemas` | Disposable database replay as the non-superuser `postgres` role, like `supabase db reset` |
+| `modules/src/*/application.json` or module sources | Definition validator, offline publication compile, and check that every create form and its flow supplies every required field |
+| Definitions, migrations or `apps/web/scripts/development-setup` | Independent local preview check PASS on the exact head: fresh `db reset` plus `setup:local` on the shared preview stack |
+| Pages, forms or definitions (`apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/`, `contracts/src/`) | Independent browser smoke PASS on the exact head. After the preview reset, headless Edge signs in, opens the CRM Companies list, opens New company and saves. Record the complete head SHA and result. |
 
-After every merge batch the orchestrator runs the full workspace typecheck on main. The monitor smoke-tests main after every merge that touches definitions, migrations or development setup. A failure on main stops further merges of that kind until it is fixed.
+Only one owner controls the shared local preview stack; never run concurrent resets. A skipped, failed or stale check is not PASS. After every merge batch, the lead runs the full workspace typecheck on main. After a merge touching definitions, migrations or development setup, independently smoke-test main. A main failure holds further merges of that kind until a corrective PR is verified.
 
 Still forbidden: creating, editing or running tests; hosted verification; Kestra runs; deployment to Testing or Production; new lint or deployment gates.
 
-**Phase ready:** a phase is ready only after the monitor's end-to-end walkthrough of its acceptance passes. For Phase 6 that is: sign in; every installed application opens; create, open and edit a record; run a declared action; see the application's theme; no sign-in loop. The phase epic closes only then.
+A phase is ready only after an independent end-to-end walkthrough passes. Phase 6 acceptance is: sign in; every installed application opens; create, open and edit a record; run a declared action; see the application's theme; and no sign-in loop. The phase epic closes only then.
 
 ## Shape before dispatch
 
-Before dispatch the orchestrator reads the complete issue, every comment, the linked specification and the current source, then makes sure the issue states, in plain language:
+Before dispatch, the lead reads the complete issue, every comment, linked specification and relevant source. The issue must state in plain language:
 
-- **Summary:** the outcome: what a person can do, or is protected from, when the work is done.
-- **Already built:** what exists today, with file references.
+- **Summary:** what a person can do, or is protected from, when the work is done.
+- **Already built:** what exists today, with source references.
 - **Remaining work:** numbered, concrete changes.
-- **Scope boundaries:** the owning paths the implementer may change, and what it must not touch.
-- **Acceptance criteria:** behaviour visible in the code that shows the work is complete.
+- **Scope boundaries:** owning paths the implementer may change and explicit exclusions.
+- **Acceptance criteria:** inspectable behavior showing completion.
 - **Blocked by and Blocks:** matching native GitHub dependencies.
 
-The orchestrator also **verifies the premise against the code**:
-- the files, contracts and paths the issue relies on exist;
-- the authority and actor model is stated;
-- required fields and forms line up;
-- every real dependency is a native blocked-by edge.
+The lead verifies that referenced files, contracts and paths exist; the authority and actor model is clear; required fields and forms line up; and every real dependency has a native blocked-by edge. If an agent raises a scope question, update the issue with the answer so the next reader sees it. Product decisions are made by the owner or an explicitly delegated decision-maker.
 
-When a lane stops on a scope question, the fix is in the issue text as well as the answer, so the next reader has it.
+An issue is bounded when one implementer can finish one outcome, one owning-path set and acceptance in one session, estimated at no more than 180 active minutes. Split larger or mixed work into sub-issues in the [standard issue format](agent-fleet.md#metadata), each with its own outcome, paths, acceptance and estimate. Set dependencies where order matters. Parents and phase epics are rollups, never implementation tasks.
 
-An issue is bounded when one implementer can finish it in one session: one outcome, one set of owning paths, an estimate of no more than 180 active minutes. Larger or mixed issues are split before dispatch into sub-issues in the [standard issue format](agent-fleet.md#metadata), each with its own outcome, paths, acceptance and estimate. Each gets a Pickup Order right after the original's and native dependencies where order matters. Parents and phase epics are rollups, never implementation tasks.
+## Board, continuity and rate limits
 
-## No-choke-point rules
+Use the existing statuses Backlog, Ready, In progress, In review, Done and Not planned. Checks, fixes, preview and merge-ready are substates evidenced in available fields or the issue/PR. Done requires a merged PR, a closed issue and a successful board read-back. An open issue is never Done; a closed issue is Done or Not planned. A blocker retains the truthful status, exact reason and next action. A pending board write makes board progress STALE in reports.
 
-1. **Review starts at handoff.** A PR without a reviewer for more than 10 minutes is drift.
-2. **Merges are not left waiting.** A PR that has passed review, verification and preview merges in the next cycle.
-3. **No stall on one provider.** A capacity limit on one provider moves new work to the overflow models; it never stops the fleet.
-4. **Mail every cycle.** The orchestrator reads its Orca mailbox between steps (at least every 10 minutes) and replies to every monitor message. Mail unprocessed for more than one cycle is drift.
-5. **Checkpoint and continuity.** The checkpoint is updated at every completed step and at least every 20 minutes, so another session can take over. Before a known session or usage limit stops the orchestrator, it writes the resume steps into the checkpoint and notifies the owner with the reset time.
-6. **One board writer.** The orchestrator writes every board row at every transition, reads it back, and reconciles the whole board at least hourly. An open issue never shows Done, and a closed issue never shows anything but Done or Not planned.
-7. **Stalls are visible.** No orchestrator progress for 30 minutes with work pending is escalated by the monitor to the owner.
-8. **No stale branches, worktrees or terminals.**
-   - A remote branch exists only for an open PR or a running lane, and a worktree only for a running lane or an issue with a recorded blocked-by reason.
-   - The implementer's worktree is removed once its reviewer's checkout exists and the work is pushed.
-   - Terminals of settled lanes are closed, keeping Orca under 25 terminals.
-   - `main` and `testing` are never deleted.
+The lead journals an intended board mutation before sending it, serializes mutations, writes only changed fields with Status first, and verifies the result with a targeted read-back. Cache Project item, field and option IDs and share the cache across work. Target a slim, fully paginated Project snapshot about every five minutes while active, less often when idle, and after structural changes; refresh relationships separately. Refresh active PR facts in a conditional REST batch about every 60–90 seconds only while useful, then re-read the merge candidate immediately before merge. Do not fetch wide nested connections for every board item.
 
-## Status meanings
+REST and GraphQL budgets are separate. Trust live response headers and GraphQL error arrays, including errors in HTTP-200 responses. Honor Retry-After, reset times, bounded backoff and jitter. Reserve one fifth of the hourly GraphQL budget for transitions. On exhaustion, journal pending writes, verify whether a mutation already succeeded before retrying, then retry after reset. Never rotate credentials to defeat limits. Unknown, partial or stale data never means an empty backlog, successful check, Done or permission to merge.
 
-| Status | Fact required |
-| --- | --- |
-| Backlog | Not picked up, or a prerequisite is unresolved |
-| Ready | Bounded and dependency-ready; no agent yet |
-| In progress | A named implementer has actually started |
-| In review | A PR exists; the reviewer is queued, reviewing, fixing, verifying or blocked (name the substate) |
-| Done | Reviewed, verified, merged, issue closed, row read back |
-| Not planned | Explicitly cancelled scope |
-
-A blocker keeps the issue in its truthful status with the exact reason and next action; it never idles unrelated work.
+These cadences guide useful work; they are not promises of background timers. The local journal is the durable execution record, not a competing backlog. Write an event for state transitions and atomically replace checkpoint snapshots. Update the checkpoint after material transitions, periodically while active, and before session end. A Codex Desktop heartbeat may request reconciliation while the app runs; it is not a guaranteed timer or unattended fleet. The machine and app must be available. Shared account limits can pause all Codex models, and changing models is not guaranteed to restore capacity. Reports state the source and age of stale evidence.
 
 ## Boundaries
 
 This is a new application. Correct obsolete contracts and their callers together; do not keep V1/V2 adapters or invent compatibility requirements. No new record-writer variants or effect kinds: a record write uses the single [record-change](../specification/06-records-and-lifecycle.md#record-change-command) engine, and a needed change extends that command.
 
-Respect real repository protections and tool-approval controls. When one rejects an operation, report the exact action, source and supported resolution. Do not disable controls, disguise commands, retry an unchanged denial or switch executors to get around it.
+Every database-function migration carries the complete canonical `create or replace function` body, comment and grants, with the canonical `supabase/schemas/<schema>/<function>.sql` changed in the same commit. A signature change is an explicit drop then create. Never inspect stored definitions with `pg_get_functiondef`, `prosrc` or `routine_definition`, or patch them with `replace()`. Migration numbers come from the lead and sort after every migration on `origin/main`.
+
+Preserve tenant isolation, permissions, transactions, revisions, safe errors and explicit publication and installation. Never put business application names or special cases into generic engines or expose credentials. Preserve unique work before any cleanup. Never use a blind revert for a regression involving migrations or dependent changes; diagnose and prepare the smallest corrective PR.
+
+Respect real repository protections and tool-approval controls. Report the exact rejected action, source and supported resolution. Do not disable controls, disguise commands, retry an unchanged denial or switch executors to get around it. Provider capacity or rate limits are not denials: retry the same session a few times about 20 seconds apart before reassignment. Do not use hosted services for verification or deployment.
 
 ## Instruction precedence
 
-Latest owner instruction, then this file, then [fleet operations](agent-fleet.md), then the bounded issue and specification, then the lane brief. Product specifications define functionality, not fleet procedure. Old comments, runbooks and archived prompts are history, not policy. Checkpoints record facts, not policy.
+Latest direct owner instruction, then this file, then [fleet operations](agent-fleet.md), then the bounded issue and specification, then the lane brief. Product specifications define functionality, not fleet procedure. Old comments, runbooks, checkpoints and archived prompts are history, not policy. Checkpoints record facts, not policy.
