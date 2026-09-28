@@ -47,7 +47,7 @@ function geometryCss(scope: string, geometry: ContainerGeometry): string {
         ? "position:static;min-height:100svh;max-height:none;overflow-y:visible;align-self:stretch"
         : "position:static;min-height:0;max-height:none;overflow-y:visible;align-self:auto";
   return [
-    `${root}{flex-direction:${geometry.direction}}`,
+    `${root}{display:flex;flex-direction:${geometry.direction};width:100%;min-width:0}`,
     `${header}{width:${row ? "auto" : "100%"};flex:none}`,
     `${menu}{flex:${menuWidth === undefined ? "none" : `0 0 ${menuWidth}`};width:${menuWidth ?? (row ? "auto" : "100%")};max-width:100%;${placement}}`,
     `${content}{flex:${row ? "1 1 0%" : "none"};width:${row ? "auto" : "100%"};min-width:0}`,
@@ -74,6 +74,7 @@ export function Container(props: ContainerProps): ReactElement {
   const gap = settings.choice<ContainerGap>("gap", "medium");
   const declared = new Set(props.metadata.properties.map((property) => property.key));
   const menuGeometryDeclared = declared.has("menu_width");
+  const contentLandmark = declared.has("content_landmark") && settings.boolean("content_landmark");
   const readWidth = (key: string): number | undefined =>
     declared.has(key) ? settings.number(key) : undefined;
   const readChoice = <Value extends string>(key: string, fallback: Value): Value =>
@@ -112,17 +113,17 @@ export function Container(props: ContainerProps): ReactElement {
   for (const region of CONTAINER_REGIONS) {
     const child = props.slots[region];
     if (child === undefined || child === null) continue;
+    const Region = region === "content" && contentLandmark ? "main" : "div";
     regions.push(
-      <div key={region} data-vortex-container-region={region} className={regionClassName(region)}>
+      <Region key={region} data-vortex-container-region={region} className={regionClassName(region)}>
         {child}
-      </div>,
+      </Region>,
     );
   }
 
   return (
     <div
       data-vortex-control="container"
-      data-vortex-placement-id={props.placementId}
       data-vortex-direction={direction}
       data-vortex-gap={gap}
       {...(menuGeometryDeclared ? { "data-vortex-container-scope": scope } : {})}
