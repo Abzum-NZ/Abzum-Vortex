@@ -42,6 +42,21 @@ const THEME_METRIC_NAMES = [
   "nova_menu_radius_px",
 ];
 const MAX_THEME_METRIC_PX = 256;
+const MAIA_ACTIVE_MENU_FAILURE_PREDICATES = new Set([
+  "wrong_route",
+  "root_count",
+  "root_theme",
+  "nav_item_count",
+  "current_link_count",
+  "link_not_visible",
+  "inactive_link",
+  "sidebar_scope",
+  "sentinel_resolution",
+  "menu_radius",
+  "base_radius",
+  "menu_background",
+  "comparison_state",
+]);
 
 const result = {
   schema: SCHEMA,
@@ -1015,23 +1030,56 @@ async function inspectMaiaRoot(pathname) {
 }
 
 async function inspectMaiaActiveMenu(pathname, comparisonKey) {
-  const expression = themePageExpression(pathname, `
-    if (!isMaiaRoot(root)) return { valid: false };
-    const link = activeNavigationLink(root, "nav_crm_companies");
-    const sidebar = link?.closest('[data-slot="sidebar"]');
-    if (!link || !sidebar || !root.contains(sidebar)) return { valid: false };
+  const expression = `(() => {
+    ${accessibleNameHelpers}
+    ${themeStyleHelpers}
+    if (location.pathname !== ${JSON.stringify(pathname)})
+      return { valid: false, failed_predicate: "wrong_route" };
+    const roots = document.querySelectorAll('[data-vortex-style-root][data-vortex-style]');
+    if (roots.length !== 1) return { valid: false, failed_predicate: "root_count" };
+    const root = roots[0];
+    if (!isMaiaRoot(root)) return { valid: false, failed_predicate: "root_theme" };
+    const items = root.querySelectorAll('[data-vortex-navigation-item-id="nav_crm_companies"]');
+    if (items.length !== 1) return { valid: false, failed_predicate: "nav_item_count" };
+    const links = items[0].querySelectorAll('a[data-slot="sidebar-menu-button"][aria-current="page"]');
+    if (links.length !== 1) return { valid: false, failed_predicate: "current_link_count" };
+    const link = links[0];
+    if (!visible(link)) return { valid: false, failed_predicate: "link_not_visible" };
+    if (!link.hasAttribute("data-active") || link.getAttribute("data-active") === "false")
+      return { valid: false, failed_predicate: "inactive_link" };
+    const sidebar = link.closest('[data-slot="sidebar"]');
+    if (!sidebar || !root.contains(sidebar)) return { valid: false, failed_predicate: "sidebar_scope" };
     const activeStyle = getComputedStyle(link);
     const menuColor = activeStyle.backgroundColor;
     const menuRadius = metricPx(activeStyle.borderTopLeftRadius);
+    if (menuRadius === null || menuRadius <= 0)
+      return { valid: false, failed_predicate: "menu_radius", maia_menu_radius_px: menuRadius };
     let accentColor = "";
     let baseRadius = null;
     try {
       accentColor = readSentinel(sidebar, "background-color", "var(--sidebar-accent)", "background-color");
       baseRadius = metricPx(readSentinel(root, "border-radius", "var(--radius)", "border-top-left-radius"));
     } catch {
-      return { valid: false };
+      return { valid: false, failed_predicate: "sentinel_resolution" };
+    }
+    if (!accentColor) return { valid: false, failed_predicate: "sentinel_resolution" };
+    if (baseRadius === null || baseRadius <= 0) {
+      return {
+        valid: false,
+        failed_predicate: "base_radius",
+        maia_menu_radius_px: menuRadius,
+        maia_base_radius_px: baseRadius,
+      };
     }
     const colorsMatch = visibleColor(menuColor) && menuColor === accentColor;
+    if (!colorsMatch) {
+      return {
+        valid: false,
+        failed_predicate: "menu_background",
+        maia_menu_radius_px: menuRadius,
+        maia_base_radius_px: baseRadius,
+      };
+    }
     let persisted = false;
     try {
       if (sessionStorage.getItem(${JSON.stringify(comparisonKey)}) === null) {
@@ -1041,15 +1089,25 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     } catch {
       persisted = false;
     }
+    if (!persisted) {
+      return {
+        valid: false,
+        failed_predicate: "comparison_state",
+        maia_menu_radius_px: menuRadius,
+        maia_base_radius_px: baseRadius,
+      };
+    }
     return {
-      valid: colorsMatch && persisted && menuRadius !== null && menuRadius > 0 && baseRadius !== null && baseRadius > 0,
+      valid: true,
       maia_menu_radius_px: menuRadius,
       maia_base_radius_px: baseRadius,
     };
-  `);
+  })()`;
   const observation = await devtools.evaluate(expression);
+  if (MAIA_ACTIVE_MENU_FAILURE_PREDICATES.has(observation?.failed_predicate))
+    result.maia_active_menu_failed_predicate = observation.failed_predicate;
   recordThemeMetrics(observation, ["maia_menu_radius_px", "maia_base_radius_px"]);
-  requireThemeCheck("maia_active_menu", observation?.valid);
+  requireThemeCheck("maia_active_menu", observation?.valid === true);
 }
 
 async function inspectMaiaTable(pathname) {
