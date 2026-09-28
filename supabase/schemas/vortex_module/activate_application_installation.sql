@@ -400,7 +400,7 @@ exception
   when invalid_text_representation or numeric_value_out_of_range then
     raise exception using errcode = '22023',
       message = 'Application installation activation command is invalid';
-end
+end;
 $function$;
 
 alter function vortex_module.activate_application_installation(uuid,bigint,jsonb) owner to vortex_module_owner;

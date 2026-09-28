@@ -338,7 +338,7 @@ exception
     raise exception using errcode = 'P0002', message = 'Module installation evidence is unavailable';
   when too_many_rows then
     raise exception using errcode = '55000', message = 'Module installation evidence is ambiguous';
-end
+end;
 $function$;
 
 alter function vortex_module.provision_module_installation_storage(uuid,bigint,uuid,bigint,bigint) owner to vortex_module_owner;

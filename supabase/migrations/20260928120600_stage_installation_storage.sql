@@ -383,7 +383,7 @@ exception
     raise exception using errcode = 'P0002', message = 'Module installation evidence is unavailable';
   when too_many_rows then
     raise exception using errcode = '55000', message = 'Module installation evidence is ambiguous';
-end
+end;
 $function$;
 
 alter function vortex_module.provision_module_installation_storage(uuid,bigint,uuid,bigint,bigint) owner to vortex_module_owner;
@@ -800,7 +800,7 @@ exception
   when invalid_text_representation or numeric_value_out_of_range then
     raise exception using errcode = '22023',
       message = 'Application installation activation command is invalid';
-end
+end;
 $function$;
 
 alter function vortex_module.activate_application_installation(uuid,bigint,jsonb) owner to vortex_module_owner;
@@ -897,7 +897,7 @@ exception
   when too_many_rows then
     raise exception using errcode = '55000',
       message = 'Application installation evidence is ambiguous';
-end
+end;
 $function$;
 
 alter function vortex_module.read_application_installation_bindings(uuid) owner to vortex_module_owner;
@@ -1138,7 +1138,7 @@ exception
   when invalid_text_representation or numeric_value_out_of_range then
     raise exception using errcode = '22023',
       message = 'Application installation discard command is invalid';
-end
+end;
 $function$;
 
 alter function vortex_module.discard_prepared_application_installation(uuid,bigint) owner to vortex_module_owner;

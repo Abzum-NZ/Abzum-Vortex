@@ -83,7 +83,7 @@ exception
   when too_many_rows then
     raise exception using errcode = '55000',
       message = 'Application installation evidence is ambiguous';
-end
+end;
 $function$;
 
 alter function vortex_module.read_application_installation_bindings(uuid) owner to vortex_module_owner;
