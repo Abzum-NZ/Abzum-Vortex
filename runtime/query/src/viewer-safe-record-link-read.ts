@@ -96,8 +96,8 @@ const read = async (
     return unavailable;
 
   try {
-    // The installation predicate and both protected reads share one statement snapshot. The
-    // Record functions make the current row and field decision; they expose no direct table data.
+    // The installation predicate gates both protected reads in one statement. The Record
+    // functions make the current row and field decision; they expose no direct table data.
     const rows = await transaction.query<RecordLinkReadRow>`
       with active_installation as materialized (
         select vortex_module.read_current_active_installation() as value

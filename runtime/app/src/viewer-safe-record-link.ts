@@ -5,15 +5,20 @@ import {
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
   type IdentitySession,
+  type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type PageDefinitionV2,
+  type PermissionDeclaration,
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkResult,
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
+  runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import type { RequestDatabaseTransaction } from "@vortex/db";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import {
   createViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
@@ -79,6 +84,62 @@ const currentContextMatches = (
   sameId(context.installation.applicationRootId, identity.applicationRootId) &&
   context.applicationReleaseRevision === context.installation.applicationReleaseRevision;
 
+const permissionAction = (permission: PermissionDeclaration) => ({
+  actionKind: permission.actionKind,
+  ...(permission.namedAction === undefined ? {} : { namedAction: permission.namedAction }),
+});
+
+/** Check the detail page's own required permission under this viewer's resolved request. */
+const canOpenDetailPage = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: InstalledRuntimeContext,
+  page: PageDefinitionV2,
+): Promise<boolean> => {
+  const platform = platformPermissionFor(page.accessPermissionKey);
+  let declaration: OrganizationAccessDeclaration;
+  if (platform !== undefined) {
+    declaration = {
+      operationKey: "application.page.discover",
+      action: permissionAction(platform),
+      target: { kind: "organization" },
+      requiredPermission: {
+        ownerKind: "platform",
+        ownerId: platformPermissionOwnerId,
+        permissionId: platform.permissionId,
+      },
+      recentAuthentication: { kind: "none" },
+      authority: { kind: "permission" },
+    };
+  } else {
+    const entries = context.permissionRegistration.entries.filter(
+      (entry) => entry.permission.key === page.accessPermissionKey,
+    );
+    if (entries.length !== 1 || entries[0] === undefined) return false;
+    const entry = entries[0];
+    declaration = {
+      operationKey: "application.page.discover",
+      action: permissionAction(entry.permission),
+      target: { kind: "application", applicationRootId: context.applicationRootId },
+      requiredPermission: {
+        applicationRootId: entry.applicationRootId,
+        ownerKind: entry.ownerKind,
+        ownerId: entry.ownerId,
+        permissionId: entry.permission.permissionId,
+      },
+      recentAuthentication: { kind: "none" },
+      authority: { kind: "permission" },
+    };
+  }
+  const result = await runOrganizationAccessOperation(
+    transaction,
+    scope,
+    declaration,
+    async (decision) => decision.correlationId,
+  );
+  return result.outcome === "completed" && sameId(result.value, context.correlationId);
+};
+
 const completeRead = (
   context: InstalledRuntimeContext,
   identity: ReturnType<typeof viewerSafeRecordLinkIdentitySchema.parse>,
@@ -102,8 +163,8 @@ const completeRead = (
 /**
  * Resolves one exact installed target record for the current human viewer. The identity tuple only
  * selects the target context: App verifies the active installation and exact bound releases, then
- * Query obtains the title through the current protected Record read. Detail-page access is checked
- * again by its destination; this link read discloses no page content beyond its route identity.
+ * Query obtains the title through the current protected Record read. The detail page's own access
+ * requirement is checked here and again by its destination when opened.
  */
 export const createViewerSafeRecordLinkService = (
   dependencies: ViewerSafeRecordLinkServiceDependencies,
@@ -142,6 +203,7 @@ export const createViewerSafeRecordLinkService = (
             const recordType = matchingRecordType(context, identity.data);
             const page = matchingDetailPage(context, identity.data);
             if (recordType === undefined || page === undefined) return unavailable;
+            if (!(await canOpenDetailPage(transaction, scope, context, page))) return unavailable;
 
             const titleRead = await records.read(transaction, scope, {
               identity: identity.data,
