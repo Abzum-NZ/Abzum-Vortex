@@ -963,14 +963,31 @@ const readSentinel = (parent, property, value, computedProperty) => {
     sentinel.remove();
   }
 };
-const activeNavigationLink = (root, navigationId) => {
-  const items = root.querySelectorAll('[data-vortex-navigation-item-id="' + navigationId + '"]');
-  if (items.length !== 1) return null;
-  const links = items[0].querySelectorAll('a[data-slot="sidebar-menu-button"][aria-current="page"]');
-  if (links.length !== 1) return null;
-  const link = links[0];
-  if (!visible(link) || !link.hasAttribute("data-active") || link.getAttribute("data-active") === "false") return null;
-  return link;
+const activeNavigationLink = (root, expectedPath, expectedName) => {
+  const candidates = root.querySelectorAll('[data-slot="sidebar"]');
+  if (candidates.length > 64) return { failed_predicate: "sidebar_scope" };
+  const visibleSidebars = [...candidates].filter(visible);
+  if (visibleSidebars.length !== 1) return { failed_predicate: "sidebar_scope" };
+  const sidebar = visibleSidebars[0];
+  const anchors = sidebar.querySelectorAll('a[data-slot="sidebar-menu-button"]');
+  if (anchors.length === 0 || anchors.length > 128) return { failed_predicate: "nav_item_count" };
+  const expectedHref = new URL(expectedPath, location.origin).href;
+  const matches = [...anchors].filter((anchor) => {
+    const href = anchor.getAttribute("href");
+    if (!href || accessibleName(anchor) !== expectedName || anchor.getAttribute("aria-current") !== "page")
+      return false;
+    try {
+      return new URL(href, location.href).href === expectedHref;
+    } catch {
+      return false;
+    }
+  });
+  if (matches.length !== 1) return { failed_predicate: "current_link_count" };
+  const link = matches[0];
+  if (!visible(link)) return { failed_predicate: "link_not_visible" };
+  if (!link.hasAttribute("data-active") || link.getAttribute("data-active") === "false")
+    return { failed_predicate: "inactive_link" };
+  return { link, sidebar };
 };
 const isMaiaRoot = (root) => root.getAttribute("data-vortex-style") === "maia" &&
   root.getAttribute("data-vortex-menu") === "default" &&
@@ -1039,16 +1056,9 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     if (roots.length !== 1) return { valid: false, failed_predicate: "root_count" };
     const root = roots[0];
     if (!isMaiaRoot(root)) return { valid: false, failed_predicate: "root_theme" };
-    const items = root.querySelectorAll('[data-vortex-navigation-item-id="nav_crm_companies"]');
-    if (items.length !== 1) return { valid: false, failed_predicate: "nav_item_count" };
-    const links = items[0].querySelectorAll('a[data-slot="sidebar-menu-button"][aria-current="page"]');
-    if (links.length !== 1) return { valid: false, failed_predicate: "current_link_count" };
-    const link = links[0];
-    if (!visible(link)) return { valid: false, failed_predicate: "link_not_visible" };
-    if (!link.hasAttribute("data-active") || link.getAttribute("data-active") === "false")
-      return { valid: false, failed_predicate: "inactive_link" };
-    const sidebar = link.closest('[data-slot="sidebar"]');
-    if (!sidebar || !root.contains(sidebar)) return { valid: false, failed_predicate: "sidebar_scope" };
+    const navigation = activeNavigationLink(root, ${JSON.stringify(pathname)}, "Companies");
+    if (!navigation.link) return { valid: false, failed_predicate: navigation.failed_predicate };
+    const { link, sidebar } = navigation;
     const activeStyle = getComputedStyle(link);
     const menuColor = activeStyle.backgroundColor;
     const menuRadius = metricPx(activeStyle.borderTopLeftRadius);
@@ -1321,12 +1331,12 @@ async function inspectNovaAndCompare(pathname, comparisonKey) {
       try { sessionStorage.removeItem(${JSON.stringify(comparisonKey)}); } catch {}
       return { valid: false };
     }
-    const link = activeNavigationLink(root, "nav_sd_home");
-    const sidebar = link?.closest('[data-slot="sidebar"]');
-    if (!link || !sidebar || !root.contains(sidebar)) {
+    const navigation = activeNavigationLink(root, ${JSON.stringify(pathname)}, "Overview");
+    if (!navigation.link) {
       try { sessionStorage.removeItem(${JSON.stringify(comparisonKey)}); } catch {}
       return { valid: false };
     }
+    const { link, sidebar } = navigation;
     const menuStyle = getComputedStyle(link);
     const menuColor = menuStyle.backgroundColor;
     const menuRadius = metricPx(menuStyle.borderTopLeftRadius);
