@@ -30,13 +30,20 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 
 PATCHED_SIGN_IN = Path("apps/web/app/auth/sign-in/page.tsx")
 TEST_SIGN_IN_HELPER = Path("apps/web/app/auth/dev-test-sign-in.ts")
 PREPARED_NEXT_ENV = Path("apps/web/next-env.d.ts")
 SETUP_STATE = Path("supabase/.temp/development-setup-state.json")
+DIAGNOSTIC_OWNER_EMAIL = "codex-preview@vortex.test"
+DIAGNOSTIC_STATUS = "DIAGNOSTIC_COMPLETE"
+DIAGNOSTIC_HELPER_SHA256 = "0faeee5d13256b283bacc71688add055b29bed58f5d9049e0f209e84580fd987"
+MAX_SETUP_STATE_BYTES = 1024 * 1024
+MAX_AUTH_USERS_RESPONSE = 2 * 1024 * 1024
+AUTH_USERS_PAGE_SIZE = 200
+AUTH_USERS_MAX_PAGES = 10
 REQUIRED_BROWSER_CHECKS = (
     "sign_in",
     "companies_list",
@@ -564,7 +571,15 @@ def _add_run_args(parser: argparse.ArgumentParser, *, state_dir: bool) -> None:
     parser.add_argument("--owner-email", required=True, help="Disposable local first-owner email; never a password")
     parser.add_argument("--port", type=int, default=3000, help="Loopback Next.js port; default 3000")
     if state_dir:
-        parser.add_argument("--state-dir", required=True, help="Stable absolute result/lock directory outside all candidate checkouts")
+        parser.add_argument("--state-dir", required=True, help="Stable absolute result directory outside all candidate checkouts")
+
+
+def _add_diagnostic_args(parser: argparse.ArgumentParser, *, live: bool) -> None:
+    _add_run_args(parser, state_dir=live)
+    parser.add_argument("--setup-state-sha256", required=True, help="Exact SHA-256 of the completed ignored local setup state")
+    if live:
+        parser.add_argument("--owner-id", required=True, help="Exact disposable local Auth UUID returned by diagnose-preflight")
+        parser.add_argument("--confirm-rotate-owner-id", required=True, help="Repeat --owner-id to authorize only its local password rotation")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -579,6 +594,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run = modes.add_parser("run", help="Run after review and explicit local-reset confirmation")
     _add_run_args(run, state_dir=True)
     run.add_argument("--confirm-reset-sha", required=True, help="Repeat --sha to authorize the local database reset")
+    diagnosis_preflight = modes.add_parser("diagnose-preflight", help="Read-only existing-setup and disposable-owner checks")
+    _add_diagnostic_args(diagnosis_preflight, live=False)
+    diagnosis = modes.add_parser("diagnose-existing", help="Browser-only diagnosis of the pinned completed local setup")
+    _add_diagnostic_args(diagnosis, live=True)
     return parser
 
 
@@ -586,7 +605,7 @@ def _safe_email(email: str) -> bool:
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email))
 
 
-def _preflight(args: argparse.Namespace) -> dict[str, Any]:
+def _preflight(args: argparse.Namespace, *, require_setup_absent: bool = True) -> dict[str, Any]:
     checkout, sha, _ = _checkout_and_sha(args.checkout, args.sha)
     if not _safe_email(args.owner_email):
         raise PreviewError("invalid_owner_email", "--owner-email is not a valid email address")
@@ -605,7 +624,8 @@ def _preflight(args: argparse.Namespace) -> dict[str, Any]:
     next_env = checkout / PREPARED_NEXT_ENV
     if not page.is_file() or not helper.is_file() or not next_env.is_file():
         raise PreviewError("fixture_missing", "A declared local sign-in fixture is missing")
-    _ensure_setup_state_absent(checkout)
+    if require_setup_absent:
+        _ensure_setup_state_absent(checkout)
     page_hash = prepared_fixtures[PATCHED_SIGN_IN.as_posix()]
     helper_hash = prepared_fixtures[TEST_SIGN_IN_HELPER.as_posix()]
     next_env_hash = prepared_fixtures[PREPARED_NEXT_ENV.as_posix()]
@@ -638,6 +658,55 @@ def _preflight(args: argparse.Namespace) -> dict[str, Any]:
         "browser_adapter_sha256": adapter_hash,
         "side_effects": [],
         "commands_executed": ["read-only git identity/diff/ignore checks", "filesystem metadata/hash reads"],
+    }
+
+
+def _diagnostic_preflight(args: argparse.Namespace, *, check_availability: bool = True) -> dict[str, Any]:
+    if args.owner_email != DIAGNOSTIC_OWNER_EMAIL:
+        raise PreviewError("diagnostic_owner_email_invalid", "Diagnosis is limited to the disposable local preview account")
+    if _pr_pair(args) is not None:
+        raise PreviewError("diagnostic_pr_unsupported", "Existing-setup diagnosis does not inspect a hosted pull request")
+    base = _preflight(args, require_setup_absent=False)
+    checkout = Path(base["checkout"])
+    if base["fixtures"][TEST_SIGN_IN_HELPER.as_posix()] != DIAGNOSTIC_HELPER_SHA256:
+        raise PreviewError("diagnostic_helper_mismatch", "Diagnosis requires the reviewed existing-user-only sign-in helper")
+    setup_hash = _diagnostic_setup_state(checkout, args.setup_state_sha256)
+    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    _outside_checkout(lock_dir, checkout, "preview lock directory")
+    _outside_git_worktrees(lock_dir, "preview lock directory")
+    if check_availability:
+        lock = lock_dir / "local-preview.lock"
+        if lock.exists() or lock.is_symlink():
+            raise PreviewError("preview_locked", "The shared local preview lock already exists")
+        if not _port_is_free(args.port):
+            raise PreviewError("web_port_occupied", "The requested loopback web port is already occupied")
+    _, local_values = _validate_env_file(args.web_env_file, checkout)
+    node = shutil.which("node")
+    if node is None:
+        raise PreviewError("runtime_missing", "Node.js is unavailable")
+    cli = checkout / "node_modules" / "supabase" / "dist" / "supabase.js"
+    api_url, service_key = _diagnostic_status(checkout, node, cli, _base_env())
+    try:
+        if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
+            raise PreviewError("supabase_url_mismatch", "The local stack and app Supabase URLs differ")
+        owner_id = _find_diagnostic_owner(api_url, service_key)
+    finally:
+        service_key = ""
+    return {
+        **base,
+        "schema": "vortex.local-preview.diagnostic-preflight.v1",
+        "optional_pr": None,
+        "owner_email": DIAGNOSTIC_OWNER_EMAIL,
+        "owner_id": owner_id,
+        "setup_state_sha256": setup_hash,
+        "setup_completed": True,
+        "diagnostic_only": True,
+        "side_effects": [],
+        "commands_executed": [
+            *base["commands_executed"],
+            "read-only pinned local Supabase status",
+            "bounded read-only local Auth user lookup",
+        ],
     }
 
 
@@ -761,6 +830,226 @@ def _create_local_owner(api_url: str, service_key: str, email: str, password: st
         raise
     except (urllib.error.URLError, TimeoutError, OSError, UnicodeError, json.JSONDecodeError):
         raise PreviewError("owner_create_failed", "The local Auth owner request failed", step="local_owner") from None
+
+
+def _diagnostic_uuid(value: Any, label: str) -> str:
+    if not isinstance(value, str):
+        raise PreviewError("diagnostic_owner_invalid", f"{label} must be a canonical UUID")
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError):
+        raise PreviewError("diagnostic_owner_invalid", f"{label} must be a canonical UUID") from None
+    if parsed.int == 0 or str(parsed) != value.lower():
+        raise PreviewError("diagnostic_owner_invalid", f"{label} must be a canonical UUID")
+    return str(parsed)
+
+
+def _diagnostic_status(checkout: Path, node: str, cli: Path, env: dict[str, str]) -> tuple[str, str]:
+    """Read status without writing the local Auth key into preflight evidence."""
+    result = _run_process(
+        [node, str(cli), "status", "--output", "json"],
+        cwd=checkout,
+        env=env,
+        timeout=RUN_TIMEOUTS["supabase_status"],
+        capture_stdout=True,
+    )
+    if not result.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "The read-only local status process did not stop")
+    if result.timed_out or result.exit_code != 0 or len(result.stdout) > MAX_CAPTURED_OUTPUT:
+        raise PreviewError("local_stack_unavailable", "The already-running local Supabase stack is unavailable")
+    try:
+        status = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise PreviewError("status_output_invalid", "Local Supabase status was not valid JSON") from None
+    api = status.get("API_URL") if isinstance(status, dict) else None
+    secret = status.get("SECRET_KEY") if isinstance(status, dict) else None
+    if not isinstance(api, str) or not isinstance(secret, str) or not secret:
+        raise PreviewError("local_stack_unavailable", "The already-running local Supabase stack is unavailable")
+    api = _loopback_url(api, "Supabase API_URL", port=54321)
+    parsed = urlsplit(api)
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise PreviewError("nonlocal_url", "Supabase API_URL must be a plain loopback origin")
+    return api, secret
+
+
+def _diagnostic_auth_json(
+    api_url: str,
+    service_key: str,
+    path: str,
+    *,
+    method: str,
+    body: dict[str, str] | None = None,
+    limit: int = MAX_AUTH_USERS_RESPONSE,
+) -> tuple[dict[str, Any], dict[str, str | None]]:
+    """Make one bounded, no-redirect request to the already-validated local Auth API."""
+    validated_api = _loopback_url(api_url, "Supabase API_URL", port=54321)
+    parsed_api = urlsplit(validated_api)
+    if parsed_api.path not in ("", "/") or parsed_api.query or parsed_api.fragment:
+        raise PreviewError("nonlocal_url", "Supabase API_URL must be a plain loopback origin")
+    if method == "GET":
+        if body is not None or not (
+            re.fullmatch(r"/auth/v1/admin/users\?page=[1-9][0-9]*&per_page=200", path)
+            or re.fullmatch(r"/auth/v1/admin/users/[0-9a-f-]{36}", path)
+        ):
+            raise PreviewError("diagnostic_auth_request_invalid", "Only bounded local Auth user reads are allowed")
+    elif method == "PUT":
+        if not re.fullmatch(r"/auth/v1/admin/users/[0-9a-f-]{36}", path) or not (
+            isinstance(body, dict) and set(body) == {"password"} and isinstance(body["password"], str)
+        ):
+            raise PreviewError("diagnostic_auth_request_invalid", "Only the pinned local user's password update is allowed")
+    else:
+        raise PreviewError("diagnostic_auth_request_invalid", "Unsupported diagnostic Auth method")
+    request = urllib.request.Request(
+        f"{validated_api}{path}",
+        data=None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+        },
+        method=method,
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler())
+    try:
+        with opener.open(request, timeout=RUN_TIMEOUTS["local_owner"]) as response:
+            if response.status != 200:
+                raise PreviewError("diagnostic_auth_unavailable", "Local Auth did not return a confirmed response")
+            raw = response.read(limit + 1)
+            headers = {
+                "link": response.headers.get("Link"),
+                "total": response.headers.get("X-Total-Count"),
+            }
+    except PreviewError:
+        raise
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        raise PreviewError("diagnostic_auth_unavailable", "The bounded local Auth request failed") from None
+    if len(raw) > limit:
+        raise PreviewError("diagnostic_auth_response_invalid", "Local Auth returned an oversized response")
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise PreviewError("diagnostic_auth_response_invalid", "Local Auth returned invalid JSON") from None
+    if not isinstance(document, dict):
+        raise PreviewError("diagnostic_auth_response_invalid", "Local Auth returned an invalid object")
+    return document, headers
+
+
+def _diagnostic_page_metadata(
+    headers: dict[str, str | None], api_url: str, page: int, count: int
+) -> int | None:
+    """Reject contradictory or malformed pagination metadata; never follow Link URLs."""
+    total_text = headers["total"]
+    total: int | None = None
+    if total_text is not None:
+        if not re.fullmatch(r"[0-9]+", total_text):
+            raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth pagination metadata is invalid")
+        total = int(total_text)
+        if total > AUTH_USERS_PAGE_SIZE * AUTH_USERS_MAX_PAGES:
+            raise PreviewError("diagnostic_owner_lookup_incomplete", "Local Auth user list exceeds the bounded scan")
+    link_text = headers["link"]
+    if link_text:
+        seen_relations: set[str] = set()
+        for part in link_text.split(","):
+            match = re.fullmatch(r'\s*<([^<>]+)>\s*;\s*rel="(first|prev|next|last)"\s*', part)
+            if match is None or match.group(2) in seen_relations:
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth pagination link is invalid")
+            relation = match.group(2)
+            seen_relations.add(relation)
+            linked = urlsplit(urljoin(f"{api_url}/auth/v1/admin/users", match.group(1)))
+            origin = urlsplit(api_url)
+            try:
+                query = parse_qs(linked.query, strict_parsing=True)
+                linked_page = int(query["page"][0])
+                linked_size = int(query["per_page"][0])
+            except (ValueError, KeyError, IndexError):
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth pagination link is invalid") from None
+            if (
+                linked.scheme != origin.scheme
+                or linked.netloc != origin.netloc
+                or linked.path != "/auth/v1/admin/users"
+                or linked.fragment
+                or set(query) != {"page", "per_page"}
+                or len(query["page"]) != 1
+                or len(query["per_page"]) != 1
+                or linked_page < 1
+                or linked_size != AUTH_USERS_PAGE_SIZE
+                or (relation == "next" and linked_page != page + 1)
+                or (relation == "next" and count == 0)
+            ):
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth pagination link is invalid")
+    return total
+
+
+def _find_diagnostic_owner(api_url: str, service_key: str) -> str:
+    matches: list[str] = []
+    seen_users: set[str] = set()
+    total_expected: int | None = None
+    completed = False
+    for page in range(1, AUTH_USERS_MAX_PAGES + 1):
+        document, headers = _diagnostic_auth_json(
+            api_url,
+            service_key,
+            f"/auth/v1/admin/users?page={page}&per_page={AUTH_USERS_PAGE_SIZE}",
+            method="GET",
+        )
+        users = document.get("users")
+        if not isinstance(users, list) or len(users) > AUTH_USERS_PAGE_SIZE:
+            raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list has an invalid page")
+        total = _diagnostic_page_metadata(headers, api_url, page, len(users))
+        if total is not None:
+            if total_expected is not None and total != total_expected:
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user count changed during lookup")
+            total_expected = total
+        for user in users:
+            if not isinstance(user, dict) or not isinstance(user.get("id"), str):
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list has an invalid entry")
+            identity = _diagnostic_uuid(user["id"], "Local Auth user ID")
+            if identity in seen_users:
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list repeated an identity")
+            seen_users.add(identity)
+            email = user.get("email")
+            if email is not None and not isinstance(email, str):
+                raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user list has an invalid email")
+            if isinstance(email, str) and email.casefold() == DIAGNOSTIC_OWNER_EMAIL and email != DIAGNOSTIC_OWNER_EMAIL:
+                raise PreviewError("diagnostic_owner_lookup_invalid", "The disposable local Auth email is not canonical")
+            if email == DIAGNOSTIC_OWNER_EMAIL:
+                matches.append(identity)
+        if len(users) == 0:
+            completed = True
+            break
+    if not completed:
+        raise PreviewError("diagnostic_owner_lookup_incomplete", "Local Auth user list did not end within the bounded scan")
+    if total_expected is not None and len(seen_users) != total_expected:
+        raise PreviewError("diagnostic_owner_lookup_invalid", "Local Auth user count did not match the completed scan")
+    if len(matches) != 1:
+        raise PreviewError("diagnostic_owner_not_unique", "Exactly one existing disposable local Auth user is required")
+    return matches[0]
+
+
+def _rotate_diagnostic_owner(api_url: str, service_key: str, owner_id: str, password: str) -> None:
+    document, _ = _diagnostic_auth_json(
+        api_url,
+        service_key,
+        f"/auth/v1/admin/users/{owner_id}",
+        method="PUT",
+        body={"password": password},
+        limit=256 * 1024,
+    )
+    user = document.get("user", document)
+    if (
+        not isinstance(user, dict)
+        or user.get("id") != owner_id
+        or user.get("email") != DIAGNOSTIC_OWNER_EMAIL
+    ):
+        raise PreviewError("diagnostic_rotation_unconfirmed", "Local Auth did not confirm the exact disposable user update")
+
+
+def _diagnostic_owner_still_matches(api_url: str, service_key: str, owner_id: str) -> bool:
+    document, _ = _diagnostic_auth_json(
+        api_url, service_key, f"/auth/v1/admin/users/{owner_id}", method="GET", limit=256 * 1024
+    )
+    user = document.get("user", document)
+    return isinstance(user, dict) and user.get("id") == owner_id and user.get("email") == DIAGNOSTIC_OWNER_EMAIL
 
 
 def _port_is_free(port: int) -> bool:
@@ -1061,9 +1350,50 @@ def _ensure_setup_state_absent(checkout: Path) -> None:
         )
 
 
-def _write_result(state_dir: Path, run_id: str, document: dict[str, Any]) -> Path:
-    target = state_dir / f"local-preview-{run_id}.json"
-    temporary = state_dir / f".local-preview-{run_id}.tmp"
+def _diagnostic_setup_state(checkout: Path, declared_hash: str) -> str:
+    """Require the exact completed, ignored setup record without exposing its contents."""
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", declared_hash):
+        raise PreviewError("invalid_setup_state_hash", "--setup-state-sha256 must be a SHA-256 digest")
+    if SETUP_STATE.as_posix() not in _git_paths(checkout, ["check-ignore", "-z", "--", SETUP_STATE.as_posix()]):
+        raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state must remain Git-ignored")
+    path = checkout / SETUP_STATE
+    try:
+        if path.is_symlink() or not path.is_file() or not _inside(path.resolve(strict=True), checkout):
+            raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state must be a regular in-checkout file")
+        if path.stat().st_size > MAX_SETUP_STATE_BYTES:
+            raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state exceeds its size limit")
+        with path.open("rb") as source:
+            raw = source.read(MAX_SETUP_STATE_BYTES + 1)
+    except PreviewError:
+        raise
+    except OSError:
+        raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state is unavailable") from None
+    if len(raw) > MAX_SETUP_STATE_BYTES:
+        raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state exceeds its size limit")
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != declared_hash.lower():
+        raise PreviewError("diagnostic_setup_state_mismatch", "Completed local setup state changed from its declared hash")
+    try:
+        document = json.loads(raw.decode("utf-8"))
+        organization_id = document.get("organizationId") if isinstance(document, dict) else None
+        if (
+            not isinstance(document, dict)
+            or document.get("setupCompleted") is not True
+            or not isinstance(organization_id, str)
+            or str(uuid.UUID(organization_id)) != organization_id.lower()
+            or uuid.UUID(organization_id).int == 0
+        ):
+            raise ValueError
+    except (UnicodeError, json.JSONDecodeError, ValueError, TypeError):
+        raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state has an invalid schema") from None
+    return digest
+
+
+def _write_result(
+    state_dir: Path, run_id: str, document: dict[str, Any], *, prefix: str = "local-preview"
+) -> Path:
+    target = state_dir / f"{prefix}-{run_id}.json"
+    temporary = state_dir / f".{prefix}-{run_id}.tmp"
     encoded = (json.dumps(document, sort_keys=True, indent=2) + "\n").encode("utf-8")
     fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
@@ -1392,17 +1722,15 @@ def _run(args: argparse.Namespace) -> int:
                 "VORTEX_DEV_TEST_SIGN_IN": "enabled",
                 "VORTEX_DEV_TEST_EMAIL": args.owner_email,
                 "VORTEX_DEV_TEST_PASSWORD": test_password,
-                "VORTEX_DEV_SERVICE_ROLE_KEY": "",
                 "PORT": str(args.port),
                 "NEXT_TELEMETRY_DISABLED": "1",
             }
         )
         test_password = ""
-        # Read local status again only in memory; the key is not written to any evidence file.
+        # Recheck the local stack without passing its admin key to the Next child.
         _, server_key = _supabase_status(
             checkout, node, cli, base_env, steps, log_file, "supabase.status.browser"
         )
-        server_env["VORTEX_DEV_SERVICE_ROLE_KEY"] = server_key
         next_entry = checkout / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
         try:
             server = subprocess.Popen(
@@ -1424,7 +1752,6 @@ def _run(args: argparse.Namespace) -> int:
             raise PreviewError("server_start_failed", "Could not start the hidden local Next.js child process", step="server_start") from None
         finally:
             server_key = ""
-            server_env["VORTEX_DEV_SERVICE_ROLE_KEY"] = ""
             server_env["VORTEX_DEV_TEST_PASSWORD"] = ""
         server_pid = server.pid
         ready_elapsed, listener_identity = _await_server(
@@ -1588,6 +1915,320 @@ def _run(args: argparse.Namespace) -> int:
     return 0 if status == "PASS" else 2
 
 
+def _diagnose_existing(args: argparse.Namespace) -> int:
+    """Inspect the completed local setup without reset, setup, or a product PASS claim."""
+    owner_id = _diagnostic_uuid(args.owner_id, "--owner-id")
+    if _diagnostic_uuid(args.confirm_rotate_owner_id, "--confirm-rotate-owner-id") != owner_id:
+        raise PreviewError("diagnostic_rotation_confirmation_mismatch", "The rotation confirmation must repeat --owner-id")
+    if os.environ.get("VERCEL") or os.environ.get("CI", "").lower() == "true":
+        raise PreviewError("noninteractive_environment", "Diagnostic runner refuses Vercel or CI environments")
+    preflight = _diagnostic_preflight(args)
+    if preflight["owner_id"] != owner_id:
+        raise PreviewError("diagnostic_owner_mismatch", "The pinned UUID differs from the unique disposable local user")
+    checkout = Path(preflight["checkout"])
+    sha = preflight["head_sha"]
+    state_dir = _resolve_future(args.state_dir, "--state-dir")
+    _outside_checkout(state_dir, checkout, "--state-dir")
+    _outside_git_worktrees(state_dir, "--state-dir")
+    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    _outside_checkout(lock_dir, checkout, "preview lock directory")
+    _outside_git_worktrees(lock_dir, "preview lock directory")
+    node = shutil.which("node")
+    if node is None:
+        raise PreviewError("runtime_missing", "Node.js is unavailable")
+    run_id = secrets.token_hex(12)
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt":
+            os.chmod(state_dir, 0o700)
+            os.chmod(lock_dir, 0o700)
+    except OSError:
+        raise PreviewError("state_dir_failed", "Could not prepare the external diagnostic result directory") from None
+    lock, token = _acquire_lock(lock_dir, run_id, checkout, sha)
+    log_path = state_dir / f"local-diagnostic-{run_id}.jsonl"
+    try:
+        log_file = log_path.open("x", encoding="utf-8")
+    except OSError:
+        _release_lock(lock, token)
+        raise PreviewError("log_create_failed", "Could not create the private diagnostic step log") from None
+
+    steps: list[dict[str, Any]] = []
+    status = "FAIL"
+    failure: dict[str, Any] | None = None
+    fixtures: dict[str, str] = dict(preflight["fixtures"])
+    browser_evidence: dict[str, Any] | None = None
+    browser_invoked = False
+    browser_cleanup_confirmed = False
+    browser_reason: str | None = None
+    browser_stage: str | None = None
+    final_identity: dict[str, Any] | None = None
+    rotation_attempted = False
+    rotation_confirmed = False
+    server: subprocess.Popen[bytes] | None = None
+    server_pid: int | None = None
+    server_stopped: bool | None = None
+    listener_identity: tuple[int, int] | None = None
+    preserve_lock = False
+    base_env = _base_env()
+    cli = checkout / "node_modules" / "supabase" / "dist" / "supabase.js"
+    try:
+        _record(steps, log_file, step="diagnostic.started", run_id=run_id, checkout=str(checkout), head_sha=sha)
+        rechecked = _diagnostic_preflight(args, check_availability=False)
+        if rechecked["owner_id"] != owner_id or rechecked["fixtures"] != fixtures:
+            raise PreviewError("diagnostic_inputs_changed", "The pinned disposable user or prepared fixtures changed")
+        _record(
+            steps,
+            log_file,
+            step="diagnostic.inputs_verified",
+            owner_id=owner_id,
+            setup_state_sha256=preflight["setup_state_sha256"],
+            fixtures=fixtures,
+            browser_adapter_sha256=preflight["browser_adapter_sha256"],
+        )
+        if not _port_is_free(args.port):
+            raise PreviewError("web_port_occupied", "The requested loopback web port is already occupied")
+        _, local_values = _validate_env_file(args.web_env_file, checkout)
+        api_url, service_key = _supabase_status(
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.diagnostic"
+        )
+        password = ""
+        try:
+            if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
+                raise PreviewError("supabase_url_mismatch", "The local stack and app Supabase URLs differ")
+            current_owner = _find_diagnostic_owner(api_url, service_key)
+            if current_owner != owner_id:
+                raise PreviewError("diagnostic_owner_mismatch", "The disposable local Auth UUID changed")
+            _record(steps, log_file, step="diagnostic.owner_verified", owner_id=owner_id)
+            password = secrets.token_urlsafe(36)
+            rotation_attempted = True
+            _rotate_diagnostic_owner(api_url, service_key, owner_id, password)
+            rotation_confirmed = True
+            _record(steps, log_file, step="diagnostic.owner_password_rotated", owner_id=owner_id, exit_code=0)
+        finally:
+            service_key = ""
+
+        base_url = f"http://127.0.0.1:{args.port}"
+        server_env = base_env.copy()
+        server_env.update(
+            {
+                "NODE_ENV": "development",
+                "VORTEX_ENVIRONMENT": "local",
+                "VORTEX_SUPABASE_URL": api_url,
+                "VORTEX_RUNTIME_DATABASE_URL": "postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres",
+                "VORTEX_SITE_URL": base_url,
+                "VORTEX_DEV_TEST_SIGN_IN": "enabled",
+                "VORTEX_DEV_TEST_EMAIL": DIAGNOSTIC_OWNER_EMAIL,
+                "VORTEX_DEV_TEST_PASSWORD": password,
+                "PORT": str(args.port),
+                "NEXT_TELEMETRY_DISABLED": "1",
+            }
+        )
+        next_entry = checkout / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
+        try:
+            server = subprocess.Popen(
+                [node, str(next_entry), "dev", "--hostname", "127.0.0.1", "--port", str(args.port)],
+                cwd=str(checkout / "apps" / "web"),
+                env=server_env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=(
+                    getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                    | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                    if os.name == "nt"
+                    else 0
+                ),
+                start_new_session=os.name != "nt",
+            )
+        except OSError:
+            raise PreviewError("server_start_failed", "Could not start the hidden local Next.js child", step="server_start") from None
+        finally:
+            password = ""
+            server_env["VORTEX_DEV_TEST_PASSWORD"] = ""
+        server_pid = server.pid
+        ready_elapsed, listener_identity = _await_server(
+            server, base_url, args.port, cwd=checkout, env=base_env, timeout=RUN_TIMEOUTS["server_ready"]
+        )
+        _record(
+            steps,
+            log_file,
+            step="server.ready",
+            pid=server.pid,
+            listener_pids=[listener_identity[0]],
+            http_status=200,
+            elapsed_seconds=round(ready_elapsed, 3),
+            local_url=base_url,
+        )
+        adapter = Path(args.browser_adapter).resolve(strict=True)
+        _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
+        owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
+        _record(steps, log_file, step="server.owner.before_browser", pid=server.pid, listener_pids=[owner_identity[0]])
+        browser_env = base_env.copy()
+        browser_env.update(
+            {
+                "VORTEX_PREVIEW_BASE_URL": base_url,
+                "VORTEX_PREVIEW_HEAD_SHA": sha,
+                "VORTEX_PREVIEW_RUN_NONCE": run_id,
+                "VORTEX_PREVIEW_FIXTURE_FINGERPRINTS": json.dumps(fixtures, sort_keys=True),
+            }
+        )
+        browser_invoked = True
+        browser_command = _run_process(
+            [node, str(adapter)],
+            cwd=checkout,
+            env=browser_env,
+            timeout=RUN_TIMEOUTS["browser_smoke"],
+            capture_stdout=True,
+        )
+        _record(
+            steps,
+            log_file,
+            step="browser.smoke",
+            exit_code=browser_command.exit_code,
+            timed_out=browser_command.timed_out,
+            elapsed_seconds=round(browser_command.elapsed_seconds, 3),
+            owned_process_tree_stopped=browser_command.stopped,
+        )
+        browser_evidence, browser_cleanup_confirmed, contract_error = _browser_report(
+            browser_command.stdout, sha, run_id, fixtures
+        )
+        browser_cleanup_confirmed = browser_cleanup_confirmed and browser_command.stopped and not browser_command.timed_out
+        if browser_evidence is not None:
+            if browser_evidence["browser_cleanup"] is not None:
+                browser_evidence["browser_cleanup"]["runner_confirmed"] = browser_cleanup_confirmed
+            browser_reason = browser_evidence.get("reason")
+            browser_stage = browser_evidence.get("action_stage")
+            _record(steps, log_file, step="browser.evidence", evidence=browser_evidence)
+        if not browser_command.stopped:
+            raise PreviewError("owned_process_stop_unconfirmed", "The browser adapter process tree did not stop", step="browser.smoke")
+        if browser_command.timed_out:
+            raise PreviewError("command_timeout", "The browser adapter exceeded its bounded timeout", step="browser.smoke")
+        if contract_error is not None:
+            raise PreviewError(contract_error, "The browser adapter returned invalid structured evidence", step="browser.smoke")
+        if not browser_cleanup_confirmed:
+            raise PreviewError("browser_cleanup_unconfirmed", "Owned browser cleanup was not confirmed", step="browser.smoke")
+        if browser_command.exit_code != 0:
+            raise PreviewError("browser_adapter_failed", "The browser adapter exited nonzero", step="browser.smoke")
+        assert browser_evidence is not None
+        if browser_evidence["result"] != "PASS":
+            raise PreviewError("browser_result_failed", "The browser adapter did not declare PASS", step="browser.smoke")
+        if any(browser_evidence["checks"].get(name) is not True for name in REQUIRED_BROWSER_CHECKS):
+            raise PreviewError("browser_checks_failed", "Browser evidence lacks a required PASS", step="browser.smoke")
+        owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
+        _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=[owner_identity[0]])
+        status = DIAGNOSTIC_STATUS
+    except PreviewError as error:
+        failure = {"code": error.code, "step": error.step}
+        if browser_reason is not None:
+            failure["adapter_reason"] = browser_reason
+        if browser_stage is not None:
+            failure["adapter_action_stage"] = browser_stage
+        preserve_lock = error.code == "owned_process_stop_unconfirmed"
+    except Exception:
+        failure = {"code": "unexpected_failure", "step": None}
+        preserve_lock = True
+    finally:
+        if server is not None:
+            server_stopped = _stop_owned_server(server, listener_identity, args.port, cwd=checkout, env=base_env)
+            port_released = _port_is_free(args.port)
+            _record(
+                steps,
+                log_file,
+                step="server.stop_owned_tree",
+                pid=server_pid,
+                stopped=server_stopped,
+                port_released=port_released,
+            )
+            if not server_stopped:
+                status = "FAIL"
+                failure = {"code": "owned_server_stop_unconfirmed", "step": "server.stop_owned_tree"}
+                preserve_lock = True
+        try:
+            final_identity, final_process_uncertain = _final_identity_checks(
+                checkout, sha, fixtures, args.browser_adapter, args.browser_adapter_sha256, None
+            )
+            preserve_lock = preserve_lock or final_process_uncertain
+        except Exception:
+            final_identity = {"error": "unexpected_failure"}
+            preserve_lock = True
+        try:
+            final_identity["setup_state_matches"] = (
+                _diagnostic_setup_state(checkout, args.setup_state_sha256) == preflight["setup_state_sha256"]
+            )
+        except PreviewError as error:
+            final_identity["setup_state_matches"] = None
+            final_identity["setup_state_error"] = error.code
+        if rotation_confirmed:
+            try:
+                final_api, final_key = _diagnostic_status(checkout, node, cli, base_env)
+                try:
+                    final_identity["owner_matches"] = (
+                        final_api == api_url and _diagnostic_owner_still_matches(final_api, final_key, owner_id)
+                    )
+                finally:
+                    final_key = ""
+            except PreviewError as error:
+                final_identity["owner_matches"] = None
+                final_identity["owner_error"] = error.code
+                preserve_lock = preserve_lock or error.code == "owned_process_stop_unconfirmed"
+        else:
+            final_identity["owner_matches"] = None
+        _record(steps, log_file, step="final.identity_checked", checks=final_identity)
+        required_identity = ("head_matches", "fixtures_match", "adapter_matches", "setup_state_matches", "owner_matches")
+        if status == DIAGNOSTIC_STATUS and any(final_identity.get(key) is not True for key in required_identity):
+            status = "FAIL"
+            failure = {"code": "final_identity_unconfirmed", "step": "final.identity_checked"}
+        if browser_invoked and not browser_cleanup_confirmed:
+            preserve_lock = True
+            if status == DIAGNOSTIC_STATUS:
+                status = "FAIL"
+                failure = {"code": "browser_cleanup_unconfirmed", "step": "browser.smoke"}
+        if rotation_attempted and not rotation_confirmed:
+            preserve_lock = True
+        log_file.close()
+
+    result = {
+        "schema": "vortex.local-preview.diagnostic.v1",
+        "scope": "browser-only-existing-setup",
+        "run_id": run_id,
+        "status": status,
+        "product_preview_pass": False,
+        "started_at": steps[0]["at"] if steps else _utc_now(),
+        "finished_at": _utc_now(),
+        "checkout": str(checkout),
+        "head_sha": sha,
+        "fixtures": fixtures,
+        "setup_state_sha256": preflight["setup_state_sha256"],
+        "owner_email": DIAGNOSTIC_OWNER_EMAIL,
+        "owner_id": owner_id,
+        "owner_password_rotation": {"attempted": rotation_attempted, "confirmed": rotation_confirmed},
+        "browser_adapter": {
+            "path": preflight["browser_adapter_path"],
+            "sha256": preflight["browser_adapter_sha256"],
+        },
+        "browser_evidence": browser_evidence,
+        "browser_invoked": browser_invoked,
+        "browser_cleanup_confirmed": browser_cleanup_confirmed if browser_invoked else None,
+        "final_identity": final_identity,
+        "server": {"pid": server_pid, "stopped": server_stopped},
+        "steps": steps,
+        "failure": failure,
+        "log_file": str(log_path),
+        "lock_released": False,
+    }
+    result_path = _write_result(state_dir, run_id, result, prefix="local-diagnostic")
+    if not preserve_lock:
+        if _release_lock(lock, token):
+            result["lock_released"] = True
+        else:
+            result["status"] = status = "FAIL"
+            result["failure"] = failure = {"code": "lock_release_failed", "step": "lock.release"}
+        _write_result(state_dir, run_id, result, prefix="local-diagnostic")
+    print(json.dumps({"status": status, "result_file": str(result_path), "head_sha": sha, "failure": failure}, sort_keys=True))
+    return 0 if status == DIAGNOSTIC_STATUS else 2
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -1619,6 +2260,12 @@ def main() -> int:
             result = _preflight(args)
             print(json.dumps(result, sort_keys=True, indent=2))
             return 0
+        if args.mode == "diagnose-preflight":
+            result = _diagnostic_preflight(args)
+            print(json.dumps(result, sort_keys=True, indent=2))
+            return 0
+        if args.mode == "diagnose-existing":
+            return _diagnose_existing(args)
         return _run(args)
     except PreviewError as error:
         print(json.dumps({"status": "BLOCKED", "code": error.code, "step": error.step, "message": str(error)}), file=sys.stderr)
