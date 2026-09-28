@@ -1173,9 +1173,9 @@ async function inspectCustomerDimensions(pathname) {
     const typeGroups = [...groups].filter((group) => visible(group) && accessibleName(group) === "Company type");
     if (typeGroups.length !== 1) return { valid: false };
     const group = typeGroups[0];
-    const roots = group.querySelectorAll('[role="checkbox"][data-slot="checkbox"]');
-    if (roots.length > 64) return { valid: false };
-    const customerRoots = [...roots].filter((candidate) => accessibleName(candidate) === "Customer");
+    const checkboxRoots = group.querySelectorAll('[role="checkbox"][data-slot="checkbox"]');
+    if (checkboxRoots.length > 64) return { valid: false };
+    const customerRoots = [...checkboxRoots].filter((candidate) => accessibleName(candidate) === "Customer");
     if (customerRoots.length !== 1) return { valid: false };
     const checkbox = customerRoots[0];
     const field = checkbox.closest('[data-slot="field"][role="group"]');
