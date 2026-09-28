@@ -93,3 +93,5 @@ grant execute on function vortex_identity.list_tenant_administrators_projection(
 
 comment on function vortex_identity.list_tenant_administrators_projection(uuid, integer) is
   'Registered tenant-administrator projection: returns every administrator assignment of the caller''s own tenant, whether scheduled, active, expired or revoked, under the fixed platform.tenant.administrators.read capability, with the organisation the record is read in, the assignment identity, the assignment revision and the safe projected attribute values keyed by lowercase field key, or no row when the capability refuses the viewer. The projected state grants nothing and grant or revocation evidence is never projected.';
+
+alter function vortex_identity.list_tenant_administrators_projection(uuid,integer) owner to postgres;

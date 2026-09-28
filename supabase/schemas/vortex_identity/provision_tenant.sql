@@ -281,3 +281,5 @@ comment on function vortex_identity.provision_tenant(
   uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text
 ) is 'Configured-system-only atomic tenant/root-organisation provisioning with separate explicit tenant and organisation steward nominations and an initial current owner Group membership for the organisation steward.';
+
+alter function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text) owner to postgres;

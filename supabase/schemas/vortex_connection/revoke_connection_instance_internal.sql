@@ -79,3 +79,4 @@ revoke all on function
 
 grant execute on function
   vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) to vortex_runtime;
+alter function vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid) owner to vortex_connection_owner;
