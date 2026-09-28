@@ -16,6 +16,14 @@
           "version": "1.0.0"
         },
         "purpose": "primary"
+      },
+      {
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_directory"
       }
     ],
     "permissions": [
@@ -35,6 +43,53 @@
         "description": "Allows managing Tenant Administration definition-level administration.",
         "action_kind": "manage",
         "administrative": true
+      },
+      {
+        "id": "app_permission_organization_read",
+        "key": "vortex.tenant_administration.organization.read",
+        "label": "Read organisations",
+        "description": "Allows reading the protected organisation projection as a system record.",
+        "record_type": "vortex.system_directory:organization",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "tenant_id",
+            "parent_organization_id",
+            "short_name",
+            "display_name",
+            "state",
+            "state_changed_at",
+            "created_at"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "app_permission_tenant_administrator_read",
+        "key": "vortex.tenant_administration.tenant_administrator.read",
+        "label": "Read tenant administrators",
+        "description": "Allows reading the protected tenant-administrator projection as a system record.",
+        "record_type": "vortex.system_directory:tenant_administrator",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "tenant_id",
+            "identity_id",
+            "capability_keys",
+            "starts_at",
+            "expires_at",
+            "state"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -96,21 +151,21 @@
       {
         "id": "event_suspend_organization",
         "key": "vortex.app.tenant_administration.organization_suspend",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_restore_organization",
         "key": "vortex.app.tenant_administration.organization_restore",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_rename_organization",
         "key": "vortex.app.tenant_administration.organization_rename",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -381,7 +436,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.display_name"
+                              "field": "vortex.system_directory:organization.display_name"
                             },
                             "label": {
                               "kind": "text",
@@ -394,7 +449,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.short_name"
+                              "field": "vortex.system_directory:organization.short_name"
                             },
                             "label": {
                               "kind": "text",
@@ -407,7 +462,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.state"
+                              "field": "vortex.system_directory:organization.state"
                             },
                             "label": {
                               "kind": "text",
@@ -420,7 +475,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.state_changed_at"
+                              "field": "vortex.system_directory:organization.state_changed_at"
                             },
                             "label": {
                               "kind": "text",
@@ -433,7 +488,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.created_at"
+                              "field": "vortex.system_directory:organization.created_at"
                             },
                             "label": {
                               "kind": "text",
@@ -501,7 +556,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.tenant_administration:organizations"
+                  "query": "vortex.system_directory:organizations"
                 },
                 "form_rename_organization": {
                   "block": {
@@ -641,7 +696,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.identity_id"
+                              "field": "vortex.system_directory:tenant_administrator.identity_id"
                             },
                             "label": {
                               "kind": "text",
@@ -654,7 +709,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.starts_at"
+                              "field": "vortex.system_directory:tenant_administrator.starts_at"
                             },
                             "label": {
                               "kind": "text",
@@ -667,7 +722,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.expires_at"
+                              "field": "vortex.system_directory:tenant_administrator.expires_at"
                             },
                             "label": {
                               "kind": "text",
@@ -680,7 +735,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.state"
+                              "field": "vortex.system_directory:tenant_administrator.state"
                             },
                             "label": {
                               "kind": "text",
@@ -704,7 +759,7 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.tenant_administration:tenant_administrators"
+                  "query": "vortex.system_directory:tenant_administrators"
                 }
               },
               "order": {
@@ -735,7 +790,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
@@ -793,7 +848,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
@@ -851,7 +906,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
