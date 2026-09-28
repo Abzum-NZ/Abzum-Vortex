@@ -1432,7 +1432,12 @@ def _diagnostic_setup_state(checkout: Path, declared_hash: str) -> str:
     """Require the exact completed, ignored setup record without exposing its contents."""
     if not re.fullmatch(r"[0-9a-fA-F]{64}", declared_hash):
         raise PreviewError("invalid_setup_state_hash", "--setup-state-sha256 must be a SHA-256 digest")
-    if SETUP_STATE.as_posix() not in _git_paths(checkout, ["check-ignore", "-z", "--", SETUP_STATE.as_posix()]):
+    ignored = _git(checkout, ["check-ignore", "--quiet", "--", SETUP_STATE.as_posix()], capture=False)
+    if not ignored.stopped:
+        raise PreviewError("owned_process_stop_unconfirmed", "The setup-state Git ignore check left process cleanup uncertain")
+    if ignored.timed_out or ignored.exit_code not in (0, 1):
+        raise PreviewError("git_read_failed", "A read-only Git ignore check failed")
+    if ignored.exit_code == 1:
         raise PreviewError("diagnostic_setup_state_invalid", "Completed local setup state must remain Git-ignored")
     path = checkout / SETUP_STATE
     try:
