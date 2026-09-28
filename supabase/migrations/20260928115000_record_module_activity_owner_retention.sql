@@ -16,6 +16,8 @@ alter function vortex_module.append_application_installation_activity_internal(u
 
 -- This helper directly reads vortex_access.permission_registrations. Keep the
 -- cross-schema table read with postgres until Access exposes an equivalent definer.
+grant create on schema vortex_module to postgres;
+
 create or replace function vortex_module.is_current_application_address_release(
   p_release_revision bigint
 )
@@ -62,3 +64,5 @@ grant execute on function vortex_module.is_current_application_address_release(b
 
 comment on function vortex_module.is_current_application_address_release(bigint) is
   'Checks an internal candidate release against the exact active registration and binding in the validated human application context.';
+
+revoke create on schema vortex_module from postgres;
