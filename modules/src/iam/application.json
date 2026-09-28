@@ -18,7 +18,7 @@
         "purpose": "primary"
       },
       {
-        "module": "vortex.organisation_administration",
+        "module": "vortex.system_directory",
         "version": {
           "selection": "exact",
           "version": "1.0.0"
@@ -53,6 +53,104 @@
         "action_kind": "named",
         "named_action": "manage",
         "administrative": true
+      },
+      {
+        "id": "perm_app_iam_person_read",
+        "key": "application.iam.directory.person.read",
+        "label": "Read IAM people",
+        "description": "Read the IAM people directory under current account authority.",
+        "record_type": "vortex.system_directory:person",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["display_name", "state", "language", "time_zone"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_read",
+        "key": "application.iam.directory.role.read",
+        "label": "Read IAM roles",
+        "description": "Read IAM roles under current role authority.",
+        "record_type": "vortex.system_directory:role",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_group_read",
+        "key": "application.iam.directory.group.read",
+        "label": "Read IAM groups",
+        "description": "Read IAM groups under current group authority.",
+        "record_type": "vortex.system_directory:group",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["key", "label", "state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_group_membership_read",
+        "key": "application.iam.directory.group_membership.read",
+        "label": "Read IAM group memberships",
+        "description": "Read IAM group memberships under current group authority.",
+        "record_type": "vortex.system_directory:group_membership",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["group_id", "account_display_name", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_assignment_read",
+        "key": "application.iam.directory.role_assignment.read",
+        "label": "Read IAM role assignments",
+        "description": "Read IAM role assignments under current assignment authority.",
+        "record_type": "vortex.system_directory:role_assignment",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_role_activation_read",
+        "key": "application.iam.directory.role_activation.read",
+        "label": "Read IAM role activations",
+        "description": "Read IAM role activations under current role authority.",
+        "record_type": "vortex.system_directory:role_activation",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["account_display_name", "role_key", "role_label", "activated_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_delegation_read",
+        "key": "application.iam.directory.delegation.read",
+        "label": "Read IAM delegations",
+        "description": "Read IAM delegations under current assignment authority.",
+        "record_type": "vortex.system_directory:delegation",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": ["holder_kind", "group_id", "scope_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -102,13 +200,13 @@
           "vortex.iam.core.access_request_item.soft_delete",
           "vortex.iam.core.access_request_item.restore",
           "vortex.iam.core.access_request_item.export",
-          "vortex.organisation_administration.person.read",
-          "vortex.organisation_administration.role.read",
-          "vortex.organisation_administration.group.read",
-          "vortex.organisation_administration.group_membership.read",
-          "vortex.organisation_administration.role_assignment.read",
-          "vortex.organisation_administration.role_activation.read",
-          "vortex.organisation_administration.delegation.read"
+          "application.iam.directory.person.read",
+          "application.iam.directory.role.read",
+          "application.iam.directory.group.read",
+          "application.iam.directory.group_membership.read",
+          "application.iam.directory.role_assignment.read",
+          "application.iam.directory.role_activation.read",
+          "application.iam.directory.delegation.read"
         ]
       }
     ],
@@ -144,7 +242,7 @@
             "type": "page",
             "label": "People",
             "page": "iam_people",
-            "permission": "vortex.organisation_administration.person.read"
+            "permission": "platform.organization.accounts.read"
           }
         ]
       },
@@ -254,58 +352,65 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_iam_open_person",
+        "key": "vortex.app.iam.open_person",
+        "record_type": "vortex.system_directory:person",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_retire_role",
         "key": "vortex.app.iam.retire_role",
-        "record_type": "vortex.organisation_administration:role",
+        "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_retire_group",
         "key": "vortex.app.iam.retire_group",
-        "record_type": "vortex.organisation_administration:group",
+        "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_remove_group_membership",
         "key": "vortex.app.iam.remove_group_membership",
-        "record_type": "vortex.organisation_administration:group_membership",
+        "record_type": "vortex.system_directory:group_membership",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_revoke_role_assignment",
         "key": "vortex.app.iam.revoke_role_assignment",
-        "record_type": "vortex.organisation_administration:role_assignment",
+        "record_type": "vortex.system_directory:role_assignment",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_deactivate_role_activation",
         "key": "vortex.app.iam.deactivate_role_activation",
-        "record_type": "vortex.organisation_administration:role_activation",
+        "record_type": "vortex.system_directory:role_activation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_revoke_delegation_authority",
         "key": "vortex.app.iam.revoke_delegation_authority",
-        "record_type": "vortex.organisation_administration:delegation",
+        "record_type": "vortex.system_directory:delegation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_revise_role_metadata",
         "key": "vortex.app.iam.revise_role_metadata",
-        "record_type": "vortex.organisation_administration:role",
+        "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_rename_group",
         "key": "vortex.app.iam.rename_group",
-        "record_type": "vortex.organisation_administration:group",
+        "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
@@ -391,11 +496,32 @@
                         }
                       },
                       "slots": {}
+                    },
+                    "shell_account": {
+                      "block": {
+                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {},
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
                     }
                   },
                   "order": {
                     "desktop": [
-                      "shell_heading"
+                      "shell_heading",
+                      "shell_account"
                     ]
                   }
                 },
@@ -404,7 +530,7 @@
                     "shell_body": {
                       "block": {
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.0.0"
+                        "release_version": "1.1.0"
                       },
                       "settings": {
                         "direction": {
@@ -414,6 +540,26 @@
                         "gap": {
                           "kind": "choice",
                           "value": "medium"
+                        },
+                        "menu_width": {
+                          "kind": "number",
+                          "value": 16
+                        },
+                        "menu_placement": {
+                          "kind": "choice",
+                          "value": "sticky"
+                        },
+                        "tablet_menu_width": {
+                          "kind": "number",
+                          "value": 14
+                        },
+                        "phone_direction": {
+                          "kind": "choice",
+                          "value": "column"
+                        },
+                        "phone_menu_placement": {
+                          "kind": "choice",
+                          "value": "flow"
                         }
                       },
                       "theme_overrides": {},
@@ -782,8 +928,10 @@
         "id": "page_iam_people",
         "key": "iam_people",
         "name": "People",
-        "type": "dashboard",
-        "permission": "vortex.organisation_administration.person.read",
+        "type": "list",
+        "record_type": "vortex.system_directory:person",
+        "permission": "platform.organization.accounts.read",
+        "query": "vortex.system_directory:people",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_iam",
@@ -821,9 +969,18 @@
               "iam_people_region": {
                 "block": {
                   "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                  "release_version": "1.2.0"
+                  "release_version": "1.3.0"
                 },
                 "settings": {
+                  "row_click": {
+                    "kind": "group",
+                    "properties": {
+                      "event_id": {
+                        "kind": "text",
+                        "value": "event_iam_open_person"
+                      }
+                    }
+                  },
                   "title": {
                     "kind": "text",
                     "value": "People (organisation accounts)"
@@ -836,7 +993,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:person.display_name"
+                            "field": "vortex.system_directory:person.display_name"
                           },
                           "label": {
                             "kind": "text",
@@ -849,7 +1006,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:person.state"
+                            "field": "vortex.system_directory:person.state"
                           },
                           "label": {
                             "kind": "text",
@@ -862,7 +1019,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:person.language"
+                            "field": "vortex.system_directory:person.language"
                           },
                           "label": {
                             "kind": "text",
@@ -875,7 +1032,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:person.time_zone"
+                            "field": "vortex.system_directory:person.time_zone"
                           },
                           "label": {
                             "kind": "text",
@@ -899,7 +1056,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:people"
+                "query": "vortex.system_directory:people"
               }
             },
             "order": {
@@ -909,6 +1066,111 @@
               ]
             }
           } }
+        }
+      },
+      {
+        "id": "page_iam_person_detail",
+        "key": "iam_person_detail",
+        "name": "Person detail",
+        "type": "detail",
+        "record_type": "vortex.system_directory:person",
+        "permission": "platform.organization.accounts.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_iam",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "iam_person_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Person detail"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Display name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:person.time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "iam_person_detail"
+                ]
+              }
+            }
+          }
         }
       },
       {
@@ -969,7 +1231,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.key"
+                            "field": "vortex.system_directory:role.key"
                           },
                           "label": {
                             "kind": "text",
@@ -982,7 +1244,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.label"
+                            "field": "vortex.system_directory:role.label"
                           },
                           "label": {
                             "kind": "text",
@@ -995,7 +1257,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.lifecycle"
+                            "field": "vortex.system_directory:role.lifecycle"
                           },
                           "label": {
                             "kind": "text",
@@ -1008,7 +1270,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.role_kind"
+                            "field": "vortex.system_directory:role.role_kind"
                           },
                           "label": {
                             "kind": "text",
@@ -1021,7 +1283,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.privilege_classification"
+                            "field": "vortex.system_directory:role.privilege_classification"
                           },
                           "label": {
                             "kind": "text",
@@ -1034,7 +1296,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.assignment_policy"
+                            "field": "vortex.system_directory:role.assignment_policy"
                           },
                           "label": {
                             "kind": "text",
@@ -1047,7 +1309,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role.accepted_permission_count"
+                            "field": "vortex.system_directory:role.accepted_permission_count"
                           },
                           "label": {
                             "kind": "text",
@@ -1102,7 +1364,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:roles"
+                "query": "vortex.system_directory:roles"
               },
               "iam_groups_region": {
                 "block": {
@@ -1122,7 +1384,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group.key"
+                            "field": "vortex.system_directory:group.key"
                           },
                           "label": {
                             "kind": "text",
@@ -1135,7 +1397,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group.label"
+                            "field": "vortex.system_directory:group.label"
                           },
                           "label": {
                             "kind": "text",
@@ -1148,7 +1410,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group.state"
+                            "field": "vortex.system_directory:group.state"
                           },
                           "label": {
                             "kind": "text",
@@ -1203,7 +1465,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:groups"
+                "query": "vortex.system_directory:groups"
               },
               "iam_group_memberships_region": {
                 "block": {
@@ -1223,7 +1485,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group_membership.account_display_name"
+                            "field": "vortex.system_directory:group_membership.account_display_name"
                           },
                           "label": {
                             "kind": "text",
@@ -1236,7 +1498,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group_membership.group_id"
+                            "field": "vortex.system_directory:group_membership.group_id"
                           },
                           "label": {
                             "kind": "text",
@@ -1249,7 +1511,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group_membership.starts_at"
+                            "field": "vortex.system_directory:group_membership.starts_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1262,7 +1524,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group_membership.expires_at"
+                            "field": "vortex.system_directory:group_membership.expires_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1275,7 +1537,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:group_membership.state"
+                            "field": "vortex.system_directory:group_membership.state"
                           },
                           "label": {
                             "kind": "text",
@@ -1317,7 +1579,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:group_memberships"
+                "query": "vortex.system_directory:group_memberships"
               }
             },
             "order": {
@@ -1389,7 +1651,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.role_label"
+                            "field": "vortex.system_directory:role_assignment.role_label"
                           },
                           "label": {
                             "kind": "text",
@@ -1402,7 +1664,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.assignee_kind"
+                            "field": "vortex.system_directory:role_assignment.assignee_kind"
                           },
                           "label": {
                             "kind": "text",
@@ -1415,7 +1677,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.assignment_kind"
+                            "field": "vortex.system_directory:role_assignment.assignment_kind"
                           },
                           "label": {
                             "kind": "text",
@@ -1428,7 +1690,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.starts_at"
+                            "field": "vortex.system_directory:role_assignment.starts_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1441,7 +1703,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.expires_at"
+                            "field": "vortex.system_directory:role_assignment.expires_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1454,7 +1716,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.state"
+                            "field": "vortex.system_directory:role_assignment.state"
                           },
                           "label": {
                             "kind": "text",
@@ -1467,7 +1729,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_assignment.temporal_state"
+                            "field": "vortex.system_directory:role_assignment.temporal_state"
                           },
                           "label": {
                             "kind": "text",
@@ -1509,7 +1771,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:role_assignments"
+                "query": "vortex.system_directory:role_assignments"
               },
               "iam_delegations_region": {
                 "block": {
@@ -1529,7 +1791,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:delegation.holder_kind"
+                            "field": "vortex.system_directory:delegation.holder_kind"
                           },
                           "label": {
                             "kind": "text",
@@ -1542,7 +1804,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:delegation.scope_kind"
+                            "field": "vortex.system_directory:delegation.scope_kind"
                           },
                           "label": {
                             "kind": "text",
@@ -1555,7 +1817,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:delegation.starts_at"
+                            "field": "vortex.system_directory:delegation.starts_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1568,7 +1830,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:delegation.expires_at"
+                            "field": "vortex.system_directory:delegation.expires_at"
                           },
                           "label": {
                             "kind": "text",
@@ -1581,7 +1843,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:delegation.state"
+                            "field": "vortex.system_directory:delegation.state"
                           },
                           "label": {
                             "kind": "text",
@@ -1623,7 +1885,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:delegations"
+                "query": "vortex.system_directory:delegations"
               }
             },
             "order": {
@@ -3306,7 +3568,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_activation.account_display_name"
+                            "field": "vortex.system_directory:role_activation.account_display_name"
                           },
                           "label": {
                             "kind": "text",
@@ -3319,7 +3581,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_activation.role_label"
+                            "field": "vortex.system_directory:role_activation.role_label"
                           },
                           "label": {
                             "kind": "text",
@@ -3332,7 +3594,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_activation.activated_at"
+                            "field": "vortex.system_directory:role_activation.activated_at"
                           },
                           "label": {
                             "kind": "text",
@@ -3345,7 +3607,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_activation.expires_at"
+                            "field": "vortex.system_directory:role_activation.expires_at"
                           },
                           "label": {
                             "kind": "text",
@@ -3358,7 +3620,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.organisation_administration:role_activation.state"
+                            "field": "vortex.system_directory:role_activation.state"
                           },
                           "label": {
                             "kind": "text",
@@ -3400,7 +3662,7 @@
                   }
                 },
                 "slots": {},
-                "query": "vortex.organisation_administration:role_activations"
+                "query": "vortex.system_directory:role_activations"
               }
             },
             "order": {
@@ -4548,7 +4810,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:role"
+              "vortex.system_directory:role"
             ]
           },
           "expected_role_revision": {
@@ -4676,7 +4938,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:role"
+              "vortex.system_directory:role"
             ]
           },
           "expected_role_revision": {
@@ -4781,7 +5043,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:group"
+              "vortex.system_directory:group"
             ]
           },
           "expected_group_revision": {
@@ -4891,7 +5153,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:group"
+              "vortex.system_directory:group"
             ]
           },
           "expected_group_revision": {
@@ -4945,7 +5207,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:group_membership"
+              "vortex.system_directory:group_membership"
             ]
           },
           "expected_membership_revision": {
@@ -4999,7 +5261,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:role_assignment"
+              "vortex.system_directory:role_assignment"
             ]
           },
           "expected_assignment_revision": {
@@ -5053,7 +5315,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:role_activation"
+              "vortex.system_directory:role_activation"
             ]
           },
           "expected_activation_revision": {
@@ -5107,7 +5369,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.organisation_administration:delegation"
+              "vortex.system_directory:delegation"
             ]
           },
           "expected_delegation_revision": {
@@ -5840,6 +6102,51 @@
         ],
         "outputs": {}
       },
+      {
+        "contractVersion": "1.0.0",
+        "id": "iam_open_person",
+        "key": "iam_open_person",
+        "description": "Opens the clicked person's own detail page with the record identity the clicked row carries.",
+        "labels": {
+          "name": "Open person"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "iam_person_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
     {
       "contractVersion": "1.0.0",
       "id": "navigate_new_access_request",
@@ -6169,6 +6476,19 @@
         "event_id": "event_iam_open_access_request",
         "event": "row_clicked",
         "flow": "iam_open_access_request",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "row_binding_iam_open_person",
+        "control": "iam_people_region",
+        "event_id": "event_iam_open_person",
+        "event": "row_clicked",
+        "flow": "iam_open_person",
         "inputs": {
           "record_id": {
             "kind": "caller",

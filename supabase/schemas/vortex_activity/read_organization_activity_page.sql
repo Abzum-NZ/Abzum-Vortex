@@ -199,3 +199,7 @@ comment on function vortex_activity.read_organization_activity_page(
   timestamptz, timestamptz, text, uuid, text, uuid, text, text, integer, timestamptz, uuid
 ) is
   'Returns one bounded newest-first keyset page of the caller''s own organisation Activity, or the organisation-wide audit projection when the actor holds the organisation access-administration read authority.';
+
+alter function vortex_activity.read_organization_activity_page(
+  timestamptz, timestamptz, text, uuid, text, uuid, text, text, integer, timestamptz, uuid
+) owner to vortex_activity_owner;

@@ -53,6 +53,10 @@ begin
 end
 $function$;
 
+alter function vortex_record.append_base_save_activity_internal(
+  uuid, text, uuid, uuid[], text
+) owner to postgres;
+
 revoke all on function vortex_record.append_base_save_activity_internal(
   uuid, text, uuid, uuid[], text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,

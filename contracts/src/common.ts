@@ -2,7 +2,6 @@ import { z } from "zod";
 import { builderKeySchema, platformIdSchema, timestampSchema } from "./identifiers";
 
 export const labelSchema = z.string().trim().min(1).max(60);
-export const shortNameSchema = z.string().trim().min(1).max(80);
 export const descriptionSchema = z.string().trim().min(1).max(1_000);
 /**
  * The longest external address an authored link or web-address value may carry, from the

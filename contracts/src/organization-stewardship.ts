@@ -102,6 +102,25 @@ export const organizationStewardshipAdoptionResultSchema = z
       });
   });
 
+export const organizationStewardshipAppointmentCommandSchema = z
+  .object({
+    operation: z.literal("appoint_organization_steward"),
+    organizationAccountId: organizationAccountIdSchema,
+    expectedAccountRevision: revisionSchema,
+  })
+  .strict();
+
+export const organizationStewardshipAppointmentResultSchema = z
+  .object({
+    outcome: z.enum(["changed", "unchanged"]),
+    operation: z.literal("appoint_organization_steward"),
+    organizationAccountId: organizationAccountIdSchema,
+    roleAssignmentId: roleAssignmentIdSchema,
+    delegationAuthorityId: delegationAuthorityIdSchema,
+    accessVersion: revisionSchema,
+  })
+  .strict();
+
 export type OrganizationStewardshipRequirement = z.infer<
   typeof organizationStewardshipRequirementSchema
 >;
@@ -110,4 +129,10 @@ export type OrganizationStewardshipAdoptionCommand = z.infer<
 >;
 export type OrganizationStewardshipAdoptionResult = z.infer<
   typeof organizationStewardshipAdoptionResultSchema
+>;
+export type OrganizationStewardshipAppointmentCommand = z.infer<
+  typeof organizationStewardshipAppointmentCommandSchema
+>;
+export type OrganizationStewardshipAppointmentResult = z.infer<
+  typeof organizationStewardshipAppointmentResultSchema
 >;
