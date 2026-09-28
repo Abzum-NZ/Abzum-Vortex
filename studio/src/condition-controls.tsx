@@ -892,6 +892,17 @@ const infoForExpectedLiteral = (
 const literalInputValue = (value: JsonValue): string =>
   value === null ? "" : typeof value === "string" ? value : String(value);
 
+const localDateTimeInputValue = (value: JsonValue): string => {
+  if (typeof value !== "string" || !isValidInstant(value)) return "";
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return "";
+  const pad = (part: number): string => String(part).padStart(2, "0");
+  const year = String(instant.getFullYear()).padStart(4, "0");
+  const date = `${year}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}`;
+  const time = `${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
+  return `${date}T${time}`;
+};
+
 type LiteralEditorProps = Readonly<{
   operand: Extract<ConditionOperand, { source: "value" }>;
   semanticType: StudioConditionSemanticType | undefined;
@@ -1035,11 +1046,19 @@ function LiteralEditor({
         <input
           aria-invalid={error !== undefined}
           type="datetime-local"
-          value={typeof operand.value === "string" ? operand.value.slice(0, 16) : ""}
+          value={localDateTimeInputValue(operand.value)}
           onChange={(event) => {
             const next = event.currentTarget.value;
-            const instant = next === "" ? null : new Date(next).toISOString();
-            onCommit(instant);
+            if (next === "") {
+              onCommit(null);
+              return;
+            }
+            const instant = new Date(next);
+            if (Number.isNaN(instant.getTime())) {
+              onInvalid("Enter a valid date and time");
+              return;
+            }
+            onCommit(instant.toISOString());
           }}
         />
         {error && <span role="alert">{error}</span>}
