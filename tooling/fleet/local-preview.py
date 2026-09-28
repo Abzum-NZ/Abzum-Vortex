@@ -435,6 +435,21 @@ def _forbidden_next_admin_key(name: str) -> bool:
     )
 
 
+def _has_forbidden_next_admin_line(path: Path) -> bool:
+    """Catch credential names even when dotenv syntax differs from our simple parser."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        raise PreviewError("env_file_unreadable", "A Next development environment source is unreadable") from None
+    for line in lines:
+        item = line.lstrip()
+        if item and not item.startswith("#"):
+            names = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", item)
+            if any(_forbidden_next_admin_key(name) for name in names):
+                return True
+    return False
+
+
 def _validate_next_env_sources(checkout: Path, primary_values: dict[str, str]) -> None:
     """Reject admin credentials in every dotenv file Next dev can auto-load."""
     web = checkout / "apps" / "web"
@@ -452,7 +467,7 @@ def _validate_next_env_sources(checkout: Path, primary_values: dict[str, str]) -
         except OSError:
             raise PreviewError("invalid_env_file", "A Next development environment source is unavailable") from None
         values = primary_values if filename == ".env.development.local" else _read_dotenv(path)
-        if any(_forbidden_next_admin_key(name) for name in values):
+        if _has_forbidden_next_admin_line(path) or any(_forbidden_next_admin_key(name) for name in values):
             raise PreviewError("next_env_admin_key_forbidden", "A Next development environment source contains an admin credential key")
 
 
