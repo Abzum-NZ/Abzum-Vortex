@@ -270,6 +270,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       validate(node.condition);
       return;
     }
+    if (node.kind !== "comparison") refuse("operator_refused");
     const operator = node.operator;
     const left = resolveOperand(node.left);
     const right = node.right === undefined ? undefined : resolveOperand(node.right);
@@ -369,6 +370,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
         node.conditions.map(toFormula),
       );
     if (node.kind === "not") return { op: "not", arg: toFormula(node.condition) };
+    if (node.kind !== "comparison") return refuse("operator_refused");
 
     const left = resolveOperand(node.left);
     let leftFormula = formulaLiteral(left);

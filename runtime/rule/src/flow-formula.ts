@@ -431,7 +431,7 @@ const compare = (
   }
   if (left.type !== right.type) return undefined;
   if (left.type === "yes_no" && typeof left.value === "boolean" && typeof right.value === "boolean")
-    return left.value === right.value ? "equal_only_same" : left.value ? 1 : -1;
+    return left.value === right.value ? "equal_only_same" : "equal_only_different";
   return flowJsonValuesEqual(left.value, right.value)
     ? "equal_only_same"
     : "equal_only_different";

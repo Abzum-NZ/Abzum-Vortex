@@ -221,7 +221,7 @@ const totalResult = (
   const sourceType = formulaTypeOf(sourceField);
   const operands = values.map((value) => literal(sourceType, value));
   if (operation === "minimum" || operation === "maximum") {
-    let selected = values[0]!;
+    let selected: JsonValue = values[0]!;
     for (const candidate of values.slice(1)) {
       const comparison = evaluateFormula({
         op: operation === "minimum" ? "lt" : "gt",

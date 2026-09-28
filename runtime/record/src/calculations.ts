@@ -417,7 +417,7 @@ export const evaluateRecordCalculations = (
   const calculations = recordType.fields.filter(
     (field): field is CalculationField => field.type === "calculation",
   );
-  const calculationIds = new Set(calculations.map((field) => field.fieldId));
+  const calculationIds = new Set<string>(calculations.map((field) => field.fieldId));
   if (Object.keys(input.authoritativeFieldValues).some((fieldId) => !fields.has(fieldId)))
     return {
       success: false,
@@ -575,7 +575,7 @@ export const readTimeCalculationFieldIds = (recordType: RecordTypeDefinitionV3):
   const calculations = recordType.fields.filter(
     (field): field is CalculationField => field.type === "calculation",
   );
-  const readTime = new Set(
+  const readTime = new Set<string>(
     calculations.filter(isReadTimeCalculationField).map((field) => field.fieldId),
   );
   let changed = true;
