@@ -512,7 +512,7 @@ class DevToolsClient {
         : message.params?.url;
       if (!this.allowedBrowserRequest(requestUrl)) {
         this.remoteOriginDetected = true;
-        result.reason = "unexpected_origin";
+        result.reason ??= "unexpected_origin";
       }
     }
     if (message.method === "Page.frameNavigated" && message.params?.frame?.parentId === undefined) {
@@ -525,11 +525,11 @@ class DevToolsClient {
         try {
           if (new URL(frameUrl).origin !== this.origin) {
             this.remoteOriginDetected = true;
-            result.reason = "unexpected_origin";
+            result.reason ??= "unexpected_origin";
           }
         } catch {
           this.remoteOriginDetected = true;
-          result.reason = "unexpected_origin";
+          result.reason ??= "unexpected_origin";
         }
       }
     }
@@ -537,7 +537,7 @@ class DevToolsClient {
 
   invalidateProtocol() {
     this.protocolInvalid = true;
-    result.reason = "browser_protocol_invalid";
+    result.reason ??= "browser_protocol_invalid";
     this.rejectPending("browser_protocol_invalid");
   }
 
@@ -1039,7 +1039,7 @@ if (args.length === 1 && args[0] === "--help") {
       await runBrowserCheck();
     } catch (error) {
       failureCode = safeReason(error);
-      result.reason = failureCode;
+      result.reason ??= failureCode;
     }
   }
   try {
