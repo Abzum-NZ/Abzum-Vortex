@@ -1052,8 +1052,6 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     const activeStyle = getComputedStyle(link);
     const menuColor = activeStyle.backgroundColor;
     const menuRadius = metricPx(activeStyle.borderTopLeftRadius);
-    if (menuRadius === null || menuRadius <= 0)
-      return { valid: false, failed_predicate: "menu_radius", maia_menu_radius_px: menuRadius };
     let accentColor = "";
     let baseRadius = null;
     try {
@@ -1062,24 +1060,7 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     } catch {
       return { valid: false, failed_predicate: "sentinel_resolution" };
     }
-    if (!accentColor) return { valid: false, failed_predicate: "sentinel_resolution" };
-    if (baseRadius === null || baseRadius <= 0) {
-      return {
-        valid: false,
-        failed_predicate: "base_radius",
-        maia_menu_radius_px: menuRadius,
-        maia_base_radius_px: baseRadius,
-      };
-    }
     const colorsMatch = visibleColor(menuColor) && menuColor === accentColor;
-    if (!colorsMatch) {
-      return {
-        valid: false,
-        failed_predicate: "menu_background",
-        maia_menu_radius_px: menuRadius,
-        maia_base_radius_px: baseRadius,
-      };
-    }
     let persisted = false;
     try {
       if (sessionStorage.getItem(${JSON.stringify(comparisonKey)}) === null) {
@@ -1089,22 +1070,24 @@ async function inspectMaiaActiveMenu(pathname, comparisonKey) {
     } catch {
       persisted = false;
     }
-    if (!persisted) {
-      return {
-        valid: false,
-        failed_predicate: "comparison_state",
-        maia_menu_radius_px: menuRadius,
-        maia_base_radius_px: baseRadius,
-      };
-    }
+    const failedPredicate = !colorsMatch
+      ? (accentColor ? "menu_background" : "sentinel_resolution")
+      : !persisted
+        ? "comparison_state"
+        : menuRadius === null || menuRadius <= 0
+          ? "menu_radius"
+          : baseRadius === null || baseRadius <= 0
+            ? "base_radius"
+            : null;
     return {
-      valid: true,
+      valid: failedPredicate === null,
+      ...(failedPredicate === null ? {} : { failed_predicate: failedPredicate }),
       maia_menu_radius_px: menuRadius,
       maia_base_radius_px: baseRadius,
     };
   })()`;
   const observation = await devtools.evaluate(expression);
-  if (MAIA_ACTIVE_MENU_FAILURE_PREDICATES.has(observation?.failed_predicate))
+  if (observation?.valid === false && MAIA_ACTIVE_MENU_FAILURE_PREDICATES.has(observation.failed_predicate))
     result.maia_active_menu_failed_predicate = observation.failed_predicate;
   recordThemeMetrics(observation, ["maia_menu_radius_px", "maia_base_radius_px"]);
   requireThemeCheck("maia_active_menu", observation?.valid === true);
