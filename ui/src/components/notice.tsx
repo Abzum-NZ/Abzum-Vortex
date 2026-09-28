@@ -67,17 +67,21 @@ function renderNoticeContent(content: NoticeContent): ReactNode {
   return content.map((part, index) => {
     const key = `${part.kind}-${index}`;
     if (part.kind === "text") return <Fragment key={key}>{part.value}</Fragment>;
+    if (part.label.trim().length === 0) return <Fragment key={key}>{part.label}</Fragment>;
 
     const href = safeNoticeHref(part.href);
+    const external = href !== undefined && /^https:\/\//i.test(href);
     return href === undefined ? (
       <Fragment key={key}>{part.label}</Fragment>
     ) : (
       <a
         key={key}
         href={href}
+        referrerPolicy={external ? "no-referrer" : undefined}
         className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {part.label}
+        {external ? <span className="ml-1 text-xs">(external)</span> : null}
       </a>
     );
   });
@@ -112,12 +116,10 @@ export function Notice({
         aria-atomic="true"
         className="min-w-0 flex-1"
       >
-        <span className="sr-only">{SEVERITY_LABELS[severity]}: </span>
-        {title === undefined ? null : (
-          <p className="vortex-validation-title" style={{ color: severityColor }}>
-            {title}
-          </p>
-        )}
+        <p className="vortex-validation-title" style={{ color: severityColor }}>
+          {SEVERITY_LABELS[severity]}
+          {title ? `: ${title}` : null}
+        </p>
         <p className="vortex-validation-text">{renderNoticeContent(content)}</p>
       </div>
       {dismissible ? (
