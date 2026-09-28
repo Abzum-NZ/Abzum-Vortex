@@ -6,3 +6,4 @@ export * from "./navigation-adapter";
 export * from "./semantic-selection";
 export * from "./application-draft-history";
 export * from "./selection-inspector";
+export * from "./condition-controls";
