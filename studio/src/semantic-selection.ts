@@ -56,8 +56,8 @@ export type StudioSemanticSelectionTraversalNode =
       label: string;
       selection: Extract<StudioSemanticSelection, { kind: "page" }>;
     }>
-  | Readonly<{ kind: "guided_step"; label: string }>
-  | Readonly<{ kind: "slot"; label: string }>
+  | Readonly<{ kind: "guided_step"; stepAlias: string; label: string }>
+  | Readonly<{ kind: "slot"; slotAlias: string; label: string }>
   | Readonly<{
       kind: "placement";
       label: string;
@@ -137,9 +137,10 @@ export const traverseStudioSemanticSelectionDraft = (
   const placementSlot = (
     slot: SourcePlacementSlot,
     owner: StudioSemanticPlacementOwner,
+    slotAlias: string,
     label: string,
   ): void => {
-    visit(Object.freeze({ kind: "slot", label }), () => {
+    visit(Object.freeze({ kind: "slot", slotAlias, label }), () => {
       for (const placementAlias of slot.order.desktop) {
         const placement = slot.placements[placementAlias];
         if (placement === undefined) continue;
@@ -153,7 +154,7 @@ export const traverseStudioSemanticSelectionDraft = (
           }),
           () => {
             for (const [slotKey, childSlot] of Object.entries(placement.slots))
-              placementSlot(childSlot, owner, readableKey(slotKey, "Content"));
+              placementSlot(childSlot, owner, slotKey, readableKey(slotKey, "Content"));
           },
         );
       }
@@ -174,11 +175,11 @@ export const traverseStudioSemanticSelectionDraft = (
       const slot = slots[contentSlot.id];
       if (slot === undefined) continue;
       visited.add(contentSlot.id);
-      placementSlot(slot, owner, authoredLabel(contentSlot.label, "Content"));
+      placementSlot(slot, owner, contentSlot.id, authoredLabel(contentSlot.label, "Content"));
     }
     for (const [slotAlias, slot] of Object.entries(slots)) {
       if (visited.has(slotAlias)) continue;
-      placementSlot(slot, owner, readableKey(slotAlias, "Content"));
+      placementSlot(slot, owner, slotAlias, readableKey(slotAlias, "Content"));
     }
   };
 
@@ -229,7 +230,7 @@ export const traverseStudioSemanticSelectionDraft = (
               label: authoredLabel(shell.name, "Shell"),
               selection,
             }),
-            () => placementSlot(shell.layout, owner, "Layout"),
+            () => placementSlot(shell.layout, owner, "layout", "Layout"),
           );
         }
       });
@@ -249,13 +250,14 @@ export const traverseStudioSemanticSelectionDraft = (
                   visit(
                     Object.freeze({
                       kind: "guided_step",
+                      stepAlias: step.id,
                       label: authoredLabel(step.name, "Step"),
                     }),
                     () => {
                       const stepSlots = composition.step_content[step.id];
                       if (stepSlots === undefined) return;
                       if (composition.shell_kind === "default") {
-                        placementSlot(stepSlots, pageOwner, "Main");
+                        placementSlot(stepSlots, pageOwner, "main", "Main");
                       } else {
                         pageSlots(stepSlots, composition.shell, pageOwner);
                       }
@@ -265,7 +267,7 @@ export const traverseStudioSemanticSelectionDraft = (
               } else {
                 const composition = page.composition;
                 if (composition.shell_kind === "default")
-                  placementSlot(composition.main, pageOwner, "Main");
+                  placementSlot(composition.main, pageOwner, "main", "Main");
                 else pageSlots(composition.content, composition.shell, pageOwner);
               }
             },
@@ -310,8 +312,8 @@ const normalizeSelection = (
   }
 };
 
-const selectionKey = (selection: StudioSemanticSelection | null): string | null => {
-  if (selection === null) return null;
+/** A stable key for authored selection identities, independent of labels and positions. */
+export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): string => {
   switch (selection.kind) {
     case "application":
       return `application:${selection.applicationRootId}`;
@@ -327,6 +329,9 @@ const selectionKey = (selection: StudioSemanticSelection | null): string | null 
       return `placement:${selection.placementAlias}`;
   }
 };
+
+const selectionKey = (selection: StudioSemanticSelection | null): string | null =>
+  selection === null ? null : studioSemanticSelectionKey(selection);
 
 const containsSelection = (
   index: SelectionIndex,
