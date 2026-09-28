@@ -213,6 +213,6 @@ revoke all on function vortex_module.read_current_detached_installation_for_tran
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter;
 grant execute on function vortex_module.read_current_detached_installation_for_transfer_internal()
-  to vortex_record_adapter, postgres;
+  to vortex_record_adapter, postgres, vortex_event_owner;
 comment on function vortex_module.read_current_detached_installation_for_transfer_internal() is
   'Private exact detached installation reader for the fixed retained/disabled ownership-transfer operation.';

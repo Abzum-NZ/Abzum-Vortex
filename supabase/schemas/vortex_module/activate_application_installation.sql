@@ -16,11 +16,15 @@ declare
   permission_snapshot record;
   pin record;
   locked_binding vortex_module.installation_bindings%rowtype;
+  staged_binding vortex_module.staged_installation_bindings%rowtype;
   storage_provision record;
   expected_count integer;
   pin_count integer;
+  staged_count integer;
   all_provisioned boolean;
+  all_staged boolean;
   all_active boolean;
+  binding_storage_contract_ids uuid[];
   changed_value boolean;
   binding_evidence jsonb;
 begin
@@ -127,12 +131,17 @@ begin
       and binding.module_release_revision = required.target_release_revision, false
     )),
     pg_catalog.bool_and(coalesce(
+      staged.binding_revision = expected.binding_revision
+      and staged.application_release_revision = p_application_release_revision
+      and staged.module_release_revision = required.target_release_revision, false
+    )),
+    pg_catalog.bool_and(coalesce(
       binding.state = 'active'
       and binding.binding_revision = expected.binding_revision
       and binding.application_release_revision = p_application_release_revision
       and binding.module_release_revision = required.target_release_revision, false
     ))
-  into all_provisioned, all_active
+  into all_provisioned, all_staged, all_active
   from vortex_definition.reachable_module_dependency_edges(
     p_application_root_id, p_application_release_revision
   ) as required
@@ -140,13 +149,31 @@ begin
     on binding.organization_id = initial_authority.organization_id
     and binding.application_root_id = p_application_root_id
     and binding.module_root_id = required.target_root_id
+  left join vortex_module.staged_installation_bindings as staged
+    on staged.organization_id = initial_authority.organization_id
+    and staged.application_root_id = p_application_root_id
+    and staged.application_release_revision = p_application_release_revision
+    and staged.module_root_id = required.target_root_id
   left join lateral (
     select (expected.value ->> 'bindingRevision')::bigint as binding_revision
     from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
     where (expected.value ->> 'moduleRootId')::uuid = required.target_root_id
   ) as expected on true
   ;
-  if all_provisioned is null or (not all_provisioned and not all_active)
+  select pg_catalog.count(*)::integer into staged_count
+  from vortex_module.staged_installation_bindings as staged
+  where staged.organization_id = initial_authority.organization_id
+    and staged.application_root_id = p_application_root_id;
+  if all_provisioned is null
+    or (not all_provisioned and not all_staged and not all_active)
+    or (all_provisioned and all_staged)
+    or (staged_count > 0 and (not all_staged or staged_count <> pin_count))
+    or exists (
+      select 1 from vortex_module.staged_installation_bindings as staged
+      where staged.organization_id = initial_authority.organization_id
+        and staged.application_root_id = p_application_root_id
+        and staged.application_release_revision <> p_application_release_revision
+    )
     or exists (
       select 1 from vortex_module.installation_bindings as binding
       where binding.organization_id = initial_authority.organization_id
@@ -163,6 +190,33 @@ begin
       message = 'Application installation bindings changed or are incomplete';
   end if;
 
+  if all_staged and exists (
+    select 1
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id, p_application_release_revision
+    ) as required
+    join vortex_module.staged_installation_bindings as staged
+      on staged.organization_id = initial_authority.organization_id
+      and staged.application_root_id = p_application_root_id
+      and staged.application_release_revision = p_application_release_revision
+      and staged.module_root_id = required.target_root_id
+    left join vortex_module.installation_bindings as binding
+      on binding.organization_id = initial_authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = required.target_root_id
+    where (staged.base_binding_revision is null and binding.module_root_id is not null)
+      or (staged.base_binding_revision is not null and binding.module_root_id is null)
+      or (staged.base_binding_state = 'active'
+        and (binding.state is distinct from 'detached'
+          or binding.binding_revision <> staged.base_binding_revision + 1))
+      or (staged.base_binding_state = 'detached'
+        and (binding.state is distinct from 'detached'
+          or binding.binding_revision <> staged.base_binding_revision))
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Staged Application installation base bindings changed';
+  end if;
+
   for pin in
     select required.*
     from vortex_definition.reachable_module_dependency_edges(
@@ -170,18 +224,42 @@ begin
     ) as required
     order by required.target_root_id
   loop
-    select binding.* into strict locked_binding
-    from vortex_module.installation_bindings as binding
-    where binding.organization_id = initial_authority.organization_id
-      and binding.application_root_id = p_application_root_id
-      and binding.module_root_id = pin.target_root_id;
+    if all_staged then
+      select staged.* into strict staged_binding
+      from vortex_module.staged_installation_bindings as staged
+      where staged.organization_id = initial_authority.organization_id
+        and staged.application_root_id = p_application_root_id
+        and staged.application_release_revision = p_application_release_revision
+        and staged.module_root_id = pin.target_root_id;
+      binding_storage_contract_ids := staged_binding.storage_contract_ids;
+    else
+      select binding.* into strict locked_binding
+      from vortex_module.installation_bindings as binding
+      where binding.organization_id = initial_authority.organization_id
+        and binding.application_root_id = p_application_root_id
+        and binding.module_root_id = pin.target_root_id;
+      binding_storage_contract_ids := locked_binding.storage_contract_ids;
+    end if;
 
-    select provision.* into strict storage_provision
-    from vortex_record.read_exact_module_storage_provision(
-      pin.target_root_id, pin.target_release_revision
-    ) as provision;
+    if all_staged then
+      -- Staged bindings are invisible to storage adoption's dependent count.
+      -- Recheck the mappings under Record's lineage locks through the switch.
+      select provision.* into strict storage_provision
+      from vortex_record.provision_exact_module_storage(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+      if storage_provision.changed then
+        raise exception using errcode = '40001',
+          message = 'Staged Application installation storage changed';
+      end if;
+    else
+      select provision.* into strict storage_provision
+      from vortex_record.read_exact_module_storage_provision(
+        pin.target_root_id, pin.target_release_revision
+      ) as provision;
+    end if;
 
-    if locked_binding.storage_contract_ids <> storage_provision.storage_contract_ids then
+    if binding_storage_contract_ids <> storage_provision.storage_contract_ids then
       raise exception using errcode = '40001',
         message = 'Application installation storage evidence changed or is incomplete';
     end if;
@@ -205,8 +283,8 @@ begin
       message = 'Application permission registration is stale or unavailable';
   end if;
 
-  changed_value := all_provisioned;
-  if changed_value then
+  changed_value := all_provisioned or all_staged;
+  if all_provisioned then
     if exists (
       select 1 from vortex_definition.reachable_module_dependency_edges(
         p_application_root_id, p_application_release_revision
@@ -234,6 +312,58 @@ begin
       raise exception using errcode = '40001',
         message = 'Application installation bindings changed';
     end if;
+  elsif all_staged then
+    for pin in
+      select required.*
+      from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as required
+      order by required.target_root_id
+    loop
+      select staged.* into strict staged_binding
+      from vortex_module.staged_installation_bindings as staged
+      where staged.organization_id = initial_authority.organization_id
+        and staged.application_root_id = p_application_root_id
+        and staged.application_release_revision = p_application_release_revision
+        and staged.module_root_id = pin.target_root_id;
+      if staged_binding.binding_revision = 9007199254740991 then
+        raise exception using errcode = '22003',
+          message = 'Module installation binding revision is exhausted';
+      end if;
+
+      insert into vortex_module.installation_bindings (
+        organization_id, application_root_id, module_root_id, binding_revision,
+        application_release_revision, module_release_revision, state,
+        storage_contract_ids
+      ) values (
+        initial_authority.organization_id, p_application_root_id,
+        staged_binding.module_root_id, staged_binding.binding_revision + 1,
+        p_application_release_revision, staged_binding.module_release_revision,
+        'active', staged_binding.storage_contract_ids
+      )
+      on conflict (organization_id, application_root_id, module_root_id)
+      do update set
+        binding_revision = excluded.binding_revision,
+        application_release_revision = excluded.application_release_revision,
+        module_release_revision = excluded.module_release_revision,
+        state = excluded.state,
+        storage_contract_ids = excluded.storage_contract_ids,
+        changed_at = pg_catalog.statement_timestamp()
+      where vortex_module.installation_bindings.state = 'detached'
+        and vortex_module.installation_bindings.binding_revision =
+          case staged_binding.base_binding_state
+            when 'active' then staged_binding.base_binding_revision + 1
+            else staged_binding.base_binding_revision
+          end;
+      if not found then
+        raise exception using errcode = '40001',
+          message = 'Staged Application installation binding changed';
+      end if;
+    end loop;
+
+    delete from vortex_module.staged_installation_bindings as staged
+    where staged.organization_id = initial_authority.organization_id
+      and staged.application_root_id = p_application_root_id;
   end if;
 
   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -281,4 +411,4 @@ revoke all on function vortex_module.activate_application_installation(uuid, big
 grant execute on function vortex_module.activate_application_installation(uuid, bigint, jsonb)
   to vortex_request;
 comment on function vortex_module.activate_application_installation(uuid, bigint, jsonb) is
-  'Revision-checked atomic activation of the complete exact Module pin set for one Application release.';
+  'Revision-checked atomic activation of one complete exact Module pin set, promoting a staged upgrade binding set while retaining the previous release until the transaction commits.';

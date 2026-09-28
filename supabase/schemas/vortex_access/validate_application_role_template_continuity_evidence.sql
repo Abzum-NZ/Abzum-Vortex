@@ -27,3 +27,6 @@ revoke execute on function vortex_access.validate_application_role_template_cont
 
 comment on function vortex_access.validate_application_role_template_continuity_evidence() is
   'Deferred evidence check that an application role-template continuity names an exact registered template. Definer, because it fires at commit under the request role, which has no table access.';
+
+alter function vortex_access.validate_application_role_template_continuity_evidence()
+  owner to vortex_access_owner;
