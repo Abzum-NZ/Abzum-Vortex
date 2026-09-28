@@ -45,6 +45,8 @@ declare
   new_role_id uuid := pg_catalog.gen_random_uuid();
   new_role_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_delegation_id uuid := pg_catalog.gen_random_uuid();
+  new_group_id uuid := pg_catalog.gen_random_uuid();
+  new_membership_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   operation_at timestamptz := pg_catalog.clock_timestamp();
   resulting_access_version bigint;
@@ -215,6 +217,20 @@ begin
     new_correlation_id
   ) as adopted;
 
+  -- The first owner needs a real current Group for Group-owned records. Access
+  -- owns both facts and their version; no application-specific permission is added.
+  perform 1 from vortex_access.coordinate_organization_group_change(
+    'create_group', new_organization_id, new_group_id, null,
+    'organisation_owners', 'Organisation owners', new_account_id,
+    new_correlation_id
+  );
+  select changed.access_version into resulting_access_version
+  from vortex_access.coordinate_organization_group_membership_change(
+    'add_membership', new_organization_id, new_membership_id, null,
+    new_group_id, new_account_id, operation_at, null, null,
+    new_account_id, new_correlation_id
+  ) as changed;
+
   -- #33 queues this evidence trigger. Validate it while the privileged boundary
   -- is still active so a runtime-role commit cannot bypass or fail its reads.
   set constraints
@@ -252,10 +268,18 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text) from public, anon, authenticated, service_role, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
-
-grant execute on function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text) to vortex_runtime;
-
-comment on function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text) is 'Configured-system-only atomic tenant/root-organisation provisioning with separate explicit tenant and organisation steward nominations.';
+revoke execute on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text
+) from public, anon, authenticated, service_role, vortex_request,
+  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text
+) to vortex_runtime;
+comment on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text
+) is 'Configured-system-only atomic tenant/root-organisation provisioning with separate explicit tenant and organisation steward nominations and an initial current owner Group membership for the organisation steward.';
 
 alter function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text) owner to postgres;

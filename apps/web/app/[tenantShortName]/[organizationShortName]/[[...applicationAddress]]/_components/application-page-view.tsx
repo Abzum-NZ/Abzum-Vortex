@@ -1024,6 +1024,7 @@ function ApplicationPageViewContent({
       placementId: string,
       binding: PlacementFlowBinding,
       submittedValues: Readonly<Record<string, unknown>>,
+      selectedOwnerGroupId?: string,
     ) => {
       const guidedForm = model.guidedForm;
       if (
@@ -1073,6 +1074,7 @@ function ApplicationPageViewContent({
         const dispatch = formBlock.submit(
           asComponentBinding(placementId, binding),
           { $guidedFormConfirmation: confirmed.proof },
+          selectedOwnerGroupId,
         );
         flowStarted = true;
         await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
@@ -1211,7 +1213,12 @@ function ApplicationPageViewContent({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(placementId, submitBinding, event.values);
+              else void submitGuidedSummary(
+                placementId,
+                submitBinding,
+                event.values,
+                event.selectedOwnerGroupId,
+              );
             }
             else
               void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
@@ -1241,7 +1248,11 @@ function ApplicationPageViewContent({
             values: event.values,
           });
           void applyDispatch(
-            formBlock.submit(asComponentBinding(placementId, submitBinding), values),
+            formBlock.submit(
+              asComponentBinding(placementId, submitBinding),
+              values,
+              event.selectedOwnerGroupId,
+            ),
             placementId,
             undefined,
             submitBinding.bindingId,
