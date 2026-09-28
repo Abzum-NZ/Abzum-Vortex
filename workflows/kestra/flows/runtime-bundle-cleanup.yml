@@ -1,0 +1,28 @@
+id: runtime_bundle_cleanup
+namespace: vortex.operations
+description: >-
+  Daily bounded cleanup for abandoned and superseded runtime bundles. Kestra holds only the
+  protected route credential and never receives database credentials.
+
+concurrency:
+  limit: 1
+  behavior: CANCEL
+
+tasks:
+  - id: cleanup_abandoned_runtime_bundles
+    type: io.kestra.plugin.core.http.Request
+    uri: "{{ secret('VORTEX_RUNTIME_BUNDLE_CLEANUP_URL') }}"
+    method: POST
+    contentType: application/json
+    headers:
+      Authorization: "Bearer {{ secret('VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL') }}"
+    timeout: PT4M
+    options:
+      allowFailed: false
+
+triggers:
+  - id: daily_cleanup
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 2 * * *"
+    timezone: Etc/UTC
+    recoverMissedSchedules: LAST
