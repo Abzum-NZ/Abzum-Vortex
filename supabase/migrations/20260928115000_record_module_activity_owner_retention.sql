@@ -1,5 +1,7 @@
 -- Preserve postgres ownership until the cross-schema appender can run behind an
 -- Activity-owned definer interface. The current appender is SECURITY INVOKER.
+begin;
+
 alter function vortex_record.append_base_save_activity_internal(
   uuid, text, uuid, uuid[], text
 ) owner to postgres;
@@ -16,7 +18,9 @@ alter function vortex_module.append_application_installation_activity_internal(u
 
 -- This helper directly reads vortex_access.permission_registrations. Keep the
 -- cross-schema table read with postgres until Access exposes an equivalent definer.
+set local role vortex_module_owner;
 grant create on schema vortex_module to postgres;
+set local role postgres;
 
 create or replace function vortex_module.is_current_application_address_release(
   p_release_revision bigint
@@ -65,4 +69,8 @@ grant execute on function vortex_module.is_current_application_address_release(b
 comment on function vortex_module.is_current_application_address_release(bigint) is
   'Checks an internal candidate release against the exact active registration and binding in the validated human application context.';
 
+set local role vortex_module_owner;
 revoke create on schema vortex_module from postgres;
+set local role postgres;
+
+commit;
