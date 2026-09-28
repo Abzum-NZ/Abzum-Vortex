@@ -248,6 +248,41 @@ const formOwnersByPlacement = (
   return owners;
 };
 
+/** Finds the semantic events each registered placement declares in the rendered page tree. */
+const placementEventNamesByPage = (
+  page: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, ReadonlySet<string>>> => {
+  const eventNames: Record<string, ReadonlySet<string>> = {};
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child);
+      return;
+    }
+    for (const [placementId, candidate] of Object.entries(slot.placements)) {
+      if (!isRecord(candidate)) continue;
+      const block = candidate.block;
+      if (
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        typeof block.releaseVersion === "string"
+      ) {
+        const registration = platformComponentRegistry.get(block.blockId, block.releaseVersion);
+        if (registration !== undefined)
+          eventNames[placementId] = new Set(registration.metadata.supportedEvents);
+      }
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child);
+    }
+  };
+  const composition = page.composition;
+  if (!isRecord(composition)) return eventNames;
+  if ("main" in composition) visit(composition.main);
+  else if (isRecord(composition.stepContent))
+    for (const child of Object.values(composition.stepContent)) visit(child);
+  return eventNames;
+};
+
 const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
   const result = new Set<string>();
   const visit = (slot: unknown): void => {
@@ -361,6 +396,10 @@ function ApplicationPageViewContent({
 
   const application = model.invocation;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const placementEventNames = useMemo(
+    () => placementEventNamesByPage(model.page),
+    [model.page],
+  );
   const serverDataRef = useRef(model.data);
   const serverDataGenerationRef = useRef(0);
   if (serverDataRef.current !== model.data) {
@@ -1024,6 +1063,7 @@ function ApplicationPageViewContent({
       placementId: string,
       binding: PlacementFlowBinding,
       submittedValues: Readonly<Record<string, unknown>>,
+      selectedOwnerGroupId?: string,
     ) => {
       const guidedForm = model.guidedForm;
       if (
@@ -1073,6 +1113,7 @@ function ApplicationPageViewContent({
         const dispatch = formBlock.submit(
           asComponentBinding(placementId, binding),
           { $guidedFormConfirmation: confirmed.proof },
+          selectedOwnerGroupId,
         );
         flowStarted = true;
         await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
@@ -1139,51 +1180,59 @@ function ApplicationPageViewContent({
           : currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
+      const declaredEvents = placementEventNames[placementId];
+      const supportsEvent = (eventName: string): boolean =>
+        declaredEvents?.has(eventName) === true;
       const flowFeedback =
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
-      // Display callbacks belong only to a placement with projected data; a control placement's
-      // own parser refuses an event name it does not declare, so they are never added to a form.
+      // Runtime data alone does not identify a display: forms can have projected owner-group data.
+      // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
-          if (bindings.some((binding) => binding.event === kind))
+          if (supportsEvent(kind) && bindings.some((binding) => binding.event === kind))
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
                 void runBinding(placementId, binding, suppliedValues(event));
             };
-        events.refresh = () => {
-          void refreshPlacements([placementId]);
-        };
-        events.selection_changed = (event: DisplaySemanticEvent) => {
-          if (event.event !== "selection_changed") return;
-          setSelection((current) => {
-            const held = new Set(current[placementId] ?? []);
-            if (event.selected) held.add(event.recordId);
-            else held.delete(event.recordId);
-            return { ...current, [placementId]: [...held] };
-          });
-        };
-        events.sort_changed = (event: DisplaySemanticEvent) => {
-          if (event.event !== "sort_changed") return;
-          setQuery((parameters) =>
-            parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
-          );
-        };
-        events.filter_changed = (event: DisplaySemanticEvent) => {
-          if (event.event !== "filter_changed") return;
-          setQuery((parameters) => {
-            const name = `filter.${placementId}.${event.field}`;
-            if (event.value === "") parameters.delete(name);
-            else parameters.set(name, event.value);
-          });
-        };
-        events.search_changed = (event: DisplaySemanticEvent) => {
-          if (event.event !== "search_changed") return;
-          setQuery((parameters) => {
-            if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
-            else parameters.set(`search.${placementId}`, event.query);
-          });
-        };
+        if (supportsEvent("refresh"))
+          events.refresh = () => {
+            void refreshPlacements([placementId]);
+          };
+        if (supportsEvent("selection_changed"))
+          events.selection_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "selection_changed") return;
+            setSelection((current) => {
+              const held = new Set(current[placementId] ?? []);
+              if (event.selected) held.add(event.recordId);
+              else held.delete(event.recordId);
+              return { ...current, [placementId]: [...held] };
+            });
+          };
+        if (supportsEvent("sort_changed"))
+          events.sort_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "sort_changed") return;
+            setQuery((parameters) =>
+              parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
+            );
+          };
+        if (supportsEvent("filter_changed"))
+          events.filter_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "filter_changed") return;
+            setQuery((parameters) => {
+              const name = `filter.${placementId}.${event.field}`;
+              if (event.value === "") parameters.delete(name);
+              else parameters.set(name, event.value);
+            });
+          };
+        if (supportsEvent("search_changed"))
+          events.search_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "search_changed") return;
+            setQuery((parameters) => {
+              if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
+              else parameters.set(`search.${placementId}`, event.query);
+            });
+          };
       }
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
@@ -1211,7 +1260,12 @@ function ApplicationPageViewContent({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(placementId, submitBinding, event.values);
+              else void submitGuidedSummary(
+                placementId,
+                submitBinding,
+                event.values,
+                event.selectedOwnerGroupId,
+              );
             }
             else
               void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
@@ -1241,7 +1295,11 @@ function ApplicationPageViewContent({
             values: event.values,
           });
           void applyDispatch(
-            formBlock.submit(asComponentBinding(placementId, submitBinding), values),
+            formBlock.submit(
+              asComponentBinding(placementId, submitBinding),
+              values,
+              event.selectedOwnerGroupId,
+            ),
             placementId,
             undefined,
             submitBinding.bindingId,
@@ -1312,6 +1370,7 @@ function ApplicationPageViewContent({
     model.bindings,
     model.data,
     model.guidedForm,
+    placementEventNames,
     router,
     refreshPlacements,
     runBinding,

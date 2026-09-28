@@ -7,6 +7,7 @@ export * from "./extension-upgrade";
 export * from "./installation-binding-reader";
 export * from "./installation-lifecycle";
 export * from "./installation-runtime-bundle-repository";
+export * from "./runtime-bundle-cleanup";
 export * from "./index-build-runner";
 export * from "./index-status";
 

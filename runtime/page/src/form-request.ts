@@ -14,8 +14,9 @@ import {
  * #588: the Page request adapter that turns one form gesture into the exact server interface it
  * needs. Submit, Enter and Save are one `form_submit` binding whose answers the surface supplies.
  * `createPrivateFormSubmitAdapter` normalises that submission into the caller inputs the binding
- * declares, so the form endpoint runs the bound flow exactly once, a surface can neither add an
- * input the binding does not declare nor choose the next node, and an unbounded answers bag is
+ * declares, including a separate initial owner Group when the binding requires it, so the form
+ * endpoint runs the bound flow exactly once, a surface can neither add an input the binding does
+ * not declare nor choose the next node, and an unbounded answers bag is
  * refused instead of run half-filled. A value the surface supplies is an input; nothing here reads
  * authority or the organisation from it.
  *
@@ -37,6 +38,7 @@ const maximumFormValues = 500;
 /** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{
   values: Readonly<Record<string, unknown>>;
+  selectedOwnerGroupId?: string;
 }>;
 
 /**
@@ -48,17 +50,26 @@ export const readPrivateFormSubmission = (
   candidate: unknown,
 ): PrivateFormSubmission | undefined => {
   if (!isRecord(candidate)) return undefined;
-  if (Object.keys(candidate).some((key) => key !== "values")) return undefined;
+  if (Object.keys(candidate).some((key) =>
+    key !== "values" && key !== "selectedOwnerGroupId")) return undefined;
   const values = candidate.values;
   if (!isRecord(values) || Object.keys(values).length > maximumFormValues) return undefined;
-  return { values };
+  if (candidate.selectedOwnerGroupId !== undefined &&
+      typeof candidate.selectedOwnerGroupId !== "string") return undefined;
+  return {
+    values,
+    ...(candidate.selectedOwnerGroupId === undefined
+      ? {}
+      : { selectedOwnerGroupId: candidate.selectedOwnerGroupId }),
+  };
 };
 
 /**
  * The endpoint's form-submit seam. It returns the caller inputs the binding declares, filled from
  * the submitted answers, or `undefined` so the endpoint refuses the submit. A binding that
  * declares the whole answer receives the submission's own values record; every other declared
- * caller input is named exactly.
+ * caller input is named exactly, except that the form's separate owner Group selection maps to
+ * the binding's declared `selected_owner_group_id` input.
  *
  * `subject` is the record the form was rendered for, named by the surface from its own address. A
  * binding that declares a `record` caller input the answers do not carry receives that record's
@@ -76,12 +87,19 @@ export const createPrivateFormSubmitAdapter =
     if (binding.event !== "form_submit") return undefined;
     const submission = readPrivateFormSubmission(callerInputs);
     if (submission === undefined) return undefined;
+    const needsOwnerGroup = Object.values(binding.flow.inputs).some((input) =>
+      typeof input === "object" && input !== null && input.kind === "caller" &&
+      input.name === "selected_owner_group_id",
+    );
+    if (needsOwnerGroup !== (submission.selectedOwnerGroupId !== undefined)) return undefined;
     const adapted: Record<string, unknown> = {};
     for (const input of Object.values(binding.flow.inputs)) {
       if (typeof input !== "object" || input === null || input.kind !== "caller") continue;
       // A binding that declares the whole answer receives the submission's own values record;
       // every other declared caller input is named exactly and must be present.
       if (input.name === "values") adapted[input.name] = submission.values;
+      else if (input.name === "selected_owner_group_id")
+        adapted[input.name] = submission.selectedOwnerGroupId;
       else if (Object.hasOwn(submission.values, input.name))
         adapted[input.name] = submission.values[input.name];
       else if (input.name === "record" && subject !== undefined)

@@ -50,6 +50,8 @@ begin
 end
 $function$;
 
+alter function vortex_workflow.consume_flow_continuation(text,uuid,uuid,uuid,text) owner to vortex_workflow_owner;
+
 revoke all on function vortex_workflow.consume_flow_continuation(
   text, uuid, uuid, uuid, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

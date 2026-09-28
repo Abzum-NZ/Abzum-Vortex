@@ -64,6 +64,8 @@ begin
 end
 $function$;
 
+alter function vortex_workflow.begin_flow_effect(uuid,uuid,uuid,text,text) owner to vortex_workflow_owner;
+
 revoke all on function vortex_workflow.begin_flow_effect(
   uuid, uuid, uuid, text, text
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
