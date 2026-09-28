@@ -337,6 +337,7 @@ comment on function vortex_identity.accept_organization_invitation_with_transiti
   text, uuid, text, text, uuid
 ) is 'Owner-only Identity invitation transition with explicit Access change classification.';
 
+grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;
 alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.begin_organization_account_closing(
@@ -395,6 +396,7 @@ revoke all on function vortex_identity.begin_organization_account_closing(uuid, 
 comment on function vortex_identity.begin_organization_account_closing(uuid, bigint) is
   'Owner-only active/suspended/closed-to-closing transition; Access composes it with version invalidation and stewardship.';
 
+grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;
 alter function vortex_identity.begin_organization_account_closing(uuid, bigint) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.change_organization_account_state(
@@ -536,6 +538,7 @@ revoke all on function vortex_identity.create_organization_invitation(text, text
 
 comment on function vortex_identity.create_organization_invitation(text, text, timestamptz) is null;
 
+grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;
 alter function vortex_identity.create_organization_invitation(text, text, timestamptz) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.ensure_identity_projection(
@@ -647,6 +650,7 @@ grant execute on function vortex_identity.finalize_organization_account_deletion
 comment on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) is
   'Private closing-to-deleted transition, reachable only through the Record deletion fence after its inventory proves nothing is owned.';
 
+grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;
 alter function vortex_identity.finalize_organization_account_deletion(uuid, bigint) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.identity_is_disabled(p_identity_id uuid)
@@ -669,6 +673,7 @@ revoke all on function vortex_identity.identity_is_disabled(uuid) from public, a
 comment on function vortex_identity.identity_is_disabled(uuid) is
   'Private environment-wide disabled fact: true only after a completed identity disablement.';
 
+grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;
 alter function vortex_identity.identity_is_disabled(uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.initialize_organization_runtime_settings(
@@ -761,6 +766,7 @@ comment on function vortex_identity.initialize_organization_runtime_settings(
   uuid, text, text, text, text, text
 ) is 'Trusted explicit Identity setup for one organisation runtime-settings row; identical retries return the current existing row and conflicting retries refuse.';
 
+grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to postgres;
 alter function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.is_active_organization_account_reference_internal(
@@ -899,6 +905,7 @@ comment on function vortex_identity.list_organization_account_choices_internal(
   uuid, uuid, text, integer, text, uuid
 ) is 'Identity-owned bounded picker projection of active accounts in one active organisation: account id and display name only, keyset-paged, no counts.';
 
+grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;
 alter function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.list_organization_accounts(p_identity_id uuid)
@@ -1026,6 +1033,7 @@ comment on function vortex_identity.list_organization_accounts_for_administratio
   uuid, uuid, integer
 ) is 'Identity-owned bounded organisation-scoped safe account administration projection.';
 
+grant execute on function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) to postgres;
 alter function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.list_organization_accounts_projection_internal(
@@ -1084,6 +1092,7 @@ revoke all on function vortex_identity.list_organization_accounts_projection_int
 comment on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) is
   'Identity-owned set-returning safe organisation-account projection bounded to the given organisation: every account in administration mode, or only active accounts with their display name and state in member mode; identity, originating invitation and state-change evidence are never exposed, and the already-decided request scope is the only visibility.';
 
+grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
 alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.list_organization_invitations_for_administration_internal(
@@ -1169,6 +1178,7 @@ comment on function vortex_identity.list_organization_invitations_for_administra
   uuid, uuid, integer
 ) is 'Identity-owned bounded organisation-scoped safe invitation projection without secret or fingerprint.';
 
+grant execute on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) to postgres;
 alter function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.list_organization_invitations_projection_internal(
@@ -1209,6 +1219,7 @@ revoke all on function vortex_identity.list_organization_invitations_projection_
 comment on function vortex_identity.list_organization_invitations_projection_internal(uuid) is
   'Identity-owned set-returning safe organisation-invitation projection bounded to the given organisation: the raw invitation secret and its stored fingerprint are never exposed, and the already-decided request scope is the only visibility.';
 
+grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;
 alter function vortex_identity.list_organization_invitations_projection_internal(uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.lock_organization_account_for_deletion_internal(
@@ -1242,6 +1253,7 @@ revoke all on function vortex_identity.lock_organization_account_for_deletion_in
 comment on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) is
   'Private exclusive lock and state read that opens the account-deletion fence.';
 
+grant execute on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) to postgres;
 alter function vortex_identity.lock_organization_account_for_deletion_internal(uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.publish_identity_disablement(
@@ -1284,6 +1296,7 @@ revoke all on function vortex_identity.publish_identity_disablement(uuid, uuid, 
 comment on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) is
   'Private step of complete_identity_disablement: suspends the subject''s existing cluster-local identity projection.';
 
+grant execute on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) to postgres;
 alter function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.read_current_organization_runtime_settings_internal(
@@ -1322,6 +1335,7 @@ revoke all on function vortex_identity.read_current_organization_runtime_setting
 
 comment on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) is null;
 
+grant execute on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) to postgres;
 alter function vortex_identity.read_current_organization_runtime_settings_internal(uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.read_identity_projection(p_identity_id uuid)
@@ -1412,6 +1426,7 @@ comment on function vortex_identity.read_organization_account_for_administration
   uuid, uuid
 ) is 'Identity-owned exact organisation-scoped safe account administration projection.';
 
+grant execute on function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) to postgres;
 alter function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.read_organization_invitation_for_administration_internal(
@@ -1470,6 +1485,7 @@ comment on function vortex_identity.read_organization_invitation_for_administrat
   uuid, uuid
 ) is 'Identity-owned exact organisation-scoped safe invitation projection without secret or fingerprint.';
 
+grant execute on function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) to postgres;
 alter function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.read_organization_time_zone_internal(
@@ -1595,6 +1611,7 @@ revoke all on function vortex_identity.revoke_organization_invitation(uuid, bigi
 
 comment on function vortex_identity.revoke_organization_invitation(uuid, bigint) is null;
 
+grant execute on function vortex_identity.revoke_organization_invitation(uuid, bigint) to postgres;
 alter function vortex_identity.revoke_organization_invitation(uuid, bigint) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.stage_organization_runtime_settings_update(
@@ -1732,6 +1749,7 @@ comment on function vortex_identity.update_organization_account_profile_internal
 ) is
   'Owner-only Identity writer for one active organisation account profile under an exact current revision; changes display name, language and time zone only and advances the account revision.';
 
+grant execute on function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) to postgres;
 alter function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.update_organization_default_application_internal(
@@ -1803,6 +1821,7 @@ comment on function vortex_identity.update_organization_default_application_inte
 ) is
   'Private Identity writer for the exact organisation default application reference; requires the current settings revision and reports an unchanged value without advancing it.';
 
+grant execute on function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) to postgres;
 alter function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.update_organization_runtime_settings_internal(
@@ -1871,6 +1890,7 @@ revoke all on function vortex_identity.update_organization_runtime_settings_inte
 
 comment on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) is null;
 
+grant execute on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) to postgres;
 alter function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) owner to vortex_identity_owner;
 
 create or replace function vortex_identity.save_organization_runtime_settings_record_internal(
@@ -2042,31 +2062,8 @@ comment on function vortex_identity.save_organization_runtime_settings_record_in
 ) is
   'Private revision-checked Identity writer for one organisation settings record, merging invariant field patches and declared extension values in the same settings row.';
 
-alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
-
--- Existing postgres-owned definers still call these private Identity entry points.
--- Preserve their execute access after ownership moves to vortex_identity_owner.
-grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;
-grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;
-grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;
-grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;
-grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;
-grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to postgres;
-grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;
-grant execute on function vortex_identity.list_organization_accounts_for_administration_internal(uuid, uuid, integer) to postgres;
-grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
-grant execute on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) to postgres;
-grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;
-grant execute on function vortex_identity.lock_organization_account_for_deletion_internal(uuid) to postgres;
-grant execute on function vortex_identity.publish_identity_disablement(uuid, uuid, uuid, timestamptz) to postgres;
-grant execute on function vortex_identity.read_current_organization_runtime_settings_internal(uuid) to postgres;
-grant execute on function vortex_identity.read_organization_account_for_administration_internal(uuid, uuid) to postgres;
-grant execute on function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) to postgres;
-grant execute on function vortex_identity.revoke_organization_invitation(uuid, bigint) to postgres;
-grant execute on function vortex_identity.update_organization_account_profile_internal(uuid, uuid, bigint, text, text, text) to postgres;
-grant execute on function vortex_identity.update_organization_default_application_internal(uuid, bigint, uuid) to postgres;
-grant execute on function vortex_identity.update_organization_runtime_settings_internal(uuid, bigint, text, text, text, text, text) to postgres;
 grant execute on function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) to postgres;
+alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
 
 grant select on table vortex_identity.organization_accounts to vortex_identity_owner;
 grant insert (activated_at, changed_at, display_name, identity_id, organization_account_id, organization_id, originating_invitation_id, revision, state, state_change_correlation_id, state_changed_at, state_changed_by) on table vortex_identity.organization_accounts to vortex_identity_owner;

@@ -54,5 +54,5 @@ comment on function vortex_identity.read_organization_invitation_for_administrat
   uuid, uuid
 ) is 'Identity-owned exact organisation-scoped safe invitation projection without secret or fingerprint.';
 
-alter function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) owner to vortex_identity_owner;
 grant execute on function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) to postgres;
+alter function vortex_identity.read_organization_invitation_for_administration_internal(uuid, uuid) owner to vortex_identity_owner;

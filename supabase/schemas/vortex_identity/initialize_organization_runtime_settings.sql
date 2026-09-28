@@ -88,5 +88,5 @@ comment on function vortex_identity.initialize_organization_runtime_settings(
   uuid, text, text, text, text, text
 ) is 'Trusted explicit Identity setup for one organisation runtime-settings row; identical retries return the current existing row and conflicting retries refuse.';
 
-alter function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) owner to vortex_identity_owner;
 grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to postgres;
+alter function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) owner to vortex_identity_owner;

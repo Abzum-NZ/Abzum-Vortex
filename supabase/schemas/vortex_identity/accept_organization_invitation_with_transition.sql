@@ -85,5 +85,5 @@ comment on function vortex_identity.accept_organization_invitation_with_transiti
   text, uuid, text, text, uuid
 ) is 'Owner-only Identity invitation transition with explicit Access change classification.';
 
-alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_identity_owner;
 grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;
+alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_identity_owner;

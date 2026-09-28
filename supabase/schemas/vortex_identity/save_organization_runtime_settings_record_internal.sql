@@ -167,5 +167,5 @@ comment on function vortex_identity.save_organization_runtime_settings_record_in
 ) is
   'Private revision-checked Identity writer for one organisation settings record, merging invariant field patches and declared extension values in the same settings row.';
 
-alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
 grant execute on function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) to postgres;
+alter function vortex_identity.save_organization_runtime_settings_record_internal(uuid, bigint, jsonb, jsonb) owner to vortex_identity_owner;
