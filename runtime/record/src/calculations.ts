@@ -505,15 +505,24 @@ export const evaluateRecordCalculations = (
           dueField !== undefined && formulaTypeOf(dueField) === "date"
             ? input.clock.organizationLocalDate + "T00:00:00.000Z"
             : input.clock.instant;
-        const evaluated = evaluateFlowFormula(formula, {
+        const scope = {
           now,
           reference: () => undefined,
-        });
+        };
+        const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
+        const exactWhole =
+          field.settings.resultType === "whole_number" && evaluated !== undefined
+            ? evaluateFlowFormula(formula, scope, {
+                preserveExactArithmetic: true,
+                requireExactInteger: true,
+              })
+            : evaluated;
         if (evaluated !== undefined) {
           if (field.settings.resultType === "money" && evaluated.type !== "money")
             evaluationIssue = "money_dimension_mismatch";
           else if (field.settings.resultType !== "money" && evaluated.type === "money")
             evaluationIssue = "money_dimension_mismatch";
+          else if (exactWhole === undefined) evaluationIssue = "non_integral_whole_number";
           else if (field.settings.resultType === "whole_number") {
             const exact = parseExactDecimal(evaluated.value);
             if (exact === undefined || exact.scale !== 0)

@@ -177,7 +177,17 @@ const evaluateFormula = (formula: FlowFormula) =>
   evaluateFlowFormula(formula, {
     now: "1970-01-01T00:00:00.000Z",
     reference: () => undefined,
-  });
+  }, { preserveExactArithmetic: true });
+
+const sumFormula = (operands: readonly FlowFormula[], scale: number): FlowFormula => {
+  if (operands.length === 1) return operands[0]!;
+  if (operands.length <= 10)
+    return { op: "add", args: [...operands], scale, rounding: "half_even" };
+  const groups: FlowFormula[] = [];
+  for (let index = 0; index < operands.length; index += 10)
+    groups.push(sumFormula(operands.slice(index, index + 10), scale));
+  return sumFormula(groups, scale);
+};
 
 const totalResult = (
   field: TotalField,
@@ -221,33 +231,49 @@ const totalResult = (
       if (comparison?.type !== "yes_no" || typeof comparison.value !== "boolean")
         return { issue: issue("invalid_source_value", field.fieldId) };
       if (comparison.value) selected = candidate;
+      else if (
+        sourceType === "date_time" &&
+        typeof candidate === "string" &&
+        typeof selected === "string" &&
+        evaluateFormula({
+          op: "eq",
+          left: literal(sourceType, candidate),
+          right: literal(sourceType, selected),
+        })?.value === true &&
+        (operation === "minimum"
+          ? compareFlowText(candidate, selected) < 0
+          : compareFlowText(candidate, selected) > 0)
+      ) selected = candidate;
     }
     return { value: selected };
   }
 
-  const sourcePrecision =
-    18;
-  let sum = evaluateFormula(operands[0]!);
-  if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
-  for (const operand of operands.slice(1)) {
-    sum = evaluateFormula({
-      op: "add",
-      args: [literal(sum.type, sum.value), operand],
-      scale: sourcePrecision,
-      rounding: "half_even",
-    });
-    if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
-  }
-  if (sum === undefined) return { issue: issue("invalid_source_value", field.fieldId) };
-  const evaluated =
+  const sumScale = resultType === "whole_number" ? 0 : 18;
+  const sum =
+    operation === "sum" && operands.length === 1
+      ? sumFormula(
+          [
+            operands[0]!,
+            literal(
+              sourceType,
+              sourceType === "money"
+                ? { amount: "0", currency: currencies[0]! }
+                : sourceType === "whole_number" ? 0 : "0",
+            ),
+          ],
+          sumScale,
+        )
+      : sumFormula(operands, sumScale);
+  const evaluated = evaluateFormula(
     operation === "average"
-      ? evaluateFormula({
+      ? {
           op: "divide",
-          args: [literal(sum.type, sum.value), literal("whole_number", values.length)],
+          args: [sum, literal("whole_number", values.length)],
           scale: field.settings.decimalPlaces!,
           rounding: "half_even",
-        })
-      : sum;
+        }
+      : sum,
+  );
   if (evaluated === undefined) {
     return {
       issue:

@@ -333,7 +333,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
         typeof value === "number" && Number.isSafeInteger(value)
           ? "whole_number"
           : "decimal_number";
-      if (typeof value === "number") value = String(value);
+      if (type === "decimal_number" && typeof value === "number") value = String(value);
     } else if (type === "decimal_number" && typeof value === "number") value = String(value);
     else if (type === "record_reference") {
       type = "text";
@@ -341,7 +341,8 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
     } else if (type === "organization_account_reference") {
       type = "text";
       if (value !== null) value = organizationAccountIdentity(value) ?? value;
-    } else if (type === "text_collection") type = "several_choices";
+    } else if (type === "boolean") type = "yes_no";
+    else if (type === "text_collection") type = "several_choices";
     else if (type === "opaque_json") type = "json";
     return {
       op: "literal",
@@ -370,12 +371,21 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
     if (node.kind === "not") return { op: "not", arg: toFormula(node.condition) };
 
     const left = resolveOperand(node.left);
-    const leftFormula = formulaLiteral(left);
-    if (node.operator === "is_empty" || node.operator === "is_not_empty")
+    let leftFormula = formulaLiteral(left);
+    if (node.operator === "is_empty" || node.operator === "is_not_empty") {
+      if (left.missing || Array.isArray(left.value)) {
+        const empty = left.missing;
+        return {
+          op: "literal",
+          type: "yes_no",
+          value: node.operator === "is_empty" ? empty : !empty,
+        };
+      }
       return { op: node.operator, arg: leftFormula };
+    }
 
     const right = node.right === undefined ? refuse("input_refused") : resolveOperand(node.right);
-    const rightFormula = formulaLiteral(right);
+    let rightFormula = formulaLiteral(right);
     const comparisons = {
       equals: "eq",
       not_equals: "neq",
@@ -392,30 +402,52 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       (left.value === null || right.value === null)
     )
       return { op: "literal", type: "yes_no", value: false };
-    if (node.operator === "not_contains")
-      return left.value === null || right.value === null
-        ? { op: "literal", type: "yes_no", value: true }
-        : { op: "not", arg: { op: "contains", left: leftFormula, right: rightFormula } };
-    if (node.operator === "contains" && (left.value === null || right.value === null))
-      return { op: "literal", type: "yes_no", value: false };
+    if (node.operator === "contains" || node.operator === "not_contains") {
+      let contains: FlowFormula;
+      if (left.value === null || right.value === null)
+        contains = { op: "literal", type: "yes_no", value: false };
+      else if (Array.isArray(left.value)) {
+        const elementType = collectionElementType(left, right.type);
+        if (elementType === undefined) refuse("operator_refused");
+        contains = left.value.length === 0
+          ? { op: "literal", type: "yes_no", value: false }
+          : {
+              op: "in",
+              value: formulaLiteral(right, elementType),
+              options: left.value.map((entry) =>
+                formulaLiteral({ value: entry, literal: entry }, elementType),
+              ),
+            };
+      } else contains = { op: "contains", left: leftFormula, right: rightFormula };
+      return node.operator === "not_contains" ? { op: "not", arg: contains } : contains;
+    }
     if (node.operator === "in" || node.operator === "not_in") {
       let membership: FlowFormula;
-      if (Array.isArray(right.value)) {
+      if (left.value === null || right.value === null)
+        membership = { op: "literal", type: "yes_no", value: false };
+      else if (Array.isArray(right.value)) {
         const elementType = collectionElementType(right, left.type);
         if (elementType === undefined) refuse("operator_refused");
-        membership = {
-          op: "in",
-          value: leftFormula,
-          options: right.value.map((entry) =>
-            formulaLiteral({ value: entry, literal: entry }, elementType),
-          ),
-        };
+        membership = right.value.length === 0
+          ? { op: "literal", type: "yes_no", value: false }
+          : {
+              op: "in",
+              value: formulaLiteral(left, elementType),
+              options: right.value.map((entry) =>
+                formulaLiteral({ value: entry, literal: entry }, elementType),
+              ),
+            };
       } else if (right.type === "text_collection") {
         membership = { op: "contains", left: rightFormula, right: leftFormula };
       } else {
         membership = { op: "in", value: leftFormula, options: [rightFormula] };
       }
       return node.operator === "not_in" ? { op: "not", arg: membership } : membership;
+    }
+    const comparisonType = sharedType(left, right);
+    if (comparisonType !== undefined) {
+      leftFormula = formulaLiteral(left, comparisonType);
+      rightFormula = formulaLiteral(right, comparisonType);
     }
     return {
       op: comparisons[node.operator as keyof typeof comparisons],

@@ -5,7 +5,6 @@ import {
   moneyValueV2Schema,
   parseExactDecimal,
   powerOfTen,
-  timestampSchema,
   type ExactDecimal,
   type FlowDateUnit,
   type FlowFormula,
@@ -60,6 +59,51 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
 
 const absolute = (input: bigint): bigint => (input < 0n ? -input : input);
 
+type ExactRational = Readonly<{ numerator: bigint; denominator: bigint }>;
+
+const greatestCommonDivisor = (left: bigint, right: bigint): bigint => {
+  let a = absolute(left);
+  let b = absolute(right);
+  while (b !== 0n) [a, b] = [b, a % b];
+  return a === 0n ? 1n : a;
+};
+
+const rational = (numerator: bigint, denominator: bigint): ExactRational | undefined => {
+  if (denominator === 0n) return undefined;
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  const sign = denominator < 0n ? -1n : 1n;
+  return {
+    numerator: (numerator * sign) / divisor,
+    denominator: absolute(denominator) / divisor,
+  };
+};
+
+const rationalOf = (decimal: ExactDecimal): ExactRational =>
+  rational(decimal.coefficient, powerOfTen(decimal.scale))!;
+
+const combineRationals = (
+  operator: "add" | "subtract" | "multiply" | "divide",
+  left: ExactRational,
+  right: ExactRational,
+): ExactRational | undefined => {
+  switch (operator) {
+    case "add":
+      return rational(
+        left.numerator * right.denominator + right.numerator * left.denominator,
+        left.denominator * right.denominator,
+      );
+    case "subtract":
+      return rational(
+        left.numerator * right.denominator - right.numerator * left.denominator,
+        left.denominator * right.denominator,
+      );
+    case "multiply":
+      return rational(left.numerator * right.numerator, left.denominator * right.denominator);
+    case "divide":
+      return rational(left.numerator * right.denominator, left.denominator * right.numerator);
+  }
+};
+
 /** Divides exactly, then rounds the quotient to a whole number in the declared mode. */
 const roundedQuotient = (
   numerator: bigint,
@@ -102,12 +146,6 @@ const roundedQuotient = (
   return negative ? -rounded : rounded;
 };
 
-/** Rescales `coefficient / 10^from` to exactly `to` decimal places. */
-const rescale = (coefficient: bigint, from: number, to: number, mode: FlowRoundingMode) =>
-  to >= from
-    ? coefficient * powerOfTen(to - from)
-    : roundedQuotient(coefficient, powerOfTen(from - to), mode);
-
 const currencyOf = (candidate: FlowRuntimeValue): string | undefined => {
   if (candidate.type !== "money") return undefined;
   const parsed = moneyValueV2Schema.safeParse(candidate.value);
@@ -132,10 +170,16 @@ const arithmetic = (
   operands: readonly FlowRuntimeValue[],
   scale: number,
   mode: FlowRoundingMode,
+  exactValues: WeakMap<FlowRuntimeValue, ExactRational>,
+  preserveExactArithmetic: boolean,
 ): FlowRuntimeValue | undefined => {
-  const decimals = operands.map(decimalOf);
-  if (decimals.some((decimal) => decimal === undefined)) return undefined;
-  const parsed = decimals as ExactDecimal[];
+  const parsed = operands.map((operand) => {
+    const carried = exactValues.get(operand);
+    if (carried !== undefined) return carried;
+    const decimal = decimalOf(operand);
+    return decimal === undefined ? undefined : rationalOf(decimal);
+  });
+  if (parsed.some((entry) => entry === undefined)) return undefined;
   const moneyOperands = operands.filter((operand) => operand.type === "money");
   const currencies = moneyOperands.map(currencyOf);
   const commonCurrency =
@@ -154,43 +198,41 @@ const arithmetic = (
             operands[0]?.type === "money" &&
             commonCurrency !== undefined);
   if (!dimensionsValid) return undefined;
-  let coefficient = parsed[0]!.coefficient;
-  let currentScale = parsed[0]!.scale;
+  let exact = parsed[0]!;
   try {
     for (const next of parsed.slice(1)) {
-      if (operator === "add" || operator === "subtract") {
-        const common = Math.max(currentScale, next.scale);
-        const left = coefficient * powerOfTen(common - currentScale);
-        const right = next.coefficient * powerOfTen(common - next.scale);
-        coefficient = operator === "add" ? left + right : left - right;
-        currentScale = common;
-      } else if (operator === "multiply") {
-        coefficient *= next.coefficient;
-        currentScale += next.scale;
-      } else {
-        // Divide straight to the declared scale so no precision beyond it is ever invented.
-        const numerator = coefficient * powerOfTen(scale + next.scale);
-        const denominator = next.coefficient * powerOfTen(currentScale);
-        coefficient = roundedQuotient(numerator, denominator, mode);
-        currentScale = scale;
-      }
+      const combined = combineRationals(operator, exact, next!);
+      if (
+        combined === undefined ||
+        absolute(combined.numerator).toString().length > 512 ||
+        combined.denominator.toString().length > 512
+      ) return undefined;
+      exact = combined;
     }
-    const scaled = rescale(coefficient, currentScale, scale, mode);
+    const scaled = roundedQuotient(exact.numerator * powerOfTen(scale), exact.denominator, mode);
     if (absolute(scaled) >= powerOfTen(maximumDecimalDigits)) return undefined;
     const amount = formatExactDecimal(
       parseExactDecimal(formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal))!,
     );
-    if (commonCurrency !== undefined)
-      return value("money", { amount, currency: commonCurrency });
+    if (commonCurrency !== undefined) {
+      const result = value("money", { amount, currency: commonCurrency });
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
+    }
     if (
       operator !== "divide" &&
       scale === 0 &&
       operands.every((operand) => operand.type === "whole_number")
     ) {
       const whole = Number(amount);
-      return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
+      if (!Number.isSafeInteger(whole)) return undefined;
+      const result = value("whole_number", whole);
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
     }
-    return value("decimal_number", amount);
+    const result = value("decimal_number", amount);
+    if (preserveExactArithmetic) exactValues.set(result, exact);
+    return result;
   } catch {
     return undefined;
   }
@@ -221,8 +263,7 @@ const exactInstantOf = (candidate: FlowRuntimeValue): ExactInstant | undefined =
       ? undefined
       : { epochSecond: BigInt(Math.floor(milliseconds / 1_000)), fraction: "" };
   }
-  if (candidate.type !== "date_time" || !timestampSchema.safeParse(candidate.value).success)
-    return undefined;
+  if (candidate.type !== "date_time") return undefined;
   const microseconds = flowInstantMicros(candidate.value);
   if (microseconds === undefined) return undefined;
   const epochSecond =
@@ -407,7 +448,9 @@ const joined = (candidate: FlowRuntimeValue): string | undefined => {
 export const evaluateFlowFormula = (
   formula: FlowFormula,
   scope: FlowFormulaScope,
+  options: Readonly<{ preserveExactArithmetic?: boolean; requireExactInteger?: boolean }> = {},
 ): FlowRuntimeValue | undefined => {
+  const exactValues = new WeakMap<FlowRuntimeValue, ExactRational>();
   const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined => {
     switch (node.op) {
       case "literal":
@@ -423,12 +466,26 @@ export const evaluateFlowFormula = (
         const operands = node.args.map(evaluate);
         return operands.some((operand) => operand === undefined)
           ? undefined
-          : arithmetic(node.op, operands as FlowRuntimeValue[], node.scale, node.rounding);
+          : arithmetic(
+              node.op,
+              operands as FlowRuntimeValue[],
+              node.scale,
+              node.rounding,
+              exactValues,
+              options.preserveExactArithmetic === true,
+            );
       }
       case "round": {
         const operand = evaluate(node.arg);
         if (operand === undefined) return undefined;
-        const rounded = arithmetic("add", [operand], node.scale, node.rounding);
+        const rounded = arithmetic(
+          "add",
+          [{ type: operand.type, value: operand.value }],
+          node.scale,
+          node.rounding,
+          exactValues,
+          false,
+        );
         if (rounded === undefined) return undefined;
         if (operand.type === "whole_number") {
           const whole = Number(rounded.value);
@@ -538,7 +595,13 @@ export const evaluateFlowFormula = (
       }
     }
   };
-  return evaluate(formula);
+  const result = evaluate(formula);
+  if (result === undefined) return undefined;
+  if (options.requireExactInteger) {
+    const exact = exactValues.get(result);
+    if (exact === undefined || exact.numerator % exact.denominator !== 0n) return undefined;
+  }
+  return result;
 };
 
 /**
