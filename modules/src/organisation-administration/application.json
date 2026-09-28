@@ -401,7 +401,7 @@
                     "shell_body": {
                       "block": {
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.1.0"
+                        "release_version": "1.2.0"
                       },
                       "settings": {
                         "direction": {
@@ -419,6 +419,10 @@
                         "menu_placement": {
                           "kind": "choice",
                           "value": "sticky"
+                        },
+                        "content_landmark": {
+                          "kind": "boolean",
+                          "value": true
                         },
                         "tablet_menu_width": {
                           "kind": "number",

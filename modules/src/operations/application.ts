@@ -5,7 +5,7 @@ import {
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_1_0,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -394,12 +394,13 @@ const applicationShell = {
         }),
         content: slot({
           shell_body: placement(
-            CONTAINER_BLOCK_RELEASE_1_1_0,
+            CONTAINER_BLOCK_RELEASE_1_2_0,
             {
               direction: { kind: "choice", value: "row" },
               gap: { kind: "choice", value: "medium" },
               menu_width: { kind: "number", value: 16 },
               menu_placement: { kind: "choice", value: "sticky" },
+              content_landmark: { kind: "boolean", value: true },
               tablet_menu_width: { kind: "number", value: 14 },
               phone_direction: { kind: "choice", value: "column" },
               phone_menu_placement: { kind: "choice", value: "flow" },
