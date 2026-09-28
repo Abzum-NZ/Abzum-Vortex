@@ -1022,7 +1022,7 @@ def _diagnostic_page_metadata(
             if (
                 linked.scheme != origin.scheme
                 or linked.netloc != origin.netloc
-                or linked.path != "/auth/v1/admin/users"
+                or linked.path not in ("/auth/v1/admin/users", "/admin/users")
                 or linked.fragment
                 or set(query) != {"page", "per_page"}
                 or len(query["page"]) != 1
