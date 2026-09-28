@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import re
 import secrets
@@ -56,7 +57,39 @@ REQUIRED_BROWSER_CHECKS = (
     "companies_list",
     "new_company",
     "save_company",
+    "maia_root",
+    "maia_active_menu",
+    "maia_table",
+    "secondary_button",
+    "customer_dimensions",
+    "primary_rest",
+    "primary_hover",
+    "large_radius",
+    "default_style_distinct",
 )
+THEME_METRIC_FIELDS = (
+    "customer_computed_width_px",
+    "customer_computed_height_px",
+    "customer_rect_width_px",
+    "customer_rect_height_px",
+    "maia_table_header_padding_px",
+    "maia_table_border_px",
+    "maia_base_radius_px",
+    "maia_menu_radius_px",
+    "nova_base_radius_px",
+    "nova_menu_radius_px",
+)
+THEME_METRIC_DEPENDENCIES = {
+    "maia_active_menu": ("maia_menu_radius_px",),
+    "maia_table": ("maia_table_header_padding_px", "maia_table_border_px"),
+    "customer_dimensions": THEME_METRIC_FIELDS[:4],
+    "large_radius": (
+        "maia_base_radius_px",
+        "maia_menu_radius_px",
+        "nova_base_radius_px",
+        "nova_menu_radius_px",
+    ),
+}
 SAFE_BROWSER_REASONS = frozenset(
     {
         "ambiguous_control",
@@ -92,6 +125,7 @@ SAFE_BROWSER_REASONS = frozenset(
         "run_timeout",
         "sign_in_timeout",
         "step_timeout",
+        "theme_check_failed",
         "unexpected_origin",
     }
 )
@@ -108,6 +142,14 @@ SAFE_BROWSER_ACTION_STAGES = frozenset(
         "customer_value",
         "save_control",
         "save_confirmation",
+        "maia_root",
+        "maia_active_menu",
+        "maia_table",
+        "secondary_button",
+        "customer_dimensions",
+        "primary_rest",
+        "primary_hover",
+        "default_style_comparison",
         "complete",
     }
 )
@@ -1566,7 +1608,7 @@ def _browser_report(
         return None, False, "browser_output_too_large"
     try:
         result = json.loads(raw.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError):
+    except (UnicodeError, ValueError):
         return None, False, "browser_output_invalid"
     if not isinstance(result, dict) or result.get("schema") != "vortex.local-preview.browser.v1":
         return None, False, "browser_contract_invalid"
@@ -1582,9 +1624,38 @@ def _browser_report(
         if isinstance(raw_checks, dict)
         else {}
     )
-    checks_valid = isinstance(raw_checks, dict) and all(
-        name not in raw_checks or type(raw_checks[name]) is bool for name in REQUIRED_BROWSER_CHECKS
+    checks_valid = isinstance(raw_checks, dict) and set(raw_checks).issubset(REQUIRED_BROWSER_CHECKS) and all(
+        type(value) is bool for value in raw_checks.values()
     )
+    raw_theme_metrics = result.get("theme_metrics")
+    theme_metrics_valid = (
+        isinstance(raw_theme_metrics, dict)
+        and set(raw_theme_metrics).issubset(THEME_METRIC_FIELDS)
+        and all(
+            type(value) in (int, float) and 0 <= value <= 256 and math.isfinite(value)
+            for value in raw_theme_metrics.values()
+        )
+    )
+    if theme_metrics_valid:
+        assert isinstance(raw_theme_metrics, dict)
+        theme_metrics_valid = all(
+            not checks.get(check_name, False)
+            or all(raw_theme_metrics.get(field, 0) > 0 for field in fields)
+            for check_name, fields in THEME_METRIC_DEPENDENCIES.items()
+        )
+    if theme_metrics_valid and checks.get("large_radius") is True:
+        assert isinstance(raw_theme_metrics, dict)
+        theme_metrics_valid = (
+            raw_theme_metrics["maia_base_radius_px"] > raw_theme_metrics["nova_base_radius_px"]
+            and raw_theme_metrics["maia_menu_radius_px"] != raw_theme_metrics["nova_menu_radius_px"]
+        )
+    if theme_metrics_valid and result.get("result") == "PASS":
+        assert isinstance(raw_theme_metrics, dict)
+        theme_metrics_valid = (
+            set(raw_theme_metrics) == set(THEME_METRIC_FIELDS)
+            and all(checks.get(name) is True for name in REQUIRED_BROWSER_CHECKS)
+            and all(raw_theme_metrics[field] > 0 for field in THEME_METRIC_FIELDS)
+        )
     reason = result.get("reason")
     safe_reason = reason if isinstance(reason, str) and reason in SAFE_BROWSER_REASONS else None
     raw_stage = result.get("action_stage")
@@ -1608,7 +1679,7 @@ def _browser_report(
         "head_sha_matches": head_matches,
         "run_nonce_matches": nonce_matches,
         "fixtures_match": fixtures_match,
-        "checks": checks,
+        "checks": checks if identity_matches else {},
         "browser_cleanup": (
             {"adapter_claimed": raw_cleanup["confirmed"], "runner_confirmed": cleanup_confirmed}
             if cleanup_valid
@@ -1617,6 +1688,12 @@ def _browser_report(
     }
     if identity_matches:
         evidence.update({"head_sha": sha, "run_nonce": run_nonce, "fixtures": fixtures})
+        evidence["theme_metrics_valid"] = theme_metrics_valid
+        if theme_metrics_valid:
+            assert isinstance(raw_theme_metrics, dict)
+            evidence["theme_metrics"] = {
+                name: raw_theme_metrics[name] for name in THEME_METRIC_FIELDS if name in raw_theme_metrics
+            }
     if safe_reason is not None and identity_matches:
         evidence["reason"] = safe_reason
     if identity_matches and "action_stage" in result:
@@ -1700,6 +1777,8 @@ def _browser_report(
         return evidence, False, "browser_reason_invalid"
     if not cleanup_valid:
         return evidence, False, "browser_cleanup_attestation_missing"
+    if not theme_metrics_valid:
+        return evidence, cleanup_confirmed, "browser_theme_contract_invalid"
     return evidence, cleanup_confirmed, None
 
 
