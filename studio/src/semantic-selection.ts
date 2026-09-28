@@ -449,3 +449,9 @@ export const createStudioSemanticSelectionStore = (
     },
   });
 };
+
+export {
+  projectStudioSemanticOutline,
+  type StudioSemanticOutline,
+  type StudioSemanticOutlineNode,
+} from "./semantic-outline";
