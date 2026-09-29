@@ -1,215 +1,181 @@
 # Fleet operations
 
-Read [agent coordination](agent-coordination.md) first: it sets the roles, capacity targets, lifecycle and verification. This file holds the procedures:
-- the main orchestrator (GPT-6 Sol, High);
-- the planner (Claude Opus 5.5);
-- GPT-6 Luna implementers and GPT-6 Sol reviewers (Extra High);
-- the independent monitor.
+Read [agent coordination](agent-coordination.md) first: it sets the current Codex Desktop control plane, roles, capacity, lifecycle and verification. This file gives the procedure. The lead coordinates native Codex subagents first, then useful bounded workers from the owner-authorized Orca Luna Extra High, Antigravity Gemini 3.8 Flash, OpenCode Kimi K3 and OpenCode Space Bunny pool when their normal controls and actual runtime permit. No separate coordinator, retired autonomous service, custom app-server or external scheduler is authorized. Deterministic local helpers may cache, journal or run requested checks, but cannot form a second coordinator.
 
-Machine-specific paths (repository checkout, coordination folder, Orca executable, run id) live in the orchestrator's checkpoint, not here.
+The coordination root is `C:/Users/vijay/.codex/fleet/Abzum-Vortex`. Keep machine-specific checkout and process facts in the checkpoint, not in this policy.
 
-## Ready-work dispatch algorithm
+## Resume and dispatch
 
-1. **Resume.** On startup or resume:
-   - read the checkpoint and the reconciliation journal;
-   - compare them with live state: Orca workers and terminals, `git worktree list`, running `codex exec` processes, open PRs;
-   - never duplicate a live or uncertain worker.
-2. **Snapshot.** Refresh the roadmap Project snapshot (items, status, phase, native blockers, parents, Pickup Order) once per reporting interval and after structural changes. Between snapshots, update from event read-backs.
-3. **Eligibility.** A leaf is eligible when its real native blockers are complete, it is bounded, its owning paths do not overlap an active editor, and capacity exists. Phase and Pickup Order only break ties, except that the current phase's blockers always go first.
-4. **Fill review lanes first.** Every open PR without a reviewer gets one now, up to 10 concurrent.
-5. **Merge what is ready.** A PR whose review, verification and preview have passed merges this cycle.
-6. **Fill implementer lanes.** Dispatch eligible leaves until 6–8 Luna lanes run. Prefer leaves that do not depend on open PRs. Hand unclear or architectural leaves to the planner, and keep 2–3 shaped leaves ready.
-7. **Shape** each picked leaf ([shape before dispatch](agent-coordination.md#shape-before-dispatch)). Work that is already implemented goes to a Sol source review and reconciliation, not reimplementation.
-8. **Recompute after every event.** After any handoff, merge, closure, board write or cleanup, recompute eligibility and refill.
+1. **Resume.** Read the checkpoint and append-only journal. Reconcile native child status, actual processes, managed worktrees, open PR heads, Project state, locks and pending writes. Treat an uncertain worker as active until investigated; do not duplicate work because a session looks idle.
+2. **Snapshot.** Refresh the slim, fully paginated roadmap Project snapshot at the active cadence in [Agent coordination](agent-coordination.md#board-continuity-and-rate-limits), after structural changes, and from event read-backs between snapshots. Refresh native relationships separately.
+3. **Choose.** Keep a small verified pickup ledger of two or three shaped leaves. A leaf is eligible only when its current comments and native blockers agree, its premise holds in current source, its scope is bounded, its owning paths do not overlap an active editor, and capacity exists. Current-phase blockers and Pickup Order break ties. Never remove a real dependency to make an issue Ready.
+4. **Actionable review first.** Give an unreviewed candidate priority when its handoff is complete and an independent Sol reviewer can make progress in an assigned managed worktree. Send a fully gated merge packet promptly to the lead. Preserve a PR blocked on external access, another owner or incomplete checks with an exact next action; its wait does not hold an otherwise verified, independent implementation leaf. Merge readiness does not permit a worker to merge; the lead makes the final decision.
+5. **Fill only useful capacity.** Target five useful assignments when eligible work and observed capacity allow, normally three implementer/recovery workers, one independent Sol reviewer and one flexible ownership/shaping worker. More bounded workers may run when disjoint qualified work, independent review throughput and measured memory allow. Dispatch an idle implementer to a verified leaf in the same active turn. If none qualifies, shape the highest-value Backlog candidate and record the missing prerequisite. For a review backlog, prefer one implementer and two reviewers. Reserve a child for an independent phase walkthrough. Do not claim empty work or dispatch capacity from partial data.
+6. **Shape and assign.** Follow [Shape before dispatch](agent-coordination.md#shape-before-dispatch). Existing implementation goes to independent review and reconciliation, not reimplementation. Assign a lead-owned isolated managed worktree, branch, issue and explicit owning paths before the child edits.
+7. **Recompute.** After a handoff, merge, closure, board transition or blocker, refresh the affected evidence and reconsider eligible work in the same active turn. Preserve a blocked child's unique work, release its slot and continue independent leaves. Do not run an always-on poller.
 
-Never claim an empty queue while an eligible leaf or a free lane exists. A dependency cycle or contradictory dependency is a planning blocker to resolve with a recorded reason. Never delete a real dependency to make an issue Ready.
+Target five productive children using observed native capacity first, then verified workers from the owner-authorized pool. Five is not a fixed maximum. The native configuration excludes the primary; verify live capacity separately. Count actual active workers, not old completed threads, shell tabs, catalog entries or accepted startup requests. Record any shortfall and immediately qualify another bounded assignment when useful work exists. Do not keep an idle model polling for work. A child does not inherit a private checkout or durable background execution automatically. Native work may be interrupted by user input, app closure, context or shared usage limits. Preserve a recovery point and keep coordination claims honest.
 
-## Launching lanes
+## Worker handoffs
 
-- **Codex lanes run headless:** `codex exec -m <model> -c model_reasoning_effort=<effort> -C <worktree> --add-dir <coordination folder> -o <final report> - < <brief>`. Run it inside an Orca terminal through the coordination launch scripts (`exec-launch.sh` / `exec-lane.sh`).
-  - Implementers: `gpt-6-luna` at `xhigh`. Reviewers: `gpt-6-sol` at `xhigh`.
-  - Never start interactive daemon-backed Codex terminals for lanes: on Windows they open a console window per command on the owner's desktop.
-- **Planner lanes:** Claude Opus 5.5 at High effort, for shaping and design only. They write issue text, comments or design records, never code.
-- **Start immediately.** A lane never waits for a heavy lock before starting. It requests the lock only when it reaches a heavy step.
-- **Confirm it started.** After launch, confirm the process is running and the log is growing. Record the actual model and effort from the session header, not the planned label.
-- **Refused commands.** Codex may refuse some commands "by policy" (lock-file writes, `gh pr create`, deletes). Read every final report the same cycle. The orchestrator performs any refused step itself; lanes never try to work around it.
-- **Overflow.** Overflow models (Space Bunny, DeepSeek Flash, Sonnet 5 High) launch through Orca's normal agent launcher when Codex capacity is short. Confirm the actual model and turn start.
+Every handoff records issue and outcome, complete dependencies, acceptance, scope boundaries, assigned worktree and branch, migration reservation if any, actual model and reasoning effort, and the exact requested deliverable. Use the issue's complete context, not an abbreviated summary. Workers report evidence and blockers to the lead.
+
+- **Read-only inventory or summary:** Luna, Extra High, or a verified owner-authorized provider when delegation saves work; supply exact sources and questions. Require source evidence for claims and keep it bounded.
+- **Implementation:** Luna, Extra High, or a verified owner-authorized external worker for one bounded outcome. The lead assigns the managed worktree and checks ownership and path boundaries. The implementer validates definitions when needed, commits, and returns the complete self-review packet, candidate SHA, changed paths, acceptance mapping, validator result, limitations, and whether a PR was opened. An external implementer's self-review never replaces independent Sol review.
+- **Review and fix:** fresh Sol, High for ordinary bounded review; Extra High for privilege, authentication, SQL ownership, tenant boundaries, transactions, architecture or unresolved cross-layer failures. Use a separate session and worktree after the implementer stops. The reviewer reads the live issue and all comments, specification, complete diff, current main and affected callers; fixes findings; re-reads changed context; re-reviews; and returns the exact-head verdict, checks and limitations to the lead. It never merges. Reuse the same independent reviewer for later acceptance of its candidate when appropriate.
+- **Planning:** Sol, High or Extra High for bounded architecture options and issue shaping. Astra, High is an exceptional consultation only for a named unresolved decision. External workers may supply bounded evidence, but product decisions remain with the owner or delegated decision-maker.
+- **Independent monitor:** Sol, High when needed for preview evidence or phase acceptance. Keep it independent from implementation. It does not become a permanent service.
+
+Reasoning is selected by risk. Keep Luna Extra High for implementation and corrections. For another provider, verify the connected model, advertised effort, successful start and actual runtime identity before assignment; a requested configuration is not proof. Sol High ordinary review is a measured pilot, while sensitive review stays Extra High; neither changes independence or verification. Record actual model and effort; do not infer them from the plan label. Compare rework and acceptance before changing routing further. Optimize cost per accepted change, not the number of simultaneous agents.
+
+Before independent review, every implementer handoff names the full candidate and base SHAs, changed paths, acceptance-to-source mapping, focused final-diff and caller self-review, actual findings and corrections (or reviewed cases when none), edge cases, checks with exit codes, and pending limits. The lead returns an incomplete packet to the same implementer session; it does not invent evidence or spend a Sol slot on an incomplete handoff. See the [implementer template](#implementer-handoff-template).
 
 ## Branches, worktrees and migrations
 
-- **Worktrees and branches:**
-  - one issue, one worktree, one editor at a time;
-  - create from `origin/main` with `git worktree add --no-track -b abzum-admin/<issue>-<agent>-<slug> <path> origin/main`;
-  - reviewers work in `<same name>-2` checkouts of the PR branch.
-- **Pushing.** Push only with an explicit refspec: `git push origin HEAD:refs/heads/<branch>`. A branch must never track `origin/main`; check with `git rev-parse --abbrev-ref @{u}`. Main is protected for everyone, including administrators.
-- **Up-to-date rule.** Main requires branches to be up to date before merging. Merge PRs in queue order, and merge `origin/main` into the next PR right after each merge.
-- **Migrations.**
-  - Before dispatch, compute the next free migration number from `git ls-tree --name-only origin/main supabase/migrations`, and reserve a range for the issue in the checkpoint.
-  - Every lane, including the monitor's own lanes, takes its numbers from the orchestrator.
-  - A migration that sorts before an existing one on main is renumbered before merge.
+- One issue has one editor and one lead-assigned isolated managed worktree at a time. Base new work on current `origin/main`. Create branches with `--no-track`; use the `codex/` branch prefix unless the owner or repository procedure says otherwise. A reviewer uses its own isolated managed worktree on the PR branch.
+- Never push to main. Push only with the explicit refspec `git push origin HEAD:refs/heads/<branch>`. Verify that the branch has no upstream tracking `origin/main`. Main is protected, including for administrators.
+- Before merge, the lead verifies the PR head, base and review are current. Update from `origin/main` when required, inspect merge changes, rerun checks invalidated by the new head, and re-read the candidate immediately before the protected merge. A changed head invalidates prior review or check evidence.
+- When the exact-head review and all required check and preview evidence are complete, the lead attempts the protected PR merge in that active turn. Classify a failed merge as changed head or base, missing evidence, conflict, protection or integration access; record one owner and next action. Never use another identity or executor to bypass a real 403.
+- Before dispatching a migration, compute the next free number from current `origin/main` and reserve it in the checkpoint. Every child takes its number only from the lead. Renumber before merge if it sorts before an existing main migration.
+- Preserve untracked, uncommitted, unpushed and otherwise unique work before considering worktree cleanup. Do not remove a worktree while a child or process uses it. Retain uncertain work with an owner, reason and next action. No recursive delete by computed path, no primary-checkout removal and no cleanup against main. Never blindly revert dependent migration or subsequent work.
 
 ## Heavy checks and locks
 
-Heavy checks are typecheck, web build and database replay. Two slots:
-- `heavy.lock` is for any heavy check;
-- `heavy.lock2` is for typecheck and build only.
+Heavy checks are scoped typecheck, web build and database replay. There are two total slots; at most one database replay may run at a time. Use `heavy.lock` for any heavy check and `heavy.lock2` for typecheck or build only. Do not start when less than 3 GB of memory is free.
 
-Rules:
-- At most one database replay runs at a time across both slots.
-- Do not start a heavy check when less than 3 GB of memory is free; wait and retry.
-- The orchestrator holds a lock on a lane's behalf, because Codex refuses lane lock writes. It writes `<issue>-<kind> <UTC>` and releases the lock the moment the command finishes.
-- A lane that exits releases any lock naming it.
-- A lock older than 25 minutes whose owner has exited is stale: the orchestrator clears it.
-- The live order is `heavy-queue.txt` in the coordination folder, kept current by the orchestrator. The current phase's blockers go first.
-- When a reservation (for example the monitor's phase walkthrough) lifts, every lane that exited because of it is re-dispatched within one cycle.
+The lead owns locks and queue state. Each reservation records owner identity, process start time, task and commit; release it as soon as the command ends. A stale timestamp alone never licenses stealing a lock. Confirm the owner process has exited and the reservation is no longer active before recovery. Reviewer asks the lead for a lock; the lead serializes the request and returns the grant. The lead coordinates priority and the current phase's blockers. Never start a heavy check merely to satisfy a stale label; use the exact verification requirements and candidate SHA.
 
-## Preview checks and smoke (monitor)
+## Preview checks and browser smoke
 
-- **Shared preview stack.** The monitor owns the shared local Supabase preview stack. No other agent resets or writes to it.
-- **Preview checks run automatically.** The monitor's preview watcher runs a fresh `db reset` plus `setup:local` on a PR's exact head and posts `Fleet monitor preview-stack check of head <sha>: PASS/FAIL` on the PR, usually within 10 minutes. It picks up:
-  - any PR comment asking the monitor for a preview or `db:reset` check;
-  - any PR number added to `preview-requests.txt` in the coordination folder.
-- **A reviewer needing a preview** requests it and waits for that comment on its **current** head. There is no 30-minute timeout. A FAIL means do not merge.
-- **Post-merge smoke.** After any merge that touches definitions, migrations or development setup, the watcher smoke-tests main and messages the orchestrator. A FAIL on main is fixed before further merges of that kind.
-- **Phase walkthrough.** When the orchestrator reports "Phase N re-check ready", it pauses launches. The monitor walks the phase acceptance in a browser and hands the owner the link only after it passes.
+The shared preview stack is local. The lead assigns one independent preview owner at a time; no concurrent database reset or setup operation is allowed. Capture the stack state and exact commit before each check.
 
-## Metadata
+For definitions, migrations or `apps/web/scripts/development-setup`, require independent preview PASS on the exact full head: fresh `db reset` and `setup:local`. For pages, forms or definitions in `apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/` or `contracts/src/`, also require independent headless Edge smoke PASS on that head after preview reset: sign in, open the CRM Companies list, open New company and save. Do not assume an automatic watcher exists. The lead assigns one independent preview owner. The source reviewer may own the run only if it did not author or fix the product candidate under verification; otherwise assign a separate monitor. A FAIL, skipped run, mismatched SHA or unavailable stack means do not merge.
 
-Each leaf title starts `#<issue>`. The issue carries the phase label, numeric Pickup Order, and these sections:
+After any merge that touches definitions, migrations or development setup, independently smoke-test main. A main failure holds further merges of that kind until the cause is diagnosed and a corrective PR is verified. The phase walkthrough is a separate independent browser acceptance run; reserve a child slot and pause conflicting preview operations while it runs.
+
+## Issue metadata
+
+Each implementation leaf title starts `#<issue>` and the issue includes its phase label, numeric Pickup Order and:
+
 - Summary
 - Already built
 - Remaining work
 - Scope boundaries
 - Acceptance criteria
-- specification references
+- Specification references
 - Blocked by and Blocks
 
-No test instructions or proof checklists.
+No test instructions or proof checklists. Parent estimates total their children. The lead records the actual session/model/effort, implementation and review estimates, assigned worktree and branch, UTC start and finish, PR and candidate/reviewed/merged SHAs, checks, preview owner, migration reservation and blocker in the checkpoint.
 
-The orchestrator records the rest in the checkpoint and on the board:
-- planned and actual agent and effort;
-- implementation and review estimates in active minutes;
-- worktree, branch and terminal;
-- UTC start and finish;
-- PR, reviewed and merged commits;
-- current blocker.
+## Project board and API budget
 
-Parent estimates total their children.
+The lead is the sole board writer. At each transition, journal the intended Project mutation before sending it, update only changed fields, read back the affected row and append evidence to the local journal. If a write is pending, report the board as STALE and keep the pending operation through restart.
 
-## Board reconciliation
-
-The orchestrator is the only board writer. At every event it writes the affected row, reads it back, and logs a line in `board-reconciliation.jsonl` (issue, intended fields, source commit or PR, UTC, pending or done):
-
-| Event | Board row |
+| Event | Project state |
 | --- | --- |
-| Leaf shaped and dependency-ready | Ready, planned agent and estimate |
-| Lane actually started | In progress, actual agent, start time |
-| PR opened | In review, substate "awaiting reviewer" |
-| Reviewer started, fixing, verifying | In review with the substate |
-| Blocked, failed or reassigned | Truthful status, exact reason, next action; dead owner cleared |
-| Merged and closed | Done, finish time; dependents unblocked; parents rolled up |
+| Leaf shaped and dependency-ready | Ready, with planned role and estimate where available |
+| Implementer actually starts | In progress, with actual session/model and start time |
+| PR opened | In review, substate awaiting reviewer |
+| Reviewer starts, fixes or verifies | In review with the truthful substate |
+| Blocked, failed or reassigned | Truthful status, exact cause and next action; clear the old owner |
+| Leaf PR merged and issue closed | Done after board read-back; update dependents and parent rollups |
 
-**Hourly reconciliation:** compare every row with issue state, open PRs and running lanes, and fix drift. Examples: an open issue showing Done; a closed issue not showing Done; an issue with an open PR showing Backlog; In progress with no running lane.
+Worker stages and parent or phase rollups are different facts: a parent's status follows verified child outcomes, and a phase stays open until independent end-to-end acceptance. A rollup can become Done after its required children and acceptance complete, its issue closes and its board row is read back; it need not have its own PR. A reviewed local branch without a PR is a preserved substate, not a mergeable PR or Done item. Reconcile the whole Project hourly when budget allows. An open issue is never Done; a closed issue is Done or Not planned. Never infer progress from a partial board read or an agent's claim.
 
-**GitHub API budget.** Project reads and writes share one GraphQL point budget across all clients.
-- Trust the live `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers and the `errors` array of real GraphQL responses, not cached rate-limit figures.
-- Keep a cache of issue-to-item, field and option IDs. Write only changed fields, Status first, batched, with one read-back.
-- Split complete refreshes into a slim item inventory and a separate native-relationship pass. Never nest wide connections under every item.
-- Reserve one fifth of the hourly budget for live transitions.
-- On exhaustion, keep pending writes in the journal and retry after the reset. Honour `Retry-After` on secondary limits.
-- Report progress as STALE with its cause while a source is unavailable.
+REST and GraphQL budgets are separate. Trust live headers and GraphQL error arrays, even on HTTP 200. Cache Project item, field and option IDs and share the cache. Refresh active PR facts conditionally about every 60–90 seconds only while useful. Coalesce and serialize writes, status first, with one targeted read-back. Reserve 20% of the hourly GraphQL budget for live transitions. Honor Retry-After and reset headers with bounded backoff and jitter. When exhausted, journal pending work, check if the write already succeeded before retrying, and wait for reset. Never rotate credentials to defeat a limit. Unknown, stale or partial evidence never means an empty backlog, PASS or permission to merge.
 
-## Stall recovery
+## Provider availability and retained fleet artifacts
+
+The Orca handover is complete; its archived inventories and reports are evidence, not instructions to restart those services. Do not attach new work to an archived or retired Run or restart retired services; reuse the current lead-owned Run recorded in the checkpoint. The owner-authorized pool has no separate model coordinator, board writer or merger. For current provider status, read the lead-owned `provider-routing.md` in the coordination root; the dated facts below are not a standing dispatch guarantee:
+
+- Orca-hosted Codex Luna Extra High is an authorized headless overflow lane; verify the actual worker and shared-account capacity for each start.
+- Antigravity currently advertises `gemini-3.8-flash-high`, medium and low. Requested Extra High is not advertised; a CLI `max` option has no verified runtime mapping. Do not label High or max as Extra High or silently substitute it.
+- OpenCode Kimi K3 is owner-authorized but absent from the connected model catalog. No worker is established by the requested model name; wait for a connected, verified provider.
+- Multiple bounded OpenCode Space Bunny workers are authorized in principle, and the catalog exposes `opencode/space-bunny-free`, but two attempts were rejected by `external_directory` while reading fleet policy. These are blocked, not running. Do not retry those denied reads unchanged, alter the permission control, or move the read to another executor. The owner must grant the specific policy and coordination directory access through OpenCode's supported controls, without a blanket allow; verify one successful worker before scaling or counting others.
+
+Headless custom-argv workers must have exact terminal/process ownership, durable output and exit records; do not claim supervised resource ownership when the runtime reports unsupervised. Codex lanes use `codex exec`, never interactive daemon-backed terminals. Preserve unique work from old branches and checkouts. Reuse an old checkout only after proving no session or process relies on it; use lead-assigned isolated managed worktrees for new product edits. A heartbeat is a recovery reminder while the app runs, not unattended fleet execution.
+
+## Stall and failure recovery
 
 | Observation | Action |
 | --- | --- |
-| Lane asks a scope question | Answer in the issue or PR within one cycle; the lane re-reads before its next step |
-| Lane stops on a real design gap | Hand to the planner for options; the owner (or the monitor as delegate) decides; relaunch with the decision |
-| No useful progress for 15 minutes | Inspect the log and worktree; ask one bounded question if unclear |
-| Lane exited without a PR or report | Read its final report; preserve work; relaunch once or reassign |
-| Lane's command refused "by policy" | The orchestrator performs the step (lock write, PR creation, cleanup) |
-| Provider capacity or rate-limit response | Retry the same session a few times about 20 seconds apart; after repeated confirmed failures, preserve work and reassign |
-| Reviewer finds defects | Reviewer fixes and re-reviews itself |
-| Merge rejected: branch not up to date | Merge `origin/main`, re-check what changed, retry |
-| Preview check FAIL | Do not merge; fix on the PR; the watcher re-checks the new head |
-| Real permission or protection rejection | Report the exact rule and supported resolution; no retry loop or bypass |
-| Orchestrator's own session or usage limit approaching | Write resume steps into the checkpoint, notify the owner with the reset time, hand over through the run mailbox |
+| Child asks a scope question | Lead records the answer in the issue or PR and updates scope before the child continues |
+| A real design gap blocks work | Use a bounded Sol analysis; owner decides product questions, then relaunch from the recorded decision |
+| No useful progress during an active turn | Inspect native status, branch and worktree; ask one bounded question if unclear |
+| Child ends without a PR or report | Read available handoff evidence, preserve work, and inspect the branch before resuming or reassigning |
+| A blocker stops a child | Preserve its branch and handoff, record the exact unblock condition, release its slot, and dispatch unrelated verified work in the same active turn |
+| Provider capacity or rate limit | Retry the same session a few times about 20 seconds apart; then preserve work and reassign only after repeated confirmation |
+| Reviewer finds defects | Reviewer fixes and re-reviews in its assigned worktree |
+| Branch is behind main | Update the candidate, inspect changed code and rerun affected verification |
+| Preview or browser check fails | Do not merge; diagnose and fix through a PR, then rerun on its new SHA |
+| Permission, tool-approval or protection rejection | Report exact action and cause; do not automatically retry the denied invocation unchanged or bypass it. A later specific owner instruction may authorize a fresh request through the same normal controls; record it and stop again if rejected. |
+| PR creation or merge returns a real integration 403 | Preserve the reviewed branch and evidence, report the access blocker, and wait for a supported resolution; do not retry through another identity or executor |
+| Session or usage limit approaches | Update checkpoint with resume steps and reset information; preserve branch and handoff evidence |
 
-## Orca lifecycle and cleanup
+For every noticed product or operational failure, record the symptom, proven cause or explicit hypothesis, bounded correction, durable prevention, independent read-back and next relevant recheck. A repeated failure needs a new diagnosis and one owner escalation, not a blind retry. Keep original failure evidence distinct from diagnostic or later acceptance evidence.
 
-- **Orca.** Use the installed Orca CLI and its version-matched skills (`orca skills get orchestration`, `orca skills get orca-cli`). Bind one coordinator run. Talk to agents through the run mailbox (`orca orchestration send/check/inbox`). A native agent chat is not a shell terminal.
-- **Merged and closed issue.** Every merged-and-closed issue enters the cleanup ledger immediately. For each worktree:
-  1. confirm no live agent or terminal is using it;
-  2. confirm there are no tracked, untracked or unpushed changes that exist only there (clean git status alone is not enough);
-  3. close its terminals;
-  4. remove it with `orca worktree rm --force` (or `git worktree remove` for a verified Git-only orphan);
-  5. confirm it is gone from both inventories.
-- **Implementer worktree.** Remove it as soon as its reviewer's `-2` checkout exists and the work is pushed.
-- **Uncertain worktrees.** A worktree with uncertain or unique work stays, with its owner, reason and next action recorded.
-- **Never** recursively delete by path, remove the primary checkout, or touch local or remote main as cleanup.
-- **Every cycle,** any worktree without a running agent and without a recorded blocked-by reason is either given an agent or removed.
-- **Terminals:** keep Orca under 25.
+## Implementer handoff template
 
-## Implementer brief
-
-```text
-Issue #<n>; phase <n>; pickup <n>. GPT-6 Luna (Codex, xhigh), headless.
+~~~text
+Issue #<n>; phase <n>; pickup <n>. Assigned owner-authorized model and effort: <verified model and effort>; execution host: <native Desktop, Orca, Antigravity or OpenCode>.
+Ownership: <native agent/session ID, or external task + dispatch + terminal + process identity>; lead: <Desktop lead ID>. Record actual runtime model and effort with evidence; requested settings or a catalog entry alone are not proof.
 Read AGENTS.md, docs/build-plan/agent-coordination.md, the full issue and comments, linked spec and current source.
 Outcome: <plain functionality>. Already built: <source facts>.
 Build: <bounded change>. Owning paths: <paths>. Exclude: <non-goals>.
-Dependencies (complete): <list>. Acceptance: <inspectable behaviour>.
-Worktree/branch: <path> / abzum-admin/<n>-luna-<slug> (created --no-track). Migration numbers: <range or none>.
-If you touch modules/src, run the definition validator (and fix every failure) before committing.
-Do NOT run heavy checks (typecheck, build, replay): the reviewer runs them.
-Commit, push ONLY with: git push origin HEAD:refs/heads/<branch>. Never push to main. Open the PR titled "#<n> - <title>".
-English only. No tests or test edits. No board writes, merges or issue closure.
-Final report: PR, candidate commit, acceptance mapping, limitations, and the exact verification the reviewer must run.
-If a real scope or design question blocks you: comment it on the issue, report it, and stop without a partial PR.
-```
+Dependencies (complete): <list>. Acceptance: <inspectable behavior>.
+Assigned managed worktree/branch: <path> / codex/<issue>-<slug>. Migration numbers: <range or none>.
+If modules/src changes, run the definition validator and fix every failure before committing.
+Do not run heavy checks or create, edit or run tests.
+Review the full final diff and affected callers, correct findings, and report the cases reviewed even if none were found. Commit and report the full candidate and base SHAs, changed paths, acceptance mapping, findings and corrections, edge cases, checks with exit codes, pending limits and actual runtime model/effort. Push only with an explicit branch refspec; never push to main. Open a PR if assigned.
+English only. No Project-field writes, issue closure or merges.
+Return: PR if opened, complete self-review packet, candidate commit, validator result and limitations.
+If a real scope or design question blocks you, preserve unique work, report the exact issue to the lead and stop without a partial PR. A PR-creation 403 is an integration blocker, not a reason to delete a reviewable local candidate.
+~~~
 
-## Reviewer brief
+## Reviewer handoff template
 
-```text
-You are the independent GPT-6 Sol (Codex, xhigh) review-and-fix owner of #<n>, PR #<pr>, headless.
-Checkout: <path>-2 on the PR branch. The implementer has stopped.
-Read the complete live issue, every comment, the linked spec, then the whole diff, current main and affected callers.
-Fix your findings yourself, commit, and re-review the final source.
-Check the diff, commits, PR text and your comments for non-English text and replace it.
-Verify the exact final head as agent-coordination.md "Verification before merge" requires:
-  scoped typecheck; web build if web/ui/runtime imports changed; disposable replay if supabase/ changed;
-  definition validator + publication compile if definitions changed;
-  monitor preview check PASS on the exact head if definitions, migrations or development setup changed
-  (request it on the PR or in preview-requests.txt, then wait for the monitor's comment on your head).
-Heavy checks: ask the orchestrator for the lock (it holds it for you); run only when told; report results at once.
-Merge origin/main into the branch (required: up to date), re-check what changed, push with an explicit refspec, merge the PR.
-Post your verdict on the PR before merging. After merge: update the issue with the delivered outcome and close it.
-Send one completion report: issue, PR, final reviewed commit, merge commit, checks run and results, fixes made, limitations.
-If blocked (failed check, product question, refused command): post the exact cause on the PR, report it, and stop without merging.
-```
+~~~text
+You are the independent GPT-6 Sol (Codex Desktop native subagent, High for ordinary bounded review; Extra High for sensitive work) reviewer/fixer for issue #<n>, PR #<pr or unavailable>.
+The implementer has stopped. Use your separately assigned managed worktree on the preserved candidate or PR branch.
+Read the complete live issue and comments, linked spec, whole diff, current main and affected callers.
+Fix your findings, commit, and re-review the final source. Check English in the diff, commits, PR and comments.
+Verify the exact final SHA as agent-coordination.md “Verification before merge” requires:
+scoped typecheck; web build if web/ui/imported runtime changed; disposable replay if supabase changed;
+definition validator and publication compile when definitions changed; independent preview PASS on exact SHA
+for definitions, migrations or development setup; browser smoke on exact SHA for listed UI paths.
+Request the heavy-check lock from the lead. Return one exact-head evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
+Do not write Project fields, close issues or merge. The lead owns those actions.
+If blocked, return the exact cause to the lead and stop without merging.
+~~~
 
-## Checkpoint and reports
+## Checkpoint, journal and reporting
 
-The orchestrator keeps `checkpoint.md` and the reconciliation journal in the coordination folder, outside worktrees, and reads them on every resume. The checkpoint holds facts, not policy:
-- UTC time, run and coordinator identity;
-- every running lane (issue, role, actual model, worktree, terminal, stage, elapsed and estimate);
-- open PRs and their review, verification and preview state;
-- lock and queue state;
-- migration reservations;
-- pending board writes;
-- the cleanup ledger;
-- blockers with resume conditions;
-- the next shaped leaves.
+Keep the checkpoint and append-only journal in the coordination root, outside worktrees. The checkpoint is facts, not policy. Record:
 
-Update it at every completed step and at least every 20 minutes.
+- UTC time, coordinator identity and current session;
+- each live child session, role, actual model and effort, issue, worktree/branch, stage and handoff status;
+- open PRs, current full heads, review, verification and preview state;
+- lock and heavy-check queue state;
+- migration reservations and pending board writes;
+- preserved work and cleanup decisions;
+- blockers with resume conditions and next shaped leaves.
 
-Reports to the owner use the owner's four-table format:
-1. tasks with evidence;
-2. capacity and board, listing every running agent and every idle lane with its reason;
-3. progress and operations, including throughput (merges per hour, median PR open-to-merge, open PRs) and the phase percentage from merged and closed facts;
-4. coordination issues with cause, correction and prevention.
+Append transition events and replace checkpoint snapshots atomically. Update at each material transition, periodically while active and before a known session limit or shutdown. On resume, compare checkpoint and journal with current Desktop child status, actual processes, worktrees, PR heads, board state, pending writes and locks. An uncertain worker is active until investigated. If a session is unavailable, recover from its preserved branch and handoff evidence in a fresh session; never claim its conversation was imported.
 
-Never infer progress from lane claims or a partial board read.
+Owner reports include: tasks with evidence; actual capacity, running children and reasons for idle slots; accepted progress and PR/review age; and coordination issues with cause and correction. State stale sources and limitations. Never infer completion from a summary, partial board read or child claim.
 
-## Monitor
+## Independent monitor
 
-The monitor is independent: it verifies facts, runs the preview watcher and phase walkthroughs, checks throughput every 20 minutes (`monitor-throughput.py`), and sends the orchestrator one correction per issue with a prevention step. A flag that repeats in two consecutive checks goes to the owner. It never dispatches or merges. It writes the board only when the owner asks for a reconciliation.
+An independent Sol child may verify preview facts, run required browser smokes, conduct phase acceptance and compare evidence with the full final SHA. It reports findings and corrections to the lead. It does not dispatch work, write Project fields or merge. No monitor runs continuously unless a separate owner instruction establishes that work.
+
+## Overflow lifecycle and retained work
+
+The lead maintains one mixed-host roster and qualified queue. Before any external launch, reconcile native occupancy, provider catalog and permission state, existing attempts, measured memory and exact process identities. Read the live `provider-routing.md`, `capacity-roster.json` and checkpoint in the coordination root; they hold the current provider facts, Run, Dispatch, terminal and process identities. Do not duplicate an uncertain start or scale a provider whose startup, permissions or output delivery remain unverified. The commands below describe the current Orca CLI; load its version-matched `orca-cli` and `orchestration` skills before use. On Windows, select the exact executable from `ORCA_CLI_COMMAND` if set, otherwise `orca-dev` when `ORCA_DEV_REPO_ROOT` is set, otherwise `orca` (`orca-ide` outside a managed terminal on Linux). Use that one executable for every command; stop on a resolution or skill-load error. The examples use `orca` as the selected executable.
+
+1. **Bind the lead's Run.** Run `orca skills get orca-cli` and `orca skills get orchestration`. Record the existing Desktop lead-controlled Orca shell terminal handle; if none exists, create one non-agent control shell with `orca terminal create --worktree path:<lead-checkout> --title "Desktop lead control" --json` and record its returned handle. Run `orca orchestration run-current --from <lead-terminal> --json`. If the checkpoint already names a current lead-owned Run, inspect it with `orca orchestration run-show --id <run-id> --json` and bind it with `orca orchestration run-use --id <run-id> --from <lead-terminal> --json` when needed. Only if there is no valid current Run, use `orca orchestration run-create --objective "<bounded fleet objective>" --from <lead-terminal> --json` and persist its ID. The shell is only the Desktop lead's control handle, not another coordinator; never create a new Run to escape a failed attempt.
+2. **Place and start one worker.** The lead creates or selects an isolated Orca-managed worktree: `orca worktree create --repo path:<repo-root> --name <issue-name> --base-branch origin/main --no-parent --json`, or `orca worktree show --worktree path:<assigned-checkout> --json` for an existing one. Confirm the returned exact path and worktree ID, current base, clean ownership and disjoint editing paths. If the created branch is not the required non-tracking `codex/` branch, create it from current `origin/main` with `git switch --no-track -c codex/<issue-slug> origin/main` in that worktree before dispatch. For a supported headless launch, run `orca orchestration worker-start --spec "<complete bounded handoff>" --worktree path:<assigned-checkout> --agent <verified-agent> --run <run-id> --from <lead-terminal> --json`. Supply `--model` and `--effort` only where this installed CLI and provider support them; OpenCode model choice is configured in its provider session rather than by these flags. The receipt must say ready and provide Task, Dispatch and terminal identities. A nonzero or uncertain start is not an invitation to launch again: inspect its receipt and `orca orchestration request-show --request <request-id> --json` or `worker-show` before recovery. Codex workers must remain headless `codex exec`; do not use a standard launcher that opens an interactive daemon-backed Codex session.
+3. **Use the custom-argv gap only when required.** When `worker-start` cannot express the approved headless argv or topology, load `orca skills get orchestration --reference references/low-level-topology.md`. Create a Task with `orca orchestration task-create --spec "<complete bounded handoff>" --run <run-id> --json`, then a shell terminal with `orca terminal create --worktree path:<assigned-checkout> --title "<issue>" --json`. Run `orca orchestration dispatch --task <task-id> --to <returned-terminal-handle> --run <run-id> --return-preamble --json` **without** `--inject`; save the exact returned preamble, including its Task specification, as the runner's stdin file. Pin and inspect the one-use runner, exact headless `codex exec` executable/model/effort/checkout argv and input bytes before launch. The runner opens that file as stdin, writes stdout and stderr to separate durable files, and records its PID, startup warnings and actual agent exit code. Send the exact runner invocation once with `orca terminal send --terminal <returned-terminal-handle> --text "<pinned runner invocation>" --enter --json`; on an input-accepted-only or ambiguous receipt, inspect that same terminal/process and receipt rather than resending. This context-only Dispatch supplies Task and message identity but **does not supervise or close** the operator-created process. Record the terminal, process and named lead cleanup owner. A shell prompt or command acceptance is not proof of a running worker; verify the agent's first turn and actual model/effort before counting it.
+4. **Prove activity and receive the handoff.** Record the Task/Dispatch, worktree/branch, provider session, terminal/PID, actual runtime model and effort, and first real agent turn in the roster; a requested model, catalog row or accepted input is insufficient. Inspect with `orca orchestration worker-show --dispatch <dispatch-id> --json` and bounded `orca orchestration worker-read --dispatch <dispatch-id> --source auto --limit 50 --json`; preserve the source and cursor when following output. Wait with `orca orchestration check --run <run-id> --terminal <lead-terminal> --wait --types "worker_done,escalation,question" --timeout-ms 60000 --json`. Process every returned FIFO Delivery (the type filter controls waking, not which delivery is returned). Match its Task/Dispatch to the active roster, answer questions, and validate a `worker_done` report against the candidate, self-review and required evidence before `orca orchestration check --run <run-id> --terminal <lead-terminal> --ack <delivery-id> --json`. Persist the delivery and acknowledgment. An unrelated optional connector diagnostic is not a process exit.
+5. **Settle and retire the exact resources.** A valid settled Dispatch may be reused, explicitly retained at the owner's request with `orca orchestration worker-retain --dispatch <dispatch-id> --json`, or released with `orca orchestration worker-release --dispatch <dispatch-id> --json`; follow a pending or uncertain release receipt rather than substituting `terminal close`. After three empty waits, enumerate `orca orchestration worker-list --run <run-id> --include-remote --json`, follow pagination and its exact `nextAction`, and inspect bounded output. A timeout, idle shell, null `agentWait`, missing status or lost host contact is **unverifiable**, not exit: preserve ownership and do not stop, abandon, retry or release. Only positive `exited` liveness, the worker's observed process exit, or a final agent transcript without `worker_done` permits the recovery guide's stop/abandon decision; load `orca skills get orchestration --reference references/recovery-and-cleanup.md`, then use its exact `worker-stop` or `worker-abandon` path. `worker-stop` closes only a proven supervised agent terminal; `worker-abandon` fences the Dispatch but closes nothing. For custom-argv Dispatches, neither stop, abandon nor release closes the unsupervised process: record the agent's actual exit code separately from shell/terminal liveness, then after accepted settlement and positive process-exit evidence the lead may close only its proven-unused exact terminal with `orca terminal close --terminal <handle> --json`. Confirm output preservation and process/worktree ownership before any cleanup; `orca orchestration worker-list --run <run-id> --terminal-state reclaimable --include-remote --json` exposes remaining supervised reclaimable terminals. Never bypass an authentication or approval rejection.
+
+Recover unfinished work from each retained checkout, assign its next owner, complete its PR workflow, then retire the checkout only after unique changes and needed ignored assets are preserved. For completed work, reconcile merged/closed evidence, head ancestry, clean status, exact agent completion and shell/process ownership. A fallback shell with complete history containing only its initial prompt differs from an unverified interrupted agent. Close only exact proven-unused terminal handles, use the owning application's supported worktree lifecycle, and verify path plus Git/application registration absence. Persist each result immediately so a partial cleanup cannot be mistaken for a full one.
