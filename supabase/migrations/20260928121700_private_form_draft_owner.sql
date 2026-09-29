@@ -2,14 +2,17 @@
 
 begin;
 
-grant usage on schema vortex_access, vortex_context, vortex_module
-  to vortex_page_owner;
+grant usage on schema vortex_access, vortex_context to vortex_page_owner;
 grant execute on function vortex_access.validated_human_request_context()
   to vortex_page_owner;
 grant execute on function vortex_context.is_non_nil_uuid(text)
   to vortex_page_owner;
+
+set local role vortex_module_owner;
+grant usage on schema vortex_module to vortex_page_owner;
 grant execute on function vortex_module.read_current_active_installation()
   to vortex_page_owner;
+reset role;
 
 -- Only the private Page owner receives relation access. Its SECURITY DEFINER
 -- entry points derive and constrain every scope from the validated context.
