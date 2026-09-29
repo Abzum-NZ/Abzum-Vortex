@@ -9,7 +9,10 @@ import {
 } from "@vortex/access";
 import { createProtectedOperationExecutor } from "@vortex/app";
 import { type RequestDatabaseTransaction } from "@vortex/db";
-import { createRequestBoundTenantGovernanceService } from "@vortex/identity";
+import {
+  createRequestBoundTenantGovernanceService,
+  type RequestBoundTenantGovernanceService,
+} from "@vortex/identity";
 import {
   applicationRootIdSchema,
   organizationAccountIdSchema,
@@ -123,7 +126,7 @@ const createCallbackService = () => {
           selection: OrganizationSelectionCandidate,
           operation: (scope: Readonly<{
             tenantId: TenantId;
-            operations: ReturnType<typeof createTenantGovernanceService>;
+            operations: RequestBoundTenantGovernanceService;
           }>) => Promise<Result>,
         ) =>
           durableRequests.runChange(session, selection, (transaction, scope) =>
