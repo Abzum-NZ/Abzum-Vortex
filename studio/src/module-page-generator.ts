@@ -42,6 +42,8 @@ export type ModulePageGeneratorInput = Readonly<{
     update: string;
   }>;
   catalogue: ImmutablePlatformBlockCatalogueV2;
+  /** Placements retained in the target Application outside these four replacement pages. */
+  retainedApplicationPlacementCount: number;
   /** Replacements keep the generated page identity and each form's bound submit control. */
   authoredPageOverrides?: Readonly<Partial<Record<ModuleGeneratedPageKind, SourcePageDefinitionV2>>>;
 }>;
@@ -67,6 +69,7 @@ export type ModulePageGeneratorErrorCode =
   | "unsupported_required_field"
   | "no_editable_fields"
   | "catalogue_release_missing"
+  | "placement_budget_invalid"
   | "composition_policy_too_small"
   | "authored_page_identity_changed";
 
@@ -97,6 +100,12 @@ const supportedFieldInputTypes: ReadonlySet<ModuleFieldV3["type"]> = new Set([
   "several_choices",
   "link",
   "link_to_one_of_several",
+]);
+
+const generatedFieldTypes: ReadonlySet<ModuleFieldV3["type"]> = new Set([
+  "reference_number",
+  "calculation",
+  "total",
 ]);
 
 const compactId = (identity: string): string => identity.replaceAll("-", "").toLowerCase();
@@ -332,6 +341,14 @@ export const generateModulePageFragments = (
 ): ModulePageFragments => {
   const module = moduleDraftV3Schema.parse(input.module);
   const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(input.catalogue);
+  if (
+    !Number.isSafeInteger(input.retainedApplicationPlacementCount) ||
+    input.retainedApplicationPlacementCount < 0
+  )
+    throw new ModulePageGeneratorError(
+      "placement_budget_invalid",
+      "The retained Application placement count must be a non-negative integer",
+    );
   const recordTypeId = recordTypeIdSchema.parse(input.recordTypeId);
   const listQueryId = queryIdSchema.parse(input.listQueryId);
   const permissions = {
@@ -376,7 +393,10 @@ export const generateModulePageFragments = (
     supportedFieldInputTypes.has(field.type),
   );
   const unsupportedRequiredFields = recordType.fields.filter(
-    (field) => field.required && !supportedFieldInputTypes.has(field.type),
+    (field) =>
+      field.required &&
+      !supportedFieldInputTypes.has(field.type) &&
+      !generatedFieldTypes.has(field.type),
   );
   if (unsupportedRequiredFields.length > 0)
     throw new ModulePageGeneratorError(
@@ -396,14 +416,6 @@ export const generateModulePageFragments = (
   const fieldInputRelease = latestRelease(catalogue, "platform.form.field_input");
   const formRelease = latestRelease(catalogue, "platform.form.container");
   const buttonRelease = latestRelease(catalogue, "platform.action.button");
-  const totalInputs = supportedFields.length;
-  const maximumFormFields = catalogue.compositionPolicy.maximumPlacements - 2;
-  if (totalInputs > maximumFormFields)
-    throw new ModulePageGeneratorError(
-      "composition_policy_too_small",
-      `The catalogue permits ${catalogue.compositionPolicy.maximumPlacements} placements per page, but each generated form needs ${totalInputs + 2}`,
-    );
-
   const fieldsById = new Map(recordType.fields.map((field) => [String(field.fieldId), field]));
   const queryFields = query.selectedFieldIds.map((fieldId) => fieldsById.get(String(fieldId)));
   if (queryFields.some((field) => field === undefined))
@@ -625,6 +637,7 @@ export const generateModulePageFragments = (
     }),
   ];
   const usedReleases = new Map<string, (typeof catalogue.releases)[number]>();
+  let placementCount = 0;
   for (const page of pages) {
     const composition = page.composition;
     const rootSlots =
@@ -635,8 +648,10 @@ export const generateModulePageFragments = (
         : composition.shell_kind === "default"
           ? [composition.main]
           : Object.values(composition.content);
-    for (const rootSlot of rootSlots)
-      for (const [, placed] of sourcePlacementEntriesV2(rootSlot)) {
+    for (const rootSlot of rootSlots) {
+      const entries = sourcePlacementEntriesV2(rootSlot);
+      placementCount += entries.length;
+      for (const [, placed] of entries) {
         const release = catalogue.releases.find(
           (candidate) =>
             candidate.blockId === placed.block.block_id &&
@@ -649,7 +664,14 @@ export const generateModulePageFragments = (
           );
         usedReleases.set(`${release.blockId}@${release.releaseVersion}`, release);
       }
+    }
   }
+  const totalApplicationPlacements = placementCount + input.retainedApplicationPlacementCount;
+  if (totalApplicationPlacements > catalogue.compositionPolicy.maximumPlacements)
+    throw new ModulePageGeneratorError(
+      "composition_policy_too_small",
+      `The generated pages use ${placementCount} placements plus ${input.retainedApplicationPlacementCount} retained Application placements, exceeding the catalogue limit of ${catalogue.compositionPolicy.maximumPlacements}`,
+    );
   const dependencies = sourcePlatformBlockDependenciesV2Schema.parse(
     [...usedReleases.values()]
       .map((release) => ({
