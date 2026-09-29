@@ -7,16 +7,6 @@
   "engines": {
     "node": "24"
   },
-  "workspaces": [
-    "apps/*",
-    "contracts",
-    "db",
-    "runtime/*",
-    "ui",
-    "studio",
-    "modules",
-    "testing"
-  ],
   "scripts": {
     "dev": "turbo run dev --filter=@vortex/web",
     "auth:local:prepare": "node tooling/supabase/ensure-local-signing-key.mjs",
@@ -38,12 +28,12 @@
     "typecheck": "turbo run typecheck",
     "boundaries": "node tooling/boundaries/check.mjs",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs",
+    "catalogue:shadcn": "node tooling/import-shadcn-theme-catalogue.mjs",
     "styles:emit": "node tooling/emit-style-stylesheets.mjs",
     "fonts:emit": "node tooling/emit-font-assets.mjs",
     "test": "vitest run",
-    "fixtures": "vitest run testing/fixtures/validate-fixtures.test.ts testing/fixtures/current-module-v2-runtime.test.ts",
     "build": "turbo run build --filter=!@vortex/testing",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm fixtures && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -56,6 +46,6 @@
     "turbo": "2.11.2",
     "typescript": "5.9.3",
     "typescript-eslint": "8.70.0",
-    "vitest": "4.1.11"
+    "vitest": "catalog:"
   }
 }

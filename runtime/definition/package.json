@@ -8,7 +8,6 @@
     "./compiler": "./src/compiler-api.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --root ../.. runtime/definition/test"
   },

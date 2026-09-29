@@ -22,6 +22,11 @@ import {
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
+import {
+  abandonGuidedFormDraftAction,
+  advanceGuidedFormStepAction,
+  confirmGuidedFormAction,
+} from "./guided-form-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -182,13 +187,15 @@ export default async function ApplicationAddressPage({
 
   if (resolved.kind === "unavailable") {
     // A refused page and a missing page of an application the viewer may open both show that
-    // application's own not-found page; everything else shows the fixed neutral fallback.
+    // application's own not-found page, in that application's installed theme; everything else
+    // shows the fixed neutral fallback.
     if (resolved.experience === undefined) return unavailableFallback;
     return (
       <ApplicationExperiencePage
         page={resolved.experience.page}
         shells={resolved.experience.shells}
         theme={resolved.experience.theme}
+        organizationName={organizationShortName}
       />
     );
   }
@@ -306,12 +313,17 @@ export default async function ApplicationAddressPage({
             name="expectedActiveReleaseRevision"
             value={adoption.installedReleaseRevision}
           />
-          <button type="submit">
-            Adopt release {adoption.offeredReleaseVersion}
-          </button>
+          <button type="submit">Adopt release {adoption.offeredReleaseVersion}</button>
         </form>
       )}
-      <ApplicationPageView model={page.model} />
+      <ApplicationPageView
+        model={page.model}
+        guidedFormActions={{
+          advance: advanceGuidedFormStepAction,
+          confirm: confirmGuidedFormAction,
+          abandon: abandonGuidedFormDraftAction,
+        }}
+      />
     </>
   );
 }

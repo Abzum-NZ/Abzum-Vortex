@@ -59,3 +59,5 @@ grant execute on function vortex_identity.list_tenant_launcher(integer, uuid)
 
 comment on function vortex_identity.list_tenant_launcher(integer, uuid) is
   'Lists active tenants assigned to the bound identity, or all active tenants for a named Vortex super administrator.';
+
+alter function vortex_identity.list_tenant_launcher(integer,uuid) owner to postgres;

@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@types/semver": "catalog:",
-    "vitest": "4.1.11"
+    "vitest": "catalog:"
   },
   "vortex": {
     "tier": 0,

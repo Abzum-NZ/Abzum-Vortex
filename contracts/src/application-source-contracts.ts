@@ -315,6 +315,8 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
 const sourceInterfaceValueTypeSchema = z.enum([
   "text",
   "number",
+  "decimal_number",
+  "money",
   "boolean",
   "date",
   "date_time",
@@ -510,7 +512,7 @@ export const sourceApplicationBodyV2Schema = z
               label: sourceProvenanceUnchanged(labelSchema),
               description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
               record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
-                "recordType/**",
+                "content/permissions/#/recordTypeId",
               ]),
               action_kind: sourceProvenanceUnchanged(
                 z.enum([

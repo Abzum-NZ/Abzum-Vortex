@@ -1567,6 +1567,63 @@
       }
     }
   },
+  "read_own_profile": {
+    "key": "read_own_profile",
+    "name": "Read own profile",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "d25066fd-53bc-4236-9f02-70fecfffb085",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "d25066fd-53bc-4236-9f02-70fecfffb085"
+      },
+      "inputs": {},
+      "outputs": {
+        "organization_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "display_name": {
+          "type": "text",
+          "required": true
+        },
+        "language": {
+          "type": "text",
+          "required": true
+        },
+        "time_zone": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "completed",
+        "refused",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "630a980c-0ff5-40b1-a329-7326a2122395",
+        "key": "platform.organization.accounts.manage"
+      }
+    }
+  },
   "prepare_role_change_evidence": {
     "key": "prepare_role_change_evidence",
     "name": "Prepare role change evidence",

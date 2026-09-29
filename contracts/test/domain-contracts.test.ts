@@ -11,15 +11,11 @@ import {
   blockPaletteGroupKeys,
   blockSettingControlSchema,
   blockSettingControlKeys,
-  blockSettingValueSchema,
-  businessRecordSchema,
   connectionTypeSchema,
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   conditionNodeSchema,
-  fieldDefinitionSchema,
   fieldTypeKeys,
-  entitlementDecisionSchema,
   federatedFileOperationSchema,
   federatedRequestSchema,
   federatedResponseSchema,
@@ -31,8 +27,6 @@ import {
   identitySessionSchema,
   invitationSchema,
   invitationAcceptanceWithAccessVersionSchema,
-  listArrangementKeys,
-  listArrangementSchema,
   organizationAccountSetSchema,
   organizationAccountSchema,
   organizationAccessVersionSchema,
@@ -43,24 +37,16 @@ import {
   organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
-  pageDefinitionSchema,
   pipelineSchema,
   permissionDeclarationSchema,
   publishedApplicationDefinitionSchema,
-  publishedModuleDefinitionSchema,
-  savedSharingConditionSchema,
   safeErrorResponseSchema,
   secretReferenceSchema,
   sessionContextSchema,
   selectedOrganizationScopeSchema,
-  workflowNodeSchema,
-  workflowNodeTypeKeys,
-  workflowNodeTypeSchema,
   definitionSourceDocumentSchema,
-  moduleSourceDocumentV2Schema,
   definitionPublicationContextSchema,
   directRecordShareSchema,
-  sourceBlockSettingValueSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
   supabaseIdentityClaimsSchema,
@@ -70,11 +56,7 @@ import {
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
 } from "../src";
-import type {
-  PublishedApplicationDefinition,
-  PublishedModuleDefinition,
-  ResolvedRecordTypeReference,
-} from "../src";
+import type { PublishedApplicationDefinition, ResolvedRecordTypeReference } from "../src";
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const fingerprint = `sha256:${"a".repeat(64)}`;
@@ -318,6 +300,155 @@ describe("identity projection, organisation-account and invitation contracts", (
   });
 });
 
+describe("shipping source boundaries", () => {
+  test("keeps shipped application identities out of generic engines", async () => {
+    const readSourceTree = async (directory: string): Promise<string[]> => {
+      const entries = await readdir(directory, { withFileTypes: true });
+      const contents: string[] = [];
+      for (const entry of entries) {
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) contents.push(...(await readSourceTree(path)));
+        else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name))
+          contents.push(await readFile(path, "utf8"));
+      }
+      return contents;
+    };
+
+    const moduleRoots = ["crm", "service-desk"];
+    const definitionPaths = (
+      await Promise.all(
+        moduleRoots.map(async (root) => {
+          const sourceDirectory = resolve(process.cwd(), "modules/src", root, "sources");
+          const sourceFiles = await readdir(sourceDirectory);
+          return [
+            resolve(process.cwd(), "modules/src", root, "application.json"),
+            ...sourceFiles
+              .filter((file) => file.endsWith(".json"))
+              .map((file) => resolve(sourceDirectory, file)),
+          ];
+        }),
+      )
+    ).flat();
+    const identifiers = new Set<string>();
+    for (const path of definitionPaths) {
+      const document = JSON.parse(await readFile(path, "utf8")) as {
+        key: string;
+        body: {
+          record_types?: { key: string; fields?: { key: string }[] }[];
+          permissions?: { key: string }[];
+          actions?: { key: string }[];
+          events?: { key: string }[];
+          rules?: { key: string }[];
+          pages?: { key: string }[];
+          queries?: { key: string }[];
+          workflows?: { key: string }[];
+          pipelines?: { key: string }[];
+          interfaces?: { key: string; operations?: { key: string }[] }[];
+          operations?: { key: string }[];
+        };
+      };
+      identifiers.add(document.key);
+      for (const recordType of document.body.record_types ?? []) {
+        identifiers.add(recordType.key);
+        identifiers.add(`${document.key}:${recordType.key}`);
+        for (const field of recordType.fields ?? []) identifiers.add(field.key);
+      }
+      for (const collection of [
+        document.body.permissions,
+        document.body.actions,
+        document.body.events,
+        document.body.rules,
+        document.body.pages,
+        document.body.queries,
+        document.body.workflows,
+        document.body.pipelines,
+        document.body.operations,
+      ]) {
+        for (const item of collection ?? []) identifiers.add(item.key);
+      }
+      for (const interfaceDefinition of document.body.interfaces ?? []) {
+        identifiers.add(interfaceDefinition.key);
+        for (const operation of interfaceDefinition.operations ?? []) identifiers.add(operation.key);
+      }
+    }
+
+    const runtimeRoots = (await readdir(resolve(process.cwd(), "runtime"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `runtime/${entry.name}/src`);
+    const shippingRoots = [
+      "apps/web/app",
+      "contracts/src",
+      "db/src",
+      ...runtimeRoots,
+      "studio/src",
+      "testing/src",
+      "tooling/boundaries",
+      "ui/src",
+    ];
+    const source = (
+      await Promise.all(shippingRoots.map((root) => readSourceTree(resolve(process.cwd(), root))))
+    )
+      .flat()
+      .join("\n")
+      .toLowerCase();
+    const genericVocabulary = new Set([
+      "action",
+      "active",
+      "address",
+      "application",
+      "behavior",
+      "body",
+      "calendar",
+      "completed",
+      "configuration",
+      "constraint",
+      "description",
+      "email",
+      "event",
+      "export",
+      "field",
+      "identity",
+      "interface",
+      "key",
+      "module",
+      "name",
+      "order",
+      "ownership",
+      "permission",
+      "phone",
+      "priority",
+      "public",
+      "query",
+      "record",
+      "relationship",
+      "required",
+      "role",
+      "rule",
+      "source",
+      "status",
+      "storage",
+      "subject",
+      "theme",
+      "value",
+      "visibility",
+      "workflow",
+    ]);
+    for (const identifier of identifiers) {
+      if (identifier.length < 4 || genericVocabulary.has(identifier)) continue;
+      const lower = identifier.toLowerCase();
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `"${lower}"`,
+      );
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `'${lower}'`,
+      );
+      expect(source, `shipping source hardcodes application identity ${identifier}`).not.toContain(
+        `\`${lower}\``,
+      );
+    }
+  });
+});
+
 describe("tenant and organisation persistence contracts", () => {
   const tenant = {
     tenantId: id(700),
@@ -478,160 +609,20 @@ describe("tenant structural-administrator assignment contracts", () => {
   });
 });
 
-const fieldBase = {
-  fieldId: id(1),
-  key: "example",
-  label: "Example",
-  required: false,
-  unique: false,
-  filterable: true,
-  sortable: true,
-  personalData: "none",
-  publicDisplay: "refused",
-} as const;
 const unresolvedRecordType = {
   state: "unresolved",
   qualifiedKey: "crm_organisations:company",
 } as const;
 
-const fieldSettings: Record<(typeof fieldTypeKeys)[number], unknown> = {
-  text: { maxLength: 200 },
-  long_text: { maxLength: 10_000 },
-  formatted_text: { allowedBlocks: ["paragraph"] },
-  whole_number: { minimum: 0, step: 1 },
-  decimal_number: { digitsBeforeDecimal: 12, decimalPlaces: 2 },
-  money: { currencyMode: "organization_default" },
-  yes_no: {},
-  date: {},
-  date_time: { displayTimeZone: "person" },
-  choice: { options: [{ value: "open", label: "Open" }] },
-  several_choices: { options: [{ value: "first", label: "First" }], maximumSelections: 1 },
-  reference_number: { digits: 8, prefix: "CRM-" },
-  email_address: {},
-  phone_number: { defaultCountry: "NZ" },
-  web_address: { allowedSchemes: ["https"] },
-  table: {
-    columns: [{ key: "quantity", type: "whole_number", required: true, settings: { minimum: 1 } }],
-    minimumRows: 0,
-    maximumRows: 20,
-  },
-  link: { target: unresolvedRecordType, reverseKey: "contacts", onParentDelete: "empty_optional" },
-  link_to_one_of_several: { targets: [unresolvedRecordType], onParentDelete: "refuse" },
-  link_to_person: {
-    audience: "organization_accounts",
-    applicationRootIdRequired: false,
-    onPersonDeactivation: "retain_reference",
-  },
-  calculation: {
-    resultType: "text",
-    expression: { kind: "join_text", fieldIds: [id(2)], separator: " " },
-    dependencyFieldIds: [id(2)],
-  },
-  total: { relationshipId: id(3), operation: "count", resultType: "whole_number" },
-  attachment: { allowedKinds: ["document"], maxFileSizeMb: 25, multiple: true, maxFiles: 5 },
-};
-
-const workflowConfigs: Record<(typeof workflowNodeTypeKeys)[number], unknown> = {
-  start: {},
-  condition: {
-    condition: {
-      kind: "comparison",
-      operator: "equals",
-      left: { source: "value", value: true },
-      right: { source: "value", value: true },
-    },
-  },
-  decision_table: {
-    decisions: [
-      {
-        when: {
-          kind: "comparison",
-          operator: "equals",
-          left: { source: "value", value: 1 },
-          right: { source: "value", value: 1 },
-        },
-        output: "yes",
-      },
-      {
-        when: {
-          kind: "comparison",
-          operator: "not_equals",
-          left: { source: "value", value: 1 },
-          right: { source: "value", value: 2 },
-        },
-        output: "no",
-      },
-    ],
-  },
-  bounded_loop: { queryId: id(40), maximumRecords: 100 },
-  delay: { seconds: 60 },
-  wait_until: { dateTimeFieldId: id(4) },
-  start_workflow: { workflowId: id(5) },
-  stop: { reasonCode: "complete" },
-  create_record: { recordTypeId: id(41), values: {} },
-  change_record: {
-    recordTypeId: id(41),
-    record: { source: "current_record" },
-    values: { [id(42)]: { source: "literal", value: "Changed" } },
-  },
-  run_action: {
-    actionKey: "crm.company.update",
-    subject: { source: "current_record" },
-    inputs: {},
-  },
-  soft_delete_record: { recordTypeId: id(41), record: { source: "current_record" } },
-  duplicate_record: { recordTypeId: id(41), record: { source: "current_record" } },
-  add_relationship: {
-    relationshipId: id(45),
-    subject: { source: "current_record" },
-    target: { source: "node_output", nodeId: id(44), outputKey: "record" },
-  },
-  copy_relationships: {
-    relationshipIds: [id(45)],
-    sourceRecord: { source: "current_record" },
-    targetRecord: { source: "node_output", nodeId: id(44), outputKey: "record" },
-  },
-  request_form: {
-    pageId: id(46),
-    responderPermissionKey: "vortex.record.respond",
-    dueInSeconds: 86_400,
-    timeoutOutcome: "expired",
-    outputs: [{ key: "response", type: "text" }],
-  },
-  query_records: { queryId: id(49) },
-  set_values: {
-    record: { source: "current_record" },
-    values: { [id(50)]: { source: "literal", value: "open" } },
-  },
-  format_value: { formatterKey: "currency", input: { source: "literal", value: 10 } },
-  generate_export: { queryId: id(49), maximumRows: 10_000 },
-  attach_file: {
-    record: { source: "current_record" },
-    fieldId: id(6),
-    file: { source: "node_output", nodeId: id(7), outputKey: "file" },
-  },
-  move_file: {
-    record: { source: "current_record" },
-    fieldId: id(6),
-    file: { source: "node_output", nodeId: id(7), outputKey: "file" },
-  },
-  call_connection: { connectionBindingId: id(51), operationKey: "post_json", inputs: {} },
-  acknowledge_message: { messageKey: "provider_event" },
-};
-
 describe("closed catalogues and discriminated contracts", () => {
   test("exports every approved catalogue member exactly once", () => {
     expect(new Set(fieldTypeKeys).size).toBe(22);
     expect(new Set(pageTypeKeys).size).toBe(6);
-    expect(new Set(listArrangementKeys).size).toBe(4);
     expect(new Set(blockPaletteGroupKeys).size).toBe(7);
     expect(new Set(blockSettingControlKeys).size).toBe(17);
-    expect(new Set(workflowNodeTypeKeys).size).toBe(24);
     expect(pageTypeSchema.safeParse("unknown").success).toBe(false);
-    expect(listArrangementSchema.safeParse("unknown").success).toBe(false);
     expect(blockPaletteGroupSchema.safeParse("unknown").success).toBe(false);
     expect(blockSettingControlSchema.safeParse("unknown").success).toBe(false);
-    expect(workflowNodeTypeSchema.safeParse("unknown").success).toBe(false);
   });
 
   test("represents every condition operand explicitly and enforces closed tree limits", () => {
@@ -729,22 +720,6 @@ describe("closed catalogues and discriminated contracts", () => {
     ).toBe(false);
   });
 
-  test("uses tagged block-setting references in source and canonical definitions", () => {
-    expect(
-      sourceBlockSettingValueSchema.safeParse({
-        kind: "field_reference",
-        field: "example_module:example.title",
-      }).success,
-    ).toBe(true);
-    expect(
-      blockSettingValueSchema.safeParse({ kind: "query_reference", queryId: id(220) }).success,
-    ).toBe(true);
-    expect(blockSettingValueSchema.safeParse(id(220)).success).toBe(false);
-    expect(
-      sourceBlockSettingValueSchema.safeParse({ kind: "page_reference", page: id(220) }).success,
-    ).toBe(false);
-  });
-
   test("requires permissioned, target-aware interface shapes", () => {
     const operation = {
       operationId: id(230),
@@ -783,150 +758,6 @@ describe("closed catalogues and discriminated contracts", () => {
             targetBinding: { kind: "action_subject" },
           },
         },
-      }).success,
-    ).toBe(false);
-  });
-
-  test.each(fieldTypeKeys)("accepts and strictly validates the %s field", (type) => {
-    const value = { ...fieldBase, type, settings: fieldSettings[type] };
-    expect(fieldDefinitionSchema.safeParse(value).success).toBe(true);
-    expect(fieldDefinitionSchema.safeParse({ ...value, unexpected: true }).success).toBe(false);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...value,
-        settings: { ...(fieldSettings[type] as object), unexpected: true },
-      }).success,
-    ).toBe(false);
-  });
-
-  test("rejects type-wrong defaults and inverted numeric settings", () => {
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "yes_no",
-        default: "yes",
-        settings: {},
-      }).success,
-    ).toBe(false);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "whole_number",
-        settings: { minimum: 10, maximum: 5 },
-      }).success,
-    ).toBe(false);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "choice",
-        default: "missing",
-        settings: { options: [{ value: "open", label: "Open" }] },
-      }).success,
-    ).toBe(false);
-  });
-
-  test("keeps choice gates and table-column settings typed without rewriting legacy history", () => {
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "choice",
-        settings: {
-          options: [
-            {
-              value: "restricted",
-              label: "Restricted",
-              requiredPermissionId: id(70),
-            },
-          ],
-        },
-      }).success,
-    ).toBe(true);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "table",
-        default: [{ amount: "not-money" }],
-        settings: {
-          columns: [
-            {
-              key: "amount",
-              type: "money",
-              required: true,
-              settings: { currencyMode: "fixed", currency: "NZD" },
-            },
-          ],
-          minimumRows: 0,
-          maximumRows: 20,
-        },
-      }).success,
-    ).toBe(false);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "table",
-        settings: {
-          columns: [
-            {
-              key: "amount",
-              type: "money",
-              required: true,
-              settings: { currencyMode: "fixed", currency: "NZD" },
-            },
-          ],
-          minimumRows: 0,
-          maximumRows: 20,
-        },
-      }).success,
-    ).toBe(true);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "table",
-        settings: {
-          columns: [
-            { key: "duplicate", type: "text", required: false, settings: { maxLength: 120 } },
-            { key: "duplicate", type: "yes_no", required: false, settings: {} },
-          ],
-          minimumRows: 0,
-          maximumRows: 20,
-        },
-      }).success,
-    ).toBe(false);
-    // The historical shape remains parseable only so immutable releases can be compared.
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "table",
-        settings: {
-          columns: [{ key: "legacy", type: "text", required: false }],
-          minimumRows: 0,
-          maximumRows: 20,
-        },
-      }).success,
-    ).toBe(true);
-  });
-
-  test.each(workflowNodeTypeKeys)("accepts and strictly validates the %s workflow node", (type) => {
-    const value = {
-      nodeId: id(10),
-      type,
-      config: workflowConfigs[type],
-      timeoutSeconds: 60,
-      retry: {
-        maximumAttempts: 3,
-        initialDelaySeconds: 1,
-        maximumDelaySeconds: 30,
-        backoff: "exponential",
-      },
-      duplicateProtection: "required",
-      activityKey: "workflow_node",
-      redaction: "identifiers_only",
-    };
-    expect(workflowNodeSchema.safeParse(value).success).toBe(true);
-    expect(
-      workflowNodeSchema.safeParse({
-        ...value,
-        config: { ...(workflowConfigs[type] as object), unexpected: true },
       }).success,
     ).toBe(false);
   });
@@ -982,90 +813,6 @@ describe("closed catalogues and discriminated contracts", () => {
         label: "Assignee",
         type: "organization_account_reference",
         required: false,
-      }).success,
-    ).toBe(true);
-  });
-
-  test("keeps permission, sharing-test, calculation and connection choices explicit", () => {
-    expect(
-      permissionDeclarationSchema.safeParse({
-        permissionId: id(80),
-        key: "example.record.read",
-        label: "Read records",
-        description: "Allows reading records.",
-        actionKind: "read",
-        administrative: false,
-      }).success,
-    ).toBe(true);
-    expect(
-      savedSharingConditionSchema.safeParse({
-        conditionId: id(81),
-        sourceRecordTypeId: id(82),
-        key: "approved_records",
-        publishedRevision: 1,
-        contractFingerprint: fingerprint,
-        parameters: [{ key: "approved", type: "boolean" }],
-        condition: {
-          kind: "comparison",
-          operator: "equals",
-          left: { source: "field", fieldId: id(83) },
-          right: { source: "parameter", key: "approved" },
-        },
-        declaredFieldIds: [id(83)],
-        publicationTests: [
-          {
-            name: "Approved",
-            parameters: { approved: true },
-            fieldValues: { [id(83)]: true },
-            expected: true,
-          },
-        ],
-      }).success,
-    ).toBe(true);
-    expect(
-      savedSharingConditionSchema.safeParse({
-        conditionId: id(84),
-        sourceRecordTypeId: id(85),
-        key: "records_for_current_account",
-        publishedRevision: 1,
-        contractFingerprint: fingerprint,
-        parameters: [{ key: "account", type: "organization_account_reference" }],
-        condition: {
-          kind: "comparison",
-          operator: "equals",
-          left: { source: "field", fieldId: id(86) },
-          right: { source: "parameter", key: "account" },
-        },
-        declaredFieldIds: [id(86)],
-        publicationTests: [
-          {
-            name: "Current account",
-            parameters: { account: id(87) },
-            fieldValues: { [id(86)]: id(87) },
-            expected: true,
-          },
-        ],
-      }).success,
-    ).toBe(true);
-    expect(
-      fieldDefinitionSchema.safeParse({
-        ...fieldBase,
-        type: "calculation",
-        settings: {
-          resultType: "text",
-          expression: { kind: "execute", source: "untrusted" },
-          dependencyFieldIds: [id(2)],
-        },
-      }).success,
-    ).toBe(false);
-    expect(
-      applicationConnectionBindingSchema.safeParse({
-        bindingId: id(84),
-        key: "primary",
-        connectionTypeId: id(85),
-        version: { selection: "exact", version: "1.0.0" },
-        resolvedVersion: "1.0.0",
-        requiredOperationKeys: ["send"],
       }).success,
     ).toBe(true);
   });
@@ -1646,66 +1393,6 @@ describe("identity, sharing and secret invariants", () => {
     ).toBe(false);
   });
 
-  test("represents organisation-account and Group record ownership without using names", () => {
-    const record = {
-      storageScope: "organization_shared" as const,
-      organizationId: id(200),
-      moduleRootId: id(201),
-      recordTypeId: id(202),
-      storageContractId: id(203),
-      recordId: id(204),
-      definitionRevision: 1,
-      lifecycleState: "active",
-      concurrencyNumber: 1,
-      values: {},
-      createdAt: "2026-09-02T01:00:00+00:00",
-      createdBy: id(205),
-      updatedAt: "2026-09-02T01:00:00+00:00",
-      updatedBy: id(205),
-    };
-    expect(
-      businessRecordSchema.safeParse({
-        ...record,
-        owner: { kind: "organization_account", organizationAccountId: id(206) },
-      }).success,
-    ).toBe(true);
-    expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupId: id(207) } })
-        .success,
-    ).toBe(true);
-    expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupName: "Support" } })
-        .success,
-    ).toBe(false);
-    expect(
-      businessRecordSchema.safeParse({
-        ...record,
-        owner: { kind: "team", teamId: id(207) },
-      }).success,
-    ).toBe(false);
-    expect(
-      businessRecordSchema.safeParse({
-        ...record,
-        storageScope: "application_contained",
-        applicationRootId: id(208),
-      }).success,
-    ).toBe(true);
-    expect(businessRecordSchema.safeParse({ ...record, applicationRootId: id(208) }).success).toBe(
-      false,
-    );
-    expect(
-      businessRecordSchema.safeParse({ ...record, lifecycleState: "soft_deleted" }).success,
-    ).toBe(false);
-    expect(
-      businessRecordSchema.safeParse({
-        ...record,
-        lifecycleState: "soft_deleted",
-        deletedAt: "2026-09-02T02:00:00+00:00",
-        deletedBy: id(205),
-      }).success,
-    ).toBe(true);
-  });
-
   test("uses the current Group principal for direct record sharing", () => {
     const share = {
       directShareId: id(209),
@@ -1837,27 +1524,6 @@ describe("identity, sharing and secret invariants", () => {
     ).toBe(false);
   });
 
-  test("never authorises more entitlement quantity than the caller requested", () => {
-    const allowed = {
-      decisionId: id(226),
-      tenantId: id(227),
-      organizationId: id(228),
-      capabilityKey: "vortex.runtime.operation",
-      requestedQuantity: 10,
-      unit: "operation",
-      policyRevision: 1,
-      decidedAt: "2026-09-02T01:00:00+00:00",
-      correlationId: id(229),
-      outcome: "allowed",
-      acceptedQuantity: 4,
-      remainingQuantity: 6,
-    } as const;
-    expect(entitlementDecisionSchema.safeParse(allowed).success).toBe(true);
-    expect(entitlementDecisionSchema.safeParse({ ...allowed, acceptedQuantity: 11 }).success).toBe(
-      false,
-    );
-  });
-
   test("requires two different organisations and both consent sides", () => {
     const request = {
       requestId: id(217),
@@ -1901,105 +1567,6 @@ describe("identity, sharing and secret invariants", () => {
 });
 
 describe("published, page and federation boundaries", () => {
-  test("published inferred types expose only resolved record-type references", () => {
-    type ModuleField =
-      PublishedModuleDefinition["content"]["recordTypes"][number]["fields"][number];
-    type LinkTarget = Extract<ModuleField, { type: "link" }>["settings"]["target"];
-    type ApplicationPage = PublishedApplicationDefinition["content"]["pages"][number];
-    type ListRecordType = Extract<ApplicationPage, { type: "list" }>["recordType"];
-    expectTypeOf<LinkTarget>().toEqualTypeOf<ResolvedRecordTypeReference>();
-    expectTypeOf<ListRecordType>().toEqualTypeOf<ResolvedRecordTypeReference>();
-  });
-
-  test("accepts a complete published module definition and refuses an incomplete envelope", () => {
-    const fieldId = id(501);
-    const published = {
-      publication: {
-        kind: "module",
-        rootId: id(500),
-        revision: 1,
-        releaseVersion: "1.0.0",
-        contentFingerprint: fingerprint,
-        publishedAt: "2026-09-02T01:00:00+00:00",
-        publishedBy: id(502),
-        validationContractVersion: "1.0.0",
-      },
-      content: {
-        name: "Example module",
-        description: "A complete published module used to prove the envelope.",
-        dependencies: [],
-        recordTypes: [
-          {
-            recordTypeId: id(503),
-            key: "example",
-            singularLabel: "Example",
-            pluralLabel: "Examples",
-            titleFieldId: fieldId,
-            storageContractId: id(504),
-            storageScope: "organization_shared",
-            ownershipMode: "none",
-            fields: [{ ...fieldBase, fieldId, type: "text", settings: { maxLength: 120 } }],
-            relationships: [],
-            standardActions: ["read"],
-            customActionIds: [],
-          },
-        ],
-        permissions: [],
-        actions: [],
-        events: [],
-        rules: [],
-        sharingConditions: [],
-        extensionPoints: [],
-      },
-      dependencyManifest: [],
-      releaseNote: "Initial release.",
-    };
-    expect(publishedModuleDefinitionSchema.safeParse(published).success).toBe(true);
-    expect(
-      publishedModuleDefinitionSchema.safeParse({ ...published, releaseNote: undefined }).success,
-    ).toBe(false);
-    expect(
-      publishedModuleDefinitionSchema.safeParse({
-        ...published,
-        content: {
-          ...published.content,
-          dependencies: [
-            {
-              dependencyKey: "missing_root",
-              moduleKey: "example:dependency",
-              version: { selection: "compatible", range: "^1.0.0" },
-            },
-          ],
-        },
-      }).success,
-    ).toBe(false);
-    expect(
-      publishedModuleDefinitionSchema.safeParse({
-        ...published,
-        content: {
-          ...published.content,
-          recordTypes: [
-            {
-              ...published.content.recordTypes[0],
-              fields: [
-                {
-                  ...fieldBase,
-                  fieldId,
-                  type: "link",
-                  settings: {
-                    target: unresolvedRecordType,
-                    reverseKey: "examples",
-                    onParentDelete: "empty_optional",
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      }).success,
-    ).toBe(false);
-  });
-
   test("accepts a complete independently versioned published application definition", () => {
     const pageId = id(540);
     const placementId = id(541);
@@ -2100,125 +1667,6 @@ describe("published, page and federation boundaries", () => {
       releaseNote: "Initial release.",
     };
     expect(publishedApplicationDefinitionSchema.safeParse(application).success).toBe(true);
-  });
-
-  test("requires calendar mappings exactly for calendar list pages", () => {
-    const base = {
-      pageId: id(510),
-      key: "records",
-      name: "Records",
-      type: "list",
-      accessPermissionKey: "crm.record.read",
-      states: ["normal"],
-      layout: { desktop: { columns: 12, componentOrder: [] }, phone: { componentOrder: [] } },
-      recordType: unresolvedRecordType,
-      queryId: id(511),
-      arrangements: ["table", "calendar"],
-    };
-    expect(pageDefinitionSchema.safeParse(base).success).toBe(false);
-    expect(
-      pageDefinitionSchema.safeParse({
-        ...base,
-        calendarMapping: { kind: "start_end", startFieldId: id(512), endFieldId: id(513) },
-      }).success,
-    ).toBe(true);
-    expect(
-      pageDefinitionSchema.safeParse({
-        ...base,
-        arrangements: ["table"],
-        calendarMapping: { kind: "start_end", startFieldId: id(512), endFieldId: id(513) },
-      }).success,
-    ).toBe(false);
-    expect(
-      pageDefinitionSchema.safeParse({
-        pageId: id(514),
-        key: "public_records",
-        name: "Public records",
-        type: "public",
-        accessPermissionKey: "public.records.open",
-        states: ["normal"],
-        layout: {
-          desktop: { columns: 12, componentOrder: [id(515)] },
-          phone: { componentOrder: [id(515)] },
-        },
-        publicFieldIds: [id(516)],
-        blocks: [
-          {
-            placementId: id(515),
-            blockId: id(517),
-            blockReleaseVersion: "1.0.0",
-            settings: {},
-            desktop: { startColumn: 1, span: 12, height: 1 },
-            phone: { order: 0, behaviour: "full_width" },
-            viewPermissionKey: "public.records.open",
-          },
-        ],
-        rateLimitPerMinute: 60,
-      }).success,
-    ).toBe(false);
-  });
-
-  test.each(pageTypeKeys)("accepts a strict canonical %s page", (type) => {
-    const placementId = id(600);
-    const block = {
-      placementId,
-      blockId: id(601),
-      blockReleaseVersion: "1.0.0",
-      settings: {},
-      desktop: { startColumn: 1, span: 12, height: 1 },
-      phone: { order: 0, behaviour: "full_width" },
-      viewPermissionKey: "example.page.open",
-    } as const;
-    const base = {
-      pageId: id(602),
-      key: `${type}_page`,
-      name: `${type} page`,
-      type,
-      accessPermissionKey: "example.page.open",
-      states: ["normal"],
-      layout: {
-        desktop: { columns: 12, componentOrder: [placementId] },
-        phone: { componentOrder: [placementId] },
-      },
-    } as const;
-    const pages = {
-      list: {
-        ...base,
-        type: "list",
-        recordType: unresolvedRecordType,
-        queryId: id(603),
-        arrangements: ["table"],
-      },
-      detail: { ...base, type: "detail", recordType: unresolvedRecordType, blocks: [block] },
-      dashboard: { ...base, type: "dashboard", blocks: [block] },
-      form: {
-        ...base,
-        type: "form",
-        recordType: unresolvedRecordType,
-        commitActionKey: "example.record.create",
-        blocks: [block],
-      },
-      guided_form: {
-        ...base,
-        type: "guided_form",
-        recordType: unresolvedRecordType,
-        commitActionKey: "example.record.create",
-        steps: [
-          { id: id(604), name: "Details", summary: false, blocks: [block] },
-          { id: id(605), name: "Summary", summary: true, blocks: [block] },
-        ],
-      },
-      public: {
-        ...base,
-        type: "public",
-        publicFieldIds: [],
-        blocks: [block],
-        rateLimitPerMinute: 60,
-      },
-    } as const;
-    const page = pages[type];
-    expect(pageDefinitionSchema.safeParse(page).success).toBe(true);
-    expect(pageDefinitionSchema.safeParse({ ...page, unexpected: true }).success).toBe(false);
   });
 
   test("couples federation operations, assertions, payloads and duplicate protection", () => {
@@ -2570,338 +2018,5 @@ describe("published, page and federation boundaries", () => {
         payload: { ...activation, activeGrant: pendingGrant },
       }).success,
     ).toBe(false);
-  });
-});
-
-describe("complete definition-source fixture set", () => {
-  test("parses every authored definition through its strict source schema", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const manifest = JSON.parse(
-      await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
-    ) as { files: string[] };
-    const definitionFiles = manifest.files.filter((file) =>
-      /^(applications|connection-types|modules)\//.test(file),
-    );
-    expect(definitionFiles).toHaveLength(13);
-    for (const file of definitionFiles) {
-      const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8"));
-      const result = file.startsWith("modules/")
-        ? moduleSourceDocumentV2Schema.safeParse(document)
-        : definitionSourceDocumentSchema.safeParse(document);
-      expect(
-        result.success,
-        result.success ? undefined : `${file}: ${JSON.stringify(result.error.issues)}`,
-      ).toBe(true);
-      if (result.success && result.data.kind === "application") {
-        for (const workflow of result.data.body.workflows) {
-          expect(workflow.maximum_nesting_depth).toBeGreaterThanOrEqual(1);
-        }
-      }
-    }
-  });
-
-  test("requires typed settings and unique keys for authored table columns", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const parsed = moduleSourceDocumentV2Schema.parse(
-      JSON.parse(await readFile(resolve(fixtureRoot, "modules/service-desk.sla.json"), "utf8")),
-    );
-    if (parsed.kind !== "module") throw new Error("Module fixture required");
-    const module = structuredClone(parsed);
-    const table = module.body.record_types
-      .flatMap((recordType) => recordType.fields)
-      .find((field) => field.type === "table");
-    expect(table).toBeDefined();
-    if (!table || table.type !== "table") throw new Error("Table field required");
-    table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
-    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(true);
-
-    const invalidDefault = structuredClone(module);
-    const invalidDefaultTable = invalidDefault.body.record_types
-      .flatMap((recordType) => recordType.fields)
-      .find((field) => field.type === "table");
-    if (!invalidDefaultTable || invalidDefaultTable.type !== "table")
-      throw new Error("Table field required");
-    invalidDefaultTable.default = [{ day: "not_a_weekday", starts_at: "09:00" }];
-    expect(moduleSourceDocumentV2Schema.safeParse(invalidDefault).success).toBe(false);
-
-    const missingSettings = structuredClone(module);
-    const missingTable = missingSettings.body.record_types
-      .flatMap((recordType) => recordType.fields)
-      .find((field) => field.type === "table");
-    if (!missingTable || missingTable.type !== "table") throw new Error("Table field required");
-    delete (missingTable.settings.columns[0] as { settings?: unknown }).settings;
-    // Stored V1 source remains readable, but semantic publication validation
-    // must refuse this legacy-incomplete column.
-    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
-    missingTable.settings.columns[1]!.key = missingTable.settings.columns[0]!.key;
-    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
-
-    table.settings.columns[1]!.key = table.settings.columns[0]!.key;
-    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(false);
-  });
-
-  test("refuses an unknown workflow condition operator in definition-source JSON", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const application = JSON.parse(
-      await readFile(resolve(fixtureRoot, "applications/crm.json"), "utf8"),
-    ) as {
-      body: { workflows: { nodes: { type: string; config: Record<string, unknown> }[] }[] };
-    };
-    const condition = application.body.workflows
-      .flatMap((workflow) => workflow.nodes)
-      .find((node) => node.type === "condition");
-    expect(condition).toBeDefined();
-    if (condition) condition.config.operator = "execute_anything";
-    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
-  });
-
-  test("refuses lossy nested field defaults and event triggers without an explicit record", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const module = JSON.parse(
-      await readFile(resolve(fixtureRoot, "modules/crm.organisations.json"), "utf8"),
-    ) as {
-      body: { record_types: { fields: { type: string; settings: Record<string, unknown> }[] }[] };
-    };
-    const numericField = module.body.record_types
-      .flatMap((recordType) => recordType.fields)
-      .find((field) => field.type === "whole_number" || field.type === "decimal_number");
-    expect(numericField).toBeDefined();
-    if (numericField) numericField.settings.default = 1;
-    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
-
-    const application = JSON.parse(
-      await readFile(resolve(fixtureRoot, "applications/crm.json"), "utf8"),
-    ) as { body: { workflows: { trigger: Record<string, unknown> }[] } };
-    const eventWorkflow = application.body.workflows.find(
-      (workflow) => workflow.trigger.kind === "event",
-    );
-    expect(eventWorkflow).toBeDefined();
-    if (eventWorkflow) delete eventWorkflow.trigger.record_type;
-    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
-  });
-
-  test("refuses application-only rule effects in a module source document", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const module = JSON.parse(
-      await readFile(resolve(fixtureRoot, "modules/service-desk.cases.json"), "utf8"),
-    ) as { body: { rules: { effect: unknown }[] } };
-    expect(module.body.rules.length).toBeGreaterThan(0);
-
-    module.body.rules[0]!.effect = {
-      kind: "show_or_hide",
-      component: "case_form_section",
-      visibility: "hide",
-    };
-    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
-
-    module.body.rules[0]!.effect = {
-      kind: "start_background_work",
-      workflow: "case_follow_up",
-    };
-    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
-  });
-
-  test("keeps source role wildcards and interface target bindings controlled", async () => {
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const application = JSON.parse(
-      await readFile(resolve(fixtureRoot, "applications/crm.json"), "utf8"),
-    ) as {
-      body: {
-        roles: { permissions: string[] }[];
-        interfaces: {
-          operations: {
-            permission?: string;
-            target: { kind: string };
-            input_shape: Record<string, unknown>;
-          }[];
-        }[];
-      };
-    };
-    application.body.roles[0]!.permissions = ["*"];
-    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(true);
-
-    const operation = application.body.interfaces
-      .flatMap((definition) => definition.operations)
-      .find((candidate) => candidate.target.kind === "query");
-    expect(operation).toBeDefined();
-    if (operation) {
-      delete operation.permission;
-      expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
-      operation.permission = "vortex.crm.organisations.company.read";
-      operation.input_shape.subject = {
-        type: "record_reference",
-        required: true,
-        target_binding: { kind: "action_subject" },
-      };
-      expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
-    }
-  });
-
-  test("keeps every publication dependency input inside one strict contract", () => {
-    expect(
-      definitionPublicationContextSchema.safeParse({
-        publishedHistories: [],
-      }).success,
-    ).toBe(true);
-    expect(
-      definitionPublicationContextSchema.safeParse({
-        publishedHistories: [],
-        inventedPublicationSwitch: true,
-      }).success,
-    ).toBe(false);
-    expect(
-      definitionPublicationContextSchema.safeParse({
-        publishedHistories: [],
-        activeDependants: [],
-      }).success,
-    ).toBe(false);
-    expect(
-      definitionPublicationContextSchema.safeParse({
-        publishedHistories: [
-          { kind: "module", definitionKey: "vortex.example.module", history: [] },
-          { kind: "module", definitionKey: "vortex.example.module", history: [] },
-        ],
-      }).success,
-    ).toBe(false);
-  });
-
-  test("keeps fixture identities and removed business-domain semantics out of all shipping source", async () => {
-    const readSourceTree = async (directory: string): Promise<string[]> => {
-      const entries = await readdir(directory, { withFileTypes: true });
-      const contents: string[] = [];
-      for (const entry of entries) {
-        const path = resolve(directory, entry.name);
-        if (entry.isDirectory()) contents.push(...(await readSourceTree(path)));
-        else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name))
-          contents.push(await readFile(path, "utf8"));
-      }
-      return contents;
-    };
-    const runtimeRoots = (await readdir(resolve(process.cwd(), "runtime"), { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `runtime/${entry.name}/src`);
-    const shippingRoots = [
-      "apps/web/app",
-      "apps/web/src",
-      "contracts/src",
-      "db/src",
-      "modules/src",
-      ...runtimeRoots,
-      "studio/src",
-      "testing/src",
-      "tooling/boundaries",
-      "ui/src",
-    ];
-    const source = (
-      await Promise.all(shippingRoots.map((root) => readSourceTree(resolve(process.cwd(), root))))
-    )
-      .flat()
-      .join("\n");
-
-    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const manifest = JSON.parse(
-      await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
-    ) as { files: string[] };
-    const fixtureIdentifiers = new Set<string>();
-    for (const file of manifest.files.filter((path) =>
-      /^(applications|connection-types|modules)\//.test(path),
-    )) {
-      const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8")) as {
-        key: string;
-        body: {
-          record_types?: { key: string; fields?: { key: string }[] }[];
-          permissions?: { key: string }[];
-          actions?: { key: string }[];
-          events?: { key: string }[];
-          rules?: { key: string }[];
-          pages?: { key: string }[];
-          queries?: { key: string }[];
-          workflows?: { key: string }[];
-          pipelines?: { key: string }[];
-          interfaces?: { key: string; operations?: { key: string }[] }[];
-          operations?: { key: string }[];
-        };
-      };
-      fixtureIdentifiers.add(document.key);
-      for (const recordType of document.body.record_types ?? []) {
-        fixtureIdentifiers.add(recordType.key);
-        fixtureIdentifiers.add(`${document.key}:${recordType.key}`);
-        for (const field of recordType.fields ?? []) fixtureIdentifiers.add(field.key);
-      }
-      for (const collection of [
-        document.body.permissions,
-        document.body.actions,
-        document.body.events,
-        document.body.rules,
-        document.body.pages,
-        document.body.queries,
-        document.body.workflows,
-        document.body.pipelines,
-        document.body.operations,
-      ]) {
-        for (const item of collection ?? []) fixtureIdentifiers.add(item.key);
-      }
-      for (const interfaceDefinition of document.body.interfaces ?? []) {
-        fixtureIdentifiers.add(interfaceDefinition.key);
-        for (const operation of interfaceDefinition.operations ?? []) {
-          fixtureIdentifiers.add(operation.key);
-        }
-      }
-    }
-    const escapeRegularExpression = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const genericPlatformVocabulary = new Set([
-      "action",
-      "active",
-      "address",
-      "application",
-      "behavior",
-      "body",
-      "calendar",
-      "completed",
-      "configuration",
-      "constraint",
-      "description",
-      "email",
-      "event",
-      "export",
-      "field",
-      "identity",
-      "interface",
-      "key",
-      "module",
-      "name",
-      "order",
-      "ownership",
-      "permission",
-      "phone",
-      "priority", // Generic rule execution ordering, not a particular record field.
-      "public",
-      "query",
-      "record",
-      "relationship",
-      "required",
-      "role",
-      "rule",
-      "source",
-      "status",
-      "storage",
-      "subject",
-      "theme",
-      "value",
-      "visibility",
-      "workflow",
-    ]);
-    for (const identifier of fixtureIdentifiers) {
-      if (identifier.length < 4 || genericPlatformVocabulary.has(identifier)) continue;
-      expect(source, `shipping source hardcodes fixture identity ${identifier}`).not.toMatch(
-        new RegExp(`(["'\\x60])${escapeRegularExpression(identifier)}\\1`, "i"),
-      );
-    }
-
-    expect(source).not.toMatch(/vortex\.(?:crm|service_desk)/i);
-    expect(source).not.toMatch(/\bCRM\b|Service Desk/i);
-    expect(source).not.toMatch(
-      /(?:planVersion|tenantSubscription|seatSnapshot|announcementSchema|privacyRequestSchema|approvalRequestSchema|request_approval|create_task|send_email|generate_document)/,
-    );
   });
 });

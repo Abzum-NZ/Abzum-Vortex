@@ -1,6 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  calendarBlockSourceIsSupported,
+  calendarMappingSchema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
   readRecordDetailContract,
@@ -24,6 +26,7 @@ import {
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
+  definitionRuleFailureFamilyByCode,
   builderKeySchema,
   platformIdSchema,
   namespacedKeySchema,
@@ -45,6 +48,7 @@ import {
   type DefinitionPublicationContext,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
+  type DefinitionValidationErrorCode,
   type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowTask,
@@ -258,23 +262,9 @@ const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
 };
 
 const schemaFailureFamily = {
-  definition_required_value: "required_value",
-  definition_invalid_value: "invalid_value",
-  definition_unsupported_choice: "unsupported_choice",
-  definition_unknown_property: "unknown_property",
-  definition_too_few_items: "too_few_items",
-  definition_too_many_items: "too_many_items",
-  definition_duplicate_key: "duplicate_key",
-  definition_broken_reference: "broken_reference",
-  definition_unresolved_reference: "unresolved_reference",
-  definition_scope_conflict: "scope_conflict",
-  definition_incompatible_version: "incompatible_version",
-  definition_dependency_cycle: "dependency_cycle",
-  definition_unsafe_content: "unsafe_content",
-  definition_incompatible_change: "incompatible_change",
-  definition_more_errors: "more_errors",
+  ...definitionRuleFailureFamilyByCode,
   definition_validation_failed: "invalid_value",
-} as const satisfies Record<string, DefinitionRuleFailure["family"]>;
+} as const satisfies Record<DefinitionValidationErrorCode, DefinitionRuleFailure["family"]>;
 
 const sourceCollectionLocationKind = {
   record_types: "record_type",
@@ -1971,6 +1961,7 @@ const applicationInterfaceFieldType = (
   const type = applicationFieldType(pair);
   if (!pair) return type;
   if (type === "whole_number" || type === "number") return "number";
+  if (type === "decimal_number" || type === "money") return type;
   if (type === "boolean") return "boolean";
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
   return undefined;
@@ -3077,17 +3068,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         ),
       ].map((action) => [String(action.key), action]),
     );
-    const moduleActionValuePairs = new Map(
-      boundModules.flatMap((module) =>
-        array(object(object(module.canonical).content).actions).map(
-          (action) =>
-            [
-              String(action.key),
-              { action },
-            ] as const,
-        ),
-      ),
-    );
     const publicPermissionSafe = (permissionKey: unknown) => {
       const permission = permissionMap.get(String(permissionKey));
       return permission !== undefined && permission.administrative !== true;
@@ -3666,10 +3646,110 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       for (const placement of placements) {
         const bound =
           placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
-        if (bound === undefined) continue;
+        const block = object(placement.block);
+        const blockKey = registeredBlockReleases.get(
+          `${String(block.blockId)}:${String(block.releaseVersion)}`,
+        )?.key;
+        if (bound === undefined) {
+          if (blockKey === "platform.display.calendar")
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+          continue;
+        }
         const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (blockKey === "platform.display.calendar") {
+          const settingFieldId = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "field_reference" && typeof property.fieldId === "string"
+              ? property.fieldId
+              : undefined;
+          };
+          const settingChoice = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "choice" && typeof property.value === "string"
+              ? property.value
+              : undefined;
+          };
+          const mappingProperties = object(object(settings.calendar_mapping).properties);
+          const mappingKind = settingChoice(mappingProperties.kind);
+          const startFieldId = settingFieldId(mappingProperties.start_field);
+          const endFieldId = settingFieldId(mappingProperties.end_field);
+          const durationFieldId = settingFieldId(mappingProperties.duration_field);
+          const durationUnit = settingChoice(mappingProperties.duration_unit);
+          const mappingCandidate =
+            mappingKind === "start_end" &&
+            startFieldId !== undefined &&
+            endFieldId !== undefined &&
+            durationFieldId === undefined &&
+            durationUnit === undefined
+              ? { kind: mappingKind, startFieldId, endFieldId }
+              : mappingKind === "start_duration" &&
+                  startFieldId !== undefined &&
+                  endFieldId === undefined &&
+                  durationFieldId !== undefined &&
+                  durationUnit !== undefined
+                ? { kind: mappingKind, startFieldId, durationFieldId, durationUnit }
+                : undefined;
+          const mapping = calendarMappingSchema.safeParse(mappingCandidate);
+          const itemTitleFieldId = settingFieldId(settings.item_title_field);
+          const queryRecordType = records.get(String(object(bound.recordType).recordTypeId));
+          const fieldById = new Map(
+            array(queryRecordType?.fields).map((field) => [
+              String(field.fieldId).toLowerCase(),
+              field,
+            ]),
+          );
+          const selectedFieldIds = new Set(
+            array(bound.selectedFieldIds).map((fieldId) => String(fieldId).toLowerCase()),
+          );
+          let calendarMappingValid = false;
+          if (mapping.success && itemTitleFieldId !== undefined && queryRecordType !== undefined) {
+            const startField = fieldById.get(mapping.data.startFieldId.toLowerCase());
+            const titleField = fieldById.get(itemTitleFieldId.toLowerCase());
+            const dateType = startField?.type;
+            const dateFields =
+              mapping.data.kind === "start_end"
+                ? [startField, fieldById.get(mapping.data.endFieldId.toLowerCase())]
+                : [startField];
+            const durationField =
+              mapping.data.kind === "start_duration"
+                ? fieldById.get(mapping.data.durationFieldId.toLowerCase())
+                : undefined;
+            const durationValid =
+              mapping.data.kind !== "start_duration" ||
+              ((dateType === "date_time" ||
+                (dateType === "date" && mapping.data.durationUnit === "days")) &&
+                durationField?.type === "whole_number");
+            const mappedFieldIds = [
+              mapping.data.startFieldId,
+              ...(mapping.data.kind === "start_end"
+                ? [mapping.data.endFieldId]
+                : [mapping.data.durationFieldId]),
+              itemTitleFieldId,
+            ];
+            calendarMappingValid =
+              (dateType === "date" || dateType === "date_time") &&
+              dateFields.every(
+                (field) =>
+                  field !== undefined &&
+                  field.type === dateType &&
+                  field.filterable === true,
+              ) &&
+              durationValid &&
+              titleField !== undefined &&
+              calendarBlockSourceIsSupported(bound, titleField.type) &&
+              mappedFieldIds.every((fieldId) =>
+                selectedFieldIds.has(fieldId.toLowerCase()),
+              );
+          }
+          if (!calendarMappingValid)
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
         if (table === undefined && detail === undefined) continue;
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
@@ -3910,12 +3990,11 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         String(query.key),
         queriesByKey.has(String(query.key)) ? undefined : query,
       );
-    const interfaceActionInputType = (type: unknown, moduleBound = false): string | undefined => {
+    const interfaceActionInputType = (type: unknown): string | undefined => {
       const value = String(type);
-      if (moduleBound && ["decimal_number", "money"].includes(value)) return undefined;
-      if (moduleBound && value === "formatted_text") return "formatted_text";
-      if (["text", "formatted_text", "choice"].includes(value)) return "text";
-      if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
+      if (["decimal_number", "money", "formatted_text"].includes(value)) return value;
+      if (["text", "choice"].includes(value)) return "text";
+      if (["number", "whole_number"].includes(value)) return "number";
       if (value === "yes_no") return "boolean";
       if (value === "date" || value === "date_time") return value;
       if (["record_reference", "organization_account_reference"].includes(value))
@@ -3992,10 +4071,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           committingTask?.type === "operation.call" ? committingLiteral("operation") : undefined;
         const targetAction =
           calledOperationKey === undefined ? undefined : actions.get(calledOperationKey);
-        const targetActionPair =
-          calledOperationKey === undefined
-            ? undefined
-            : moduleActionValuePairs.get(calledOperationKey);
         const startedFlowId =
           committingTask?.type === "flow.run_background" ? committingLiteral("flow") : undefined;
         const targetKind: "action" | "query" | "start" | undefined =
@@ -4077,8 +4152,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               const descriptor = bindingsForInput[0];
               return (
                 descriptor?.required === input.required &&
-                descriptor?.type ===
-                  interfaceActionInputType(input.type, targetActionPair !== undefined)
+                descriptor?.type === interfaceActionInputType(input.type)
               );
             });
           // The interface supplies the flow's inputs, which the flow passes to the named action by
@@ -4092,8 +4166,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
                 const declaration = targetFlow.inputs[key];
                 return (
                   declaration !== undefined &&
-                  object(bindingsForInput[0]).type ===
-                    interfaceActionInputType(declaration.type, targetActionPair !== undefined)
+                  object(bindingsForInput[0]).type === interfaceActionInputType(declaration.type)
                 );
               }) &&
               flowInputs.every(

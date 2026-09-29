@@ -376,7 +376,10 @@ begin
           when 'application_flow' then
             array['applicationRootId', 'flowId', 'resolutionFingerprint']::text[]
           when 'application_flow_node' then
-            array['applicationRootId', 'flowId', 'nodeId', 'resolutionFingerprint']::text[]
+            array[
+              'applicationRootId', 'flowId', 'nodeId', 'operations', 'grantable',
+              'resolutionFingerprint'
+            ]::text[]
           when 'application_query' then
             array['applicationRootId', 'queryId', 'resolutionFingerprint']::text[]
           when 'module_query' then
@@ -404,7 +407,9 @@ begin
         or exists (
           select 1
           from pg_catalog.unnest(supplied_expected_keys) as expected(key)
-          where expected.key not in ('operation', 'declaredRequirement')
+          where expected.key not in (
+            'operation', 'declaredRequirement', 'operations', 'grantable'
+          )
             and pg_catalog.jsonb_typeof(supplied_dependency -> expected.key) is distinct from 'string'
         )
         or (
@@ -420,6 +425,13 @@ begin
               is distinct from 'object'
             or supplied_owner_kind is null
             or supplied_owner_kind not in ('application', 'module', 'platform_service')
+          )
+        )
+        or (
+          supplied_kind = 'application_flow_node'
+          and (
+            pg_catalog.jsonb_typeof(supplied_dependency -> 'operations') is distinct from 'array'
+            or pg_catalog.jsonb_typeof(supplied_dependency -> 'grantable') is distinct from 'boolean'
           )
         ) then
         raise exception using errcode = '22023',
@@ -450,6 +462,129 @@ begin
           ) is distinct from 'string' then
           raise exception using errcode = '22023',
             message = 'Definition flow target dependency has an invalid shape';
+        end if;
+      end if;
+
+      if supplied_kind = 'application_flow_node' then
+        if (supplied_dependency ->> 'grantable')::boolean is distinct from
+            (pg_catalog.jsonb_array_length(supplied_dependency -> 'operations') > 0) then
+          raise exception using errcode = '22023',
+            message = 'Definition flow node operation references have an invalid grantability shape';
+        end if;
+
+        if exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(supplied_dependency -> 'operations') as operation(value)
+          where pg_catalog.jsonb_typeof(operation.value) is distinct from 'object'
+            or pg_catalog.jsonb_typeof(operation.value -> 'owner') is distinct from 'object'
+            or pg_catalog.jsonb_typeof(operation.value -> 'operationId') is distinct from 'string'
+            or pg_catalog.jsonb_typeof(operation.value #> '{owner,kind}') is distinct from 'string'
+        ) then
+          raise exception using errcode = '22023',
+            message = 'Definition flow node operation reference has an invalid shape';
+        end if;
+
+        if exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(supplied_dependency -> 'operations') as operation(value)
+          where (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(operation.value)) <> 2
+            or exists (
+              select 1
+              from pg_catalog.jsonb_object_keys(operation.value) as operation_key(key)
+              where operation_key.key not in ('owner', 'operationId')
+            )
+            or operation.value #>> '{owner,kind}' not in ('application', 'module')
+            or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(operation.value -> 'owner')) <> 2
+            or exists (
+              select 1
+              from pg_catalog.jsonb_object_keys(operation.value -> 'owner') as owner_key(key)
+              where owner_key.key not in (
+                'kind',
+                case operation.value #>> '{owner,kind}'
+                  when 'application' then 'applicationRootId'
+                  else 'moduleRootId'
+                end
+              )
+            )
+            or pg_catalog.jsonb_typeof(
+              operation.value -> 'owner' -> case operation.value #>> '{owner,kind}'
+                when 'application' then 'applicationRootId'
+                else 'moduleRootId'
+              end
+            ) is distinct from 'string'
+        ) then
+          raise exception using errcode = '22023',
+            message = 'Definition flow node operation reference has an invalid owner shape';
+        end if;
+
+        if exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(supplied_dependency -> 'operations') as operation(value)
+          cross join lateral (
+            select case operation.value #>> '{owner,kind}'
+              when 'application' then operation.value #>> '{owner,applicationRootId}'
+              else operation.value #>> '{owner,moduleRootId}'
+            end as owner_id
+          ) as owner
+          where owner.owner_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or owner.owner_id = '00000000-0000-0000-0000-000000000000'
+            or (operation.value ->> 'operationId') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or operation.value ->> 'operationId' = '00000000-0000-0000-0000-000000000000'
+        ) then
+          raise exception using errcode = '22023',
+            message = 'Definition flow node operation reference has an invalid identifier';
+        end if;
+
+        if exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(supplied_dependency -> 'operations') as operation(value)
+          cross join lateral (
+            select case operation.value #>> '{owner,kind}'
+              when 'application' then operation.value #>> '{owner,applicationRootId}'
+              else operation.value #>> '{owner,moduleRootId}'
+            end as owner_id
+          ) as owner
+          where (
+              operation.value #>> '{owner,kind}' = 'application'
+              and owner.owner_id is distinct from p_root_id::text
+            )
+            or (
+              operation.value #>> '{owner,kind}' = 'module'
+              and not exists (
+                select 1
+                from pg_catalog.jsonb_array_elements(dependency_manifest_value) as pinned(value)
+                where pinned.value ->> 'kind' = 'module'
+                  and pg_catalog.lower(pinned.value ->> 'rootId') = owner.owner_id
+              )
+            )
+        ) then
+          raise exception using errcode = '23514',
+            message = 'Definition flow node operation reference does not belong to this release or a pinned Module';
+        end if;
+
+        if exists (
+          select 1
+          from (
+            select
+              pg_catalog.lag(ordered.reference_key) over (order by ordered.ordinality) as previous_reference_key,
+              ordered.reference_key
+            from (
+              select
+                operation.ordinality,
+                (operation.value #>> '{owner,kind}') || ':' ||
+                  case operation.value #>> '{owner,kind}'
+                    when 'application' then operation.value #>> '{owner,applicationRootId}'
+                    else operation.value #>> '{owner,moduleRootId}'
+                  end || ':' || (operation.value ->> 'operationId') as reference_key
+              from pg_catalog.jsonb_array_elements(supplied_dependency -> 'operations')
+                with ordinality as operation(value, ordinality)
+            ) as ordered
+          ) as adjacent
+          where adjacent.previous_reference_key is not null
+            and adjacent.previous_reference_key collate "C" >= adjacent.reference_key collate "C"
+        ) then
+          raise exception using errcode = '22023',
+            message = 'Definition flow node operation references must be unique and canonically sorted';
         end if;
       end if;
 
@@ -825,4 +960,4 @@ revoke execute on function vortex_definition.append_release(uuid, bigint, text, 
 grant execute on function vortex_definition.append_release(uuid, bigint, text, jsonb)
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
-  'Atomically validates and records one compiled Definition release, including exact field-policy ownership and dependencies, then advances only its root current-release pointer.';
+  'Atomically validates and records one compiled Definition release, including exact field-policy ownership, pinned dependencies, and canonical protected-operation references for every flow node, then advances only its root current-release pointer.';

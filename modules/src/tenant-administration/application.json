@@ -16,6 +16,14 @@
           "version": "1.0.0"
         },
         "purpose": "primary"
+      },
+      {
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_directory"
       }
     ],
     "permissions": [
@@ -35,6 +43,53 @@
         "description": "Allows managing Tenant Administration definition-level administration.",
         "action_kind": "manage",
         "administrative": true
+      },
+      {
+        "id": "app_permission_organization_read",
+        "key": "vortex.tenant_administration.organization.read",
+        "label": "Read organisations",
+        "description": "Allows reading the protected organisation projection as a system record.",
+        "record_type": "vortex.system_directory:organization",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "tenant_id",
+            "parent_organization_id",
+            "short_name",
+            "display_name",
+            "state",
+            "state_changed_at",
+            "created_at"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "app_permission_tenant_administrator_read",
+        "key": "vortex.tenant_administration.tenant_administrator.read",
+        "label": "Read tenant administrators",
+        "description": "Allows reading the protected tenant-administrator projection as a system record.",
+        "record_type": "vortex.system_directory:tenant_administrator",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "tenant_id",
+            "identity_id",
+            "capability_keys",
+            "starts_at",
+            "expires_at",
+            "state"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -96,21 +151,35 @@
       {
         "id": "event_suspend_organization",
         "key": "vortex.app.tenant_administration.organization_suspend",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_restore_organization",
         "key": "vortex.app.tenant_administration.organization_restore",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "event_rename_organization",
         "key": "vortex.app.tenant_administration.organization_rename",
-        "record_type": "vortex.tenant_administration:organization",
+        "record_type": "vortex.system_directory:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_organization_detail",
+        "key": "vortex.app.tenant_administration.organization_open_detail",
+        "record_type": "vortex.system_directory:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_tenant_administrator_detail",
+        "key": "vortex.app.tenant_administration.tenant_administrator_open_detail",
+        "record_type": "vortex.system_directory:tenant_administrator",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -182,11 +251,32 @@
                         }
                       },
                       "slots": {}
+                    },
+                    "shell_account": {
+                      "block": {
+                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {},
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
                     }
                   },
                   "order": {
                     "desktop": [
-                      "shell_heading"
+                      "shell_heading",
+                      "shell_account"
                     ]
                   }
                 },
@@ -195,7 +285,7 @@
                     "shell_body": {
                       "block": {
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.0.0"
+                        "release_version": "1.2.0"
                       },
                       "settings": {
                         "direction": {
@@ -205,6 +295,30 @@
                         "gap": {
                           "kind": "choice",
                           "value": "medium"
+                        },
+                        "menu_width": {
+                          "kind": "number",
+                          "value": 16
+                        },
+                        "menu_placement": {
+                          "kind": "choice",
+                          "value": "sticky"
+                        },
+                        "content_landmark": {
+                          "kind": "boolean",
+                          "value": true
+                        },
+                        "tablet_menu_width": {
+                          "kind": "number",
+                          "value": 14
+                        },
+                        "phone_direction": {
+                          "kind": "choice",
+                          "value": "column"
+                        },
+                        "phone_menu_placement": {
+                          "kind": "choice",
+                          "value": "flow"
                         }
                       },
                       "theme_overrides": {},
@@ -324,7 +438,7 @@
                     },
                     "text": {
                       "kind": "text",
-                      "value": "Review tenant structure and its direct protected actions. Protected tenant structure and tenant administrators are read live on their own pages; protected facts are not copied into application records."
+                      "value": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure for its protected actions. Tenant administrators are listed on their own page."
                     }
                   },
                   "theme_overrides": {},
@@ -340,11 +454,92 @@
                     }
                   },
                   "slots": {}
+                },
+                "overview_organizations_region": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.4.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisations in this tenant"
+                    },
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_open_organization_detail"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.short_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Short name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "view_permission": "vortex.tenant_administration.organization.read",
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.system_directory:organizations"
                 }
               },
               "order": {
                 "desktop": [
-                  "overview_text"
+                  "overview_text",
+                  "overview_organizations_region"
                 ]
               }
             }
@@ -373,6 +568,15 @@
                       "kind": "text",
                       "value": "Tenant structure"
                     },
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_open_organization_detail"
+                        }
+                      }
+                    },
                     "columns": {
                       "kind": "list",
                       "items": [
@@ -381,7 +585,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.display_name"
+                              "field": "vortex.system_directory:organization.display_name"
                             },
                             "label": {
                               "kind": "text",
@@ -394,7 +598,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.short_name"
+                              "field": "vortex.system_directory:organization.short_name"
                             },
                             "label": {
                               "kind": "text",
@@ -407,7 +611,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.state"
+                              "field": "vortex.system_directory:organization.state"
                             },
                             "label": {
                               "kind": "text",
@@ -420,7 +624,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.state_changed_at"
+                              "field": "vortex.system_directory:organization.state_changed_at"
                             },
                             "label": {
                               "kind": "text",
@@ -433,7 +637,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:organization.created_at"
+                              "field": "vortex.system_directory:organization.created_at"
                             },
                             "label": {
                               "kind": "text",
@@ -501,7 +705,8 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.tenant_administration:organizations"
+                  "view_permission": "vortex.tenant_administration.organization.read",
+                  "query": "vortex.system_directory:organizations"
                 },
                 "form_rename_organization": {
                   "block": {
@@ -583,6 +788,124 @@
         }
       },
       {
+        "id": "page_tenant_organization_detail",
+        "key": "tenant_organization_detail",
+        "name": "Organisation details",
+        "type": "detail",
+        "record_type": "vortex.system_directory:organization",
+        "permission": "vortex.tenant_administration.organization.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "tenant_organization_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Organisation details"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Organisation"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.short_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Short name"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.state_changed_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State changed"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:organization.created_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Created"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "tenant_organization_detail"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
         "id": "page_tenant_administrators",
         "key": "tenant_administrators",
         "name": "Tenant administrators",
@@ -626,12 +949,21 @@
                 "administrators_region": {
                   "block": {
                     "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
+                    "release_version": "1.4.0"
                   },
                   "settings": {
                     "title": {
                       "kind": "text",
                       "value": "Tenant administrators"
+                    },
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_open_tenant_administrator_detail"
+                        }
+                      }
                     },
                     "columns": {
                       "kind": "list",
@@ -641,7 +973,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.identity_id"
+                              "field": "vortex.system_directory:tenant_administrator.identity_id"
                             },
                             "label": {
                               "kind": "text",
@@ -654,7 +986,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.starts_at"
+                              "field": "vortex.system_directory:tenant_administrator.starts_at"
                             },
                             "label": {
                               "kind": "text",
@@ -667,7 +999,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.expires_at"
+                              "field": "vortex.system_directory:tenant_administrator.expires_at"
                             },
                             "label": {
                               "kind": "text",
@@ -680,7 +1012,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.tenant_administration:tenant_administrator.state"
+                              "field": "vortex.system_directory:tenant_administrator.state"
                             },
                             "label": {
                               "kind": "text",
@@ -704,13 +1036,132 @@
                     }
                   },
                   "slots": {},
-                  "query": "vortex.tenant_administration:tenant_administrators"
+                  "view_permission": "vortex.tenant_administration.tenant_administrator.read",
+                  "query": "vortex.system_directory:tenant_administrators"
                 }
               },
               "order": {
                 "desktop": [
                   "administrators_text",
                   "administrators_region"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_tenant_administrator_detail",
+        "key": "tenant_administrator_detail",
+        "name": "Tenant administrator details",
+        "type": "detail",
+        "record_type": "vortex.system_directory:tenant_administrator",
+        "permission": "vortex.tenant_administration.tenant_administrator.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_tenant_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "tenant_administrator_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Tenant administrator details"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:tenant_administrator.identity_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Identity"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:tenant_administrator.capability_keys"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Capabilities"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:tenant_administrator.starts_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Starts"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:tenant_administrator.expires_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Expires"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.system_directory:tenant_administrator.state"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "State"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "tenant_administrator_detail"
                 ]
               }
             }
@@ -735,7 +1186,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
@@ -793,7 +1244,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
@@ -851,7 +1302,7 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": [
-              "vortex.tenant_administration:organization"
+              "vortex.system_directory:organization"
             ]
           },
           "expected_revision": {
@@ -948,9 +1399,144 @@
         },
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_open_tenant_organization",
+        "key": "open_tenant_organization",
+        "labels": {
+          "name": "Open organisation details"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "organization_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:organization"
+            ]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "tenant_organization_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.organization_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_open_tenant_administrator",
+        "key": "open_tenant_administrator",
+        "labels": {
+          "name": "Open tenant administrator details"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "tenant_administrator_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:tenant_administrator"
+            ]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "tenant_administrator_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.tenant_administrator_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
+      {
+        "id": "binding_open_organization_detail_from_overview",
+        "control": "overview_organizations_region",
+        "event_id": "event_open_organization_detail",
+        "event": "row_clicked",
+        "flow": "flow_open_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_open_organization_detail_from_structure",
+        "control": "structure_region",
+        "event_id": "event_open_organization_detail",
+        "event": "row_clicked",
+        "flow": "flow_open_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_open_tenant_administrator_detail",
+        "control": "administrators_region",
+        "event_id": "event_open_tenant_administrator_detail",
+        "event": "row_clicked",
+        "flow": "flow_open_tenant_administrator",
+        "inputs": {
+          "tenant_administrator_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
       {
         "id": "binding_suspend_organization",
         "control": "structure_region",

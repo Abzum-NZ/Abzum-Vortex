@@ -1,5 +1,14 @@
 export const uiPackage = "@vortex/ui" as const;
 
+// Shared notice component (#1607)
+export {
+  Notice,
+  type NoticeContent,
+  type NoticeContentPart,
+  type NoticeProps,
+  type NoticeSeverity,
+} from "./components/notice";
+
 // Platform Component Registry
 export {
   assertRuntimeInputKeysArePlacements,
@@ -300,6 +309,8 @@ export { Container, Heading, type ContainerProps, type HeadingProps } from "./la
 // General Layout Registrations & Registry
 export {
   CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
   HEADING_BLOCK_RELEASE,
   LAYOUT_BLOCK_RELEASES,
   LAYOUT_COMPONENT_REGISTRATIONS,
@@ -318,6 +329,10 @@ export {
 // Application Navigation Registrations & Registry (#1009)
 export {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
+  ApplicationAccountActionsBlock,
+  ApplicationAccountActionsProvider,
+  type ApplicationAccountActions,
   NAVIGATION_BLOCK_RELEASES,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,

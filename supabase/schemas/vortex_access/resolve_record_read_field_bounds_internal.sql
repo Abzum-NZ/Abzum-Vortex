@@ -278,3 +278,6 @@ grant execute on function vortex_access.resolve_record_read_field_bounds_interna
 
 comment on function vortex_access.resolve_record_read_field_bounds_internal(jsonb) is
   'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
+
+alter function vortex_access.resolve_record_read_field_bounds_internal(jsonb)
+  owner to vortex_access_owner;
