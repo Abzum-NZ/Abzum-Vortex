@@ -268,7 +268,7 @@ export const createRequestBoundTenantGovernanceService = (
         if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
         throw error;
       } finally {
-        state.activeMethod = undefined;
+        delete state.activeMethod;
         state.runtimeCallUsed = false;
         state.identityQueryUsed = false;
       }
