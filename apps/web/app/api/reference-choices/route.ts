@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   builderKeySchema,
+  containedComponentIdSchema,
   referenceChoiceSelectionEvidenceSchema,
   revisionSchema,
 } from "@vortex/contracts";
@@ -25,7 +26,7 @@ const requestSchema = z
     organizationShortName: z.string().min(1).max(200),
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
-    placementId: builderKeySchema,
+    placementId: containedComponentIdSchema,
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
     search: z.string().trim().max(100).optional(),

@@ -39,7 +39,7 @@ import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
-import { loadApplicationPage } from "../../../_lib/application-page";
+import { loadApplicationPage, loadProjectedReferenceChoiceForm } from "../../../_lib/application-page";
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
@@ -82,6 +82,7 @@ const requestSchema = z
     tenantShortName: z.string().min(1).max(200),
     organizationShortName: z.string().min(1).max(200),
     applicationKey: z.string().min(1).max(200),
+    pageKey: z.string().min(1).max(200),
     invocation: flowBindingInvocationSchema,
   })
   .strict();
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body.tenantShortName,
       body.organizationShortName,
       body.applicationKey,
+      body.pageKey,
     );
     if (address.kind === "temporarily_unavailable")
       return privateResponse({ kind: "unavailable" }, 503);
@@ -402,12 +404,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }),
       });
       const answer = request.answer;
-      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+      if (request.target.awaiting !== "form")
+        return answer.kind === "submit"
+          ? { kind: "refused", reason: "unavailable" }
+          : pageFormRequests.resume(session, selection, request);
 
       const trustedFormId = request.target.formId;
       if (
         trustedFormId === undefined ||
-        request.target.awaiting !== "form" ||
         request.target.releaseKey !== installed.releaseKey ||
         request.target.installation.applicationRootId.toLowerCase() !==
           installed.applicationRootId.toLowerCase() ||
@@ -425,6 +429,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         !applicationHasAuthoredForm(installed.applicationContent, trustedFormId)
       )
         return { kind: "refused", reason: "unavailable" };
+      const projectedForm = await loadProjectedReferenceChoiceForm(session, address, {
+        installationRevision: installed.installationRevision,
+        releaseKey: installed.releaseKey,
+        formId: trustedFormId,
+      });
+      if (projectedForm === undefined) return { kind: "refused", reason: "unavailable" };
+      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
       const values = await resolveReferenceChoiceFormValues({
         service: referenceChoices,
         session,
@@ -432,6 +443,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         application: installed.applicationContent,
         modules: installed.modules,
         formId: trustedFormId,
+        projectedFields: projectedForm.fields,
         values: answer.values,
         ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
       });
@@ -471,9 +483,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ? async () => bindingInstallation
         : readInstalled,
       adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
-        const resolveValues = (values: unknown) => {
+        const resolveValues = async (values: unknown) => {
           if (installation.applicationContent === undefined || installation.modules === undefined)
             return undefined;
+          const projectedForm = await loadProjectedReferenceChoiceForm(identity.session, address, {
+            installationRevision: installation.installationRevision,
+            releaseKey: installation.releaseKey,
+            formId: binding.controlId,
+          });
+          if (projectedForm === undefined) return undefined;
           return resolveReferenceChoiceFormValues({
             service: referenceChoices,
             session: identity.session,
@@ -481,6 +499,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             application: installation.applicationContent,
             modules: installation.modules,
             formId: binding.controlId,
+            projectedFields: projectedForm.fields,
             values,
             ...(callerInputs.choiceEvidence === undefined
               ? {}

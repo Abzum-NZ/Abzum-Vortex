@@ -276,29 +276,33 @@ const formSurfaceComposition = (
 }> | undefined => {
   let match: Record<string, unknown> | undefined;
   let matchId: string | undefined;
+  let matchUsable = false;
   let matches = 0;
-  const visit = (slot: unknown): void => {
+  const visit = (slot: unknown, usable: boolean): void => {
     if (!isRecord(slot) || !isRecord(slot.placements)) return;
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
+      const currentlyUsable = usable && candidate.availability === undefined;
       if (placementId.toLowerCase() === formId.toLowerCase()) {
         match = candidate;
         matchId = placementId;
+        matchUsable = currentlyUsable;
         matches += 1;
       }
       if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child);
+        for (const child of Object.values(candidate.slots)) visit(child, currentlyUsable);
     }
   };
   const composition = page.composition;
   if (!isRecord(composition)) return undefined;
-  if ("main" in composition) visit(composition.main);
+  if ("main" in composition) visit(composition.main, true);
   else if (isRecord(composition.stepContent))
-    for (const root of Object.values(composition.stepContent)) visit(root);
+    for (const root of Object.values(composition.stepContent)) visit(root, true);
   if (
     match === undefined ||
     matchId === undefined ||
     matches !== 1 ||
+    !matchUsable ||
     !isRecord(match.block) ||
     typeof match.block.blockId !== "string" ||
     match.block.blockId.toLowerCase() !== FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase()
@@ -1069,6 +1073,7 @@ function ApplicationPageViewContent({
         tenantShortName: application.tenantShortName,
         organizationShortName: application.organizationShortName,
         applicationKey: application.applicationKey,
+        pageKey: application.pageKey,
       },
       installation: {
         installationRevision: application.installationRevision,

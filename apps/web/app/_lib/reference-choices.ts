@@ -41,6 +41,11 @@ export type ReferenceChoiceFormField = Readonly<{
 
 export type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
 
+export type ProjectedReferenceChoiceForm = Readonly<{
+  fields: ReferenceChoiceFormFieldIndex;
+  placements: ReadonlyMap<string, ReferenceChoiceFormField>;
+}>;
+
 const blockOf = (placement: unknown): Record<string, unknown> | undefined => {
   if (!isRecord(placement) || !isRecord(placement.block)) return undefined;
   return placement.block;
@@ -201,6 +206,7 @@ export const referenceChoiceFieldsForForm = (
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
   formId: string,
 ): ReferenceChoiceFormFieldIndex | undefined => {
+  if (!applicationHasAuthoredForm(application, formId)) return undefined;
   const fields: ReferenceChoiceFormField[] = [];
   for (const page of application.pages) {
     const result = formPlacementsOnPage(page, formId, modules);
@@ -218,6 +224,66 @@ export const referenceChoiceFieldsForForm = (
     index.set(field.fieldKey, field);
   }
   return index;
+};
+
+/** Uses only the visible, usable Form subtree of the viewer's projected addressed page. */
+export const projectedReferenceChoiceForm = (
+  page: unknown,
+  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  formId: string,
+): ProjectedReferenceChoiceForm | undefined => {
+  if (!isRecord(page) || !isRecord(page.composition)) return undefined;
+  let matches = 0;
+  let target: Record<string, unknown> | undefined;
+  const find = (slot: unknown, usable: boolean): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      if (!isRecord(placement)) continue;
+      const block = blockOf(placement);
+      const isForm = typeof block?.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
+      const currentlyUsable = usable && placement.availability === undefined;
+      if (isForm && sameId(placementId, formId)) {
+        matches += 1;
+        if (currentlyUsable) target = placement;
+      }
+      if (isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) find(child, currentlyUsable);
+    }
+  };
+  const composition = page.composition;
+  if ("main" in composition) find(composition.main, true);
+  if (isRecord(composition.stepContent))
+    for (const slot of Object.values(composition.stepContent)) find(slot, true);
+  if (matches !== 1 || target === undefined) return undefined;
+
+  const fields = new Map<string, ReferenceChoiceFormField>();
+  const placements = new Map<string, ReferenceChoiceFormField>();
+  let invalid = false;
+  const collect = (slot: unknown, usable: boolean): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      if (!isRecord(placement)) continue;
+      const block = blockOf(placement);
+      if (typeof block?.blockId === "string" &&
+          sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) continue;
+      const currentlyUsable = usable && placement.availability === undefined;
+      if (!currentlyUsable) continue;
+      if (hasReferenceChoiceSource(placement)) {
+        const field = referenceChoiceFieldForPlacement(placement, modules);
+        if (field === undefined || fields.has(field.fieldKey)) invalid = true;
+        else {
+          fields.set(field.fieldKey, field);
+          placements.set(placementId, field);
+        }
+      }
+      if (isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) collect(child, currentlyUsable);
+    }
+  };
+  if (isRecord(target.slots))
+    for (const child of Object.values(target.slots)) collect(child, true);
+  return invalid ? undefined : { fields, placements };
 };
 
 type ReferenceChoiceService = ReturnType<typeof createReferenceChoiceService>;
@@ -249,12 +315,16 @@ export const resolveReferenceChoiceFormValues = async (args: Readonly<{
   application: ApplicationContentV2;
   modules: readonly ModuleDefinitionConsumerReadResultV3[];
   formId: string;
+  projectedFields: ReferenceChoiceFormFieldIndex;
   values: unknown;
   evidence?: unknown;
 }>): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
   if (!isRecord(args.values)) return undefined;
-  const fields = referenceChoiceFieldsForForm(args.application, args.modules, args.formId);
-  if (fields === undefined) return undefined;
+  const authoredFields = referenceChoiceFieldsForForm(args.application, args.modules, args.formId);
+  if (authoredFields === undefined) return undefined;
+  const fields = args.projectedFields;
+  for (const fieldKey of Object.keys(args.values))
+    if (authoredFields.has(fieldKey) && !fields.has(fieldKey)) return undefined;
   const parsedEvidence =
     args.evidence === undefined
       ? { success: true as const, data: {} as ReferenceChoiceSelectionEvidenceMap }

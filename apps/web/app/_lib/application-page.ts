@@ -72,8 +72,9 @@ import {
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 import {
   hasReferenceChoiceSource,
-  referenceChoiceFieldForPlacement,
+  projectedReferenceChoiceForm,
   resolveReferenceChoiceOption,
+  type ProjectedReferenceChoiceForm,
   type ReferenceChoiceFormField,
 } from "./reference-choices";
 
@@ -286,6 +287,84 @@ export type ReferenceChoicePageResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
+type ReferenceChoiceAddress = Readonly<{
+  read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+  application: PermittedApplication;
+  pageKey: string;
+}>;
+
+/** Reprojects the current addressed page under the actor and the exact installed release. */
+const projectReferenceChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string }>,
+): Promise<
+  | Readonly<{
+      kind: "available";
+      page: Readonly<Record<string, unknown>>;
+      context: InstalledRuntimeContext;
+      selection: OrganizationSelectionCandidate;
+      dependencies: ReturnType<typeof requestDependencies>;
+    }>
+  | Exclude<ReferenceChoicePageResult, { kind: "completed" }>
+> => {
+  const dependencies = requestDependencies();
+  const selection: OrganizationSelectionCandidate = {
+    organizationId: address.read.organizationId,
+    applicationRootId: address.application.applicationRootId,
+  };
+  const loaded = await loadInstalledContext(session, dependencies, selection);
+  if (loaded.kind !== "available")
+    return loaded.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused" };
+  const context = loaded.value;
+  const application = context.releaseSet.application;
+  if (!sameId(context.applicationRootId, address.application.applicationRootId))
+    return { kind: "refused" };
+  if (
+    request.installationRevision !== context.applicationReleaseRevision ||
+    request.releaseKey !== [
+      application.releaseVersion,
+      application.contentFingerprint,
+      application.resolutionFingerprint,
+    ].join(":")
+  )
+    return { kind: "reload" };
+  const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
+  if (pageDefinition === undefined) return { kind: "refused" };
+  const projected = await createStoredPageCapabilityService({
+    ...dependencies,
+    context,
+    selection: { pageId: pageDefinition.pageId },
+  }).project(session, selection);
+  if (projected.kind === "temporarily_unavailable")
+    return { kind: "temporarily_unavailable" };
+  if (projected.kind !== "available" || projected.value === undefined)
+    return { kind: "refused" };
+  return { kind: "available", page: projected.value, context, selection, dependencies };
+};
+
+/** The form submission's fields come only from its current actor-permitted page. */
+export const loadProjectedReferenceChoiceForm = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string; formId: string }>,
+): Promise<ProjectedReferenceChoiceForm | undefined> => {
+  try {
+    const projected = await projectReferenceChoicePage(session, address, request);
+    return projected.kind === "available"
+      ? projectedReferenceChoiceForm(
+          projected.page,
+          projected.context.releaseSet.modules,
+          request.formId,
+        )
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** A form field may show only a value the page subject read returned for its own record type. */
 const projectEditField = (
   placement: Readonly<Record<string, unknown>>,
@@ -478,11 +557,7 @@ const projectEditField = (
 /** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
 export const loadReferenceChoicePage = async (
   session: IdentitySession,
-  address: Readonly<{
-    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
-    application: PermittedApplication;
-    pageKey: string;
-  }>,
+  address: ReferenceChoiceAddress,
   request: Readonly<{
     placementId: string;
     installationRevision: number;
@@ -494,49 +569,21 @@ export const loadReferenceChoicePage = async (
   }>,
 ): Promise<ReferenceChoicePageResult> => {
   try {
-    const dependencies = requestDependencies();
+    const projected = await projectReferenceChoicePage(session, address, request);
+    if (projected.kind !== "available") return projected;
+    const { dependencies, selection, context } = projected;
     const continuationKey = getQueryContinuationKey();
-    const selection: OrganizationSelectionCandidate = {
-      organizationId: address.read.organizationId,
-      applicationRootId: address.application.applicationRootId,
-    };
-    const loaded = await loadInstalledContext(session, dependencies, selection);
-    if (loaded.kind !== "available")
-      return loaded.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
-    const context = loaded.value;
-    const application = context.releaseSet.application;
-    if (!sameId(context.applicationRootId, address.application.applicationRootId))
-      return { kind: "refused" };
-    if (
-      request.installationRevision !== context.applicationReleaseRevision ||
-      request.releaseKey !==
-        [
-          application.releaseVersion,
-          application.contentFingerprint,
-          application.resolutionFingerprint,
-        ].join(":")
-    )
-      return { kind: "reload" };
-
-    const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
-    if (pageDefinition === undefined) return { kind: "refused" };
-    const projectedPage = await createStoredPageCapabilityService({
-      ...dependencies,
-      context,
-      selection: { pageId: pageDefinition.pageId },
-    }).project(session, selection);
-    if (projectedPage.kind === "temporarily_unavailable")
-      return { kind: "temporarily_unavailable" };
-    if (projectedPage.kind !== "available" || projectedPage.value === undefined)
-      return { kind: "refused" };
-    const placement = collectPlacements(projectedPage.value).find(
+    const placement = collectPlacements(projected.page).find(
       (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
     );
-    if (placement === undefined || !hasReferenceChoiceSource(placement.placement))
+    if (placement === undefined || placement.formId === undefined)
       return { kind: "refused" };
-    const field = referenceChoiceFieldForPlacement(placement.placement, context.releaseSet.modules);
+    const form = projectedReferenceChoiceForm(
+      projected.page,
+      context.releaseSet.modules,
+      placement.formId,
+    );
+    const field = form?.placements.get(request.placementId);
     if (field === undefined) return { kind: "refused" };
 
     const service = createReferenceChoiceService({ ...dependencies, continuationKey });
@@ -1246,7 +1293,10 @@ const loadApplicationPageInternal = async (
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
     if (hasReferenceChoiceSource(placement)) {
-      const field = referenceChoiceFieldForPlacement(placement, context.releaseSet.modules);
+      const form = formId === undefined
+        ? undefined
+        : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
+      const field = form?.placements.get(placementId);
       if (field === undefined || formId === undefined) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
         continue;
