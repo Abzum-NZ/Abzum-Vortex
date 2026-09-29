@@ -5,19 +5,28 @@ import {
   isRecord,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
+  applicationRootIdSchema,
+  correlationIdSchema,
   flowIdSchema,
+  flowLiteralSchema,
   groupIdSchema,
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
+  executionAuthorityContextSchema,
   formContinuationAnswerSchema,
   identitySessionSchema,
+  moduleRootIdSchema,
+  organizationIdSchema,
   organizationSelectionCandidateSchema,
   platformOperationKey,
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   saveRecordCommandV2Schema,
+  stableDefinitionReleaseVersionSchema,
+  timestampSchema,
+  type ExecutionAuthorityContext,
   type ExecuteNamedActionCommandV2,
   type FlowDefinition,
   type ExecuteNamedActionResultV2,
@@ -28,8 +37,13 @@ import {
   type OrganizationSelectionCandidate,
   type SaveRecordCommandV2,
   type SaveRecordResultV2,
+  type FlowTriggerOrigin,
 } from "@vortex/contracts";
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+import {
+  readFlowRunAsPrincipalForRun,
+  type HumanOrganizationRequestResult,
+} from "@vortex/access";
+import { withRuntimeTransaction } from "@vortex/db";
 import {
   collectActionFlowTasks,
   resumeFlowRun,
@@ -61,16 +75,16 @@ export type { FlowSubject };
  * clock, the continuation store and the protected-operation executor.
  *
  * What it guarantees:
- * - The actor is always the initiator's verified session and the organisation that person
- *   selected. Neither is ever read from the inputs, a continuation body or the page, and a flow
- *   that does not run as its initiator is refused.
- * - Every protected task runs through the one executor (`protected-operation-executor.ts`), in its
- *   own short transaction, and only after the effect ledger claims (run id, task path, iteration).
- *   A replayed continuation, a redelivered run or a retried resume therefore replays the recorded
- *   safe outcome, or reports the effect uncertain, and never repeats it.
- * - A continuation is a random token whose hash keys one server-stored row bound to the run, the
- *   initiator, the organisation and the exact flow release. It expires, is handed back once, and a
- *   token that is unknown, expired, used, foreign or for another release is one neutral result.
+ * - Person starts and resumes use only the verified session and selected organisation. A
+ *   committed Event start accepts only its stored intent ID, reloads the exact retained release,
+ *   and resolves the Access-owned non-person principal without creating or borrowing a session.
+ * - Person protected tasks run through the one executor (`protected-operation-executor.ts`), in
+ *   their own short transaction, and only after the effect ledger claims the run, task path,
+ *   iteration, principal and origin. Event protected tasks fail closed until exact per-task grant
+ *   resolution is available; neither path can repeat an uncertain effect.
+ * - A person continuation is a random token whose hash keys one server-stored row bound to the run,
+ *   the initiator, the organisation and the exact flow release. It expires, is handed back once,
+ *   and a token that is unknown, expired, used, foreign or for another release is one neutral result.
  * - The page subject and revision are kept in that server-stored run state as evidence. Protected
  *   tasks recheck current read access and pass the same expected revision to the owning operation.
  * - The run limits are enforced here and in the interpreter: 100 For each items, 25 protected
@@ -110,6 +124,101 @@ export type FlowRelease = Readonly<{
   /** The release's named actions by action key, for a Call protected operation task naming one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
 }>;
+
+/** Exact installation and compiled-flow release identity retained on a committed start intent. */
+export const flowReleaseIdentitySchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
+    flowOwnerKind: z.enum(["application", "module"]),
+    flowOwnerRootId: z.union([applicationRootIdSchema, moduleRootIdSchema]),
+    flowReleaseRevision: revisionSchema,
+    flowReleaseVersion: stableDefinitionReleaseVersionSchema,
+    flowReleaseFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
+export type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
+
+/** Trusted read shape of one committed Event start; callers supply only its intent identifier. */
+export const committedFlowStartIntentSchema = z
+  .object({
+    intentId: z.uuid(),
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
+    flowRelease: z.discriminatedUnion("ownerKind", [
+      z
+        .object({
+          ownerKind: z.literal("application"),
+          rootId: applicationRootIdSchema,
+          revision: revisionSchema,
+          version: stableDefinitionReleaseVersionSchema,
+          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        })
+        .strict(),
+      z
+        .object({
+          ownerKind: z.literal("module"),
+          rootId: moduleRootIdSchema,
+          revision: revisionSchema,
+          version: stableDefinitionReleaseVersionSchema,
+          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        })
+        .strict(),
+    ]),
+    flowId: flowIdSchema,
+    origin: z.literal("event"),
+    originId: z.uuid(),
+    trigger: z.object({ type: z.literal("Event"), id: z.string().min(1).max(1300) }).strict(),
+    inputs: z.record(z.string().min(1).max(200), flowLiteralSchema),
+    triggerValues: z.record(z.string().min(1).max(200), flowLiteralSchema),
+    correlationId: correlationIdSchema,
+    acceptedAt: timestampSchema,
+  })
+  .strict()
+  .superRefine((intent, context) => {
+    if (
+      intent.flowRelease.ownerKind === "application" &&
+      (intent.flowRelease.rootId !== intent.applicationRootId ||
+        intent.flowRelease.revision !== intent.applicationReleaseRevision ||
+        intent.flowRelease.version !== intent.applicationReleaseVersion)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["flowRelease"],
+        message: "Application flow release differs from the installation",
+      });
+  });
+export type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
+
+const releaseIdentityForIntent = (intent: CommittedFlowStartIntent): FlowReleaseIdentity => ({
+  organizationId: intent.organizationId,
+  applicationRootId: intent.applicationRootId,
+  applicationReleaseRevision: intent.applicationReleaseRevision,
+  applicationReleaseVersion: intent.applicationReleaseVersion,
+  flowOwnerKind: intent.flowRelease.ownerKind,
+  flowOwnerRootId: intent.flowRelease.rootId,
+  flowReleaseRevision: intent.flowRelease.revision,
+  flowReleaseVersion: intent.flowRelease.version,
+  flowReleaseFingerprint: intent.flowRelease.fingerprint,
+});
+
+const flowReleaseIdentityMatches = (
+  expected: FlowReleaseIdentity,
+  actual: FlowReleaseIdentity,
+): boolean =>
+  expected.organizationId.toLowerCase() === actual.organizationId.toLowerCase() &&
+  expected.applicationRootId.toLowerCase() === actual.applicationRootId.toLowerCase() &&
+  expected.applicationReleaseRevision === actual.applicationReleaseRevision &&
+  expected.applicationReleaseVersion === actual.applicationReleaseVersion &&
+  expected.flowOwnerKind === actual.flowOwnerKind &&
+  expected.flowOwnerRootId.toLowerCase() === actual.flowOwnerRootId.toLowerCase() &&
+  expected.flowReleaseRevision === actual.flowReleaseRevision &&
+  expected.flowReleaseVersion === actual.flowReleaseVersion &&
+  expected.flowReleaseFingerprint === actual.flowReleaseFingerprint;
 
 /** One record type of a release: each field's identity by its key and by its own identity. */
 export type FlowRecordType = Readonly<{
@@ -184,6 +293,12 @@ export type FlowOrchestratorDependencies = Readonly<{
     organizationId: string,
     flowId: string,
   ) => Promise<FlowRelease | undefined>;
+  /** Reads a committed Event intent by ID; the caller cannot supply its tenant, release or actor. */
+  readCommittedStartIntent?: (intentId: string) => Promise<unknown>;
+  /** Resolves the exact immutable release named by the committed intent, never the current pointer. */
+  resolveCommittedStartRelease?: (
+    intent: CommittedFlowStartIntent,
+  ) => Promise<(FlowRelease & Readonly<{ identity: FlowReleaseIdentity }>) | undefined>;
   /**
    * Checks a flow's invocation permission for the initiator. Required whenever the started flow, or
    * any flow it can reach through Run flow, declares one; such a flow is unavailable to the run when
@@ -449,9 +564,30 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     };
   };
 
-  type Run = Readonly<{
+  type RunAuthority =
+    | Readonly<{
+        kind: "person";
+        session: IdentitySession;
+        selection: OrganizationSelectionCandidate;
+      }>
+    | Readonly<{
+        kind: "execution_authority";
+        context: ExecutionAuthorityContext;
+        organizationId: string;
+      }>;
+
+  type PreparedPersonRun = Readonly<{
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
+    flowId: string;
+    release: FlowRelease;
+    library: FlowLibrary;
+  }>;
+
+  type Run = Readonly<{
+    authority: RunAuthority;
+    origin: FlowTriggerOrigin;
+    originId: string;
     flowId: string;
     release: FlowRelease;
     library: FlowLibrary;
@@ -672,6 +808,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     call: FlowProtectedTaskCall,
     plan: TaskPlan,
   ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
+    // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
+    if (run.authority.kind !== "person")
+      return { result: { outcome: "failed" }, stored: {} };
+    const { session, selection } = run.authority;
     // The page subject is retained as run evidence. A fresh read under this initiator's request
     // scope verifies the exact record type and identity before either protected change is attempted.
     // The record service still checks change or action permission inside its own transaction.
@@ -682,7 +822,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
           : undefined;
     if (target !== undefined) {
-      const subject = await dependencies.subjects!.read(run.session, run.selection, target);
+      const subject = await dependencies.subjects!.read(session, selection, target);
       if (subject !== "read")
         return {
           result: { outcome: subject === "refused" ? "refused" : "failed" },
@@ -690,7 +830,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         };
     }
     if (plan.kind === "save") {
-      const saved = await dependencies.records!.save(run.session, run.selection, plan.command);
+      const saved = await dependencies.records!.save(session, selection, plan.command);
       if (saved.kind !== "available")
         return { result: { outcome: requestOutcome(saved.kind) }, stored: {} };
       const value = saved.value;
@@ -704,7 +844,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     }
 
     if (plan.kind === "action") {
-      const executed = await runNamedAction(run.session, run.selection, plan.command);
+      const executed = await runNamedAction(session, selection, plan.command);
       if (executed.kind !== "available")
         return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
       const value = executed.value;
@@ -724,8 +864,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         operationId: plan.entry.release.operationId,
         releaseVersion: plan.entry.release.releaseVersion,
       },
-      session: run.session,
-      selection: run.selection,
+      session,
+      selection,
       inputs: plan.inputs,
       effectKey: { runId: state.runId, taskPath: call.taskPath, iteration: call.iteration },
     });
@@ -756,13 +896,30 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     state: FlowRunState,
     call: FlowProtectedTaskCall,
   ): Promise<TaskResult> => {
+    if (run.authority.kind === "execution_authority")
+      return notAvailable(run, call, "per-task Access grant resolution (#1562)");
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 
+    const principal =
+      run.authority.kind === "person"
+        ? { kind: "person" as const, id: run.authority.session.identityId }
+        : {
+            kind: run.authority.context.actor.kind,
+            id:
+              run.authority.context.actor.kind === "specified_account"
+                ? run.authority.context.actor.organizationAccountId
+                : run.authority.context.actor.systemActorId,
+          };
     const key = {
       runId: state.runId,
-      organizationId: run.selection.organizationId,
-      identityId: run.session.identityId,
+      organizationId:
+        run.authority.kind === "person"
+          ? run.authority.selection.organizationId
+          : run.authority.organizationId,
+      principal,
+      origin: run.origin,
+      originId: run.originId,
       taskPath: call.taskPath,
       iteration: call.iteration,
     } as const;
@@ -801,6 +958,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     run: Run,
     step: Extract<FlowRunStep, { kind: "interface" }>,
   ): Promise<FlowOrchestratorResponse> => {
+    if (run.authority.kind !== "person") return refused;
+    const { session, selection } = run.authority;
     const token = newToken();
     let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>>;
     try {
@@ -810,8 +969,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       stored = await dependencies.continuations.issue({
         tokenHash: sha256(token),
         runId: step.state.runId,
-        organizationId: run.selection.organizationId,
-        identityId: run.session.identityId,
+        organizationId: selection.organizationId,
+        identityId: session.identityId,
         flowId: run.flowId,
         releaseKey: run.release.releaseKey,
         state: step.state,
@@ -853,7 +1012,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     for (;;) {
       if (step.kind === "finished") return finished(run, step);
       if (elapsedMilliseconds(run) > serverMilliseconds) return limitExceeded(run, step.state);
-      if (step.kind === "interface") return suspend(run, step);
+      if (step.kind === "interface")
+        return run.authority.kind === "person" ? suspend(run, step) : refused;
       const result = await runProtectedTask(run, step.state, step.call);
       const resume: FlowRunResume = {
         kind: "task_result",
@@ -869,9 +1029,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     selection: OrganizationSelectionCandidate,
     flowId: string,
     kind: "interactive" | "action" = "interactive",
-  ): Promise<
-    Omit<Run, "carriedMilliseconds" | "segmentStart" | "unavailable" | "sensitive"> | undefined
-  > => {
+  ): Promise<PreparedPersonRun | undefined> => {
     // An expired session is not a verified initiator, on a start or on any resume.
     if (!(Date.parse(session.accessTokenExpiresAt) > now().valueOf())) return undefined;
     const release = await dependencies.resolveRelease(selection.organizationId, flowId);
@@ -982,7 +1140,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           return refused;
         const actor = await dependencies.resolveActor?.(session, selection);
         const run: Run = {
-          ...prepared,
+          authority: { kind: "person", session, selection },
+          origin: "person",
+          originId: session.identityId,
+          flowId: prepared.flowId,
+          release: prepared.release,
+          library: prepared.library,
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
@@ -996,6 +1159,128 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             now: now().toISOString(),
             ...(actor === undefined ? {} : { actor }),
             ...(subject === undefined ? {} : { subject }),
+          },
+          run.library,
+        );
+        return await drive(run, first);
+      } catch {
+        return refused;
+      }
+    },
+
+    /** Starts one verified background Event flow using only its committed start-intent ID. */
+    async startCommittedIntent(intentIdCandidate: string): Promise<FlowOrchestratorResponse> {
+      try {
+        const intentId = z.uuid().safeParse(intentIdCandidate);
+        if (
+          !intentId.success ||
+          dependencies.readCommittedStartIntent === undefined ||
+          dependencies.resolveCommittedStartRelease === undefined
+        )
+          return refused;
+
+        const storedIntent = await dependencies.readCommittedStartIntent(intentId.data);
+        const parsedIntent = committedFlowStartIntentSchema.safeParse(storedIntent);
+        if (
+          !parsedIntent.success ||
+          parsedIntent.data.intentId.toLowerCase() !== intentId.data.toLowerCase()
+        )
+          return refused;
+        const intent = parsedIntent.data;
+        // Trigger field values are not yet mapped by the Event dispatcher; never silently ignore them.
+        if (
+          Object.keys(intent.triggerValues).length > 0 ||
+          !withinPayload(intent.inputs) ||
+          !withinPayload(intent.triggerValues)
+        )
+          return refused;
+
+        const resolvedRelease = await dependencies.resolveCommittedStartRelease(intent);
+        if (resolvedRelease === undefined) return refused;
+        const resolvedIdentity = flowReleaseIdentitySchema.safeParse(resolvedRelease.identity);
+        if (
+          !resolvedIdentity.success ||
+          !flowReleaseIdentityMatches(releaseIdentityForIntent(intent), resolvedIdentity.data)
+        )
+          return refused;
+
+        const library = libraryOf(resolvedRelease);
+        const flow = library(intent.flowId);
+        if (
+          flow === undefined ||
+          flow.execution !== "background" ||
+          (flow.runAs.kind !== "specified_account" && flow.runAs.kind !== "system") ||
+          !flow.triggers.some(
+            (trigger) => trigger.type === "Event" && trigger.id === intent.trigger.id,
+          )
+        )
+          return refused;
+
+        const principalRead = await withRuntimeTransaction((transaction) =>
+          readFlowRunAsPrincipalForRun(transaction, {
+            executionBindingId: flow.runAs.executionBindingId,
+            organizationId: intent.organizationId,
+            applicationRootId: intent.applicationRootId,
+            releaseVersion: intent.applicationReleaseVersion,
+            flowId: intent.flowId,
+          }),
+        );
+        if (principalRead.outcome !== "available") return refused;
+        const principal = principalRead.principal;
+        if (
+          principal.state !== "active" ||
+          principal.actor.kind !== flow.runAs.kind ||
+          principal.executionBindingId.toLowerCase() !== flow.runAs.executionBindingId.toLowerCase() ||
+          principal.organizationId.toLowerCase() !== intent.organizationId.toLowerCase() ||
+          principal.applicationRootId.toLowerCase() !== intent.applicationRootId.toLowerCase() ||
+          principal.releaseVersion !== intent.applicationReleaseVersion ||
+          principal.flowId.toLowerCase() !== intent.flowId.toLowerCase()
+        )
+          return refused;
+
+        const issuedAt = now();
+        const executionAuthority = executionAuthorityContextSchema.safeParse({
+          kind: "execution_authority",
+          organizationId: intent.organizationId,
+          applicationRootId: intent.applicationRootId,
+          releaseVersion: intent.applicationReleaseVersion,
+          flowId: intent.flowId,
+          executionBindingId: flow.runAs.executionBindingId,
+          actor: principal.actor,
+          correlationId: intent.correlationId,
+          issuedAt: issuedAt.toISOString(),
+          expiresAt: new Date(issuedAt.valueOf() + serverMilliseconds).toISOString(),
+        });
+        if (!executionAuthority.success) return refused;
+
+        const run: Run = {
+          authority: {
+            kind: "execution_authority",
+            context: executionAuthority.data,
+            organizationId: intent.organizationId,
+          },
+          origin: intent.origin,
+          originId: intent.originId,
+          flowId: intent.flowId,
+          release: resolvedRelease,
+          library,
+          carriedMilliseconds: 0,
+          segmentStart: clock(),
+          unavailable: [],
+          sensitive: [],
+        };
+        const actor =
+          principal.actor.kind === "specified_account"
+            ? principal.actor.organizationAccountId
+            : principal.actor.systemActorId;
+        const first = startFlowRun(
+          {
+            runId: intent.intentId,
+            flowId: intent.flowId,
+            inputs: intent.inputs,
+            now: issuedAt.toISOString(),
+            actor,
+            executionKinds: ["background"],
           },
           run.library,
         );
@@ -1052,7 +1337,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             return refused;
         }
         const run: Run = {
-          ...prepared,
+          authority: { kind: "person", session, selection },
+          origin: "person",
+          originId: session.identityId,
+          flowId: prepared.flowId,
+          release: prepared.release,
+          library: prepared.library,
           carriedMilliseconds: stored.elapsedMilliseconds,
           segmentStart: clock(),
           unavailable: [],
