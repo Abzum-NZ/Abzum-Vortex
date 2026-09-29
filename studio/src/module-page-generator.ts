@@ -626,10 +626,15 @@ export const generateModulePageFragments = (
   ];
   const usedReleases = new Map<string, (typeof catalogue.releases)[number]>();
   for (const page of pages) {
+    const composition = page.composition;
     const rootSlots =
-      page.composition.shell_kind === "default"
-        ? [page.composition.main]
-        : Object.values(page.composition.content);
+      "step_content" in composition
+        ? composition.shell_kind === "default"
+          ? Object.values(composition.step_content)
+          : Object.values(composition.step_content).flatMap((step) => Object.values(step))
+        : composition.shell_kind === "default"
+          ? [composition.main]
+          : Object.values(composition.content);
     for (const rootSlot of rootSlots)
       for (const [, placed] of sourcePlacementEntriesV2(rootSlot)) {
         const release = catalogue.releases.find(
