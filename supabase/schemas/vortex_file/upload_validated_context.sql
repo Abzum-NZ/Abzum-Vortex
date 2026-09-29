@@ -15,3 +15,5 @@ revoke execute on function vortex_file.upload_validated_context() from public, a
 
 comment on function vortex_file.upload_validated_context() is
   'Returns the established upload context after the shared human or system context validator accepts it.';
+
+alter function vortex_file.upload_validated_context() owner to vortex_file_owner;

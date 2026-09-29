@@ -1,45 +1,32 @@
 import {
+  formatExactDecimal,
   jsonValueSchema,
   moneyValueV2Schema,
+  parseExactDecimal,
   recordTypeDefinitionV3Schema,
   timestampSchema,
+  type FlowFormula,
   type JsonValue,
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
-import { compareInstants, exactInstant } from "./exact-instant";
-import { evaluateTypedConditionV2 } from "@vortex/rule";
-import {
-  addRationals,
-  divideRationals,
-  multiplyRationals,
-  rationalFromExactText,
-  rationalFromWholeNumber,
-  rationalToSafeWholeNumber,
-  roundRationalHalfEven,
-  subtractRationals,
-  type ExactRational,
-} from "./exact-arithmetic";
+import { evaluateFlowFormula, evaluateTypedConditionV2 } from "@vortex/rule";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
-type CalculationFieldV2 = Extract<ModuleFieldV3, { type: "calculation" }>;
-type CalculationExpressionV2 = CalculationFieldV2["settings"]["expression"];
-/** One value of a numeric calculation: a named field, an exact literal, or a nested operation. */
-type CalculationNumberValueV2 = Extract<
-  CalculationExpressionV2,
-  { kind: "numeric" }
->["operands"][number];
-type CalculationNumberLeafV2 = Extract<CalculationNumberValueV2, { source: "field" | "literal" }>;
+type CalculationField = Extract<ModuleFieldV3, { type: "calculation" }>;
+type CalculationExpression = CalculationField["settings"]["expression"];
+type CalculationNumberValue = Extract<CalculationExpression, { kind: "numeric" }>["operands"][number];
+type DateOffsetAmount = Extract<CalculationExpression, { kind: "date_offset" }>["amount"];
 
-export type RecordCalculationClockV2 = Readonly<{
+export type RecordCalculationClock = Readonly<{
   instant: string;
   organizationLocalDate: string;
 }>;
 
-export type EvaluateRecordCalculationsV2Input = Readonly<{
+export type EvaluateRecordCalculationsInput = Readonly<{
   recordType: RecordTypeDefinitionV3;
   authoritativeFieldValues: Readonly<Record<string, unknown>>;
-  clock: RecordCalculationClockV2;
+  clock: RecordCalculationClock;
 }>;
 
 export type RecordCalculationIssueCode =
@@ -61,7 +48,7 @@ export type RecordCalculationIssue = Readonly<{
   path: readonly (string | number)[];
 }>;
 
-export type EvaluateRecordCalculationsV2Result =
+export type EvaluateRecordCalculationsResult =
   | Readonly<{
       success: true;
       setValues: Readonly<Record<string, JsonValue>>;
@@ -72,83 +59,47 @@ export type EvaluateRecordCalculationsV2Result =
       issues: readonly RecordCalculationIssue[];
     }>;
 
-type NumericValue = Readonly<{
-  value: ExactRational;
-  currency?: string;
-}>;
+const isValueMap = (candidate: unknown): candidate is Readonly<Record<string, unknown>> =>
+  candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
 
-type NumberRefusalCode = Extract<
-  RecordCalculationIssueCode,
-  "division_by_zero" | "money_dimension_mismatch" | "result_overflow"
->;
-/**
- * One numeric value of a calculation: absent when a named operand has no usable value, refused
- * when the arithmetic or the money dimensions of one operation are not allowed, and otherwise
- * the exact rational with the currency its dimensions require. A nested operation is worked out
- * with the same rules as the calculation that contains it, so only the outermost result is
- * checked against the declared result type.
- */
-type NumberValueOutcome =
-  | { kind: "value"; value: NumericValue }
-  | { kind: "absent" }
-  | { kind: "refused"; code: NumberRefusalCode };
-
-const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-const utcDate = (
-  year: number,
-  month: number,
-  day: number,
-  hour = 0,
-  minute = 0,
-  second = 0,
-): Date => {
-  const output = new Date(0);
-  output.setUTCFullYear(year, month, day);
-  output.setUTCHours(hour, minute, second, 0);
-  return output;
-};
-
-const validCalendarDate = (value: string): boolean => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = utcDate(year!, month! - 1, day!);
+const validCalendarDate = (candidate: string): boolean => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(candidate);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
   return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   );
 };
 
-const numberValueDependencies = (
-  value: CalculationNumberValueV2,
-  add: (fieldId: string) => void,
-): void => {
-  if (value.source === "numeric") {
-    value.operands.forEach((operand) => numberValueDependencies(operand, add));
-    return;
-  }
-  if (value.source === "field") add(value.fieldId);
-};
-
-const calculationDependencies = (expression: CalculationExpressionV2): string[] => {
+const calculationDependencies = (expression: CalculationExpression): string[] => {
   const dependencies: string[] = [];
   const add = (fieldId: string | undefined) => {
     if (fieldId !== undefined && !dependencies.includes(fieldId)) dependencies.push(fieldId);
   };
-  const visitCondition = (value: unknown): void => {
-    if (value === null || typeof value !== "object") return;
-    if (!Array.isArray(value)) {
-      const entry = value as Readonly<Record<string, unknown>>;
+  const visitCondition = (candidate: unknown): void => {
+    if (candidate === null || typeof candidate !== "object") return;
+    if (!Array.isArray(candidate)) {
+      const entry = candidate as Readonly<Record<string, unknown>>;
       if (entry.source === "field" && typeof entry.fieldId === "string") add(entry.fieldId);
     }
-    for (const child of Array.isArray(value) ? value : Object.values(value)) visitCondition(child);
+    for (const child of Array.isArray(candidate) ? candidate : Object.values(candidate))
+      visitCondition(child);
+  };
+  const visitNumber = (candidate: CalculationNumberValue): void => {
+    if (candidate.source === "numeric") candidate.operands.forEach(visitNumber);
+    else if (candidate.source === "field") add(candidate.fieldId);
   };
   switch (expression.kind) {
     case "join_text":
       expression.fieldIds.forEach(add);
       break;
     case "numeric":
-      expression.operands.forEach((operand) => numberValueDependencies(operand, add));
+      expression.operands.forEach(visitNumber);
       break;
     case "condition":
       visitCondition(expression.condition);
@@ -165,104 +116,176 @@ const calculationDependencies = (expression: CalculationExpressionV2): string[] 
   return dependencies;
 };
 
-const resultType = (field: ModuleFieldV3): string =>
+const resultTypeOf = (field: ModuleFieldV3): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
-const numericValue = (field: ModuleFieldV3, value: unknown): NumericValue | undefined => {
-  const type = resultType(field);
-  if (type === "whole_number") {
-    const parsed = rationalFromWholeNumber(value);
-    return parsed === undefined ? undefined : { value: parsed };
+const formulaTypeOf = (field: ModuleFieldV3): string => {
+  const type = resultTypeOf(field);
+  switch (type) {
+    case "yes_no":
+      return "yes_no";
+    case "long_text":
+    case "reference_number":
+    case "email_address":
+    case "phone_number":
+    case "web_address":
+      return "text";
+    case "link":
+    case "link_to_one_of_several":
+      return "record_reference";
+    case "link_to_person":
+      return "organization_account_reference";
+    case "table":
+    case "attachment":
+      return "json";
+    default:
+      return type;
   }
-  if (type === "decimal_number") {
-    const parsed = rationalFromExactText(value);
-    return parsed === undefined ? undefined : { value: parsed };
-  }
-  if (type === "money") {
-    const parsedMoney = moneyValueV2Schema.safeParse(value);
-    if (!parsedMoney.success) return undefined;
-    const parsed = rationalFromExactText(parsedMoney.data.amount);
-    return parsed === undefined
-      ? undefined
-      : { value: parsed, currency: parsedMoney.data.currency };
-  }
-  return undefined;
 };
 
-const sameCurrency = (values: readonly NumericValue[]): string | undefined => {
-  const currencies = values.flatMap((value) =>
-    value.currency === undefined ? [] : [value.currency],
+const literal = (type: string, value: JsonValue): FlowFormula =>
+  ({ op: "literal", type, value }) as unknown as FlowFormula;
+
+const fieldFormula = (
+  fieldId: string,
+  fields: ReadonlyMap<string, ModuleFieldV3>,
+  values: ReadonlyMap<string, JsonValue>,
+): FlowFormula | undefined => {
+  const field = fields.get(fieldId);
+  if (field === undefined) return undefined;
+  return literal(formulaTypeOf(field), values.get(fieldId) ?? null);
+};
+
+const numericOperation = (
+  operation: "add" | "subtract" | "multiply" | "divide",
+  operands: readonly FlowFormula[],
+  scale = 18,
+): FlowFormula => {
+  if (operation === "add" || operation === "multiply") {
+    if (operands.length <= 10)
+      return { op: operation, args: [...operands], scale, rounding: "half_even" };
+    const groups: FlowFormula[] = [];
+    for (let index = 0; index < operands.length; index += 10) {
+      const group = operands.slice(index, index + 10);
+      groups.push(group.length === 1 ? group[0]! : numericOperation(operation, group));
+    }
+    return { op: operation, args: groups, scale, rounding: "half_even" };
+  }
+  return operands.slice(1).reduce<FlowFormula>(
+    (current, next, index) => ({
+      op: operation,
+      args: [current, next],
+      scale: index === operands.length - 2 ? scale : 18,
+      rounding: "half_even",
+    }),
+    operands[0]!,
   );
-  return currencies.length > 0 && currencies.every((currency) => currency === currencies[0])
-    ? currencies[0]
-    : undefined;
 };
 
-const numericResult = (
-  field: CalculationFieldV2,
-  value: ExactRational,
-  currency?: string,
-): JsonValue | undefined => {
-  const type = field.settings.resultType;
-  if (type === "whole_number") return rationalToSafeWholeNumber(value);
-  const decimalPlaces = field.settings.decimalPlaces;
-  if (decimalPlaces === undefined) return undefined;
-  const amount = roundRationalHalfEven(value, decimalPlaces);
-  if (amount === undefined) return undefined;
-  if (type === "decimal_number") return amount;
-  return type === "money" && currency !== undefined ? { amount, currency } : undefined;
+const numberFormula = (
+  operand: CalculationNumberValue,
+  fields: ReadonlyMap<string, ModuleFieldV3>,
+  values: ReadonlyMap<string, JsonValue>,
+): FlowFormula | undefined => {
+  if (operand.source === "literal") return literal("decimal_number", operand.value);
+  if (operand.source === "field") return fieldFormula(operand.fieldId, fields, values);
+  const children = operand.operands.map((child) => numberFormula(child, fields, values));
+  if (children.some((child) => child === undefined)) return undefined;
+  return numericOperation(operand.operation, children as FlowFormula[]);
 };
 
-/**
- * True when an exact result is a whole number too large for the declared whole-number result
- * type. Such a result is refused outright rather than reported as a missing or fractional value,
- * because no exact value exists that the declared type can hold.
- */
-const wholeNumberOverflows = (value: ExactRational): boolean =>
-  value.numerator % value.denominator === 0n &&
-  (value.numerator / value.denominator < BigInt(Number.MIN_SAFE_INTEGER) ||
-    value.numerator / value.denominator > BigInt(Number.MAX_SAFE_INTEGER));
-
-const daysInUtcMonth = (year: number, month: number): number =>
-  utcDate(year, month + 1, 0).getUTCDate();
-
-const offsetUtcDate = (
-  date: Date,
-  amount: number,
-  unit: "days" | "weeks" | "months" | "years",
-): Date | undefined => {
-  const output = new Date(date.getTime());
-  if (unit === "days" || unit === "weeks")
-    output.setUTCDate(output.getUTCDate() + amount * (unit === "weeks" ? 7 : 1));
-  else {
-    const originalDay = output.getUTCDate();
-    const monthDelta = amount * (unit === "years" ? 12 : 1);
-    output.setUTCDate(1);
-    output.setUTCMonth(output.getUTCMonth() + monthDelta);
-    output.setUTCDate(
-      Math.min(originalDay, daysInUtcMonth(output.getUTCFullYear(), output.getUTCMonth())),
-    );
+const dateAmountFormula = (
+  amount: DateOffsetAmount,
+  fields: ReadonlyMap<string, ModuleFieldV3>,
+  values: ReadonlyMap<string, JsonValue>,
+): FlowFormula | undefined => {
+  if (amount.source === "literal") {
+    const whole = Number(amount.value);
+    return Number.isSafeInteger(whole)
+      ? literal("whole_number", whole)
+      : literal("whole_number", null);
   }
-  return Number.isNaN(output.getTime()) ? undefined : output;
+  const field = fields.get(amount.fieldId);
+  if (!field) return undefined;
+  const candidate = values.get(amount.fieldId);
+  if (candidate === undefined || candidate === null) return literal("whole_number", null);
+  if (formulaTypeOf(field) === "money") return literal("money", candidate);
+  const whole = typeof candidate === "number" ? candidate : Number(candidate);
+  return Number.isSafeInteger(whole) ? literal("whole_number", whole) : literal("whole_number", null);
 };
 
-const offsetDateValue = (
-  value: string,
-  amount: number,
-  unit: "days" | "weeks" | "months" | "years",
-  dateTime: boolean,
-): string | undefined => {
-  if (!dateTime) {
-    if (!validCalendarDate(value)) return undefined;
-    const [year, month, day] = value.split("-").map(Number);
-    const output = offsetUtcDate(utcDate(year!, month! - 1, day!), amount, unit);
-    return output?.toISOString().slice(0, 10);
+const deadlineFormula = (
+  field: CalculationField,
+  fields: ReadonlyMap<string, ModuleFieldV3>,
+  values: ReadonlyMap<string, JsonValue>,
+): FlowFormula | undefined => {
+  const expression = field.settings.expression;
+  if (expression.kind !== "deadline_passed") return undefined;
+  const dueField = fields.get(expression.dueFieldId);
+  const due = fieldFormula(expression.dueFieldId, fields, values);
+  if (!dueField || !due) return undefined;
+  const dueType = formulaTypeOf(dueField);
+  const passed =
+    dueType === "date"
+      ? {
+          op: "lte" as const,
+          left: {
+            op: "date_add" as const,
+            date: due,
+            amount: literal("whole_number", 1),
+            unit: "days" as const,
+          },
+          right: { op: "now" as const },
+        }
+      : { op: "lte" as const, left: due, right: { op: "now" as const } };
+  if (!expression.statusFieldId || expression.terminalStatusValues.length === 0) return passed;
+  const statusField = fields.get(expression.statusFieldId);
+  const status = fieldFormula(expression.statusFieldId, fields, values);
+  if (!statusField || !status) return undefined;
+  const statusType = formulaTypeOf(statusField);
+  const terminal = {
+    op: "in" as const,
+    value: status,
+    options: expression.terminalStatusValues.map((value) => literal(statusType, value)),
+  };
+  return {
+    op: "if",
+    condition: terminal,
+    then: literal("yes_no", false),
+    else: passed,
+  };
+};
+
+const calculationFormula = (
+  field: CalculationField,
+  fields: ReadonlyMap<string, ModuleFieldV3>,
+  values: ReadonlyMap<string, JsonValue>,
+): FlowFormula | undefined => {
+  const expression = field.settings.expression;
+  if (expression.kind === "join_text") {
+    const parts = expression.fieldIds.map((fieldId) => fieldFormula(fieldId, fields, values));
+    if (parts.some((part) => part === undefined)) return undefined;
+    return {
+      op: "join",
+      parts: parts as FlowFormula[],
+      separator: expression.separator,
+    };
   }
-  if (!timestampSchema.safeParse(value).success) return undefined;
-  const fraction = /(\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value)?.[1] ?? "";
-  const output = offsetUtcDate(new Date(value), amount, unit);
-  if (!output) return undefined;
-  return output.toISOString().replace(/\.\d{3}Z$/, `${fraction}Z`);
+  if (expression.kind === "numeric") {
+    const operands = expression.operands.map((operand) => numberFormula(operand, fields, values));
+    if (operands.some((operand) => operand === undefined)) return undefined;
+    const precision =
+      field.settings.resultType === "whole_number" ? 18 : field.settings.decimalPlaces ?? 12;
+    return numericOperation(expression.operation, operands as FlowFormula[], precision);
+  }
+  if (expression.kind === "date_offset") {
+    const date = fieldFormula(expression.dateFieldId, fields, values);
+    const amount = dateAmountFormula(expression.amount, fields, values);
+    if (!date || !amount) return undefined;
+    return { op: "date_add", date, amount, unit: expression.unit };
+  }
+  if (expression.kind === "deadline_passed") return deadlineFormula(field, fields, values);
+  return undefined;
 };
 
 const issue = (
@@ -271,20 +294,117 @@ const issue = (
   path: readonly (string | number)[] = ["recordType"],
 ): RecordCalculationIssue => ({ code, ...(fieldId === undefined ? {} : { fieldId }), path });
 
+const currencyOf = (candidate: JsonValue): string | undefined => {
+  const parsed = moneyValueV2Schema.safeParse(candidate);
+  return parsed.success ? parsed.data.currency : undefined;
+};
+
+const zeroValue = (candidate: JsonValue): boolean => {
+  const amount =
+    candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)
+      ? (candidate as { amount?: unknown }).amount
+      : candidate;
+  if (typeof amount !== "string" && typeof amount !== "number") return false;
+  return parseExactDecimal(String(amount))?.coefficient === 0n;
+};
+
+const formulaFailure = (
+  formula: FlowFormula,
+  input: EvaluateRecordCalculationsInput,
+): RecordCalculationIssueCode | undefined => {
+  const evaluate = (candidate: FlowFormula) =>
+    evaluateFlowFormula(candidate, {
+      now: input.clock.instant,
+      reference: () => undefined,
+    });
+  if (
+    formula.op === "add" ||
+    formula.op === "subtract" ||
+    formula.op === "multiply" ||
+    formula.op === "divide"
+  ) {
+    const operands = formula.args.map(evaluate);
+    if (operands.every((operand) => operand !== undefined)) {
+      const money = operands.filter((operand) => operand!.type === "money");
+      const currencies = money.map((operand) => currencyOf(operand!.value));
+      const commonCurrency =
+        currencies.length > 0 &&
+        currencies.every((currency) => currency !== undefined && currency === currencies[0]);
+      const valid =
+        formula.op === "add" || formula.op === "subtract"
+          ? money.length === 0 || (money.length === operands.length && commonCurrency)
+          : formula.op === "multiply"
+            ? money.length <= 1
+            : money.length === 0 ||
+              (money.length === 1 && operands[0]?.type === "money" && commonCurrency);
+      if (!valid) return "money_dimension_mismatch";
+      if (formula.op === "divide" && operands.slice(1).some((operand) => zeroValue(operand!.value)))
+        return "division_by_zero";
+    }
+    for (const child of formula.args) {
+      const failure = formulaFailure(child, input);
+      if (failure !== undefined) return failure;
+    }
+  } else if (formula.op === "round") return formulaFailure(formula.arg, input);
+  else if (formula.op === "date_add") {
+    const amount = evaluate(formula.amount);
+    if (amount?.type === "money") return "money_dimension_mismatch";
+  }
+  return undefined;
+};
+
+const calculationInputsPresent = (
+  field: CalculationField,
+  values: ReadonlyMap<string, JsonValue>,
+): boolean => {
+  const expression = field.settings.expression;
+  const requiredIds =
+    expression.kind === "deadline_passed"
+      ? [expression.dueFieldId]
+      : calculationDependencies(expression);
+  return requiredIds.every((fieldId) => {
+    const value = values.get(fieldId);
+    return value !== undefined && value !== null;
+  });
+};
+
+const evaluateCondition = (
+  field: CalculationField,
+  recordType: RecordTypeDefinitionV3,
+  values: ReadonlyMap<string, JsonValue>,
+): boolean | undefined => {
+  const expression = field.settings.expression;
+  if (expression.kind !== "condition") return undefined;
+  const dependencies = calculationDependencies(expression);
+  try {
+    return evaluateTypedConditionV2({
+      condition: expression.condition,
+      sourceRecordFields: recordType.fields,
+      declaredFieldIds: dependencies,
+      parameterDeclarations: [],
+      fieldValues: Object.fromEntries(
+        dependencies.map((fieldId) => [fieldId, values.get(fieldId) ?? null]),
+      ),
+      parameterValues: {},
+    });
+  } catch {
+    return undefined;
+  }
+};
+
 /**
- * Evaluates canonical Module V2 calculation fields from an owning operation's
- * complete authoritative values. It performs no reads, writes or access decisions.
+ * Evaluates every stored calculation from the owning operation's complete authoritative values
+ * using the shared flow formula evaluator. It performs no reads, writes or access decisions.
  */
-export const evaluateRecordCalculationsV2 = (
-  input: EvaluateRecordCalculationsV2Input,
-): EvaluateRecordCalculationsV2Result => {
+export const evaluateRecordCalculations = (
+  input: EvaluateRecordCalculationsInput,
+): EvaluateRecordCalculationsResult => {
   const parsedRecordType = recordTypeDefinitionV3Schema.safeParse(input.recordType);
-  const operationInstant =
-    typeof input.clock?.instant === "string" ? exactInstant(input.clock.instant) : undefined;
   if (
     !parsedRecordType.success ||
     !isValueMap(input.authoritativeFieldValues) ||
-    operationInstant === undefined ||
+    typeof input.clock?.instant !== "string" ||
+    !timestampSchema.safeParse(input.clock.instant).success ||
     typeof input.clock?.organizationLocalDate !== "string" ||
     !validCalendarDate(input.clock.organizationLocalDate)
   )
@@ -295,11 +415,10 @@ export const evaluateRecordCalculationsV2 = (
     recordType.fields.map((field) => [field.fieldId, field]),
   );
   const calculations = recordType.fields.filter(
-    (field): field is CalculationFieldV2 => field.type === "calculation",
+    (field): field is CalculationField => field.type === "calculation",
   );
   const calculationIds = new Set<string>(calculations.map((field) => field.fieldId));
-  const suppliedKeys = Object.keys(input.authoritativeFieldValues);
-  if (suppliedKeys.some((fieldId) => !fields.has(fieldId)))
+  if (Object.keys(input.authoritativeFieldValues).some((fieldId) => !fields.has(fieldId)))
     return {
       success: false,
       issues: [issue("invalid_input", undefined, ["authoritativeFieldValues"])],
@@ -307,20 +426,15 @@ export const evaluateRecordCalculationsV2 = (
 
   const values = new Map<string, JsonValue>();
   const invalidValues: RecordCalculationIssue[] = [];
-  for (const [fieldId, value] of Object.entries(input.authoritativeFieldValues)) {
+  for (const [fieldId, candidate] of Object.entries(input.authoritativeFieldValues)) {
     const field = fields.get(fieldId)!;
     if (calculationIds.has(fieldId)) continue;
     if (
-      !jsonValueSchema.safeParse(value).success ||
-      !persistedRecordFieldValueMatches({
-        field,
-        value,
-      })
+      !jsonValueSchema.safeParse(candidate).success ||
+      !persistedRecordFieldValueMatches({ field, value: candidate })
     )
-      invalidValues.push(
-        issue("invalid_dependency_value", fieldId, ["authoritativeFieldValues", fieldId]),
-      );
-    else values.set(fieldId, value as JsonValue);
+      invalidValues.push(issue("invalid_dependency_value", fieldId, ["authoritativeFieldValues", fieldId]));
+    else values.set(fieldId, candidate as JsonValue);
   }
   if (invalidValues.length > 0) return { success: false, issues: invalidValues };
 
@@ -337,16 +451,13 @@ export const evaluateRecordCalculationsV2 = (
       (["decimal_number", "money"].includes(field.settings.resultType) &&
         field.settings.decimalPlaces === undefined)
     )
-      return {
-        success: false,
-        issues: [issue("execution_ineligible", field.fieldId)],
-      };
+      return { success: false, issues: [issue("execution_ineligible", field.fieldId)] };
 
-  const order: CalculationFieldV2[] = [];
+  const order: CalculationField[] = [];
   const visiting = new Set<string>();
   const visited = new Set<string>();
   let cycleFieldId: string | undefined;
-  const visit = (field: CalculationFieldV2): void => {
+  const visit = (field: CalculationField): void => {
     if (visited.has(field.fieldId) || cycleFieldId !== undefined) return;
     if (visiting.has(field.fieldId)) {
       cycleFieldId = field.fieldId;
@@ -368,147 +479,70 @@ export const evaluateRecordCalculationsV2 = (
   const setValues: Record<string, JsonValue> = {};
   const clearFieldIds: string[] = [];
   const issues: RecordCalculationIssue[] = [];
-  const missing = (field: CalculationFieldV2) => {
+  const missing = (field: CalculationField) => {
     if (field.required) issues.push(issue("required_result_missing", field.fieldId));
     else clearFieldIds.push(field.fieldId);
   };
-  const numberLeaf = (leaf: CalculationNumberLeafV2): NumberValueOutcome => {
-    let parsed: NumericValue | undefined;
-    if (leaf.source === "literal") {
-      const exact = rationalFromExactText(leaf.value);
-      parsed = exact === undefined ? undefined : { value: exact };
-    } else {
-      const dependencyField = fields.get(leaf.fieldId);
-      const dependencyValue = values.get(leaf.fieldId);
-      parsed =
-        dependencyField === undefined || dependencyValue === undefined
-          ? undefined
-          : numericValue(dependencyField, dependencyValue);
-    }
-    return parsed === undefined ? { kind: "absent" } : { kind: "value", value: parsed };
-  };
-  const numberValue = (value: CalculationNumberValueV2): NumberValueOutcome => {
-    if (value.source !== "numeric") return numberLeaf(value);
-    const numbers: NumericValue[] = [];
-    let refused: { kind: "refused"; code: NumberRefusalCode } | undefined;
-    for (const operand of value.operands) {
-      const outcome = numberValue(operand);
-      if (outcome.kind === "value") numbers.push(outcome.value);
-      if (outcome.kind === "refused") refused ??= outcome;
-    }
-    // An unusable operand leaves the whole formula without a value, but an operation the closed
-    // catalogue refuses is an authoring defect and is reported even beside an unusable operand.
-    if (numbers.length !== value.operands.length) return refused ?? { kind: "absent" };
-    const currency = sameCurrency(numbers);
-    const moneyCount = numbers.filter((number) => number.currency !== undefined).length;
-    const dimensionsValid =
-      value.operation === "add" || value.operation === "subtract"
-        ? moneyCount === 0 || (moneyCount === numbers.length && currency !== undefined)
-        : value.operation === "multiply"
-          ? moneyCount <= 1
-          : moneyCount === 0 || (moneyCount === 1 && numbers[0]!.currency !== undefined);
-    if (!dimensionsValid) return { kind: "refused", code: "money_dimension_mismatch" };
-    let accumulated = numbers[0]!.value;
-    for (const number of numbers.slice(1)) {
-      if (value.operation === "add") accumulated = addRationals(accumulated, number.value);
-      if (value.operation === "subtract")
-        accumulated = subtractRationals(accumulated, number.value);
-      if (value.operation === "multiply")
-        accumulated = multiplyRationals(accumulated, number.value);
-      if (value.operation === "divide") {
-        const divided = divideRationals(accumulated, number.value);
-        if (divided === undefined) return { kind: "refused", code: "division_by_zero" };
-        accumulated = divided;
-      }
-    }
-    return {
-      kind: "value",
-      value: { value: accumulated, ...(currency === undefined ? {} : { currency }) },
-    };
-  };
 
   for (const field of order) {
-    const expression = field.settings.expression;
     let calculated: JsonValue | undefined;
     let evaluationIssue: RecordCalculationIssueCode | undefined;
-    if (expression.kind === "join_text") {
-      const entries = expression.fieldIds.map((fieldId) => values.get(fieldId));
-      if (entries.every((entry) => typeof entry === "string"))
-        calculated = (entries as string[]).join(expression.separator);
-    } else if (expression.kind === "numeric") {
-      const outcome = numberValue({
-        source: "numeric",
-        operation: expression.operation,
-        operands: expression.operands,
-      });
-      if (outcome.kind === "refused") evaluationIssue = outcome.code;
-      else if (outcome.kind === "value") {
-        const resultIsMoney = outcome.value.currency !== undefined;
-        if ((field.settings.resultType === "money") !== resultIsMoney)
-          evaluationIssue = "money_dimension_mismatch";
-        else if (
-          field.settings.resultType === "whole_number" &&
-          wholeNumberOverflows(outcome.value.value)
-        )
-          evaluationIssue = "result_overflow";
-        else calculated = numericResult(field, outcome.value.value, outcome.value.currency);
-      }
-    } else if (expression.kind === "condition") {
-      const declaredFieldIds = dependencies.get(field.fieldId) ?? [];
-      const conditionValues = Object.fromEntries(
-        declaredFieldIds.map((fieldId) => [fieldId, values.get(fieldId) ?? null]),
-      );
-      try {
-        calculated = evaluateTypedConditionV2({
-          condition: expression.condition,
-          sourceRecordFields: recordType.fields,
-          declaredFieldIds,
-          parameterDeclarations: [],
-          fieldValues: conditionValues,
-          parameterValues: {},
-        });
-      } catch {
+    if (field.settings.expression.kind === "condition") {
+      const result = evaluateCondition(field, recordType, values);
+      if (result !== undefined) calculated = result;
+      else if (dependencies.get(field.fieldId)!.every((fieldId) => values.has(fieldId)))
         evaluationIssue = "condition_refused";
-      }
-    } else if (expression.kind === "date_offset") {
-      const dateField = fields.get(expression.dateFieldId);
-      const dateValue = values.get(expression.dateFieldId);
-      const amountOutcome = numberLeaf(expression.amount);
-      const amount = amountOutcome.kind === "value" ? amountOutcome.value : undefined;
-      const wholeAmount =
-        amount && amount.currency === undefined
-          ? rationalToSafeWholeNumber(amount.value)
-          : undefined;
-      if (amount?.currency !== undefined) evaluationIssue = "money_dimension_mismatch";
-      if (dateField && typeof dateValue === "string" && wholeAmount !== undefined)
-        calculated = offsetDateValue(
-          dateValue,
-          wholeAmount,
-          expression.unit,
-          resultType(dateField) === "date_time",
-        );
-      if (
-        dateField &&
-        dateValue !== undefined &&
-        amount !== undefined &&
-        evaluationIssue === undefined &&
-        calculated === undefined
-      )
-        evaluationIssue = "invalid_result";
     } else {
-      const dueField = fields.get(expression.dueFieldId);
-      const dueValue = values.get(expression.dueFieldId);
-      const statusValue = expression.statusFieldId
-        ? values.get(expression.statusFieldId)
-        : undefined;
-      const terminal =
-        statusValue !== undefined && expression.terminalStatusValues.includes(statusValue);
-      if (terminal) calculated = false;
-      else if (typeof dueValue === "string" && dueField) {
-        if (resultType(dueField) === "date")
-          calculated = input.clock.organizationLocalDate > dueValue;
-        if (resultType(dueField) === "date_time")
-          calculated = compareInstants(operationInstant, exactInstant(dueValue)!) >= 0;
+      const formula = calculationFormula(field, fields, values);
+      if (formula === undefined) {
+        evaluationIssue = "execution_ineligible";
+      } else {
+        const dueField =
+          field.settings.expression.kind === "deadline_passed"
+            ? fields.get(field.settings.expression.dueFieldId)
+            : undefined;
+        const now =
+          dueField !== undefined && formulaTypeOf(dueField) === "date"
+            ? input.clock.organizationLocalDate + "T00:00:00.000Z"
+            : input.clock.instant;
+        const scope = {
+          now,
+          reference: () => undefined,
+        };
+        const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
+        const exactWhole =
+          field.settings.resultType === "whole_number" && evaluated !== undefined
+            ? evaluateFlowFormula(formula, scope, {
+                preserveExactArithmetic: true,
+                requireExactInteger: true,
+              })
+            : evaluated;
+        if (evaluated !== undefined) {
+          if (field.settings.resultType === "money" && evaluated.type !== "money")
+            evaluationIssue = "money_dimension_mismatch";
+          else if (field.settings.resultType !== "money" && evaluated.type === "money")
+            evaluationIssue = "money_dimension_mismatch";
+          else if (exactWhole === undefined) evaluationIssue = "non_integral_whole_number";
+          else if (field.settings.resultType === "whole_number") {
+            const exact = parseExactDecimal(evaluated.value);
+            if (exact === undefined || exact.scale !== 0)
+              evaluationIssue = "non_integral_whole_number";
+            else if (
+              exact.coefficient < BigInt(Number.MIN_SAFE_INTEGER) ||
+              exact.coefficient > BigInt(Number.MAX_SAFE_INTEGER)
+            )
+              evaluationIssue = "result_overflow";
+            else calculated = Number(exact.coefficient);
+          } else if (field.settings.resultType === "decimal_number") {
+            const exact = parseExactDecimal(String(evaluated.value));
+            if (exact === undefined) evaluationIssue = "invalid_result";
+            else calculated = formatExactDecimal(exact);
+          } else calculated = evaluated.value;
+        } else if (calculationInputsPresent(field, values)) {
+          evaluationIssue =
+            formulaFailure(formula, { ...input, clock: { ...input.clock, instant: now } }) ??
+            "invalid_result";
+        }
       }
     }
 
@@ -517,21 +551,10 @@ export const evaluateRecordCalculationsV2 = (
       continue;
     }
     if (calculated === undefined) {
-      if (
-        expression.kind === "numeric" &&
-        field.settings.resultType === "whole_number" &&
-        calculationDependencies(expression).every((fieldId) => values.has(fieldId))
-      )
-        issues.push(issue("non_integral_whole_number", field.fieldId));
-      else missing(field);
+      missing(field);
       continue;
     }
-    if (
-      !persistedRecordFieldValueMatches({
-        field,
-        value: calculated,
-      })
-    ) {
+    if (!persistedRecordFieldValueMatches({ field, value: calculated })) {
       issues.push(issue("invalid_result", field.fieldId));
       continue;
     }
@@ -544,19 +567,13 @@ export const evaluateRecordCalculationsV2 = (
     : { success: true, setValues, clearFieldIds };
 };
 
-const isReadTimeCalculationField = (field: CalculationFieldV2): boolean =>
+const isReadTimeCalculationField = (field: CalculationField): boolean =>
   field.settings.evaluation === "read_time" || field.settings.expression.kind === "deadline_passed";
 
-/**
- * The calculated fields of a record type that are worked out whenever a record
- * is read: those declared `read_time`, every deadline-passed calculation, and
- * every calculation that depends, through any chain, on one of those.
- */
-export const readTimeCalculationFieldIdsV2 = (
-  recordType: RecordTypeDefinitionV3,
-): readonly string[] => {
+/** Returns calculation fields that are worked out whenever their record is read. */
+export const readTimeCalculationFieldIds = (recordType: RecordTypeDefinitionV3): readonly string[] => {
   const calculations = recordType.fields.filter(
-    (field): field is CalculationFieldV2 => field.type === "calculation",
+    (field): field is CalculationField => field.type === "calculation",
   );
   const readTime = new Set<string>(
     calculations.filter(isReadTimeCalculationField).map((field) => field.fieldId),
@@ -576,12 +593,10 @@ export const readTimeCalculationFieldIdsV2 = (
   return calculations.filter((field) => readTime.has(field.fieldId)).map((field) => field.fieldId);
 };
 
-export type EvaluateReadTimeCalculationsV2Result =
+export type EvaluateReadTimeCalculationsResult =
   | Readonly<{
       success: true;
-      /** The current value of every read-time field that has one; never stored. */
       values: Readonly<Record<string, JsonValue>>;
-      /** Read-time fields that have no value now. */
       emptyFieldIds: readonly string[];
     }>
   | Readonly<{
@@ -589,22 +604,14 @@ export type EvaluateReadTimeCalculationsV2Result =
       issues: readonly RecordCalculationIssue[];
     }>;
 
-/**
- * Works out the read-time calculated fields of one record with the same typed
- * evaluator a save uses, from the record's stored values and one read clock:
- * the statement instant and the current date in the organisation's time zone.
- * The result is never written back. It performs no reads or access decisions.
- * A required read-time field with no value now (such as a deadline with no due
- * value) is reported empty, as the database read reports it, rather than
- * failing the read.
- */
-export const evaluateReadTimeCalculationsV2 = (
-  input: EvaluateRecordCalculationsV2Input,
-): EvaluateReadTimeCalculationsV2Result => {
+/** Evaluates read-time calculated fields through the same formula engine as a save. */
+export const evaluateReadTimeCalculations = (
+  input: EvaluateRecordCalculationsInput,
+): EvaluateReadTimeCalculationsResult => {
   const parsed = recordTypeDefinitionV3Schema.safeParse(input.recordType);
   if (!parsed.success) return { success: false, issues: [issue("invalid_input")] };
-  const readTimeIds = new Set(readTimeCalculationFieldIdsV2(parsed.data));
-  const evaluated = evaluateRecordCalculationsV2({
+  const readTimeIds = new Set(readTimeCalculationFieldIds(parsed.data));
+  const evaluated = evaluateRecordCalculations({
     ...input,
     recordType: {
       ...parsed.data,

@@ -76,6 +76,7 @@ const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
   "settings",
   "slots",
   "breakpoint",
+  "responsiveLayout",
   "metadata",
   "themeOverrides",
   "availability",
@@ -169,6 +170,8 @@ export type PlatformBlockRenderProps = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   slots: Readonly<Record<string, ReactNode>>;
   breakpoint: Breakpoint;
+  /** Live pages use viewport media rules; preview renders only its selected breakpoint. */
+  responsiveLayout?: boolean;
   metadata: PlatformBlockReleaseV2;
   themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";

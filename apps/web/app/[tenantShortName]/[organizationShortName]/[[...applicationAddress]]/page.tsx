@@ -202,6 +202,7 @@ export default async function ApplicationAddressPage({
         page={resolved.experience.page}
         shells={resolved.experience.shells}
         theme={theme}
+        organizationName={resolved.read?.organizationShortName ?? "Organisation"}
       />
     );
   }
@@ -319,9 +320,7 @@ export default async function ApplicationAddressPage({
             name="expectedActiveReleaseRevision"
             value={adoption.installedReleaseRevision}
           />
-          <button type="submit">
-            Adopt release {adoption.offeredReleaseVersion}
-          </button>
+          <button type="submit">Adopt release {adoption.offeredReleaseVersion}</button>
         </form>
       )}
       <ApplicationPageView

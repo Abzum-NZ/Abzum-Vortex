@@ -580,6 +580,7 @@ function PlacementView({
           settings={placement.settings}
           slots={renderedSlots}
           breakpoint={breakpoint}
+          responsiveLayout={responsive}
           metadata={metadata}
           themeOverrides={placement.themeOverrides}
           themeTokens={placementTheme.scope.inherited}
@@ -908,12 +909,9 @@ export function PageLayoutRenderer({
   const activeGuidedStep =
     activeGuidedStepIndex < 0 ? undefined : guidedSteps?.[activeGuidedStepIndex];
 
-  // The theme root serves runtime pages and preview canvases alike; React hoists and
-  // de-duplicates the one shared stylesheet however many layouts render, and the resolved style's
-  // own stylesheet with it. Only the resolved style is linked, and the server emits both the link
-  // and the attribute in the first response, so a page never paints a moment of another style. A
-  // client-side navigation to another application renders the new link beside the hoisted one, so
-  // the stylesheet component drops the superseded sheet once the new one is in place.
+  // The theme root serves runtime pages and preview canvases alike. The selected style link stays
+  // inside this React-owned root, so the server emits it with the matching attribute and a client
+  // navigation replaces it without manipulating React's hoisted stylesheet resources.
   return (
     <VortexStyleRoot
       {...createThemeRootProps(applicationTheme, themeMode)}
