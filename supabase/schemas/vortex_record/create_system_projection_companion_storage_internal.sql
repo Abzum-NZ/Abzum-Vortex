@@ -275,6 +275,12 @@ begin
           and attribute.attname in ('organisation_id', 'record_id')
           and (attribute.atttypid <> 'uuid'::regtype
             or not attribute.attnotnull
+            or attribute.atthasdef
+            or exists (
+              select 1 from pg_catalog.pg_attrdef as default_row
+              where default_row.adrelid = attribute.attrelid
+                and default_row.adnum = attribute.attnum
+            )
             or attribute.attgenerated <> ''
             or attribute.attidentity <> ''
             or attribute.attnum < 1
@@ -327,10 +333,15 @@ begin
         on attribute.attrelid = relation_oid
         and attribute.attname = mapping.physical_column_token
         and attribute.attnum > 0 and not attribute.attisdropped
+      left join pg_catalog.pg_attrdef as default_row
+        on default_row.adrelid = attribute.attrelid
+        and default_row.adnum = attribute.attnum
       where mapping.storage_contract_id = p_storage_contract_id
         and mapping.introduced_by_module_root_id <> p_target_module_root_id
         and (attribute.attnum is null
           or attribute.attnotnull
+          or attribute.atthasdef
+          or default_row.oid is not null
           or attribute.attgenerated <> ''
           or attribute.attidentity <> ''
           or attribute.atttypid is distinct from
@@ -421,6 +432,12 @@ begin
 
   relation_oid := pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token))::oid;
   select coalesce(
+      pg_catalog.array_agg(expected_column.value order by expected_column.value),
+      array[]::text[]
+    )
+  into expected_columns
+  from pg_catalog.unnest(expected_columns) as expected_column(value);
+  select coalesce(
       pg_catalog.array_agg(attribute.attname order by attribute.attname),
       array[]::text[]
     )
@@ -437,6 +454,12 @@ begin
         and attribute.attname = column_token
         and attribute.attnum > 0 and not attribute.attisdropped
         and not attribute.attnotnull
+        and not attribute.atthasdef
+        and not exists (
+          select 1 from pg_catalog.pg_attrdef as default_row
+          where default_row.adrelid = attribute.attrelid
+            and default_row.adnum = attribute.attnum
+        )
         and attribute.attgenerated = ''
         and attribute.attidentity = ''
         and attribute.atttypid = pg_catalog.to_regtype(sql_type)::oid
