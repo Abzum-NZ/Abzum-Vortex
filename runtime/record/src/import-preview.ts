@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   recordIdSchema,
   recordTypeDefinitionV3Schema,
@@ -45,6 +46,8 @@ export type DecodedRecordImportRow = Readonly<{
 export type RecordImportRowAccessFact = Readonly<{
   state: "allowed" | "denied" | "unresolved";
   operation: "create" | "update";
+  /** The exact record checked for an update; absent for a create. */
+  targetRecordId?: RecordId;
 }>;
 
 type UnmatchedRecordImportTarget = Readonly<{
@@ -66,12 +69,18 @@ export type RecordImportRowMatchFact =
       fieldId: FieldId;
       state: "matched";
       recordId: RecordId;
+      /** The mapped field value after Record normalization, used for this match. */
+      normalizedValue: JsonValue;
       existingValues: ValueMap;
     }>;
 
 export type RecordImportUniqueCheckFact = Readonly<{
   fieldId: FieldId;
   state: "confirmed" | "conflict" | "unresolved";
+  /** The exact value after Record normalization that the protected check covered. */
+  normalizedValue: JsonValue;
+  /** Opaque, bounded scope-and-value key with this field's storage-index equality. */
+  comparisonKey: string;
   /** The update target excluded by the protected uniqueness check. Omit for creates. */
   targetRecordId?: RecordId;
 }>;
@@ -80,7 +89,9 @@ export type RecordImportUniqueCheckFact = Readonly<{
  * Protected resolver facts for one decoded row. The caller must resolve these
  * against the current organisation, published definition, actor, and row.
  * Unique checks must cover the exact values after field normalization and the
- * current update target. Missing or partial facts never authorize an operation.
+ * current update target. Comparison keys must agree for values that the storage
+ * index considers equal, including across rows of this preview. Missing or
+ * partial facts never authorize an operation.
  */
 export type RecordImportRowResolverFacts = Readonly<{
   rowNumber: number;
@@ -102,8 +113,10 @@ export type RecordImportPreviewRowErrorCode =
   | "ambiguous_match"
   | "invalid_record_id"
   | "record_id_mismatch"
+  | "match_value_mismatch"
   | "missing_match_value"
   | "duplicate_target"
+  | "duplicate_unique_value"
   | "unresolved_unique_check"
   | "unique_conflict"
   | "unexpected_unique_check"
@@ -183,6 +196,7 @@ type PreparedRow = {
   readonly rowNumber: number;
   readonly errors: RecordImportPreviewRowError[];
   readonly operation?: RecordImportPreviewOperation;
+  readonly uniqueComparisonKeys?: ReadonlyMap<FieldId, string>;
 };
 
 const generatedFieldTypes = new Set(["reference_number", "calculation", "total"]);
@@ -372,7 +386,7 @@ export const planRecordImportPreview = (
         generatedFieldTypes.has(uniqueField.type) ||
         !mappedFields.has(input.duplicatePolicy.fieldId)
       )
-        return inputFailure("invalid_duplicate_policy", { fieldId: input.duplicatePolicy.fieldId });
+        return inputFailure("invalid_duplicate_policy");
       break;
     }
     default:
@@ -394,6 +408,8 @@ export const planRecordImportPreview = (
       !hasPlainDataProperties(facts.access) ||
       !["allowed", "denied", "unresolved"].includes(facts.access.state) ||
       !["create", "update"].includes(facts.access.operation) ||
+      (facts.access.targetRecordId !== undefined &&
+        !recordIdSchema.safeParse(facts.access.targetRecordId).success) ||
       !hasPlainDataProperties(facts.match) ||
       !Array.isArray(facts.uniqueChecks) ||
       !Array.isArray(facts.resolvedPendingChecks)
@@ -408,6 +424,9 @@ export const planRecordImportPreview = (
         typeof check.fieldId !== "string" ||
         fieldsById.get(check.fieldId)?.unique !== true ||
         !["confirmed", "conflict", "unresolved"].includes(check.state) ||
+        typeof check.comparisonKey !== "string" ||
+        check.comparisonKey.length === 0 ||
+        check.comparisonKey.length > 256 ||
         uniqueCheckFieldIds.has(check.fieldId) ||
         (check.targetRecordId !== undefined &&
           !recordIdSchema.safeParse(check.targetRecordId).success)
@@ -512,7 +531,11 @@ export const planRecordImportPreview = (
       }
     }
 
-    if (operation !== undefined && facts.access.operation !== operation) {
+    if (
+      operation !== undefined &&
+      (facts.access.operation !== operation ||
+        facts.access.targetRecordId !== (operation === "update" ? recordId : undefined))
+    ) {
       addRowError({ code: "access_fact_mismatch" });
     } else if (facts.access.state === "denied") {
       addRowError({ code: "access_denied" });
@@ -547,6 +570,17 @@ export const planRecordImportPreview = (
       continue;
     }
 
+    if (
+      input.duplicatePolicy.kind === "update_by_unique_field" &&
+      facts.match.method === "unique_field" &&
+      facts.match.state === "matched" &&
+      !isDeepStrictEqual(
+        facts.match.normalizedValue,
+        prepared.setValues[input.duplicatePolicy.fieldId],
+      )
+    )
+      addRowError({ code: "match_value_mismatch", fieldId: input.duplicatePolicy.fieldId });
+
     const requiredUniqueFieldIds = new Set<FieldId>();
     for (const fieldId of Object.keys(prepared.setValues)) {
       const field = fieldsById.get(fieldId as FieldId);
@@ -561,18 +595,24 @@ export const planRecordImportPreview = (
     const uniqueChecksByFieldId = new Map(
       uniqueChecks.map((check) => [check.fieldId, check] as const),
     );
+    const uniqueComparisonKeys = new Map<FieldId, string>();
     for (const check of uniqueChecks) {
       if (!requiredUniqueFieldIds.has(check.fieldId)) {
         addRowError({ code: "unexpected_unique_check", fieldId: check.fieldId });
         continue;
       }
       const expectedTargetRecordId = operation === "update" ? recordId : undefined;
-      if (check.targetRecordId !== expectedTargetRecordId) {
+      if (
+        check.targetRecordId !== expectedTargetRecordId ||
+        !isDeepStrictEqual(check.normalizedValue, prepared.setValues[check.fieldId])
+      ) {
         addRowError({ code: "unexpected_unique_check", fieldId: check.fieldId });
       } else if (check.state === "conflict") {
         addRowError({ code: "unique_conflict", fieldId: check.fieldId });
       } else if (check.state === "unresolved") {
         addRowError({ code: "unresolved_unique_check", fieldId: check.fieldId });
+      } else {
+        uniqueComparisonKeys.set(check.fieldId, check.comparisonKey);
       }
     }
     for (const fieldId of requiredUniqueFieldIds)
@@ -613,6 +653,7 @@ export const planRecordImportPreview = (
       preparedRows.push({
         rowNumber: row.rowNumber,
         errors,
+        uniqueComparisonKeys,
         operation: {
           rowNumber: row.rowNumber,
           operation,
@@ -655,6 +696,27 @@ export const planRecordImportPreview = (
     if (duplicateTargetRows.has(preparedRow.rowNumber))
       addError({ rowNumber: preparedRow.rowNumber, code: "duplicate_target" });
 
+  const uniqueRowsByField = new Map<FieldId, Map<string, number[]>>();
+  for (const preparedRow of preparedRows) {
+    if (preparedRow.operation === undefined || duplicateTargetRows.has(preparedRow.rowNumber))
+      continue;
+    for (const [fieldId, key] of preparedRow.uniqueComparisonKeys ?? []) {
+      const rowsByKey = uniqueRowsByField.get(fieldId) ?? new Map<string, number[]>();
+      const matchingRows = rowsByKey.get(key) ?? [];
+      matchingRows.push(preparedRow.rowNumber);
+      rowsByKey.set(key, matchingRows);
+      uniqueRowsByField.set(fieldId, rowsByKey);
+    }
+  }
+  const duplicateUniqueRows = new Set<number>();
+  for (const [fieldId, rowsByKey] of uniqueRowsByField)
+    for (const matchingRows of rowsByKey.values())
+      if (matchingRows.length > 1)
+        for (const rowNumber of matchingRows) {
+          duplicateUniqueRows.add(rowNumber);
+          addError({ rowNumber, code: "duplicate_unique_value", fieldId });
+        }
+
   if (errorLimitExceeded)
     return {
       success: false,
@@ -662,9 +724,13 @@ export const planRecordImportPreview = (
       rowErrors,
     };
 
-  const duplicateTargetSet = duplicateTargetRows;
   const operations = preparedRows
-    .filter((row) => row.operation !== undefined && !duplicateTargetSet.has(row.rowNumber))
+    .filter(
+      (row) =>
+        row.operation !== undefined &&
+        !duplicateTargetRows.has(row.rowNumber) &&
+        !duplicateUniqueRows.has(row.rowNumber),
+    )
     .map((row) => row.operation!);
   return {
     success: true,
