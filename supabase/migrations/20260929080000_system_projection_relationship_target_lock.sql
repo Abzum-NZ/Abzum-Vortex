@@ -97,6 +97,15 @@ comment on function vortex_access.lock_system_projection_link_target_internal(te
 
 set local role vortex_record_owner;
 
+-- The Access security-definer lock is owned by postgres, whose membership in
+-- vortex_record_owner does not inherit the closed reader registry's privileges.
+grant usage on schema vortex_record to postgres;
+grant select (protected_read_model_key, reader_schema, reader_function)
+  on vortex_record.protected_read_model_views to postgres;
+create policy protected_read_model_views_projection_lock_postgres_select
+  on vortex_record.protected_read_model_views
+  for select to postgres using (true);
+
 grant create on schema vortex_record to vortex_record_adapter;
 
 reset role;
