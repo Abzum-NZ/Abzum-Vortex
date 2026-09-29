@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactElement } from "react";
+import { Button as SharedButton } from "../components/button";
 import { DefinitionRenderError } from "../definition-error";
 import type { ButtonPayload } from "./projected-data";
 import {
@@ -13,9 +14,19 @@ import { useFormScope } from "./form-context";
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
 type ButtonMode = "action" | "submit" | "reset";
+type SharedButtonVariant = "default" | "secondary" | "destructive" | "ghost";
+
+const SHARED_BUTTON_VARIANTS: Readonly<
+  Record<"primary" | "secondary" | "danger" | "ghost", SharedButtonVariant>
+> = {
+  primary: "default",
+  secondary: "secondary",
+  danger: "destructive",
+  ghost: "ghost",
+};
 
 /**
- * Native button activated by pointer, Enter or Space. An action button emits only its declared
+ * Button activated by pointer, Enter or Space. An action button emits only its declared
  * `action` event; inside a form container that event carries the form's current typed field
  * values, so the bound flow receives what the person entered. Submit and reset buttons must sit
  * inside a form container and emit nothing themselves: the form emits its one `form_submit` or
@@ -65,8 +76,9 @@ export function Button(props: ButtonProps): ReactElement {
 
   return (
     <>
-      <button
+      <SharedButton
         type={mode === "action" ? "button" : mode}
+        variant={SHARED_BUTTON_VARIANTS[variant]}
         data-vortex-control="button"
         data-vortex-placement-id={props.placementId}
         data-vortex-action-kind={mode}
@@ -95,10 +107,9 @@ export function Button(props: ButtonProps): ReactElement {
             (outcome as PromiseLike<unknown>).then(settle, settle);
           }
         }}
-        className={`vortex-button vortex-button-${variant}`}
       >
         {label}
-      </button>
+      </SharedButton>
       {note === undefined ? null : (
         <span id={noteId} className="vortex-field-note">
           {note}
