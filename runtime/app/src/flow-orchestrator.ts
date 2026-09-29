@@ -23,6 +23,7 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  ruleIdSchema,
   saveRecordCommandV2Schema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
@@ -1220,13 +1221,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         )
           return refused;
 
+        const executionBindingId = flow.runAs.executionBindingId;
+        // Access retains the flow identity under its RuleId brand; both contracts validate
+        // the same non-nil UUID, so cross that boundary explicitly before the scoped read.
+        const accessFlowId = ruleIdSchema.safeParse(intent.flowId);
+        if (!accessFlowId.success) return refused;
         const principalRead = await withRuntimeTransaction((transaction) =>
           readFlowRunAsPrincipalForRun(transaction, {
-            executionBindingId: flow.runAs.executionBindingId,
+            executionBindingId,
             organizationId: intent.organizationId,
             applicationRootId: intent.applicationRootId,
             releaseVersion: intent.applicationReleaseVersion,
-            flowId: intent.flowId,
+            flowId: accessFlowId.data,
           }),
         );
         if (principalRead.outcome !== "available") return refused;
