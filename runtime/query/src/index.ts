@@ -41,8 +41,10 @@ export {
 export {
   createViewerSafeRecordLinkReadService,
   viewerSafeRecordLinkTitleReadResultSchema,
+  viewerSafeRecordLinkFieldsReadResultSchema,
   type ViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
+  type ViewerSafeRecordLinkFieldsReadResult,
 } from "./viewer-safe-record-link-read";
 
 export type { QueryContinuationKey } from "./continuation-token";
