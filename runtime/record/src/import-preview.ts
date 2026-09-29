@@ -114,7 +114,7 @@ export type RecordImportPreviewRowErrorCode =
 export type RecordImportPreviewRowError = Readonly<{
   rowNumber: number;
   code: RecordImportPreviewRowErrorCode;
-  fieldId?: FieldId;
+  fieldId?: string;
   path?: readonly (string | number)[];
   checkKind?: RecordFieldValuePendingCheck["kind"];
 }>;
@@ -187,7 +187,7 @@ type PreparedRow = {
 
 const generatedFieldTypes = new Set(["reference_number", "calculation", "total"]);
 
-const isPlainDataRecord = (value: unknown): value is Record<string, unknown> => {
+const hasPlainDataProperties = (value: unknown): boolean => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
@@ -197,6 +197,9 @@ const isPlainDataRecord = (value: unknown): value is Record<string, unknown> => 
     return descriptor !== undefined && "value" in descriptor;
   });
 };
+
+const isPlainDataRecord = (value: unknown): value is Record<string, unknown> =>
+  hasPlainDataProperties(value);
 
 const lexicographic = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
@@ -315,7 +318,7 @@ export const planRecordImportPreview = (
   const mappedFields = new Set<string>();
   for (const entry of input.columnMapping) {
     if (
-      !isPlainDataRecord(entry) ||
+      !hasPlainDataProperties(entry) ||
       typeof entry.columnId !== "string" ||
       entry.columnId.length === 0 ||
       entry.columnId.length > 256 ||
@@ -335,10 +338,10 @@ export const planRecordImportPreview = (
   const rowsByNumber = new Map<number, DecodedRecordImportRow>();
   for (const row of input.rows) {
     if (
-      !isPlainDataRecord(row) ||
+      !hasPlainDataProperties(row) ||
       !Number.isSafeInteger(row.rowNumber) ||
       row.rowNumber <= 0 ||
-      !isPlainDataRecord(row.cells) ||
+      !hasPlainDataProperties(row.cells) ||
       Reflect.ownKeys(row.cells).length > RECORD_IMPORT_PREVIEW_MAX_COLUMNS ||
       rowsByNumber.has(row.rowNumber)
     )
@@ -383,25 +386,25 @@ export const planRecordImportPreview = (
   const factsByRowNumber = new Map<number, RecordImportRowResolverFacts>();
   for (const facts of input.rowFacts) {
     if (
-      !isPlainDataRecord(facts) ||
+      !hasPlainDataProperties(facts) ||
       !Number.isSafeInteger(facts.rowNumber) ||
       facts.rowNumber <= 0 ||
       !rowsByNumber.has(facts.rowNumber) ||
       factsByRowNumber.has(facts.rowNumber) ||
-      !isPlainDataRecord(facts.access) ||
+      !hasPlainDataProperties(facts.access) ||
       !["allowed", "denied", "unresolved"].includes(facts.access.state) ||
       !["create", "update"].includes(facts.access.operation) ||
-      !isPlainDataRecord(facts.match) ||
+      !hasPlainDataProperties(facts.match) ||
       !Array.isArray(facts.uniqueChecks) ||
       !Array.isArray(facts.resolvedPendingChecks)
     )
-      return inputFailure("invalid_resolver_facts", { rowNumber: facts?.rowNumber });
+      return inputFailure("invalid_resolver_facts");
     if (facts.uniqueChecks.length > RECORD_IMPORT_PREVIEW_MAX_COLUMNS)
       return inputFailure("resolver_facts_limit_exceeded", { rowNumber: facts.rowNumber });
     const uniqueCheckFieldIds = new Set<string>();
     for (const check of facts.uniqueChecks) {
       if (
-        !isPlainDataRecord(check) ||
+        !hasPlainDataProperties(check) ||
         typeof check.fieldId !== "string" ||
         fieldsById.get(check.fieldId)?.unique !== true ||
         !["confirmed", "conflict", "unresolved"].includes(check.state) ||
@@ -544,12 +547,12 @@ export const planRecordImportPreview = (
       continue;
     }
 
-    const requiredUniqueFieldIds = new Set(
-      Object.keys(prepared.setValues).filter((fieldId) => {
-        const field = fieldsById.get(fieldId);
-        return field?.unique === true && !generatedFieldTypes.has(field.type);
-      }),
-    );
+    const requiredUniqueFieldIds = new Set<FieldId>();
+    for (const fieldId of Object.keys(prepared.setValues)) {
+      const field = fieldsById.get(fieldId as FieldId);
+      if (field?.unique === true && !generatedFieldTypes.has(field.type))
+        requiredUniqueFieldIds.add(field.fieldId);
+    }
     if (input.duplicatePolicy.kind === "update_by_unique_field")
       requiredUniqueFieldIds.add(input.duplicatePolicy.fieldId);
     const uniqueChecks = [...facts.uniqueChecks].sort((left, right) =>
@@ -626,7 +629,10 @@ export const planRecordImportPreview = (
   if (errorLimitExceeded)
     return {
       success: false,
-      error: { code: "error_limit_exceeded", rowNumber: preparedRows.at(-1)?.rowNumber },
+      error: {
+        code: "error_limit_exceeded",
+        ...(preparedRows.at(-1) === undefined ? {} : { rowNumber: preparedRows.at(-1)!.rowNumber }),
+      },
       rowErrors,
     };
 
