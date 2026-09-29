@@ -321,6 +321,57 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
+/** Query shapes and title fields that a query-bound Calendar block can display. */
+export const calendarBlockSourceIsSupported = (query: unknown, titleFieldType: unknown): boolean => {
+  if (query === null || typeof query !== "object" || Array.isArray(query)) return false;
+  const source = query as Record<string, unknown>;
+  if (
+    !Array.isArray(source.inputs) ||
+    !Array.isArray(source.groupByFieldIds) ||
+    !Array.isArray(source.aggregates) ||
+    typeof source.relationshipHops !== "number"
+  )
+    return false;
+  if (
+    source.groupByFieldIds.length > 0 ||
+    source.aggregates.length > 0 ||
+    source.relationshipHops !== 0
+  )
+    return false;
+  if (
+    source.inputs.some(
+      (input) =>
+        input === null ||
+        typeof input !== "object" ||
+        Array.isArray(input) ||
+        typeof (input as { required?: unknown }).required !== "boolean" ||
+        (input as { required: boolean }).required,
+    )
+  )
+    return false;
+  return (
+    typeof titleFieldType === "string" &&
+    calendarTitleFieldTypes.has(titleFieldType)
+  );
+};
+
+const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
+  "text",
+  "long_text",
+  "formatted_text",
+  "whole_number",
+  "decimal_number",
+  "yes_no",
+  "date",
+  "date_time",
+  "choice",
+  "several_choices",
+  "reference_number",
+  "email_address",
+  "phone_number",
+  "web_address",
+]);
+
 // Retired page settings (#1011): page-level states and standard page replacement, and
 // list arrangements and calendar mapping, were compiled but never rendered. The compiler
 // no longer emits them. Releases published before their removal still carry them and
