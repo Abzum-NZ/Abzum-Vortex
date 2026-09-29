@@ -87,12 +87,17 @@ export const readCurrentLegalHolds = async (
   const parsedCandidate = parseRecordCandidate(candidate);
   if (parsedCandidate === undefined) return UNAVAILABLE;
 
-  await transaction.query`set local role vortex_runtime`;
-  const rows = await transaction.query<LegalHoldReadRow>`
-    select vortex_record.read_current_legal_holds(
-      ${JSON.stringify(parsedCandidate)}::text::jsonb
-    ) as result
-  `;
+  let rows: readonly LegalHoldReadRow[];
+  try {
+    await transaction.query`set local role vortex_runtime`;
+    rows = await transaction.query<LegalHoldReadRow>`
+      select vortex_record.read_current_legal_holds(
+        ${JSON.stringify(parsedCandidate)}::text::jsonb
+      ) as result
+    `;
+  } catch {
+    return UNAVAILABLE;
+  }
   if (rows.length !== 1 || rows[0] === undefined || !isRecord(rows[0].result))
     return UNAVAILABLE;
 

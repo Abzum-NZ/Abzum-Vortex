@@ -330,6 +330,9 @@ begin
     'outcome', 'complete',
     'holds', hold_values
   );
+exception
+  when others then
+    return pg_catalog.jsonb_build_object('outcome', 'unavailable');
 end
 $function$;
 
