@@ -23,8 +23,11 @@ body {
   background-size: 32px 32px;
 }
 
-a {
-  color: inherit;
+@layer base {
+  /* Generic links inherit text unless a resolved component or style layer provides a foreground. */
+  a {
+    color: inherit;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
