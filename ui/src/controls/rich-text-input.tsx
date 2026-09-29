@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
+import { Textarea } from "../components/textarea";
 import {
   readControlSettings,
   resolveControlContext,
@@ -107,7 +108,7 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
       <label htmlFor={ids.control} className="vortex-field-label">
         <FieldLabelText label={label} required={required} />
       </label>
-      <textarea
+      <Textarea
         id={ids.control}
         name={fieldKey}
         value={value}
@@ -117,7 +118,6 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
         required={required}
         aria-invalid={error !== undefined}
         {...describedBy(ids, help, error, note, draftFeedback)}
-        className="vortex-textarea"
       />
       <FieldMessages
         ids={ids}
