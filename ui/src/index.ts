@@ -1,5 +1,14 @@
 export const uiPackage = "@vortex/ui" as const;
 
+// Shared notice component (#1607)
+export {
+  Notice,
+  type NoticeContent,
+  type NoticeContentPart,
+  type NoticeProps,
+  type NoticeSeverity,
+} from "./components/notice";
+
 // Platform Component Registry
 export {
   assertRuntimeInputKeysArePlacements,
