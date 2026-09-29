@@ -744,7 +744,7 @@ comment on function vortex_record.write_named_action_relationship_value_internal
 
 reset role;
 
-set local role vortex_record_owner;
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.restore_record_internal(
   p_record_type_id uuid,
@@ -967,7 +967,7 @@ end
 $function$;
 
 alter function vortex_record.restore_record_internal(uuid, uuid, bigint)
-  owner to vortex_record_owner;
+  owner to vortex_record_adapter;
 
 revoke all on function vortex_record.restore_record_internal(uuid, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
