@@ -985,4 +985,3 @@ revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
 
 commit;
-
