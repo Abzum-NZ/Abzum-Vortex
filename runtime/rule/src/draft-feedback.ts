@@ -6,7 +6,7 @@ import {
   type BeforeSaveRuleWarning,
   type EvaluateBeforeSaveRuleGraphsInput,
 } from "./before-save-rule-graphs";
-import { codePointCompare } from "./typed-condition-core";
+import { compareFlowText } from "./flow-formula";
 
 /**
  * Version marker for the draft-feedback input/context token. Bump it when the
@@ -137,7 +137,7 @@ export const ruleDraftFeedbackFingerprint = (input: RuleDraftFeedbackProjectionI
   };
   if (!isPlainJson(payload)) refuse("input_refused");
   // The v1 token used code-point order; preserve its bytes for nested JSON keys.
-  const canonical = canonicalJson(payload, codePointCompare);
+  const canonical = canonicalJson(payload, compareFlowText);
   return `${ruleDraftFeedbackFingerprintVersion}:${canonical}`;
 };
 
@@ -178,7 +178,7 @@ export const projectRuleDraftFeedback = (
         disabled: generated,
       };
     })
-    .sort((left, right) => codePointCompare(left.fieldId, right.fieldId));
+    .sort((left, right) => compareFlowText(left.fieldId, right.fieldId));
 
   return {
     fingerprint,

@@ -4890,7 +4890,19 @@ function applicationProvenanceV2(
       const transformed =
         canonicalJson(valueAtPath(source, sourcePath)) !==
         canonicalJson(valueAtPath(canonical, canonicalPath));
-      if (transformed && !sourceTransformationApproved(sourcePath, canonicalPath, positions)) {
+      // A table behaviour's authored event alias resolves to the exact identity used by its
+      // compiled flow binding. No other text setting is allowed to change during compilation.
+      const eventSettingReference =
+        sourcePath.includes("settings") &&
+        sourcePath.at(-2) === "event_id" &&
+        sourcePath.at(-1) === "value" &&
+        valueAtPath(canonical, canonicalPath) ===
+          resolution.id(source.key, "event", String(valueAtPath(source, sourcePath)), "content");
+      if (
+        transformed &&
+        !eventSettingReference &&
+        !sourceTransformationApproved(sourcePath, canonicalPath, positions)
+      ) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }
       const pageReference =
@@ -4932,6 +4944,7 @@ function applicationProvenanceV2(
         isInterfaceOperationFlowTargetPath(sourceObject, sourcePath) ||
         pageReference ||
         compositionReference ||
+        eventSettingReference ||
         (v2SpecialRoot(sourcePath) &&
           sourcePath.includes("order") &&
           typeof sourcePath.at(-1) === "number");

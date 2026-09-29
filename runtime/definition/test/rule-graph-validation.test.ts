@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ruleGraphSchema,
-  type ModuleFieldV2,
-  type RecordTypeDefinitionV2,
+  type ModuleFieldV3,
+  type RecordTypeDefinitionV3,
   type RuleGraph,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
@@ -27,9 +27,9 @@ const id = (value: number) => `10000000-0000-4000-8000-${String(value).padStart(
 const field = (
   fieldId: string,
   key: string,
-  type: ModuleFieldV2["type"],
+  type: ModuleFieldV3["type"],
   settings: unknown,
-): ModuleFieldV2 =>
+): ModuleFieldV3 =>
   ({
     fieldId,
     key,
@@ -42,9 +42,9 @@ const field = (
     publicDisplay: "refused",
     type,
     settings,
-  }) as ModuleFieldV2;
+  }) as ModuleFieldV3;
 
-const fields: ModuleFieldV2[] = [
+const fields: ModuleFieldV3[] = [
   field(id(41), "amount", "decimal_number", {
     digitsBeforeDecimal: 30,
     decimalPlaces: 12,
@@ -81,7 +81,7 @@ const fields: ModuleFieldV2[] = [
 const subjectRecordType = {
   recordTypeId: id(2),
   fields,
-} as RecordTypeDefinitionV2;
+} as RecordTypeDefinitionV3;
 const availableRecordTypeIds = new Set([id(2), id(3), id(4)]);
 
 const validate = (graph: RuleGraph, available: ReadonlySet<string> = availableRecordTypeIds) =>

@@ -54,7 +54,7 @@ begin
   end if;
 
   -- Only an application this organisation has installed offers an adoption
-  -- target. Module owns installation facts: its fixed postgres-granted reader
+  -- target. Module owns installation facts: its fixed Module-owned reader
   -- refuses an organisation/application scope with no complete active
   -- installation, so this function never reads Module storage directly.
   perform vortex_module.read_active_installation_for_scope_internal(
@@ -90,7 +90,10 @@ $function$;
 
 revoke all on function vortex_definition.read_application_release_adoption_target(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
+
 grant execute on function vortex_definition.read_application_release_adoption_target(uuid)
   to vortex_request;
+
 comment on function vortex_definition.read_application_release_adoption_target(uuid) is
   'Returns the published-current release identity an organisation with an installed application may deliberately adopt, for a caller holding platform.organization.applications.manage.';
+alter function vortex_definition.read_application_release_adoption_target(uuid) owner to vortex_definition_owner;

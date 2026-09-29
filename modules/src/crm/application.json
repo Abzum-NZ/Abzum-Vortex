@@ -238,7 +238,16 @@
                                        "action_kind": "named",
                                        "named_action": "opportunity_update",
                                        "administrative": false
-                                     }
+                                     },
+                                   {
+                                     "id": "app_permission_21",
+                                     "key": "application.crm.opportunity.create",
+                                     "label": "Open opportunity creation",
+                                     "description": "Allows opening opportunity creation.",
+                                     "action_kind": "named",
+                                     "named_action": "opportunity_create",
+                                     "administrative": false
+                                   }
                                  ],
                  "roles":  [
                                {
@@ -272,6 +281,7 @@
                                                        "vortex.crm.people.lead.convert",
                                                        "application.crm.lead.convert",
                                                        "vortex.crm.opportunities.opportunity.create",
+                                                       "application.crm.opportunity.create",
                                                        "vortex.crm.opportunities.opportunity.read",
                                                        "application.crm.opportunity.read",
                                                        "vortex.crm.opportunities.opportunity.update",
@@ -338,6 +348,7 @@
                                                        "application.crm.lead.convert",
                                                        "vortex.crm.people.contact.view_sensitive_notes",
                                                        "vortex.crm.opportunities.opportunity.create",
+                                                       "application.crm.opportunity.create",
                                                        "vortex.crm.opportunities.opportunity.read",
                                                        "application.crm.opportunity.read",
                                                        "vortex.crm.opportunities.opportunity.update",
@@ -898,11 +909,46 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.crm.opportunities:crm_pipeline"
-                                                                                                     }
+                                                                                                     },
+                                                                                     "button_new_opportunity": {
+                                                                                       "block": {
+                                                                                         "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                                                         "release_version": "1.0.0"
+                                                                                       },
+                                                                                       "view_permission": "application.crm.opportunity.create",
+                                                                                       "settings": {
+                                                                                         "label": {
+                                                                                           "kind": "text",
+                                                                                           "value": "New opportunity"
+                                                                                         },
+                                                                                         "action_kind": {
+                                                                                           "kind": "choice",
+                                                                                           "value": "action"
+                                                                                         },
+                                                                                         "variant": {
+                                                                                           "kind": "choice",
+                                                                                           "value": "secondary"
+                                                                                         }
+                                                                                       },
+                                                                                       "theme_overrides": {},
+                                                                                       "responsive": {
+                                                                                         "desktop": {
+                                                                                           "visible": true,
+                                                                                           "width": {
+                                                                                             "kind": "fill"
+                                                                                           },
+                                                                                           "height": {
+                                                                                             "kind": "content"
+                                                                                           }
+                                                                                         }
+                                                                                       },
+                                                                                       "slots": {}
+                                                                                     }
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_4"
+                                                                                                  "content_4",
+                                                                                                  "button_new_opportunity"
                                                                                               ]
                                                                               }
                                                                     }
@@ -1770,6 +1816,7 @@
 
                                                                                                                                                                                                                    }
                                                                                                                                                                                                      },
+                                                                                                                                                                        "input_crm_company_create_company_kind": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.organisations:company.company_kind"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                         "submit_crm_company_create":  {
                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1807,6 +1854,7 @@
                                                                                                                                                      "order":  {
                                                                                                                                                                    "desktop":  [
                                                                                                                                                                                    "input_crm_company_create",
+                                                                                                                                                                                   "input_crm_company_create_company_kind",
                                                                                                                                                                                    "submit_crm_company_create"
                                                                                                                                                                                ]
                                                                                                                                                                }
@@ -1893,6 +1941,7 @@
 
                                                                                                                                                                                                                }
                                                                                                                                                                                                  },
+                                                                                                                                                                      "input_crm_company_edit_company_kind": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.organisations:company.company_kind"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                       "submit_crm_company_edit":  {
                                                                                                                                                                                                       "block":  {
                                                                                                                                                                                                                     "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1930,6 +1979,7 @@
                                                                                                                                                    "order":  {
                                                                                                                                                                  "desktop":  [
                                                                                                                                                                                  "input_crm_company_edit",
+                                                                                                                                                                                 "input_crm_company_edit_company_kind",
                                                                                                                                                                                  "submit_crm_company_edit"
                                                                                                                                                                              ]
                                                                                                                                                              }
@@ -1989,23 +2039,10 @@
                                                                                                                                                      "placements":  {
                                                                                                                                                                         "input_crm_contact_create":  {
                                                                                                                                                                                                          "block":  {
-                                                                                                                                                                                                                       "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                                                                                                                                                                                       "block_id":  "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                                                                                                                                                                                                        "release_version":  "1.0.0"
                                                                                                                                                                                                                    },
-                                                                                                                                                                                                         "settings":  {
-                                                                                                                                                                                                                          "name":  {
-                                                                                                                                                                                                                                       "kind":  "text",
-                                                                                                                                                                                                                                       "value":  "full_name"
-                                                                                                                                                                                                                                   },
-                                                                                                                                                                                                                          "label":  {
-                                                                                                                                                                                                                                        "kind":  "text",
-                                                                                                                                                                                                                                        "value":  "Full name"
-                                                                                                                                                                                                                                    },
-                                                                                                                                                                                                                          "required":  {
-                                                                                                                                                                                                                                           "kind":  "boolean",
-                                                                                                                                                                                                                                           "value":  true
-                                                                                                                                                                                                                                       }
-                                                                                                                                                                                                                      },
+                                                                                                                                                                                                         "settings":  {"field":{"kind":"field_reference","field":"vortex.crm.people:contact.first_name"}},
                                                                                                                                                                                                          "theme_overrides":  {
 
                                                                                                                                                                                                                              },
@@ -2024,6 +2061,8 @@
 
                                                                                                                                                                                                                    }
                                                                                                                                                                                                      },
+                                                                                                                                                                        "input_crm_contact_create_last_name": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.last_name"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                        "input_crm_contact_create_email": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.email"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                         "submit_crm_contact_create":  {
                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2061,6 +2100,8 @@
                                                                                                                                                      "order":  {
                                                                                                                                                                    "desktop":  [
                                                                                                                                                                                    "input_crm_contact_create",
+                                                                                                                                                                                   "input_crm_contact_create_last_name",
+                                                                                                                                                                                   "input_crm_contact_create_email",
                                                                                                                                                                                    "submit_crm_contact_create"
                                                                                                                                                                                ]
                                                                                                                                                                }
@@ -2120,23 +2161,10 @@
                                                                                                                                                    "placements":  {
                                                                                                                                                                       "input_crm_contact_edit":  {
                                                                                                                                                                                                      "block":  {
-                                                                                                                                                                                                                   "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                                                                                                                                                                                   "block_id":  "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                                                                                                                                                                                                    "release_version":  "1.0.0"
                                                                                                                                                                                                                },
-                                                                                                                                                                                                     "settings":  {
-                                                                                                                                                                                                                      "name":  {
-                                                                                                                                                                                                                                   "kind":  "text",
-                                                                                                                                                                                                                                   "value":  "full_name"
-                                                                                                                                                                                                                               },
-                                                                                                                                                                                                                      "label":  {
-                                                                                                                                                                                                                                    "kind":  "text",
-                                                                                                                                                                                                                                    "value":  "Full name"
-                                                                                                                                                                                                                                },
-                                                                                                                                                                                                                      "required":  {
-                                                                                                                                                                                                                                       "kind":  "boolean",
-                                                                                                                                                                                                                                       "value":  true
-                                                                                                                                                                                                                                   }
-                                                                                                                                                                                                                  },
+                                                                                                                                                                                                     "settings":  {"field":{"kind":"field_reference","field":"vortex.crm.people:contact.first_name"}},
                                                                                                                                                                                                      "theme_overrides":  {
 
                                                                                                                                                                                                                          },
@@ -2155,6 +2183,8 @@
 
                                                                                                                                                                                                                }
                                                                                                                                                                                                  },
+                                                                                                                                                                      "input_crm_contact_edit_last_name": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.last_name"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                      "input_crm_contact_edit_email": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.email"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                       "submit_crm_contact_edit":  {
                                                                                                                                                                                                       "block":  {
                                                                                                                                                                                                                     "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2192,6 +2222,8 @@
                                                                                                                                                    "order":  {
                                                                                                                                                                  "desktop":  [
                                                                                                                                                                                  "input_crm_contact_edit",
+                                                                                                                                                                                 "input_crm_contact_edit_last_name",
+                                                                                                                                                                                 "input_crm_contact_edit_email",
                                                                                                                                                                                  "submit_crm_contact_edit"
                                                                                                                                                                              ]
                                                                                                                                                              }
@@ -2282,6 +2314,9 @@
 
                                                                                                                                                                                                              }
                                                                                                                                                                                                },
+                                                                                                                                                                     "input_crm_lead_create_email": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.email"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                     "input_crm_lead_create_source": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.source"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                     "input_crm_lead_create_received_at": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.received_at"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                      "submit_crm_lead_create":  {
                                                                                                                                                                                                     "block":  {
                                                                                                                                                                                                                   "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2319,6 +2354,9 @@
                                                                                                                                                   "order":  {
                                                                                                                                                                 "desktop":  [
                                                                                                                                                                                 "input_crm_lead_create",
+                                                                                                                                                                                "input_crm_lead_create_email",
+                                                                                                                                                                                "input_crm_lead_create_source",
+                                                                                                                                                                                "input_crm_lead_create_received_at",
                                                                                                                                                                                 "submit_crm_lead_create"
                                                                                                                                                                             ]
                                                                                                                                                             }
@@ -2409,6 +2447,9 @@
 
                                                                                                                                                                                                          }
                                                                                                                                                                                            },
+                                                                                                                                                                   "input_crm_lead_edit_email": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.email"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                   "input_crm_lead_edit_source": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.source"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                   "input_crm_lead_edit_received_at": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:lead.received_at"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                    "submit_crm_lead_edit":  {
                                                                                                                                                                                                 "block":  {
                                                                                                                                                                                                               "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2446,6 +2487,9 @@
                                                                                                                                                 "order":  {
                                                                                                                                                               "desktop":  [
                                                                                                                                                                               "input_crm_lead_edit",
+                                                                                                                                                                              "input_crm_lead_edit_email",
+                                                                                                                                                                              "input_crm_lead_edit_source",
+                                                                                                                                                                              "input_crm_lead_edit_received_at",
                                                                                                                                                                               "submit_crm_lead_edit"
                                                                                                                                                                           ]
                                                                                                                                                           }
@@ -3539,7 +3583,276 @@
                                      }
                                    }
                                  }
+                               },
+                             {
+                               "id": "page_crm_opportunity_create",
+                               "key": "crm_opportunity_create",
+                               "name": "Create opportunity",
+                               "type": "form",
+                               "record_type": "vortex.crm.opportunities:opportunity",
+                               "permission": "application.crm.opportunity.create",
+                               "composition": {
+                                 "shell_kind": "application",
+                                 "shell": "shell_crm",
+                                 "content": {
+                                   "slot_primary": {
+                                     "placements": {
+                                       "form_crm_opportunity_create": {
+                                         "block": {
+                                           "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                                           "release_version": "1.0.0"
+                                         },
+                                         "settings": {
+                                           "title": {
+                                             "kind": "text",
+                                             "value": "Create opportunity"
+                                           }
+                                         },
+                                         "theme_overrides": {},
+                                         "responsive": {
+                                           "desktop": {
+                                             "visible": true,
+                                             "width": {
+                                               "kind": "fill"
+                                             },
+                                             "height": {
+                                               "kind": "content"
+                                             }
+                                           }
+                                         },
+                                         "slots": {
+                                           "content": {
+                                             "placements": {
+                                               "input_crm_opportunity_create_name": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.name"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_company": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.company"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_value": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.value"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_primary_contact": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.primary_contact"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_probability": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.probability"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_stage": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.stage"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "input_crm_opportunity_create_expected_close_date": {
+                                                 "block": {
+                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "field": {
+                                                     "kind": "field_reference",
+                                                     "field": "vortex.crm.opportunities:opportunity.expected_close_date"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               },
+                                               "submit_crm_opportunity_create": {
+                                                 "block": {
+                                                   "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                   "release_version": "1.0.0"
+                                                 },
+                                                 "settings": {
+                                                   "label": {
+                                                     "kind": "text",
+                                                     "value": "Save"
+                                                   },
+                                                   "action_kind": {
+                                                     "kind": "choice",
+                                                     "value": "submit"
+                                                   }
+                                                 },
+                                                 "theme_overrides": {},
+                                                 "responsive": {
+                                                   "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                       "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                       "kind": "content"
+                                                     }
+                                                   }
+                                                 },
+                                                 "slots": {}
+                                               }
+                                             },
+                                             "order": {
+                                               "desktop": [
+                                                 "input_crm_opportunity_create_name",
+                                                 "input_crm_opportunity_create_company",
+                                                 "input_crm_opportunity_create_value",
+                                                 "input_crm_opportunity_create_primary_contact",
+                                                 "input_crm_opportunity_create_probability",
+                                                 "input_crm_opportunity_create_stage",
+                                                 "input_crm_opportunity_create_expected_close_date",
+                                                 "submit_crm_opportunity_create"
+                                               ]
+                                             }
+                                           }
+                                         }
+                                       }
+                                     },
+                                     "order": {
+                                       "desktop": [
+                                         "form_crm_opportunity_create"
+                                       ]
+                                     }
+                                   }
+                                 }
                                }
+                             }
                            ],
                  "pipelines":  [
                                    {
@@ -4027,7 +4340,21 @@
                                   "record_type": "vortex.crm.opportunities:opportunity",
                                   "carries": [],
                                   "personal_or_sensitive_values_allowed": false
-                                }
+                                },
+                              {
+                                "id": "form_submit_11",
+                                "key": "vortex.app.events.vortex_app_crm_form_submit_11",
+                                "record_type": "vortex.crm.opportunities:opportunity",
+                                "carries": [],
+                                "personal_or_sensitive_values_allowed": false
+                              },
+                              {
+                                "id": "event_new_opportunity",
+                                "key": "vortex.app.events.vortex_app_crm_new_opportunity",
+                                "record_type": "vortex.crm.opportunities:opportunity",
+                                "carries": [],
+                                "personal_or_sensitive_values_allowed": false
+                              }
                             ],
                  "public_addresses":  [
 
@@ -4100,11 +4427,32 @@
                                      }
                                    },
                                    "slots": {}
+                                 },
+                                 "shell_account": {
+                                   "block": {
+                                     "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {},
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
                                  }
                                },
                                "order": {
                                  "desktop": [
-                                   "shell_heading"
+                                   "shell_heading",
+                                   "shell_account"
                                  ]
                                }
                              },
@@ -4113,7 +4461,7 @@
                                  "shell_body": {
                                    "block": {
                                      "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                     "release_version": "1.0.0"
+                                     "release_version": "1.2.0"
                                    },
                                    "settings": {
                                      "direction": {
@@ -4123,6 +4471,30 @@
                                      "gap": {
                                        "kind": "choice",
                                        "value": "medium"
+                                     },
+                                     "menu_width": {
+                                       "kind": "number",
+                                       "value": 16
+                                     },
+                                     "menu_placement": {
+                                       "kind": "choice",
+                                       "value": "sticky"
+                                     },
+                                     "content_landmark": {
+                                       "kind": "boolean",
+                                       "value": true
+                                     },
+                                     "tablet_menu_width": {
+                                       "kind": "number",
+                                       "value": 14
+                                     },
+                                     "phone_direction": {
+                                       "kind": "choice",
+                                       "value": "column"
+                                     },
+                                     "phone_menu_placement": {
+                                       "kind": "choice",
+                                       "value": "flow"
                                      }
                                    },
                                    "theme_overrides": {},
@@ -4401,7 +4773,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_form_flow_4",
                          "key": "crm_form_flow_4",
-                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "description": "Creates a company and opens its detail page.",
                          "labels": {
                              "name": "Continue Create company"
                          },
@@ -4412,6 +4784,10 @@
                          "inputs": {
                              "values": {
                                  "type": "json",
+                                 "required": true
+                             },
+                             "selected_owner_group_id": {
+                                 "type": "text",
                                  "required": true
                              }
                          },
@@ -4434,9 +4810,36 @@
                                              "source": "input",
                                              "name": "values"
                                          }
+                                     },
+                                     "selected_owner_group_id": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "selected_owner_group_id"
+                                         }
                                      }
                                  }
+                             },
+                           {
+                             "id": "open_detail",
+                             "type": "interface.navigate",
+                             "version": "1.0.0",
+                             "properties": {
+                               "page": {
+                                 "kind": "literal",
+                                 "literal": {
+                                   "type": "text",
+                                   "value": "crm_company_detail"
+                                 }
+                               },
+                               "parameters": {
+                                 "kind": "map",
+                                 "entries": {
+                                   "record_id": "{{ outputs.save.record }}"
+                                 }
+                               }
                              }
+                           }
                          ],
                          "outputs": {
                              "record": {
@@ -4563,6 +4966,10 @@
                              "values": {
                                  "type": "json",
                                  "required": true
+                             },
+                             "selected_owner_group_id": {
+                                 "type": "text",
+                                 "required": true
                              }
                          },
                          "tasks": [
@@ -4583,6 +4990,13 @@
                                          "reference": {
                                              "source": "input",
                                              "name": "values"
+                                         }
+                                     },
+                                     "selected_owner_group_id": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "selected_owner_group_id"
                                          }
                                      }
                                  }
@@ -5498,7 +5912,127 @@
                          }
                        ],
                        "outputs": {}
+                     },
+                   {
+                     "contractVersion": "1.0.0",
+                     "id": "crm_form_flow_11",
+                     "key": "crm_form_flow_11",
+                     "description": "Creates an opportunity and opens its detail page.",
+                     "labels": {
+                       "name": "Continue Create opportunity"
+                     },
+                     "execution": "interactive",
+                     "runAs": {
+                       "kind": "initiator"
+                     },
+                     "inputs": {
+                       "values": {
+                         "type": "json",
+                         "required": true
+                       },
+                       "selected_owner_group_id": {
+                         "type": "text",
+                         "required": true
+                       }
+                     },
+                     "tasks": [
+                       {
+                         "id": "save",
+                         "type": "record.save",
+                         "version": "1.0.0",
+                         "properties": {
+                           "record_type": {
+                             "kind": "literal",
+                             "literal": {
+                               "type": "text",
+                               "value": "vortex.crm.opportunities:opportunity"
+                             }
+                           },
+                           "values": {
+                             "kind": "reference",
+                             "reference": {
+                               "source": "input",
+                               "name": "values"
+                             }
+                           },
+                           "selected_owner_group_id": {
+                             "kind": "reference",
+                             "reference": {
+                               "source": "input",
+                               "name": "selected_owner_group_id"
+                             }
+                           }
+                         }
+                       },
+                       {
+                         "id": "open_detail",
+                         "type": "interface.navigate",
+                         "version": "1.0.0",
+                         "properties": {
+                           "page": {
+                             "kind": "literal",
+                             "literal": {
+                               "type": "text",
+                               "value": "crm_opportunity_detail"
+                             }
+                           },
+                           "parameters": {
+                             "kind": "map",
+                             "entries": {
+                               "record_id": "{{ outputs.save.record }}"
+                             }
+                           }
+                         }
+                       }
+                     ],
+                     "outputs": {
+                       "record": {
+                         "type": "record_reference",
+                         "recordTypeIds": [
+                           "vortex.crm.opportunities:opportunity"
+                         ],
+                         "value": {
+                           "kind": "reference",
+                           "reference": {
+                             "source": "task_output",
+                             "task": "save",
+                             "key": "record"
+                           }
+                         }
+                       }
                      }
+                   },
+                   {
+                     "contractVersion": "1.0.0",
+                     "id": "navigate_new_opportunity",
+                     "key": "navigate_new_opportunity",
+                     "description": "Opens the opportunity creation form.",
+                     "labels": {
+                       "name": "New opportunity"
+                     },
+                     "execution": "interactive",
+                     "runAs": {
+                       "kind": "initiator"
+                     },
+                     "inputs": {},
+                     "tasks": [
+                       {
+                         "id": "open_page",
+                         "type": "interface.navigate",
+                         "version": "1.0.0",
+                         "properties": {
+                           "page": {
+                             "kind": "literal",
+                             "literal": {
+                               "type": "text",
+                               "value": "crm_opportunity_create"
+                             }
+                           }
+                         }
+                       }
+                     ],
+                     "outputs": {}
+                   }
                  ],
                  "flow_bindings":  [
                      {
@@ -5565,6 +6099,10 @@
                              "values": {
                                  "kind": "caller",
                                  "name": "values"
+                             },
+                             "selected_owner_group_id": {
+                                 "kind": "caller",
+                                 "name": "selected_owner_group_id"
                              }
                          }
                      },
@@ -5595,6 +6133,10 @@
                              "values": {
                                  "kind": "caller",
                                  "name": "values"
+                             },
+                             "selected_owner_group_id": {
+                                 "kind": "caller",
+                                 "name": "selected_owner_group_id"
                              }
                          }
                      },
@@ -5818,7 +6360,32 @@
                            "name": "record_id"
                          }
                        }
+                     },
+                   {
+                     "id": "form_binding_11",
+                     "control": "form_crm_opportunity_create",
+                     "event_id": "form_submit_11",
+                     "event": "form_submit",
+                     "flow": "crm_form_flow_11",
+                     "inputs": {
+                       "values": {
+                         "kind": "caller",
+                         "name": "values"
+                       },
+                       "selected_owner_group_id": {
+                         "kind": "caller",
+                         "name": "selected_owner_group_id"
+                       }
                      }
+                   },
+                   {
+                     "id": "binding_new_opportunity",
+                     "control": "button_new_opportunity",
+                     "event_id": "event_new_opportunity",
+                     "event": "action",
+                     "flow": "navigate_new_opportunity",
+                     "inputs": {}
+                   }
                  ]
              }
 }

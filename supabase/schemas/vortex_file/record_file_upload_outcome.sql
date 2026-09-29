@@ -96,3 +96,7 @@ revoke execute on function
 
 grant execute on function
   vortex_file.record_file_upload_outcome(uuid, bigint, text, bigint, text, text, text, text) to vortex_request;
+
+alter function vortex_file.record_file_upload_outcome(
+  uuid, bigint, text, bigint, text, text, text, text
+) owner to vortex_file_owner;

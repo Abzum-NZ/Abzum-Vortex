@@ -1,6 +1,8 @@
 import {
+  canonicalWorkflowValueType,
   compareExactDecimals,
   formatExactDecimal,
+  moneyValueV2Schema,
   parseExactDecimal,
   powerOfTen,
   type ExactDecimal,
@@ -10,6 +12,7 @@ import {
   type FlowRoundingMode,
   type JsonValue,
 } from "@vortex/contracts";
+import { flowInstantMicros } from "./flow-instant";
 
 /**
  * The one evaluator of the typed flow formula tree (architecture decision 1, "Formulas"): exact
@@ -36,8 +39,8 @@ export type FlowFormulaScope = Readonly<{
 const maximumDecimalDigits = 100;
 const maximumTextCharacters = 65_536;
 
-const numericTypes = new Set(["whole_number", "decimal_number", "money"]);
-const textTypes = new Set(["text", "formatted_text", "choice"]);
+const isNumericType = (type: string): boolean => canonicalWorkflowValueType(type) === "number";
+const isTextType = (type: string): boolean => canonicalWorkflowValueType(type) === "text";
 
 const value = (type: string, content: JsonValue): FlowRuntimeValue => ({ type, value: content });
 const yesNo = (content: boolean) => value("yes_no", content);
@@ -47,10 +50,61 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
     return typeof candidate.value === "number" && Number.isSafeInteger(candidate.value)
       ? parseExactDecimal(String(candidate.value))
       : undefined;
-  return numericTypes.has(candidate.type) ? parseExactDecimal(candidate.value) : undefined;
+  if (candidate.type === "money") {
+    // Flow literals carry an amount; stored Record values also carry a currency.
+    if (typeof candidate.value === "string") return parseExactDecimal(candidate.value);
+    const money = moneyValueV2Schema.safeParse(candidate.value);
+    return money.success ? parseExactDecimal(money.data.amount) : undefined;
+  }
+  return isNumericType(candidate.type) ? parseExactDecimal(candidate.value) : undefined;
 };
 
 const absolute = (input: bigint): bigint => (input < 0n ? -input : input);
+
+type ExactRational = Readonly<{ numerator: bigint; denominator: bigint }>;
+
+const greatestCommonDivisor = (left: bigint, right: bigint): bigint => {
+  let a = absolute(left);
+  let b = absolute(right);
+  while (b !== 0n) [a, b] = [b, a % b];
+  return a === 0n ? 1n : a;
+};
+
+const rational = (numerator: bigint, denominator: bigint): ExactRational | undefined => {
+  if (denominator === 0n) return undefined;
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  const sign = denominator < 0n ? -1n : 1n;
+  return {
+    numerator: (numerator * sign) / divisor,
+    denominator: absolute(denominator) / divisor,
+  };
+};
+
+const rationalOf = (decimal: ExactDecimal): ExactRational =>
+  rational(decimal.coefficient, powerOfTen(decimal.scale))!;
+
+const combineRationals = (
+  operator: "add" | "subtract" | "multiply" | "divide",
+  left: ExactRational,
+  right: ExactRational,
+): ExactRational | undefined => {
+  switch (operator) {
+    case "add":
+      return rational(
+        left.numerator * right.denominator + right.numerator * left.denominator,
+        left.denominator * right.denominator,
+      );
+    case "subtract":
+      return rational(
+        left.numerator * right.denominator - right.numerator * left.denominator,
+        left.denominator * right.denominator,
+      );
+    case "multiply":
+      return rational(left.numerator * right.numerator, left.denominator * right.denominator);
+    case "divide":
+      return rational(left.numerator * right.denominator, left.denominator * right.numerator);
+  }
+};
 
 /** Divides exactly, then rounds the quotient to a whole number in the declared mode. */
 const roundedQuotient = (
@@ -94,51 +148,107 @@ const roundedQuotient = (
   return negative ? -rounded : rounded;
 };
 
-/** Rescales `coefficient / 10^from` to exactly `to` decimal places. */
-const rescale = (coefficient: bigint, from: number, to: number, mode: FlowRoundingMode) =>
-  to >= from
-    ? coefficient * powerOfTen(to - from)
-    : roundedQuotient(coefficient, powerOfTen(from - to), mode);
+const currencyOf = (candidate: FlowRuntimeValue): string | undefined => {
+  if (candidate.type !== "money") return undefined;
+  const parsed = moneyValueV2Schema.safeParse(candidate.value);
+  return parsed.success ? parsed.data.currency : undefined;
+};
 
-const resultType = (operands: readonly FlowRuntimeValue[]): string =>
-  operands.some((operand) => operand.type === "money") ? "money" : "decimal_number";
+const codePointCompare = (left: string, right: string): number => {
+  const leftPoints = [...left].map((entry) => entry.codePointAt(0)!);
+  const rightPoints = [...right].map((entry) => entry.codePointAt(0)!);
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = leftPoints[index]! - rightPoints[index]!;
+    if (difference !== 0) return difference;
+  }
+  return leftPoints.length - rightPoints.length;
+};
+
+export const compareFlowText = codePointCompare;
 
 const arithmetic = (
   operator: "add" | "subtract" | "multiply" | "divide",
   operands: readonly FlowRuntimeValue[],
   scale: number,
   mode: FlowRoundingMode,
+  exactValues: WeakMap<FlowRuntimeValue, ExactRational>,
+  preserveExactArithmetic: boolean,
 ): FlowRuntimeValue | undefined => {
-  const decimals = operands.map(decimalOf);
-  if (decimals.some((decimal) => decimal === undefined)) return undefined;
-  const parsed = decimals as ExactDecimal[];
-  let coefficient = parsed[0]!.coefficient;
-  let currentScale = parsed[0]!.scale;
+  const parsed = operands.map((operand) => {
+    const carried = exactValues.get(operand);
+    if (carried !== undefined) return carried;
+    const decimal = decimalOf(operand);
+    return decimal === undefined ? undefined : rationalOf(decimal);
+  });
+  if (parsed.some((entry) => entry === undefined)) return undefined;
+  const moneyOperands = operands.filter((operand) => operand.type === "money");
+  const textMoneyOperands = moneyOperands.filter((operand) => typeof operand.value === "string");
+  if (textMoneyOperands.length > 0 && textMoneyOperands.length !== moneyOperands.length)
+    return undefined;
+  const currencies = moneyOperands.map(currencyOf);
+  const commonCurrency =
+    currencies.length > 0 &&
+    currencies.every((currency) => currency !== undefined && currency === currencies[0])
+      ? currencies[0]
+      : undefined;
+  const dimensionsValid =
+    operator === "add" || operator === "subtract"
+      ? moneyOperands.length === 0 ||
+        (moneyOperands.length === operands.length &&
+          (textMoneyOperands.length === moneyOperands.length || commonCurrency !== undefined))
+      : operator === "multiply"
+        ? moneyOperands.length <= 1
+        : moneyOperands.length === 0 ||
+          (moneyOperands.length === 1 &&
+            operands[0]?.type === "money" &&
+            (textMoneyOperands.length === 1 || commonCurrency !== undefined));
+  if (!dimensionsValid) return undefined;
+  let exact = parsed[0]!;
   try {
     for (const next of parsed.slice(1)) {
-      if (operator === "add" || operator === "subtract") {
-        const common = Math.max(currentScale, next.scale);
-        const left = coefficient * powerOfTen(common - currentScale);
-        const right = next.coefficient * powerOfTen(common - next.scale);
-        coefficient = operator === "add" ? left + right : left - right;
-        currentScale = common;
-      } else if (operator === "multiply") {
-        coefficient *= next.coefficient;
-        currentScale += next.scale;
-      } else {
-        // Divide straight to the declared scale so no precision beyond it is ever invented.
-        const numerator = coefficient * powerOfTen(scale + next.scale);
-        const denominator = next.coefficient * powerOfTen(currentScale);
-        coefficient = roundedQuotient(numerator, denominator, mode);
-        currentScale = scale;
-      }
+      const combined = combineRationals(operator, exact, next!);
+      if (
+        combined === undefined ||
+        absolute(combined.numerator).toString().length > 512 ||
+        combined.denominator.toString().length > 512
+      ) return undefined;
+      exact = combined;
     }
-    const scaled = rescale(coefficient, currentScale, scale, mode);
+    const scaled = roundedQuotient(exact.numerator * powerOfTen(scale), exact.denominator, mode);
     if (absolute(scaled) >= powerOfTen(maximumDecimalDigits)) return undefined;
-    return value(
-      resultType(operands),
-      formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal),
+    const amount = formatExactDecimal(
+      parseExactDecimal(formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal))!,
     );
+    if (commonCurrency !== undefined) {
+      const result = value("money", { amount, currency: commonCurrency });
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
+    }
+    if (textMoneyOperands.length > 0) {
+      const result = value("money", amount);
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
+    }
+    if (
+      operator !== "divide" &&
+      scale === 0 &&
+      operands.every((operand) => operand.type === "whole_number")
+    ) {
+      const whole = Number(amount);
+      if (!Number.isSafeInteger(whole)) {
+        if (!preserveExactArithmetic) return undefined;
+        const result = value("decimal_number", amount);
+        exactValues.set(result, exact);
+        return result;
+      }
+      const result = value("whole_number", whole);
+      if (preserveExactArithmetic) exactValues.set(result, exact);
+      return result;
+    }
+    const result = value("decimal_number", amount);
+    if (preserveExactArithmetic) exactValues.set(result, exact);
+    return result;
   } catch {
     return undefined;
   }
@@ -159,6 +269,40 @@ const instantOf = (candidate: FlowRuntimeValue): number | undefined => {
   return undefined;
 };
 
+type ExactInstant = Readonly<{ epochSecond: bigint; fraction: string }>;
+
+const exactInstantOf = (candidate: FlowRuntimeValue): ExactInstant | undefined => {
+  if (typeof candidate.value !== "string") return undefined;
+  if (candidate.type === "date") {
+    const milliseconds = instantOf(candidate);
+    return milliseconds === undefined
+      ? undefined
+      : { epochSecond: BigInt(Math.floor(milliseconds / 1_000)), fraction: "" };
+  }
+  if (candidate.type !== "date_time") return undefined;
+  const microseconds = flowInstantMicros(candidate.value);
+  if (microseconds === undefined) return undefined;
+  const epochSecond =
+    microseconds < 0n && microseconds % 1_000_000n !== 0n
+      ? microseconds / 1_000_000n - 1n
+      : microseconds / 1_000_000n;
+  const fractionalMicros = microseconds - epochSecond * 1_000_000n;
+  const fraction =
+    fractionalMicros === 0n
+      ? ""
+      : fractionalMicros.toString().padStart(6, "0").replace(/0+$/, "");
+  return { epochSecond, fraction };
+};
+
+const compareInstants = (left: ExactInstant, right: ExactInstant): -1 | 0 | 1 => {
+  if (left.epochSecond < right.epochSecond) return -1;
+  if (left.epochSecond > right.epochSecond) return 1;
+  const scale = Math.max(left.fraction.length, right.fraction.length);
+  const leftFraction = left.fraction.padEnd(scale, "0");
+  const rightFraction = right.fraction.padEnd(scale, "0");
+  return leftFraction < rightFraction ? -1 : leftFraction > rightFraction ? 1 : 0;
+};
+
 const unitMilliseconds: Readonly<Partial<Record<FlowDateUnit, number>>> = {
   minutes: 60_000,
   hours: 3_600_000,
@@ -168,19 +312,20 @@ const unitMilliseconds: Readonly<Partial<Record<FlowDateUnit, number>>> = {
 
 const addMonths = (milliseconds: number, months: number): number => {
   const start = new Date(milliseconds);
-  const target = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, 1));
-  const lastDay = new Date(
-    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  return Date.UTC(
-    target.getUTCFullYear(),
-    target.getUTCMonth(),
-    Math.min(start.getUTCDate(), lastDay),
+  const target = new Date(0);
+  target.setUTCHours(0, 0, 0, 0);
+  target.setUTCFullYear(start.getUTCFullYear(), start.getUTCMonth() + months, 1);
+  const endOfMonth = new Date(0);
+  endOfMonth.setUTCHours(0, 0, 0, 0);
+  endOfMonth.setUTCFullYear(target.getUTCFullYear(), target.getUTCMonth() + 1, 0);
+  target.setUTCDate(Math.min(start.getUTCDate(), endOfMonth.getUTCDate()));
+  target.setUTCHours(
     start.getUTCHours(),
     start.getUTCMinutes(),
     start.getUTCSeconds(),
     start.getUTCMilliseconds(),
   );
+  return target.getTime();
 };
 
 const dateAdd = (
@@ -203,7 +348,8 @@ const dateAdd = (
     if (unit === "minutes" || unit === "hours") return undefined;
     return value("date", iso.slice(0, 10));
   }
-  return value("date_time", iso);
+  const fraction = /\.(\d+)(?=Z|[+-]\d{2}:\d{2}$)/.exec(String(date.value))?.[1] ?? "";
+  return value("date_time", iso.replace(/\.\d{3}Z$/, (fraction === "" ? "" : "." + fraction) + "Z"));
 };
 
 const dateDiff = (
@@ -215,15 +361,32 @@ const dateDiff = (
   const end = instantOf(to);
   if (start === undefined || end === undefined) return undefined;
   const fixed = unitMilliseconds[unit];
-  if (fixed !== undefined) return value("whole_number", Math.trunc((end - start) / fixed));
+  const exactStart = exactInstantOf(from);
+  const exactEnd = exactInstantOf(to);
+  if (exactStart === undefined || exactEnd === undefined) return undefined;
+  if (fixed !== undefined) {
+    const scale = Math.max(exactStart.fraction.length, exactEnd.fraction.length);
+    const startFraction = BigInt(exactStart.fraction.padEnd(scale, "0") || "0");
+    const endFraction = BigInt(exactEnd.fraction.padEnd(scale, "0") || "0");
+    const difference =
+      (exactEnd.epochSecond - exactStart.epochSecond) * powerOfTen(scale) +
+      endFraction -
+      startFraction;
+    const whole = Number(difference / (BigInt(fixed / 1_000) * powerOfTen(scale)));
+    return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
+  }
   const first = new Date(start);
   const second = new Date(end);
   let months =
     (second.getUTCFullYear() - first.getUTCFullYear()) * 12 +
     (second.getUTCMonth() - first.getUTCMonth());
   // Whole months only: step back when the later date has not yet reached the earlier one's day.
-  if (months > 0 && addMonths(start, months) > end) months -= 1;
-  else if (months < 0 && addMonths(start, months) < end) months += 1;
+  const shifted = (amount: number): ExactInstant => ({
+    epochSecond: BigInt(Math.floor(addMonths(start, amount) / 1_000)),
+    fraction: exactStart.fraction,
+  });
+  if (months > 0 && compareInstants(shifted(months), exactEnd) > 0) months -= 1;
+  else if (months < 0 && compareInstants(shifted(months), exactEnd) < 0) months += 1;
   return value("whole_number", unit === "years" ? Math.trunc(months / 12) : months);
 };
 
@@ -232,28 +395,65 @@ const isEmpty = (candidate: FlowRuntimeValue): boolean =>
   candidate.value === "" ||
   (Array.isArray(candidate.value) && candidate.value.length === 0);
 
-const deepEqual = (left: JsonValue, right: JsonValue): boolean =>
-  JSON.stringify(left) === JSON.stringify(right);
+export const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean => {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object")
+    return false;
+  if (Array.isArray(left) || Array.isArray(right))
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((entry, index) => flowJsonValuesEqual(entry, right[index]!))
+    );
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) =>
+        key === rightKeys[index] && flowJsonValuesEqual(left[key]!, right[key]!),
+    )
+  );
+};
 
 const compare = (
   left: FlowRuntimeValue,
   right: FlowRuntimeValue,
 ): -1 | 0 | 1 | "equal_only_different" | "equal_only_same" | undefined => {
+  if (left.value === null || right.value === null)
+    return left.value === right.value ? "equal_only_same" : "equal_only_different";
   const leftDecimal = decimalOf(left);
   const rightDecimal = decimalOf(right);
-  if (leftDecimal !== undefined && rightDecimal !== undefined)
+  if (leftDecimal !== undefined && rightDecimal !== undefined) {
+    if ((left.type === "money") !== (right.type === "money")) return undefined;
+    if (left.type === "money" && right.type === "money") {
+      const leftCurrency = currencyOf(left);
+      const rightCurrency = currencyOf(right);
+      if (leftCurrency === undefined || rightCurrency === undefined) {
+        if (typeof left.value !== "string" || typeof right.value !== "string")
+          return undefined;
+      }
+      if (leftCurrency !== rightCurrency) return "equal_only_different";
+    }
     return compareExactDecimals(leftDecimal, rightDecimal);
-  if (numericTypes.has(left.type) || numericTypes.has(right.type)) return undefined;
-  const leftInstant = instantOf(left);
-  const rightInstant = instantOf(right);
+  }
+  if (isNumericType(left.type) || isNumericType(right.type)) return undefined;
+  const leftInstant = exactInstantOf(left);
+  const rightInstant = exactInstantOf(right);
   if (leftInstant !== undefined && rightInstant !== undefined)
-    return leftInstant < rightInstant ? -1 : leftInstant > rightInstant ? 1 : 0;
+    return compareInstants(leftInstant, rightInstant);
   if (typeof left.value === "string" && typeof right.value === "string") {
-    if (!textTypes.has(left.type) || !textTypes.has(right.type)) return undefined;
-    return left.value < right.value ? -1 : left.value > right.value ? 1 : 0;
+    if (!isTextType(left.type) || !isTextType(right.type)) return undefined;
+    const order = compareFlowText(left.value, right.value);
+    return order < 0 ? -1 : order > 0 ? 1 : 0;
   }
   if (left.type !== right.type) return undefined;
-  return deepEqual(left.value, right.value) ? "equal_only_same" : "equal_only_different";
+  if (left.type === "yes_no" && typeof left.value === "boolean" && typeof right.value === "boolean")
+    return left.value === right.value ? "equal_only_same" : "equal_only_different";
+  return flowJsonValuesEqual(left.value, right.value)
+    ? "equal_only_same"
+    : "equal_only_different";
 };
 
 const joined = (candidate: FlowRuntimeValue): string | undefined => {
@@ -267,7 +467,9 @@ const joined = (candidate: FlowRuntimeValue): string | undefined => {
 export const evaluateFlowFormula = (
   formula: FlowFormula,
   scope: FlowFormulaScope,
+  options: Readonly<{ preserveExactArithmetic?: boolean; requireExactInteger?: boolean }> = {},
 ): FlowRuntimeValue | undefined => {
+  const exactValues = new WeakMap<FlowRuntimeValue, ExactRational>();
   const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined => {
     switch (node.op) {
       case "literal":
@@ -283,13 +485,32 @@ export const evaluateFlowFormula = (
         const operands = node.args.map(evaluate);
         return operands.some((operand) => operand === undefined)
           ? undefined
-          : arithmetic(node.op, operands as FlowRuntimeValue[], node.scale, node.rounding);
+          : arithmetic(
+              node.op,
+              operands as FlowRuntimeValue[],
+              node.scale,
+              node.rounding,
+              exactValues,
+              options.preserveExactArithmetic === true,
+            );
       }
       case "round": {
         const operand = evaluate(node.arg);
-        return operand === undefined
-          ? undefined
-          : arithmetic("add", [operand], node.scale, node.rounding);
+        if (operand === undefined) return undefined;
+        const rounded = arithmetic(
+          "add",
+          [{ type: operand.type, value: operand.value }],
+          node.scale,
+          node.rounding,
+          exactValues,
+          false,
+        );
+        if (rounded === undefined) return undefined;
+        if (operand.type === "whole_number") {
+          const whole = Number(rounded.value);
+          return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
+        }
+        return value(operand.type, rounded.value);
       }
       case "eq":
       case "neq":
@@ -324,7 +545,7 @@ export const evaluateFlowFormula = (
         const right = evaluate(node.right);
         if (left === undefined || right === undefined) return undefined;
         if (typeof left.value === "string" && typeof right.value === "string") {
-          if (!textTypes.has(left.type) || !textTypes.has(right.type)) return undefined;
+          if (!isTextType(left.type) || !isTextType(right.type)) return undefined;
           return yesNo(
             node.op === "contains"
               ? left.value.includes(right.value)
@@ -334,7 +555,7 @@ export const evaluateFlowFormula = (
           );
         }
         if (node.op === "contains" && Array.isArray(left.value))
-          return yesNo(left.value.some((item) => deepEqual(item, right.value)));
+          return yesNo(left.value.some((item) => flowJsonValuesEqual(item, right.value)));
         return undefined;
       }
       case "is_empty":
@@ -393,7 +614,13 @@ export const evaluateFlowFormula = (
       }
     }
   };
-  return evaluate(formula);
+  const result = evaluate(formula);
+  if (result === undefined) return undefined;
+  if (options.requireExactInteger) {
+    const exact = exactValues.get(result);
+    if (exact === undefined || exact.numerator % exact.denominator !== 0n) return undefined;
+  }
+  return result;
 };
 
 /**

@@ -35,6 +35,8 @@ $function$;
 
 revoke execute on function vortex_file.upload_file_record(vortex_file.file_records) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_file.upload_file_record(vortex_file.file_records)
+  to vortex_file_owner;
 
 comment on function vortex_file.upload_file_record(vortex_file.file_records) is
   'Returns the canonical FileRecord projection with UTC timestamp values.';

@@ -1,5 +1,7 @@
 import {
   CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
   HEADING_BLOCK_RELEASE,
   LAYOUT_BLOCK_RELEASES,
 } from "@vortex/contracts";
@@ -17,7 +19,13 @@ import { Heading } from "./heading";
  * these registrations only pair each registered release with its renderer, so a renderer change
  * cannot redefine or extend what authors may place.
  */
-export { CONTAINER_BLOCK_RELEASE, HEADING_BLOCK_RELEASE, LAYOUT_BLOCK_RELEASES };
+export {
+  CONTAINER_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_1_0,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
+  HEADING_BLOCK_RELEASE,
+  LAYOUT_BLOCK_RELEASES,
+};
 
 /**
  * Exact registrations pairing each general layout block release with its React renderer. A layout
@@ -27,6 +35,16 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
   Object.freeze([
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE,
+      render: Container,
+      parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      metadata: CONTAINER_BLOCK_RELEASE_1_1_0,
+      render: Container,
+      parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      metadata: CONTAINER_BLOCK_RELEASE_1_2_0,
       render: Container,
       parsePayload: noRuntimeInputs,
     }),

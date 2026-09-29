@@ -84,11 +84,11 @@ After the caller maps the schema location to an authorised builder-visible locat
 
 ```json
 {
-  "catalogueVersion": "1.0.0",
+  "catalogueVersion": "1.1.0",
   "correlationId": "00000000-0000-4000-8000-000000000013",
   "errors": [
     {
-      "catalogueVersion": "1.0.0",
+      "catalogueVersion": "1.1.0",
       "code": "definition_required_value",
       "message": "A required value is missing.",
       "guidance": "Provide the required value and validate the definition again.",

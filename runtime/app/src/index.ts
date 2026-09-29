@@ -4,11 +4,13 @@ import { createComponentContextResolver } from "./component-context-resolver";
 import { createComponentEventDispatcher } from "./component-event-dispatch";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowOrchestrator } from "./flow-orchestrator";
+import { createFlowTestRunner } from "./flow-test-run";
 import { createFormContinuationService } from "./form-continuation";
 import { createIdentityDisablementCoordinator } from "./identity-disablement";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
 import { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
 import { createInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createAppTelemetryCollector } from "./telemetry";
@@ -52,6 +54,13 @@ export {
   type InstalledRuntimeContextErrorCode,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+
+export {
+  createViewerSafeRecordLinkService,
+  type ViewerSafeRecordLinkInstalledContextLoaderFactory,
+  type ViewerSafeRecordLinkService,
+  type ViewerSafeRecordLinkServiceDependencies,
+} from "./viewer-safe-record-link";
 
 export {
   componentContextMismatchCodes,
@@ -203,6 +212,12 @@ export {
 } from "./flow-orchestrator";
 
 export {
+  createFlowTestRunner,
+  type FlowTestRunDependencies,
+  type FlowTestRunner,
+} from "./flow-test-run";
+
+export {
   createFormContinuationService,
   type FormContinuationInstallationResolver,
   type FormContinuationInstalledRelease,
@@ -227,11 +242,13 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createPreviewInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  createViewerSafeRecordLinkService,
   createComponentContextResolver,
   createComponentEventDispatcher,
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
   createFlowOrchestrator,
+  createFlowTestRunner,
   createFormContinuationService,
   createDatabaseFlowStores,
 });
