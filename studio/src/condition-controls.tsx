@@ -24,6 +24,14 @@ type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 type ConditionOperand = ComparisonCondition["left"];
 type FieldOperand = Extract<ConditionOperand, { source: "field" }>;
 type ParameterOperand = Extract<ConditionOperand, { source: "parameter" }>;
+type FieldOperandPermission = Extract<StudioConditionOperandPermission, { field: ModuleFieldV3 }>;
+
+const isComparisonCondition = (condition: ConditionNode): condition is ComparisonCondition =>
+  condition.kind === "comparison";
+
+const isFieldOperandPermission = (
+  permission: StudioConditionOperandPermission,
+): permission is FieldOperandPermission => "field" in permission;
 
 /** The semantic types used by the current Rule V2 field and parameter contracts. */
 export type StudioConditionSemanticType =
@@ -203,13 +211,13 @@ const makeIssue = (
 });
 
 const conditionOperandCount = (condition: ConditionNode): number => {
-  if (condition.kind === "comparison") return condition.right === undefined ? 1 : 2;
+  if (isComparisonCondition(condition)) return condition.right === undefined ? 1 : 2;
   if (condition.kind === "not") return conditionOperandCount(condition.condition);
   return condition.conditions.reduce((count, child) => count + conditionOperandCount(child), 0);
 };
 
 const conditionDepth = (condition: ConditionNode): number => {
-  if (condition.kind === "comparison") return 1;
+  if (isComparisonCondition(condition)) return 1;
   if (condition.kind === "not") return 1 + conditionDepth(condition.condition);
   return 1 + Math.max(...condition.conditions.map(conditionDepth));
 };
@@ -222,11 +230,6 @@ const referenceKey = (operand: Exclude<ConditionOperand, { source: "value" }>): 
 
 const permissionKey = (permission: StudioConditionOperandPermission): string =>
   referenceKey(permission.operand);
-
-const fieldMetadataForPermission = (
-  permission: StudioConditionOperandPermission,
-): ModuleFieldV3 | undefined =>
-  "field" in permission ? permission.field : undefined;
 
 const semanticTypeForField = (field: ModuleFieldV3): StudioConditionSemanticType => {
   switch (field.type) {
@@ -360,8 +363,8 @@ const contextIssues = (
       issues.push(makeIssue("invalid_context", ["allowedOperands", index], "An operand is listed more than once"));
     seen.add(key);
 
-    if (permission.operand.source === "field") {
-      const parsedField = moduleFieldV3Schema.safeParse(fieldMetadataForPermission(permission));
+    if (isFieldOperandPermission(permission)) {
+      const parsedField = moduleFieldV3Schema.safeParse(permission.field);
       if (
         !parsedField.success ||
         parsedField.data.fieldId !== permission.operand.fieldId ||
@@ -394,7 +397,7 @@ const infoForOperand = (
     (candidate) => permissionKey(candidate) === referenceKey(operand),
   );
   if (!permission) return undefined;
-  if (permission.operand.source === "parameter") {
+  if (!isFieldOperandPermission(permission)) {
     const declaredType = context.parameterDeclarations.find(
       (declaration) => declaration.key === permission.operand.key,
     )?.type;
@@ -402,11 +405,9 @@ const infoForOperand = (
       ? { source: "reference", semanticType: semanticTypeForParameter(declaredType) }
       : undefined;
   }
-  const field = fieldMetadataForPermission(permission);
-  if (!field) return undefined;
   return {
     source: "reference",
-    semanticType: semanticTypeForField(field),
+    semanticType: semanticTypeForField(permission.field),
   };
 };
 
@@ -792,6 +793,7 @@ export function validateStudioCondition(
       condition.conditions.forEach((child, index) => visit(child, [...path, "conditions", index]));
       return;
     }
+    if (!isComparisonCondition(condition)) return;
 
     const checkOperand = (operand: ConditionOperand, key: "left" | "right"): OperandInfo | undefined => {
       const operandPath = [...path, key];
@@ -864,17 +866,17 @@ const describeCondition = (
   condition: ConditionNode,
   context: StudioConditionControlsContext,
 ): string => {
+  if (isComparisonCondition(condition)) {
+    const left = describeOperand(condition.left, context);
+    const operator = operatorLabels[condition.operator];
+    return condition.right === undefined
+      ? `${left} ${operator}`
+      : `${left} ${operator} ${describeOperand(condition.right, context)}`;
+  }
   if (condition.kind === "not")
     return `not (${describeCondition(condition.condition, context)})`;
-  if (condition.kind === "all" || condition.kind === "any") {
-    const joiningWord = condition.kind === "all" ? " and " : " or ";
-    return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
-  }
-  const left = describeOperand(condition.left, context);
-  const operator = operatorLabels[condition.operator];
-  return condition.right === undefined
-    ? `${left} ${operator}`
-    : `${left} ${operator} ${describeOperand(condition.right, context)}`;
+  const joiningWord = condition.kind === "all" ? " and " : " or ";
+  return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
 };
 
 const displayRole = (role: StudioConditionOperandRole): string => roleLabels[role];
@@ -1323,6 +1325,8 @@ function TreeEditor({
       </fieldset>
     );
 
+  if (!isComparisonCondition(condition)) return null;
+
   const leftInfo = infoForOperand(condition.left, context);
   const availableOperators = studioConditionOperatorsFor(condition.left, condition.right, context).filter(
     (option) =>
@@ -1412,7 +1416,7 @@ function TreeEditor({
         <LiteralEditor
           operand={operand}
           semanticType={type}
-          collectionElementType={collectionType}
+          {...(collectionType === undefined ? {} : { collectionElementType: collectionType })}
           path={pathToOperand}
           validation={validation}
           onCommit={commitLiteral}
