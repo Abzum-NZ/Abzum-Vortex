@@ -9,6 +9,7 @@ import {
   closeOrganizationAccountCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
   createOrganizationInvitationForAdministrationCommandSchema,
+  createTenantOrganizationCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
   identitySessionSchema,
@@ -38,6 +39,8 @@ import {
   workflowIdSchema,
   organizationIdSchema,
   revisionSchema,
+  type CreateTenantOrganizationCommand,
+  type CreateTenantOrganizationResult,
   type IdentitySession,
   type ExecutionAuthorityContext,
   type JsonValue,
@@ -160,6 +163,10 @@ type Inputs = Readonly<Record<string, ProtectedOperationValue | undefined>>;
 type Outputs = Readonly<Record<string, ProtectedOperationValue | null | undefined>>;
 
 type TenantGovernanceOperations = Readonly<{
+  createOrganization: (
+    session: IdentitySession,
+    command: CreateTenantOrganizationCommand,
+  ) => Promise<CreateTenantOrganizationResult>;
   renameOrganization: (
     session: IdentitySession,
     command: RenameTenantOrganizationCommand,
@@ -288,7 +295,7 @@ const operation =
       services: ProtectedOperationExecutorDependencies,
       caller: ProtectedOperationCaller,
       command: z.output<Schema>,
-    ) => Promise<HumanOrganizationRequestResult<Outputs> | "conflict">;
+    ) => Promise<HumanOrganizationRequestResult<Outputs> | "validation" | "conflict">;
   }, authorityKind: Operation["authorityKind"] = "permission"): Operation =>
     Object.freeze({
       authorityKind,
@@ -348,6 +355,68 @@ const runTenantOrganizationMutation = async (
   return scoped.kind === "available" ? scoped.value : scoped;
 };
 
+const createTenantOrganizationOperationCommandSchema = z
+  .object({
+    duplicateKey: createTenantOrganizationCommandSchema.shape.duplicateKey,
+    parentOrganizationId: organizationIdSchema,
+    shortName: createTenantOrganizationCommandSchema.shape.shortName,
+    displayName: createTenantOrganizationCommandSchema.shape.displayName,
+    stewardDisplayName:
+      createTenantOrganizationCommandSchema.shape.organizationSteward.shape.accountDisplayName,
+    runtimeSettings: createTenantOrganizationCommandSchema.shape.runtimeSettings,
+  })
+  .strict();
+
+type CreateTenantOrganizationOperationCommand = z.output<
+  typeof createTenantOrganizationOperationCommandSchema
+>;
+
+const runTenantOrganizationCreation = async (
+  services: ProtectedOperationExecutorDependencies,
+  caller: ProtectedOperationCaller,
+  command: CreateTenantOrganizationOperationCommand,
+): Promise<HumanOrganizationRequestResult<Outputs> | "validation"> => {
+  const scoped = await services.tenantGovernance.run(
+    caller.session,
+    caller.selection,
+    async ({ tenantId, operations }) => {
+      const candidate = createTenantOrganizationCommandSchema.safeParse({
+        operation: "create_tenant_organization",
+        duplicateKey: command.duplicateKey,
+        tenantId,
+        parentOrganizationId: command.parentOrganizationId,
+        shortName: command.shortName,
+        displayName: command.displayName,
+        organizationSteward: {
+          // The creator is the only nominee; steward identity never comes from operation input.
+          identityId: caller.session.identityId,
+          accountDisplayName: command.stewardDisplayName,
+          accountLanguage: command.runtimeSettings.language,
+          accountTimeZone: command.runtimeSettings.timeZone,
+        },
+        runtimeSettings: command.runtimeSettings,
+      });
+      if (!candidate.success) return "validation" as const;
+
+      const result = await operations.createOrganization(caller.session, candidate.data);
+      if (result.outcome === "refused") {
+        if (result.code === "invalid_command") return "validation" as const;
+        if (result.code === "operation_unavailable")
+          return { kind: "temporarily_unavailable" } as const;
+        return { kind: "unavailable" } as const;
+      }
+      return {
+        kind: "available",
+        value: {
+          organization_id: result.organizationId,
+          revision: result.organizationRevision,
+        },
+      } as const;
+    },
+  );
+  return scoped.kind === "available" ? scoped.value : scoped;
+};
+
 /**
  * Each registered operation, exhaustively keyed by the catalogue (`satisfies` makes a missing or
  * an unregistered key a compile error), so a newly registered operation cannot exist without an
@@ -368,6 +437,28 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  create_tenant_organization: operation(
+    {
+      schema: createTenantOrganizationOperationCommandSchema,
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        parentOrganizationId: inputs.parent_organization_id,
+        shortName: inputs.short_name,
+        displayName: inputs.display_name,
+        stewardDisplayName: inputs.steward_display_name,
+        runtimeSettings: {
+          language: inputs.language,
+          timeZone: inputs.time_zone,
+          currency: inputs.currency,
+          dateFormat: inputs.date_format,
+          numberFormat: inputs.number_format,
+        },
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationCreation(services, caller, command),
+    },
+    "tenant_capability",
+  ),
   rename_group: operation({
     schema: renameOrganizationAdministrationGroupCommandSchema,
     command: (inputs) => ({

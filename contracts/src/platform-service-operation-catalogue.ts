@@ -69,6 +69,7 @@ const entry = (definition: {
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
+  create_tenant_organization: entry(sources.create_tenant_organization),
   rename_group: entry(sources.rename_group),
   retire_group: entry(sources.retire_group),
   add_group_membership: entry(sources.add_group_membership),

@@ -170,6 +170,13 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_create_child_organization",
+        "key": "vortex.app.tenant_administration.organization_create_child",
+        "record_type": "vortex.system_directory:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_open_organization_detail",
         "key": "vortex.app.tenant_administration.organization_open_detail",
         "record_type": "vortex.system_directory:organization",
@@ -688,6 +695,19 @@
                               "value": "Rename organisation"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
+                              "value": "event_create_child_organization"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Create child organisation"
+                            }
+                          }
                         }
                       ]
                     }
@@ -775,12 +795,479 @@
                       }
                     }
                   }
+                },
+                "form_create_child_organization": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Create child organisation"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": false,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "create_child_organisation_steward_notice": {
+                          "block": {
+                            "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "title": {
+                              "kind": "text",
+                              "value": "First organisation steward"
+                            },
+                            "text": {
+                              "kind": "text",
+                              "value": "The signed-in administrator who creates this child organisation becomes its first organisation steward."
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_short_name": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "short_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Short name"
+                            },
+                            "help_text": {
+                              "kind": "text",
+                              "value": "Use lowercase words separated by underscores."
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_display_name": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Display name"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_steward_display_name": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "steward_display_name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Your display name in the new organisation"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_language": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "language"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Language"
+                            },
+                            "help_text": {
+                              "kind": "text",
+                              "value": "Enter a language tag such as en or en-NZ."
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_time_zone": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "time_zone"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Time zone"
+                            },
+                            "help_text": {
+                              "kind": "text",
+                              "value": "Enter an IANA time zone such as Pacific/Auckland."
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_currency": {
+                          "block": {
+                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "currency"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Currency"
+                            },
+                            "help_text": {
+                              "kind": "text",
+                              "value": "Enter a three-letter ISO currency code such as NZD."
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_date_format": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "date_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Date format"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "options": {
+                              "kind": "list",
+                              "items": [
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "short"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Short"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "medium"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Medium"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "long"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Long"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "full"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Full"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "input_create_child_organization_number_format": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "number_format"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Number format"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "options": {
+                              "kind": "list",
+                              "items": [
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "auto"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Automatic"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "always"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Always group thousands"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "min2"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Group thousands above four digits"
+                                    }
+                                  }
+                                },
+                                {
+                                  "kind": "group",
+                                  "properties": {
+                                    "key": {
+                                      "kind": "text",
+                                      "value": "never"
+                                    },
+                                    "label": {
+                                      "kind": "text",
+                                      "value": "Never group thousands"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "create_child_organisation_steward_notice",
+                          "input_create_child_organization_short_name",
+                          "input_create_child_organization_display_name",
+                          "input_create_child_organization_steward_display_name",
+                          "input_create_child_organization_language",
+                          "input_create_child_organization_time_zone",
+                          "input_create_child_organization_currency",
+                          "input_create_child_organization_date_format",
+                          "input_create_child_organization_number_format"
+                        ]
+                      }
+                    }
+                  }
                 }
               },
               "order": {
                 "desktop": [
                   "structure_region",
-                  "form_rename_organization"
+                  "form_rename_organization",
+                  "form_create_child_organization"
                 ]
               }
             }
@@ -1402,6 +1889,195 @@
       },
       {
         "contractVersion": "1.0.0",
+        "id": "flow_create_tenant_organization",
+        "key": "create_tenant_organization",
+        "labels": {
+          "name": "Create child organisation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "parent_organization_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:organization"
+            ]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_create_child_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "short_name": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "display_name": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "steward_display_name": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "language": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "time_zone": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "currency": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "" }
+                  },
+                  "date_format": {
+                    "kind": "literal",
+                    "literal": { "type": "choice", "value": "medium" }
+                  },
+                  "number_format": {
+                    "kind": "literal",
+                    "literal": { "type": "choice", "value": "auto" }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_tenant_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "parent_organization_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "parent_organization_id"
+                    }
+                  },
+                  "short_name": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["short_name"]
+                    }
+                  },
+                  "display_name": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["display_name"]
+                    }
+                  },
+                  "steward_display_name": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["steward_display_name"]
+                    }
+                  },
+                  "language": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["language"]
+                    }
+                  },
+                  "time_zone": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["time_zone"]
+                    }
+                  },
+                  "currency": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["currency"]
+                    }
+                  },
+                  "date_format": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["date_format"]
+                    }
+                  },
+                  "number_format": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["number_format"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
         "id": "flow_open_tenant_organization",
         "key": "open_tenant_organization",
         "labels": {
@@ -1585,6 +2261,19 @@
           "expected_revision": {
             "kind": "caller",
             "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_create_child_organization",
+        "control": "structure_region",
+        "event_id": "event_create_child_organization",
+        "event": "row_action",
+        "flow": "flow_create_tenant_organization",
+        "inputs": {
+          "parent_organization_id": {
+            "kind": "caller",
+            "name": "record_id"
           }
         }
       }

@@ -170,6 +170,10 @@
     }
   },
   "platformServiceOperations": {
+    "a90f1734-08a8-4dac-bbc5-23e1c7b68d92:12d1b239-bd2f-4075-9cf4-17f7d3f51256:1.0.0": {
+      "contentFingerprint": "sha256:dee007bc3a0f04147e62627dd8c8b6201a3038e8ae0c38b925ec2f7d548ad804",
+      "catalogueFingerprint": "sha256:808e0ab199e1cdb66f28c89b8cddf33b0c1c71225c4557c9aa20e13be6faa2a1"
+    },
     "a90f1734-08a8-4dac-bbc5-23e1c7b68d92:aa09a4e0-4644-439a-b7d9-740d7875758e:1.0.0": {
       "contentFingerprint": "sha256:8ff1948a67c51eed0b27c1ea99f5e56891d412a95231cbe5b4cd684555ddf738",
       "catalogueFingerprint": "sha256:2d30a70f2f5573f4d59f0ee834c9ac1de5c68c1848ab56f1e41e830f5c2ea3f6"
