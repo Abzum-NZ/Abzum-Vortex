@@ -1,4 +1,5 @@
 import {
+  CALENDAR_BLOCK_RELEASE,
   DISPLAY_BLOCK_RELEASES,
   GROUPED_DATA_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE_1_1_0,
@@ -28,6 +29,7 @@ import {
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
+  parseCalendarPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -37,6 +39,7 @@ import {
   parseSummaryPayload,
   parseTablePayload,
   parseTextPayload,
+  type CalendarPayload,
   type GroupedPayload,
   type ListPayload,
   type RecordDetailPayload,
@@ -46,6 +49,7 @@ import {
   type TextPayload,
 } from "./projected-data";
 import { GroupedDataDisplay } from "./grouped-data";
+import { CalendarDisplay } from "./calendar";
 import { ListDisplay } from "./list";
 import { RecordDetailDisplay } from "./record-detail";
 import { RichTextDisplay } from "./rich-text-component";
@@ -60,6 +64,7 @@ import { PlainTextDisplay } from "./text";
  */
 export {
   DISPLAY_BLOCK_RELEASES,
+  CALENDAR_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
@@ -86,6 +91,7 @@ const TEXT_PAYLOAD_PARSER = displayPayloadParser<TextPayload>(parseTextPayload);
 const RICH_TEXT_PAYLOAD_PARSER = displayPayloadParser<RichTextPayload>(parseRichTextPayload);
 const LIST_PAYLOAD_PARSER = displayPayloadParser<ListPayload>(parseListPayload);
 const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload>(parseTablePayload);
+const CALENDAR_PAYLOAD_PARSER = displayPayloadParser<CalendarPayload>(parseCalendarPayload);
 const RECORD_DETAIL_PAYLOAD_PARSER =
   displayPayloadParser<RecordDetailPayload>(parseRecordDetailPayload);
 const GROUPED_DATA_PAYLOAD_PARSER = displayPayloadParser<GroupedPayload>(parseGroupedPayload);
@@ -188,6 +194,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: TABLE_BLOCK_RELEASE_1_4_0,
       render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
+    }),
+    Object.freeze({
+      metadata: CALENDAR_BLOCK_RELEASE,
+      render: CalendarDisplay,
+      parsePayload: CALENDAR_PAYLOAD_PARSER,
     }),
   ]);
 
