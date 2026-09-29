@@ -62,7 +62,11 @@ import {
   type FlowTaskOutcome,
 } from "@vortex/rule";
 import { z } from "zod";
-import type { FlowContinuationStore, FlowEffectLedger } from "./flow-continuation-store";
+import type {
+  FlowContinuationStore,
+  FlowEffectLedger,
+  FlowEffectPrincipal,
+} from "./flow-continuation-store";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
 export type { FlowSubject };
@@ -896,27 +900,27 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     state: FlowRunState,
     call: FlowProtectedTaskCall,
   ): Promise<TaskResult> => {
+    const principal: FlowEffectPrincipal =
+      run.authority.kind === "person"
+        ? { kind: "person", id: run.authority.session.identityId }
+        : run.authority.context.actor.kind === "specified_account"
+          ? {
+              kind: "specified_account",
+              id: run.authority.context.actor.organizationAccountId,
+            }
+          : { kind: "system", id: run.authority.context.actor.systemActorId };
+    const organizationId =
+      run.authority.kind === "person"
+        ? run.authority.selection.organizationId
+        : run.authority.organizationId;
     if (run.authority.kind === "execution_authority")
       return notAvailable(run, call, "per-task Access grant resolution (#1562)");
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 
-    const principal =
-      run.authority.kind === "person"
-        ? { kind: "person" as const, id: run.authority.session.identityId }
-        : {
-            kind: run.authority.context.actor.kind,
-            id:
-              run.authority.context.actor.kind === "specified_account"
-                ? run.authority.context.actor.organizationAccountId
-                : run.authority.context.actor.systemActorId,
-          };
     const key = {
       runId: state.runId,
-      organizationId:
-        run.authority.kind === "person"
-          ? run.authority.selection.organizationId
-          : run.authority.organizationId,
+      organizationId,
       principal,
       origin: run.origin,
       originId: run.originId,
