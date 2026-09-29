@@ -4712,5 +4712,119 @@
     },
     "supportedEvents": [],
     "supportedStateOperations": []
+  },
+  "CALENDAR_BLOCK_RELEASE": {
+    "blockId": "d1125b70-e83b-4fc6-bf60-7a6e36f5f56a",
+    "key": "platform.display.calendar",
+    "releaseVersion": "1.0.0",
+    "name": "Calendar",
+    "icon": "calendar",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.calendar",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the block heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "group",
+        "key": "calendar_mapping",
+        "label": "Calendar mapping",
+        "help": "Fields that place each query row on the calendar",
+        "required": true,
+        "properties": [
+          {
+            "kind": "choice",
+            "key": "kind",
+            "label": "Mapping kind",
+            "help": "Whether each item has an end field or a duration",
+            "required": true,
+            "options": [
+              { "key": "start_end", "label": "Start and end" },
+              { "key": "start_duration", "label": "Start and duration" }
+            ]
+          },
+          {
+            "kind": "field_reference",
+            "key": "start_field",
+            "label": "Start field",
+            "help": "Date or date-time field that starts each item",
+            "required": true
+          },
+          {
+            "kind": "field_reference",
+            "key": "end_field",
+            "label": "End field",
+            "help": "Date or date-time field that ends each item",
+            "required": false
+          },
+          {
+            "kind": "field_reference",
+            "key": "duration_field",
+            "label": "Duration field",
+            "help": "Numeric field that gives each item's duration",
+            "required": false
+          },
+          {
+            "kind": "choice",
+            "key": "duration_unit",
+            "label": "Duration unit",
+            "help": "Unit used by the duration field",
+            "required": false,
+            "options": [
+              { "key": "minutes", "label": "Minutes" },
+              { "key": "hours", "label": "Hours" },
+              { "key": "days", "label": "Days" }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "field_reference",
+        "key": "item_title_field",
+        "label": "Item title field",
+        "help": "Query field shown as the title of each calendar item",
+        "required": true
+      },
+      {
+        "kind": "choice",
+        "key": "default_view",
+        "label": "Default view",
+        "help": "View shown when the address has no valid view parameter",
+        "required": false,
+        "options": [
+          { "key": "month", "label": "Month" },
+          { "key": "week", "label": "Week" },
+          { "key": "agenda", "label": "Agenda" }
+        ],
+        "defaultValue": { "kind": "choice", "value": "month" }
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when there are no items in this period",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": ["title"]
+    },
+    "supportedEvents": ["refresh", "row_action"],
+    "supportedStateOperations": []
   }
 }
