@@ -9,12 +9,15 @@ import {
   sourceComponentFlowBindingSchema,
   sourceFlowSchema,
   sourcePageDefinitionV2Schema,
+  sourcePlacementEntriesV2,
+  sourcePlacementSlotV2Schema,
   sourcePlatformBlockDependenciesV2Schema,
   type ImmutablePlatformBlockCatalogueV2,
   type ModuleDraftV3,
   type ModuleFieldV3,
   type ModuleQueryDefinitionV3,
   type RecordTypeDefinitionV3,
+  type SourceApplicationBodyV2,
   type SourceBlockPropertyValueV2Contract,
   type SourceFlow,
   type SourcePageDefinitionV2,
@@ -39,16 +42,18 @@ export type ModulePageGeneratorInput = Readonly<{
     update: string;
   }>;
   catalogue: ImmutablePlatformBlockCatalogueV2;
-  /** Full authored page replacements, keyed by generated surface and required to keep its ID. */
+  /** Replacements keep the generated page identity and each form's bound submit control. */
   authoredPageOverrides?: Readonly<Partial<Record<ModuleGeneratedPageKind, SourcePageDefinitionV2>>>;
 }>;
 
 type ParsedFlowBinding = ReturnType<typeof sourceComponentFlowBindingSchema.parse>;
 type ParsedPlatformDependencies = ReturnType<typeof sourcePlatformBlockDependenciesV2Schema.parse>;
+type SourceApplicationEvent = SourceApplicationBodyV2["events"][number];
 
 /** Ordinary authored Application source. Callers merge these fragments into the current draft. */
 export type ModulePageFragments = Readonly<{
   pages: readonly SourcePageDefinitionV2[];
+  events: readonly SourceApplicationEvent[];
   flows: readonly SourceFlow[];
   flow_bindings: readonly ParsedFlowBinding[];
   platform_block_dependencies: ParsedPlatformDependencies;
@@ -228,10 +233,26 @@ const pageName = (value: string): string => {
   return name;
 };
 
+type SourcePlacementSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+type SourcePlacement = SourcePlacementSlot["placements"][string];
+
+const findPlacement = (slot: SourcePlacementSlot, alias: string): SourcePlacement | undefined => {
+  const direct = slot.placements[alias];
+  if (direct !== undefined) return direct;
+  for (const placement of Object.values(slot.placements)) {
+    for (const child of Object.values(placement.slots)) {
+      const found = findPlacement(child, alias);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+};
+
 const withAuthoredPageOverride = (
   kind: ModuleGeneratedPageKind,
   generated: SourcePageDefinitionV2,
   authored: SourcePageDefinitionV2 | undefined,
+  boundForm?: Readonly<{ alias: string; blockId: string; releaseVersion: string }>,
 ): SourcePageDefinitionV2 => {
   if (authored === undefined) return generated;
   const parsed = sourcePageDefinitionV2Schema.parse(authored);
@@ -245,6 +266,21 @@ const withAuthoredPageOverride = (
       "authored_page_identity_changed",
       `The authored '${kind}' page override must retain generated id '${generated.id}', key '${generated.key}', and type '${expectedType}'`,
     );
+  if (boundForm !== undefined && parsed.type === "form") {
+    const rootSlots =
+      parsed.composition.shell_kind === "default"
+        ? [parsed.composition.main]
+        : Object.values(parsed.composition.content);
+    const form = rootSlots.map((slot) => findPlacement(slot, boundForm.alias)).find(Boolean);
+    if (
+      form?.block.block_id !== boundForm.blockId ||
+      form.block.release_version !== boundForm.releaseVersion
+    )
+      throw new ModulePageGeneratorError(
+        "authored_page_identity_changed",
+        `The authored '${kind}' page must retain its generated submit form '${boundForm.alias}' and block release`,
+      );
+  }
   return parsed;
 };
 
@@ -360,7 +396,6 @@ export const generateModulePageFragments = (
   const fieldInputRelease = latestRelease(catalogue, "platform.form.field_input");
   const formRelease = latestRelease(catalogue, "platform.form.container");
   const buttonRelease = latestRelease(catalogue, "platform.action.button");
-  const usedReleases = [tableRelease, detailRelease, fieldInputRelease, formRelease, buttonRelease];
   const totalInputs = supportedFields.length;
   const maximumFormFields = catalogue.compositionPolicy.maximumPlacements - 2;
   if (totalInputs > maximumFormFields)
@@ -500,6 +535,15 @@ export const generateModulePageFragments = (
 
     const flowId = sourceIdentity(module, recordType, `${kind}_save_flow`);
     const flowKey = builderIdentity(flowId, `${kind}_save`);
+    const eventId = sourceIdentity(module, recordType, `${kind}_submit_event`);
+    const event: SourceApplicationEvent = {
+      id: eventId,
+      key: `vortex.app.events.${builderIdentity(eventId, `${kind}_submit`)}`,
+      record_type: recordTypeReference,
+      carries: [],
+      personal_or_sensitive_values_allowed: false,
+    };
+    const groupOwnedCreate = kind === "create" && recordType.ownershipMode === "group";
     const flow = sourceFlowSchema.parse({
       contractVersion: flowContractVersion,
       id: flowId,
@@ -519,6 +563,9 @@ export const generateModulePageFragments = (
             }
           : {}),
         values: { type: "json", required: true },
+        ...(groupOwnedCreate
+          ? { selected_owner_group_id: { type: "text", required: true } }
+          : {}),
       },
       variables: {},
       triggers: [],
@@ -530,10 +577,13 @@ export const generateModulePageFragments = (
           properties: {
             record_type: {
               kind: "literal",
-              literal: { type: "record_type_id", value: recordTypeReference },
+              literal: { type: "text", value: recordTypeReference },
             },
             ...(kind === "edit" ? { record: flowValueReference("record") } : {}),
             values: flowValueReference("values"),
+            ...(groupOwnedCreate
+              ? { selected_owner_group_id: flowValueReference("selected_owner_group_id") }
+              : {}),
           },
         },
       ],
@@ -544,21 +594,59 @@ export const generateModulePageFragments = (
     const flowBinding = sourceComponentFlowBindingSchema.parse({
       id: sourceIdentity(module, recordType, `${kind}_submit_binding`),
       control: formPlacementId,
-      event_id: "form_submit",
+      event_id: eventId,
       event: "form_submit",
       flow: flowId,
       inputs: {
         ...(kind === "edit" ? { record: { kind: "caller", name: "record" } } : {}),
         values: { kind: "caller", name: "values" },
+        ...(groupOwnedCreate
+          ? { selected_owner_group_id: { kind: "caller", name: "selected_owner_group_id" } }
+          : {}),
       },
     });
-    return { page, flow, flowBinding };
+    return { page, event, flow, flowBinding };
   };
 
   const create = makeForm("create");
   const edit = makeForm("edit");
+  const pages = [
+    withAuthoredPageOverride("list", listPage, input.authoredPageOverrides?.list),
+    withAuthoredPageOverride("detail", detailPage, input.authoredPageOverrides?.detail),
+    withAuthoredPageOverride("create", create.page, input.authoredPageOverrides?.create, {
+      alias: create.flowBinding.control,
+      blockId: formRelease.blockId,
+      releaseVersion: formRelease.releaseVersion,
+    }),
+    withAuthoredPageOverride("edit", edit.page, input.authoredPageOverrides?.edit, {
+      alias: edit.flowBinding.control,
+      blockId: formRelease.blockId,
+      releaseVersion: formRelease.releaseVersion,
+    }),
+  ];
+  const usedReleases = new Map<string, (typeof catalogue.releases)[number]>();
+  for (const page of pages) {
+    const rootSlots =
+      page.composition.shell_kind === "default"
+        ? [page.composition.main]
+        : Object.values(page.composition.content);
+    for (const rootSlot of rootSlots)
+      for (const [, placed] of sourcePlacementEntriesV2(rootSlot)) {
+        const release = catalogue.releases.find(
+          (candidate) =>
+            candidate.blockId === placed.block.block_id &&
+            candidate.releaseVersion === placed.block.release_version,
+        );
+        if (release === undefined)
+          throw new ModulePageGeneratorError(
+            "catalogue_release_missing",
+            `The supplied platform catalogue has no release '${placed.block.block_id}@${placed.block.release_version}'`,
+          );
+        usedReleases.set(`${release.blockId}@${release.releaseVersion}`, release);
+      }
+  }
   const dependencies = sourcePlatformBlockDependenciesV2Schema.parse(
-    [...usedReleases]
+    [...usedReleases.values()]
       .map((release) => ({
         kind: "platform_block",
         block_id: release.blockId,
@@ -574,12 +662,8 @@ export const generateModulePageFragments = (
   );
 
   return freezeRecursively({
-    pages: [
-      withAuthoredPageOverride("list", listPage, input.authoredPageOverrides?.list),
-      withAuthoredPageOverride("detail", detailPage, input.authoredPageOverrides?.detail),
-      withAuthoredPageOverride("create", create.page, input.authoredPageOverrides?.create),
-      withAuthoredPageOverride("edit", edit.page, input.authoredPageOverrides?.edit),
-    ],
+    pages,
+    events: [create.event, edit.event],
     flows: [create.flow, edit.flow],
     flow_bindings: [create.flowBinding, edit.flowBinding],
     platform_block_dependencies: dependencies,
