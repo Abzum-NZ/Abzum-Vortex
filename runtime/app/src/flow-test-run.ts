@@ -136,8 +136,24 @@ const failureFromInterpreter = (failure: FlowFailure): FlowTestRunFailure => ({
   ...(failure.taskId === undefined ? {} : { taskId: failure.taskId }),
 });
 
+// FlowTask's registered-task member is open-ended, so narrow control tasks by shape as well as tag.
+const isIfTask = (task: FlowTask): task is Extract<FlowTask, { type: "if" }> =>
+  task.type === "if" && "condition" in task && "then" in task && Array.isArray(task.then);
+
+const isSwitchTask = (task: FlowTask): task is Extract<FlowTask, { type: "switch" }> =>
+  task.type === "switch" && "value" in task && "cases" in task && Array.isArray(task.cases);
+
+const isForEachTask = (task: FlowTask): task is Extract<FlowTask, { type: "for_each" }> =>
+  task.type === "for_each" && "items" in task && "tasks" in task && Array.isArray(task.tasks);
+
+const isSequentialTask = (task: FlowTask): task is Extract<FlowTask, { type: "sequential" }> =>
+  task.type === "sequential" && "tasks" in task && Array.isArray(task.tasks);
+
+const isRunFlowTask = (task: FlowTask): task is Extract<FlowTask, { type: "run_flow" }> =>
+  task.type === "run_flow" && "flowId" in task && "inputs" in task;
+
 const mapTasksForTest = (
-  flowId: string,
+  flowId: FlowDefinition["id"],
   tasks: readonly FlowTask[],
   simulatedTasks: Set<string>,
   simulatedTaskTypes: Map<string, string>,
@@ -155,35 +171,31 @@ const mapTasksForTest = (
       simulatedTaskTypes.set(key, task.type);
       return { ...common, type: "sequential", tasks: [] };
     }
-    switch (task.type) {
-      case "if":
-        return {
-          ...task,
-          then: mapTasksForTest(flowId, task.then, simulatedTasks, simulatedTaskTypes),
-          ...(task.else === undefined
-            ? {}
-            : { else: mapTasksForTest(flowId, task.else, simulatedTasks, simulatedTaskTypes) }),
-        };
-      case "switch":
-        return {
-          ...task,
-          cases: task.cases.map((entry) => ({
-            ...entry,
-            tasks: mapTasksForTest(flowId, entry.tasks, simulatedTasks, simulatedTaskTypes),
-          })),
-          ...(task.default === undefined
-            ? {}
-            : { default: mapTasksForTest(flowId, task.default, simulatedTasks, simulatedTaskTypes) }),
-        };
-      case "for_each":
-      case "sequential":
-        return {
-          ...task,
-          tasks: mapTasksForTest(flowId, task.tasks, simulatedTasks, simulatedTaskTypes),
-        };
-      default:
-        return task;
-    }
+    if (isIfTask(task))
+      return {
+        ...task,
+        then: mapTasksForTest(flowId, task.then, simulatedTasks, simulatedTaskTypes),
+        ...(task.else === undefined
+          ? {}
+          : { else: mapTasksForTest(flowId, task.else, simulatedTasks, simulatedTaskTypes) }),
+      };
+    if (isSwitchTask(task))
+      return {
+        ...task,
+        cases: task.cases.map((entry) => ({
+          ...entry,
+          tasks: mapTasksForTest(flowId, entry.tasks, simulatedTasks, simulatedTaskTypes),
+        })),
+        ...(task.default === undefined
+          ? {}
+          : { default: mapTasksForTest(flowId, task.default, simulatedTasks, simulatedTaskTypes) }),
+      };
+    if (isForEachTask(task) || isSequentialTask(task))
+      return {
+        ...task,
+        tasks: mapTasksForTest(flowId, task.tasks, simulatedTasks, simulatedTaskTypes),
+      };
+    return task;
   });
 
 const testFlow = (
@@ -200,11 +212,11 @@ const testFlow = (
   finally: mapTasksForTest(flow.id, flow.finally, simulatedTasks, simulatedTaskTypes),
 });
 
-const runFlowTargets = (flow: FlowDefinition): string[] => {
-  const targets: string[] = [];
+const runFlowTargets = (flow: FlowDefinition): FlowDefinition["id"][] => {
+  const targets: FlowDefinition["id"][] = [];
   const visit = (tasks: readonly FlowTask[]) => {
     for (const task of tasks) {
-      if (task.type === "run_flow") targets.push(task.flowId);
+      if (isRunFlowTask(task)) targets.push(task.flowId);
       for (const child of flowTaskChildLists(task)) visit(child.tasks);
     }
   };
@@ -217,7 +229,7 @@ const runFlowTargets = (flow: FlowDefinition): string[] => {
 const emptyObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const resultOutcome = (code: string): TaskExecution["outcome"] =>
+const resultOutcome = (code: string): FlowTestRunFailure["outcome"] =>
   code === "conflict"
     ? "conflict"
     : code === "invalid_request"
@@ -599,7 +611,14 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         iteration: string;
         traceIndex: number;
       }> = [];
+      let traceFlowUnavailable = false;
       const observer: FlowTaskTraceObserver = (observation) => {
+        const observedFlow = testFlows.get(observation.flowId);
+        if (observedFlow === undefined) {
+          traceFlowUnavailable = true;
+          return;
+        }
+        const flowId = observedFlow.id;
         const key = taskKey(observation.flowId, observation.taskId);
         if (observation.outcome === "awaiting") return;
         if (observation.outcome === "entered") {
@@ -610,7 +629,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
             traceIndex: trace.length,
           });
           trace.push({
-            flowId: observation.flowId,
+            flowId,
             taskId: observation.taskId,
             taskType: observation.taskType,
             iteration: observation.iteration,
@@ -651,7 +670,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           ? undefined
           : failureFromInterpreter(observation.failure);
         trace.push({
-          flowId: observation.flowId,
+          flowId,
           taskId: observation.taskId,
           taskType: simulatedTaskTypes.get(key) ?? observation.taskType,
           iteration: observation.iteration,
@@ -670,6 +689,14 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           };
         }
       };
+      const finishFailedRun = (failure: FlowTestRunFailure): FlowTestRunResponse => ({
+        kind: "finished",
+        runId,
+        flowId: requestedFlow.id,
+        result: { status: "failed", failure },
+        trace,
+        intents,
+      });
 
       const startedAt = clock();
       let step = startFlowRun(
@@ -693,31 +720,15 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
       for (;;) {
         if (clock() - startedAt > serverMilliseconds) {
           failPendingRunFlows("server_time_limit", "failed");
-          return {
-            kind: "finished",
-            runId,
-            flowId: requestedFlow.id,
-            result: {
-              status: "failed",
-              failure: { outcome: "failed", code: "server_time_limit" },
-            },
-            trace,
-            intents,
-          };
+          return finishFailedRun({ outcome: "failed", code: "server_time_limit" });
         }
         if (Date.parse(previewInstallation.expiresAt) <= now().valueOf()) {
           failPendingRunFlows("preview_expired", "refused");
-          return {
-            kind: "finished",
-            runId,
-            flowId: requestedFlow.id,
-            result: {
-              status: "failed",
-              failure: { outcome: "refused", code: "preview_expired" },
-            },
-            trace,
-            intents,
-          };
+          return finishFailedRun({ outcome: "refused", code: "preview_expired" });
+        }
+        if (traceFlowUnavailable) {
+          failPendingRunFlows("flow_unavailable", "failed");
+          return finishFailedRun({ outcome: "failed", code: "flow_unavailable" });
         }
         if (step.kind === "finished") {
           return {
@@ -746,6 +757,12 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         }
 
         const call = step.call;
+        const activeFlowId = step.state.activations.at(-1)?.flowId;
+        const activeFlow = activeFlowId === undefined ? undefined : testFlows.get(activeFlowId);
+        if (activeFlow === undefined) {
+          failPendingRunFlows("flow_unavailable", "failed");
+          return finishFailedRun({ outcome: "failed", code: "flow_unavailable" });
+        }
         let execution: TaskExecution;
         if (call.taskType.startsWith("record.")) {
           execution = await runRecordTask(
@@ -761,7 +778,7 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           ? execution.outcome
           : "simulated";
         trace.push({
-          flowId: step.state.activations.at(-1)?.flowId ?? requestedFlow.id,
+          flowId: activeFlow.id,
           taskId: call.taskId,
           taskType: call.taskType,
           iteration: call.iteration,

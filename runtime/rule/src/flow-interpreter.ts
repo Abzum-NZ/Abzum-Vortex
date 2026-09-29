@@ -913,10 +913,11 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
         if (executed.step.kind === "interface") {
+          const intent = executed.step.intents.find((intent) => intent.taskId === task.id);
           observe(observer, {
             ...observation,
             outcome: "interface",
-            intent: executed.step.intents.find((intent) => intent.taskId === task.id),
+            ...(intent === undefined ? {} : { intent }),
           });
         } else observe(observer, { ...observation, outcome: "awaiting" });
         return executed.step;
