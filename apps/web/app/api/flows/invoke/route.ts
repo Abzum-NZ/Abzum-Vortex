@@ -24,6 +24,7 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
+import { createReferenceChoiceService } from "@vortex/query";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -38,7 +39,7 @@ import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
-import { loadApplicationPage } from "../../../_lib/application-page";
+import { loadApplicationPage, loadProjectedReferenceChoiceForm } from "../../../_lib/application-page";
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
@@ -56,7 +57,16 @@ import {
 } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
-import { appTelemetry as telemetry, humanOrganizationRequests } from "../../../_lib/server-composition";
+import {
+  appTelemetry as telemetry,
+  humanOrganizationRequestDependencies,
+  humanOrganizationRequests,
+} from "../../../_lib/server-composition";
+import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
+import {
+  applicationHasAuthoredForm,
+  resolveReferenceChoiceFormValues,
+} from "../../../_lib/reference-choices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +82,7 @@ const requestSchema = z
     tenantShortName: z.string().min(1).max(200),
     organizationShortName: z.string().min(1).max(200),
     applicationKey: z.string().min(1).max(200),
+    pageKey: z.string().min(1).max(200),
     invocation: flowBindingInvocationSchema,
   })
   .strict();
@@ -103,14 +114,16 @@ const fromOwnSite = (request: NextRequest): boolean => {
 
 /**
  * Whether an installed flow declares the paused node a continuation target names (#544): a task
- * with that id anywhere in the flow and, for a form, a Show form task whose fixed form is the named
- * one (a confirmation names no form). The stored run still pins the exact node; this refuses a
- * target the installed flow could never pause at before the continuation is spent.
+ * with that id anywhere in the flow and, for a form, a Show form task whose literal form matches
+ * or whose dynamic form is checked against the active authored release. The stored run still pins
+ * the exact node; this refuses a target the installed flow could never pause at before spending
+ * the continuation.
  */
 const declaresPausedNode = (
   flow: unknown,
   node: Readonly<{ nodeId: string; formId?: string }>,
 ): boolean => {
+  if (typeof flow !== "object" || flow === null) return false;
   const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
   const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
     for (const task of tasks ?? []) {
@@ -158,6 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body.tenantShortName,
       body.organizationShortName,
       body.applicationKey,
+      body.pageKey,
     );
     if (address.kind === "temporarily_unavailable")
       return privateResponse({ kind: "unavailable" }, 503);
@@ -165,6 +179,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const { authorityId } = getIdentityAuthorityConfiguration();
     const requests = humanOrganizationRequests(authorityId);
+    const referenceChoices = createReferenceChoiceService({
+      ...humanOrganizationRequestDependencies(authorityId),
+      continuationKey: getQueryContinuationKey(),
+    });
     const executor = createProtectedOperationExecutor({
       accessAdministration: createOrganizationAccessAdministrationService({
         identityAuthorityId: authorityId,
@@ -337,6 +355,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           flows,
           recordTypes,
           namedActions,
+          applicationContent: application.content,
+          modules: releaseSet.modules,
         };
         return installed;
       });
@@ -383,7 +403,55 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           },
         }),
       });
-      return pageFormRequests.resume(session, selection, request);
+      const answer = request.answer;
+      if (request.target.awaiting !== "form")
+        return answer.kind === "submit"
+          ? { kind: "refused", reason: "unavailable" }
+          : pageFormRequests.resume(session, selection, request);
+
+      const trustedFormId = request.target.formId;
+      if (
+        trustedFormId === undefined ||
+        request.target.releaseKey !== installed.releaseKey ||
+        request.target.installation.applicationRootId.toLowerCase() !==
+          installed.applicationRootId.toLowerCase() ||
+        request.target.installation.installationReleaseRevision !== installed.installationRevision ||
+        !declaresPausedNode(installed.flows.get(request.target.flowId), {
+          nodeId: request.target.nodeId,
+          formId: trustedFormId,
+        })
+      ) {
+        return { kind: "refused", reason: "unavailable" };
+      }
+      if (
+        installed.applicationContent === undefined ||
+        installed.modules === undefined ||
+        !applicationHasAuthoredForm(installed.applicationContent, trustedFormId)
+      )
+        return { kind: "refused", reason: "unavailable" };
+      const projectedForm = await loadProjectedReferenceChoiceForm(session, address, {
+        installationRevision: installed.installationRevision,
+        releaseKey: installed.releaseKey,
+        formId: trustedFormId,
+      });
+      if (projectedForm === undefined) return { kind: "refused", reason: "unavailable" };
+      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+      const values = await resolveReferenceChoiceFormValues({
+        service: referenceChoices,
+        session,
+        selection,
+        application: installed.applicationContent,
+        modules: installed.modules,
+        formId: trustedFormId,
+        projectedFields: projectedForm.fields,
+        values: answer.values,
+        ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
+      });
+      if (values === undefined) return { kind: "refused", reason: "unavailable" };
+      return pageFormRequests.resume(session, selection, {
+        ...request,
+        answer: { kind: "submit", values },
+      });
     };
 
     const invocation = body.invocation;
@@ -414,13 +482,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       readInstallation: invocation.kind === "binding"
         ? async () => bindingInstallation
         : readInstalled,
-      adaptFormSubmit: async (binding, callerInputs, subject) => {
+      adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
+        const resolveValues = async (values: unknown) => {
+          if (installation.applicationContent === undefined || installation.modules === undefined)
+            return undefined;
+          const projectedForm = await loadProjectedReferenceChoiceForm(identity.session, address, {
+            installationRevision: installation.installationRevision,
+            releaseKey: installation.releaseKey,
+            formId: binding.controlId,
+          });
+          if (projectedForm === undefined) return undefined;
+          return resolveReferenceChoiceFormValues({
+            service: referenceChoices,
+            session: identity.session,
+            selection,
+            application: installation.applicationContent,
+            modules: installation.modules,
+            formId: binding.controlId,
+            projectedFields: projectedForm.fields,
+            values,
+            ...(callerInputs.choiceEvidence === undefined
+              ? {}
+              : { evidence: callerInputs.choiceEvidence }),
+          });
+        };
         const guided = guidedControls.get(binding.controlId.toLowerCase());
-        if (guided === undefined)
-          return isRecord(callerInputs.values) &&
-            Object.hasOwn(callerInputs.values, guidedFormConfirmationKey)
-            ? undefined
-            : adaptFormSubmit(binding, callerInputs, subject);
+        if (guided === undefined) {
+          if (isRecord(callerInputs.values) &&
+              Object.hasOwn(callerInputs.values, guidedFormConfirmationKey))
+            return undefined;
+          const resolvedValues = await resolveValues(callerInputs.values);
+          if (resolvedValues === undefined) return undefined;
+          const adapterInputs: Record<string, unknown> = { ...callerInputs };
+          delete adapterInputs.choiceEvidence;
+          return adaptFormSubmit(binding, { ...adapterInputs, values: resolvedValues }, subject);
+        }
         if (guided === null || !guided.summary || guided.flowId === undefined ||
             guided.flowId.toLowerCase() !== String(binding.flow.flowId).toLowerCase())
           return undefined;
@@ -469,8 +565,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               held.event === "form_submit" &&
               held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase()))
           return undefined;
+        const resolvedValues = await resolveValues(draft.values);
+        if (resolvedValues === undefined) return undefined;
         return adaptFormSubmit(binding, {
-          values: draft.values,
+          values: resolvedValues,
           ...(callerInputs.selectedOwnerGroupId === undefined
             ? {}
             : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
