@@ -57,7 +57,7 @@ import {
   nextComponentRequestGeneration,
   type ComponentRequestGeneration,
 } from "@vortex/app/component-result-state";
-import { containedComponentIdSchema } from "@vortex/contracts";
+import { containedComponentIdSchema, recordIdSchema } from "@vortex/contracts";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
 import { signOut } from "../../../../auth/actions";
 
@@ -1625,18 +1625,39 @@ function ApplicationPageViewContent({
    * installed binding and refuses anything else.
    */
   const runBinding = useCallback(
-    (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>) =>
-      applyDispatch(
+    (
+      placementId: string,
+      binding: PlacementFlowBinding,
+      supplied: Record<string, unknown>,
+      selectedRecordId?: string,
+    ) => {
+      const callerInputs = { ...supplied };
+      for (const selectedReadInput of binding.selectedReadInputs ?? []) {
+        delete callerInputs[selectedReadInput.callerInputName];
+        if (
+          binding.recordTypeId === undefined ||
+          binding.recordTypeId.toLowerCase() !== selectedReadInput.recordTypeId.toLowerCase()
+        )
+          continue;
+        const parsedRecordId = recordIdSchema.safeParse(selectedRecordId);
+        if (!parsedRecordId.success) continue;
+        callerInputs[selectedReadInput.callerInputName] = {
+          recordTypeId: binding.recordTypeId,
+          recordId: parsedRecordId.data,
+        };
+      }
+      return applyDispatch(
         flowRuntime.dispatch(
           asComponentBinding(placementId, binding),
           Object.fromEntries(
-            Object.entries(supplied).filter(([name]) => binding.callerInputs.includes(name)),
+            Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
         ),
         formOwners[placementId],
         undefined,
         binding.bindingId,
-      ),
+      );
+    },
     [applyDispatch, formOwners, flowRuntime],
   );
 
@@ -1684,7 +1705,16 @@ function ApplicationPageViewContent({
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
-                void runBinding(placementId, binding, suppliedValues(event));
+                void runBinding(
+                  placementId,
+                  binding,
+                  suppliedValues(event),
+                  event.event === "row_clicked" ||
+                    event.event === "row_action" ||
+                    event.event === "inline_edit"
+                    ? event.recordId
+                    : undefined,
+                );
             };
         if (supportsEvent("refresh"))
           events.refresh = () => {
@@ -1737,10 +1767,15 @@ function ApplicationPageViewContent({
       if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
-          return runBinding(placementId, actionBinding, {
-            ...(event.values ?? {}),
-            ...(subject === undefined ? {} : { record_id: subject.recordId }),
-          });
+          return runBinding(
+            placementId,
+            actionBinding,
+            {
+              ...(event.values ?? {}),
+              ...(subject === undefined ? {} : { record_id: subject.recordId }),
+            },
+            subject?.recordId,
+          );
         };
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
