@@ -1189,6 +1189,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (call.taskType === "record.read_fields")
       return runSelectedRecordRead(run, state, call);
 
+    // A later protected result could contain a selected value and be stored in the effect ledger.
+    if (run.selectedRecordReadSeen) return { outcome: "refused" };
+
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
         ? { kind: "person", id: run.authority.session.identityId }
