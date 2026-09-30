@@ -943,11 +943,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const selectedValue = resolved.values[callerInputName];
             if (
-              typeof selectedValue !== "string" ||
+              !isRecord(selectedValue) ||
+              Object.keys(selectedValue).length !== 2 ||
+              !Object.hasOwn(selectedValue, "recordTypeId") ||
+              !Object.hasOwn(selectedValue, "recordId") ||
+              typeof selectedValue.recordTypeId !== "string" ||
+              !sameId(selectedValue.recordTypeId, choiceRecordType.recordTypeId) ||
               adaptedInputs[callerInputName] !== selectedValue
             )
               return undefined;
-            const recordId = recordIdSchema.safeParse(selectedValue);
+            const recordId = recordIdSchema.safeParse(selectedValue.recordId);
             if (!recordId.success) return undefined;
             result[callerInputName] = {
               recordTypeId: choiceRecordType.recordTypeId,
