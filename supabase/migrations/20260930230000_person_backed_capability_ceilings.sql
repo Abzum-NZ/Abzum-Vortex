@@ -245,7 +245,7 @@ revoke execute on function vortex_access.set_capability_policy_ceiling(
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 grant execute on function vortex_access.set_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, bigint
-) to vortex_runtime;
+) to vortex_runtime, vortex_request;
 
 comment on function vortex_access.set_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, bigint
@@ -420,7 +420,7 @@ revoke execute on function vortex_access.revoke_capability_policy_ceiling(
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 grant execute on function vortex_access.revoke_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, bigint
-) to vortex_runtime;
+) to vortex_runtime, vortex_request;
 
 comment on function vortex_access.revoke_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, bigint
