@@ -19,62 +19,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
-/* Definition-driven action buttons */
-.vortex-button {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vortex-space-xs);
-  min-height: var(--vortex-control-min-height);
-  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-secondary);
-  color: var(--vortex-on-secondary);
-  font: inherit;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  transition: box-shadow var(--vortex-motion-feedback) ease-out;
-}
-
-.vortex-button-primary {
-  background-color: var(--vortex-primary);
-  color: var(--vortex-on-primary);
-  border-color: var(--vortex-primary);
-}
-
-.vortex-button-danger {
-  background-color: var(--vortex-danger);
-  color: var(--vortex-on-danger);
-  border-color: var(--vortex-danger);
-}
-
-.vortex-button-ghost {
-  background-color: transparent;
-  color: var(--vortex-text);
-  border-color: transparent;
-}
-
-.vortex-button:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 0.125rem currentColor;
-}
-
-.vortex-button:active:not(:disabled) {
-  box-shadow: inset 0 0 0 0.25rem currentColor;
-}
-
-.vortex-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.vortex-button[aria-busy="true"] {
-  cursor: progress;
-  opacity: 0.75;
-}
-
 /* Group heading */
 .vortex-group-heading {
   margin: 0;
