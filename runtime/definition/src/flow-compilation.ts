@@ -1,11 +1,14 @@
 import {
   compiledFlowSetSchema,
+  flowReadFieldsProjectionSchema,
+  flowReadFieldsScalarTypeSchema,
   flowSchema,
   flowTaskRegistry,
   type CompiledFlowSet,
   type DefinitionProvenanceEntry,
   type DefinitionValidationLocation,
   type FlowDefinition,
+  type FlowReadFieldsScalarType,
   type FlowTaskTypeKey,
   type FlowValue,
   type JsonValue,
@@ -53,6 +56,24 @@ export type ResolvedFlowFieldMetadata = Readonly<{
   type: string;
 }>;
 
+/** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
+export const flowReadFieldsScalarTypeForField = (
+  fieldType: string,
+): FlowReadFieldsScalarType | undefined => {
+  const direct = flowReadFieldsScalarTypeSchema.safeParse(fieldType);
+  if (direct.success) return direct.data;
+  switch (fieldType) {
+    case "long_text":
+    case "reference_number":
+    case "email_address":
+    case "phone_number":
+    case "web_address":
+      return "text";
+    default:
+      return undefined;
+  }
+};
+
 /**
  * How aliases become permanent identities. Each method throws the compiler's refusal when the
  * alias is missing or ambiguous. Record types are written `key` or `definition.key:key`; a field
@@ -67,6 +88,11 @@ export type FlowCompilationResolver = Readonly<{
   field: (recordTypeReference: string, alias: string) => ResolvedFlowIdentity;
   /** All authoritative records for a permanent field identity; zero or many are invalid. */
   fieldMetadata: (fieldId: string) => readonly ResolvedFlowFieldMetadata[];
+  /** Fields from one exact declared Module dependency selected by the source binding. */
+  dependencyFieldMetadata: (
+    definitionKey: string,
+    fieldId: string,
+  ) => readonly ResolvedFlowFieldMetadata[];
   relationship: (recordTypeReference: string, alias: string) => ResolvedFlowIdentity;
   action: (alias: string) => ResolvedFlowIdentity;
   permission: (alias: string) => ResolvedFlowIdentity;
@@ -357,6 +383,119 @@ const resolveTaskList = (
   path: Path,
 ): unknown[] => tasks.map((task, index) => resolveTask(ctx, task, [...path, index]));
 
+const resolveReadFieldsTask = (
+  ctx: Context,
+  task: Extract<SourceFlowTask, { properties: unknown }>,
+  path: Path,
+): unknown => {
+  const node = task as typeof task & {
+    properties: Readonly<Record<string, FlowValue>>;
+  };
+  const recordTypeValue = node.properties.record_type;
+  const recordValue = node.properties.record;
+  const fieldsValue = node.properties.fields;
+  if (recordTypeValue === undefined || recordValue === undefined || fieldsValue === undefined)
+    throw refusal(ctx, "vortex.definition.workflow_node_values", "required_value");
+
+  const recordTypeReference = aliasOf(ctx, recordTypeValue);
+  const recordType = ctx.resolver.recordType(recordTypeReference);
+  if (recordType.definitionKey === ctx.resolver.definitionKey)
+    throw refusal(ctx, "vortex.definition.application_dependency_manifest", "broken_reference");
+  const recordTypeId = resolveAt(ctx, recordType, [
+    ...path,
+    "properties",
+    "record_type",
+    "literal",
+    "value",
+  ]);
+  const record = resolveProperty(
+    ctx,
+    "record_reference",
+    recordValue,
+    node.properties,
+    false,
+    [...path, "properties", "record"],
+  );
+  if (fieldsValue.kind !== "literal" || fieldsValue.literal.type !== "json")
+    throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
+  const projection = flowReadFieldsProjectionSchema.safeParse(fieldsValue.literal.value);
+  if (!projection.success)
+    throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
+
+  const selectedFieldIds = new Set<string>();
+  const typeEntries: [string, FlowReadFieldsScalarType][] = [];
+  const fields = projection.data.map((entry, index) => {
+    const { record: fieldRecordReference, member: fieldAlias } = splitMemberReference(
+      ctx,
+      entry.field,
+    );
+    const fieldRecord = ctx.resolver.recordType(fieldRecordReference);
+    if (
+      fieldRecord.identifier !== recordType.identifier ||
+      fieldRecord.definitionKey !== recordType.definitionKey
+    )
+      throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+    const field = ctx.resolver.field(fieldRecordReference, fieldAlias);
+    if (field.definitionKey !== recordType.definitionKey)
+      throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+    const matches = ctx.resolver.dependencyFieldMetadata(
+      recordType.definitionKey,
+      field.identifier,
+    );
+    if (matches.length === 0)
+      throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+    if (matches.length !== 1)
+      throw refusal(ctx, "vortex.definition.ambiguous_identity", "unresolved_reference");
+    const metadata = matches[0]!;
+    if (
+      metadata.identifier !== field.identifier ||
+      metadata.recordTypeId !== recordType.identifier
+    )
+      throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+    if (selectedFieldIds.has(field.identifier))
+      throw refusal(ctx, "vortex.definition.duplicate_identity_resolution", "duplicate_key");
+    selectedFieldIds.add(field.identifier);
+    const scalarType = flowReadFieldsScalarTypeForField(metadata.type);
+    if (scalarType === undefined)
+      throw refusal(ctx, "vortex.definition.unsupported_field_type", "unsupported_choice");
+    typeEntries.push([entry.alias, scalarType]);
+    const fieldPath: Path = [
+      ...path,
+      "properties",
+      "fields",
+      "literal",
+      "value",
+      index,
+      "field",
+    ];
+    const fieldId = resolveAt(ctx, field, fieldPath);
+    // The compiler-owned scalar type is resolved from the same exact field identity, so its
+    // provenance points back to the selected source field rather than appearing as a default.
+    ctx.resolved.push({
+      canonicalPath: [...path, "readFieldTypes", entry.alias],
+      sourcePath: fieldPath,
+    });
+    return {
+      ...entry,
+      field: fieldId,
+    };
+  });
+
+  return {
+    ...node,
+    properties: {
+      ...node.properties,
+      record_type: identityLiteral(recordTypeId),
+      record,
+      fields: {
+        kind: "literal",
+        literal: { type: "json", value: fields as unknown as JsonValue },
+      },
+    },
+    readFieldTypes: Object.fromEntries(typeEntries),
+  };
+};
+
 const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown => {
   switch (task.type) {
     case "if": {
@@ -418,6 +557,8 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
         : undefined;
       if (definition === undefined)
         throw refusal(ctx, "vortex.definition.unsupported_workflow_node", "unsupported_choice");
+      if (node.type === "record.read_fields")
+        return resolveReadFieldsTask(ctx, node, path);
       const properties: Record<string, FlowValue> = {};
       for (const [name, value] of Object.entries(node.properties)) {
         const declared = Object.hasOwn(definition.properties, name)
@@ -638,6 +779,23 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   });
 
   compiled.sort((left, right) => compareCanonicalStrings(left.flow.id, right.flow.id));
+  const compiledFlowsById = new Map(compiled.map(({ flow }) => [flow.id, flow]));
+  for (const entry of compiled) {
+    // Source validation sees readable projection aliases. Revalidate the canonical task map so
+    // output paths acquire the compiler-resolved member types before publication.
+    const invalid = validateFlow(entry.flow, {
+      targetFlow: (reference) => compiledFlowsById.get(reference),
+    })[0];
+    if (invalid !== undefined)
+      throw new DefinitionCompilationError(
+        invalid.ruleCode,
+        invalid.family,
+        flowIssueLocation(
+          resolver.locate?.(input.flows[entry.sourceIndex]!.key),
+          invalid,
+        ),
+      );
+  }
   // Calls between the flows: no cycle, a bounded depth, and transaction flows calling only their own kind.
   const called = validateFlowSet(compiled.map(({ flow }) => flow))[0];
   if (called !== undefined) {

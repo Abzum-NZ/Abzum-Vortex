@@ -5,6 +5,8 @@ import {
   flowMaximumRunFlowDepth,
   flowMaximumTaskOutputPathDepth,
   flowJsonMemberType,
+  flowReadFieldsProjectionSchema,
+  flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   parseExactDecimal,
@@ -613,6 +615,55 @@ const declaredOutputs = (
   return outputs;
 };
 
+const validReadFieldsResume = (
+  flow: FlowDefinition | undefined,
+  taskId: string,
+  produced: Readonly<Record<string, JsonValue>> | undefined,
+): boolean => {
+  const task =
+    flow === undefined
+      ? undefined
+      : findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
+  if (task?.type !== "record.read_fields") return false;
+  const registered = task as Extract<FlowTask, { properties: unknown }> & {
+    properties: Readonly<Record<string, FlowValue>>;
+    readFieldTypes?: Readonly<Record<string, string>>;
+  };
+  const fields = registered.properties.fields;
+  const projection =
+    fields?.kind === "literal" && fields.literal.type === "json"
+      ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
+      : undefined;
+  const types = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
+  if (!projection?.success || !types.success) return false;
+  const declaredAliases = projection.data.map((field) => field.alias);
+  const typeAliases = Object.keys(types.data);
+  if (
+    declaredAliases.length !== typeAliases.length ||
+    declaredAliases.some((alias) => !Object.hasOwn(types.data, alias))
+  )
+    return false;
+  if (
+    produced === undefined ||
+    typeof produced !== "object" ||
+    Array.isArray(produced) ||
+    Object.keys(produced).length !== 1 ||
+    !Object.hasOwn(produced, "values")
+  )
+    return false;
+  const values: unknown = produced.values;
+  if (values === null || typeof values !== "object" || Array.isArray(values)) return false;
+  const actual = values as Record<string, unknown>;
+  const actualAliases = Object.keys(actual);
+  return (
+    actualAliases.length === declaredAliases.length &&
+    declaredAliases.every(
+      (alias) =>
+        Object.hasOwn(actual, alias) && valueMatchesType(types.data[alias]!, actual[alias]),
+    )
+  );
+};
+
 const interfaceKinds = {
   "interface.show_message": "show_message",
   "interface.show_form": "show_form",
@@ -1028,6 +1079,24 @@ export const resumeFlowRun = (
       resume.outcome === "committed" ||
       resume.outcome === "background_pending";
     if (succeeded) {
+      if (
+        awaiting.taskType === "record.read_fields" &&
+        !validReadFieldsResume(
+          machine.library(activation.flowId),
+          awaiting.taskId,
+          resume.outputs,
+        )
+      ) {
+        replaceTop(
+          machine,
+          failActivation(activation, {
+            outcome: "validation",
+            code: "output_unresolved",
+            taskId: awaiting.taskId,
+          }),
+        );
+        return drive(machine, observer);
+      }
       if (resume.outcome === "committed") machine.state.committedEffects += 1;
       replaceTop(
         machine,
