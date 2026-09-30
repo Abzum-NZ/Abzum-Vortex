@@ -90,7 +90,11 @@ import type {
 } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
-import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
+import {
+  compileFlowSources,
+  type ResolvedFlowFieldMetadata,
+  type ResolvedFlowIdentity,
+} from "./flow-compilation";
 import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
 import {
   findOperationCallIssue,
@@ -5333,10 +5337,50 @@ function compileApplicationV2Internal(
  * dependency manifest contribution only ever names definitions the source already declares, so
  * the definition's own resolved dependencies stay the one record of exact releases.
  */
-function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
+function compileOwnedFlowSources(
+  source: JsonObject,
+  resolution: Resolution,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+) {
   const parsed = sourceFlowCollectionSchema.safeParse(asObject(source.body).flows);
   if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
   const ownKey = String(source.key);
+  const declaredDefinitionKeys = dependencyOrder(source).filter((key) => key !== ownKey);
+  const declaredDefinitionKeySet = new Set(declaredDefinitionKeys);
+  const fieldMetadataById = new Map<string, ResolvedFlowFieldMetadata[]>();
+  const addFieldMetadata = (metadata: ResolvedFlowFieldMetadata) => {
+    const matches = fieldMetadataById.get(metadata.identifier);
+    if (matches === undefined) fieldMetadataById.set(metadata.identifier, [metadata]);
+    else matches.push(metadata);
+  };
+  const body = asObject(source.body);
+  for (const recordType of Array.isArray(body.record_types)
+    ? (body.record_types as JsonObject[])
+    : []) {
+    const recordKey = String(recordType.key);
+    const qualifiedRecordType = `${ownKey}:${recordKey}`;
+    const recordTypeId = resolution.recordType(qualifiedRecordType).recordTypeId;
+    for (const field of recordType.fields as JsonObject[])
+      addFieldMetadata({
+        identifier: resolution.field(qualifiedRecordType, String(field.id)),
+        recordTypeId,
+        type: String(field.type),
+      });
+  }
+  for (const output of dependencyOutputs) {
+    if (
+      output.kind !== "module" ||
+      !declaredDefinitionKeySet.has(output.artifact.definitionKey)
+    )
+      continue;
+    for (const recordType of output.canonical.content.recordTypes as unknown as JsonObject[])
+      for (const field of recordType.fields as JsonObject[])
+        addFieldMetadata({
+          identifier: String(field.fieldId),
+          recordTypeId: String(recordType.recordTypeId),
+          type: String(field.type),
+        });
+  }
   const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
     const split = alias.indexOf(":");
     const definitionKey = split < 1 ? ownKey : alias.slice(0, split);
@@ -5350,7 +5394,7 @@ function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
   const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
   return compileFlowSources({
     flows: parsed.data,
-    declaredDefinitionKeys: dependencyOrder(source).filter((key) => key !== ownKey),
+    declaredDefinitionKeys,
     resolver: {
       definitionKey: ownKey,
       flow: (alias) => owned("flow", alias),
@@ -5362,6 +5406,7 @@ function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
         identifier: resolution.field(qualifiedRecord(record), alias),
         definitionKey: recordOwner(record),
       }),
+      fieldMetadata: (fieldId) => fieldMetadataById.get(fieldId) ?? [],
       relationship: (record, alias) => ({
         identifier: resolution.relationship(qualifiedRecord(record), alias),
         definitionKey: recordOwner(record),
@@ -5389,7 +5434,7 @@ function compileCheckedFlowSources(
   resolution: Resolution,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
 ) {
-  const flowSet = compileOwnedFlowSources(source, resolution);
+  const flowSet = compileOwnedFlowSources(source, resolution, dependencyOutputs);
   const actions = new Map<string, ReturnType<typeof namedActionInputs>>();
   const remember = (candidates: unknown) => {
     for (const action of (Array.isArray(candidates) ? candidates : []) as JsonObject[])
