@@ -5347,13 +5347,58 @@ function compileOwnedFlowSources(
   const ownKey = String(source.key);
   const declaredDefinitionKeys = dependencyOrder(source).filter((key) => key !== ownKey);
   const declaredDefinitionKeySet = new Set(declaredDefinitionKeys);
+  const body = asObject(source.body);
+  const moduleDependencyEntries =
+    source.kind === "module"
+      ? (Array.isArray(body.dependencies) ? (body.dependencies as JsonObject[]) : [])
+      : source.kind === "application"
+        ? (Array.isArray(body.module_bindings) ? (body.module_bindings as JsonObject[]) : [])
+        : [];
+  const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutputV3 => {
+    const bindings = moduleDependencyEntries.filter(
+      (binding) => String(binding.module) === moduleKey,
+    );
+    if (moduleKey === ownKey || !declaredDefinitionKeySet.has(moduleKey) || bindings.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const snapshotMatches = resolution.snapshot.definitions.filter(
+      (definition) => definition.kind === "module" && definition.key === moduleKey,
+    );
+    if (snapshotMatches.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const expected = resolution.definition(moduleKey, "module");
+    const requirement = bindings[0]!.version as Parameters<typeof compatibleVersion>[0];
+    if (!compatibleVersion(requirement, expected.exactVersion))
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+
+    const candidates = dependencyOutputs.filter(
+      (output): output is ModuleCompilationOutputV3 =>
+        output.kind === "module" && output.artifact.definitionKey === moduleKey,
+    );
+    if (candidates.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const output = candidates[0]!;
+    const canonical = asObject(output.canonical);
+    const envelope = asObject(canonical.envelope);
+    const content = asObject(canonical.content);
+    if (
+      output.artifact.rootId !== expected.rootId ||
+      output.artifact.exactVersion !== expected.exactVersion ||
+      output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
+      output.artifact.contentFingerprint !== fingerprintCanonicalValue(content) ||
+      canonical.kind !== "module" ||
+      envelope.kind !== "module" ||
+      envelope.key !== moduleKey ||
+      envelope.rootId !== expected.rootId
+    )
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    return output;
+  };
   const fieldMetadataById = new Map<string, ResolvedFlowFieldMetadata[]>();
   const addFieldMetadata = (metadata: ResolvedFlowFieldMetadata) => {
     const matches = fieldMetadataById.get(metadata.identifier);
     if (matches === undefined) fieldMetadataById.set(metadata.identifier, [metadata]);
     else matches.push(metadata);
   };
-  const body = asObject(source.body);
   for (const recordType of Array.isArray(body.record_types)
     ? (body.record_types as JsonObject[])
     : []) {
@@ -5407,6 +5452,19 @@ function compileOwnedFlowSources(
         definitionKey: recordOwner(record),
       }),
       fieldMetadata: (fieldId) => fieldMetadataById.get(fieldId) ?? [],
+      dependencyFieldMetadata: (definitionKey, fieldId) => {
+        const moduleOutput = dependencyModuleOutput(definitionKey);
+        return (moduleOutput.canonical.content.recordTypes as unknown as JsonObject[]).flatMap(
+          (recordType) =>
+            (recordType.fields as JsonObject[])
+              .filter((field) => String(field.fieldId) === fieldId)
+              .map((field) => ({
+                identifier: String(field.fieldId),
+                recordTypeId: String(recordType.recordTypeId),
+                type: String(field.type),
+              })),
+        );
+      },
       relationship: (record, alias) => ({
         identifier: resolution.relationship(qualifiedRecord(record), alias),
         definitionKey: recordOwner(record),
