@@ -61,7 +61,10 @@ export const flowReadFieldsScalarTypeForField = (
   fieldType: string,
 ): FlowReadFieldsScalarType | undefined => {
   const direct = flowReadFieldsScalarTypeSchema.safeParse(fieldType);
-  if (direct.success) return direct.data;
+  // Module money and formatted-text values are structured objects, while the Flow scalar
+  // evaluator accepts decimal text and a string respectively. Neither can be projected as-is.
+  if (direct.success && fieldType !== "money" && fieldType !== "formatted_text")
+    return direct.data;
   switch (fieldType) {
     case "long_text":
     case "reference_number":
@@ -779,7 +782,9 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   });
 
   compiled.sort((left, right) => compareCanonicalStrings(left.flow.id, right.flow.id));
-  const compiledFlowsById = new Map(compiled.map(({ flow }) => [flow.id, flow]));
+  const compiledFlowsById = new Map<string, FlowDefinition>(
+    compiled.map(({ flow }) => [flow.id, flow]),
+  );
   for (const entry of compiled) {
     // Source validation sees readable projection aliases. Revalidate the canonical task map so
     // output paths acquire the compiler-resolved member types before publication.

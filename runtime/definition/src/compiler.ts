@@ -5371,7 +5371,8 @@ function compileOwnedFlowSources(
       fail("vortex.definition.application_dependency_manifest", "broken_reference");
 
     const candidates = dependencyOutputs.filter(
-      (output) => output.kind === "module" && output.artifact.definitionKey === moduleKey,
+      (output): output is ModuleCompilationOutputV3 =>
+        output.kind === "module" && output.artifact.definitionKey === moduleKey,
     );
     if (candidates.length !== 1)
       fail("vortex.definition.application_dependency_manifest", "broken_reference");
@@ -5382,7 +5383,6 @@ function compileOwnedFlowSources(
     if (
       output.artifact.rootId !== expected.rootId ||
       output.artifact.exactVersion !== expected.exactVersion ||
-      output.resolutionFingerprint !== resolution.snapshot.fingerprint ||
       output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
       output.artifact.contentFingerprint !== fingerprintCanonicalValue(content) ||
       canonical.kind !== "module" ||

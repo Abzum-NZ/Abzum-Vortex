@@ -355,6 +355,12 @@ const declaredOutputFieldType = (
     );
     if (entry?.descriptor.effect === "read") return entry.descriptor.outputs[path[0]!]?.type;
   }
+  if (task?.type === "record.read_fields" && path.length === 1) {
+    const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
+    return types.success && Object.hasOwn(types.data, path[0]!)
+      ? types.data[path[0]!]
+      : undefined;
+  }
   if (task?.type !== "interface.show_form") return undefined;
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs;
   if (inputs?.kind !== "map") return undefined;
