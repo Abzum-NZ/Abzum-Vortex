@@ -2,6 +2,7 @@
 
 import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/contracts";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "critical";
 
@@ -107,31 +108,38 @@ export function Notice({
     <div
       data-slot="notice"
       data-vortex-severity={severity}
-      className="vortex-validation-message flex items-start justify-between gap-4"
-      style={{ borderLeftColor: severityColor }}
     >
-      <div
+      <Alert
         role={critical ? "alert" : "status"}
         aria-live={critical ? "assertive" : "polite"}
         aria-atomic="true"
-        className="min-w-0 flex-1"
+        variant={critical ? "destructive" : "default"}
+        className="border-l-4"
+        style={{ borderLeftColor: severityColor }}
       >
-        <p className="vortex-validation-title" style={{ color: severityColor }}>
-          {SEVERITY_LABELS[severity]}
-          {title ? `: ${title}` : null}
-        </p>
-        <p className="vortex-validation-text">{renderNoticeContent(content)}</p>
-      </div>
-      {dismissible ? (
-        <button
-          type="button"
-          aria-label="Dismiss notice"
-          onClick={() => setDismissed(true)}
-          className="shrink-0 rounded px-2 py-1 text-sm underline underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          Dismiss
-        </button>
-      ) : null}
+        <div className="min-w-0">
+          <AlertTitle className="mb-1 font-bold" style={{ color: severityColor }}>
+            {SEVERITY_LABELS[severity]}
+            {title ? `: ${title}` : null}
+          </AlertTitle>
+          <AlertDescription style={{ color: "var(--vortex-text)" }}>
+            <p className="m-0">{renderNoticeContent(content)}</p>
+          </AlertDescription>
+        </div>
+        {dismissible ? (
+          <AlertAction>
+            <button
+              type="button"
+              aria-label="Dismiss notice"
+              onClick={() => setDismissed(true)}
+              style={{ color: "var(--vortex-text)" }}
+              className="shrink-0 rounded px-2 py-1 text-sm underline underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              Dismiss
+            </button>
+          </AlertAction>
+        ) : null}
+      </Alert>
     </div>
   );
 }
