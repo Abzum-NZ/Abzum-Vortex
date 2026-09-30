@@ -3,13 +3,18 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   isRecord,
+  builderKeySchema,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandV2Schema,
   applicationRootIdSchema,
   correlationIdSchema,
+  fieldIdSchema,
   flowIdSchema,
   flowLiteralSchema,
   groupIdSchema,
+  flowReadFieldsProjectionSchema,
+  flowReadFieldsScalarTypeSchema,
+  flowReadFieldsTypeMapSchema,
   flowMaximumServerSeconds,
   flowSchema,
   flowTaskChildLists,
@@ -19,6 +24,7 @@ import {
   moduleRootIdSchema,
   organizationIdSchema,
   organizationSelectionCandidateSchema,
+  parseExactDecimal,
   platformOperationKey,
   recordIdSchema,
   recordTypeIdSchema,
@@ -30,8 +36,10 @@ import {
   type ExecutionAuthorityContext,
   type ExecuteNamedActionCommandV2,
   type FlowDefinition,
+  type FlowReadFieldsScalarType,
   type ExecuteNamedActionResultV2,
   type FlowTask,
+  type FlowValue,
   type IdentitySession,
   type InstalledNamedActionReferenceV2,
   type JsonValue,
@@ -128,6 +136,24 @@ export type FlowRelease = Readonly<{
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by action key, for a Call protected operation task naming one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
+  /** Exact trusted selected-record projections, keyed by flow id then task id. */
+  selectedRecordReadProjections?: ReadonlyMap<
+    string,
+    ReadonlyMap<string, FlowSelectedRecordReadProjection>
+  >;
+}>;
+
+/** One compiler-typed field in a release's selected-record read projection. */
+export type FlowSelectedRecordReadField = Readonly<{
+  alias: string;
+  fieldId: string;
+  type: FlowReadFieldsScalarType;
+}>;
+
+/** Trusted immutable projection of one compiled record.read_fields task. */
+export type FlowSelectedRecordReadProjection = Readonly<{
+  recordTypeId: string;
+  fields: readonly FlowSelectedRecordReadField[];
 }>;
 
 /** Exact installation and compiled-flow release identity retained on a committed start intent. */
@@ -260,6 +286,24 @@ export type FlowSubjectReadPort = Readonly<{
   ): Promise<"read" | "refused" | "temporarily_unavailable">;
 }>;
 
+/** The current protected read result; unavailable is intentionally indistinguishable. */
+export type FlowSelectedRecordReadResult =
+  | Readonly<{ outcome: "read"; values: Readonly<Record<string, JsonValue>> }>
+  | Readonly<{ outcome: "unavailable" }>;
+
+/** Fresh protected read for the current person and one selected record. */
+export type FlowSelectedRecordReadPort = Readonly<{
+  readFields(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    target: Readonly<{
+      recordTypeId: string;
+      recordId: string;
+      fieldIds: readonly string[];
+    }>,
+  ): Promise<HumanOrganizationRequestResult<FlowSelectedRecordReadResult>>;
+}>;
+
 /**
  * What the record service runs for a named action (#1063): it prepares the action's subject under
  * the actor's authority, calls the supplied flow run inside its own transaction, and applies every
@@ -288,6 +332,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   records?: RecordSaveTaskPort;
   /** Verifies the viewer's read access to a claimed page subject before a protected change. */
   subjects?: FlowSubjectReadPort;
+  /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
+  selectedRecordReads?: FlowSelectedRecordReadPort;
   continuations: FlowContinuationStore;
   ledger: FlowEffectLedger;
   /**
@@ -550,6 +596,189 @@ const carriesSensitive = (candidate: unknown, sensitive: readonly string[]): boo
   return sensitive.some((value) => text.includes(value));
 };
 
+const selectedRecordReadProjectionSchema = z
+  .object({
+    recordTypeId: recordTypeIdSchema,
+    fields: z
+      .array(
+        z
+          .object({
+            alias: builderKeySchema,
+            fieldId: fieldIdSchema,
+            type: flowReadFieldsScalarTypeSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict()
+  .superRefine((projection, context) => {
+    const aliases = new Set<string>();
+    const fieldIds = new Set<string>();
+    projection.fields.forEach((field, index) => {
+      if (aliases.has(field.alias))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "alias"],
+          message: "Projection aliases must be unique",
+        });
+      aliases.add(field.alias);
+      const normalizedFieldId = field.fieldId.toLowerCase();
+      if (fieldIds.has(normalizedFieldId))
+        context.addIssue({
+          code: "custom",
+          path: ["fields", index, "fieldId"],
+          message: "Projection field IDs must be unique",
+        });
+      fieldIds.add(normalizedFieldId);
+    });
+  });
+
+const findFlowTask = (flow: FlowDefinition, taskId: string): FlowTask | undefined => {
+  const find = (tasks: readonly FlowTask[]): FlowTask | undefined => {
+    for (const task of tasks) {
+      if (task.id === taskId) return task;
+      for (const child of flowTaskChildLists(task)) {
+        const nested = find(child.tasks);
+        if (nested !== undefined) return nested;
+      }
+    }
+    return undefined;
+  };
+  return find([...flow.tasks, ...flow.errors, ...flow.finally]);
+};
+
+type CompiledSelectedRecordReadTask = FlowTask &
+  Readonly<{
+    type: "record.read_fields";
+    version: string;
+    properties: Readonly<Record<string, FlowValue>>;
+    readFieldTypes?: Readonly<Record<string, string>>;
+  }>;
+
+/** Match the interpreter's scalar runtime checks without parsing text as a Flow literal. */
+const readFieldValueMatchesType = (
+  type: FlowReadFieldsScalarType,
+  candidate: unknown,
+): candidate is JsonValue => {
+  switch (type) {
+    case "yes_no":
+      return typeof candidate === "boolean";
+    case "whole_number":
+      return typeof candidate === "number" && Number.isSafeInteger(candidate);
+    case "decimal_number":
+    case "money":
+      return parseExactDecimal(candidate) !== undefined;
+    case "date":
+      return (
+        typeof candidate === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(candidate) &&
+        Number.isFinite(Date.parse(`${candidate}T00:00:00.000Z`))
+      );
+    case "date_time":
+      return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
+    case "text":
+    case "formatted_text":
+      return typeof candidate === "string";
+    case "choice":
+      return typeof candidate === "string" && candidate.length > 0;
+  }
+};
+
+/** Return every declared alias only when the protected reader returned the whole valid field map. */
+const aliasSelectedRecordValues = (
+  projection: FlowSelectedRecordReadProjection,
+  candidate: unknown,
+): Record<string, JsonValue> | undefined => {
+  if (!isRecord(candidate)) return undefined;
+  const entries = Object.entries(candidate);
+  if (entries.length !== projection.fields.length) return undefined;
+  const valuesByFieldId = new Map<string, unknown>();
+  for (const [fieldId, value] of entries) {
+    if (!fieldIdSchema.safeParse(fieldId).success) return undefined;
+    const normalizedFieldId = fieldId.toLowerCase();
+    if (valuesByFieldId.has(normalizedFieldId)) return undefined;
+    valuesByFieldId.set(normalizedFieldId, value);
+  }
+
+  const values: [string, JsonValue][] = [];
+  for (const field of projection.fields) {
+    const normalizedFieldId = field.fieldId.toLowerCase();
+    if (!valuesByFieldId.has(normalizedFieldId)) return undefined;
+    const value = valuesByFieldId.get(normalizedFieldId);
+    if (!readFieldValueMatchesType(field.type, value)) return undefined;
+    values.push([field.alias, value]);
+  }
+  return Object.fromEntries(values);
+};
+
+/** Locate and cross-check trusted projection metadata against the active compiled task. */
+const selectedRecordProjectionForTask = (
+  release: FlowRelease,
+  library: FlowLibrary,
+  state: FlowRunState,
+  call: FlowProtectedTaskCall,
+): FlowSelectedRecordReadProjection | undefined => {
+  if (call.taskType !== "record.read_fields") return undefined;
+  const awaiting = state.awaiting;
+  if (
+    awaiting?.kind !== "protected_task" ||
+    awaiting.taskId !== call.taskId ||
+    awaiting.taskType !== call.taskType
+  )
+    return undefined;
+  const activation = state.activations[state.activations.length - 1];
+  if (activation === undefined) return undefined;
+  const flow = library(activation.flowId);
+  if (flow === undefined) return undefined;
+  const task = findFlowTask(flow, call.taskId);
+  if (task === undefined || task.type !== "record.read_fields") return undefined;
+  const registered = task as CompiledSelectedRecordReadTask;
+  if (registered.version !== call.taskVersion) return undefined;
+
+  const projectionCandidate = release.selectedRecordReadProjections
+    ?.get(flow.id)
+    ?.get(registered.id);
+  const projection = selectedRecordReadProjectionSchema.safeParse(projectionCandidate);
+  if (!projection.success) return undefined;
+
+  const recordType = registered.properties.record_type;
+  if (recordType?.kind !== "literal" || recordType.literal.type !== "text") return undefined;
+  const compiledRecordTypeId = recordTypeIdSchema.safeParse(recordType.literal.value);
+  if (
+    !compiledRecordTypeId.success ||
+    compiledRecordTypeId.data.toLowerCase() !== projection.data.recordTypeId.toLowerCase()
+  )
+    return undefined;
+
+  const fields = registered.properties.fields;
+  if (fields?.kind !== "literal" || fields.literal.type !== "json") return undefined;
+  const compiledFields = flowReadFieldsProjectionSchema.safeParse(fields.literal.value);
+  const compiledTypes = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
+  if (
+    !compiledFields.success ||
+    !compiledTypes.success ||
+    compiledFields.data.length !== projection.data.fields.length
+  )
+    return undefined;
+
+  const trustedFields = new Map(
+    projection.data.fields.map((field) => [field.alias, field] as const),
+  );
+  if (trustedFields.size !== compiledFields.data.length) return undefined;
+  for (const compiledField of compiledFields.data) {
+    const trustedField = trustedFields.get(compiledField.alias);
+    if (
+      trustedField === undefined ||
+      trustedField.fieldId.toLowerCase() !== compiledField.field.toLowerCase() ||
+      trustedField.type !== compiledTypes.data[compiledField.alias]
+    )
+      return undefined;
+  }
+  return projection.data;
+};
+
 export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencies) => {
   const now = dependencies.now ?? (() => new Date());
   const clock = dependencies.clock ?? (() => performance.now());
@@ -589,7 +818,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     library: FlowLibrary;
   }>;
 
-  type Run = Readonly<{
+  type Run = {
     authority: RunAuthority;
     origin: FlowTriggerOrigin;
     originId: string;
@@ -605,7 +834,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      * nothing that carries one is stored or handed to another protected operation.
      */
     sensitive: string[];
-  }>;
+    /** This segment cannot persist interpreter state after any selected values enter it. */
+    selectedRecordReadSeen: boolean;
+  };
 
   const elapsedMilliseconds = (run: Run): number =>
     Math.max(0, Math.round(run.carriedMilliseconds + (clock() - run.segmentStart)));
@@ -806,6 +1037,58 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       : { outcome: "validation" };
   };
 
+  /** Reads the active task's selected fields without using the replayable effect ledger. */
+  const runSelectedRecordRead = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+  ): Promise<TaskResult> => {
+    const authority = run.authority;
+    if (authority.kind !== "person")
+      return notAvailable(run, call, "the current initiator's selected-record read port");
+    if (dependencies.selectedRecordReads === undefined)
+      return notAvailable(run, call, "a trusted selected-record read port");
+    const projection = selectedRecordProjectionForTask(run.release, run.library, state, call);
+    if (projection === undefined)
+      return notAvailable(run, call, "the exact release's selected-record projection");
+
+    const record = call.properties.record;
+    const recordId = record?.type === "record_reference"
+      ? recordIdSchema.safeParse(record.value)
+      : undefined;
+    if (recordId === undefined || !recordId.success) return { outcome: "refused" };
+
+    try {
+      const result = await dependencies.selectedRecordReads.readFields(
+        authority.session,
+        authority.selection,
+        {
+          recordTypeId: projection.recordTypeId,
+          recordId: recordId.data,
+          fieldIds: projection.fields.map((field) => field.fieldId),
+        },
+      );
+      if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
+      const read = result.value;
+      if (
+        !isRecord(read) ||
+        read.outcome !== "read" ||
+        Object.keys(read).length !== 2 ||
+        !isRecord(read.values)
+      )
+        return { outcome: "refused" };
+      const values = aliasSelectedRecordValues(projection, read.values);
+      if (values === undefined) return { outcome: "refused" };
+
+      // The interpreter will place these values in FlowRunState on resume. That state may finish
+      // in this segment, but it must never be written to a continuation.
+      run.selectedRecordReadSeen = true;
+      return { outcome: "completed", outputs: { values } };
+    } catch {
+      return { outcome: "refused" };
+    }
+  };
+
   /** Runs a planned task's effect, holding the claim. Every failure is a safe outcome. */
   const runPlan = async (
     run: Run,
@@ -901,6 +1184,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     state: FlowRunState,
     call: FlowProtectedTaskCall,
   ): Promise<TaskResult> => {
+    // Selected-record values are intentionally fresh and transient: never claim or complete a
+    // replayable effect-ledger entry for this task.
+    if (call.taskType === "record.read_fields")
+      return runSelectedRecordRead(run, state, call);
+
+    // A later protected result could contain a selected value and be stored in the effect ledger.
+    if (run.selectedRecordReadSeen) return { outcome: "refused" };
+
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
         ? { kind: "person", id: run.authority.session.identityId }
@@ -964,6 +1255,19 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     step: Extract<FlowRunStep, { kind: "interface" }>,
   ): Promise<FlowOrchestratorResponse> => {
     if (run.authority.kind !== "person") return refused;
+    // A selected-record result is safe to use in this segment, but the interpreter snapshot now
+    // contains readable data. Refuse before issuing a continuation or saving that state.
+    if (run.selectedRecordReadSeen)
+      return {
+        kind: "finished",
+        runId: step.state.runId,
+        outcome: "failed",
+        committedEffects: step.state.committedEffects,
+        failure: { code: "continuation_unavailable" },
+        outputs: {},
+        intents: [],
+        unavailable: run.unavailable,
+      };
     const { session, selection } = run.authority;
     const token = newToken();
     let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>>;
@@ -1155,6 +1459,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           segmentStart: clock(),
           unavailable: [],
           sensitive: [],
+          selectedRecordReadSeen: false,
         };
         const first = startFlowRun(
           {
@@ -1278,6 +1583,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           segmentStart: clock(),
           unavailable: [],
           sensitive: [],
+          selectedRecordReadSeen: false,
         };
         const actor =
           principal.actor.kind === "specified_account"
@@ -1357,6 +1663,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           segmentStart: clock(),
           unavailable: [],
           sensitive: [],
+          selectedRecordReadSeen: false,
         };
         return await drive(run, resumeFlowRun(state, answer, run.library));
       } catch {
