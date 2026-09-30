@@ -77,10 +77,19 @@ export const loadSetupState = (organizationId: string): SetupState => {
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
       sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
       setupCompleted = stored.setupCompleted === true;
-      defaultApplicationInitializationAttempted =
-        stored.defaultApplicationInitializationAttempted === true;
-      defaultApplicationInitializationCompleted =
-        stored.defaultApplicationInitializationCompleted === true;
+      if (
+        typeof stored.defaultApplicationInitializationAttempted === "boolean" &&
+        typeof stored.defaultApplicationInitializationCompleted === "boolean"
+      ) {
+        defaultApplicationInitializationAttempted =
+          stored.defaultApplicationInitializationAttempted;
+        defaultApplicationInitializationCompleted =
+          stored.defaultApplicationInitializationCompleted;
+      } else {
+        // An existing setup predates this marker. Its null default may be an explicit clear,
+        // so upgrading must preserve that choice rather than guessing it was never initialized.
+        defaultApplicationInitializationCompleted = true;
+      }
     }
   } catch {
     // No usable state: start empty.

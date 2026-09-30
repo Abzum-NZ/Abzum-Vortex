@@ -6,6 +6,7 @@ import {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
 } from "@vortex/access";
 import {
+  applicationRootIdSchema,
   organizationSelectionCandidateSchema,
   provisionTenantCommandSchema,
 } from "@vortex/contracts";
@@ -92,6 +93,7 @@ const initializeLandingZoneDefault = async (
     return;
   }
 
+  const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
   // Fence reruns before the protected write. If the process stops after the write, a later
   // explicit clear must remain the user's choice; an interrupted attempt falls back to the launcher.
   state.defaultApplicationInitializationAttempted = true;
@@ -102,13 +104,13 @@ const initializeLandingZoneDefault = async (
   });
   const result = await administration.setDefaultApplication(session, selection, {
     expectedRevision: observed.value.revision,
-    defaultApplicationRootId: applicationRootId,
+    defaultApplicationRootId,
   });
   state.defaultApplicationInitializationCompleted = true;
   state.save();
   if (
     result.kind === "available" &&
-    result.value.defaultApplicationRootId?.toLowerCase() === applicationRootId.toLowerCase()
+    result.value.defaultApplicationRootId?.toLowerCase() === defaultApplicationRootId.toLowerCase()
   ) {
     log(
       `initialized the organisation default to Landing Zone at settings revision ${result.value.revision}`,
