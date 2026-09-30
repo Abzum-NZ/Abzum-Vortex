@@ -1022,32 +1022,6 @@ const loadInstalledContext = (
     },
   );
 
-/**
- * The installed release's theme for one application the viewer may open, so a page shown in place
- * of an addressed page (its not-found experience) renders in that application's own theme. It
- * reads under the person's own request scope like the page itself; when the read does not settle
- * the caller keeps the platform default rather than failing the page.
- */
-export const loadApplicationTheme = async (
-  session: IdentitySession,
-  address: Readonly<{
-    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
-    application: PermittedApplication;
-  }>,
-): Promise<ApplicationPageModel["theme"] | undefined> => {
-  try {
-    const loaded = await loadInstalledContext(session, requestDependencies(), {
-      organizationId: address.read.organizationId,
-      applicationRootId: address.application.applicationRootId,
-    });
-    return loaded.kind === "available"
-      ? loaded.value.releaseSet.application.content.theme
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const loadApplicationPageInternal = async (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
