@@ -107,8 +107,8 @@ The current platform permission catalogue is version 1.4.0. Its declaration sour
 | `platform.organization.applications.manage` | Install, upgrade and uninstall packages. This permission already exists. |
 | `platform.organization.custom_code.manage` | Required in addition to `applications.manage` when a package contains custom components. |
 | `platform.organization.system_applications.manage` | Change system applications. |
-| Named Vortex super administrator (global Identity assignment, not a customer role) | Install packages that contain custom scripts, and operate Kestra. |
-| Configured system operator | Bootstrap named super-administrator assignments and perform the separate entitlement policy and tenant-ceiling commands. |
+| Named Vortex super administrator (global Identity assignment, not a customer role) | Install packages that contain custom scripts, operate Kestra, and set, re-pin or revoke a capability ceiling for any independently verified active tenant after recent primary authentication. The selected active organisation account is the request anchor; the target tenant need not have an active organisation. |
+| Configured system operator | Bootstrap named super-administrator assignments, define and publish entitlement policies, and retain the context-free tenant-ceiling bootstrap command. |
 
 These permissions have further rules:
 - **Approvals and the one fixed rule.** The organisation's approval workflow decides who must approve a grant, and the required-caller policy can make that workflow mandatory. Independently of any workflow, the grant operation refuses any role or role template that contains a permission outside the actor's own delegated scope ([04](../04-access-and-permissions.md)). Workflows are editable definitions, so this rule is what stops anyone granting themselves more than they hold.

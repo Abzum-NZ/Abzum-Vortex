@@ -26,6 +26,7 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
       availability={availability}
       projectedData={state}
       emptyMessage={emptyMessage}
+      refusedMessage="This summary is unavailable."
     >
       {values === undefined ? null : (
         <section
@@ -45,7 +46,13 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
               >
                 <dt className="text-sm text-muted-foreground">{item.label}</dt>
                 <dd className="font-heading text-base font-medium">
-                  <DisplayCellView value={item.value} />
+                  {item.value.kind === "unavailable" ? (
+                    <span role="status" data-vortex-summary-value-state="unavailable">
+                      Unavailable
+                    </span>
+                  ) : (
+                    <DisplayCellView value={item.value} />
+                  )}
                 </dd>
               </Card>
             ))}

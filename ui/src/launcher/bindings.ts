@@ -119,7 +119,7 @@ export type PermittedApplicationMetadata = Readonly<{
 /**
  * Launcher projection of the `PermittedApplicationsRead` returned by
  * `readPermittedApplicationsAtAddress` (runtime/app/src/application-address.ts). The launcher block
- * binds to this projection; it is the only launcher input that names applications.
+ * supplies the organisation-address launcher when no default application resolves.
  */
 export type PermittedApplicationsLauncherProjection =
   | Readonly<{
@@ -251,9 +251,10 @@ export function parsePermittedApplicationsLauncherProjection(
 
 /**
  * Projects an available permitted-applications read into the closed `list` display values the
- * `application_launcher` renderer consumes. Every row identity is the application's permanent
- * identity and only its name and icon cells are populated, so no page set or authority leaks out.
- * Unavailable reads are the caller's own state and never become launcher rows.
+ * organisation-address `application_launcher` consumes. The row action identity is the
+ * application's stable root identity, and only its name and icon cells are populated, so no page
+ * set or authority leaks out. Unavailable reads are the caller's own state and never become
+ * launcher rows.
  */
 export function permittedApplicationsToListValues(
   projection: Extract<PermittedApplicationsLauncherProjection, { kind: "available" }>,
@@ -270,6 +271,81 @@ export function permittedApplicationsToListValues(
     headingKey: "name",
     secondaryKey: "icon",
     rows: Object.freeze(rows),
+  });
+}
+
+/** A query row projected to launcher cell keys by its server-side module binding. */
+export type ApplicationLauncherQueryRow = Readonly<{
+  applicationKey: unknown;
+  cells: Readonly<Record<string, DisplayCellValue>>;
+}>;
+
+/**
+ * Binds already-returned query rows to the application launcher and intersects them with the
+ * protected permitted-application keys. Query rows supply layout and live display values only;
+ * the protected read decides whether a row may be opened. The row action identity is the
+ * application key, so the browser sends no projection record identity or permission evidence.
+ */
+export function applicationLauncherQueryRowsToListValues(
+  rows: readonly ApplicationLauncherQueryRow[],
+  permittedApplicationKeys: readonly string[],
+  nameKey: string,
+  iconKey: string,
+  location: DefinitionRenderErrorLocation = {},
+): ListPayload {
+  const headingKey = requireBuilderKey(
+    nameKey,
+    "An application launcher requires a name cell key",
+    location,
+  );
+  const secondaryKey = requireBuilderKey(
+    iconKey,
+    "An application launcher requires an icon cell key",
+    location,
+  );
+  const permitted = new Set(
+    permittedApplicationKeys.map((key, index) =>
+      requireNamespacedKey(key, "A permitted application key is invalid", {
+        ...location,
+        propertyPath: [`permittedApplicationKeys[${index}]`],
+      }).toLowerCase(),
+    ),
+  );
+  const seen = new Set<string>();
+  const displayRows: DisplayRow[] = [];
+  for (const [index, row] of rows.entries()) {
+    const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
+    const applicationKey = requireNamespacedKey(
+      row.applicationKey,
+      "A launcher query row requires an application key",
+      rowLocation,
+    );
+    if (!permitted.has(applicationKey.toLowerCase())) continue;
+    const identity = applicationKey.toLowerCase();
+    if (seen.has(identity))
+      fail(`Duplicate launcher application key '${applicationKey}'`, rowLocation);
+    seen.add(identity);
+
+    const projectedName = row.cells[headingKey];
+    const name = projectedName?.kind === "text"
+      ? projectedName
+      : fail("A launcher query row requires its projected name cell", rowLocation);
+    const projectedIcon = row.cells[secondaryKey];
+    const icon = projectedIcon?.kind === "text"
+      ? projectedIcon
+      : fail("A launcher query row requires its projected icon cell", rowLocation);
+    displayRows.push(
+      Object.freeze({
+        recordId: applicationKey,
+        cells: Object.freeze({ [headingKey]: name, [secondaryKey]: icon }),
+      }),
+    );
+  }
+  return Object.freeze({
+    kind: "list",
+    headingKey,
+    secondaryKey,
+    rows: Object.freeze(displayRows),
   });
 }
 
