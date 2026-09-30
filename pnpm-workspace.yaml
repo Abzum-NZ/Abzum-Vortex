@@ -10,6 +10,7 @@ packages:
 allowBuilds:
   esbuild: false
 catalog:
+  '@js-temporal/polyfill': 0.5.1
   "@puckeditor/core": 0.23.0
   "@supabase/ssr": 0.12.7
   "@supabase/supabase-js": 2.116.0
