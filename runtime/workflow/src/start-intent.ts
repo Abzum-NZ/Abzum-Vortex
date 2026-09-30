@@ -2,8 +2,10 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
+  correlationIdSchema,
   flowIdSchema,
   flowLiteralSchema,
+  flowTriggerOriginSchema,
   moduleRootIdSchema,
   organizationIdSchema,
   revisionSchema,
@@ -11,7 +13,7 @@ import {
   timestampSchema,
   type FlowLiteral,
 } from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 
 /** One accepted start, written inside the caller's authorized request transaction. */
@@ -131,4 +133,95 @@ export const acceptFlowStartIntent = async (
   const parsed = rows.length === 1 ? resultSchema.safeParse(rows[0]?.result) : undefined;
   if (!parsed?.success) throw new Error("START_INTENT_STORAGE_RESULT_INVALID");
   return parsed.data;
+};
+
+const committedFlowStartIntentSchema = z
+  .object({
+    intentId: z.uuid(),
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
+    flowRelease: z.discriminatedUnion("ownerKind", [
+      z
+        .object({
+          ownerKind: z.literal("application"),
+          rootId: applicationRootIdSchema,
+          revision: revisionSchema,
+          version: stableDefinitionReleaseVersionSchema,
+          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        })
+        .strict(),
+      z
+        .object({
+          ownerKind: z.literal("module"),
+          rootId: moduleRootIdSchema,
+          revision: revisionSchema,
+          version: stableDefinitionReleaseVersionSchema,
+          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        })
+        .strict(),
+    ]),
+    flowId: flowIdSchema,
+    origin: flowTriggerOriginSchema,
+    originId: z.uuid(),
+    trigger: z.object({ type: z.literal("Event"), id: z.string().min(1).max(1300) }).strict(),
+    inputs: z.record(z.string().min(1).max(200), flowLiteralSchema),
+    triggerValues: z.record(z.string().min(1).max(200), flowLiteralSchema),
+    correlationId: correlationIdSchema,
+    acceptedAt: timestampSchema,
+  })
+  .strict()
+  .superRefine((intent, context) => {
+    if (intent.origin !== "event")
+      context.addIssue({
+        code: "custom",
+        path: ["origin"],
+        message: "Only event intents are startable",
+      });
+    if (
+      intent.flowRelease.ownerKind === "application" &&
+      (intent.flowRelease.rootId !== intent.applicationRootId ||
+        intent.flowRelease.revision !== intent.applicationReleaseRevision ||
+        intent.flowRelease.version !== intent.applicationReleaseVersion)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["flowRelease"],
+        message: "Application flow release differs from the installation",
+      });
+    if (Object.keys(intent.inputs).length > 100 || Object.keys(intent.triggerValues).length > 100)
+      context.addIssue({ code: "custom", path: ["inputs"], message: "Too many start values" });
+  });
+
+const committedFlowStartIntentResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("unavailable") }).strict(),
+  z
+    .object({
+      kind: z.literal("available"),
+      intent: committedFlowStartIntentSchema,
+    })
+    .strict(),
+]);
+
+export type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
+
+/** Reads only a committed Event intent by its opaque identifier; all other inputs come from storage. */
+export const readCommittedFlowStartIntent = async (
+  intentIdCandidate: string,
+): Promise<CommittedFlowStartIntent | undefined> => {
+  const intentId = z.uuid().safeParse(intentIdCandidate);
+  if (!intentId.success) return undefined;
+  try {
+    const rows = await withRuntimeTransaction((transaction) => transaction.query<{ result: unknown }>`
+      select vortex_workflow.read_committed_flow_start_intent(${intentId.data}::uuid) as result
+    `);
+    if (rows.length !== 1) return undefined;
+    const result = committedFlowStartIntentResultSchema.safeParse(rows[0]?.result);
+    if (!result.success || result.data.kind !== "available") return undefined;
+    if (result.data.intent.intentId.toLowerCase() !== intentId.data.toLowerCase()) return undefined;
+    return result.data.intent;
+  } catch {
+    return undefined;
+  }
 };
