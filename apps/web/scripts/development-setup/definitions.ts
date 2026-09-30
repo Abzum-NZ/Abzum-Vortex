@@ -16,6 +16,7 @@ import {
 import {
   crmApplication,
   crmModuleSources,
+  hrModuleSources,
   iamApplication,
   iamModule,
   operationsApplication,
@@ -76,6 +77,7 @@ const moduleSources = [
   ...crmModuleSources,
   ...serviceDeskModuleSources,
   ...operationsModuleSources,
+  ...hrModuleSources,
 ] as readonly StoredDefinitionSource[];
 
 const applicationSources = [
