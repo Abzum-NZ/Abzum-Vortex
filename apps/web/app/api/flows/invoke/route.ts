@@ -870,7 +870,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             formId: binding.controlId,
           });
           if (projectedForm === undefined) return undefined;
-          return resolveReferenceChoiceFormValues({
+          const resolvedValues = await resolveReferenceChoiceFormValues({
             service: referenceChoices,
             session: identity.session,
             selection,
@@ -883,6 +883,78 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               ? {}
               : { evidence: callerInputs.choiceEvidence }),
           });
+          return resolvedValues === undefined
+            ? undefined
+            : { fields: projectedForm.fields, values: resolvedValues };
+        };
+        const adaptSelectedReadInputs = (
+          adaptedInputs: Readonly<Record<string, unknown>>,
+          resolved: NonNullable<Awaited<ReturnType<typeof resolveValues>>>,
+        ): Readonly<Record<string, unknown>> | undefined => {
+          const selectedReadInputs = installation.selectedRecordReadInputs?.get(
+            String(binding.flow.flowId).toLowerCase(),
+          );
+          if (selectedReadInputs === undefined || selectedReadInputs.size === 0)
+            return adaptedInputs;
+
+          const result: Record<string, unknown> = { ...adaptedInputs };
+          const selectedCallerNames = new Set<string>();
+          for (const [flowInputName, declaredRecordTypeId] of selectedReadInputs) {
+            const flowInput = binding.flow.inputs[flowInputName];
+            if (
+              !isRecord(flowInput) ||
+              flowInput.kind !== "caller" ||
+              typeof flowInput.name !== "string"
+            )
+              return undefined;
+            const callerInputName = flowInput.name;
+            const matchingCallerInputs = Object.values(binding.flow.inputs).filter(
+              (candidate) =>
+                isRecord(candidate) &&
+                candidate.kind === "caller" &&
+                candidate.name === callerInputName,
+            );
+            if (
+              matchingCallerInputs.length !== 1 ||
+              selectedCallerNames.has(callerInputName) ||
+              !Object.hasOwn(adaptedInputs, callerInputName)
+            )
+              return undefined;
+            selectedCallerNames.add(callerInputName);
+
+            const choiceField = resolved.fields.get(callerInputName);
+            if (
+              choiceField === undefined ||
+              choiceField.command.kind !== "record_reference" ||
+              choiceField.command.allowedRecordTypes.length !== 1
+            )
+              return undefined;
+            const choiceRecordType = choiceField.command.allowedRecordTypes[0];
+            const selectedReadModule = installation.selectedRecordReadModules?.get(
+              declaredRecordTypeId.toLowerCase(),
+            );
+            if (
+              choiceRecordType?.state !== "resolved" ||
+              !sameId(choiceRecordType.recordTypeId, declaredRecordTypeId) ||
+              selectedReadModule === undefined ||
+              !sameId(choiceRecordType.moduleRootId, selectedReadModule.moduleRootId)
+            )
+              return undefined;
+
+            const selectedValue = resolved.values[callerInputName];
+            if (
+              typeof selectedValue !== "string" ||
+              adaptedInputs[callerInputName] !== selectedValue
+            )
+              return undefined;
+            const recordId = recordIdSchema.safeParse(selectedValue);
+            if (!recordId.success) return undefined;
+            result[callerInputName] = {
+              recordTypeId: choiceRecordType.recordTypeId,
+              recordId: recordId.data,
+            };
+          }
+          return result;
         };
         const guided = guidedControls.get(binding.controlId.toLowerCase());
         if (guided === undefined) {
@@ -891,11 +963,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             Object.hasOwn(callerInputs.values, guidedFormConfirmationKey)
           )
             return undefined;
-          const resolvedValues = await resolveValues(callerInputs.values);
-          if (resolvedValues === undefined) return undefined;
+          const resolved = await resolveValues(callerInputs.values);
+          if (resolved === undefined) return undefined;
           const adapterInputs: Record<string, unknown> = { ...callerInputs };
           delete adapterInputs.choiceEvidence;
-          return adaptFormSubmit(binding, { ...adapterInputs, values: resolvedValues }, subject);
+          const adaptedInputs = adaptFormSubmit(
+            binding,
+            { ...adapterInputs, values: resolved.values },
+            subject,
+          );
+          return adaptedInputs === undefined
+            ? undefined
+            : adaptSelectedReadInputs(adaptedInputs, resolved);
         }
         if (
           guided === null ||
@@ -965,18 +1044,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           )
         )
           return undefined;
-        const resolvedValues = await resolveValues(draft.values);
-        if (resolvedValues === undefined) return undefined;
-        return adaptFormSubmit(
+        const resolved = await resolveValues(draft.values);
+        if (resolved === undefined) return undefined;
+        const adaptedInputs = adaptFormSubmit(
           binding,
           {
-            values: resolvedValues,
+            values: resolved.values,
             ...(callerInputs.selectedOwnerGroupId === undefined
               ? {}
               : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
           },
           subject,
         );
+        return adaptedInputs === undefined
+          ? undefined
+          : adaptSelectedReadInputs(adaptedInputs, resolved);
       },
       continueForm,
       orchestratorFor,
