@@ -901,6 +901,29 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   type TaskResult = { outcome: FlowTaskOutcome; outputs?: Record<string, JsonValue> };
 
+  const flowTaskOutcomes = new Set<FlowTaskOutcome>([
+    "completed",
+    "committed",
+    "background_pending",
+    "refused",
+    "conflict",
+    "validation",
+    "uncertain",
+    "failed",
+  ]);
+
+  /** A saved record effect stores only the record identity, never readable or submitted values. */
+  const isSavedRecordEffectOutput = (
+    value: unknown,
+  ): value is Readonly<{ record: string }> =>
+    isRecord(value) &&
+    Object.keys(value).length === 1 &&
+    Object.hasOwn(value, "record") &&
+    recordIdSchema.safeParse(value.record).success;
+
+  const isEmptyEffectOutput = (value: unknown): boolean =>
+    isRecord(value) && Object.keys(value).length === 0;
+
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
   const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
     run.unavailable.push({
@@ -1123,7 +1146,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         return { result: { outcome: requestOutcome(saved.kind) }, stored: {} };
       const value = saved.value;
       if (value.outcome === "saved") {
-        const outputs = { record: value.recordId };
+        const recordId = recordIdSchema.safeParse(value.recordId);
+        if (!recordId.success)
+          return { result: { outcome: "refused" }, stored: {} };
+        const outputs = { record: recordId.data };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
       const outcome =
@@ -1186,11 +1212,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   ): Promise<TaskResult> => {
     // Selected-record values are intentionally fresh and transient: never claim or complete a
     // replayable effect-ledger entry for this task.
+    if (run.selectedRecordReadSeen && call.taskType !== "record.save")
+      return { outcome: "refused" };
     if (call.taskType === "record.read_fields")
       return runSelectedRecordRead(run, state, call);
-
-    // A later protected result could contain a selected value and be stored in the effect ledger.
-    if (run.selectedRecordReadSeen) return { outcome: "refused" };
 
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
@@ -1226,11 +1251,44 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // Nothing was claimed, so nothing ran.
       return { outcome: "failed" };
     }
-    if (claim.kind === "completed")
+    if (claim.kind === "completed") {
+      if (run.selectedRecordReadSeen) {
+        // Never trust or expose an effect-ledger replay for a read-derived save. Validate its
+        // minimal stored shape, then ask the Record service to resolve the command receipt under
+        // the current initiator and permissions. The receipt also rejects changed command fields.
+        if (
+          planned.plan.kind !== "save" ||
+          !flowTaskOutcomes.has(claim.outcome as FlowTaskOutcome)
+        )
+          return { outcome: "refused" };
+        if (claim.outcome === "committed") {
+          const ledgerOutputs = claim.outputs;
+          if (!isSavedRecordEffectOutput(ledgerOutputs))
+            return { outcome: "refused" };
+          try {
+            const replayed = await runPlan(run, state, call, planned.plan);
+            if (replayed.result.outcome === "committed") {
+              const replayedOutputs = replayed.result.outputs;
+              if (
+                !isSavedRecordEffectOutput(replayedOutputs) ||
+                replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase()
+              )
+                return { outcome: "refused" };
+            }
+            return replayed.result;
+          } catch {
+            return { outcome: "uncertain" };
+          }
+        }
+        return isEmptyEffectOutput(claim.outputs)
+          ? { outcome: claim.outcome as FlowTaskOutcome }
+          : { outcome: "refused" };
+      }
       return {
         outcome: claim.outcome as FlowTaskOutcome,
         outputs: isRecord(claim.outputs) ? (claim.outputs as Record<string, JsonValue>) : {},
       };
+    }
     if (claim.kind === "in_progress") return { outcome: "uncertain" };
     if (claim.kind !== "claimed") return { outcome: "refused" };
 
