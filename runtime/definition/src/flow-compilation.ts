@@ -46,6 +46,13 @@ export type ResolvedFlowIdentity = Readonly<{
   definitionKey: string;
 }>;
 
+/** Authoritative field facts from the compiled definition and its declared dependencies. */
+export type ResolvedFlowFieldMetadata = Readonly<{
+  identifier: string;
+  recordTypeId: string;
+  type: string;
+}>;
+
 /**
  * How aliases become permanent identities. Each method throws the compiler's refusal when the
  * alias is missing or ambiguous. Record types are written `key` or `definition.key:key`; a field
@@ -58,6 +65,8 @@ export type FlowCompilationResolver = Readonly<{
   flow: (alias: string) => ResolvedFlowIdentity;
   recordType: (reference: string) => ResolvedFlowIdentity;
   field: (recordTypeReference: string, alias: string) => ResolvedFlowIdentity;
+  /** All authoritative records for a permanent field identity; zero or many are invalid. */
+  fieldMetadata: (fieldId: string) => readonly ResolvedFlowFieldMetadata[];
   relationship: (recordTypeReference: string, alias: string) => ResolvedFlowIdentity;
   action: (alias: string) => ResolvedFlowIdentity;
   permission: (alias: string) => ResolvedFlowIdentity;
@@ -314,6 +323,34 @@ const resolveProperty = (
   }
 };
 
+const resolveFileAttachmentField = (
+  ctx: Context,
+  value: FlowValue,
+  properties: Readonly<Record<string, FlowValue>>,
+  recordTypeProperty: string,
+  path: Path,
+): FlowValue => {
+  const { record, member: alias } = splitMemberReference(ctx, aliasOf(ctx, value));
+  const field = ctx.resolver.field(record, alias);
+  const fieldId = resolveAt(ctx, field, [...path, "literal", "value"]);
+  const recordType = ctx.resolver.recordType(
+    aliasOf(ctx, properties[recordTypeProperty]!),
+  );
+  const matches = ctx.resolver.fieldMetadata(fieldId);
+  if (matches.length === 0)
+    throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+  if (matches.length !== 1)
+    throw refusal(ctx, "vortex.definition.ambiguous_identity", "unresolved_reference");
+  const metadata = matches[0]!;
+  if (
+    metadata.identifier !== field.identifier ||
+    metadata.type !== "attachment" ||
+    metadata.recordTypeId !== recordType.identifier
+  )
+    throw refusal(ctx, "vortex.definition.workflow_node_references", "invalid_value");
+  return identityLiteral(fieldId);
+};
+
 const resolveTaskList = (
   ctx: Context,
   tasks: readonly SourceFlowTask[],
@@ -388,14 +425,31 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : undefined;
         if (declared === undefined)
           throw refusal(ctx, "vortex.definition.workflow_node_values", "unknown_property");
-        properties[name] = resolveProperty(
-          ctx,
-          declared.type,
-          value,
-          node.properties,
-          definition.transactionScope === "saved_record",
-          [...path, "properties", name],
-        );
+        const fileRecordTypeProperty =
+          node.type === "file.attach" && name === "target_attachment_field"
+            ? "target_record_type"
+            : node.type === "file.move" && name === "source_attachment_field"
+              ? "source_record_type"
+              : node.type === "file.move" && name === "target_attachment_field"
+                ? "target_record_type"
+                : undefined;
+        properties[name] =
+          fileRecordTypeProperty === undefined
+            ? resolveProperty(
+                ctx,
+                declared.type,
+                value,
+                node.properties,
+                definition.transactionScope === "saved_record",
+                [...path, "properties", name],
+              )
+            : resolveFileAttachmentField(
+                ctx,
+                value,
+                node.properties,
+                fileRecordTypeProperty,
+                [...path, "properties", name],
+              );
       }
       return { ...node, properties };
     }

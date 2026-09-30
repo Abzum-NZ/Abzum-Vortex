@@ -16,6 +16,6 @@
     "utils": "@vortex/ui/lib/utils",
     "ui": "@vortex/ui/components",
     "lib": "@vortex/ui/lib",
-    "hooks": "@vortex/ui/hooks"
+    "hooks": "@vortex/ui/lib"
   }
 }

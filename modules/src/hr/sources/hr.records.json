@@ -1,0 +1,408 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "mod_hr",
+  "key": "vortex.hr",
+  "kind": "module",
+  "body": {
+    "name": "HR Records",
+    "description": "Private employee, department, position and leave request records for an HR application. Person identity and organisation-wide details remain in the System Directory.",
+    "dependencies": [
+      {
+        "dependency_key": "system_directory",
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
+      }
+    ],
+    "record_types": [
+      {
+        "id": "rt_hr_employee",
+        "key": "employee",
+        "name": "Employee",
+        "plural_name": "Employees",
+        "title_field": "employee_number",
+        "storage_contract_id": "srt_hr_employee",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_hr_employee_number",
+            "key": "employee_number",
+            "label": "Employee identifier",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_hr_employee_status",
+            "key": "employment_status",
+            "label": "Employment status",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "active",
+                  "label": "Active"
+                },
+                {
+                  "value": "inactive",
+                  "label": "Inactive"
+                }
+              ]
+            },
+            "default": "active"
+          },
+          {
+            "id": "fld_hr_employee_start_date",
+            "key": "start_date",
+            "label": "Start date",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "date",
+            "settings": {}
+          },
+          {
+            "id": "fld_hr_employee_person",
+            "key": "person",
+            "label": "Person",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.system_directory:person",
+              "reverse_key": "employee",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_hr_employee_position",
+            "key": "position",
+            "label": "Position",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.hr:position",
+              "reverse_key": "employees",
+              "on_parent_delete": "refuse"
+            }
+          }
+        ],
+        "relationships": [
+          {
+            "id": "rel_hr_employee_person",
+            "key": "person",
+            "from_field": "person",
+            "to_record_type": "vortex.system_directory:person",
+            "cardinality": "one_to_one",
+            "on_parent_delete": "refuse"
+          },
+          {
+            "id": "rel_hr_employee_position",
+            "key": "position",
+            "from_field": "position",
+            "to_record_type": "vortex.hr:position",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          }
+        ]
+      },
+      {
+        "id": "rt_hr_department",
+        "key": "department",
+        "name": "Department",
+        "plural_name": "Departments",
+        "title_field": "name",
+        "storage_contract_id": "srt_hr_department",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_hr_department_code",
+            "key": "department_code",
+            "label": "Department identifier",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_hr_department_name",
+            "key": "name",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_hr_position",
+        "key": "position",
+        "name": "Position",
+        "plural_name": "Positions",
+        "title_field": "title",
+        "storage_contract_id": "srt_hr_position",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_hr_position_code",
+            "key": "position_code",
+            "label": "Position identifier",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_hr_position_title",
+            "key": "title",
+            "label": "Title",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 160
+            }
+          },
+          {
+            "id": "fld_hr_position_department",
+            "key": "department",
+            "label": "Department",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.hr:department",
+              "reverse_key": "positions",
+              "on_parent_delete": "refuse"
+            }
+          }
+        ],
+        "relationships": [
+          {
+            "id": "rel_hr_position_department",
+            "key": "department",
+            "from_field": "department",
+            "to_record_type": "vortex.hr:department",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          }
+        ]
+      },
+      {
+        "id": "rt_hr_leave_request",
+        "key": "leave_request",
+        "name": "Leave Request",
+        "plural_name": "Leave Requests",
+        "title_field": "start_date",
+        "storage_contract_id": "srt_hr_leave_request",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_hr_leave_request_start_date",
+            "key": "start_date",
+            "label": "Start date",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "date",
+            "settings": {}
+          },
+          {
+            "id": "fld_hr_leave_request_end_date",
+            "key": "end_date",
+            "label": "End date",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "date",
+            "settings": {}
+          },
+          {
+            "id": "fld_hr_leave_request_reason",
+            "key": "reason",
+            "label": "Reason",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "sensitive",
+            "public_display": "refused",
+            "type": "long_text",
+            "settings": {
+              "max_length": 1000
+            }
+          },
+          {
+            "id": "fld_hr_leave_request_status",
+            "key": "status",
+            "label": "Status",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "pending",
+                  "label": "Pending"
+                },
+                {
+                  "value": "approved",
+                  "label": "Approved"
+                },
+                {
+                  "value": "refused",
+                  "label": "Refused"
+                },
+                {
+                  "value": "withdrawn",
+                  "label": "Withdrawn"
+                }
+              ]
+            },
+            "default": "pending"
+          },
+          {
+            "id": "fld_hr_leave_request_employee",
+            "key": "employee",
+            "label": "Employee",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.hr:employee",
+              "reverse_key": "leave_requests",
+              "on_parent_delete": "refuse"
+            }
+          }
+        ],
+        "relationships": [
+          {
+            "id": "rel_hr_leave_request_employee",
+            "key": "employee",
+            "from_field": "employee",
+            "to_record_type": "vortex.hr:employee",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          }
+        ]
+      }
+    ],
+    "permissions": [],
+    "actions": [],
+    "events": [],
+    "flows": [],
+    "extension_points": [],
+    "sharing_conditions": [],
+    "queries": []
+  }
+}
