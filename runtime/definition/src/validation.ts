@@ -1,6 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  calendarBlockSourceIsSupported,
+  calendarMappingSchema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
   readRecordDetailContract,
@@ -2841,23 +2843,58 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const aggregateAliases = array(query.aggregates).map((aggregate) => String(aggregate.alias));
       const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
       const unique = (values: readonly string[]) => new Set(values).size === values.length;
-      // Grouping decides the row shape, so a grouped query returns and orders by its grouping
-      // keys only, and a total needs a grouping key to belong to.
+      const summaryGroupFieldTypes = new Set([
+        "text", "whole_number", "decimal_number", "yes_no", "date", "date_time",
+        "choice", "reference_number", "email_address", "phone_number", "web_address",
+        "link", "link_to_one_of_several", "link_to_person",
+      ]);
+      const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
+      const extremaFieldTypes = new Set([
+        "whole_number", "decimal_number", "money", "date", "date_time",
+      ]);
+      const refuseSummaryField = (ruleCode: string, field: JsonObject): void => {
+        const root = rootLocation(output);
+        failures.push({
+          ruleCode,
+          family: "unsupported_choice",
+          location: {
+            ...root,
+            segments: [...root.segments, location, { kind: "field", key: String(field.key) }],
+          },
+        });
+      };
+      for (const fieldId of groupByFieldIds) {
+        const field = fieldMap.get(fieldId);
+        if (field && !summaryGroupFieldTypes.has(String(field.type)))
+          refuseSummaryField("vortex.definition.module_query_group_field_type", field);
+      }
+      for (const aggregate of array(query.aggregates)) {
+        if (aggregate.fieldId === undefined) continue;
+        const field = fieldMap.get(String(aggregate.fieldId));
+        if (!field || aggregate.operation === "count") continue;
+        const fieldType = String(field.type);
+        if (fieldType === "calculation" || fieldType === "total")
+          refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
+        else if (
+          (aggregate.operation === "sum" || aggregate.operation === "average") &&
+          !numericAggregateFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_numeric_aggregate_field_type", field);
+        else if (
+          (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
+          !extremaFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_extrema_field_type", field);
+      }
+      // A grouped query returns and orders by its grouping keys only. An ungrouped
+      // summary can still return totals over all permitted rows.
       const groupingValid =
-        groupByFieldIds.length > 0
-          ? selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
-            sortFieldIds.every((id) => groupByFieldIds.includes(id))
-          : aggregateAliases.length === 0;
+        groupByFieldIds.length === 0 ||
+        (selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
+          sortFieldIds.every((id) => groupByFieldIds.includes(id)));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
-        if (aggregate.fieldId === undefined) return false;
-        const field = fieldMap.get(String(aggregate.fieldId));
-        if (!field) return false;
-        if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["whole_number", "decimal_number", "money"].includes(fieldValueTypeV2(field) ?? "");
-        return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
-          String(field.type),
-        );
+        return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
       });
       const filterValid =
         !query.filter ||
@@ -3644,10 +3681,110 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       for (const placement of placements) {
         const bound =
           placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
-        if (bound === undefined) continue;
+        const block = object(placement.block);
+        const blockKey = registeredBlockReleases.get(
+          `${String(block.blockId)}:${String(block.releaseVersion)}`,
+        )?.key;
+        if (bound === undefined) {
+          if (blockKey === "platform.display.calendar")
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+          continue;
+        }
         const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (blockKey === "platform.display.calendar") {
+          const settingFieldId = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "field_reference" && typeof property.fieldId === "string"
+              ? property.fieldId
+              : undefined;
+          };
+          const settingChoice = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "choice" && typeof property.value === "string"
+              ? property.value
+              : undefined;
+          };
+          const mappingProperties = object(object(settings.calendar_mapping).properties);
+          const mappingKind = settingChoice(mappingProperties.kind);
+          const startFieldId = settingFieldId(mappingProperties.start_field);
+          const endFieldId = settingFieldId(mappingProperties.end_field);
+          const durationFieldId = settingFieldId(mappingProperties.duration_field);
+          const durationUnit = settingChoice(mappingProperties.duration_unit);
+          const mappingCandidate =
+            mappingKind === "start_end" &&
+            startFieldId !== undefined &&
+            endFieldId !== undefined &&
+            durationFieldId === undefined &&
+            durationUnit === undefined
+              ? { kind: mappingKind, startFieldId, endFieldId }
+              : mappingKind === "start_duration" &&
+                  startFieldId !== undefined &&
+                  endFieldId === undefined &&
+                  durationFieldId !== undefined &&
+                  durationUnit !== undefined
+                ? { kind: mappingKind, startFieldId, durationFieldId, durationUnit }
+                : undefined;
+          const mapping = calendarMappingSchema.safeParse(mappingCandidate);
+          const itemTitleFieldId = settingFieldId(settings.item_title_field);
+          const queryRecordType = records.get(String(object(bound.recordType).recordTypeId));
+          const fieldById = new Map(
+            array(queryRecordType?.fields).map((field) => [
+              String(field.fieldId).toLowerCase(),
+              field,
+            ]),
+          );
+          const selectedFieldIds = new Set(
+            array(bound.selectedFieldIds).map((fieldId) => String(fieldId).toLowerCase()),
+          );
+          let calendarMappingValid = false;
+          if (mapping.success && itemTitleFieldId !== undefined && queryRecordType !== undefined) {
+            const startField = fieldById.get(mapping.data.startFieldId.toLowerCase());
+            const titleField = fieldById.get(itemTitleFieldId.toLowerCase());
+            const dateType = startField?.type;
+            const dateFields =
+              mapping.data.kind === "start_end"
+                ? [startField, fieldById.get(mapping.data.endFieldId.toLowerCase())]
+                : [startField];
+            const durationField =
+              mapping.data.kind === "start_duration"
+                ? fieldById.get(mapping.data.durationFieldId.toLowerCase())
+                : undefined;
+            const durationValid =
+              mapping.data.kind !== "start_duration" ||
+              ((dateType === "date_time" ||
+                (dateType === "date" && mapping.data.durationUnit === "days")) &&
+                durationField?.type === "whole_number");
+            const mappedFieldIds = [
+              mapping.data.startFieldId,
+              ...(mapping.data.kind === "start_end"
+                ? [mapping.data.endFieldId]
+                : [mapping.data.durationFieldId]),
+              itemTitleFieldId,
+            ];
+            calendarMappingValid =
+              (dateType === "date" || dateType === "date_time") &&
+              dateFields.every(
+                (field) =>
+                  field !== undefined &&
+                  field.type === dateType &&
+                  field.filterable === true,
+              ) &&
+              durationValid &&
+              titleField !== undefined &&
+              calendarBlockSourceIsSupported(bound, titleField.type) &&
+              mappedFieldIds.every((fieldId) =>
+                selectedFieldIds.has(fieldId.toLowerCase()),
+              );
+          }
+          if (!calendarMappingValid)
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
         if (table === undefined && detail === undefined) continue;
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
@@ -4248,6 +4385,10 @@ const moduleRuleCodes = [
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
   "vortex.definition.module_query_references",
+  "vortex.definition.module_query_group_field_type",
+  "vortex.definition.module_query_derived_aggregate_source",
+  "vortex.definition.module_query_numeric_aggregate_field_type",
+  "vortex.definition.module_query_extrema_field_type",
 ] as const;
 const applicationRuleCodes = [
   "vortex.definition.application_identity_unique",

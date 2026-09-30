@@ -8,7 +8,6 @@
     "./component-result-state": "./src/component-result-state.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
