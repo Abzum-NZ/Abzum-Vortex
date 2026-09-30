@@ -1625,19 +1625,21 @@ function ApplicationPageViewContent({
    * installed binding and refuses anything else.
    */
   const runBinding = useCallback(
-    (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>) => {
+    (
+      placementId: string,
+      binding: PlacementFlowBinding,
+      supplied: Record<string, unknown>,
+      selectedRecordId?: string,
+    ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
-        const candidate = Object.hasOwn(supplied, selectedReadInput.callerInputName)
-          ? supplied[selectedReadInput.callerInputName]
-          : supplied.record_id;
         delete callerInputs[selectedReadInput.callerInputName];
         if (
           binding.recordTypeId === undefined ||
           binding.recordTypeId.toLowerCase() !== selectedReadInput.recordTypeId.toLowerCase()
         )
           continue;
-        const parsedRecordId = recordIdSchema.safeParse(candidate);
+        const parsedRecordId = recordIdSchema.safeParse(selectedRecordId);
         if (!parsedRecordId.success) continue;
         callerInputs[selectedReadInput.callerInputName] = {
           recordTypeId: binding.recordTypeId,
@@ -1703,7 +1705,16 @@ function ApplicationPageViewContent({
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
-                void runBinding(placementId, binding, suppliedValues(event));
+                void runBinding(
+                  placementId,
+                  binding,
+                  suppliedValues(event),
+                  event.event === "row_clicked" ||
+                    event.event === "row_action" ||
+                    event.event === "inline_edit"
+                    ? event.recordId
+                    : undefined,
+                );
             };
         if (supportsEvent("refresh"))
           events.refresh = () => {
@@ -1756,10 +1767,15 @@ function ApplicationPageViewContent({
       if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
-          return runBinding(placementId, actionBinding, {
-            ...(event.values ?? {}),
-            ...(subject === undefined ? {} : { record_id: subject.recordId }),
-          });
+          return runBinding(
+            placementId,
+            actionBinding,
+            {
+              ...(event.values ?? {}),
+              ...(subject === undefined ? {} : { record_id: subject.recordId }),
+            },
+            subject?.recordId,
+          );
         };
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation.
