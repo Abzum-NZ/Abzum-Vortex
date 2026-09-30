@@ -2,6 +2,7 @@
 
 import { builderKeySchema } from "@vortex/contracts";
 import type { ReactElement } from "react";
+import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { DefinitionRenderError } from "../definition-error";
 import type { ValidationPayload } from "./projected-data";
 import {
@@ -11,6 +12,12 @@ import {
 } from "./control-context";
 
 export type ValidationMessageProps = ControlRenderProps<ValidationPayload>;
+
+const VALIDATION_SEVERITY_COLORS: Readonly<Record<"error" | "warning" | "info", string>> = {
+  error: "var(--vortex-danger-text)",
+  warning: "var(--vortex-warning-text)",
+  info: "var(--vortex-info-text)",
+};
 
 /**
  * Form-wide or field-targeted validation summary. The live region is always present so a later
@@ -34,30 +41,39 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
   const messages: readonly string[] =
     projected !== undefined ? projected : message === undefined ? [] : [message];
   const title = context.accessibleName;
+  const severityColor = VALIDATION_SEVERITY_COLORS[severity];
 
   return (
-    <div
+    <Alert
       role={severity === "error" ? "alert" : "status"}
       data-vortex-control="validation-message"
       data-vortex-placement-id={props.placementId}
       data-vortex-severity={severity}
       {...(forField === undefined ? {} : { "data-vortex-for-field": forField })}
-      className={`vortex-validation-message vortex-validation-${severity}`}
+      variant={severity === "error" ? "destructive" : "default"}
+      className="border-l-4"
+      style={{ backgroundColor: "var(--vortex-surface)", borderLeftColor: severityColor }}
     >
       {messages.length === 0 ? null : (
         <>
-          {title === undefined ? null : <p className="vortex-validation-title">{title}</p>}
-          {messages.length === 1 ? (
-            <p className="vortex-validation-text">{messages[0]}</p>
-          ) : (
-            <ul className="vortex-validation-list">
-              {messages.map((text, index) => (
-                <li key={index}>{text}</li>
-              ))}
-            </ul>
+          {title === undefined ? null : (
+            <AlertTitle className="mb-1 font-bold" style={{ color: severityColor }}>
+              {title}
+            </AlertTitle>
           )}
+          <AlertDescription style={{ color: "var(--vortex-text)" }}>
+            {messages.length === 1 ? (
+              <p className="m-0">{messages[0]}</p>
+            ) : (
+              <ul className="m-0 list-disc pl-5">
+                {messages.map((text, index) => (
+                  <li key={index}>{text}</li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
         </>
       )}
-    </div>
+    </Alert>
   );
 }

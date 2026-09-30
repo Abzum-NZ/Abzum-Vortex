@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import {
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
@@ -8,11 +9,15 @@ import {
   identitySessionSchema,
   organizationSelectionCandidateSchema,
   safeFlowResultDescriptors,
+  recordIdSchema,
+  recordTypeIdSchema,
   type ComponentFlowBinding,
   type FormContinuationOutcome,
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
+  type ApplicationContentV2,
+  type ModuleDefinitionConsumerReadResultV3,
   type FlowBindingInvocation,
   type IdentitySession,
   type JsonValue,
@@ -51,7 +56,9 @@ import type {
  * - The flow's inputs are the binding's own: its literals, plus the caller inputs it declares,
  *   filled by name from the values the surface supplies. A surface can neither add an input the
  *   binding does not declare nor override one the binding fixes. Inputs that need page data
- *   (references and formulas) are not evaluated on the server and fail closed.
+ *   (references and formulas) are not evaluated on the server and fail closed, except for the one
+ *   declared `record.read_fields` input, whose exact selected-record tuple is checked against the
+ *   installed projection and reduced to its record ID before Flow receives it.
  * - One click runs the flow once. The run identity is derived from the initiator, organisation,
  *   binding and click identity, so a repeated request for the same click reaches the same run and
  *   the effect ledger replays its recorded outcome instead of repeating an effect.
@@ -81,6 +88,18 @@ export type InstalledFlowBindings = Readonly<{
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by key, for a Call protected operation task that names one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
+  /** The exact active Application and Module definitions used to verify authored form values. */
+  applicationContent?: ApplicationContentV2;
+  modules?: readonly ModuleDefinitionConsumerReadResultV3[];
+  /** Compiler-owned selected-record projections derived from the exact installed releases. */
+  selectedRecordReadProjections?: FlowRelease["selectedRecordReadProjections"];
+  /** Flow input name to exact selected record type, keyed by lower-case flow identity. */
+  selectedRecordReadInputs?: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  /** Exact installed Module owner for each selected-read record type, keyed by lower-case ID. */
+  selectedRecordReadModules?: ReadonlyMap<
+    string,
+    Readonly<{ moduleRootId: string; moduleReleaseRevision: number; storageContractId: string }>
+  >;
 }>;
 
 export type FlowBindingEndpointDependencies = Readonly<{
@@ -96,6 +115,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
   orchestratorFor: (
     release: FlowRelease,
     runId: string | undefined,
+    installation: InstalledFlowBindings,
   ) => Pick<FlowOrchestrator, "start" | "resume">;
   /**
    * THE SEAM for #588's form-submit adapter (`createPrivateFormSubmitAdapter`): turns what a form
@@ -107,6 +127,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
     subject: FlowSubject | undefined,
+    installation: InstalledFlowBindings,
   ) => Promise<Readonly<Record<string, unknown>> | undefined>;
   /**
    * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
@@ -159,6 +180,10 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
+const selectedRecordInputSchema = z
+  .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
+  .strict();
+
 const withinSupplied = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumSuppliedCharacters;
@@ -205,20 +230,47 @@ const runIdForClick = (
 const bindingInputs = (
   binding: ComponentFlowBinding,
   callerInputs: Readonly<Record<string, unknown>>,
+  selectedRecordReadInputs: ReadonlyMap<string, string>,
 ): Record<string, unknown> | undefined => {
   const inputs: Record<string, unknown> = {};
   const declaredCallerNames = new Set<string>();
+  for (const inputName of selectedRecordReadInputs.keys()) {
+    const bindingInput = binding.flow.inputs[inputName];
+    if (typeof bindingInput !== "object" || bindingInput === null || bindingInput.kind !== "caller")
+      continue;
+    const matchingInputNames = Object.values(binding.flow.inputs).filter(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        candidate.kind === "caller" &&
+        candidate.name === bindingInput.name,
+    );
+    if (matchingInputNames.length !== 1) return undefined;
+  }
   for (const [name, value] of Object.entries(binding.flow.inputs)) {
     if (typeof value !== "object" || value === null) return undefined;
     if (value.kind === "literal") inputs[name] = value.literal.value;
     else if (value.kind === "caller") {
       declaredCallerNames.add(value.name);
       if (!Object.hasOwn(callerInputs, value.name)) return undefined;
-      inputs[name] = callerInputs[value.name];
+      const selectedRecordTypeId = selectedRecordReadInputs.get(name);
+      if (selectedRecordTypeId === undefined) inputs[name] = callerInputs[value.name];
+      else {
+        const selectedRecord = selectedRecordInputSchema.safeParse(callerInputs[value.name]);
+        if (
+          !selectedRecord.success ||
+          !sameId(selectedRecord.data.recordTypeId, selectedRecordTypeId)
+        )
+          return undefined;
+        // The type is checked against the installed task declaration above; only the record ID
+        // enters Flow's ordinary typed input map.
+        inputs[name] = selectedRecord.data.recordId;
+      }
     } else return undefined;
   }
   // A surface may only fill the caller inputs the binding declares.
-  for (const name of Object.keys(callerInputs)) if (!declaredCallerNames.has(name)) return undefined;
+  for (const name of Object.keys(callerInputs))
+    if (!declaredCallerNames.has(name)) return undefined;
   return inputs;
 };
 
@@ -371,9 +423,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const invocation = flowBindingInvocationSchema.safeParse(invocationCandidate);
         if (!session.success || !selection.success || !invocation.success) return refused;
         const request = invocation.data;
-        if (
-          !withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer)
-        )
+        if (!withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer))
           return refused;
 
         const installation = await dependencies.readInstallation(session.data, selection.data);
@@ -395,6 +445,9 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           ...(installation.namedActions === undefined
             ? {}
             : { namedActions: installation.namedActions }),
+          ...(installation.selectedRecordReadProjections === undefined
+            ? {}
+            : { selectedRecordReadProjections: installation.selectedRecordReadProjections }),
         };
 
         if (request.kind === "continuation") {
@@ -417,12 +470,15 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             });
             return continuationResult(outcome, installation.installationRevision);
           }
+          // A form answer must pass through the paused-target adapter, which resolves every
+          // reference-choice key before the flow sees the submitted values.
+          if (request.answer.kind === "submit") return refused;
           const expectation: FlowRunExpectation = {
             releaseKey: installation.releaseKey,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
           };
           const response = await dependencies
-            .orchestratorFor(release, undefined)
+            .orchestratorFor(release, undefined, installation)
             .resume(
               {
                 session: session.data,
@@ -440,10 +496,15 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           });
         }
 
-        const binding = installation.bindings.find((entry) =>
+        const matchingBindings = installation.bindings.filter((entry) =>
           sameId(entry.bindingId, request.bindingId),
         );
-        if (binding === undefined || !sameId(binding.flow.flowId, request.flowId)) return refused;
+        if (
+          matchingBindings.length !== 1 ||
+          !sameId(matchingBindings[0]!.flow.flowId, request.flowId)
+        )
+          return refused;
+        const binding = matchingBindings[0]!;
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {
@@ -451,11 +512,15 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             binding,
             callerInputs,
             request.subject,
+            installation,
           );
           if (adapted === undefined || !isRecord(adapted)) return refused;
           callerInputs = adapted;
         }
-        const inputs = bindingInputs(binding, callerInputs);
+        const selectedRecordReadInputs =
+          installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??
+          new Map<string, string>();
+        const inputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
         if (inputs === undefined) return refused;
 
         const runId = runIdForClick(
@@ -465,7 +530,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           installation.installationRevision,
           request.clickId,
         );
-        const response = await dependencies.orchestratorFor(release, runId).start({
+        const response = await dependencies.orchestratorFor(release, runId, installation).start({
           session: session.data,
           selection: selection.data,
           binding: { flowId: binding.flow.flowId, inputs },

@@ -20,7 +20,7 @@ import {
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadApplicationPage, loadApplicationTheme } from "../../../_lib/application-page";
+import { loadApplicationPage } from "../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 import {
   abandonGuidedFormDraftAction,
@@ -63,10 +63,11 @@ export default async function ApplicationAddressPage({
   const addressSegments = applicationAddress ?? [];
 
   /**
-   * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
-   * the tile's application identity; this server action re-resolves the signed-in person's current
-   * permitted applications at this address and opens the matching one, so a withdrawn or refused
-   * application is never opened from stale page data or a crafted identity.
+   * Tile activation is the launcher block's declared `row_action` event. A query-bound tile sends
+   * only its application key; the existing organisation launcher may send the application's stable
+   * identity. This server action resolves either identity against the signed-in person's current
+   * permitted applications before opening it, so a withdrawn or refused application is never
+   * opened from stale page data or a crafted value.
    */
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
@@ -82,7 +83,8 @@ export default async function ApplicationAddressPage({
     );
     if (rechecked.kind !== "organization_launcher") redirect(chooser);
     const application = rechecked.read.applications.find(
-      (candidate) => candidate.applicationRootId === event.recordId,
+      (candidate) =>
+        candidate.key === event.recordId || candidate.applicationRootId === event.recordId,
     );
     if (application === undefined) redirect(chooser);
     redirect(
@@ -190,19 +192,12 @@ export default async function ApplicationAddressPage({
     // application's own not-found page, in that application's installed theme; everything else
     // shows the fixed neutral fallback.
     if (resolved.experience === undefined) return unavailableFallback;
-    const theme =
-      resolved.read === undefined || resolved.application === undefined
-        ? undefined
-        : await loadApplicationTheme(identity.session, {
-            read: resolved.read,
-            application: resolved.application,
-          });
     return (
       <ApplicationExperiencePage
         page={resolved.experience.page}
         shells={resolved.experience.shells}
-        theme={theme}
-        organizationName={resolved.read?.organizationShortName ?? "Organisation"}
+        theme={resolved.experience.theme}
+        organizationName={organizationShortName}
       />
     );
   }
@@ -325,6 +320,7 @@ export default async function ApplicationAddressPage({
       )}
       <ApplicationPageView
         model={page.model}
+        onOpenApplication={openApplication}
         guidedFormActions={{
           advance: advanceGuidedFormStepAction,
           confirm: confirmGuidedFormAction,
