@@ -13,6 +13,7 @@ import {
   semanticVersionSchema,
 } from "./identifiers";
 import { moduleContentV3Schema, moduleQueryDefinitionV3Schema } from "./module-contracts-v3";
+import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const definitionConsumerReadSelectorSchema = z.discriminatedUnion("selection", [
@@ -114,6 +115,7 @@ export const applicationDefinitionConsumerReadResultV2Schema = z
     content: applicationContentV2Schema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("2.0.0"),
+    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
   })
   .strict();
 
