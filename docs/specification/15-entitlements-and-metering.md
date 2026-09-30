@@ -59,15 +59,16 @@ Corrections are explicit later events or protected reconciliation operations; hi
 
 Entitlement limits have two levels of authority (owner decision, 27 September 2026):
 
-- **Ceiling.** Only the configured system operator defines entitlement policies and sets each tenant's ceiling for a capability. It is trusted server configuration reached only by the runtime, in a transaction that carries no person's request context. Named super-administrator assignments do not call these commands in this release; person-backed ceiling commands are owned by #1441.
+- **Ceiling.** The configured system operator defines and publishes entitlement policies and retains the context-free tenant-ceiling bootstrap command. An active named Vortex super administrator may set, re-pin and revoke a tenant ceiling as a verified person after recent primary authentication. The selected active organisation account is only the account-bound request anchor; the target is independently verified as an active tenant and need not have an active organisation.
 - **Allocation.** `platform.tenant.capability_limits.allocate` authorizes setting, lowering and revoking a tenant or organisation allocation. Tenant administrators receive `platform.tenant.capability_limits.read` by default, but allocation requires the separate allocation permission. The `Tenant limits manager` tenant-role preset contains both permissions, and a tenant administrator may also be given the allocation permission without that preset. An allocation above the tenant's current ceiling is refused. A named Vortex super administrator inherits both tenant permissions through the existing tenant-capability decision.
 - **Read.** A tenant administrator with `platform.tenant.capability_limits.read` can view tenant limits. Organisation administrators can see the effective limit for their own organisation through its organisation-scoped request, but cannot assign or change any limit, including their own.
 - **Resolution.** The effective limit for a tenant or organisation is the lowest of the platform ceiling, the tenant allocation and, for an organisation, its own allocation. The decision reports which of these applied and the ceiling itself. An allocation counts only while a ceiling is in force, so an allocation, including one made before the ceiling was lowered, can never raise a limit.
 
 ```mermaid
 flowchart TB
-    PO[Platform operator] -->|defines policy, sets ceiling| CEIL[Tenant ceiling]
-    SA[Vortex super administrator] -->|inherits tenant allocation permission| TALLOC[Tenant allocation]
+    PO[Platform operator] -->|defines policy, bootstraps ceiling| CEIL[Tenant ceiling]
+    SA[Vortex super administrator] -->|sets, re-pins or revokes| CEIL
+    SA -->|inherits tenant allocation permission| TALLOC[Tenant allocation]
     SA -->|inherits tenant allocation permission| OALLOC[Organisation allocation]
     TLM[Tenant limits manager] -->|allocates or lowers, never above the ceiling| TALLOC
     TLM -->|allocates or lowers, never above the ceiling| OALLOC

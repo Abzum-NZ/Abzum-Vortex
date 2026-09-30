@@ -14,7 +14,10 @@ import {
   recordIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/contracts";
-import { protectedQueryRowSchema } from "./protected-query-contracts";
+import {
+  protectedQueryRowSchema,
+  protectedQuerySummaryCommandSchema,
+} from "./protected-query-contracts";
 
 /**
  * Most rows one arrangement accepts. Rows, counts, groups and totals are all
@@ -175,28 +178,15 @@ export const calendarArrangementDescriptorSchema = z
   })
   .strict();
 
-export const summaryArrangementDescriptorSchema = z
-  .object({
-    type: z.literal("summary"),
-    /** Fields the summary may group or total; a summary emits no rows. */
-    declaredFieldIds: declaredFieldIdsSchema,
-    groupByFieldIds: groupByFieldIdsSchema.default([]),
-    aggregates: aggregatesSchema.min(1),
-  })
-  .strict();
-
 export const arrangementDescriptorSchema = z.discriminatedUnion("type", [
   tableArrangementDescriptorSchema,
   boardArrangementDescriptorSchema,
   calendarArrangementDescriptorSchema,
-  summaryArrangementDescriptorSchema,
 ]);
 export type ArrangementDescriptor = z.infer<typeof arrangementDescriptorSchema>;
 export type TableArrangementDescriptor = z.infer<typeof tableArrangementDescriptorSchema>;
 export type BoardArrangementDescriptor = z.infer<typeof boardArrangementDescriptorSchema>;
 export type CalendarArrangementDescriptor = z.infer<typeof calendarArrangementDescriptorSchema>;
-export type SummaryArrangementDescriptor = z.infer<typeof summaryArrangementDescriptorSchema>;
-
 export const arrangementCommandSchema = z
   .object({
     dataset: arrangementDatasetSchema,
@@ -204,6 +194,10 @@ export const arrangementCommandSchema = z
   })
   .strict();
 export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
+
+/** Summary input identifies the installed Query; its own declaration provides groups and totals. */
+export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
+export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
 
 // Results
 
@@ -315,6 +309,16 @@ export const arrangementRefusalReasonCodes = [
   "dataset_invalid",
   /** The complete result is larger than one arrangement accepts. */
   "dataset_limit_exceeded",
+  /** The installed Query could not be resolved for the current Application release. */
+  "query_unavailable",
+  "input_invalid",
+  "field_unbounded",
+  "filter_invalid",
+  "sort_invalid",
+  "relationship_invalid",
+  "page_size_invalid",
+  "cursor_invalid",
+  "cursor_stale",
   /** The calendar time zone is not a known IANA zone. */
   "time_zone_invalid",
 ] as const;

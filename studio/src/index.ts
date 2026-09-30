@@ -1,5 +1,6 @@
 export const studioPackage = "@vortex/studio" as const;
 
+export * from "./contextual-palette";
 export * from "./vortex-puck-adapter";
 export * from "./discovery-adapter";
 export * from "./navigation-adapter";

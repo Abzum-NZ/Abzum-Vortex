@@ -610,6 +610,96 @@ const shorthandReferenceValueSchema = z.string().transform((text, context) => {
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
 
+/** A selected-record read declares at most twenty output members and source field references. */
+export const flowMaximumRecordReadFields = 20;
+
+/** Scalar output types supported by Flow for selected-record field projections. */
+export const flowReadFieldsScalarTypeKeys = [
+  "text",
+  "formatted_text",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+  "choice",
+] as const satisfies readonly z.infer<typeof workflowValueTypeSchema>[];
+export const flowReadFieldsScalarTypeSchema = z.enum(flowReadFieldsScalarTypeKeys);
+export type FlowReadFieldsScalarType = z.infer<typeof flowReadFieldsScalarTypeSchema>;
+
+/** Compiler-owned scalar types keyed by the aliases in a selected-record projection. */
+export const flowReadFieldsTypeMapSchema = z
+  .record(builderKeySchema, flowReadFieldsScalarTypeSchema)
+  .superRefine((types, context) => {
+    const count = Object.keys(types).length;
+    if (count < 1)
+      context.addIssue({
+        code: "custom",
+        message: "A selected-record type map must contain at least one member",
+      });
+    if (count > flowMaximumRecordReadFields)
+      context.addIssue({
+        code: "custom",
+        message: `A selected-record type map can contain at most ${flowMaximumRecordReadFields} members`,
+      });
+  });
+
+/** One named output member of a selected-record field projection. */
+export const flowReadFieldsProjectionEntrySchema = z
+  .object({
+    alias: builderKeySchema,
+    // A source record type alias can use 240 characters, plus a dot and a 40-character field key.
+    field: z.string().min(1).max(281),
+  })
+  .strict();
+
+/** The closed, ordered projection carried by `record.read_fields`. */
+export const flowReadFieldsProjectionSchema = z
+  .array(flowReadFieldsProjectionEntrySchema)
+  .min(1)
+  .max(flowMaximumRecordReadFields)
+  .superRefine((fields, context) => {
+    const aliases = new Set<string>();
+    const references = new Set<string>();
+    fields.forEach((field, index) => {
+      if (aliases.has(field.alias))
+        context.addIssue({
+          code: "custom",
+          path: [index, "alias"],
+          message: "Projection aliases must be unique",
+        });
+      aliases.add(field.alias);
+      if (references.has(field.field))
+        context.addIssue({
+          code: "custom",
+          path: [index, "field"],
+          message: "Projected field references must be unique",
+        });
+      references.add(field.field);
+    });
+  });
+
+/** The projection is authored as one JSON literal, never a runtime map or computed value. */
+export const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {
+  if (value.kind !== "literal" || value.literal.type !== "json") {
+    context.addIssue({
+      code: "custom",
+      message: "A selected-record projection must be a JSON literal",
+    });
+    return;
+  }
+  const projection = flowReadFieldsProjectionSchema.safeParse(value.literal.value);
+  if (projection.success) return;
+  projection.error.issues.forEach((issue) =>
+    context.addIssue({
+      code: "custom",
+      path: ["literal", "value", ...issue.path],
+      message: issue.message,
+    }),
+  );
+});
+
 // ─── Declarations ──────────────────────────────────────────────────────────────────────────────
 
 const recordReferenceTypes = new Set(["record_reference", "record_reference_list"]);
@@ -784,6 +874,10 @@ export const flowTriggerSchema = z.discriminatedUnion("type", [
 ]);
 export type FlowTrigger = z.infer<typeof flowTriggerSchema>;
 
+/** The verified source that caused one flow run to start. */
+export const flowTriggerOriginSchema = z.enum(["person", "event", "schedule"]);
+export type FlowTriggerOrigin = z.infer<typeof flowTriggerOriginSchema>;
+
 /** Which execution kinds each automatic start may run. */
 export const flowTriggerExecutionKinds = Object.freeze({
   BeforeSave: ["transaction"],
@@ -914,6 +1008,7 @@ export type FlowTask = FlowTaskCommon &
         type: string;
         version: string;
         properties: Record<string, FlowValue>;
+        readFieldTypes?: Record<string, FlowReadFieldsScalarType> | undefined;
         allowRefusal?: boolean | undefined;
       }
   );
@@ -1016,10 +1111,75 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
       /** Published flows pin the exact registered task version. */
       version: stableDefinitionReleaseVersionSchema,
       properties: boundedRecord(flowValueSchema, 50),
+      /** Compiler-owned scalar types for each `record.read_fields` projection alias. */
+      readFieldTypes: flowReadFieldsTypeMapSchema.optional(),
       /** When true, a refused, conflict or invalid outcome is branched on instead of failing. */
       allowRefusal: z.boolean().optional(),
     })
-    .strict();
+    .strict()
+    .superRefine((task, context) => {
+      if (task.type !== "record.read_fields") {
+        if (task.readFieldTypes !== undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["readFieldTypes"],
+            message: "A selected-record type map is only valid on record.read_fields tasks",
+          });
+        return;
+      }
+
+      if (task.readFieldTypes === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["readFieldTypes"],
+          message: "A record.read_fields task requires compiler-provided member types",
+        });
+      if (task.properties.fields === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["properties", "fields"],
+          message: "A record.read_fields task requires its selected-field projection",
+        });
+        return;
+      }
+
+      const projection = flowReadFieldsProjectionValueSchema.safeParse(task.properties.fields);
+      if (!projection.success) {
+        projection.error.issues.forEach((issue) =>
+          context.addIssue({
+            code: "custom",
+            path: ["properties", "fields", ...issue.path],
+            message: issue.message,
+          }),
+        );
+        return;
+      }
+
+      if (task.readFieldTypes === undefined) return;
+      const projectionValue = task.properties.fields;
+      if (projectionValue.kind !== "literal" || projectionValue.literal.type !== "json") return;
+      const fields = flowReadFieldsProjectionSchema.safeParse(projectionValue.literal.value);
+      if (!fields.success) return;
+
+      const projectionAliases = new Set(fields.data.map((field) => field.alias));
+      const memberAliases = new Set(Object.keys(task.readFieldTypes));
+      for (const alias of projectionAliases) {
+        if (!memberAliases.has(alias))
+          context.addIssue({
+            code: "custom",
+            path: ["readFieldTypes", alias],
+            message: "The selected-record type map must include every projection alias",
+          });
+      }
+      for (const alias of memberAliases) {
+        if (!projectionAliases.has(alias))
+          context.addIssue({
+            code: "custom",
+            path: ["readFieldTypes", alias],
+            message: "The selected-record type map cannot include undeclared aliases",
+          });
+      }
+    });
   return z.union([control, registered]);
 });
 export const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;
