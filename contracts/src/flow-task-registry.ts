@@ -214,7 +214,7 @@ export const flowTaskTypeDefinitionSchema = z
       issue(["kestra", "mode"], "A task compiles for Kestra exactly when it can run in a durable flow");
     const expectedModes: Partial<Record<FlowTaskEffectClass, readonly FlowTaskKestraCompileMode[]>> = {
       pure: ["native_control", "evaluator_callback", "native_wait", "not_compiled"],
-      read: ["protected_callback"],
+      read: ["protected_callback", "not_compiled"],
       change: ["protected_callback"],
       background_start: ["protected_callback"],
       interface: ["not_compiled"],
@@ -258,6 +258,7 @@ export const flowRegisteredTaskTypeKeys = [
   "record.restore",
   "record.changes",
   "record.query",
+  "record.read_fields",
   "operation.call",
   "flow.run_background",
   "event.announce",
@@ -512,6 +513,20 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     outputs: [output("records", "record_reference_list")],
     kestra: "protected_callback",
     retry: durableRetry,
+    redaction: "safe_fields",
+  },
+  "record.read_fields": {
+    title: "Read selected record fields",
+    summary: "Reads a bounded set of fields from one selected record under the run's authority.",
+    runLocations: ["server"],
+    effect: "read",
+    properties: {
+      record_type: required("record_type_id"),
+      record: required("record_reference"),
+      fields: required("json"),
+    },
+    outputs: [output("values", "json")],
+    kestra: "not_compiled",
     redaction: "safe_fields",
   },
   "operation.call": {
