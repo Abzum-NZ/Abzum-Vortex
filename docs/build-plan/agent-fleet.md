@@ -35,23 +35,27 @@ Before independent review, every implementer handoff names the full candidate an
 - One issue has one editor and one lead-assigned isolated managed worktree at a time. Base new work on current `origin/main`. Create branches with `--no-track`; use the `codex/` branch prefix unless the owner or repository procedure says otherwise. A reviewer uses its own isolated managed worktree on the PR branch.
 - Never push to main. Push only with the explicit refspec `git push origin HEAD:refs/heads/<branch>`. Verify that the branch has no upstream tracking `origin/main`. Main is protected, including for administrators.
 - Before merge, the lead verifies the PR head, base and review are current. Update from `origin/main` when required, inspect merge changes, rerun checks invalidated by the new head, and re-read the candidate immediately before the protected merge. A changed head invalidates prior review or check evidence.
-- When the exact-head review and all required check and preview evidence are complete, the lead attempts the protected PR merge in that active turn. Classify a failed merge as changed head or base, missing evidence, conflict, protection or integration access; record one owner and next action. Never use another identity or executor to bypass a real 403.
+- When the exact-head review and all required check evidence are complete, the lead attempts the protected PR merge in that active turn. Optional preview/browser work must not queue an otherwise eligible merge. Classify a failed merge as changed head or base, missing evidence, conflict, protection or integration access; record one owner and next action. Never use another identity or executor to bypass a real 403.
 - Before dispatching a migration, compute the next free number from current `origin/main` and reserve it in the checkpoint. Every child takes its number only from the lead. Renumber before merge if it sorts before an existing main migration.
 - Preserve untracked, uncommitted, unpushed and otherwise unique work before considering worktree cleanup. Do not remove a worktree while a child or process uses it. Retain uncertain work with an owner, reason and next action. No recursive delete by computed path, no primary-checkout removal and no cleanup against main. Never blindly revert dependent migration or subsequent work.
 
-## Heavy checks and locks
+## Verification concurrency
 
-Heavy checks are scoped typecheck, web build and database replay. There are two total slots; at most one database replay may run at a time. Use `heavy.lock` for any heavy check and `heavy.lock2` for typecheck or build only. Do not start when less than 3 GB of memory is free.
+Vortex does not use a global persistent `heavy.lock` or `heavy.lock2` for verification. No agent or helper may create, check, wait on or restore either file as a prerequisite for typecheck, web build, disposable SQL replay, preview, browser verification or merge.
 
-The lead owns locks and queue state. Each reservation records owner identity, process start time, task and commit; release it as soon as the command ends. A stale timestamp alone never licenses stealing a lock. Confirm the owner process has exited and the reservation is no longer active before recovery. Reviewer asks the lead for a lock; the lead serializes the request and returns the grant. The lead coordinates priority and the current phase's blockers. Never start a heavy check merely to satisfy a stale label; use the exact verification requirements and candidate SHA.
+Scoped typecheck and web build may run in parallel in **different** worktrees. Do not concurrently run commands that write generated outputs in the same checkout. Disposable SQL replay creates a fresh `vortex-verify-*` container and network with a random host port; independent PR replays may run in parallel when measured Docker and memory capacity permit. Each run cleans only its own disposable resources and never resets the shared preview database. Measure free physical memory before a memory-intensive command and require at least 3 GB. When capacity is insufficient, record the PR, full head SHA, command, owner and next attempt; do not use a fleet-wide filesystem lock as the queue.
+
+The shared local preview database and fixed web port are genuinely mutable shared resources. One independent owner controls their reset, setup and browser observation at a time. If a resource-scoped lease is used, it records owner/session, PR, exact SHA, resource, creation time, expiry and renewal during long runs, and recovers automatically after owner exit or expiry with process-identity checks. It cannot become a permanent fleet-wide gate. Checks on isolated worktrees and disposable databases continue while preview is occupied. A stale coordination artifact must never indefinitely block review.
+
+The lead classifies each open PR by its next missing required exact-head gate: source review, applicable typecheck/build/SQL replay or definition checks, ready to merge, or another stated blocker. Track optional preview/browser evidence separately. Idle eligible verification capacity with a growing In review queue is a stall requiring same-turn assignment or a recorded concrete recovery. A new commit invalidates affected execution and optional preview/browser evidence. Exact-head review, applicable scoped checks and protected merge remain mandatory.
 
 ## Preview checks and browser smoke
 
 The shared preview stack is local. The lead assigns one independent preview owner at a time; no concurrent database reset or setup operation is allowed. Capture the stack state and exact commit before each check.
 
-For definitions, migrations or `apps/web/scripts/development-setup`, require independent preview PASS on the exact full head: fresh `db reset` and `setup:local`. For pages, forms or definitions in `apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/` or `contracts/src/`, also require independent headless Edge smoke PASS on that head after preview reset: sign in, open the CRM Companies list, open New company and save. Do not assume an automatic watcher exists. The lead assigns one independent preview owner. The source reviewer may own the run only if it did not author or fix the product candidate under verification; otherwise assign a separate monitor. A FAIL, skipped run, mismatched SHA or unavailable stack means do not merge.
+For definitions, migrations or `apps/web/scripts/development-setup`, an independent exact-head preview may run when the safe stack is available: fresh `db reset` and `setup:local`. For pages, forms or definitions in `apps/web/`, `ui/`, `modules/src/`, `runtime/page|app|record|query|access/` or `contracts/src/`, an independent headless Edge smoke may follow: sign in, open the CRM Companies list, open New company and save. These are diagnostics, not per-PR merge gates. Do not assume an automatic watcher exists. The lead assigns one independent preview owner for any run. The source reviewer may own the run only if it did not author or fix the product candidate under verification; otherwise assign a separate monitor. A FAIL, skipped run, mismatched SHA or unavailable stack is recorded truthfully, never called PASS and never used alone to hold a PR. A confirmed candidate defect returns to source review and correction; unrelated verified PRs keep moving.
 
-After any merge that touches definitions, migrations or development setup, independently smoke-test main. A main failure holds further merges of that kind until the cause is diagnosed and a corrective PR is verified. The phase walkthrough is a separate independent browser acceptance run; reserve a child slot and pause conflicting preview operations while it runs.
+After a merge batch touching definitions, migrations or development setup, independently smoke-test main when the safe stack is available. Record an unavailable or failed smoke with a concrete recovery owner; continue unrelated verified merges. The phase walkthrough remains a separate independent browser acceptance run before closing the phase epic; reserve a child slot and pause conflicting preview operations while it runs.
 
 ## Issue metadata
 
@@ -107,7 +111,7 @@ Headless custom-argv workers must have exact terminal/process ownership, durable
 | Provider capacity or rate limit | Retry the same session a few times about 20 seconds apart; then preserve work and reassign only after repeated confirmation |
 | Reviewer finds defects | Reviewer fixes and re-reviews in its assigned worktree |
 | Branch is behind main | Update the candidate, inspect changed code and rerun affected verification |
-| Preview or browser check fails | Do not merge; diagnose and fix through a PR, then rerun on its new SHA |
+| Optional preview or browser check fails | Record the failure and recovery owner; diagnose and fix through a PR when it reveals a product defect. Do not report PASS or close phase acceptance from a failed check. An unrelated verified PR can still merge. |
 | Permission, tool-approval or protection rejection | Report exact action and cause; do not automatically retry the denied invocation unchanged or bypass it. A later specific owner instruction may authorize a fresh request through the same normal controls; record it and stop again if rejected. |
 | PR creation or merge returns a real integration 403 | Preserve the reviewed branch and evidence, report the access blocker, and wait for a supported resolution; do not retry through another identity or executor |
 | Session or usage limit approaches | Update checkpoint with resume steps and reset information; preserve branch and handoff evidence |
@@ -141,9 +145,8 @@ Read the complete live issue and comments, linked spec, whole diff, current main
 Fix your findings, commit, and re-review the final source. Check English in the diff, commits, PR and comments.
 Verify the exact final SHA as agent-coordination.md “Verification before merge” requires:
 scoped typecheck; web build if web/ui/imported runtime changed; disposable replay if supabase changed;
-definition validator and publication compile when definitions changed; independent preview PASS on exact SHA
-for definitions, migrations or development setup; browser smoke on exact SHA for listed UI paths.
-Request the heavy-check lock from the lead. Return one exact-head evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
+definition validator and publication compile when definitions changed. Preview/browser diagnostics are optional per PR and require exact-head reporting if run; phase acceptance remains separate.
+Request the exact-head checks from the lead with the PR, full SHA, command and isolated resource. No global lock grant is required. Return one evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
 Do not write Project fields, close issues or merge. The lead owns those actions.
 If blocked, return the exact cause to the lead and stop without merging.
 ~~~
@@ -155,7 +158,7 @@ Keep the checkpoint and append-only journal in the coordination root, outside wo
 - UTC time, coordinator identity and current session;
 - each live child session, role, actual model and effort, issue, worktree/branch, stage and handoff status;
 - open PRs, current full heads, review, verification and preview state;
-- lock and heavy-check queue state;
+- measured verification capacity, resource-scoped preview ownership and per-PR missing-gate queues;
 - migration reservations and pending board writes;
 - preserved work and cleanup decisions;
 - blockers with resume conditions and next shaped leaves.
@@ -166,7 +169,7 @@ Owner reports include: tasks with evidence; actual capacity, running children an
 
 ## Independent monitor
 
-An independent Sol child may verify preview facts, run required browser smokes, conduct phase acceptance and compare evidence with the full final SHA. It reports findings and corrections to the lead. It does not dispatch work, write Project fields or merge. No monitor runs continuously unless a separate owner instruction establishes that work.
+An independent Sol child may verify preview facts, run optional per-PR browser diagnostics, conduct the required phase-acceptance walkthrough and compare evidence with the full final SHA. It reports findings and corrections to the lead. It does not dispatch work, write Project fields or merge. No monitor runs continuously unless a separate owner instruction establishes that work.
 
 ## Overflow lifecycle and retained work
 

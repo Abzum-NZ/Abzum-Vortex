@@ -340,3 +340,11 @@ The Landing Zone is an ordinary application and a [system application](#system-a
 Each person's tiles are records owned by their organisation account, in application-contained storage, under permissions whose only record scope is ownership; no permission in the application reads another person's tiles. A tile names an application, a page, a record or an external address and carries an open behaviour and a favourite flag and order.
 
 The page uses one shell with a required main slot and an optional rail slot. The rail holds registered blocks chosen in the application release and renders empty when none is placed; a block whose capability is unavailable in the organisation renders its unavailable state. The platform contributes only the permitted-applications read, the organisation default application and generic link, launcher and filter blocks; favourites and bookmarks are definition semantics.
+
+The `home_applications` and `all_applications` launcher placements bind to a Query over the
+Landing Zone module's application projection. The query supplies rows for layout with the live
+name and icon shown on those pages. The page shows only the intersection between query rows and
+application keys from the protected permitted-applications read. That protected read remains the
+authority for which applications and pages may open, for address resolution, for the
+organisation-address launcher fallback and for the server-side tile-open recheck. A query row alone
+never grants access.
