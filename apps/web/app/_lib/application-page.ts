@@ -15,16 +15,20 @@ import {
 import {
   arrangeDataset,
   protectedQueryCommandSchema,
+  protectedQuerySummaryCommandSchema,
   createProtectedQueryService,
   createReferenceChoiceService,
   projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
+  type ProtectedQuerySummaryAggregateResult,
   type ReferenceChoiceInputValues,
 } from "@vortex/query";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  SUMMARY_VALUES_BLOCK_RELEASE,
   applicationLauncherQueryRowsToListValues,
   type ApplicationLauncherQueryRow,
+  type DisplayCellValue,
 } from "@vortex/ui";
 import {
   createPageSubjectReader,
@@ -44,10 +48,12 @@ import {
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
+  exactDecimalTextV2Schema,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
+  moneyValueV2Schema,
   timestampSchema,
   organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
@@ -681,6 +687,55 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
 
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
+const summaryAggregateLabel = (alias: string): string =>
+  alias
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[a-z]/, (letter) => letter.toUpperCase());
+
+/** Projects one already-authorised Query aggregate into the closed summary cell contract. */
+const summaryAggregateCellValue = (
+  aggregate: ModuleQuery["aggregates"][number],
+  field: ModuleField | undefined,
+  result: ProtectedQuerySummaryAggregateResult,
+): DisplayCellValue | Readonly<{ kind: "unavailable" }> | undefined => {
+  if (result.outcome === "refused") return { kind: "unavailable" };
+  if (aggregate.operation === "count")
+    return typeof result.value === "number" && Number.isSafeInteger(result.value)
+      ? { kind: "number", value: result.value }
+      : undefined;
+  if (result.value === null || result.valueCount === 0) return { kind: "empty" };
+  if (field === undefined) return undefined;
+
+  switch (field.type) {
+    case "whole_number": {
+      if (typeof result.value === "number" && Number.isSafeInteger(result.value))
+        return { kind: "number", value: result.value };
+      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
+    }
+    case "decimal_number": {
+      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
+    }
+    case "money": {
+      const moneyValue = moneyValueV2Schema.safeParse(result.value);
+      return moneyValue.success
+        ? { kind: "text", text: `${moneyValue.data.currency} ${moneyValue.data.amount}` }
+        : undefined;
+    }
+    case "date":
+    case "date_time":
+      return typeof result.value === "string"
+        ? { kind: "date", iso: result.value }
+        : undefined;
+    default:
+      return undefined;
+  }
+};
+
 const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
 
 const findModuleQuery = (
@@ -777,7 +832,12 @@ const logPlacementFailure = (
     | "calendar_query_invalid"
     | "calendar_query_unavailable"
     | "calendar_query_refused"
-    | "calendar_arrangement_refused",
+    | "calendar_arrangement_refused"
+    | "summary_query_invalid"
+    | "summary_query_unavailable"
+    | "summary_query_refused"
+    | "summary_dataset_limit_exceeded"
+    | "summary_result_invalid",
 ): void => {
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}`,
@@ -1550,6 +1610,10 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, CALENDAR_BLOCK_RELEASE.blockId);
+    const isSummaryValuesBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     const calendarContract = isCalendarBlock ? readCalendarPlacementContract(settings) : undefined;
     const tableContract = readRecordsTableContract(settings);
@@ -1597,7 +1661,14 @@ const loadApplicationPageInternal = async (
     }
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
-    if (tableContract === undefined && detailContract === undefined && !isCalendarBlock && !queryBoundLauncher) continue;
+    const queryBoundSummary = isSummaryValuesBlock && queryId !== undefined;
+    if (
+      tableContract === undefined &&
+      detailContract === undefined &&
+      !isCalendarBlock &&
+      !queryBoundLauncher &&
+      !queryBoundSummary
+    ) continue;
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
     // record read path under the viewer's own authority. A public page shows no more than its
@@ -1774,6 +1845,112 @@ const loadApplicationPageInternal = async (
         launcherCellKey(settings, "icon_key", "icon"),
       );
       data[placementId] = { status: "ready", values };
+      continue;
+    }
+
+    if (queryBoundSummary) {
+      const inputValues: Record<string, JsonValue> = {};
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      const command = protectedQuerySummaryCommandSchema.safeParse({
+        moduleRootId: bound.module.rootId,
+        queryId: bound.query.queryId,
+        inputValues,
+      });
+      if (!command.success) {
+        logPlacementFailure(address, placementId, "summary_query_invalid");
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      let summaryResult: Awaited<ReturnType<typeof queries.summarise>>;
+      try {
+        summaryResult = await queries.summarise(session, selection, command.data);
+      } catch {
+        summaryResult = { kind: "temporarily_unavailable" };
+      }
+      if (summaryResult.kind === "temporarily_unavailable") {
+        logPlacementFailure(address, placementId, "summary_query_unavailable");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      if (summaryResult.kind !== "available" || summaryResult.value.outcome !== "completed") {
+        const isDatasetLimitExceeded =
+          summaryResult.kind === "available" &&
+          summaryResult.value.outcome === "refused" &&
+          summaryResult.value.reasonCode === "dataset_limit_exceeded";
+        logPlacementFailure(
+          address,
+          placementId,
+          isDatasetLimitExceeded ? "summary_dataset_limit_exceeded" : "summary_query_refused",
+        );
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const declaredAggregates = bound.query.aggregates;
+      const projectedAggregates = summaryResult.value.aggregates;
+      const aliases = declaredAggregates.map((aggregate) => aggregate.alias);
+      const resultAliases = Object.keys(projectedAggregates);
+      if (
+        resultAliases.length !== aliases.length ||
+        aliases.some((alias) => !Object.hasOwn(projectedAggregates, alias))
+      ) {
+        logPlacementFailure(address, placementId, "summary_result_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+
+      const recordTypeReference = bound.query.recordType;
+      const summaryRecordType =
+        recordTypeReference.state === "resolved"
+          ? context.releaseSet.modules
+              .find((module) => sameId(String(module.rootId), String(recordTypeReference.moduleRootId)))
+              ?.content.recordTypes.find((recordType) =>
+                sameId(String(recordType.recordTypeId), String(recordTypeReference.recordTypeId)),
+              )
+          : undefined;
+      const fieldById = new Map(
+        (summaryRecordType?.fields ?? []).map((field) => [String(field.fieldId).toLowerCase(), field]),
+      );
+      const values: Array<{
+        key: string;
+        label: string;
+        value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
+      }> = [];
+      let invalidAggregate = false;
+      for (const aggregate of declaredAggregates) {
+        const field =
+          aggregate.fieldId === undefined
+            ? undefined
+            : fieldById.get(aggregate.fieldId.toLowerCase());
+        const value = summaryAggregateCellValue(
+          aggregate,
+          field,
+          projectedAggregates[aggregate.alias]!,
+        );
+        if (value === undefined) {
+          invalidAggregate = true;
+          break;
+        }
+        values.push({
+          key: aggregate.alias,
+          label: summaryAggregateLabel(aggregate.alias) || aggregate.alias,
+          value,
+        });
+      }
+      if (invalidAggregate) {
+        logPlacementFailure(address, placementId, "summary_result_invalid");
+        data[placementId] = { status: "error" };
+      } else if (values.length === 0) data[placementId] = { status: "empty" };
+      else
+        data[placementId] = {
+          status: "ready",
+          values: { kind: "summary_values", values },
+        };
       continue;
     }
 
