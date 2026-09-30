@@ -62,6 +62,9 @@ const hourMs = 60 * 60 * 1_000;
 const searchMarginMs = 2 * dayMs;
 const maximumWindowMs = 366 * dayMs;
 const maximumExaminedSlots = 10_000;
+// IANA UTC offsets stay within one day. This conservative bound avoids resolving
+// slots that cannot map into the requested UTC window.
+const maximumIanaOffsetMs = dayMs;
 
 const inputKeys = ["identity", "flowId", "triggerId", "recurrence", "afterUtc", "throughUtc"];
 const identityKeys = [
@@ -374,7 +377,8 @@ const refused = (reason: ScheduleOccurrenceRefusalReason): ScheduleOccurrenceRes
 /**
  * Finds the earliest published Schedule occurrence after the cursor and no later than the bound.
  * The recurrence is enumerated in anchored local civil time, then resolved through the runtime's
- * IANA database. Gaps and absent month days are skipped; folds keep their earlier UTC instant.
+ * transition-complete IANA database. Gaps and absent month days are skipped; folds keep their
+ * earlier UTC instant. Non-UTC slots are refused when the runtime does not provide Temporal.
  */
 export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceResult => {
   try {
@@ -411,7 +415,6 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
       return refused("invalid_time_zone");
     }
     const temporal = getTemporalRuntime();
-    if (!isUtcZone && !temporal) return refused("time_zone_resolution_unavailable");
 
     // The two-day margins on both UTC bounds contain every possible local slot whose UTC
     // instant is in the requested window, including zones with large historical offset jumps.
@@ -425,6 +428,20 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
       if (examinedSlots > maximumExaminedSlots)
         return refused("candidate_limit_exceeded");
       if (fields === undefined) continue;
+      const wallEpoch = civilEpoch(
+        fields.year,
+        fields.month,
+        fields.day,
+        fields.hour,
+        fields.minute,
+        fields.second,
+      );
+      if (
+        wallEpoch + maximumIanaOffsetMs <= afterEpoch ||
+        wallEpoch - maximumIanaOffsetMs > throughEpoch
+      )
+        continue;
+      if (!isUtcZone && !temporal) return refused("time_zone_resolution_unavailable");
 
       let instant: number | undefined;
       try {
