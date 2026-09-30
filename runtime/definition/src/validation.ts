@@ -2843,23 +2843,58 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const aggregateAliases = array(query.aggregates).map((aggregate) => String(aggregate.alias));
       const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
       const unique = (values: readonly string[]) => new Set(values).size === values.length;
-      // Grouping decides the row shape, so a grouped query returns and orders by its grouping
-      // keys only, and a total needs a grouping key to belong to.
+      const summaryGroupFieldTypes = new Set([
+        "text", "whole_number", "decimal_number", "yes_no", "date", "date_time",
+        "choice", "reference_number", "email_address", "phone_number", "web_address",
+        "link", "link_to_one_of_several", "link_to_person",
+      ]);
+      const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
+      const extremaFieldTypes = new Set([
+        "whole_number", "decimal_number", "money", "date", "date_time",
+      ]);
+      const refuseSummaryField = (ruleCode: string, field: JsonObject): void => {
+        const root = rootLocation(output);
+        failures.push({
+          ruleCode,
+          family: "unsupported_choice",
+          location: {
+            ...root,
+            segments: [...root.segments, location, { kind: "field", key: String(field.key) }],
+          },
+        });
+      };
+      for (const fieldId of groupByFieldIds) {
+        const field = fieldMap.get(fieldId);
+        if (field && !summaryGroupFieldTypes.has(String(field.type)))
+          refuseSummaryField("vortex.definition.module_query_group_field_type", field);
+      }
+      for (const aggregate of array(query.aggregates)) {
+        if (aggregate.fieldId === undefined) continue;
+        const field = fieldMap.get(String(aggregate.fieldId));
+        if (!field || aggregate.operation === "count") continue;
+        const fieldType = String(field.type);
+        if (fieldType === "calculation" || fieldType === "total")
+          refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
+        else if (
+          (aggregate.operation === "sum" || aggregate.operation === "average") &&
+          !numericAggregateFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_numeric_aggregate_field_type", field);
+        else if (
+          (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
+          !extremaFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_extrema_field_type", field);
+      }
+      // A grouped query returns and orders by its grouping keys only. An ungrouped
+      // summary can still return totals over all permitted rows.
       const groupingValid =
-        groupByFieldIds.length > 0
-          ? selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
-            sortFieldIds.every((id) => groupByFieldIds.includes(id))
-          : aggregateAliases.length === 0;
+        groupByFieldIds.length === 0 ||
+        (selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
+          sortFieldIds.every((id) => groupByFieldIds.includes(id)));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
-        if (aggregate.fieldId === undefined) return false;
-        const field = fieldMap.get(String(aggregate.fieldId));
-        if (!field) return false;
-        if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["whole_number", "decimal_number", "money"].includes(fieldValueTypeV2(field) ?? "");
-        return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
-          String(field.type),
-        );
+        return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
       });
       const filterValid =
         !query.filter ||
@@ -4350,6 +4385,10 @@ const moduleRuleCodes = [
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
   "vortex.definition.module_query_references",
+  "vortex.definition.module_query_group_field_type",
+  "vortex.definition.module_query_derived_aggregate_source",
+  "vortex.definition.module_query_numeric_aggregate_field_type",
+  "vortex.definition.module_query_extrema_field_type",
 ] as const;
 const applicationRuleCodes = [
   "vortex.definition.application_identity_unique",
