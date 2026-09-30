@@ -29,6 +29,10 @@ export type SetupState = {
   sharedLifecyclePolicies: Record<string, boolean>;
   /** Every application was installed once for this organisation. */
   setupCompleted: boolean;
+  /** A default initialization attempt was durably recorded before its protected write. */
+  defaultApplicationInitializationAttempted: boolean;
+  /** The one-time default initialization decision has been handled for this organisation. */
+  defaultApplicationInitializationCompleted: boolean;
   save(): void;
 };
 
@@ -52,6 +56,8 @@ export const loadSetupState = (organizationId: string): SetupState => {
   let lifecyclePolicies: Record<string, boolean> = {};
   let sharedLifecyclePolicies: Record<string, boolean> = {};
   let setupCompleted = false;
+  let defaultApplicationInitializationAttempted = false;
+  let defaultApplicationInitializationCompleted = false;
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
       organizationId?: unknown;
@@ -61,6 +67,8 @@ export const loadSetupState = (organizationId: string): SetupState => {
       lifecyclePolicies?: Record<string, boolean>;
       sharedLifecyclePolicies?: Record<string, boolean>;
       setupCompleted?: boolean;
+      defaultApplicationInitializationAttempted?: boolean;
+      defaultApplicationInitializationCompleted?: boolean;
     };
     if (stored.organizationId === organizationId) {
       releases = stored.releases ?? {};
@@ -69,6 +77,10 @@ export const loadSetupState = (organizationId: string): SetupState => {
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
       sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
       setupCompleted = stored.setupCompleted === true;
+      defaultApplicationInitializationAttempted =
+        stored.defaultApplicationInitializationAttempted === true;
+      defaultApplicationInitializationCompleted =
+        stored.defaultApplicationInitializationCompleted === true;
     }
   } catch {
     // No usable state: start empty.
@@ -81,6 +93,8 @@ export const loadSetupState = (organizationId: string): SetupState => {
     lifecyclePolicies,
     sharedLifecyclePolicies,
     setupCompleted,
+    defaultApplicationInitializationAttempted,
+    defaultApplicationInitializationCompleted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
       writeFileSync(
@@ -94,6 +108,10 @@ export const loadSetupState = (organizationId: string): SetupState => {
             lifecyclePolicies: state.lifecyclePolicies,
             sharedLifecyclePolicies: state.sharedLifecyclePolicies,
             setupCompleted: state.setupCompleted,
+            defaultApplicationInitializationAttempted:
+              state.defaultApplicationInitializationAttempted,
+            defaultApplicationInitializationCompleted:
+              state.defaultApplicationInitializationCompleted,
           },
           null,
           2,
