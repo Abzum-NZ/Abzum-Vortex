@@ -617,7 +617,8 @@ export const flowMaximumRecordReadFields = 20;
 export const flowReadFieldsProjectionEntrySchema = z
   .object({
     alias: builderKeySchema,
-    field: z.string().min(1).max(240),
+    // A source record type alias can use 240 characters, plus a dot and a 40-character field key.
+    field: z.string().min(1).max(281),
   })
   .strict();
 

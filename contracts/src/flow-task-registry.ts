@@ -214,18 +214,12 @@ export const flowTaskTypeDefinitionSchema = z
       issue(["kestra", "mode"], "A task compiles for Kestra exactly when it can run in a durable flow");
     const expectedModes: Partial<Record<FlowTaskEffectClass, readonly FlowTaskKestraCompileMode[]>> = {
       pure: ["native_control", "evaluator_callback", "native_wait", "not_compiled"],
-      read: ["protected_callback"],
+      read: ["protected_callback", "not_compiled"],
       change: ["protected_callback"],
       background_start: ["protected_callback"],
       interface: ["not_compiled"],
     };
-    const taskModes =
-      value.type === "record.read_fields"
-        ? value.effect === "read" && locations.size === 1 && locations.has("server")
-          ? ["not_compiled"]
-          : []
-        : expectedModes[value.effect];
-    if (value.category === "registered" && !taskModes?.includes(value.kestra.mode))
+    if (value.category === "registered" && !expectedModes[value.effect]?.includes(value.kestra.mode))
       issue(["kestra", "mode"], "The Kestra compile mode does not fit the task's effect");
     if (value.category === "registered" && value.kestra.mode === "native_control")
       issue(["kestra", "mode"], "Only control tasks compile to native Kestra control tasks");
