@@ -32,6 +32,7 @@ import {
   namespacedKeySchema,
   translateDefinitionSchemaError,
   valueTypesCompatible,
+  flowReadFieldsProjectionSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   type DefinitionCompilationOutput,
@@ -79,6 +80,7 @@ import {
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { deriveFormCommitActionKeys } from "./form-commit";
+import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -2079,6 +2081,73 @@ function permissionRecordScopesValid(
   return valid;
 }
 
+function readFieldsTypeMapsValid(
+  flows: readonly FlowDefinition[],
+  recordTypes: readonly JsonObject[],
+): boolean {
+  let valid = true;
+  const inspect = (tasks: readonly FlowTask[]): void => {
+    for (const task of tasks) {
+      if (task.type === "record.read_fields") {
+        const recordTypeValue = object(task.properties.record_type);
+        const recordTypeId =
+          recordTypeValue.kind === "literal" &&
+          object(recordTypeValue.literal).type === "text" &&
+          typeof object(recordTypeValue.literal).value === "string"
+            ? String(object(recordTypeValue.literal).value)
+            : undefined;
+        const fieldsValue = object(task.properties.fields);
+        const projection =
+          fieldsValue.kind === "literal" && object(fieldsValue.literal).type === "json"
+            ? flowReadFieldsProjectionSchema.safeParse(object(fieldsValue.literal).value)
+            : undefined;
+        const typeMap = task.readFieldTypes;
+        const recordMatches = recordTypes.filter(
+          (record) => String(record.recordTypeId) === recordTypeId,
+        );
+        if (
+          recordTypeId === undefined ||
+          recordMatches.length !== 1 ||
+          !projection?.success ||
+          typeMap === undefined ||
+          Object.keys(typeMap).length !== projection.data.length ||
+          projection.data.some((entry) => !Object.hasOwn(typeMap, entry.alias))
+        ) {
+          valid = false;
+        } else {
+          const selectedFieldIds = new Set<string>();
+          for (const entry of projection.data) {
+            const matches = recordTypes.flatMap((record) =>
+              array(record.fields)
+                .filter((field) => String(field.fieldId) === entry.field)
+                .map((field) => ({ field, recordTypeId: String(record.recordTypeId) })),
+            );
+            const scalarType =
+              matches.length === 1 && matches[0]!.recordTypeId === recordTypeId
+                ? flowReadFieldsScalarTypeForField(String(object(matches[0]!.field).type))
+                : undefined;
+            if (
+              selectedFieldIds.has(entry.field) ||
+              matches.length !== 1 ||
+              scalarType === undefined ||
+              typeMap[entry.alias] !== scalarType
+            )
+              valid = false;
+            selectedFieldIds.add(entry.field);
+          }
+        }
+      }
+      for (const child of flowTaskChildLists(task)) inspect(child.tasks);
+    }
+  };
+  for (const flow of flows) {
+    inspect(flow.tasks);
+    inspect(flow.errors);
+    inspect(flow.finally);
+  }
+  return valid;
+}
+
 function moduleReferenceRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const walkValues = context.walkCanonicalValues ?? canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
@@ -2238,6 +2307,29 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
     const moduleRootId = String(envelope.rootId);
+    const boundOutputs = array(content.dependencies).flatMap((dependency) =>
+      availableModuleOutputs.filter(
+        (candidate) =>
+          candidate.artifact.rootId === dependency.moduleRootId &&
+          candidate.artifact.definitionKey === dependency.moduleKey &&
+          candidate.artifact.exactVersion === dependency.resolvedVersion &&
+          candidate.artifact.resolutionFingerprint === candidate.resolutionFingerprint &&
+          candidate.artifact.contentFingerprint ===
+            fingerprintCanonicalValue(object(candidate.canonical).content),
+      ),
+    );
+    if (
+      array(content.flows).length > 0 &&
+      !readFieldsTypeMapsValid(
+        array(content.flows) as unknown as FlowDefinition[],
+        boundOutputs.flatMap((candidate) =>
+          array(object(candidate.canonical.content).recordTypes),
+        ),
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "broken_reference"),
+      );
     const allowedModuleRoots = new Set([
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
@@ -2982,11 +3074,23 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const boundRoots = new Set(bindings.map((binding) => String(binding.moduleRootId)));
     const boundModules = modules.filter((module) => {
       const rootId = String(object(object(module.canonical).envelope).rootId);
+      const canonical = object(module.canonical);
+      const envelope = object(canonical.envelope);
+      const exactSnapshots = request?.resolution.definitions.filter(
+        (definition) =>
+          definition.kind === "module" &&
+          definition.key === module.artifact.definitionKey &&
+          definition.rootId === rootId &&
+          definition.exactVersion === module.artifact.exactVersion,
+      );
       const expected = request?.resolution.definitions.find(
         (definition) => definition.kind === "module" && definition.rootId === rootId,
       );
       return (
         boundRoots.has(rootId) &&
+        exactSnapshots?.length === 1 &&
+        canonical.kind === "module" &&
+        envelope.kind === "module" &&
         expected?.key === module.artifact.definitionKey &&
         expected.exactVersion === module.artifact.exactVersion &&
         module.artifact.rootId === rootId &&
@@ -2995,6 +3099,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           fingerprintCanonicalValue(object(module.canonical).content)
       );
     });
+    if (
+      boundRoots.size !== bindings.length ||
+      boundModules.length !== bindings.length ||
+      new Set(
+        boundModules.map((module) =>
+          `${module.artifact.definitionKey}\u0000${module.artifact.rootId}\u0000${module.artifact.exactVersion}`,
+        ),
+      ).size !== boundModules.length
+    )
+      failures.push(
+        failure(output, "vortex.definition.application_dependency_manifest", "broken_reference"),
+      );
     const recordTypes = boundModules.flatMap((module) =>
       array(object(object(module.canonical).content).recordTypes),
     );
@@ -4301,6 +4417,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     // it produced this content, so only what binds to them is judged here.
     const flows = array(content.flows) as unknown as FlowDefinition[];
     const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
+    if (!readFieldsTypeMapsValid(flows, recordTypes))
+      failures.push(
+        failure(output, "vortex.definition.application_dependency_manifest", "broken_reference"),
+      );
     const eventIds = new Set(array(content.events).map((event) => String(event.eventId)));
     for (const binding of array(content.flowBindings)) {
       const bindingFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>

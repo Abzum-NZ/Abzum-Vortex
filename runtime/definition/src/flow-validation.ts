@@ -8,6 +8,7 @@ import {
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowMaximumTaskOutputPathDepth,
+  flowReadFieldsProjectionSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   flowTriggerExecutionKinds,
@@ -383,6 +384,38 @@ export function validateFlow(
             );
             return undefined;
           }
+          if (task.type === "record.read_fields") {
+            const registered = task as Extract<FlowTask, { properties: unknown }> & {
+              properties: Readonly<Record<string, FlowValue>>;
+              readFieldTypes?: Readonly<Record<string, string>>;
+            };
+            if (reference.key !== "values" || reference.path.length !== 1) {
+              add(
+                path,
+                "vortex.definition.workflow_node_values",
+                "invalid_value",
+                "A selected-record read exposes only one declared values member at a time",
+              );
+              return undefined;
+            }
+            const projectionValue = registered.properties.fields;
+            const projection =
+              projectionValue?.kind === "literal" && projectionValue.literal.type === "json"
+                ? flowReadFieldsProjectionSchema.safeParse(projectionValue.literal.value)
+                : undefined;
+            const alias = reference.path[0]!;
+            if (!projection?.success || !projection.data.some((field) => field.alias === alias)) {
+              add(
+                path,
+                "vortex.definition.workflow_node_references",
+                "broken_reference",
+                `Task ${reference.task}.values declares no field ${alias}`,
+              );
+              return undefined;
+            }
+            const memberType = registered.readFieldTypes?.[alias];
+            return memberType as StaticType | undefined;
+          }
           if (task.type === "operation.call" && reference.key === "result") {
             const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.operation;
             const key = operation?.kind === "literal" ? operation.literal.value : undefined;
@@ -438,6 +471,15 @@ export function validateFlow(
             return undefined;
           }
           return valueType(member, where, path);
+        }
+        if (task.type === "record.read_fields" && reference.key === "values") {
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "A selected-record read must name one declared values member",
+          );
+          return undefined;
         }
         return output.type;
       }
