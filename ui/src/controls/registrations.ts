@@ -2,6 +2,7 @@ import {
   BOOLEAN_INPUT_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CONTROL_BLOCK_RELEASES,
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
@@ -83,6 +84,7 @@ export {
   BOOLEAN_INPUT_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CONTROL_BLOCK_RELEASES,
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
@@ -356,6 +358,11 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     }),
     Object.freeze({
       metadata: CHOICE_INPUT_BLOCK_RELEASE,
+      render: ChoiceInput,
+      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
+    }),
+    Object.freeze({
+      metadata: CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
       render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
