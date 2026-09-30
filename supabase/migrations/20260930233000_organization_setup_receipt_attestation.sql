@@ -28,6 +28,7 @@ declare
   resolved_organization_tenant_id uuid;
   resolved_organization_created_at timestamptz;
   resolved_organization_created_by uuid;
+  resolved_assignment_id uuid;
   resolved_organization_account_id uuid;
   resolved_account_organization_id uuid;
   resolved_identity_id uuid;
@@ -37,6 +38,7 @@ declare
   matched_assignment_count bigint;
   matched_account_count bigint;
   matched_identity_count bigint;
+  expected_subject_ids uuid[];
 begin
   if p_receipt_id is null
     or p_receipt_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -129,18 +131,24 @@ begin
     select pg_catalog.count(*)
     into matched_assignment_count
     from vortex_identity.tenant_administrator_assignments as assignment
-    where assignment.assignment_id = any(stored_receipt.subject_ids);
-    if matched_assignment_count <> 1
-      or not exists (
-        select 1
-        from vortex_identity.tenant_administrator_assignments as assignment
-        where assignment.assignment_id = any(stored_receipt.subject_ids)
-          and assignment.tenant_id = resolved_tenant_id
-      ) then
+    where assignment.assignment_id = any(stored_receipt.subject_ids)
+      and assignment.tenant_id = resolved_tenant_id
+      and assignment.granted_at = stored_receipt.accepted_at
+      and assignment.granted_by_actor_id = stored_receipt.actor_id
+      and assignment.grant_correlation_id = stored_receipt.receipt_id;
+    if matched_assignment_count <> 1 then
       raise exception using
         errcode = 'V3101',
         message = 'Tenant operation is unavailable';
     end if;
+    select assignment.assignment_id
+    into resolved_assignment_id
+    from vortex_identity.tenant_administrator_assignments as assignment
+    where assignment.assignment_id = any(stored_receipt.subject_ids)
+      and assignment.tenant_id = resolved_tenant_id
+      and assignment.granted_at = stored_receipt.accepted_at
+      and assignment.granted_by_actor_id = stored_receipt.actor_id
+      and assignment.grant_correlation_id = stored_receipt.receipt_id;
   else
     if stored_receipt.tenant_id is null
       or stored_receipt.cluster_id is not null
@@ -221,6 +229,29 @@ begin
   from vortex_identity.identity_projections as projection
   where projection.identity_id = resolved_identity_id;
   if matched_identity_count <> 1 then
+    raise exception using
+      errcode = 'V3101',
+      message = 'Tenant operation is unavailable';
+  end if;
+
+  if p_expected_operation = 'provision_tenant' then
+    select pg_catalog.array_agg(subject_id order by subject_id)
+    into expected_subject_ids
+    from (values
+      (resolved_tenant_id),
+      (resolved_organization_id),
+      (resolved_assignment_id),
+      (resolved_organization_account_id)
+    ) as original_subjects(subject_id);
+  else
+    select pg_catalog.array_agg(subject_id order by subject_id)
+    into expected_subject_ids
+    from (values
+      (resolved_organization_id),
+      (resolved_organization_account_id)
+    ) as original_subjects(subject_id);
+  end if;
+  if stored_receipt.subject_ids is distinct from expected_subject_ids then
     raise exception using
       errcode = 'V3101',
       message = 'Tenant operation is unavailable';
