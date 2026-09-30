@@ -9,6 +9,7 @@ import {
   createFormBlockRuntime,
   createFullPlatformComponentRegistry,
   equalFormValue,
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
   UnsavedWorkProvider,
@@ -450,6 +451,36 @@ const placementEventNamesByPage = (
   return eventNames;
 };
 
+/** Finds launcher placements whose row actions open through the addressed server action. */
+const applicationLauncherPlacementIds = (page: Readonly<Record<string, unknown>>): Set<string> => {
+  const placementIds = new Set<string>();
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot)) return;
+    if (!isRecord(slot.placements)) {
+      for (const child of Object.values(slot)) visit(child);
+      return;
+    }
+    for (const [placementId, candidate] of Object.entries(slot.placements)) {
+      if (!isRecord(candidate)) continue;
+      const block = candidate.block;
+      if (
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        block.blockId.toLowerCase() === APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId.toLowerCase()
+      )
+        placementIds.add(placementId);
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child);
+    }
+  };
+  const composition = page.composition;
+  if (!isRecord(composition)) return placementIds;
+  if ("main" in composition) visit(composition.main);
+  else if (isRecord(composition.stepContent))
+    for (const child of Object.values(composition.stepContent)) visit(child);
+  return placementIds;
+};
+
 const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
   const result = new Set<string>();
   const visit = (slot: unknown): void => {
@@ -485,16 +516,25 @@ const bindingFor = (
 /**
  * Renders one installed application page and carries out what its people do on it. Every
  * declared component event goes to the one flow endpoint with the exact installation and binding
- * the page was rendered from; after a write, only data placements affected by that source are
- * re-read. Nothing here decides permission or runs an operation itself.
+ * the page was rendered from. Launcher row actions use the server-side permitted-application
+ * recheck. After a write, only data placements affected by that source are re-read.
  */
 export function ApplicationPageView({
   model,
   guidedFormActions,
-}: Readonly<{ model: ApplicationPageModel; guidedFormActions: GuidedFormActions }>): ReactElement {
+  onOpenApplication,
+}: Readonly<{
+  model: ApplicationPageModel;
+  guidedFormActions: GuidedFormActions;
+  onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+}>): ReactElement {
   return (
     <UnsavedWorkProvider>
-      <ApplicationPageViewContent model={model} guidedFormActions={guidedFormActions} />
+      <ApplicationPageViewContent
+        model={model}
+        guidedFormActions={guidedFormActions}
+        onOpenApplication={onOpenApplication}
+      />
     </UnsavedWorkProvider>
   );
 }
@@ -502,7 +542,12 @@ export function ApplicationPageView({
 function ApplicationPageViewContent({
   model,
   guidedFormActions,
-}: Readonly<{ model: ApplicationPageModel; guidedFormActions: GuidedFormActions }>): ReactElement {
+  onOpenApplication,
+}: Readonly<{
+  model: ApplicationPageModel;
+  guidedFormActions: GuidedFormActions;
+  onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+}>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -582,6 +627,10 @@ function ApplicationPageViewContent({
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
   const placementEventNames = useMemo(
     () => placementEventNamesByPage(model.page),
+    [model.page],
+  );
+  const launcherPlacements = useMemo(
+    () => applicationLauncherPlacementIds(model.page),
     [model.page],
   );
   const serverDataRef = useRef(model.data);
@@ -1619,8 +1668,19 @@ function ApplicationPageViewContent({
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
+        if (launcherPlacements.has(placementId) && supportsEvent("row_action"))
+          events.row_action = async (event: DisplaySemanticEvent) => {
+            if (event.event !== "row_action" || busy) return;
+            if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork()))
+              return;
+            await onOpenApplication(event);
+          };
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
-          if (supportsEvent(kind) && bindings.some((binding) => binding.event === kind))
+          if (
+            supportsEvent(kind) &&
+            (kind !== "row_action" || !launcherPlacements.has(placementId)) &&
+            bindings.some((binding) => binding.event === kind)
+          )
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
@@ -1799,6 +1859,7 @@ function ApplicationPageViewContent({
     formBlock,
     formFeedback,
     formOwners,
+    launcherPlacements,
     choiceEvidenceFor,
     activeChoicePages,
     model.referenceChoiceInputs,
@@ -1820,6 +1881,8 @@ function ApplicationPageViewContent({
     selection,
     setQuery,
     subject,
+    onOpenApplication,
+    unsavedWork,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;
