@@ -36,6 +36,7 @@ export const scheduleOccurrenceRefusalReasons = [
   "invalid_trigger_id",
   "invalid_schedule",
   "invalid_time_zone",
+  "time_zone_resolution_unavailable",
   "invalid_window",
   "window_too_wide",
   "candidate_limit_exceeded",
@@ -61,7 +62,6 @@ const hourMs = 60 * 60 * 1_000;
 const searchMarginMs = 2 * dayMs;
 const maximumWindowMs = 366 * dayMs;
 const maximumExaminedSlots = 10_000;
-const maximumTimeZoneOffsetMs = dayMs;
 
 const inputKeys = ["identity", "flowId", "triggerId", "recurrence", "afterUtc", "throughUtc"];
 const identityKeys = [
@@ -198,58 +198,67 @@ const makeZoneFormatter = (timeZone: string): Intl.DateTimeFormat =>
     hourCycle: "h23",
   });
 
-const zoneParts = (formatter: Intl.DateTimeFormat, epoch: number): CivilParts => {
-  const parts = Object.fromEntries(
-    formatter.formatToParts(new Date(epoch)).map(({ type, value }) => [type, value]),
-  );
-  const displayedYear = Number(parts.year);
-  const year = parts.era === "BC" || parts.era === "BCE" ? 1 - displayedYear : displayedYear;
-  const result = {
-    year,
-    month: Number(parts.month) - 1,
-    day: Number(parts.day),
-    hour: Number(parts.hour),
-    minute: Number(parts.minute),
-    second: Number(parts.second),
-  };
-  if (
-    !Number.isInteger(result.year) ||
-    result.month < 0 ||
-    result.month > 11 ||
-    result.day < 1 ||
-    result.day > 31 ||
-    result.hour < 0 ||
-    result.hour > 23 ||
-    result.minute < 0 ||
-    result.minute > 59 ||
-    result.second < 0 ||
-    result.second > 59
-  )
-    throw new RangeError("Time zone formatting did not produce civil date parts");
-  return result;
-};
+type LocalSlot = CivilParts | undefined;
 
-const offsetAt = (formatter: Intl.DateTimeFormat, epoch: number): number => {
-  const parts = zoneParts(formatter, epoch);
-  return civilEpoch(
-    parts.year,
-    parts.month,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-  ) - epoch;
-};
+type TemporalZonedDateTimeLike = Readonly<{
+  epochMilliseconds: number;
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}>;
 
-const sameLocalMinute = (left: CivilParts, right: CivilParts): boolean =>
+type TemporalPlainDateTimeLike = Readonly<{
+  toZonedDateTime(
+    timeZone: string,
+    options: Readonly<{ disambiguation: "earlier" }>,
+  ): TemporalZonedDateTimeLike;
+}>;
+
+type TemporalRuntime = Readonly<{
+  PlainDateTime: Readonly<{
+    from(fields: Readonly<CivilParts & { month: number }>): TemporalPlainDateTimeLike;
+  }>;
+}>;
+
+const getTemporalRuntime = (): TemporalRuntime | undefined =>
+  (globalThis as typeof globalThis & { Temporal?: TemporalRuntime }).Temporal;
+
+const sameTemporalLocalMinute = (left: TemporalZonedDateTimeLike, right: CivilParts): boolean =>
   left.year === right.year &&
-  left.month === right.month &&
+  left.month === right.month + 1 &&
   left.day === right.day &&
   left.hour === right.hour &&
   left.minute === right.minute &&
   left.second === right.second;
 
-type LocalSlot = Readonly<{ fields: CivilParts | undefined; wallEpoch: number | undefined }>;
+const resolveLocalSlot = (
+  temporal: TemporalRuntime | undefined,
+  timeZone: string,
+  isUtcZone: boolean,
+  fields: CivilParts,
+): number | undefined => {
+  if (isUtcZone)
+    return civilEpoch(
+      fields.year,
+      fields.month,
+      fields.day,
+      fields.hour,
+      fields.minute,
+      fields.second,
+    );
+  if (!temporal) throw new RangeError("Complete IANA time-zone resolution is unavailable");
+
+  const zoned = temporal.PlainDateTime.from({
+    ...fields,
+    month: fields.month + 1,
+  }).toZonedDateTime(timeZone, { disambiguation: "earlier" });
+  // Temporal's earlier disambiguation chooses the earlier instant in a fold. In a gap it
+  // shifts the local time backward, so the round-trip mismatch proves this slot is absent.
+  return sameTemporalLocalMinute(zoned, fields) ? zoned.epochMilliseconds : undefined;
+};
 
 const fieldsForWallEpoch = (wallEpoch: number): CivilParts => {
   const date = new Date(wallEpoch);
@@ -280,7 +289,7 @@ function* enumerateLocalSlots(
     const step = recurrence.interval * hourMs;
     const first = anchor + Math.ceil((startWallEpoch - anchor) / step) * step;
     for (let wallEpoch = first; wallEpoch <= endWallEpoch; wallEpoch += step)
-      yield { fields: fieldsForWallEpoch(wallEpoch), wallEpoch };
+      yield fieldsForWallEpoch(wallEpoch);
     return;
   }
 
@@ -290,7 +299,7 @@ function* enumerateLocalSlots(
     const step = recurrence.interval * dayMs;
     const first = anchor + Math.ceil((startWallEpoch - anchor) / step) * step;
     for (let wallEpoch = first; wallEpoch <= endWallEpoch; wallEpoch += step)
-      yield { fields: fieldsForWallEpoch(wallEpoch), wallEpoch };
+      yield fieldsForWallEpoch(wallEpoch);
     return;
   }
 
@@ -306,7 +315,7 @@ function* enumerateLocalSlots(
     const step = recurrence.interval * 7 * dayMs;
     const first = anchor + Math.ceil((startWallEpoch - anchor) / step) * step;
     for (let wallEpoch = first; wallEpoch <= endWallEpoch; wallEpoch += step)
-      yield { fields: fieldsForWallEpoch(wallEpoch), wallEpoch };
+      yield fieldsForWallEpoch(wallEpoch);
     return;
   }
 
@@ -323,13 +332,13 @@ function* enumerateLocalSlots(
     const month = monthIndex - year * 12;
     const monthDay = recurrence.monthDay ?? 1;
     if (monthDay > daysInMonth(year, month)) {
-      yield { fields: undefined, wallEpoch: undefined };
+      yield undefined;
       continue;
     }
     const wallEpoch = civilEpoch(year, month, monthDay, hour, minute);
     if (wallEpoch >= startWallEpoch) {
       if (wallEpoch > endWallEpoch) break;
-      yield { fields: fieldsForWallEpoch(wallEpoch), wallEpoch };
+      yield fieldsForWallEpoch(wallEpoch);
     }
   }
 }
@@ -393,63 +402,48 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
     if (throughEpoch - afterEpoch > maximumWindowMs) return refused("window_too_wide");
 
     let formatter: Intl.DateTimeFormat;
+    let isUtcZone: boolean;
     try {
       formatter = makeZoneFormatter(recurrence.data.timeZone);
       formatter.formatToParts(new Date(afterEpoch));
+      isUtcZone = formatter.resolvedOptions().timeZone === "UTC";
     } catch {
       return refused("invalid_time_zone");
     }
+    const temporal = getTemporalRuntime();
+    if (!isUtcZone && !temporal) return refused("time_zone_resolution_unavailable");
 
     // The two-day margins on both UTC bounds contain every possible local slot whose UTC
     // instant is in the requested window, including zones with large historical offset jumps.
     const startWallEpoch = afterEpoch - searchMarginMs;
     const endWallEpoch = throughEpoch + searchMarginMs;
-    const offsetsByUtcDay = new Map<number, ReadonlySet<number>>();
-    const offsetsNearWall = (wallEpoch: number): readonly number[] => {
-      const utcDay = Math.floor(wallEpoch / dayMs);
-      const offsets = new Set<number>();
-      // Every valid IANA UTC offset is under one day, so these full UTC days contain all
-      // possible instants for this local minute. Hourly sampling captures both sides of a
-      // daylight-saving transition while keeping a year-long hourly request bounded.
-      for (let day = utcDay - 2; day <= utcDay + 2; day += 1) {
-        let dayOffsets = offsetsByUtcDay.get(day);
-        if (!dayOffsets) {
-          const sampled = new Set<number>();
-          for (let hour = 0; hour < 24; hour += 1) {
-            const offset = offsetAt(formatter, day * dayMs + hour * hourMs);
-            if (Math.abs(offset) > maximumTimeZoneOffsetMs)
-              throw new RangeError("Unsupported UTC offset");
-            sampled.add(offset);
-          }
-          dayOffsets = sampled;
-          offsetsByUtcDay.set(day, dayOffsets);
-        }
-        for (const offset of dayOffsets) offsets.add(offset);
-      }
-      return [...offsets];
-    };
 
     let examinedSlots = 0;
     let earliestEpoch: number | undefined;
-    for (const slot of enumerateLocalSlots(recurrence.data, startWallEpoch, endWallEpoch)) {
+    for (const fields of enumerateLocalSlots(recurrence.data, startWallEpoch, endWallEpoch)) {
       examinedSlots += 1;
       if (examinedSlots > maximumExaminedSlots)
         return refused("candidate_limit_exceeded");
-      if (slot.fields === undefined || slot.wallEpoch === undefined) continue;
+      if (fields === undefined) continue;
 
-      const matches = new Set<number>();
-      for (const offset of offsetsNearWall(slot.wallEpoch)) {
-        const instant = slot.wallEpoch - offset;
-        if (sameLocalMinute(zoneParts(formatter, instant), slot.fields)) matches.add(instant);
+      let instant: number | undefined;
+      try {
+        instant = resolveLocalSlot(
+          temporal,
+          recurrence.data.timeZone,
+          isUtcZone,
+          fields,
+        );
+      } catch {
+        return refused("time_zone_resolution_unavailable");
       }
-      if (matches.size === 0) continue;
-
-      // A fold can map one civil minute to two UTC instants. Keeping the earlier one gives
-      // that local schedule slot exactly one canonical occurrence.
-      const earlierFoldInstant = Math.min(...matches);
-      if (earlierFoldInstant <= afterEpoch || earlierFoldInstant > throughEpoch) continue;
-      if (earliestEpoch === undefined || earlierFoldInstant < earliestEpoch)
-        earliestEpoch = earlierFoldInstant;
+      if (
+        instant !== undefined &&
+        instant > afterEpoch &&
+        instant <= throughEpoch &&
+        (earliestEpoch === undefined || instant < earliestEpoch)
+      )
+        earliestEpoch = instant;
     }
 
     if (earliestEpoch === undefined) return { outcome: "none" };
