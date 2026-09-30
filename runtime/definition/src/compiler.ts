@@ -62,6 +62,7 @@ import {
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
 } from "@vortex/contracts";
+import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { isPlatformPermissionKey } from "@vortex/modules";
 import {
   canonicalJson,
@@ -5474,6 +5475,7 @@ function compileParsedApplicationV2Request(
     const output = applicationCompilationOutputV2Schema.safeParse({
       kind: "application",
       validationContractVersion: "2.0.0",
+      platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,
       provenance: applicationProvenanceV2(source, canonical, resolution, flowSet),

@@ -335,6 +335,10 @@ export const projectStoredConsumerRelease = async (
   if (catalogueVerification === "invalid")
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
+  const platformCompatibilityVersion =
+    release.kind === "application" && output.kind === "application"
+      ? output.platformCompatibilityVersion
+      : undefined;
   const result = definitionConsumerReadResultSchema.safeParse({
     kind: release.kind,
     organizationId: release.organizationId,
@@ -347,6 +351,9 @@ export const projectStoredConsumerRelease = async (
     resolutionFingerprint: release.resolutionFingerprint,
     content: output.canonical.content,
     dependencyManifest: release.dependencyManifest,
+    ...(platformCompatibilityVersion !== undefined
+      ? { platformCompatibilityVersion }
+      : {}),
     correlationId,
   });
   if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
