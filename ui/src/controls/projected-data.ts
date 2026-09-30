@@ -1,10 +1,11 @@
 import {
   builderKeySchema,
+  referenceChoiceSelectionEvidenceMapSchema,
   groupIdSchema,
   richTextDocumentV2Schema,
   timestampSchema,
   type BlockPropertyValueV2Contract,
-  type ComponentSemanticEventKind,
+  type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
@@ -16,7 +17,8 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
   "form_reset",
   "form_submit",
   "tab_changed",
-] as const satisfies readonly ComponentSemanticEventKind[]);
+  "choices_requested",
+] as const);
 
 /** Declared semantic event names this form and action family can emit. */
 export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
@@ -61,6 +63,13 @@ export type ControlSemanticEvent =
       values?: Readonly<Record<string, TypedFieldValue>>;
     }>
   | Readonly<{ event: "field_changed"; fieldKey: string; value: TypedFieldValue }>
+  | Readonly<{
+      event: "choices_requested";
+      search?: string;
+      continuationToken?: string;
+      selectedKey?: string;
+      selectedEvidence?: ReferenceChoiceSelectionEvidence;
+    }>
   | Readonly<{ event: "form_ready" }>
   | Readonly<{ event: "form_reset" }>
   | Readonly<{
@@ -70,7 +79,7 @@ export type ControlSemanticEvent =
     }>
   | Readonly<{ event: "tab_changed"; tabKey: string }>;
 
-export type ControlEventHandler = (event: ControlSemanticEvent) => void;
+export type ControlEventHandler = (event: ControlSemanticEvent) => void | Promise<void>;
 
 /** Callbacks accepted by one control placement, keyed only by declared event name. */
 export type ControlEventHandlers = Readonly<
@@ -132,6 +141,8 @@ export type ChoiceInputPayload = Readonly<{
   kind: "choice_input";
   value?: string | null;
   options?: readonly ChoiceOption[];
+  optionEvidence?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
+  nextContinuationToken?: string;
   error?: string;
 }>;
 
@@ -570,9 +581,33 @@ export const parseChoiceInputPayload = (
       `Expected 'choice_input' projected values, got '${String(record.kind)}'`,
       location,
     );
-  requireExactKeys(record, ["kind", "value", "options", "error"], location);
+  requireExactKeys(
+    record,
+    ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error"],
+    location,
+  );
   const options =
     record.options === undefined ? undefined : parseChoiceOptions(record.options, location);
+  let optionEvidence: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> | undefined;
+  if (record.optionEvidence !== undefined) {
+    const parsed = referenceChoiceSelectionEvidenceMapSchema.safeParse(record.optionEvidence);
+    if (!parsed.success || options === undefined)
+      return fail("Choice option evidence must map projected options to Query page evidence", location);
+    if (
+      options.some((option) => !Object.hasOwn(parsed.data, option.key)) ||
+      Object.keys(parsed.data).some((key) => !options.some((option) => option.key === key))
+    )
+      fail("Choice option evidence must match the projected options exactly", location);
+    optionEvidence = parsed.data;
+  }
+  const nextContinuationToken =
+    record.nextContinuationToken === undefined
+      ? undefined
+      : requireNonEmptyString(
+          record.nextContinuationToken,
+          "A choice continuation token must be non-empty text",
+          location,
+        );
   if (record.value !== undefined && record.value !== null) {
     const key = requireChoiceValue(record.value, "A choice value must be an option value", location);
     if (options !== undefined && !options.some((option) => option.key === key))
@@ -582,6 +617,8 @@ export const parseChoiceInputPayload = (
     kind: "choice_input",
     ...(record.value === undefined ? {} : { value: record.value as string | null }),
     ...(options === undefined ? {} : { options }),
+    ...(optionEvidence === undefined ? {} : { optionEvidence }),
+    ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
     ...optionalError(record, location),
   });
 };

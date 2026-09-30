@@ -7,12 +7,16 @@ import {
   accessGrantSchema,
   activityIdSchema,
   clusterIdSchema,
+  fingerprintSchema,
+  grantConsentDecisionIdSchema,
+  grantConsentDecisionSchema,
   grantConsentRequestIdSchema,
   grantConsentRequestSchema,
   grantIdSchema,
   organizationAccountIdSchema,
   roleIdSchema,
   type AccessGrant,
+  type GrantConsentDecision,
   type GrantConsentRequest,
   type IdentitySession,
   type OrganizationSelectionCandidate,
@@ -39,6 +43,7 @@ export type RecordShareGrantDependencies = HumanOrganizationRequestDependencies 
     grantId?: () => string;
     consentRequestId?: () => string;
     activityId?: () => string;
+    decisionId?: () => string;
   }>;
 
 /** One stored proposal: the exact grant, its consent request (cross-organisation only) and lifecycle facts. */
@@ -353,6 +358,7 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
   const newGrantId = dependencies.grantId ?? randomUUID;
   const newConsentRequestId = dependencies.consentRequestId ?? randomUUID;
   const newActivityId = dependencies.activityId ?? randomUUID;
+  const newDecisionId = dependencies.decisionId ?? randomUUID;
 
   const identifiers = ():
     Readonly<{ grantId: string; consentRequestId: string; activityId: string }> | undefined => {
@@ -551,6 +557,82 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
         )
           throw new Error("INVALID_GRANT_RESULT");
         return state;
+      });
+    },
+
+    /**
+     * Records one immutable decision for the current side of the exact pending
+     * proposal revision. The protected writer derives the side and role path
+     * from the verified request context and current Access state.
+     */
+    decide: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<GrantConsentDecision>> => {
+      if (!isRecord(commandCandidate)) return { kind: "unavailable" };
+      const {
+        requestId: requestIdCandidate,
+        expectedRevision,
+        expectedProposalFingerprint,
+        decision: decisionCandidate,
+        note: noteCandidate,
+        ...unknownKeys
+      } = commandCandidate;
+      const requestId = grantConsentRequestIdSchema.safeParse(
+        typeof requestIdCandidate === "string"
+          ? requestIdCandidate.toLowerCase()
+          : requestIdCandidate,
+      );
+      const proposalFingerprint = fingerprintSchema.safeParse(expectedProposalFingerprint);
+      if (
+        Object.keys(unknownKeys).length !== 0 ||
+        !requestId.success ||
+        !positiveRevision(expectedRevision) ||
+        !proposalFingerprint.success ||
+        (decisionCandidate !== "consented" && decisionCandidate !== "refused") ||
+        (noteCandidate !== undefined &&
+          (typeof noteCandidate !== "string" || noteCandidate.length > 500))
+      )
+        return { kind: "unavailable" };
+      const decisionId = grantConsentDecisionIdSchema.safeParse(newDecisionId());
+      const activityId = activityIdSchema.safeParse(newActivityId());
+      if (!decisionId.success || !activityId.success)
+        return { kind: "temporarily_unavailable" };
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const rows = await transaction.query<ResultRow>`
+          select vortex_access.record_share_grant_consent_decision_for_administration(
+            ${decisionId.data}::uuid,
+            ${requestId.data}::uuid,
+            ${expectedRevision}::bigint,
+            ${proposalFingerprint.data}::text,
+            ${decisionCandidate}::text,
+            ${noteCandidate ?? null}::text,
+            ${activityId.data}::uuid
+          ) as result
+        `;
+        const row = rows[0];
+        const raw: unknown =
+          rows.length === 1 && row !== undefined
+            ? typeof row.result === "string"
+              ? JSON.parse(row.result)
+              : row.result
+            : undefined;
+        const parsed = grantConsentDecisionSchema.safeParse(raw);
+        if (
+          !parsed.success ||
+          !sameId(parsed.data.decisionId, decisionId.data) ||
+          !sameId(parsed.data.requestId, requestId.data) ||
+          !sameId(parsed.data.proposedGrantFingerprint, proposalFingerprint.data) ||
+          parsed.data.proposalRevision !== expectedRevision ||
+          parsed.data.decision !== decisionCandidate ||
+          !sameId(parsed.data.approverOrganizationId, scope.organizationId) ||
+          !sameId(parsed.data.approverOrganizationAccountId, scope.organizationAccountId) ||
+          scope.applicationRootId === undefined ||
+          !sameId(parsed.data.approverApplicationRootId, scope.applicationRootId)
+        )
+          throw new Error("INVALID_GRANT_CONSENT_DECISION_RESULT");
+        return parsed.data;
       });
     },
 
