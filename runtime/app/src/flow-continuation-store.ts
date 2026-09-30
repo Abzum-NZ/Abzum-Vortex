@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { FlowTriggerOrigin } from "@vortex/contracts";
 import { withRuntimeTransaction } from "@vortex/db";
 import { z } from "zod";
 
@@ -47,10 +48,17 @@ export type FlowContinuationStore = Readonly<{
   >;
 }>;
 
+export type FlowEffectPrincipal =
+  | Readonly<{ kind: "person"; id: string }>
+  | Readonly<{ kind: "specified_account"; id: string }>
+  | Readonly<{ kind: "system"; id: string }>;
+
 export type FlowEffectKey = Readonly<{
   runId: string;
   organizationId: string;
-  identityId: string;
+  principal: FlowEffectPrincipal;
+  origin: FlowTriggerOrigin;
+  originId: string;
   taskPath: string;
   iteration: string;
 }>;
@@ -61,7 +69,7 @@ export type FlowEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
-/** Duplicate protection for protected effects: (run id, task path, iteration). */
+/** Duplicate protection binds each run/task/iteration to its verified principal and trigger. */
 export type FlowEffectLedger = Readonly<{
   begin: (key: FlowEffectKey) => Promise<FlowEffectClaim>;
   complete: (
@@ -155,10 +163,13 @@ export const createDatabaseFlowStores = (): Readonly<{
       async begin(key) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.begin_flow_effect(
+            select vortex_workflow.begin_flow_effect_with_origin(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
-              ${key.identityId}::uuid,
+              ${key.principal.kind}::text,
+              ${key.principal.id}::uuid,
+              ${key.origin}::text,
+              ${key.originId}::uuid,
               ${key.taskPath}::text,
               ${key.iteration}::text
             ) as result
@@ -172,10 +183,13 @@ export const createDatabaseFlowStores = (): Readonly<{
       async complete(key, outcome, outputs) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.complete_flow_effect(
+            select vortex_workflow.complete_flow_effect_with_origin(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
-              ${key.identityId}::uuid,
+              ${key.principal.kind}::text,
+              ${key.principal.id}::uuid,
+              ${key.origin}::text,
+              ${key.originId}::uuid,
               ${key.taskPath}::text,
               ${key.iteration}::text,
               ${outcome}::text,
