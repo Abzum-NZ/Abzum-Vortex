@@ -1675,6 +1675,16 @@ const loadApplicationPageInternal = async (
         recordTypeByPlacement.get(placementId.toLowerCase()) ??
         (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase()));
       bindings[placementId] = held.map((binding) => {
+        // An action selects the page subject, so a foreign placement cannot lend it a record type.
+        const selectedRecordTypeId =
+          binding.event === "action"
+            ? (pageDefinition.type === "detail" || pageDefinition.type === "form") &&
+              pageSubjectRecordTypeId !== undefined &&
+              (placementRecordTypeId === undefined ||
+                sameId(placementRecordTypeId, pageSubjectRecordTypeId))
+              ? pageSubjectRecordTypeId
+              : undefined
+            : placementRecordTypeId;
         const selectedReadTypes =
           selectedReadTypesByFlow.get(String(binding.flow.flowId).toLowerCase()) ??
           new Map<string, string>();
@@ -1699,7 +1709,7 @@ const loadApplicationPageInternal = async (
               ? [input.name]
               : [],
           ),
-          ...(placementRecordTypeId === undefined ? {} : { recordTypeId: placementRecordTypeId }),
+          ...(selectedRecordTypeId === undefined ? {} : { recordTypeId: selectedRecordTypeId }),
           ...(selectedReadInputs.length === 0 ? {} : { selectedReadInputs }),
         };
       });
