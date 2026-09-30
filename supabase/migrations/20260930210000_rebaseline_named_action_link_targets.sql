@@ -1,3 +1,11 @@
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.named_action_command_link_targets_internal(
   p_catalogue jsonb,
   p_record_type_id uuid,
@@ -86,3 +94,11 @@ grant execute on function vortex_record.named_action_command_link_targets_intern
   to vortex_record_adapter;
 
 comment on function vortex_record.named_action_command_link_targets_internal(jsonb, uuid, jsonb, jsonb) is null;
+
+reset role;
+
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
