@@ -417,6 +417,8 @@ declare
   authorization_path jsonb;
   path_valid_until timestamptz;
   source_authority jsonb;
+  readable_ceiling uuid[];
+  changeable_ceiling uuid[];
   decision_expires_at timestamptz;
   inserted_decision_id uuid;
   activity_result text;
@@ -671,10 +673,27 @@ begin
         context_value, stored_grant.module_root_id, stored_grant.record_type_id
       );
     if source_authority is null
-      or pg_catalog.jsonb_typeof(source_authority -> 'recordTypeIds') <> 'array'
-      or pg_catalog.jsonb_array_length(source_authority -> 'recordTypeIds') = 0 then
+      or pg_catalog.jsonb_typeof(source_authority -> 'recordTypeIds') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(source_authority -> 'recordTypeIds') = 0
+      or pg_catalog.jsonb_typeof(source_authority -> 'readableFieldIds') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(source_authority -> 'changeableFieldIds') is distinct from 'array' then
       raise exception using errcode = '42501',
         message = 'Record-share consent requires current source share permission';
+    end if;
+    select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+    into readable_ceiling
+    from pg_catalog.jsonb_array_elements_text(
+      source_authority -> 'readableFieldIds'
+    ) as field(value);
+    select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+    into changeable_ceiling
+    from pg_catalog.jsonb_array_elements_text(
+      source_authority -> 'changeableFieldIds'
+    ) as field(value);
+    if not (stored_grant.readable_field_ids <@ readable_ceiling)
+      or not (stored_grant.changeable_field_ids <@ changeable_ceiling) then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent exceeds current source field authority';
     end if;
   end if;
 
@@ -817,5 +836,5 @@ grant execute on function vortex_access.record_share_grant_consent_decision_for_
 comment on function vortex_access.record_share_grant_consent_decision_for_administration(
   uuid, uuid, bigint, text, text, text, uuid
 ) is
-  'Fixed protected same-cluster consent writer: records one immutable side decision for the locked current proposal, requiring current named role-path evidence, source share permission where applicable and MFA no older than 300 seconds; it never activates a grant.';
+  'Fixed protected same-cluster consent writer: records one immutable side decision for the locked current proposal, requiring current named role-path evidence, source share and field authority where applicable and MFA no older than 300 seconds; it never activates a grant.';
 commit;
