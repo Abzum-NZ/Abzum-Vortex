@@ -289,6 +289,9 @@ importers:
       '@vortex/record':
         specifier: workspace:*
         version: link:../../runtime/record
+      '@vortex/studio':
+        specifier: workspace:*
+        version: link:../../studio
       '@vortex/ui':
         specifier: workspace:*
         version: link:../../ui
