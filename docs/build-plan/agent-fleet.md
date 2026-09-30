@@ -39,11 +39,15 @@ Before independent review, every implementer handoff names the full candidate an
 - Before dispatching a migration, compute the next free number from current `origin/main` and reserve it in the checkpoint. Every child takes its number only from the lead. Renumber before merge if it sorts before an existing main migration.
 - Preserve untracked, uncommitted, unpushed and otherwise unique work before considering worktree cleanup. Do not remove a worktree while a child or process uses it. Retain uncertain work with an owner, reason and next action. No recursive delete by computed path, no primary-checkout removal and no cleanup against main. Never blindly revert dependent migration or subsequent work.
 
-## Heavy checks and locks
+## Verification concurrency
 
-Heavy checks are scoped typecheck, web build and database replay. There are two total slots; at most one database replay may run at a time. Use `heavy.lock` for any heavy check and `heavy.lock2` for typecheck or build only. Do not start when less than 3 GB of memory is free.
+Vortex does not use a global persistent `heavy.lock` or `heavy.lock2` for verification. No agent or helper may create, check, wait on or restore either file as a prerequisite for typecheck, web build, disposable SQL replay, preview, browser verification or merge.
 
-The lead owns locks and queue state. Each reservation records owner identity, process start time, task and commit; release it as soon as the command ends. A stale timestamp alone never licenses stealing a lock. Confirm the owner process has exited and the reservation is no longer active before recovery. Reviewer asks the lead for a lock; the lead serializes the request and returns the grant. The lead coordinates priority and the current phase's blockers. Never start a heavy check merely to satisfy a stale label; use the exact verification requirements and candidate SHA.
+Scoped typecheck and web build may run in parallel in **different** worktrees. Do not concurrently run commands that write generated outputs in the same checkout. Disposable SQL replay creates a fresh `vortex-verify-*` container and network with a random host port; independent PR replays may run in parallel when measured Docker and memory capacity permit. Each run cleans only its own disposable resources and never resets the shared preview database. Measure free physical memory before a memory-intensive command and require at least 3 GB. When capacity is insufficient, record the PR, full head SHA, command, owner and next attempt; do not use a fleet-wide filesystem lock as the queue.
+
+The shared local preview database and fixed web port are genuinely mutable shared resources. One independent owner controls their reset, setup and browser observation at a time. If a resource-scoped lease is used, it records owner/session, PR, exact SHA, resource, creation time, expiry and renewal during long runs, and recovers automatically after owner exit or expiry with process-identity checks. It cannot become a permanent fleet-wide gate. Checks on isolated worktrees and disposable databases continue while preview is occupied. A stale coordination artifact must never indefinitely block review.
+
+The lead classifies each open PR by its next missing exact-head gate: source review, SQL replay, preview, browser, ready to merge or another stated blocker. Idle eligible verification capacity with a growing In review queue is a stall requiring same-turn assignment or a recorded concrete recovery. A new commit invalidates affected execution and preview/browser evidence. Exact-head review, scoped checks, independent preview/browser acceptance and protected merge remain mandatory.
 
 ## Preview checks and browser smoke
 
@@ -143,7 +147,7 @@ Verify the exact final SHA as agent-coordination.md “Verification before merge
 scoped typecheck; web build if web/ui/imported runtime changed; disposable replay if supabase changed;
 definition validator and publication compile when definitions changed; independent preview PASS on exact SHA
 for definitions, migrations or development setup; browser smoke on exact SHA for listed UI paths.
-Request the heavy-check lock from the lead. Return one exact-head evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
+Request the exact-head checks from the lead with the PR, full SHA, command and isolated resource. No global lock grant is required. Return one evidence packet with your verdict, final candidate SHA, checks and results, fixes and limitations. Do not claim a local branch is mergeable without a PR.
 Do not write Project fields, close issues or merge. The lead owns those actions.
 If blocked, return the exact cause to the lead and stop without merging.
 ~~~
@@ -155,7 +159,7 @@ Keep the checkpoint and append-only journal in the coordination root, outside wo
 - UTC time, coordinator identity and current session;
 - each live child session, role, actual model and effort, issue, worktree/branch, stage and handoff status;
 - open PRs, current full heads, review, verification and preview state;
-- lock and heavy-check queue state;
+- measured verification capacity, resource-scoped preview ownership and per-PR missing-gate queues;
 - migration reservations and pending board writes;
 - preserved work and cleanup decisions;
 - blockers with resume conditions and next shaped leaves.
