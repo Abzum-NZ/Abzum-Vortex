@@ -1,5 +1,7 @@
 import "server-only";
 
+import { Temporal } from "@js-temporal/polyfill";
+
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
@@ -203,33 +205,7 @@ const makeZoneFormatter = (timeZone: string): Intl.DateTimeFormat =>
 
 type LocalSlot = CivilParts | undefined;
 
-type TemporalZonedDateTimeLike = Readonly<{
-  epochMilliseconds: number;
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}>;
-
-type TemporalPlainDateTimeLike = Readonly<{
-  toZonedDateTime(
-    timeZone: string,
-    options: Readonly<{ disambiguation: "earlier" }>,
-  ): TemporalZonedDateTimeLike;
-}>;
-
-type TemporalRuntime = Readonly<{
-  PlainDateTime: Readonly<{
-    from(fields: Readonly<CivilParts & { month: number }>): TemporalPlainDateTimeLike;
-  }>;
-}>;
-
-const getTemporalRuntime = (): TemporalRuntime | undefined =>
-  (globalThis as typeof globalThis & { Temporal?: TemporalRuntime }).Temporal;
-
-const sameTemporalLocalMinute = (left: TemporalZonedDateTimeLike, right: CivilParts): boolean =>
+const sameTemporalLocalMinute = (left: Temporal.ZonedDateTime, right: CivilParts): boolean =>
   left.year === right.year &&
   left.month === right.month + 1 &&
   left.day === right.day &&
@@ -238,7 +214,6 @@ const sameTemporalLocalMinute = (left: TemporalZonedDateTimeLike, right: CivilPa
   left.second === right.second;
 
 const resolveLocalSlot = (
-  temporal: TemporalRuntime | undefined,
   timeZone: string,
   isUtcZone: boolean,
   fields: CivilParts,
@@ -252,9 +227,7 @@ const resolveLocalSlot = (
       fields.minute,
       fields.second,
     );
-  if (!temporal) throw new RangeError("Complete IANA time-zone resolution is unavailable");
-
-  const zoned = temporal.PlainDateTime.from({
+  const zoned = Temporal.PlainDateTime.from({
     ...fields,
     month: fields.month + 1,
   }).toZonedDateTime(timeZone, { disambiguation: "earlier" });
@@ -377,8 +350,8 @@ const refused = (reason: ScheduleOccurrenceRefusalReason): ScheduleOccurrenceRes
 /**
  * Finds the earliest published Schedule occurrence after the cursor and no later than the bound.
  * The recurrence is enumerated in anchored local civil time, then resolved through the runtime's
- * transition-complete IANA database. Gaps and absent month days are skipped; folds keep their
- * earlier UTC instant. Non-UTC slots are refused when the runtime does not provide Temporal.
+ * transition-complete IANA database using the Temporal polyfill. Gaps and absent month days are
+ * skipped; folds keep their earlier UTC instant.
  */
 export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceResult => {
   try {
@@ -414,8 +387,6 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
     } catch {
       return refused("invalid_time_zone");
     }
-    const temporal = getTemporalRuntime();
-
     // The two-day margins on both UTC bounds contain every possible local slot whose UTC
     // instant is in the requested window, including zones with large historical offset jumps.
     const startWallEpoch = afterEpoch - searchMarginMs;
@@ -441,16 +412,10 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
         wallEpoch - maximumIanaOffsetMs > throughEpoch
       )
         continue;
-      if (!isUtcZone && !temporal) return refused("time_zone_resolution_unavailable");
 
       let instant: number | undefined;
       try {
-        instant = resolveLocalSlot(
-          temporal,
-          recurrence.data.timeZone,
-          isUtcZone,
-          fields,
-        );
+        instant = resolveLocalSlot(recurrence.data.timeZone, isUtcZone, fields);
       } catch {
         return refused("time_zone_resolution_unavailable");
       }
