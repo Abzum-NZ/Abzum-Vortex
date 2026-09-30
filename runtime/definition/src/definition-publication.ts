@@ -19,6 +19,7 @@ import {
   storedDefinitionDraftSchema,
   sourceIdentityKindV2Schema,
   type DefinitionCompilationOutput,
+  type ApplicationCompilationOutputV2,
   type DefinitionPublicationConfirmation,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionResolutionSnapshot,
@@ -32,6 +33,7 @@ import {
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionCommand,
   type ModuleVersionImpactHistoryEntryV3,
+  type ModuleCompilationOutputV3,
   type PublishDefinitionResult,
   type SavedConditionRevisionAssignment,
   type SessionContext,
@@ -50,6 +52,7 @@ import {
   type Revision,
   type SemanticVersion,
 } from "@vortex/contracts";
+import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { compare, satisfies } from "semver";
 import type { z } from "zod";
 import {
@@ -77,6 +80,7 @@ import { DefinitionVersionImpactError } from "./version-impact-error";
 type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];
 type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
+type PublishableCompilationOutput = ApplicationCompilationOutputV2 | ModuleCompilationOutputV3;
 type DefinitionResolution =
   DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
 
@@ -223,7 +227,7 @@ export interface DefinitionPublicationCatalogue {
 
 export type DefinitionReleaseAppend = Readonly<{
   draft: StoredDefinitionDraft;
-  compilationOutput: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+  compilationOutput: PublishableCompilationOutput;
   assignedVersion: string;
   comparisonFingerprint: string;
   reasons: DefinitionPublicationConfirmation["reasons"];
@@ -254,7 +258,7 @@ export interface DefinitionPublicationRepository {
 type PreparedState = Readonly<{
   confirmation: DefinitionPublicationConfirmation;
   draft: StoredDefinitionDraft;
-  compilationOutput: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+  compilationOutput: PublishableCompilationOutput;
   resolutionSnapshot: DefinitionResolution;
 }>;
 
@@ -262,7 +266,7 @@ export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult;
 
 /** One current Application draft compiled at its exact revision, for exact-draft preview. */
 export type ApplicationDraftCompilation = Readonly<{
-  compilation: Extract<DefinitionCompilationOutput, { kind: "application" }>;
+  compilation: ApplicationCompilationOutputV2;
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
 }>;
@@ -1221,7 +1225,7 @@ const compileCandidate = (
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
   final: boolean,
-): Exclude<DefinitionCompilationOutput, { kind: "connection_type" }> => {
+): PublishableCompilationOutput => {
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
@@ -1241,6 +1245,12 @@ const compileCandidate = (
       parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
       dependencyOutputs,
     );
+    if (
+      final &&
+      (output.kind !== "application" ||
+        output.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION)
+    )
+      return refuse("DEFINITION_COMPILATION_REFUSED");
     if (final)
       assertFinalPublicationValidation(
         parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
@@ -1517,7 +1527,11 @@ export const createDefinitionPublicationService = (
           buildResolution(candidate, dependencies, currentVersion),
           false,
         );
-        if (compilation.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
+        if (
+          compilation.kind !== "application" ||
+          compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+        )
+          return refuse("DEFINITION_COMPILATION_REFUSED");
         return {
           compilation,
           currentReleaseRevision: candidate.draft.publishedRevision ?? null,
@@ -1553,6 +1567,12 @@ export const createDefinitionPublicationService = (
           fingerprintCanonicalValue(confirmation)
         )
           refuse("DEFINITION_CONFIRMATION_MISMATCH");
+        if (
+          recomputed.compilationOutput.kind === "application" &&
+          recomputed.compilationOutput.platformCompatibilityVersion !==
+            APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+        )
+          refuse("DEFINITION_COMPILATION_REFUSED");
         const result = await transaction.appendRelease({
           draft: recomputed.draft,
           compilationOutput: recomputed.compilationOutput,
