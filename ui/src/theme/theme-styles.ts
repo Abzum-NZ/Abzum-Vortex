@@ -45,9 +45,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
   color: var(--vortex-text-muted);
 }
 
-/* Search and rich text inputs */
-.vortex-input,
-.vortex-textarea {
+/* Search input */
+.vortex-input {
   box-sizing: border-box;
   width: 100%;
   min-height: var(--vortex-control-min-height);
@@ -60,28 +59,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
   transition: border-color var(--vortex-motion-feedback) ease-out;
 }
 
-.vortex-textarea {
-  min-height: 5.5rem;
-  resize: vertical;
-}
-
-.vortex-input:hover:not(:disabled):not([readonly]),
-.vortex-textarea:hover:not(:disabled):not([readonly]) {
+.vortex-input:hover:not(:disabled):not([readonly]) {
   border-color: var(--vortex-text);
-}
-
-.vortex-textarea[readonly] {
-  border-style: dashed;
-}
-
-.vortex-textarea:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.vortex-textarea[aria-invalid="true"] {
-  border-color: var(--vortex-danger-text);
-  box-shadow: inset 0 0 0 0.0625rem var(--vortex-danger-text);
 }
 
 /* Single-select table control */
@@ -95,50 +74,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-selection-radio:hover:not(:disabled) {
   box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
-}
-
-/* Validation messages: meaning is carried by text; the severity colour is an accent */
-.vortex-validation-message {
-  padding: var(--vortex-space-sm) var(--vortex-space-md);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-left-width: 0.25rem;
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-surface);
-  color: var(--vortex-text);
-}
-
-.vortex-validation-error {
-  border-left-color: var(--vortex-danger-text);
-}
-
-.vortex-validation-warning {
-  border-left-color: var(--vortex-warning-text);
-}
-
-.vortex-validation-info {
-  border-left-color: var(--vortex-info-text);
-}
-
-.vortex-validation-title {
-  margin: 0 0 var(--vortex-space-xs);
-  font-weight: 700;
-}
-
-.vortex-validation-error .vortex-validation-title {
-  color: var(--vortex-danger-text);
-}
-
-.vortex-validation-warning .vortex-validation-title {
-  color: var(--vortex-warning-text);
-}
-
-.vortex-validation-info .vortex-validation-title {
-  color: var(--vortex-info-text);
-}
-
-.vortex-validation-text,
-.vortex-validation-list {
-  margin: 0;
 }
 
 /* Grouped data */
