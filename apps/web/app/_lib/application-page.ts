@@ -113,6 +113,13 @@ export type PlacementFlowBinding = Readonly<{
   flowId: string;
   /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
   callerInputs: readonly string[];
+  /** The installed record type of this placement's selected row or enclosing form context. */
+  recordTypeId?: string;
+  /** Caller inputs consumed by a declared `record.read_fields` task in this exact flow. */
+  selectedReadInputs?: readonly Readonly<{
+    callerInputName: string;
+    recordTypeId: string;
+  }>[];
 }>;
 
 export type ApplicationPageModel = Readonly<{
@@ -230,6 +237,62 @@ type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
 type PermissionEntry = InstalledRuntimeContext["permissionRegistration"]["entries"][number];
 type DateTimeZones = { personTimeZone?: string; organizationTimeZone?: string };
+
+type InstalledFlow =
+  InstalledRuntimeContext["releaseSet"]["application"]["content"]["flows"][number];
+
+/** The record-reference inputs that the installed flow uses for selected-field reads. */
+const selectedReadInputTypes = (flow: InstalledFlow): ReadonlyMap<string, string> => {
+  const inputTypes = new Map<string, string | null>();
+  const visit = (tasks: readonly FlowTask[]): void => {
+    for (const task of tasks) {
+      if (task.type === "record.read_fields") {
+        const properties = "properties" in task ? task.properties : undefined;
+        const recordType = properties?.record_type;
+        const recordTypeId =
+          isRecord(recordType) &&
+          recordType.kind === "literal" &&
+          isRecord(recordType.literal) &&
+          recordType.literal.type === "text" &&
+          typeof recordType.literal.value === "string"
+            ? recordType.literal.value
+            : undefined;
+        const record = properties?.record;
+        const reference =
+          isRecord(record) && record.kind === "reference" ? record.reference : undefined;
+        const inputName =
+          isRecord(reference) &&
+          reference.source === "input" &&
+          typeof reference.name === "string"
+            ? reference.name
+            : undefined;
+        const declaration = inputName === undefined ? undefined : flow.inputs[inputName];
+        if (
+          inputName !== undefined &&
+          recordTypeId !== undefined &&
+          declaration?.type === "record_reference" &&
+          declaration.recordTypeIds?.length === 1 &&
+          sameId(declaration.recordTypeIds[0]!, recordTypeId)
+        ) {
+          const previous = inputTypes.get(inputName);
+          inputTypes.set(
+            inputName,
+            previous === undefined || (previous !== null && sameId(previous, recordTypeId))
+              ? recordTypeId
+              : null,
+          );
+        }
+      }
+      for (const child of flowTaskChildLists(task)) visit(child.tasks);
+    }
+  };
+  visit([...flow.tasks, ...flow.errors, ...flow.finally]);
+  return new Map(
+    [...inputTypes].flatMap(([inputName, recordTypeId]) =>
+      recordTypeId === null ? [] : [[inputName, recordTypeId] as const],
+    ),
+  );
+};
 
 const fieldForPlacement = (
   placement: Readonly<Record<string, unknown>>,
@@ -1487,6 +1550,21 @@ const loadApplicationPageInternal = async (
   const flowsById = new Map(
     application.content.flows.map((flow) => [String(flow.id).toLowerCase(), flow] as const),
   );
+  const selectedReadTypesByFlow = new Map<string, ReadonlyMap<string, string>>();
+  const ambiguousSelectedReadFlowIds = new Set<string>();
+  for (const flow of [
+    ...application.content.flows,
+    ...context.releaseSet.modules.flatMap((module) => module.content.flows),
+  ]) {
+    const flowId = String(flow.id).toLowerCase();
+    if (ambiguousSelectedReadFlowIds.has(flowId)) continue;
+    if (selectedReadTypesByFlow.has(flowId)) {
+      selectedReadTypesByFlow.delete(flowId);
+      ambiguousSelectedReadFlowIds.add(flowId);
+      continue;
+    }
+    selectedReadTypesByFlow.set(flowId, selectedReadInputTypes(flow));
+  }
   const actionRecordTypes = new Map(
     [
       ...application.content.actions,
@@ -1592,18 +1670,40 @@ const loadApplicationPageInternal = async (
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
-    if (held.length > 0)
-      bindings[placementId] = held.map((binding) => ({
-        bindingId: binding.bindingId,
-        eventId: binding.eventId,
-        event: binding.event,
-        flowId: binding.flow.flowId,
-        callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
-          typeof input === "object" && input !== null && input.kind === "caller"
-            ? [input.name]
-            : [],
-        ),
-      }));
+    if (held.length > 0) {
+      const placementRecordTypeId =
+        recordTypeByPlacement.get(placementId.toLowerCase()) ??
+        (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase()));
+      bindings[placementId] = held.map((binding) => {
+        const selectedReadTypes =
+          selectedReadTypesByFlow.get(String(binding.flow.flowId).toLowerCase()) ??
+          new Map<string, string>();
+        const selectedReadInputs = Object.entries(binding.flow.inputs).flatMap(
+          ([inputName, input]) => {
+            const selectedRecordTypeId = selectedReadTypes.get(inputName);
+            return selectedRecordTypeId !== undefined &&
+              isRecord(input) &&
+              input.kind === "caller" &&
+              typeof input.name === "string"
+              ? [{ callerInputName: input.name, recordTypeId: selectedRecordTypeId }]
+              : [];
+          },
+        );
+        return {
+          bindingId: binding.bindingId,
+          eventId: binding.eventId,
+          event: binding.event,
+          flowId: binding.flow.flowId,
+          callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
+            typeof input === "object" && input !== null && input.kind === "caller"
+              ? [input.name]
+              : [],
+          ),
+          ...(placementRecordTypeId === undefined ? {} : { recordTypeId: placementRecordTypeId }),
+          ...(selectedReadInputs.length === 0 ? {} : { selectedReadInputs }),
+        };
+      });
+    }
 
     const block = placement.block;
     const isCalendarBlock =

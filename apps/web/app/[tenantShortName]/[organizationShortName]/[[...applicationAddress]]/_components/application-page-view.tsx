@@ -57,7 +57,7 @@ import {
   nextComponentRequestGeneration,
   type ComponentRequestGeneration,
 } from "@vortex/app/component-result-state";
-import { containedComponentIdSchema } from "@vortex/contracts";
+import { containedComponentIdSchema, recordIdSchema } from "@vortex/contracts";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
 import { signOut } from "../../../../auth/actions";
 
@@ -1625,18 +1625,37 @@ function ApplicationPageViewContent({
    * installed binding and refuses anything else.
    */
   const runBinding = useCallback(
-    (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>) =>
-      applyDispatch(
+    (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>) => {
+      const callerInputs = { ...supplied };
+      for (const selectedReadInput of binding.selectedReadInputs ?? []) {
+        const candidate = Object.hasOwn(supplied, selectedReadInput.callerInputName)
+          ? supplied[selectedReadInput.callerInputName]
+          : supplied.record_id;
+        delete callerInputs[selectedReadInput.callerInputName];
+        if (
+          binding.recordTypeId === undefined ||
+          binding.recordTypeId.toLowerCase() !== selectedReadInput.recordTypeId.toLowerCase()
+        )
+          continue;
+        const parsedRecordId = recordIdSchema.safeParse(candidate);
+        if (!parsedRecordId.success) continue;
+        callerInputs[selectedReadInput.callerInputName] = {
+          recordTypeId: binding.recordTypeId,
+          recordId: parsedRecordId.data,
+        };
+      }
+      return applyDispatch(
         flowRuntime.dispatch(
           asComponentBinding(placementId, binding),
           Object.fromEntries(
-            Object.entries(supplied).filter(([name]) => binding.callerInputs.includes(name)),
+            Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
         ),
         formOwners[placementId],
         undefined,
         binding.bindingId,
-      ),
+      );
+    },
     [applyDispatch, formOwners, flowRuntime],
   );
 
