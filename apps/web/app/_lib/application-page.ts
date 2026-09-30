@@ -16,7 +16,10 @@ import {
   arrangeDataset,
   protectedQueryCommandSchema,
   createProtectedQueryService,
+  createReferenceChoiceService,
+  projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
+  type ReferenceChoiceInputValues,
 } from "@vortex/query";
 import {
   createPageSubjectReader,
@@ -50,6 +53,7 @@ import {
   type JsonValue,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -71,6 +75,13 @@ import {
   visibleGuidedFormValidation,
 } from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import {
+  hasReferenceChoiceSource,
+  projectedReferenceChoiceForm,
+  resolveReferenceChoiceOption,
+  type ProjectedReferenceChoiceForm,
+  type ReferenceChoiceFormField,
+} from "./reference-choices";
 
 /**
  * Composes the one server model of an installed application page: the permission-filtered page,
@@ -106,6 +117,12 @@ export type ApplicationPageModel = Readonly<{
   refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  /** Dynamic reference-choice placements within the viewer's projected page. */
+  referenceChoiceInputs: readonly Readonly<{
+    placementId: string;
+    formId: string;
+    fieldKey: string;
+  }>[];
   guidedForm?: Readonly<{
     draftId: string;
     revision: number;
@@ -267,6 +284,90 @@ const collectPlacements = (
   else if (isRecord(composition.stepContent))
     for (const root of Object.values(composition.stepContent)) visit(root);
   return found;
+};
+
+export type ReferenceChoicePageResult =
+  | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
+  | Readonly<{ kind: "reload" }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+type ReferenceChoiceAddress = Readonly<{
+  read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+  application: PermittedApplication;
+  pageKey: string;
+}>;
+
+/** Reprojects the current addressed page under the actor and the exact installed release. */
+const projectReferenceChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string }>,
+): Promise<
+  | Readonly<{
+      kind: "available";
+      page: Readonly<Record<string, unknown>>;
+      context: InstalledRuntimeContext;
+      selection: OrganizationSelectionCandidate;
+      dependencies: ReturnType<typeof requestDependencies>;
+    }>
+  | Exclude<ReferenceChoicePageResult, { kind: "completed" }>
+> => {
+  const dependencies = requestDependencies();
+  const selection: OrganizationSelectionCandidate = {
+    organizationId: address.read.organizationId,
+    applicationRootId: address.application.applicationRootId,
+  };
+  const loaded = await loadInstalledContext(session, dependencies, selection);
+  if (loaded.kind !== "available")
+    return loaded.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused" };
+  const context = loaded.value;
+  const application = context.releaseSet.application;
+  if (!sameId(context.applicationRootId, address.application.applicationRootId))
+    return { kind: "refused" };
+  if (
+    request.installationRevision !== context.applicationReleaseRevision ||
+    request.releaseKey !== [
+      application.releaseVersion,
+      application.contentFingerprint,
+      application.resolutionFingerprint,
+    ].join(":")
+  )
+    return { kind: "reload" };
+  const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
+  if (pageDefinition === undefined) return { kind: "refused" };
+  const projected = await createStoredPageCapabilityService({
+    ...dependencies,
+    context,
+    selection: { pageId: pageDefinition.pageId },
+  }).project(session, selection);
+  if (projected.kind === "temporarily_unavailable")
+    return { kind: "temporarily_unavailable" };
+  if (projected.kind !== "available" || projected.value === undefined)
+    return { kind: "refused" };
+  return { kind: "available", page: projected.value, context, selection, dependencies };
+};
+
+/** The form submission's fields come only from its current actor-permitted page. */
+export const loadProjectedReferenceChoiceForm = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string; formId: string }>,
+): Promise<ProjectedReferenceChoiceForm | undefined> => {
+  try {
+    const projected = await projectReferenceChoicePage(session, address, request);
+    return projected.kind === "available"
+      ? projectedReferenceChoiceForm(
+          projected.page,
+          projected.context.releaseSet.modules,
+          request.formId,
+        )
+      : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 /** A form field may show only a value the page subject read returned for its own record type. */
@@ -456,6 +557,103 @@ const projectEditField = (
       values: { kind, value: displayed, ...(kind === "date_time_input" ? dateTimeZones : {}) },
     },
   };
+};
+
+/** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
+export const loadReferenceChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{
+    placementId: string;
+    installationRevision: number;
+    releaseKey: string;
+    search?: string;
+    continuationToken?: string;
+    selectedKey?: string;
+    selectedEvidence?: ReferenceChoiceSelectionEvidence;
+  }>,
+): Promise<ReferenceChoicePageResult> => {
+  try {
+    const projected = await projectReferenceChoicePage(session, address, request);
+    if (projected.kind !== "available") return projected;
+    const { dependencies, selection, context } = projected;
+    const continuationKey = getQueryContinuationKey();
+    const placement = collectPlacements(projected.page).find(
+      (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
+    );
+    if (placement === undefined || placement.formId === undefined)
+      return { kind: "refused" };
+    const form = projectedReferenceChoiceForm(
+      projected.page,
+      context.releaseSet.modules,
+      placement.formId,
+    );
+    const field = form?.placements.get(request.placementId);
+    if (field === undefined) return { kind: "refused" };
+
+    const service = createReferenceChoiceService({ ...dependencies, continuationKey });
+    const result = await service.run(session, selection, {
+      ...field.command,
+      ...(request.search === undefined || request.search.trim() === ""
+        ? {}
+        : { search: request.search }),
+      ...(request.continuationToken === undefined
+        ? {}
+        : { continuationToken: request.continuationToken }),
+    });
+    if (result.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (result.kind !== "available" || result.value.outcome !== "completed")
+      return { kind: "refused" };
+
+    const pageChoices = result.value.choices;
+    let selectedChoice = request.selectedKey === undefined
+      ? undefined
+      : pageChoices.find((choice) => choice.key === request.selectedKey);
+    let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
+    if (
+      selectedChoice === undefined &&
+      request.selectedKey !== undefined &&
+      request.selectedEvidence !== undefined
+    ) {
+      selectedChoice = await resolveReferenceChoiceOption({
+        service,
+        session,
+        selection,
+        field,
+        key: request.selectedKey,
+        evidence: request.selectedEvidence,
+      });
+      if (selectedChoice !== undefined)
+        selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
+    }
+    const choices =
+      selectedChoice === undefined || pageChoices.some((choice) => choice.key === selectedChoice?.key)
+        ? pageChoices
+        : [selectedChoice, ...pageChoices];
+    return {
+      kind: "completed",
+      values: projectReferenceChoiceInputValues(
+        choices,
+        selectedChoice?.key ?? null,
+        undefined,
+        {
+          ...(request.search === undefined ? {} : { search: request.search }),
+          ...(request.continuationToken === undefined
+            ? {}
+            : { continuationToken: request.continuationToken }),
+          ...(result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken }),
+          ...(Object.keys(selectedEvidenceOverride).length === 0
+            ? {}
+            : { optionEvidenceOverrides: selectedEvidenceOverride }),
+        },
+      ),
+    };
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
 };
 
 /**
@@ -1034,6 +1232,7 @@ const loadApplicationPageInternal = async (
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
+  const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
@@ -1283,7 +1482,8 @@ const loadApplicationPageInternal = async (
         values: { kind: "date_time_input", ...dateTimeZones },
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  for (const { placementId, placement } of placements) {
+  const referenceChoiceInputs: Array<{ placementId: string; formId: string; fieldKey: string }> = [];
+  for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
@@ -1310,6 +1510,34 @@ const loadApplicationPageInternal = async (
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    if (hasReferenceChoiceSource(placement)) {
+      const form = formId === undefined
+        ? undefined
+        : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
+      const field = form?.placements.get(placementId);
+      if (field === undefined || formId === undefined) {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
+      const result = await referenceChoices.run(session, selection, field.command);
+      if (result.kind !== "available" || result.value.outcome !== "completed") {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      data[placementId] = {
+        status: "ready",
+        values: projectReferenceChoiceInputValues(
+          result.value.choices,
+          undefined,
+          undefined,
+          result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken },
+        ),
+      };
+      continue;
+    }
     // A placement still bound to a legacy read model has no reader on this page: system record
     // types are read through the query path. It must never fall through to an empty display.
     if (placement.readModel !== undefined) {
@@ -1915,6 +2143,7 @@ const loadApplicationPageInternal = async (
       bindings,
       refreshPlacementsByBinding,
       editFormBaselines,
+      referenceChoiceInputs,
       ...(guidedForm === undefined ? {} : { guidedForm }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
