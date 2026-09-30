@@ -115,7 +115,7 @@ export function Notice({
         aria-atomic="true"
         variant={critical ? "destructive" : "default"}
         className="border-l-4"
-        style={{ borderLeftColor: severityColor }}
+        style={{ backgroundColor: "var(--vortex-surface)", borderLeftColor: severityColor }}
       >
         <div className="min-w-0">
           <AlertTitle className="mb-1 font-bold" style={{ color: severityColor }}>

@@ -52,7 +52,7 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
       {...(forField === undefined ? {} : { "data-vortex-for-field": forField })}
       variant={severity === "error" ? "destructive" : "default"}
       className="border-l-4"
-      style={{ borderLeftColor: severityColor }}
+      style={{ backgroundColor: "var(--vortex-surface)", borderLeftColor: severityColor }}
     >
       {messages.length === 0 ? null : (
         <>
