@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./platform-compatibility": "./src/platform-compatibility.ts",
     "./shadcn-theme-releases": "./src/shadcn-theme-releases.ts"
   },
   "scripts": {

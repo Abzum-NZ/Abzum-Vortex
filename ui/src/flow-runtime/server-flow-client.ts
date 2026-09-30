@@ -15,6 +15,7 @@ export type FlowApplicationAddress = Readonly<{
   tenantShortName: string;
   organizationShortName: string;
   applicationKey: string;
+  pageKey: string;
 }>;
 
 /** What the surface was rendered from, so the server can refuse a stale or foreign request. */
@@ -194,11 +195,12 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
-        // Exactly the endpoint's strict request shape: the three address parts and the invocation.
+        // Exactly the endpoint's strict request shape: the addressed page and the invocation.
         body: JSON.stringify({
           tenantShortName: options.address.tenantShortName,
           organizationShortName: options.address.organizationShortName,
           applicationKey: options.address.applicationKey,
+          pageKey: options.address.pageKey,
           invocation: parsedInvocation.data,
         }),
       });

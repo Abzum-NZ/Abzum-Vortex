@@ -15,9 +15,21 @@ import {
 import {
   arrangeDataset,
   protectedQueryCommandSchema,
+  protectedQuerySummaryCommandSchema,
   createProtectedQueryService,
+  createReferenceChoiceService,
+  projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
+  type ProtectedQuerySummaryAggregateResult,
+  type ReferenceChoiceInputValues,
 } from "@vortex/query";
+import {
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  SUMMARY_VALUES_BLOCK_RELEASE,
+  applicationLauncherQueryRowsToListValues,
+  type ApplicationLauncherQueryRow,
+  type DisplayCellValue,
+} from "@vortex/ui";
 import {
   createPageSubjectReader,
   createRecordsTableQueryResolver,
@@ -36,10 +48,12 @@ import {
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
+  exactDecimalTextV2Schema,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
+  moneyValueV2Schema,
   timestampSchema,
   organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
@@ -50,12 +64,14 @@ import {
   type JsonValue,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import {
   computeGuidedFormStepId,
   getGuidedFormFlowId,
@@ -71,6 +87,13 @@ import {
   visibleGuidedFormValidation,
 } from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import {
+  hasReferenceChoiceSource,
+  projectedReferenceChoiceForm,
+  resolveReferenceChoiceOption,
+  type ProjectedReferenceChoiceForm,
+  type ReferenceChoiceFormField,
+} from "./reference-choices";
 
 /**
  * Composes the one server model of an installed application page: the permission-filtered page,
@@ -106,6 +129,12 @@ export type ApplicationPageModel = Readonly<{
   refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
+  /** Dynamic reference-choice placements within the viewer's projected page. */
+  referenceChoiceInputs: readonly Readonly<{
+    placementId: string;
+    formId: string;
+    fieldKey: string;
+  }>[];
   guidedForm?: Readonly<{
     draftId: string;
     revision: number;
@@ -267,6 +296,90 @@ const collectPlacements = (
   else if (isRecord(composition.stepContent))
     for (const root of Object.values(composition.stepContent)) visit(root);
   return found;
+};
+
+export type ReferenceChoicePageResult =
+  | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
+  | Readonly<{ kind: "reload" }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+type ReferenceChoiceAddress = Readonly<{
+  read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+  application: PermittedApplication;
+  pageKey: string;
+}>;
+
+/** Reprojects the current addressed page under the actor and the exact installed release. */
+const projectReferenceChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string }>,
+): Promise<
+  | Readonly<{
+      kind: "available";
+      page: Readonly<Record<string, unknown>>;
+      context: InstalledRuntimeContext;
+      selection: OrganizationSelectionCandidate;
+      dependencies: ReturnType<typeof requestDependencies>;
+    }>
+  | Exclude<ReferenceChoicePageResult, { kind: "completed" }>
+> => {
+  const dependencies = requestDependencies();
+  const selection: OrganizationSelectionCandidate = {
+    organizationId: address.read.organizationId,
+    applicationRootId: address.application.applicationRootId,
+  };
+  const loaded = await loadInstalledContext(session, dependencies, selection);
+  if (loaded.kind !== "available")
+    return loaded.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused" };
+  const context = loaded.value;
+  const application = context.releaseSet.application;
+  if (!sameId(context.applicationRootId, address.application.applicationRootId))
+    return { kind: "refused" };
+  if (
+    request.installationRevision !== context.applicationReleaseRevision ||
+    request.releaseKey !== [
+      application.releaseVersion,
+      application.contentFingerprint,
+      application.resolutionFingerprint,
+    ].join(":")
+  )
+    return { kind: "reload" };
+  const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
+  if (pageDefinition === undefined) return { kind: "refused" };
+  const projected = await createStoredPageCapabilityService({
+    ...dependencies,
+    context,
+    selection: { pageId: pageDefinition.pageId },
+  }).project(session, selection);
+  if (projected.kind === "temporarily_unavailable")
+    return { kind: "temporarily_unavailable" };
+  if (projected.kind !== "available" || projected.value === undefined)
+    return { kind: "refused" };
+  return { kind: "available", page: projected.value, context, selection, dependencies };
+};
+
+/** The form submission's fields come only from its current actor-permitted page. */
+export const loadProjectedReferenceChoiceForm = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{ installationRevision: number; releaseKey: string; formId: string }>,
+): Promise<ProjectedReferenceChoiceForm | undefined> => {
+  try {
+    const projected = await projectReferenceChoicePage(session, address, request);
+    return projected.kind === "available"
+      ? projectedReferenceChoiceForm(
+          projected.page,
+          projected.context.releaseSet.modules,
+          request.formId,
+        )
+      : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 /** A form field may show only a value the page subject read returned for its own record type. */
@@ -458,6 +571,103 @@ const projectEditField = (
   };
 };
 
+/** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
+export const loadReferenceChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: Readonly<{
+    placementId: string;
+    installationRevision: number;
+    releaseKey: string;
+    search?: string;
+    continuationToken?: string;
+    selectedKey?: string;
+    selectedEvidence?: ReferenceChoiceSelectionEvidence;
+  }>,
+): Promise<ReferenceChoicePageResult> => {
+  try {
+    const projected = await projectReferenceChoicePage(session, address, request);
+    if (projected.kind !== "available") return projected;
+    const { dependencies, selection, context } = projected;
+    const continuationKey = getQueryContinuationKey();
+    const placement = collectPlacements(projected.page).find(
+      (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
+    );
+    if (placement === undefined || placement.formId === undefined)
+      return { kind: "refused" };
+    const form = projectedReferenceChoiceForm(
+      projected.page,
+      context.releaseSet.modules,
+      placement.formId,
+    );
+    const field = form?.placements.get(request.placementId);
+    if (field === undefined) return { kind: "refused" };
+
+    const service = createReferenceChoiceService({ ...dependencies, continuationKey });
+    const result = await service.run(session, selection, {
+      ...field.command,
+      ...(request.search === undefined || request.search.trim() === ""
+        ? {}
+        : { search: request.search }),
+      ...(request.continuationToken === undefined
+        ? {}
+        : { continuationToken: request.continuationToken }),
+    });
+    if (result.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (result.kind !== "available" || result.value.outcome !== "completed")
+      return { kind: "refused" };
+
+    const pageChoices = result.value.choices;
+    let selectedChoice = request.selectedKey === undefined
+      ? undefined
+      : pageChoices.find((choice) => choice.key === request.selectedKey);
+    let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
+    if (
+      selectedChoice === undefined &&
+      request.selectedKey !== undefined &&
+      request.selectedEvidence !== undefined
+    ) {
+      selectedChoice = await resolveReferenceChoiceOption({
+        service,
+        session,
+        selection,
+        field,
+        key: request.selectedKey,
+        evidence: request.selectedEvidence,
+      });
+      if (selectedChoice !== undefined)
+        selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
+    }
+    const choices =
+      selectedChoice === undefined || pageChoices.some((choice) => choice.key === selectedChoice?.key)
+        ? pageChoices
+        : [selectedChoice, ...pageChoices];
+    return {
+      kind: "completed",
+      values: projectReferenceChoiceInputValues(
+        choices,
+        selectedChoice?.key ?? null,
+        undefined,
+        {
+          ...(request.search === undefined ? {} : { search: request.search }),
+          ...(request.continuationToken === undefined
+            ? {}
+            : { continuationToken: request.continuationToken }),
+          ...(result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken }),
+          ...(Object.keys(selectedEvidenceOverride).length === 0
+            ? {}
+            : { optionEvidenceOverrides: selectedEvidenceOverride }),
+        },
+      ),
+    };
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
+};
+
 /**
  * A query-string value typed to the declared input it fills. A value the type cannot hold is
  * dropped, so the Query engine refuses the request instead of receiving a guess.
@@ -476,6 +686,57 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
 };
 
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
+
+const summaryAggregateLabel = (alias: string): string =>
+  alias
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[a-z]/, (letter) => letter.toUpperCase());
+
+/** Projects one already-authorised Query aggregate into the closed summary cell contract. */
+const summaryAggregateCellValue = (
+  aggregate: ModuleQuery["aggregates"][number],
+  field: ModuleField | undefined,
+  result: ProtectedQuerySummaryAggregateResult,
+): DisplayCellValue | Readonly<{ kind: "unavailable" }> | undefined => {
+  if (result.outcome === "refused") return { kind: "unavailable" };
+  if (aggregate.operation === "count")
+    return typeof result.value === "number" && Number.isSafeInteger(result.value)
+      ? { kind: "number", value: result.value }
+      : undefined;
+  if (result.value === null || result.valueCount === 0) return { kind: "empty" };
+  if (field === undefined) return undefined;
+
+  switch (field.type) {
+    case "whole_number": {
+      if (typeof result.value === "number" && Number.isSafeInteger(result.value))
+        return { kind: "number", value: result.value };
+      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
+    }
+    case "decimal_number": {
+      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
+    }
+    case "money": {
+      const moneyValue = moneyValueV2Schema.safeParse(result.value);
+      return moneyValue.success
+        ? { kind: "text", text: `${moneyValue.data.currency} ${moneyValue.data.amount}` }
+        : undefined;
+    }
+    case "date":
+    case "date_time":
+      return typeof result.value === "string"
+        ? { kind: "date", iso: result.value }
+        : undefined;
+    default:
+      return undefined;
+  }
+};
+
+const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
 
 const findModuleQuery = (
   context: InstalledRuntimeContext,
@@ -502,6 +763,25 @@ const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
       recordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.label] as const),
     ),
   );
+
+const isApplicationLauncherPlacement = (placement: unknown): boolean => {
+  if (!isRecord(placement) || !isRecord(placement.block)) return false;
+  return (
+    typeof placement.block.blockId === "string" &&
+    sameId(placement.block.blockId, APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId)
+  );
+};
+
+const launcherCellKey = (
+  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
+  settingKey: string,
+  fallback: string,
+): string => {
+  const value = settings[settingKey];
+  return isRecord(value) && value.kind === "text" && typeof value.value === "string"
+    ? value.value
+    : fallback;
+};
 
 const fieldChoiceLabelsOf = (
   module: ModuleRelease,
@@ -544,12 +824,20 @@ const logPlacementFailure = (
     | "detail_command_invalid"
     | "detail_query_unavailable"
     | "detail_query_refused"
+    | "launcher_query_invalid"
+    | "launcher_query_unavailable"
+    | "launcher_query_refused"
     | "calendar_settings_invalid"
     | "calendar_time_zone_unavailable"
     | "calendar_query_invalid"
     | "calendar_query_unavailable"
     | "calendar_query_refused"
-    | "calendar_arrangement_refused",
+    | "calendar_arrangement_refused"
+    | "summary_query_invalid"
+    | "summary_query_unavailable"
+    | "summary_query_refused"
+    | "summary_dataset_limit_exceeded"
+    | "summary_result_invalid",
 ): void => {
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}`,
@@ -824,32 +1112,6 @@ const loadInstalledContext = (
     },
   );
 
-/**
- * The installed release's theme for one application the viewer may open, so a page shown in place
- * of an addressed page (its not-found experience) renders in that application's own theme. It
- * reads under the person's own request scope like the page itself; when the read does not settle
- * the caller keeps the platform default rather than failing the page.
- */
-export const loadApplicationTheme = async (
-  session: IdentitySession,
-  address: Readonly<{
-    read: Extract<PermittedApplicationsRead, { kind: "available" }>;
-    application: PermittedApplication;
-  }>,
-): Promise<ApplicationPageModel["theme"] | undefined> => {
-  try {
-    const loaded = await loadInstalledContext(session, requestDependencies(), {
-      organizationId: address.read.organizationId,
-      applicationRootId: address.application.applicationRootId,
-    });
-    return loaded.kind === "available"
-      ? loaded.value.releaseSet.application.content.theme
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const loadApplicationPageInternal = async (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
@@ -1060,6 +1322,7 @@ const loadApplicationPageInternal = async (
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
+  const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
@@ -1152,6 +1415,21 @@ const loadApplicationPageInternal = async (
     selectedForProjection === undefined
       ? allPlacements
       : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
+  const hasQueryBoundLauncher = placements.some(
+    ({ placement }) =>
+      isApplicationLauncherPlacement(placement) && typeof placement.queryId === "string",
+  );
+  const permittedApplicationsRead = hasQueryBoundLauncher
+    ? await loadPermittedApplicationsAtAddress(
+        session,
+        address.tenantShortName,
+        address.organizationShortName,
+      )
+    : undefined;
+  const permittedApplicationKeys =
+    permittedApplicationsRead?.kind === "available"
+      ? permittedApplicationsRead.applications.map((application) => application.key)
+      : undefined;
 
   const pageSubjectRecordTypeId =
     subjectType === undefined ? undefined : String(subjectType.recordTypeId);
@@ -1309,7 +1587,8 @@ const loadApplicationPageInternal = async (
         values: { kind: "date_time_input", ...dateTimeZones },
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  for (const { placementId, placement } of placements) {
+  const referenceChoiceInputs: Array<{ placementId: string; formId: string; fieldKey: string }> = [];
+  for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
@@ -1331,11 +1610,43 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, CALENDAR_BLOCK_RELEASE.blockId);
+    const isSummaryValuesBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     const calendarContract = isCalendarBlock ? readCalendarPlacementContract(settings) : undefined;
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+    if (hasReferenceChoiceSource(placement)) {
+      const form = formId === undefined
+        ? undefined
+        : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
+      const field = form?.placements.get(placementId);
+      if (field === undefined || formId === undefined) {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
+      const result = await referenceChoices.run(session, selection, field.command);
+      if (result.kind !== "available" || result.value.outcome !== "completed") {
+        data[placementId] = { status: "disabled", reason: "Choices unavailable" };
+        continue;
+      }
+      data[placementId] = {
+        status: "ready",
+        values: projectReferenceChoiceInputValues(
+          result.value.choices,
+          undefined,
+          undefined,
+          result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken },
+        ),
+      };
+      continue;
+    }
     // A placement still bound to a legacy read model has no reader on this page: system record
     // types are read through the query path. It must never fall through to an empty display.
     if (placement.readModel !== undefined) {
@@ -1348,10 +1659,16 @@ const loadApplicationPageInternal = async (
       data[placementId] = { status: "refused", reason: "not_permitted" };
       continue;
     }
-    if (tableContract === undefined && detailContract === undefined && !isCalendarBlock) continue;
-
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
-
+    const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
+    const queryBoundSummary = isSummaryValuesBlock && queryId !== undefined;
+    if (
+      tableContract === undefined &&
+      detailContract === undefined &&
+      !isCalendarBlock &&
+      !queryBoundLauncher &&
+      !queryBoundSummary
+    ) continue;
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
     // record read path under the viewer's own authority. A public page shows no more than its
@@ -1414,6 +1731,228 @@ const loadApplicationPageInternal = async (
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
     const fieldLabels = fieldLabelsOf(bound.module);
+
+    if (queryBoundLauncher) {
+      if (permittedApplicationKeys === undefined) {
+        data[placementId] =
+          permittedApplicationsRead?.kind === "temporarily_unavailable"
+            ? { status: "error" }
+            : { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const target = bound.query.recordType;
+      if (target.state !== "resolved") {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      const targetModule = context.releaseSet.modules.find((module) =>
+        sameId(String(module.rootId), String(target.moduleRootId)),
+      );
+      const targetRecordType = targetModule?.content.recordTypes.find((recordType) =>
+        sameId(String(recordType.recordTypeId), String(target.recordTypeId)),
+      );
+      if (targetRecordType === undefined) {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      const inputValues: Record<string, JsonValue> = {};
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      const command = protectedQueryCommandSchema.safeParse({
+        moduleRootId: bound.module.rootId,
+        queryId: bound.query.queryId,
+        inputValues,
+        requestedFieldIds: bound.query.selectedFieldIds,
+        requestedSystemFieldKeys: [],
+        sort: [],
+        sortableFieldIds: [],
+        filterableFieldIds: [],
+        searchableFieldIds: [],
+        pageSize: bound.query.pageSize,
+      });
+      if (!command.success) {
+        logPlacementFailure(address, placementId, "launcher_query_invalid");
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const queryRows: ProtectedQueryRow[] = [];
+      const seenContinuationTokens = new Set<string>();
+      let continuationToken: string | undefined;
+      let failure: "unavailable" | "refused" | "too_many_rows" | undefined;
+      do {
+        const result = await queries.run(session, selection, {
+          ...command.data,
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        });
+        if (result.kind === "temporarily_unavailable") {
+          failure = "unavailable";
+          break;
+        }
+        if (result.kind !== "available" || result.value.outcome !== "completed") {
+          failure = "refused";
+          break;
+        }
+        queryRows.push(...result.value.rows);
+        if (queryRows.length > MAXIMUM_LAUNCHER_QUERY_ROWS) {
+          failure = "too_many_rows";
+          break;
+        }
+        const nextToken = result.value.nextContinuationToken;
+        if (nextToken !== undefined && seenContinuationTokens.has(nextToken)) {
+          failure = "too_many_rows";
+          break;
+        }
+        if (nextToken !== undefined) seenContinuationTokens.add(nextToken);
+        continuationToken = nextToken;
+      } while (continuationToken !== undefined);
+
+      if (failure !== undefined) {
+        logPlacementFailure(
+          address,
+          placementId,
+          failure === "unavailable" ? "launcher_query_unavailable" : "launcher_query_refused",
+        );
+        data[placementId] =
+          failure === "unavailable"
+            ? { status: "error" }
+            : { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const fieldKeys = new Map(
+        targetRecordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
+      );
+      const launcherRows: ApplicationLauncherQueryRow[] = queryRows.map((row) => {
+        const cells: Record<string, { kind: "text"; text: string }> = {};
+        for (const [fieldId, value] of Object.entries(row.values)) {
+          const fieldKey = fieldKeys.get(fieldId.toLowerCase());
+          if (fieldKey !== undefined && typeof value === "string")
+            cells[fieldKey] = { kind: "text", text: value };
+        }
+        const key = cells.key;
+        return { applicationKey: key?.kind === "text" ? key.text : undefined, cells };
+      });
+      const values = applicationLauncherQueryRowsToListValues(
+        launcherRows,
+        permittedApplicationKeys,
+        launcherCellKey(settings, "name_key", "name"),
+        launcherCellKey(settings, "icon_key", "icon"),
+      );
+      data[placementId] = { status: "ready", values };
+      continue;
+    }
+
+    if (queryBoundSummary) {
+      const inputValues: Record<string, JsonValue> = {};
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      const command = protectedQuerySummaryCommandSchema.safeParse({
+        moduleRootId: bound.module.rootId,
+        queryId: bound.query.queryId,
+        inputValues,
+      });
+      if (!command.success) {
+        logPlacementFailure(address, placementId, "summary_query_invalid");
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      let summaryResult: Awaited<ReturnType<typeof queries.summarise>>;
+      try {
+        summaryResult = await queries.summarise(session, selection, command.data);
+      } catch {
+        summaryResult = { kind: "temporarily_unavailable" };
+      }
+      if (summaryResult.kind === "temporarily_unavailable") {
+        logPlacementFailure(address, placementId, "summary_query_unavailable");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+      if (summaryResult.kind !== "available" || summaryResult.value.outcome !== "completed") {
+        const isDatasetLimitExceeded =
+          summaryResult.kind === "available" &&
+          summaryResult.value.outcome === "refused" &&
+          summaryResult.value.reasonCode === "dataset_limit_exceeded";
+        logPlacementFailure(
+          address,
+          placementId,
+          isDatasetLimitExceeded ? "summary_dataset_limit_exceeded" : "summary_query_refused",
+        );
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const declaredAggregates = bound.query.aggregates;
+      const projectedAggregates = summaryResult.value.aggregates;
+      const aliases = declaredAggregates.map((aggregate) => aggregate.alias);
+      const resultAliases = Object.keys(projectedAggregates);
+      if (
+        resultAliases.length !== aliases.length ||
+        aliases.some((alias) => !Object.hasOwn(projectedAggregates, alias))
+      ) {
+        logPlacementFailure(address, placementId, "summary_result_invalid");
+        data[placementId] = { status: "error" };
+        continue;
+      }
+
+      const recordTypeReference = bound.query.recordType;
+      const summaryRecordType =
+        recordTypeReference.state === "resolved"
+          ? context.releaseSet.modules
+              .find((module) => sameId(String(module.rootId), String(recordTypeReference.moduleRootId)))
+              ?.content.recordTypes.find((recordType) =>
+                sameId(String(recordType.recordTypeId), String(recordTypeReference.recordTypeId)),
+              )
+          : undefined;
+      const fieldById = new Map(
+        (summaryRecordType?.fields ?? []).map((field) => [String(field.fieldId).toLowerCase(), field]),
+      );
+      const values: Array<{
+        key: string;
+        label: string;
+        value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
+      }> = [];
+      let invalidAggregate = false;
+      for (const aggregate of declaredAggregates) {
+        const field =
+          aggregate.fieldId === undefined
+            ? undefined
+            : fieldById.get(aggregate.fieldId.toLowerCase());
+        const value = summaryAggregateCellValue(
+          aggregate,
+          field,
+          projectedAggregates[aggregate.alias]!,
+        );
+        if (value === undefined) {
+          invalidAggregate = true;
+          break;
+        }
+        values.push({
+          key: aggregate.alias,
+          label: summaryAggregateLabel(aggregate.alias) || aggregate.alias,
+          value,
+        });
+      }
+      if (invalidAggregate) {
+        logPlacementFailure(address, placementId, "summary_result_invalid");
+        data[placementId] = { status: "error" };
+      } else if (values.length === 0) data[placementId] = { status: "empty" };
+      else
+        data[placementId] = {
+          status: "ready",
+          values: { kind: "summary_values", values },
+        };
+      continue;
+    }
 
     if (isCalendarBlock && calendarContract !== undefined) {
       let organizationSettings: Awaited<ReturnType<typeof readCalendarSettings>>;
@@ -1941,6 +2480,7 @@ const loadApplicationPageInternal = async (
       bindings,
       refreshPlacementsByBinding,
       editFormBaselines,
+      referenceChoiceInputs,
       ...(guidedForm === undefined ? {} : { guidedForm }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
