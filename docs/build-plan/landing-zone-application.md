@@ -47,6 +47,13 @@ are platform, each because an ordinary definition cannot express it:
 | Link, launcher and filter blocks | [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) | Blocks are the platform's presentation vocabulary; customers cannot supply components. A link that opens a platform target is as generic as navigation. |
 | Viewer-safe record link resolution | [#378](https://github.com/Abzum-NZ/Abzum-Vortex/issues/378) | A link field must enumerate its target record types at publication and cannot cover every record type of every installed application; reading an application-contained record from another application's context is refused; and copying the title at pin time is the leak this prevents. |
 
+The Landing Zone's `home_applications` and `all_applications` launcher placements bind to its
+own `landing_zone_applications` Query to supply rows for layout with live application names and
+icons. On an application page, the server intersects those query rows with application keys from
+the protected permitted-applications read. The protected read remains the authority for which applications and
+pages may open, for address resolution, for the organisation-address launcher fallback and for
+the server-side tile-open recheck. A query row alone never makes an application openable.
+
 ## Per-user configuration
 
 Tiles are records in the Landing Zone's own module, in application-contained storage, owned

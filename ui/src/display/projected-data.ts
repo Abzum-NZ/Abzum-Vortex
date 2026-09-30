@@ -80,6 +80,13 @@ export type DisplaySummaryValue = Readonly<{
   value: DisplayCellValue;
 }>;
 
+/** One summary-block aggregate, which may be unavailable on its own. */
+export type DisplaySummaryMetric = Readonly<{
+  key: string;
+  label: string;
+  value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
+}>;
+
 /** One permission-projected group with stable group identity and its own rows. */
 export type DisplayGroup = Readonly<{
   groupId: string;
@@ -155,7 +162,7 @@ export type GroupedPayload = Readonly<{ kind: "grouped_data"; groups: readonly D
 /** The ready values a summary-values block renders. */
 export type SummaryPayload = Readonly<{
   kind: "summary_values";
-  values: readonly DisplaySummaryValue[];
+  values: readonly DisplaySummaryMetric[];
 }>;
 
 export type TextData = DisplayDataState<TextPayload>;
@@ -641,10 +648,22 @@ const parsePagination = (
   return Object.freeze({ page: parsedPage, pageCount: parsedCount });
 };
 
-const parseSummaryValues = (
+const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryValue[] => {
+): DisplaySummaryMetric["value"] => {
+  if (isRecord(value) && value.kind === "unavailable") {
+    requireExactKeys(value, ["kind"], location);
+    return Object.freeze({ kind: "unavailable" });
+  }
+  return parseCellValue(value, location);
+};
+
+const parseSummaryEntries = <Value>(
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+  parseValue: (value: unknown, location: DefinitionRenderErrorLocation) => Value,
+): readonly Readonly<{ key: string; label: string; value: Value }>[] => {
   const items = requireArray(value, "Projected summary values must be an array", location);
   const seen = new Set<string>();
   return Object.freeze(
@@ -666,11 +685,22 @@ const parseSummaryValues = (
           "A summary value requires a label",
           summaryLocation,
         ),
-        value: parseCellValue(record.value, summaryLocation),
+        value: parseValue(record.value, summaryLocation),
       });
     }),
   );
 };
+
+const parseSummaryMetrics = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly DisplaySummaryMetric[] =>
+  parseSummaryEntries(value, location, parseSummaryValue);
+
+const parseSummaryValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly DisplaySummaryValue[] => parseSummaryEntries(value, location, parseCellValue);
 
 const parseFields = (
   value: unknown,
@@ -993,7 +1023,7 @@ export const parseSummaryPayload = (
   requireExactKeys(record, ["kind", "values"], location);
   return Object.freeze({
     kind: "summary_values",
-    values: parseSummaryValues(record.values, location),
+    values: parseSummaryMetrics(record.values, location),
   });
 };
 

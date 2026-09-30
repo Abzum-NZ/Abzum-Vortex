@@ -784,6 +784,10 @@ export const flowTriggerSchema = z.discriminatedUnion("type", [
 ]);
 export type FlowTrigger = z.infer<typeof flowTriggerSchema>;
 
+/** The verified source that caused one flow run to start. */
+export const flowTriggerOriginSchema = z.enum(["person", "event", "schedule"]);
+export type FlowTriggerOrigin = z.infer<typeof flowTriggerOriginSchema>;
+
 /** Which execution kinds each automatic start may run. */
 export const flowTriggerExecutionKinds = Object.freeze({
   BeforeSave: ["transaction"],

@@ -194,7 +194,13 @@ begin
           from pg_catalog.jsonb_array_elements(role_values) as role(value)
         ),
         'permissions', coalesce(permission_values, '[]'::jsonb)
-      )
+      ) || case
+        when pg_catalog.jsonb_array_length(experience_values) > 0
+          then pg_catalog.jsonb_build_object(
+            'theme', application_row.compilation_output #> '{canonical,content,theme}'
+          )
+        else '{}'::jsonb
+      end
     );
   end loop;
 

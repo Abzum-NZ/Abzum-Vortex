@@ -45,11 +45,15 @@ import {
   protectedQueryCommandSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryResultSchema,
+  protectedQuerySummaryCommandSchema,
+  protectedQuerySummaryResultSchema,
   protectedQueryRowCapabilitiesSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryPage,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryResult,
 } from "./protected-query-contracts";
 import { recordSystemValuesSchema } from "./record-system-values";
 import { readThroughQueryCache, type SharedCacheStore } from "./shared-cache-adapter";
@@ -155,6 +159,10 @@ const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryRes
   reasonCode,
 });
 
+const summaryRefusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): ProtectedQuerySummaryResult => ({ outcome: "refused", reasonCode });
+
 const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   return rows[0].result;
@@ -257,7 +265,7 @@ const userInputRefusal = (
 
 const readInputs = async (
   transaction: RequestDatabaseTransaction,
-  command: ProtectedQueryCommand,
+  command: Pick<ProtectedQueryCommand, "moduleRootId" | "queryId">,
 ) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.read_module_query_inputs(
@@ -266,6 +274,62 @@ const readInputs = async (
     ) as result
   `;
   return inputsReadSchema.parse(one(rows));
+};
+
+const readSummary = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQuerySummaryCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify({
+        filter: command.filter ?? null,
+        filterableFieldIds: command.filterableFieldIds,
+      })}::text::jsonb
+    ) as result
+  `;
+  return protectedQuerySummaryResultSchema.parse(one(rows));
+};
+
+const summaryFilterInputRefusal = (
+  command: ProtectedQuerySummaryCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const summariseCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQuerySummaryCommand,
+): Promise<ProtectedQuerySummaryResult> => {
+  if (scope.applicationRootId === undefined) return summaryRefusal("request_invalid");
+  const userRefusal = summaryFilterInputRefusal(command);
+  if (userRefusal !== undefined) return summaryRefusal(userRefusal);
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return summaryRefusal(declared.reasonCode);
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return summaryRefusal("descriptor_invalid");
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return summaryRefusal("input_invalid");
+    throw error;
+  }
+
+  return readSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
 };
 
 const readPage = async (
@@ -720,6 +784,21 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
             };
       return requests.run(caller, selection, (transaction, scope) =>
         runCommand(transaction, scope, command.data, continuationKey, cache),
+      );
+    },
+    async summarise(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return { kind: "available", value: summaryRefusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, (transaction, scope) =>
+        summariseCommand(transaction, scope, command.data),
       );
     },
   });
