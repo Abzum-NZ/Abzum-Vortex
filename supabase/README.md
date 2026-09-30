@@ -211,6 +211,19 @@ PostgreSQL grants temporary-relation capability through the database-wide
 unchanged: temporary relations are session-local, never service storage or
 authority, and are outside the persistent ownership restriction.
 
+Supabase Auth sends verification and recovery messages through its configured
+SMTP provider. The commented `[auth.email.smtp]` template in `config.toml` names
+`env(VORTEX_AUTH_SMTP_HOST)`, `env(VORTEX_AUTH_SMTP_USER)`,
+`env(VORTEX_AUTH_SMTP_PASSWORD)`, and `env(VORTEX_AUTH_SMTP_FROM_ADDRESS)` for
+environment-specific Auth configuration; it commits no credential values.
+Supply them from an environment-scoped Doppler configuration consumed only by
+the matching Supabase Auth project, separate from the Vercel-synchronised roots
+and the Operations environment. In particular, the SMTP password never enters
+a Vercel-synchronised config. The Supabase Auth/email operator owns provider
+credential rotation, updates that environment's Auth configuration, and
+verifies delivery before retiring the prior credential. Local Auth continues
+to use Mailpit.
+
 Vercel runtime traffic uses Supabase's shared transaction pooler on port 6543
 with prepared statements disabled. Kestra delivery uses the session pooler on
 port 5432. Both routes verify the certificate and hostname.
@@ -225,11 +238,18 @@ reserved characters without URL-encoding ambiguity.
 Migrations deliberately create `vortex_runtime` without a password. Hosted
 provisioning generates a different high-entropy password for each environment,
 assigns it through the Supabase administrative path, and stores it only inside
-that environment's complete `VORTEX_RUNTIME_DATABASE_URL`. After the exact
+that environment's complete `VORTEX_RUNTIME_DATABASE_URL`. The database
+operator owns rotation of each environment's `vortex_runtime` password and its
+matching Vercel-synchronised Doppler root config. After the exact
 Doppler-to-Vercel sync and redeployment, the operated proof must verify a real
 protected request. Never copy the project-owner password, a migration variable,
-a general `DATABASE_*` variable, or a Kestra credential into a Vercel-synchronised
-config.
+a general `DATABASE_*` variable, an SMTP credential, or a Kestra credential into
+a Vercel-synchronised config.
+
+The database operations operator owns the separate project-owner and migration
+credentials in the unsynced `Operations` environment. Rotation updates only the
+matching `ops_stg` or `ops_prd` config and the reviewed migration path; those
+credentials are never copied into Vercel or exchanged for a runtime password.
 
 Never edit a migration after it has reached Testing or Production. Correct it
 with a later migration. Never place customer data, a database address, or a
