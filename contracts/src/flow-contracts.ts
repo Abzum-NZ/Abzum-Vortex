@@ -610,6 +610,63 @@ const shorthandReferenceValueSchema = z.string().transform((text, context) => {
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
 
+/** A selected-record read declares at most twenty output members and source field references. */
+export const flowMaximumRecordReadFields = 20;
+
+/** One named output member of a selected-record field projection. */
+export const flowReadFieldsProjectionEntrySchema = z
+  .object({
+    alias: builderKeySchema,
+    field: z.string().min(1).max(240),
+  })
+  .strict();
+
+/** The closed, ordered projection carried by `record.read_fields`. */
+export const flowReadFieldsProjectionSchema = z
+  .array(flowReadFieldsProjectionEntrySchema)
+  .min(1)
+  .max(flowMaximumRecordReadFields)
+  .superRefine((fields, context) => {
+    const aliases = new Set<string>();
+    const references = new Set<string>();
+    fields.forEach((field, index) => {
+      if (aliases.has(field.alias))
+        context.addIssue({
+          code: "custom",
+          path: [index, "alias"],
+          message: "Projection aliases must be unique",
+        });
+      aliases.add(field.alias);
+      if (references.has(field.field))
+        context.addIssue({
+          code: "custom",
+          path: [index, "field"],
+          message: "Projected field references must be unique",
+        });
+      references.add(field.field);
+    });
+  });
+
+/** The projection is authored as one JSON literal, never a runtime map or computed value. */
+export const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {
+  if (value.kind !== "literal" || value.literal.type !== "json") {
+    context.addIssue({
+      code: "custom",
+      message: "A selected-record projection must be a JSON literal",
+    });
+    return;
+  }
+  const projection = flowReadFieldsProjectionSchema.safeParse(value.literal.value);
+  if (projection.success) return;
+  projection.error.issues.forEach((issue) =>
+    context.addIssue({
+      code: "custom",
+      path: ["literal", "value", ...issue.path],
+      message: issue.message,
+    }),
+  );
+});
+
 // ─── Declarations ──────────────────────────────────────────────────────────────────────────────
 
 const recordReferenceTypes = new Set(["record_reference", "record_reference_list"]);
@@ -1023,7 +1080,19 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
       /** When true, a refused, conflict or invalid outcome is branched on instead of failing. */
       allowRefusal: z.boolean().optional(),
     })
-    .strict();
+    .strict()
+    .superRefine((task, context) => {
+      if (task.type !== "record.read_fields" || task.properties.fields === undefined) return;
+      const projection = flowReadFieldsProjectionValueSchema.safeParse(task.properties.fields);
+      if (projection.success) return;
+      projection.error.issues.forEach((issue) =>
+        context.addIssue({
+          code: "custom",
+          path: ["properties", "fields", ...issue.path],
+          message: issue.message,
+        }),
+      );
+    });
   return z.union([control, registered]);
 });
 export const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;

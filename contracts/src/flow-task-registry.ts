@@ -219,7 +219,13 @@ export const flowTaskTypeDefinitionSchema = z
       background_start: ["protected_callback"],
       interface: ["not_compiled"],
     };
-    if (value.category === "registered" && !expectedModes[value.effect]?.includes(value.kestra.mode))
+    const taskModes =
+      value.type === "record.read_fields"
+        ? value.effect === "read" && locations.size === 1 && locations.has("server")
+          ? ["not_compiled"]
+          : []
+        : expectedModes[value.effect];
+    if (value.category === "registered" && !taskModes?.includes(value.kestra.mode))
       issue(["kestra", "mode"], "The Kestra compile mode does not fit the task's effect");
     if (value.category === "registered" && value.kestra.mode === "native_control")
       issue(["kestra", "mode"], "Only control tasks compile to native Kestra control tasks");
@@ -258,6 +264,7 @@ export const flowRegisteredTaskTypeKeys = [
   "record.restore",
   "record.changes",
   "record.query",
+  "record.read_fields",
   "operation.call",
   "flow.run_background",
   "event.announce",
@@ -512,6 +519,20 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     outputs: [output("records", "record_reference_list")],
     kestra: "protected_callback",
     retry: durableRetry,
+    redaction: "safe_fields",
+  },
+  "record.read_fields": {
+    title: "Read selected record fields",
+    summary: "Reads a bounded set of fields from one selected record under the run's authority.",
+    runLocations: ["server"],
+    effect: "read",
+    properties: {
+      record_type: required("record_type_id"),
+      record: required("record_reference"),
+      fields: required("json"),
+    },
+    outputs: [output("values", "json")],
+    kestra: "not_compiled",
     redaction: "safe_fields",
   },
   "operation.call": {
