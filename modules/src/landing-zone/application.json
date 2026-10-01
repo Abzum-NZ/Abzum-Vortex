@@ -685,17 +685,20 @@
           "label": { "type": "text", "required": false },
           "description": { "type": "text", "required": false }
         },
+        "variables": {
+          "bookmark_values": { "type": "json", "default": {} }
+        },
         "tasks": [
           {
-            "id": "save",
-            "type": "record.save",
+            "id": "prepare_values",
+            "type": "data.set_variable",
             "version": "1.0.0",
             "properties": {
-              "record_type": {
+              "variable": {
                 "kind": "literal",
-                "literal": { "type": "text", "value": "vortex.landing_zone:tile" }
+                "literal": { "type": "text", "value": "bookmark_values" }
               },
-              "values": {
+              "value": {
                 "kind": "map",
                 "entries": {
                   "target_kind": {
@@ -759,6 +762,21 @@
                     "reference": { "source": "input", "name": "description" }
                   }
                 }
+              }
+            }
+          },
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": { "type": "text", "value": "vortex.landing_zone:tile" }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": { "source": "variable", "name": "bookmark_values" }
               }
             }
           },
