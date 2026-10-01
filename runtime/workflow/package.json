@@ -7,10 +7,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "catalog:",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
     "@vortex/event": "workspace:*",

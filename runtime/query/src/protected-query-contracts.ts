@@ -117,6 +117,59 @@ export const protectedQueryCommandSchema = z
   .strict();
 export type ProtectedQueryCommand = z.infer<typeof protectedQueryCommandSchema>;
 
+/** One explicit, installed choice column or the unassigned member set. */
+export const protectedQueryBoardColumnSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("option"), value: z.string().min(1).max(120) }).strict(),
+  z.object({ kind: z.literal("unassigned") }).strict(),
+]);
+export type ProtectedQueryBoardColumn = z.infer<typeof protectedQueryBoardColumnSchema>;
+
+/** A closed member selector over the choice field of a grouped installed Query. */
+export const protectedQueryBoardSelectorSchema = z
+  .object({
+    choiceFieldId: fieldIdSchema,
+    column: protectedQueryBoardColumnSchema,
+  })
+  .strict();
+export type ProtectedQueryBoardSelector = z.infer<typeof protectedQueryBoardSelectorSchema>;
+
+/** One uncached, record-identity-ordered page of readable members in a board column. */
+export const protectedQueryBoardMembersCommandSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    queryId: queryIdSchema,
+    inputValues: z.record(builderKeySchema, jsonValueSchema),
+    requestedFieldIds: z
+      .array(fieldIdSchema)
+      .min(1)
+      .max(200)
+      .refine(
+        (fieldIds) =>
+          new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length,
+        { message: "Each requested field is named once" },
+      ),
+    requestedSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      })
+      .default([]),
+    filter: conditionNodeSchema.optional(),
+    filterableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+      .default([]),
+    selector: protectedQueryBoardSelectorSchema,
+    pageSize: z.number().int().min(1).max(200),
+    continuationToken: z.string().min(1).max(65_536).optional(),
+  })
+  .strict();
+export type ProtectedQueryBoardMembersCommand = z.infer<
+  typeof protectedQueryBoardMembersCommandSchema
+>;
+
 /**
  * The record action kinds one list row can expose per row. Read is implied by the
  * row's own presence; create is not a per-existing-record action and is never listed.
@@ -205,6 +258,8 @@ export const protectedQueryRefusalReasonCodes = [
   "page_size_invalid",
   "cursor_invalid",
   "cursor_stale",
+  /** A database-backed summary would exceed its bounded candidate scan. */
+  "dataset_limit_exceeded",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 
@@ -235,3 +290,65 @@ export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
   protectedQueryRefusalSchema,
 ]);
 export type ProtectedQueryResult = z.infer<typeof protectedQueryResultSchema>;
+
+/** One database-backed summary request over the installed Query's own groups and aggregates. */
+export const protectedQuerySummaryCommandSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    queryId: queryIdSchema,
+    inputValues: z.record(builderKeySchema, jsonValueSchema),
+    /** The viewer's typed filter narrows the installed Query filter. */
+    filter: conditionNodeSchema.optional(),
+    /** Built by the bound component from its installed filter controls. */
+    filterableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+      .default([]),
+  })
+  .strict();
+export type ProtectedQuerySummaryCommand = z.infer<typeof protectedQuerySummaryCommandSchema>;
+
+export const protectedQuerySummaryAggregateResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("completed"),
+      value: jsonValueSchema,
+      valueCount: z.number().int().nonnegative().max(100_000),
+    })
+    .strict(),
+  z.object({ outcome: z.literal("refused"), reasonCode: z.literal("mixed_currency") }).strict(),
+]);
+
+export const protectedQuerySummaryGroupSchema = z
+  .object({
+    groupKey: z.string(),
+    groupValues: z.record(fieldIdSchema, jsonValueSchema),
+    rowCount: z.number().int().nonnegative().max(100_000),
+    aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
+  })
+  .strict();
+
+export const protectedQuerySummaryCompletedSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+    queryId: queryIdSchema,
+    groupByFieldIds: z.array(fieldIdSchema).max(10),
+    totalRowCount: z.number().int().nonnegative().max(100_000),
+    groups: z.array(protectedQuerySummaryGroupSchema).max(100_000),
+    aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
+  })
+  .strict();
+
+export const protectedQuerySummaryResultSchema = z.discriminatedUnion("outcome", [
+  protectedQuerySummaryCompletedSchema,
+  protectedQueryRefusalSchema,
+]);
+export type ProtectedQuerySummaryCompleted = z.infer<typeof protectedQuerySummaryCompletedSchema>;
+export type ProtectedQuerySummaryAggregateResult = z.infer<
+  typeof protectedQuerySummaryAggregateResultSchema
+>;
+export type ProtectedQuerySummaryGroup = z.infer<typeof protectedQuerySummaryGroupSchema>;
+export type ProtectedQuerySummaryResult = z.infer<typeof protectedQuerySummaryResultSchema>;

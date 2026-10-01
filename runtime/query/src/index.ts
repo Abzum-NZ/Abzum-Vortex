@@ -2,6 +2,9 @@ import "server-only";
 
 export {
   protectedQueryCommandSchema,
+  protectedQueryBoardColumnSchema,
+  protectedQueryBoardSelectorSchema,
+  protectedQueryBoardMembersCommandSchema,
   protectedQuerySortSchema,
   protectedQueryRowSchema,
   protectedQueryPageRowSchema,
@@ -12,7 +15,15 @@ export {
   protectedQueryRefusalSchema,
   protectedQueryPageSchema,
   protectedQueryResultSchema,
+  protectedQuerySummaryCommandSchema,
+  protectedQuerySummaryAggregateResultSchema,
+  protectedQuerySummaryGroupSchema,
+  protectedQuerySummaryCompletedSchema,
+  protectedQuerySummaryResultSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryBoardColumn,
+  type ProtectedQueryBoardSelector,
+  type ProtectedQueryBoardMembersCommand,
   type ProtectedQuerySort,
   type ProtectedQueryRow,
   type ProtectedQueryPageRow,
@@ -22,6 +33,11 @@ export {
   type ProtectedQueryRefusal,
   type ProtectedQueryPage,
   type ProtectedQueryResult,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryCompleted,
+  type ProtectedQuerySummaryAggregateResult,
+  type ProtectedQuerySummaryGroup,
+  type ProtectedQuerySummaryResult,
 } from "./protected-query-contracts";
 
 export {
@@ -41,8 +57,10 @@ export {
 export {
   createViewerSafeRecordLinkReadService,
   viewerSafeRecordLinkTitleReadResultSchema,
+  viewerSafeRecordLinkFieldsReadResultSchema,
   type ViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
+  type ViewerSafeRecordLinkFieldsReadResult,
 } from "./viewer-safe-record-link-read";
 
 export type { QueryContinuationKey } from "./continuation-token";
@@ -60,7 +78,8 @@ export {
   type TableArrangementDescriptor,
   type BoardArrangementDescriptor,
   type CalendarArrangementDescriptor,
-  type SummaryArrangementDescriptor,
+  summaryArrangementCommandSchema,
+  type SummaryArrangementCommand,
   type AggregateDescriptor,
   type AggregateValue,
   type AggregateResult,
@@ -77,7 +96,7 @@ export {
   type ArrangementResult,
 } from "./arrangement-contracts";
 
-export { arrangeDataset } from "./arrangements";
+export { arrangeDataset, arrangeSummary } from "./arrangements";
 
 export {
   createUsageProjectionService,

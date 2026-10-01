@@ -22,12 +22,15 @@ import {
   identityAuthorityIdSchema,
   identityIdSchema,
   invitationIdSchema,
+  membershipIdSchema,
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+  roleActivationIdSchema,
+  roleAssignmentIdSchema,
   roleIdSchema,
   sessionIdSchema,
   tenantAdministratorAssignmentIdSchema,
@@ -1838,21 +1841,103 @@ export const grantConsentRequestSchema = z
       });
   });
 
+export const grantConsentDecisionAuthorizationPathSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("direct"),
+      roleId: roleIdSchema,
+      roleAssignmentId: roleAssignmentIdSchema,
+      validUntil: timestampSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("group"),
+      roleId: roleIdSchema,
+      roleAssignmentId: roleAssignmentIdSchema,
+      membershipId: membershipIdSchema,
+      validUntil: timestampSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("activated_pim_direct"),
+      roleId: roleIdSchema,
+      roleAssignmentId: roleAssignmentIdSchema,
+      roleActivationId: roleActivationIdSchema,
+      validUntil: timestampSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("activated_pim_group"),
+      roleId: roleIdSchema,
+      roleAssignmentId: roleAssignmentIdSchema,
+      membershipId: membershipIdSchema,
+      roleActivationId: roleActivationIdSchema,
+      validUntil: timestampSchema,
+    })
+    .strict(),
+]);
+
 export const grantConsentDecisionSchema = z
   .object({
     decisionId: grantConsentDecisionIdSchema,
     requestId: grantConsentRequestIdSchema,
     side: z.enum(["source_authorization", "recipient_acceptance"]),
     proposedGrantFingerprint: fingerprintSchema,
+    proposalRevision: revisionSchema,
     approverOrganizationId: organizationIdSchema,
     approverOrganizationAccountId: organizationAccountIdSchema,
+    approverApplicationRootId: applicationRootIdSchema,
+    accessVersion: revisionSchema,
+    proposalExpiresAt: timestampSchema,
     decision: z.enum(["consented", "refused"]),
     decidedAt: timestampSchema,
     note: z.string().max(500).optional(),
-    authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
+    authorizationPath: grantConsentDecisionAuthorizationPathSchema,
+    authenticationStrength: z.literal("recent_multi_factor"),
+    multiFactorAuthenticatedAt: timestampSchema,
+    multiFactorAuthenticationExpiresAt: timestampSchema,
+    expiresAt: timestampSchema,
     correlationId: correlationIdSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => {
+      const decidedAt = Date.parse(value.decidedAt);
+      const multiFactorAt = Date.parse(value.multiFactorAuthenticatedAt);
+      const multiFactorExpiresAt = Date.parse(value.multiFactorAuthenticationExpiresAt);
+      const pathValidUntil = Date.parse(value.authorizationPath.validUntil);
+      const proposalExpiresAt = Date.parse(value.proposalExpiresAt);
+      const decisionExpiresAt = Date.parse(value.expiresAt);
+      return (
+        [
+          decidedAt,
+          multiFactorAt,
+          multiFactorExpiresAt,
+          pathValidUntil,
+          proposalExpiresAt,
+          decisionExpiresAt,
+        ].every(Number.isFinite) &&
+        multiFactorAt <= decidedAt &&
+        decidedAt - multiFactorAt <= 300_000 &&
+        multiFactorExpiresAt >= decidedAt &&
+        multiFactorExpiresAt <= multiFactorAt + 300_000 &&
+        pathValidUntil > decidedAt &&
+        proposalExpiresAt > decidedAt &&
+        decisionExpiresAt >= decidedAt &&
+        decisionExpiresAt <= multiFactorExpiresAt &&
+        decisionExpiresAt <= pathValidUntil &&
+        decisionExpiresAt <= proposalExpiresAt
+      );
+    },
+    {
+      path: ["expiresAt"],
+      message:
+        "Consent decision evidence must remain current within its MFA, role-path, and proposal windows",
+    },
+  );
 
 export type Tenant = z.infer<typeof tenantSchema>;
 export type TenantAdministratorAssignment = z.infer<typeof tenantAdministratorAssignmentSchema>;
@@ -1905,4 +1990,7 @@ export type FieldRestriction = z.infer<typeof fieldRestrictionSchema>;
 export type DirectRecordShare = z.infer<typeof directRecordShareSchema>;
 export type AccessGrant = z.infer<typeof accessGrantSchema>;
 export type GrantConsentRequest = z.infer<typeof grantConsentRequestSchema>;
+export type GrantConsentDecisionAuthorizationPath = z.infer<
+  typeof grantConsentDecisionAuthorizationPathSchema
+>;
 export type GrantConsentDecision = z.infer<typeof grantConsentDecisionSchema>;

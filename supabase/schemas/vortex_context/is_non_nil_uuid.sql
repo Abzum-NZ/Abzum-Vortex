@@ -21,6 +21,8 @@ grant execute on function vortex_context.is_non_nil_uuid(text)
     vortex_module_owner, vortex_access_owner, vortex_workflow_owner;
 grant execute on function vortex_context.is_non_nil_uuid(text)
   to vortex_file_owner;
+grant execute on function vortex_context.is_non_nil_uuid(text)
+  to vortex_page_owner;
 
 comment on function vortex_context.is_non_nil_uuid(text) is
   'Accepts only a non-nil RFC UUID with a version nibble from 1 through 8 and an RFC variant nibble.';

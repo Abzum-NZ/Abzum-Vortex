@@ -37,6 +37,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "./identifiers";
+import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
 
 export {
@@ -417,6 +418,34 @@ export const applicationCompilationOutputV2Schema = z
   .object({
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
+    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
+    canonical: applicationDraftV2Schema,
+    artifact: compiledApplicationArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+    toolBundle: applicationToolBundleSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.toolBundle.applicationKey !== value.canonical.envelope.key)
+      context.addIssue({
+        code: "custom",
+        path: ["toolBundle", "applicationKey"],
+        message: "A release's tool bundle belongs to the application it was compiled from",
+      });
+  });
+
+/**
+ * Persisted Application releases can predate platform compatibility metadata. New compilation
+ * uses the required-field schema above; immutable historical output remains readable as stored.
+ */
+const storedApplicationCompilationOutputV2Schema = z
+  .object({
+    kind: z.literal("application"),
+    validationContractVersion: z.literal("2.0.0"),
+    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
     canonical: applicationDraftV2Schema,
     artifact: compiledApplicationArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
@@ -450,7 +479,7 @@ export const moduleCompilationOutputV3Schema = z
 
 export const definitionCompilationOutputSchema = z.union([
   moduleCompilationOutputV3Schema,
-  applicationCompilationOutputV2Schema,
+  storedApplicationCompilationOutputV2Schema,
   z
     .object({
       kind: z.literal("connection_type"),

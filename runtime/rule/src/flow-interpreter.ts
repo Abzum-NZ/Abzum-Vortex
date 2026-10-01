@@ -5,10 +5,13 @@ import {
   flowMaximumRunFlowDepth,
   flowMaximumTaskOutputPathDepth,
   flowJsonMemberType,
+  flowReadFieldsProjectionSchema,
+  flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   parseExactDecimal,
   platformOperationKey,
+  recordLinkValueV2Schema,
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
@@ -353,6 +356,12 @@ const declaredOutputFieldType = (
     );
     if (entry?.descriptor.effect === "read") return entry.descriptor.outputs[path[0]!]?.type;
   }
+  if (task?.type === "record.read_fields" && path.length === 1) {
+    const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
+    return types.success && Object.hasOwn(types.data, path[0]!)
+      ? types.data[path[0]!]
+      : undefined;
+  }
   if (task?.type !== "interface.show_form") return undefined;
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs;
   if (inputs?.kind !== "map") return undefined;
@@ -613,6 +622,55 @@ const declaredOutputs = (
   return outputs;
 };
 
+const validReadFieldsResume = (
+  flow: FlowDefinition | undefined,
+  taskId: string,
+  produced: Readonly<Record<string, JsonValue>> | undefined,
+): boolean => {
+  const task =
+    flow === undefined
+      ? undefined
+      : findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
+  if (task?.type !== "record.read_fields") return false;
+  const registered = task as Extract<FlowTask, { properties: unknown }> & {
+    properties: Readonly<Record<string, FlowValue>>;
+    readFieldTypes?: Readonly<Record<string, string>>;
+  };
+  const fields = registered.properties.fields;
+  const projection =
+    fields?.kind === "literal" && fields.literal.type === "json"
+      ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
+      : undefined;
+  const types = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
+  if (!projection?.success || !types.success) return false;
+  const declaredAliases = projection.data.map((field) => field.alias);
+  const typeAliases = Object.keys(types.data);
+  if (
+    declaredAliases.length !== typeAliases.length ||
+    declaredAliases.some((alias) => !Object.hasOwn(types.data, alias))
+  )
+    return false;
+  if (
+    produced === undefined ||
+    typeof produced !== "object" ||
+    Array.isArray(produced) ||
+    Object.keys(produced).length !== 1 ||
+    !Object.hasOwn(produced, "values")
+  )
+    return false;
+  const values: unknown = produced.values;
+  if (values === null || typeof values !== "object" || Array.isArray(values)) return false;
+  const actual = values as Record<string, unknown>;
+  const actualAliases = Object.keys(actual);
+  return (
+    actualAliases.length === declaredAliases.length &&
+    declaredAliases.every(
+      (alias) =>
+        Object.hasOwn(actual, alias) && valueMatchesType(types.data[alias]!, actual[alias]),
+    )
+  );
+};
+
 const interfaceKinds = {
   "interface.show_message": "show_message",
   "interface.show_form": "show_form",
@@ -741,6 +799,46 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 
   if (definition.effect === "pure") {
     if (unavailablePureTasks.has(registered.type)) failed("task_not_available", "failed", taskId);
+    if (registered.type === "data.record_link") {
+      const recordType = registered.properties.record_type;
+      const record = registered.properties.record;
+      if (
+        recordType?.kind !== "literal" ||
+        recordType.literal.type !== "text" ||
+        typeof recordType.literal.value !== "string" ||
+        record?.kind !== "reference" ||
+        record.reference.source !== "input"
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const recordTypeId = recordType.literal.value;
+      const declaration = flow.inputs[record.reference.name];
+      if (
+        declaration === undefined ||
+        declaration.type !== "record_reference" ||
+        declaration.recordTypeIds?.length !== 1 ||
+        declaration.recordTypeIds[0] !== recordTypeId
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const evaluatedType = properties.record_type;
+      const evaluatedRecord = properties.record;
+      if (
+        evaluatedType?.type !== "text" ||
+        evaluatedType.value !== recordTypeId ||
+        evaluatedRecord?.type !== "record_reference" ||
+        typeof evaluatedRecord.value !== "string"
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const link = recordLinkValueV2Schema.safeParse({
+        recordTypeId,
+        recordId: evaluatedRecord.value,
+      });
+      if (!link.success) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value: typed("json", link.data) }));
+      return { kind: "continue" };
+    }
     if (registered.type === "data.calculate") {
       if (properties.formula === undefined) return failed("value_unresolved", "failed", taskId);
       replaceTop(machine, storeTaskOutputs(next, taskId, { value: properties.formula }));
@@ -1028,6 +1126,24 @@ export const resumeFlowRun = (
       resume.outcome === "committed" ||
       resume.outcome === "background_pending";
     if (succeeded) {
+      if (
+        awaiting.taskType === "record.read_fields" &&
+        !validReadFieldsResume(
+          machine.library(activation.flowId),
+          awaiting.taskId,
+          resume.outputs,
+        )
+      ) {
+        replaceTop(
+          machine,
+          failActivation(activation, {
+            outcome: "validation",
+            code: "output_unresolved",
+            taskId: awaiting.taskId,
+          }),
+        );
+        return drive(machine, observer);
+      }
       if (resume.outcome === "committed") machine.state.committedEffects += 1;
       replaceTop(
         machine,

@@ -3,7 +3,7 @@ create or replace function vortex_definition.read_publication_history_page(
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -13,7 +13,7 @@ declare
   entries jsonb;
   next_after bigint;
 begin
-  checked_context := vortex_definition.validated_system_context();
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
   if p_root_id is null or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_anchor_release_revision is null or p_anchor_release_revision not between 1 and 9007199254740991
     or (p_after_release_revision is not null and p_after_release_revision not between 0 and p_anchor_release_revision)

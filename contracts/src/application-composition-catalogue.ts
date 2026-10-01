@@ -125,6 +125,11 @@ export const TABLE_BLOCK_RELEASE_1_4_0: PlatformBlockReleaseV2 = release(
   sources.TABLE_BLOCK_RELEASE_1_4_0,
 );
 
+/** Exact immutable metadata release for the query-bound calendar display block. */
+export const CALENDAR_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.CALENDAR_BLOCK_RELEASE,
+);
+
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
@@ -139,6 +144,11 @@ export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 
 /** Exact immutable metadata release for the choice input block. */
 export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.CHOICE_INPUT_BLOCK_RELEASE);
+
+/** Release 1.1.0 adds a published-query source while preserving the authored-option release. */
+export const CHOICE_INPUT_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+);
 
 /** Exact immutable metadata release for the validation message block. */
 export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VALIDATION_MESSAGE_BLOCK_RELEASE);
@@ -320,7 +330,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All eighteen immutable display block releases: the seven 1.0.0 releases, their 1.1.0 successors, the two 1.2.0 data-contract releases, the 1.3.0 row-behaviour table release and the 1.4.0 interactive-controls table release. */
+/** All nineteen immutable display block releases, including the query-bound calendar release. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -340,9 +350,10 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
   TABLE_BLOCK_RELEASE_1_3_0,
   TABLE_BLOCK_RELEASE_1_4_0,
+  CALENDAR_BLOCK_RELEASE,
 ]);
 
-/** All fifteen immutable form, layout and action block releases. */
+/** All sixteen immutable form, layout and action block releases. */
 export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_INPUT_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
@@ -352,6 +363,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,

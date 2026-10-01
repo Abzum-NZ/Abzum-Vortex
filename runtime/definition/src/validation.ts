@@ -1,6 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  calendarBlockSourceIsSupported,
+  calendarMappingSchema,
   calculationMaximumNestingDepth,
   protectedReadModelKeys,
   readRecordDetailContract,
@@ -30,6 +32,7 @@ import {
   namespacedKeySchema,
   translateDefinitionSchemaError,
   valueTypesCompatible,
+  flowReadFieldsProjectionSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   type DefinitionCompilationOutput,
@@ -77,6 +80,7 @@ import {
 } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { deriveFormCommitActionKeys } from "./form-commit";
+import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -2077,6 +2081,73 @@ function permissionRecordScopesValid(
   return valid;
 }
 
+function readFieldsTypeMapsValid(
+  flows: readonly FlowDefinition[],
+  recordTypes: readonly JsonObject[],
+): boolean {
+  let valid = true;
+  const inspect = (tasks: readonly FlowTask[]): void => {
+    for (const task of tasks) {
+      if (task.type === "record.read_fields") {
+        const recordTypeValue = object(task.properties.record_type);
+        const recordTypeId =
+          recordTypeValue.kind === "literal" &&
+          object(recordTypeValue.literal).type === "text" &&
+          typeof object(recordTypeValue.literal).value === "string"
+            ? String(object(recordTypeValue.literal).value)
+            : undefined;
+        const fieldsValue = object(task.properties.fields);
+        const projection =
+          fieldsValue.kind === "literal" && object(fieldsValue.literal).type === "json"
+            ? flowReadFieldsProjectionSchema.safeParse(object(fieldsValue.literal).value)
+            : undefined;
+        const typeMap = task.readFieldTypes;
+        const recordMatches = recordTypes.filter(
+          (record) => String(record.recordTypeId) === recordTypeId,
+        );
+        if (
+          recordTypeId === undefined ||
+          recordMatches.length !== 1 ||
+          !projection?.success ||
+          typeMap === undefined ||
+          Object.keys(typeMap).length !== projection.data.length ||
+          projection.data.some((entry) => !Object.hasOwn(typeMap, entry.alias))
+        ) {
+          valid = false;
+        } else {
+          const selectedFieldIds = new Set<string>();
+          for (const entry of projection.data) {
+            const matches = recordTypes.flatMap((record) =>
+              array(record.fields)
+                .filter((field) => String(field.fieldId) === entry.field)
+                .map((field) => ({ field, recordTypeId: String(record.recordTypeId) })),
+            );
+            const scalarType =
+              matches.length === 1 && matches[0]!.recordTypeId === recordTypeId
+                ? flowReadFieldsScalarTypeForField(String(object(matches[0]!.field).type))
+                : undefined;
+            if (
+              selectedFieldIds.has(entry.field) ||
+              matches.length !== 1 ||
+              scalarType === undefined ||
+              typeMap[entry.alias] !== scalarType
+            )
+              valid = false;
+            selectedFieldIds.add(entry.field);
+          }
+        }
+      }
+      for (const child of flowTaskChildLists(task)) inspect(child.tasks);
+    }
+  };
+  for (const flow of flows) {
+    inspect(flow.tasks);
+    inspect(flow.errors);
+    inspect(flow.finally);
+  }
+  return valid;
+}
+
 function moduleReferenceRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const walkValues = context.walkCanonicalValues ?? canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
@@ -2236,6 +2307,29 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
     const moduleRootId = String(envelope.rootId);
+    const boundOutputs = array(content.dependencies).flatMap((dependency) =>
+      availableModuleOutputs.filter(
+        (candidate) =>
+          candidate.artifact.rootId === dependency.moduleRootId &&
+          candidate.artifact.definitionKey === dependency.moduleKey &&
+          candidate.artifact.exactVersion === dependency.resolvedVersion &&
+          candidate.artifact.resolutionFingerprint === candidate.resolutionFingerprint &&
+          candidate.artifact.contentFingerprint ===
+            fingerprintCanonicalValue(object(candidate.canonical).content),
+      ),
+    );
+    if (
+      array(content.flows).length > 0 &&
+      !readFieldsTypeMapsValid(
+        array(content.flows) as unknown as FlowDefinition[],
+        boundOutputs.flatMap((candidate) =>
+          array(object(candidate.canonical.content).recordTypes),
+        ),
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "broken_reference"),
+      );
     const allowedModuleRoots = new Set([
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
@@ -2841,23 +2935,58 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const aggregateAliases = array(query.aggregates).map((aggregate) => String(aggregate.alias));
       const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
       const unique = (values: readonly string[]) => new Set(values).size === values.length;
-      // Grouping decides the row shape, so a grouped query returns and orders by its grouping
-      // keys only, and a total needs a grouping key to belong to.
+      const summaryGroupFieldTypes = new Set([
+        "text", "whole_number", "decimal_number", "yes_no", "date", "date_time",
+        "choice", "reference_number", "email_address", "phone_number", "web_address",
+        "link", "link_to_one_of_several", "link_to_person",
+      ]);
+      const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
+      const extremaFieldTypes = new Set([
+        "whole_number", "decimal_number", "money", "date", "date_time",
+      ]);
+      const refuseSummaryField = (ruleCode: string, field: JsonObject): void => {
+        const root = rootLocation(output);
+        failures.push({
+          ruleCode,
+          family: "unsupported_choice",
+          location: {
+            ...root,
+            segments: [...root.segments, location, { kind: "field", key: String(field.key) }],
+          },
+        });
+      };
+      for (const fieldId of groupByFieldIds) {
+        const field = fieldMap.get(fieldId);
+        if (field && !summaryGroupFieldTypes.has(String(field.type)))
+          refuseSummaryField("vortex.definition.module_query_group_field_type", field);
+      }
+      for (const aggregate of array(query.aggregates)) {
+        if (aggregate.fieldId === undefined) continue;
+        const field = fieldMap.get(String(aggregate.fieldId));
+        if (!field || aggregate.operation === "count") continue;
+        const fieldType = String(field.type);
+        if (fieldType === "calculation" || fieldType === "total")
+          refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
+        else if (
+          (aggregate.operation === "sum" || aggregate.operation === "average") &&
+          !numericAggregateFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_numeric_aggregate_field_type", field);
+        else if (
+          (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
+          !extremaFieldTypes.has(fieldType)
+        )
+          refuseSummaryField("vortex.definition.module_query_extrema_field_type", field);
+      }
+      // The published projection may include explicitly selected member fields;
+      // grouped ordering still names grouping keys only. Summary output remains
+      // constrained to the groups and aggregates declared separately.
       const groupingValid =
-        groupByFieldIds.length > 0
-          ? selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
-            sortFieldIds.every((id) => groupByFieldIds.includes(id))
-          : aggregateAliases.length === 0;
+        groupByFieldIds.length === 0 ||
+        sortFieldIds.every((id) => groupByFieldIds.includes(id));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
-        if (aggregate.fieldId === undefined) return false;
-        const field = fieldMap.get(String(aggregate.fieldId));
-        if (!field) return false;
-        if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["whole_number", "decimal_number", "money"].includes(fieldValueTypeV2(field) ?? "");
-        return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
-          String(field.type),
-        );
+        return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
       });
       const filterValid =
         !query.filter ||
@@ -2945,11 +3074,23 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const boundRoots = new Set(bindings.map((binding) => String(binding.moduleRootId)));
     const boundModules = modules.filter((module) => {
       const rootId = String(object(object(module.canonical).envelope).rootId);
+      const canonical = object(module.canonical);
+      const envelope = object(canonical.envelope);
+      const exactSnapshots = request?.resolution.definitions.filter(
+        (definition) =>
+          definition.kind === "module" &&
+          definition.key === module.artifact.definitionKey &&
+          definition.rootId === rootId &&
+          definition.exactVersion === module.artifact.exactVersion,
+      );
       const expected = request?.resolution.definitions.find(
         (definition) => definition.kind === "module" && definition.rootId === rootId,
       );
       return (
         boundRoots.has(rootId) &&
+        exactSnapshots?.length === 1 &&
+        canonical.kind === "module" &&
+        envelope.kind === "module" &&
         expected?.key === module.artifact.definitionKey &&
         expected.exactVersion === module.artifact.exactVersion &&
         module.artifact.rootId === rootId &&
@@ -2958,6 +3099,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           fingerprintCanonicalValue(object(module.canonical).content)
       );
     });
+    if (
+      boundRoots.size !== bindings.length ||
+      boundModules.length !== bindings.length ||
+      new Set(
+        boundModules.map((module) =>
+          `${module.artifact.definitionKey}\u0000${module.artifact.rootId}\u0000${module.artifact.exactVersion}`,
+        ),
+      ).size !== boundModules.length
+    )
+      failures.push(
+        failure(output, "vortex.definition.application_dependency_manifest", "broken_reference"),
+      );
     const recordTypes = boundModules.flatMap((module) =>
       array(object(object(module.canonical).content).recordTypes),
     );
@@ -3644,10 +3797,110 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       for (const placement of placements) {
         const bound =
           placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
-        if (bound === undefined) continue;
+        const block = object(placement.block);
+        const blockKey = registeredBlockReleases.get(
+          `${String(block.blockId)}:${String(block.releaseVersion)}`,
+        )?.key;
+        if (bound === undefined) {
+          if (blockKey === "platform.display.calendar")
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+          continue;
+        }
         const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (blockKey === "platform.display.calendar") {
+          const settingFieldId = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "field_reference" && typeof property.fieldId === "string"
+              ? property.fieldId
+              : undefined;
+          };
+          const settingChoice = (value: unknown): string | undefined => {
+            const property = object(value);
+            return property.kind === "choice" && typeof property.value === "string"
+              ? property.value
+              : undefined;
+          };
+          const mappingProperties = object(object(settings.calendar_mapping).properties);
+          const mappingKind = settingChoice(mappingProperties.kind);
+          const startFieldId = settingFieldId(mappingProperties.start_field);
+          const endFieldId = settingFieldId(mappingProperties.end_field);
+          const durationFieldId = settingFieldId(mappingProperties.duration_field);
+          const durationUnit = settingChoice(mappingProperties.duration_unit);
+          const mappingCandidate =
+            mappingKind === "start_end" &&
+            startFieldId !== undefined &&
+            endFieldId !== undefined &&
+            durationFieldId === undefined &&
+            durationUnit === undefined
+              ? { kind: mappingKind, startFieldId, endFieldId }
+              : mappingKind === "start_duration" &&
+                  startFieldId !== undefined &&
+                  endFieldId === undefined &&
+                  durationFieldId !== undefined &&
+                  durationUnit !== undefined
+                ? { kind: mappingKind, startFieldId, durationFieldId, durationUnit }
+                : undefined;
+          const mapping = calendarMappingSchema.safeParse(mappingCandidate);
+          const itemTitleFieldId = settingFieldId(settings.item_title_field);
+          const queryRecordType = records.get(String(object(bound.recordType).recordTypeId));
+          const fieldById = new Map(
+            array(queryRecordType?.fields).map((field) => [
+              String(field.fieldId).toLowerCase(),
+              field,
+            ]),
+          );
+          const selectedFieldIds = new Set(
+            array(bound.selectedFieldIds).map((fieldId) => String(fieldId).toLowerCase()),
+          );
+          let calendarMappingValid = false;
+          if (mapping.success && itemTitleFieldId !== undefined && queryRecordType !== undefined) {
+            const startField = fieldById.get(mapping.data.startFieldId.toLowerCase());
+            const titleField = fieldById.get(itemTitleFieldId.toLowerCase());
+            const dateType = startField?.type;
+            const dateFields =
+              mapping.data.kind === "start_end"
+                ? [startField, fieldById.get(mapping.data.endFieldId.toLowerCase())]
+                : [startField];
+            const durationField =
+              mapping.data.kind === "start_duration"
+                ? fieldById.get(mapping.data.durationFieldId.toLowerCase())
+                : undefined;
+            const durationValid =
+              mapping.data.kind !== "start_duration" ||
+              ((dateType === "date_time" ||
+                (dateType === "date" && mapping.data.durationUnit === "days")) &&
+                durationField?.type === "whole_number");
+            const mappedFieldIds = [
+              mapping.data.startFieldId,
+              ...(mapping.data.kind === "start_end"
+                ? [mapping.data.endFieldId]
+                : [mapping.data.durationFieldId]),
+              itemTitleFieldId,
+            ];
+            calendarMappingValid =
+              (dateType === "date" || dateType === "date_time") &&
+              dateFields.every(
+                (field) =>
+                  field !== undefined &&
+                  field.type === dateType &&
+                  field.filterable === true,
+              ) &&
+              durationValid &&
+              titleField !== undefined &&
+              calendarBlockSourceIsSupported(bound, titleField.type) &&
+              mappedFieldIds.every((fieldId) =>
+                selectedFieldIds.has(fieldId.toLowerCase()),
+              );
+          }
+          if (!calendarMappingValid)
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
         if (table === undefined && detail === undefined) continue;
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
@@ -4164,6 +4417,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     // it produced this content, so only what binds to them is judged here.
     const flows = array(content.flows) as unknown as FlowDefinition[];
     const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
+    if (!readFieldsTypeMapsValid(flows, recordTypes))
+      failures.push(
+        failure(output, "vortex.definition.application_dependency_manifest", "broken_reference"),
+      );
     const eventIds = new Set(array(content.events).map((event) => String(event.eventId)));
     for (const binding of array(content.flowBindings)) {
       const bindingFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
@@ -4248,6 +4505,10 @@ const moduleRuleCodes = [
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
   "vortex.definition.module_query_references",
+  "vortex.definition.module_query_group_field_type",
+  "vortex.definition.module_query_derived_aggregate_source",
+  "vortex.definition.module_query_numeric_aggregate_field_type",
+  "vortex.definition.module_query_extrema_field_type",
 ] as const;
 const applicationRuleCodes = [
   "vortex.definition.application_identity_unique",
