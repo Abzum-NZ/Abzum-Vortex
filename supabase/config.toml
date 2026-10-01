@@ -231,15 +231,18 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Local Auth continues to deliver messages to Mailpit. Hosted custom SMTP is
+# configured only in the target environment's Supabase Auth settings. If an
+# explicitly authorized config deployment enables it, supply settings through
+# that environment's scoped variables; never commit provider credentials.
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
+# host = "env(VORTEX_AUTH_SMTP_HOST)"
 # port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# user = "env(VORTEX_AUTH_SMTP_USER)"
+# pass = "env(VORTEX_AUTH_SMTP_PASSWORD)"
+# admin_email = "env(VORTEX_AUTH_SMTP_FROM_ADDRESS)"
+# sender_name = "Vortex"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

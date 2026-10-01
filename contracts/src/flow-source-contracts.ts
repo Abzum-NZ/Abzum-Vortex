@@ -8,6 +8,7 @@ import {
   flowFormulaSchema,
   flowLiteralSchema,
   flowMaximumTaskCount,
+  flowReadFieldsProjectionSchema,
   flowRegisteredTaskTypeSchema,
   flowScheduleRecurrenceSchema,
   flowSchema,
@@ -262,6 +263,150 @@ export const sourceFlowTaskSchema: z.ZodType<SourceFlowTask> = z.lazy(() => {
   return z.union([control, registered]);
 });
 
+const readFieldsTextAlias = (value: FlowValue | undefined): string | undefined =>
+  value?.kind === "literal" &&
+  value.literal.type === "text" &&
+  typeof value.literal.value === "string"
+    ? value.literal.value
+    : undefined;
+
+const refineReadFieldsTask = (
+  task: SourceFlowTask,
+  taskPath: (string | number)[],
+  inputs: Readonly<Record<string, z.infer<typeof sourceInputDeclarationSchema>>>,
+  context: z.RefinementCtx,
+) => {
+  if (task.type !== "record.read_fields" || !("properties" in task)) return;
+  const properties = task.properties as Readonly<Record<string, FlowValue>>;
+  const targetAlias = readFieldsTextAlias(properties.record_type);
+  if (targetAlias === undefined || !flowAliasSchema.safeParse(targetAlias).success) {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record_type"],
+      message: "Read selected record fields requires one record type alias",
+    });
+  }
+
+  const selectedRecord = properties.record;
+  let selectedTypeAlias: string | undefined;
+  if (selectedRecord?.kind !== "reference" || selectedRecord.reference.source !== "input") {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record"],
+      message: "Read selected record fields must reference one declared record input",
+    });
+  } else {
+    const declaration = inputs[selectedRecord.reference.name];
+    if (
+      declaration === undefined ||
+      declaration.type !== "record_reference" ||
+      declaration.recordTypeIds?.length !== 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: [...taskPath, "properties", "record"],
+        message: "The selected input must declare one record_reference type",
+      });
+    } else {
+      selectedTypeAlias = declaration.recordTypeIds[0];
+    }
+  }
+  if (
+    targetAlias !== undefined &&
+    selectedTypeAlias !== undefined &&
+    targetAlias !== selectedTypeAlias
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record"],
+      message: "The selected record input must target the task's record type alias",
+    });
+  }
+
+  const fieldsValue = properties.fields;
+  if (fieldsValue?.kind !== "literal" || fieldsValue.literal.type !== "json") {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "fields"],
+      message: "The field projection must be a JSON literal",
+    });
+    return;
+  }
+  const projection = flowReadFieldsProjectionSchema.safeParse(fieldsValue.literal.value);
+  if (!projection.success) {
+    projection.error.issues.forEach((issue) =>
+      context.addIssue({
+        code: "custom",
+        path: [...taskPath, "properties", "fields", "literal", "value", ...issue.path],
+        message: issue.message,
+      }),
+    );
+    return;
+  }
+  projection.data.forEach((field, index) => {
+    const separator = field.field.lastIndexOf(".");
+    const recordTypeAlias = separator < 1 ? undefined : field.field.slice(0, separator);
+    const fieldAlias = separator < 1 ? undefined : field.field.slice(separator + 1);
+    if (
+      recordTypeAlias === undefined ||
+      fieldAlias === undefined ||
+      !flowAliasSchema.safeParse(recordTypeAlias).success ||
+      !builderKeySchema.safeParse(fieldAlias).success
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: [...taskPath, "properties", "fields", "literal", "value", index, "field"],
+        message: "A projected field must be a qualified record type and field alias",
+      });
+    } else if (targetAlias !== undefined && recordTypeAlias !== targetAlias) {
+      context.addIssue({
+        code: "custom",
+        path: [...taskPath, "properties", "fields", "literal", "value", index, "field"],
+        message: "A projected field must use the task's target record type alias",
+      });
+    }
+  });
+};
+
+const refineSourceReadFields = (
+  flow: {
+    inputs: Readonly<Record<string, z.infer<typeof sourceInputDeclarationSchema>>>;
+    tasks: readonly SourceFlowTask[];
+    errors: readonly SourceFlowTask[];
+    finally: readonly SourceFlowTask[];
+  },
+  context: z.RefinementCtx,
+) => {
+  type TaskChildren = SourceFlowTask & {
+    then?: SourceFlowTask[];
+    else?: SourceFlowTask[];
+    tasks?: SourceFlowTask[];
+    cases?: { tasks: SourceFlowTask[] }[];
+    default?: SourceFlowTask[];
+    branches?: SourceFlowTask[][];
+  };
+  const visit = (tasks: readonly SourceFlowTask[], path: (string | number)[]) => {
+    tasks.forEach((task, index) => {
+      const taskPath = [...path, index];
+      refineReadFieldsTask(task, taskPath, flow.inputs, context);
+      const node = task as TaskChildren;
+      if (node.then) visit(node.then, [...taskPath, "then"]);
+      if (node.else) visit(node.else, [...taskPath, "else"]);
+      if (node.tasks) visit(node.tasks, [...taskPath, "tasks"]);
+      node.cases?.forEach((entry, caseIndex) =>
+        visit(entry.tasks, [...taskPath, "cases", caseIndex, "tasks"]),
+      );
+      if (node.default) visit(node.default, [...taskPath, "default"]);
+      node.branches?.forEach((branch, branchIndex) =>
+        visit(branch, [...taskPath, "branches", branchIndex]),
+      );
+    });
+  };
+  visit(flow.tasks, ["tasks"]);
+  visit(flow.errors, ["errors"]);
+  visit(flow.finally, ["finally"]);
+};
+
 // ─── The authored flow ───────────────────────────────────────────────────────────────────────
 
 export const sourceFlowSchema = z
@@ -292,7 +437,8 @@ export const sourceFlowSchema = z
       .strict()
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(refineSourceReadFields);
 export type SourceFlow = z.infer<typeof sourceFlowSchema>;
 
 /** The flows one module or application owns. Every flow has exactly one owner. */
