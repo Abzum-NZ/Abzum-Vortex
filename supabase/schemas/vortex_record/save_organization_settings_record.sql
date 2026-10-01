@@ -336,3 +336,7 @@ comment on function vortex_record.save_organization_settings_record(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) is
   'Closed Record save writer for the organisation_settings system projection: rechecks its installed definition, delegates protected settings authorization and persistence to Access, and records one receipt, Activity and Event.';
+
+alter function vortex_record.save_organization_settings_record(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
+) owner to vortex_record_adapter;
