@@ -26,7 +26,11 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
+import {
+  requireInstalledRuntimeContext,
+  resolveInstalledPageIdentity,
+  type InstalledRuntimeContext,
+} from "@vortex/app";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
@@ -340,8 +344,12 @@ export const createStoredPageCapabilityService = (
 
   // Undefined means the selected page is not in the release: a lasting answer, not a fault.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
-    const pages = applicationRelease.content.pages.filter((page) => sameId(page.pageId, pageId));
-    if (pages.length === 0) return undefined;
+    const identity = resolveInstalledPageIdentity(context, { pageId });
+    if (identity === undefined) return undefined;
+    // Resolution reports the pair, but only the explicitly requested endpoint selects a page.
+    const pages = applicationRelease.content.pages.filter((page) =>
+      sameId(page.pageId, identity.requested.pageId),
+    );
     if (pages.length !== 1 || pages[0] === undefined)
       throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
     const page = pages[0];

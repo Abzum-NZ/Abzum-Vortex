@@ -13,6 +13,7 @@ import { createInstalledRuntimeContextLoader } from "./installed-runtime-context
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
+import { resolveInstalledPageIdentity } from "./standard-page-resolution";
 import { createAppTelemetryCollector } from "./telemetry";
 
 export {
@@ -54,6 +55,14 @@ export {
   type InstalledRuntimeContextErrorCode,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+
+export {
+  resolveInstalledPageIdentity,
+  type InstalledPageEndpointIdentity,
+  type InstalledPageIdentity,
+  type InstalledPageIdentitySelection,
+  type InstalledPageSubjectIdentity,
+} from "./standard-page-resolution";
 
 export {
   createViewerSafeRecordLinkService,
@@ -242,6 +251,7 @@ export const AppService = Object.freeze({
   createApplicationInstallationCoordinator,
   createPreviewInstallationCoordinator,
   createInstalledRuntimeContextLoader,
+  resolveInstalledPageIdentity,
   createViewerSafeRecordLinkService,
   createComponentContextResolver,
   createComponentEventDispatcher,
