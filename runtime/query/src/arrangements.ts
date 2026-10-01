@@ -576,7 +576,12 @@ const requestedProjectionIsPreserved = (
       return false;
 
     const returnedSystemFields = Object.keys(row.systemValues ?? {});
-    if (returnedSystemFields.some((fieldKey) => !declaredSystemFields.has(fieldKey))) return false;
+    if (
+      returnedSystemFields.some((fieldKey) => !declaredSystemFields.has(fieldKey)) ||
+      declaredSystemFields.size > 0 !== (row.systemValues !== undefined) ||
+      returnedSystemFields.length !== declaredSystemFields.size
+    )
+      return false;
   }
   return true;
 };
@@ -623,6 +628,7 @@ const readProtectedBoardPage = async (
   });
   if (
     !page.success ||
+    page.data.rows.length > command.pageSize ||
     !requestedProjectionIsPreserved(
       page.data,
       command.requestedFieldIds,

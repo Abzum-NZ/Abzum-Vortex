@@ -225,7 +225,7 @@ export type ProtectedBoardArrangementPageRequest = z.infer<
 export const protectedBoardArrangementPageSchema = z
   .object({
     rows: z.array(protectedQueryPageRowSchema).max(200),
-    nextContinuationToken: z.string().optional(),
+    nextContinuationToken: z.string().min(1).max(65_536).optional(),
   })
   .strict();
 export type ProtectedBoardArrangementPage = z.infer<typeof protectedBoardArrangementPageSchema>;
