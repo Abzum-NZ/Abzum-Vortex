@@ -1,3 +1,4 @@
+-- Private Access-owner routine; Record callers first lock the active linked account.
 create or replace function vortex_access.organization_account_has_current_application_access_internal(
   p_organization_id uuid,
   p_organization_account_id uuid,

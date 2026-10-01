@@ -1,3 +1,5 @@
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.restore_record_internal(
   p_record_type_id uuid,
   p_record_id uuid,

@@ -1,5 +1,6 @@
 -- Enforce current application access for Person links during Record writes and restore (#1727).
 begin;
+-- Private Access-owner routine; Record callers first lock the active linked account.
 create or replace function vortex_access.organization_account_has_current_application_access_internal(
   p_organization_id uuid,
   p_organization_account_id uuid,
@@ -177,6 +178,15 @@ comment on function vortex_access.organization_account_has_current_application_a
 
 alter function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
   owner to vortex_access_owner;
+-- Existing Record functions belong to the adapter. Preserve the established
+-- non-superuser migration path, then remove the temporary schema privilege.
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+
+set local role vortex_record_adapter;
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.write_relationship_value_internal(
   p_source_record_type_id uuid,
   p_source_record_id uuid,
@@ -450,6 +460,8 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
   'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
 
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.write_named_action_relationship_value_internal(
   p_source_record_type_id uuid,
   p_source_record_id uuid,
@@ -712,6 +724,8 @@ grant execute on function
 comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
   'Private named-action edge writer: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
 
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.restore_record_internal(
   p_record_type_id uuid,
   p_record_id uuid,
@@ -965,4 +979,8 @@ revoke all on function vortex_record.restore_record_internal(uuid, uuid, bigint)
 comment on function vortex_record.restore_record_internal(uuid, uuid, bigint) is
   'Private revision-checked restore primitive over retained facts, current Access, current definition, required relationships and every non-null Person link with required application access; it locks record or protected projection targets through the canonical relationship lock and enforces no recovery window.';
 
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
 commit;
