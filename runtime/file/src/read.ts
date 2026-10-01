@@ -613,6 +613,8 @@ export type FileReadCoordinatorDependencies = Readonly<{
   maximumPreviewSourceBytes?: number;
   /** Largest rendition streamed back; defaults to 10 MiB. */
   maximumPreviewOutputBytes?: number;
+  /** Trusted per-operation correlation shared with the protected request; defaults to UUID. */
+  correlationId?: () => string;
   clock?: () => Date;
 }>;
 
@@ -920,7 +922,7 @@ export const createFileReadCoordinator = (
     let credential: StorageOperationCredential;
     try {
       const oneTimeId = platformIdSchema.parse(randomUUID());
-      const correlationId = correlationIdSchema.parse(randomUUID());
+      const correlationId = correlationIdSchema.parse((dependencies.correlationId ?? randomUUID)());
       const grant = downloadGrantSchema.parse({
         kind: "download",
         organizationId: fileRecord.organizationId,
