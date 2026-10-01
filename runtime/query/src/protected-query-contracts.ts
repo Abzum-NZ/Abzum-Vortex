@@ -11,6 +11,10 @@ import {
   recordIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
+  moduleFieldValueV2Schemas,
+  personLinkValueV2Schema,
+  recordLinkValueV2Schema,
+  sourceExactDecimalTextV2Schema,
 } from "@vortex/contracts";
 import {
   recordSystemValuesSchema,
@@ -170,6 +174,83 @@ export type ProtectedQueryBoardMembersCommand = z.infer<
   typeof protectedQueryBoardMembersCommandSchema
 >;
 
+const safeWholeNumberGroupValueSchema = z.number().int().refine(Number.isSafeInteger);
+const groupStringValueSchema = z.string();
+const groupChoiceValueSchema = z.string().min(1).max(120);
+const groupTypedValue = <K extends string, T extends z.ZodType>(fieldType: K, value: T) =>
+  z
+    .object({ fieldId: fieldIdSchema, fieldType: z.literal(fieldType), value: value.nullable() })
+    .strict();
+
+/** One exact readable representation for an installed generic summary group key. */
+export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", [
+  groupTypedValue("text", groupStringValueSchema),
+  groupTypedValue("whole_number", safeWholeNumberGroupValueSchema),
+  groupTypedValue("decimal_number", sourceExactDecimalTextV2Schema),
+  groupTypedValue("yes_no", z.boolean()),
+  groupTypedValue("date", moduleFieldValueV2Schemas.date),
+  groupTypedValue("date_time", moduleFieldValueV2Schemas.date_time),
+  groupTypedValue("choice", groupChoiceValueSchema),
+  groupTypedValue("reference_number", groupStringValueSchema),
+  groupTypedValue("email_address", groupStringValueSchema),
+  groupTypedValue("phone_number", groupStringValueSchema),
+  groupTypedValue("web_address", groupStringValueSchema),
+  groupTypedValue("link", recordLinkValueV2Schema),
+  groupTypedValue("link_to_one_of_several", recordLinkValueV2Schema),
+  groupTypedValue("link_to_person", personLinkValueV2Schema),
+]);
+export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;
+
+/** Exact installed group identity; values keep the same representation used by summary JSONB. */
+export const protectedQueryGroupSelectorSchema = z
+  .object({
+    values: z.array(protectedQueryGroupValueSchema).min(1).max(10),
+  })
+  .strict()
+  .superRefine((selector, context) => {
+    const normalizedIds = selector.values.map((value) => value.fieldId.toLowerCase());
+    if (new Set(normalizedIds).size !== normalizedIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["values"],
+        message: "Each installed group field is named once",
+      });
+  });
+export type ProtectedQueryGroupSelector = z.infer<typeof protectedQueryGroupSelectorSchema>;
+
+/** One uncached, record-identity-ordered page of currently readable members in a generic group. */
+export const protectedQueryGroupedMembersCommandSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    queryId: queryIdSchema,
+    inputValues: z.record(builderKeySchema, jsonValueSchema),
+    requestedFieldIds: z
+      .array(fieldIdSchema)
+      .min(1)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each requested field is named once" }),
+    requestedSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      })
+      .default([]),
+    filter: conditionNodeSchema.optional(),
+    filterableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+      .default([]),
+    pageSize: z.number().int().min(1).max(200),
+    selector: protectedQueryGroupSelectorSchema,
+    continuationToken: z.string().min(1).max(65_536).optional(),
+  })
+  .strict();
+export type ProtectedQueryGroupedMembersCommand = z.infer<
+  typeof protectedQueryGroupedMembersCommandSchema
+>;
+
 /**
  * The record action kinds one list row can expose per row. Read is implied by the
  * row's own presence; create is not a per-existing-record action and is never listed.
@@ -284,6 +365,65 @@ export const protectedQueryPageSchema = z
   })
   .strict();
 export type ProtectedQueryPage = z.infer<typeof protectedQueryPageSchema>;
+
+export const protectedQueryGroupedMembersCompletedSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+    queryId: queryIdSchema,
+    groupByFieldIds: z.array(fieldIdSchema).min(1).max(10),
+    groupValues: z.record(fieldIdSchema, jsonValueSchema),
+    rows: z.array(protectedQueryPageRowSchema).max(200),
+    nextContinuationToken: z.string().optional(),
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const normalizedIds = result.groupByFieldIds.map((fieldId) => fieldId.toLowerCase());
+    if (normalizedIds.some((fieldId, index) => fieldId !== result.groupByFieldIds[index]))
+      context.addIssue({
+        code: "custom",
+        path: ["groupByFieldIds"],
+        message: "Installed group field identifiers use normalized lowercase spelling",
+      });
+    if (new Set(normalizedIds).size !== normalizedIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["groupByFieldIds"],
+        message: "Each installed group field is reported once",
+      });
+    const rawGroupValueIds = Object.keys(result.groupValues);
+    const groupValueIds = rawGroupValueIds.map((fieldId) => fieldId.toLowerCase());
+    if (
+      new Set(groupValueIds).size !== groupValueIds.length ||
+      groupValueIds.some((fieldId, index) => fieldId !== rawGroupValueIds[index]) ||
+      normalizedIds.length !== groupValueIds.length ||
+      normalizedIds.some((fieldId) => !groupValueIds.includes(fieldId))
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["groupValues"],
+        message: "Group values name every installed grouping field exactly once",
+      });
+    const rowIds = result.rows.map((row) => row.recordId.toLowerCase());
+    if (new Set(rowIds).size !== rowIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["rows"],
+        message: "Each record is returned once per group page",
+      });
+  });
+export type ProtectedQueryGroupedMembersCompleted = z.infer<
+  typeof protectedQueryGroupedMembersCompletedSchema
+>;
+
+export const protectedQueryGroupedMembersResultSchema = z.discriminatedUnion("outcome", [
+  protectedQueryGroupedMembersCompletedSchema,
+  protectedQueryRefusalSchema,
+]);
+export type ProtectedQueryGroupedMembersResult = z.infer<
+  typeof protectedQueryGroupedMembersResultSchema
+>;
 
 export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
   protectedQueryPageSchema,

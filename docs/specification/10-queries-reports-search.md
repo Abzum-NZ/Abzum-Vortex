@@ -109,6 +109,22 @@ raw groups or option permission identifiers. It does not promise an atomic
 snapshot across separate member and summary requests, and it does not compose
 board blocks.
 
+A protected grouped-member page reads one exact group of an installed grouped
+Query in record-identity order. Its selector supplies every installed grouping
+field once, using the same typed JSON values and representations as the generic
+summary. Membership is checked only after the current record read and published
+and narrowing filters pass: every grouping value must be present in the current
+readable projection and equal the selector value, with JSON null matching only
+JSON null. A missing or withheld grouping value belongs to no generic group, and
+the grouping fields need not be selected for row output or declared filterable.
+The page returns the installed group identity even when it has no rows. Its
+opaque `protected-group-members-v1` continuation binds the actor, installation,
+release revision, selector, inputs, filters, projection, page size and
+record-identity order. Each page rechecks the installation and live record
+authority; grouped-member pages are uncached and scan at most 500 candidates
+while returning at most 200 rows. This operation returns no group counts or
+aggregates and does not compose or place grouped tables.
+
 Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. A money total is refused unless the filtered group contains at most one currency; no implicit conversion or split result is produced.
 
 ## Shared-record reads
