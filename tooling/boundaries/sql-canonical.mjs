@@ -37,6 +37,24 @@ function normalizeBlock(block) {
     .trim();
 }
 
+function insertHistoricalOrReplaceHeader(block, canonicalBlock) {
+  const historicalHeader = /^(create\s+)(function\b)/i.exec(block);
+  const canonicalHeader = /^(create\s+)(or\s+replace\s+)(function\b)/i.exec(canonicalBlock);
+  if (
+    !historicalHeader ||
+    !canonicalHeader ||
+    historicalHeader[1] !== canonicalHeader[1] ||
+    historicalHeader[2] !== canonicalHeader[3]
+  ) {
+    return block;
+  }
+  return (
+    block.slice(0, historicalHeader[1].length) +
+    canonicalHeader[2] +
+    block.slice(historicalHeader[1].length)
+  );
+}
+
 const argumentModes = new Set(["in", "out", "inout", "variadic"]);
 // First words of built-in type names that are written as several words.
 const multiWordTypes = new Set([
@@ -706,7 +724,12 @@ export async function validateSqlCanonical(root) {
       );
     } else if (state.dropped) {
       errors.push(`${item.file} describes ${key}, which ${state.file} drops; remove the file`);
-    } else if (state.block !== item.definition.block) {
+    } else if (
+      (state.governed
+        ? state.block
+        : insertHistoricalOrReplaceHeader(state.block, item.definition.block)) !==
+      item.definition.block
+    ) {
       errors.push(
         `${item.file} differs from ${key} as last installed by ${state.file}; a canonical change needs a migration carrying the identical complete definition`,
       );
