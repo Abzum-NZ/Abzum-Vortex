@@ -31,6 +31,7 @@ declare
   changed record;
   changed_summary jsonb;
   checked_at timestamptz;
+  authority_checked_at timestamptz;
   activity_result text;
 begin
   if p_membership_id is null
@@ -147,6 +148,8 @@ begin
       message = 'Organization Group membership addition is unavailable';
   end if;
 
+  authority_checked_at := decision.checked_at;
+
   select result.* into strict changed
   from vortex_access.coordinate_organization_group_membership_change(
     'add_membership', context_organization_id, p_membership_id,
@@ -190,6 +193,24 @@ begin
     raise exception using errcode = '40001',
       message = 'Organization Group membership addition Activity is stale';
   end if;
+
+  perform vortex_access.append_organization_group_membership_events_internal(
+    'add_membership',
+    pg_catalog.jsonb_build_object(
+      'kind', 'human',
+      'organizationId', context_organization_id,
+      'organizationAccountId', context_account_id,
+      'correlationId', context_correlation_id,
+      'accessVersionBefore', context_access_version,
+      'authorityCheckedAt', vortex_context.format_timestamp_utc(authority_checked_at)
+    ),
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'role', 'membership',
+      'membershipId', (changed.membership ->> 'membershipId')::uuid,
+      'revision', (changed.membership ->> 'revision')::bigint
+    )),
+    p_activity_id
+  );
 
   return query select 'completed'::text, context_organization_id, changed_summary,
     changed.access_version;

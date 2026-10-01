@@ -29,6 +29,7 @@ declare
   context_access_version bigint;
   context_correlation_id uuid;
   locked_access_version bigint;
+  authority_checked_at timestamptz;
   target_group_id uuid;
   membership_fact vortex_access.organization_group_memberships%rowtype;
   authority_after jsonb;
@@ -132,6 +133,8 @@ begin
   ) as evaluated;
   if decision.outcome is distinct from 'eligible'
     or decision.operation_key is distinct from operation_key
+    or decision.target_kind is distinct from 'organization'
+    or decision.target_application_root_id is not null
     or decision.organization_id is distinct from context_organization_id
     or decision.organization_account_id is distinct from context_account_id
     or decision.access_version is distinct from context_access_version
@@ -139,6 +142,8 @@ begin
     raise exception using errcode = '42501',
       message = 'Private Organization Group membership change is unavailable';
   end if;
+
+  authority_checked_at := decision.checked_at;
 
   select result.* into strict changed
   from vortex_access.coordinate_organization_group_membership_change(
@@ -162,6 +167,35 @@ begin
     raise exception using errcode = '40001',
       message = 'Private Organization Group membership Activity is stale';
   end if;
+
+  perform vortex_access.append_organization_group_membership_events_internal(
+    p_operation,
+    pg_catalog.jsonb_build_object(
+      'kind', 'human',
+      'organizationId', context_organization_id,
+      'organizationAccountId', context_account_id,
+      'correlationId', context_correlation_id,
+      'accessVersionBefore', context_access_version,
+      'authorityCheckedAt', vortex_context.format_timestamp_utc(authority_checked_at)
+    ),
+    case when p_operation = 'renew_membership' then pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'role', 'predecessor',
+        'membershipId', (changed.closed_predecessor ->> 'membershipId')::uuid,
+        'revision', (changed.closed_predecessor ->> 'revision')::bigint
+      ),
+      pg_catalog.jsonb_build_object(
+        'role', 'replacement',
+        'membershipId', (changed.membership ->> 'membershipId')::uuid,
+        'revision', (changed.membership ->> 'revision')::bigint
+      )
+    ) else pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'role', 'membership',
+      'membershipId', (changed.membership ->> 'membershipId')::uuid,
+      'revision', (changed.membership ->> 'revision')::bigint
+    )) end,
+    p_activity_id
+  );
 
   return query select changed.outcome, changed.operation, changed.membership,
     changed.closed_predecessor, changed.access_version, changed.correlation_id;

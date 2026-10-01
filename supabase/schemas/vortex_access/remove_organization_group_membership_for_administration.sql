@@ -27,6 +27,7 @@ declare
   decision record;
   changed record;
   changed_summary jsonb;
+  authority_checked_at timestamptz;
   activity_result text;
 begin
   if p_membership_id is null
@@ -59,6 +60,8 @@ begin
     raise exception using errcode = '42501',
       message = 'Organization Group membership removal is unavailable';
   end if;
+
+  authority_checked_at := decision.checked_at;
 
   select membership.* into membership_fact
   from vortex_access.organization_group_memberships as membership
@@ -183,6 +186,24 @@ begin
     raise exception using errcode = '40001',
       message = 'Organization Group membership removal Activity is stale';
   end if;
+
+  perform vortex_access.append_organization_group_membership_events_internal(
+    'remove_membership',
+    pg_catalog.jsonb_build_object(
+      'kind', 'human',
+      'organizationId', context_organization_id,
+      'organizationAccountId', context_account_id,
+      'correlationId', context_correlation_id,
+      'accessVersionBefore', context_access_version,
+      'authorityCheckedAt', vortex_context.format_timestamp_utc(authority_checked_at)
+    ),
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'role', 'membership',
+      'membershipId', (changed.membership ->> 'membershipId')::uuid,
+      'revision', (changed.membership ->> 'revision')::bigint
+    )),
+    p_activity_id
+  );
 
   return query select 'completed'::text, context_organization_id, changed_summary,
     changed.access_version;
