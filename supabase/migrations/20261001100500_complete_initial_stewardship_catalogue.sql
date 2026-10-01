@@ -1,3 +1,7 @@
+begin;
+
+set local role postgres;
+
 create or replace function vortex_access.coordinate_organization_stewardship_adoption(
   p_organization_id uuid,
   p_organization_account_id uuid,
@@ -540,3 +544,7 @@ revoke execute on function
   vortex_access.coordinate_organization_stewardship_adoption(
     uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
   ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+reset role;
+
+commit;
