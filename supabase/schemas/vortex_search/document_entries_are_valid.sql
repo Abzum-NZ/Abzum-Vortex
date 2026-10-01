@@ -31,6 +31,8 @@ $function$;
 revoke all on function vortex_search.document_entries_are_valid(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+grant execute on function vortex_search.document_entries_are_valid(jsonb)
+  to vortex_search_owner;
 
 comment on function vortex_search.document_entries_are_valid(jsonb) is
   'Storage check for search document entries: bounded array of unique field entries with the exact entry shape, types and text sizes; ranking weights are derived by the runtime producer.';
