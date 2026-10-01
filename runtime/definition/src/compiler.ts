@@ -5385,7 +5385,7 @@ function compileOwnedFlowSources(
       output.artifact.exactVersion !== expected.exactVersion ||
       output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
       output.artifact.contentFingerprint !== fingerprintCanonicalValue(content) ||
-      canonical.kind !== "module" ||
+      // The Module kind belongs to the canonical envelope, not the canonical draft root.
       envelope.kind !== "module" ||
       envelope.key !== moduleKey ||
       envelope.rootId !== expected.rootId
