@@ -1,3 +1,5 @@
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.write_named_action_relationship_value_internal(
   p_source_record_type_id uuid,
   p_source_record_id uuid,
@@ -33,6 +35,7 @@ declare
   source_application_root_id uuid;
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
+  application_root_required boolean;
   existing_other boolean;
   update_sql text;
   changed_rows integer;
@@ -127,6 +130,14 @@ begin
   target_meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
   source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
     then (source_context ->> 'applicationRootId')::uuid else null end;
+  application_root_required := coalesce(
+    (field_value #>> '{settings,applicationRootIdRequired}')::boolean, false
+  );
+  if application_root_required
+    and (target_meta #>> '{recordType,systemProjection,protectedView}')
+      is distinct from 'organization_accounts' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
 
   perform vortex_record.lock_relationship_target_row_internal(
     target_type_id, target_record_id,
@@ -172,6 +183,14 @@ begin
       (source_context ->> 'organizationId')::uuid
     or (source_application_root_id is not null and target_application_root_id is not null
       and source_application_root_id <> target_application_root_id) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  if application_root_required
+    and not vortex_access.organization_account_has_current_application_access_internal(
+      (source_context ->> 'organizationId')::uuid,
+      target_record_id,
+      (source_context ->> 'applicationRootId')::uuid
+    ) then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
 
@@ -241,4 +260,4 @@ grant execute on function
   vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
 
 comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
-  'Private named-action edge writer: uses the ordinary or protected projection target lock and edge flow, except that the command subject is authorised by re-evaluating the exact installed named action rather than ordinary read.';
+  'Private named-action edge writer: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';

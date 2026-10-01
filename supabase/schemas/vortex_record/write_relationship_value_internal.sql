@@ -1,3 +1,5 @@
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.write_relationship_value_internal(
   p_source_record_type_id uuid,
   p_source_record_id uuid,
@@ -28,6 +30,7 @@ declare
   source_application_root_id uuid;
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
+  application_root_required boolean;
   existing_other boolean;
   update_sql text;
   changed_rows integer;
@@ -137,6 +140,14 @@ begin
   target_meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
   source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
     then (source_context ->> 'applicationRootId')::uuid else null end;
+  application_root_required := coalesce(
+    (field_value #>> '{settings,applicationRootIdRequired}')::boolean, false
+  );
+  if application_root_required
+    and (target_meta #>> '{recordType,systemProjection,protectedView}')
+      is distinct from 'organization_accounts' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
 
   -- Lock the protected row behind either ordinary record storage or a
   -- registered system projection before rebuilding eligibility from current
@@ -171,6 +182,14 @@ begin
       (source_context ->> 'organizationId')::uuid
     or (source_application_root_id is not null and target_application_root_id is not null
       and source_application_root_id <> target_application_root_id) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  if application_root_required
+    and not vortex_access.organization_account_has_current_application_access_internal(
+      (source_context ->> 'organizationId')::uuid,
+      target_record_id,
+      (source_context ->> 'applicationRootId')::uuid
+    ) then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
 
@@ -252,4 +271,4 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship writer: validates the declared relationship and target eligibility, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
+  'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
