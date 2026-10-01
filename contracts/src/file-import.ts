@@ -33,7 +33,7 @@ const atMost256CodePoints = (value: string): boolean => {
 
 export const structuredRecordImportColumnSchema = z
   .object({
-    columnId: z.string().min(1).refine(atMost256CodePoints),
+    columnId: z.string().min(1).max(256),
     label: z.string().refine(atMost256CodePoints).optional(),
   })
   .strict();
@@ -63,7 +63,7 @@ const safeDecodedCellsSchema = z.custom<Readonly<Record<string, unknown>>>((valu
     if (keys.length > STRUCTURED_RECORD_IMPORT_MAXIMUM_COLUMNS) return false;
     const descriptors = Object.getOwnPropertyDescriptors(value);
     return keys.every((key) => {
-      if (typeof key !== "string" || !atMost256CodePoints(key) || key.length === 0) return false;
+      if (typeof key !== "string" || key.length > 256 || key.length === 0) return false;
       const descriptor = descriptors[key];
       return descriptor !== undefined && descriptor.enumerable === true && "value" in descriptor;
     });

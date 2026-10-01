@@ -386,7 +386,7 @@ const decodeParsedDocument = (candidate: unknown): StructuredRecordImportDecodeR
     if (
       !ownKeysExactly(value, hasLabel ? ["columnId", "label"] : ["columnId"]) ||
       typeof value.columnId !== "string" ||
-      !codePointLengthWithin(value.columnId, 256) ||
+      value.columnId.length > 256 ||
       (hasLabel &&
         (typeof value.label !== "string" || !codePointLengthWithin(value.label as string, 256)))
     ) {

@@ -74,16 +74,7 @@ const expiredAt = (clock: () => Date, deadlineMilliseconds: number): boolean => 
 const cancelStream = (stream: ReadableStream<Uint8Array>): void => {
   try {
     const reader = stream.getReader();
-    void reader
-      .cancel()
-      .catch(() => undefined)
-      .finally(() => {
-        try {
-          reader.releaseLock();
-        } catch {
-          // Cancellation is best-effort after the protected decision closes.
-        }
-      });
+    cancelReaderAndRelease(reader);
   } catch {
     if (!stream.locked) void stream.cancel().catch(() => undefined);
   }
@@ -148,7 +139,10 @@ const boundedUpstreamReader =
       cancelStream(late.stream),
     );
     if (result.kind !== "completed") throw new Error("FILE_IMPORT_SOURCE_EXPIRED");
-    return result.value;
+    return {
+      ...result.value,
+      stream: deadlineOwnedStream(result.value.stream, deadlineMilliseconds, clock),
+    };
   };
 
 type ReaderReadResult =
@@ -157,16 +151,17 @@ type ReaderReadResult =
   | Readonly<{ kind: "failed" }>;
 
 const cancelReaderAndRelease = (reader: ReadableStreamDefaultReader<Uint8Array>): void => {
-  void reader
-    .cancel()
-    .catch(() => undefined)
-    .finally(() => {
-      try {
-        reader.releaseLock();
-      } catch {
-        // A late underlying read may still be settling after cancellation.
-      }
-    });
+  try {
+    void reader.cancel().catch(() => undefined);
+  } catch {
+    // A completed stream may already have released its reader.
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Cancellation is best-effort after the protected decision closes.
+    }
+  }
 };
 
 const readUntil = (
@@ -214,6 +209,54 @@ const readUntil = (
       },
     );
   });
+
+/** Own the acquired reader without awaiting an unbounded cancellation promise. */
+const deadlineOwnedStream = (
+  source: ReadableStream<Uint8Array>,
+  deadlineMilliseconds: number,
+  clock: () => Date,
+): ReadableStream<Uint8Array> => {
+  const reader = source.getReader();
+  let closed = false;
+  const close = (cancel: boolean): void => {
+    if (closed) return;
+    closed = true;
+    if (cancel) {
+      cancelReaderAndRelease(reader);
+      return;
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      // The completed upstream reader may already have released its lock.
+    }
+  };
+
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        if (closed) return;
+        const next = await readUntil(reader, deadlineMilliseconds, clock);
+        if (closed) return;
+        if (next.kind !== "read") {
+          close(true);
+          controller.error(new Error("FILE_IMPORT_SOURCE_UNAVAILABLE"));
+          return;
+        }
+        if (next.value.done) {
+          close(false);
+          controller.close();
+          return;
+        }
+        controller.enqueue(next.value.value);
+      },
+      cancel() {
+        close(true);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+};
 
 const consumeAuthorizedStream = async (
   stream: ReadableStream<Uint8Array>,
