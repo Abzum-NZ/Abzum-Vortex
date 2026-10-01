@@ -2537,6 +2537,90 @@ function inheritReadTimeEvaluation<
   );
 }
 
+function personLinkSettingLocation(
+  field: JsonObject,
+  qualifiedRecordType: string,
+  resolution: Resolution,
+): DefinitionValidationLocation {
+  const recordKey = qualifiedRecordType.slice(qualifiedRecordType.lastIndexOf(":") + 1);
+  const location = resolution.location("field", String(field.key), `record:${recordKey}`);
+  return {
+    ...location,
+    segments: [...location.segments, { kind: "setting", key: "application_root_required" }],
+  };
+}
+
+/**
+ * The optional access flag belongs only to a resolved organization-account projection. Local
+ * records belong to the same compiled Module draft, which is contract-checked before returning.
+ */
+function validatePersonLinkApplicationAccess(
+  source: JsonObject,
+  resolution: Resolution,
+  organizationId: unknown,
+  localRecords: readonly JsonObject[],
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): void {
+  const body = asObject(source.body);
+  const ownKey = String(source.key);
+  for (const record of body.record_types as JsonObject[]) {
+    const qualifiedRecordType = `${ownKey}:${String(record.key)}`;
+    for (const field of record.fields as JsonObject[]) {
+      if (field.type !== "link") continue;
+      const settings = asObject(field.settings);
+      if (settings.application_root_required === undefined) continue;
+      const location = personLinkSettingLocation(field, qualifiedRecordType, resolution);
+      try {
+        const reference = String(settings.target);
+        const target = resolution.recordType(reference);
+        const moduleKey = reference.slice(0, reference.lastIndexOf(":"));
+        const expected = resolution.definition(moduleKey, "module");
+        let records = localRecords;
+        if (moduleKey !== ownKey) {
+          const declarations = (body.dependencies as JsonObject[]).filter(
+            (dependency) => dependency.module === moduleKey,
+          );
+          const candidates = dependencyOutputs.filter(
+            (output): output is ModuleCompilationOutputV3 =>
+              output.kind === "module" && output.artifact.definitionKey === moduleKey,
+          );
+          if (declarations.length !== 1 || candidates.length !== 1)
+            fail("vortex.definition.application_dependency_manifest", "broken_reference", location);
+          const requirement = declarations[0]!.version as Parameters<typeof compatibleVersion>[0];
+          const output = candidates[0]!;
+          const canonical = asObject(output.canonical);
+          const envelope = asObject(canonical.envelope);
+          const content = asObject(canonical.content);
+          if (
+            !compatibleVersion(requirement, expected.exactVersion) ||
+            output.artifact.rootId !== expected.rootId ||
+            output.artifact.exactVersion !== expected.exactVersion ||
+            output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
+            envelope.kind !== "module" ||
+            envelope.key !== moduleKey ||
+            envelope.rootId !== expected.rootId ||
+            envelope.organizationId !== organizationId ||
+            output.artifact.contentFingerprint !== fingerprintCanonicalValue(content)
+          )
+            fail("vortex.definition.application_dependency_manifest", "broken_reference", location);
+          records = content.recordTypes as JsonObject[];
+        }
+        const matches = records.filter((candidate) => candidate.recordTypeId === target.recordTypeId);
+        if (
+          target.moduleRootId !== expected.rootId ||
+          matches.length !== 1 ||
+          (matches[0]!.systemProjection as JsonObject | undefined)?.protectedView !==
+            "organization_accounts"
+        )
+          fail("vortex.definition.invalid_record_type_reference", "broken_reference", location);
+      } catch (error) {
+        if (!(error instanceof DefinitionCompilationError)) throw error;
+        throw new DefinitionCompilationError(error.ruleCode, error.family, location);
+      }
+    }
+  }
+}
+
 function fieldSettings(
   field: JsonObject,
   qualifiedRecordType: string,
@@ -2672,12 +2756,29 @@ function fieldSettings(
         minimumRows: settings.minimum_rows,
         maximumRows: settings.maximum_rows,
       };
-    case "link":
-      return {
-        target: resolution.recordType(String(settings.target)),
-        reverseKey: settings.reverse_key,
-        onParentDelete: settings.on_parent_delete,
-      };
+    case "link": {
+      try {
+        return {
+          target: resolution.recordType(String(settings.target)),
+          reverseKey: settings.reverse_key,
+          onParentDelete: settings.on_parent_delete,
+          ...(settings.application_root_required === undefined
+            ? {}
+            : { applicationRootIdRequired: settings.application_root_required }),
+        };
+      } catch (error) {
+        if (
+          settings.application_root_required === undefined ||
+          !(error instanceof DefinitionCompilationError)
+        )
+          throw error;
+        throw new DefinitionCompilationError(
+          error.ruleCode,
+          error.family,
+          personLinkSettingLocation(field, qualifiedRecordType, resolution),
+        );
+      }
+    }
     case "link_to_one_of_several":
       return {
         targets: (settings.targets as string[]).map((target) => resolution.recordType(target)),
@@ -3272,6 +3373,13 @@ function compileModule(
       ),
     };
   });
+  validatePersonLinkApplicationAccess(
+    source,
+    resolution,
+    metadata.organizationId,
+    recordTypes,
+    dependencyOutputs,
+  );
   const qualifiedForRecord = (recordKey: string) => `${definitionKey}:${recordKey}`;
   const actions = (body.actions as JsonObject[]).map((action) => {
     const record = qualifiedForRecord(String(action.record_type));
