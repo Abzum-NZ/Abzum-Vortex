@@ -1,7 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { developmentSetupManifest } from "./manifest";
 import {
   createHumanOrganizationRequestService,
-  createOrganizationRuntimeSettingsAdministrationService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
 } from "@vortex/access";
@@ -17,11 +17,17 @@ import {
   resolveFirstOwnerIdentity,
 } from "./guards";
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
-import { publishShippedDefinitions } from "./definitions";
+import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/definition";
+import { createRecordSaveService } from "@vortex/record";
+import { developmentPublicationCatalogue, publishShippedDefinitions } from "./definitions";
 import { installApplications, type InstallFacts } from "./install";
 import { grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
-import { nominatedOwnerSession } from "./development-authority";
+import {
+  inSystemTransaction,
+  mintSystemContext,
+  nominatedOwnerSession,
+} from "./development-authority";
 import { loadSetupState } from "./state";
 
 /**
@@ -40,14 +46,14 @@ const log = (message: string): void => {
 };
 
 const landingZoneApplicationKey = "vortex.app.landing_zone";
+const organisationAdministrationApplicationKey = "vortex.app.organisation_administration";
 
 const initializeLandingZoneDefault = async (
-  identityAuthorityId: ReturnType<typeof requireLocalDevelopmentEnvironment>,
-  organizationId: string,
-  stewardIdentityId: string,
+  facts: InstallFacts,
   applicationRootId: string,
-  state: ReturnType<typeof loadSetupState>,
 ): Promise<void> => {
+  const { identityAuthorityId, stewardIdentityId, state } = facts;
+  const { organizationId } = facts.system;
   if (state.defaultApplicationInitializationCompleted) return;
   if (state.defaultApplicationInitializationAttempted) {
     state.defaultApplicationInitializationCompleted = true;
@@ -94,26 +100,64 @@ const initializeLandingZoneDefault = async (
   }
 
   const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
+  const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
+  if (administrationRelease === undefined)
+    throw new Error(`No published release recorded for ${organisationAdministrationApplicationKey}`);
+  const definitionContext = mintSystemContext(facts.system);
+  const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
+    createDatabaseSystemApplicationBoundReleaseSetService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read(definitionContext, {
+      applicationRootId: applicationRootIdSchema.parse(administrationRelease.rootId),
+      applicationReleaseRevision: administrationRelease.releaseRevision,
+    }),
+  );
+  const settingsRecordType = releaseSet.modules
+    .find((module) => module.definitionKey === "vortex.organisation_administration")
+    ?.content.recordTypes.find((recordType) => recordType.key === "organization_settings");
+  const defaultApplicationField = settingsRecordType?.fields.find(
+    (field) => field.key === "default_application_root_id",
+  );
+  if (
+    settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
+    !settingsRecordType.standardActions.includes("update") ||
+    defaultApplicationField === undefined
+  )
+    throw new Error("The installed Organisation Administration settings definition is unavailable");
+  const saveSelection = organizationSelectionCandidateSchema.parse({
+    organizationId,
+    applicationRootId: administrationRelease.rootId,
+  });
   // Fence reruns before the protected write. If the process stops after the write, a later
   // explicit clear must remain the user's choice; an interrupted attempt falls back to the launcher.
   state.defaultApplicationInitializationAttempted = true;
   state.save();
 
-  const administration = createOrganizationRuntimeSettingsAdministrationService({
-    identityAuthorityId,
-  });
-  const result = await administration.setDefaultApplication(session, selection, {
-    expectedRevision: observed.value.revision,
-    defaultApplicationRootId,
+  const result = await createRecordSaveService({ identityAuthorityId }).save(session, saveSelection, {
+    contractVersion: "2.0.0",
+    commandId: randomUUID(),
+    operation: "update",
+    recordTypeId: settingsRecordType.recordTypeId,
+    recordId: organizationId,
+    expectedConcurrencyNumber: observed.value.revision,
+    submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
   });
   state.defaultApplicationInitializationCompleted = true;
   state.save();
+  const savedDefaultApplicationRootId =
+    result.kind === "available" && result.value.outcome === "saved"
+      ? result.value.readableValues[defaultApplicationField.fieldId]
+      : undefined;
   if (
     result.kind === "available" &&
-    result.value.defaultApplicationRootId?.toLowerCase() === defaultApplicationRootId.toLowerCase()
+    result.value.outcome === "saved" &&
+    result.value.concurrencyNumber === observed.value.revision + 1 &&
+    typeof savedDefaultApplicationRootId === "string" &&
+    savedDefaultApplicationRootId.toLowerCase() === defaultApplicationRootId.toLowerCase()
   ) {
     log(
-      `initialized the organisation default to Landing Zone at settings revision ${result.value.revision}`,
+      `initialized the organisation default to Landing Zone at settings revision ${result.value.concurrencyNumber}`,
     );
   } else {
     log(
@@ -240,13 +284,7 @@ const main = async (): Promise<void> => {
   const landingZoneRelease = releases.get(landingZoneApplicationKey);
   if (landingZoneRelease === undefined)
     throw new Error(`No published release recorded for ${landingZoneApplicationKey}`);
-  await initializeLandingZoneDefault(
-    identityAuthorityId,
-    system.organizationId,
-    stewardIdentityId,
-    landingZoneRelease.rootId,
-    state,
-  );
+  await initializeLandingZoneDefault(installFacts(releases), landingZoneRelease.rootId);
   log("done. Sign in with the nominated account and open the organisation.");
 };
 

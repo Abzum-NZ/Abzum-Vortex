@@ -632,9 +632,10 @@ export const invitationAcceptanceWithAccessVersionSchema = z.discriminatedUnion(
 
 /**
  * SIX Group List One (Current Currency & Funds), published 2026-01-01.
- * Update this checked-in allowlist only from a later List One publication.
+ * This immutable version is the source of the initial SQL reference seed.
+ * A later List One publication needs a new version and a forward migration.
  */
-const currentIso4217Alpha3CodesV2026_01_01 = new Set<string>([
+export const currentIso4217Alpha3CodesV2026_01_01 = [
   "AED",
   "AFN",
   "ALL",
@@ -813,7 +814,51 @@ const currentIso4217Alpha3CodesV2026_01_01 = new Set<string>([
   "ZAR",
   "ZMW",
   "ZWG",
-]);
+] as const;
+
+const currentIso4217Alpha3CodeSetV2026_01_01 = new Set<string>(
+  currentIso4217Alpha3CodesV2026_01_01,
+);
+
+/** Immutable source of the initial organisation-settings date-format seed. */
+export const organizationRuntimeSettingsDateFormatsV2026_09_29 = [
+  "short",
+  "medium",
+  "long",
+  "full",
+] as const;
+export const organizationRuntimeSettingsDateFormats =
+  organizationRuntimeSettingsDateFormatsV2026_09_29;
+const [shortDateFormat, mediumDateFormat, longDateFormat, fullDateFormat] =
+  organizationRuntimeSettingsDateFormats;
+export const organizationRuntimeSettingsDateFormatOptions = [
+  { value: shortDateFormat, label: "Short" },
+  { value: mediumDateFormat, label: "Medium" },
+  { value: longDateFormat, label: "Long" },
+  { value: fullDateFormat, label: "Full" },
+] as const;
+
+/** Immutable source of the initial organisation-settings number-format seed. */
+export const organizationRuntimeSettingsNumberFormatsV2026_09_29 = [
+  "auto",
+  "always",
+  "min2",
+  "never",
+] as const;
+export const organizationRuntimeSettingsNumberFormats =
+  organizationRuntimeSettingsNumberFormatsV2026_09_29;
+const [
+  automaticNumberFormat,
+  alwaysDecimalNumberFormat,
+  minimumTwoDecimalNumberFormat,
+  noDecimalNumberFormat,
+] = organizationRuntimeSettingsNumberFormats;
+export const organizationRuntimeSettingsNumberFormatOptions = [
+  { value: automaticNumberFormat, label: "Automatic" },
+  { value: alwaysDecimalNumberFormat, label: "Always show decimals" },
+  { value: minimumTwoDecimalNumberFormat, label: "At least two decimals" },
+  { value: noDecimalNumberFormat, label: "Never show decimals" },
+] as const;
 
 /**
  * IANA TZDB 2026d zone.tab canonical named locations. UTC and Etc/UTC are
@@ -1269,12 +1314,12 @@ export const organizationRuntimeSettingsSchema = z
       .string()
       .length(3)
       .refine(
-        (value) => currentIso4217Alpha3CodesV2026_01_01.has(value),
+        (value) => currentIso4217Alpha3CodeSetV2026_01_01.has(value),
         "Currency must be a current ISO-4217 code",
       ),
-    dateFormat: z.enum(["short", "medium", "long", "full"]),
+    dateFormat: z.enum(organizationRuntimeSettingsDateFormats),
     // Closed serialization of ECMA-402 `useGrouping`; `never` maps to false.
-    numberFormat: z.enum(["auto", "always", "min2", "never"]),
+    numberFormat: z.enum(organizationRuntimeSettingsNumberFormats),
     revision: revisionSchema,
   })
   .strict();
