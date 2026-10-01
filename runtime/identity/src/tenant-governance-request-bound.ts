@@ -39,7 +39,7 @@ type BoundRequestRow = DatabaseRow & {
 };
 
 type BoundHumanRequest = Readonly<{
-  context: SessionContext;
+  context: Extract<SessionContext, { callerKind: "human" | "federated" }>;
   channel: ProtectedOperationChannel;
 }>;
 
