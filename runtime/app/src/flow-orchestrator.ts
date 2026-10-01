@@ -1209,11 +1209,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       operationSucceeded
         ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
         : {};
+    const diagnostic = "diagnostic" in executed ? executed.diagnostic : undefined;
     return {
       result: {
         outcome,
         outputs,
-        ...(executed.diagnostic === undefined ? {} : { diagnostic: executed.diagnostic }),
+        ...(diagnostic === undefined ? {} : { diagnostic }),
       },
       stored,
     };

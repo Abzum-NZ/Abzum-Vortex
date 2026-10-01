@@ -154,6 +154,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       )
         return unavailable;
       const failure = candidate.failure;
+      let acceptedFailure: Extract<ServerFlowResponse, { kind: "result" }>["failure"];
       if (failure !== undefined && !isRecord(failure)) return unavailable;
       if (isRecord(failure)) {
         const allowedFailureKeys = new Set(["code", "taskId", "diagnostic"]);
@@ -163,15 +164,18 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
           (failure.taskId !== undefined && typeof failure.taskId !== "string")
         )
           return unavailable;
+        let diagnostic: FlowRefusalFeedback | undefined;
         if (failure.diagnostic !== undefined) {
-          const diagnostic = flowRefusalFeedbackSchema.safeParse(failure.diagnostic);
-          if (!diagnostic.success || diagnostic.data.operationInput !== undefined)
-            return unavailable;
+          const parsed = flowRefusalFeedbackSchema.safeParse(failure.diagnostic);
+          if (!parsed.success || parsed.data.operationInput !== undefined) return unavailable;
+          diagnostic = parsed.data;
         }
+        acceptedFailure = {
+          code: failure.code,
+          ...(typeof failure.taskId === "string" ? { taskId: failure.taskId } : {}),
+          ...(diagnostic === undefined ? {} : { diagnostic }),
+        };
       }
-      const diagnostic = isRecord(failure) && failure.diagnostic !== undefined
-        ? flowRefusalFeedbackSchema.parse(failure.diagnostic)
-        : undefined;
       return {
         kind: "result",
         runId: candidate.runId,
@@ -183,15 +187,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
         intents,
-        ...(isRecord(failure)
-          ? {
-              failure: {
-                code: failure.code,
-                ...(typeof failure.taskId === "string" ? { taskId: failure.taskId } : {}),
-                ...(diagnostic === undefined ? {} : { diagnostic }),
-              },
-            }
-          : {}),
+        ...(acceptedFailure === undefined ? {} : { failure: acceptedFailure }),
       };
     }
     default:
