@@ -146,7 +146,10 @@ const boundedUpstreamReader =
   };
 
 type ReaderReadResult =
-  | Readonly<{ kind: "read"; value: ReadableStreamReadResult<Uint8Array> }>
+  | Readonly<{
+      kind: "read";
+      value: Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+    }>
   | Readonly<{ kind: "expired" }>
   | Readonly<{ kind: "failed" }>;
 
