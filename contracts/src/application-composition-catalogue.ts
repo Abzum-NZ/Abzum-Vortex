@@ -130,6 +130,9 @@ export const CALENDAR_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
   sources.CALENDAR_BLOCK_RELEASE,
 );
 
+/** Exact immutable metadata release for the installed query-bound board display block. */
+export const BOARD_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.BOARD_BLOCK_RELEASE);
+
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
@@ -330,7 +333,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All nineteen immutable display block releases, including the query-bound calendar release. */
+/** All twenty immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -351,6 +354,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   TABLE_BLOCK_RELEASE_1_3_0,
   TABLE_BLOCK_RELEASE_1_4_0,
   CALENDAR_BLOCK_RELEASE,
+  BOARD_BLOCK_RELEASE,
 ]);
 
 /** All sixteen immutable form, layout and action block releases. */
