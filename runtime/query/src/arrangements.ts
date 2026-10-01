@@ -11,6 +11,9 @@ import type { HumanOrganizationRequestResult } from "@vortex/access";
 import {
   arrangementCommandSchema,
   arrangementRowLimit,
+  protectedBoardArrangementCommandSchema,
+  protectedBoardArrangementPageSchema,
+  protectedBoardArrangementResultSchema,
   summaryArrangementResultSchema,
   type AggregateDescriptor,
   type AggregateResult,
@@ -24,10 +27,17 @@ import {
   type CalendarArrangementDescriptor,
   type CalendarArrangementResult,
   type CalendarItem,
+  type ProtectedBoardArrangementPage,
+  type ProtectedBoardArrangementResult,
   summaryArrangementCommandSchema,
   type TableArrangementDescriptor,
   type TableArrangementResult,
 } from "./arrangement-contracts";
+import {
+  protectedQueryBoardSummaryResultSchema,
+  protectedQueryResultSchema,
+  type ProtectedQueryBoardSelector,
+} from "./protected-query-contracts";
 import type { createProtectedQueryService } from "./protected-query-service";
 import { aggregateSupportsFieldType, computeAggregates } from "./exact-aggregation";
 
@@ -533,4 +543,211 @@ export const arrangeSummary = async (
   });
   if (!mapped.success) throw new Error("PROTECTED_QUERY_SUMMARY_RESULT_INVALID");
   return { kind: "available", value: mapped.data };
+};
+
+type ProtectedBoardService = Pick<
+  ReturnType<typeof createProtectedQueryService>,
+  "boardMembers" | "boardSummary"
+>;
+type ProtectedBoardSummaryArguments = Parameters<ProtectedBoardService["boardSummary"]>;
+type ProtectedBoardMembersArguments = Parameters<ProtectedBoardService["boardMembers"]>;
+type ProtectedBoardPageRead = HumanOrganizationRequestResult<
+  ProtectedBoardArrangementPage | ArrangementRefusal
+>;
+
+const requestedProjectionIsPreserved = (
+  page: ProtectedBoardArrangementPage,
+  requestedFieldIds: readonly string[],
+  requestedSystemFieldKeys: readonly string[],
+): boolean => {
+  const declaredFields = new Set(requestedFieldIds.map(lower));
+  const declaredSystemFields = new Set(requestedSystemFieldKeys);
+  const recordIds = new Set<string>();
+  for (const row of page.rows) {
+    const recordId = lower(row.recordId);
+    if (recordIds.has(recordId)) return false;
+    recordIds.add(recordId);
+
+    const returnedFields = Object.keys(row.values);
+    if (
+      new Set(returnedFields.map(lower)).size !== returnedFields.length ||
+      returnedFields.some((fieldId) => !declaredFields.has(lower(fieldId)))
+    )
+      return false;
+
+    const returnedSystemFields = Object.keys(row.systemValues ?? {});
+    if (returnedSystemFields.some((fieldKey) => !declaredSystemFields.has(fieldKey))) return false;
+  }
+  return true;
+};
+
+const readProtectedBoardPage = async (
+  queries: ProtectedBoardService,
+  caller: ProtectedBoardMembersArguments[0],
+  selection: ProtectedBoardMembersArguments[1],
+  command: ReturnType<typeof protectedBoardArrangementCommandSchema.parse>,
+  expectedReleaseVersion: string,
+  selector: ProtectedQueryBoardSelector,
+  continuationToken?: string,
+): Promise<ProtectedBoardPageRead> => {
+  const producer = await queries.boardMembers(caller, selection, {
+    moduleRootId: command.moduleRootId,
+    queryId: command.queryId,
+    inputValues: command.inputValues,
+    requestedFieldIds: command.requestedFieldIds,
+    requestedSystemFieldKeys: command.requestedSystemFieldKeys,
+    filter: command.filter,
+    filterableFieldIds: command.filterableFieldIds,
+    selector,
+    pageSize: command.pageSize,
+    ...(continuationToken === undefined ? {} : { continuationToken }),
+  });
+  if (producer.kind !== "available") return producer;
+
+  const parsed = protectedQueryResultSchema.safeParse(producer.value);
+  if (!parsed.success) return { kind: "available", value: refusal("dataset_invalid") };
+  if (parsed.data.outcome === "refused")
+    return { kind: "available", value: refusal(parsed.data.reasonCode) };
+
+  if (
+    lower(parsed.data.moduleRootId) !== lower(command.moduleRootId) ||
+    lower(parsed.data.queryId) !== lower(command.queryId)
+  )
+    return { kind: "available", value: refusal("dataset_invalid") };
+  if (parsed.data.moduleReleaseVersion !== expectedReleaseVersion)
+    return { kind: "available", value: refusal("cursor_stale") };
+
+  const page = protectedBoardArrangementPageSchema.safeParse({
+    rows: parsed.data.rows,
+    nextContinuationToken: parsed.data.nextContinuationToken,
+  });
+  if (
+    !page.success ||
+    !requestedProjectionIsPreserved(
+      page.data,
+      command.requestedFieldIds,
+      command.requestedSystemFieldKeys,
+    )
+  )
+    return { kind: "available", value: refusal("dataset_invalid") };
+  return { kind: "available", value: page.data };
+};
+
+/**
+ * Composes one current protected board summary with only its requested member pages. Initial
+ * requests read at most twelve installed columns plus unassigned; continuations read one column.
+ * Every producer call rechecks current authority, and separate calls do not share an atomic
+ * snapshot, so refreshed totals can differ from previously returned or newly read member pages.
+ */
+export const arrangeProtectedBoard = async (
+  queries: ProtectedBoardService,
+  caller: ProtectedBoardSummaryArguments[0],
+  selection: ProtectedBoardSummaryArguments[1],
+  commandCandidate: unknown,
+): Promise<
+  HumanOrganizationRequestResult<ProtectedBoardArrangementResult | ArrangementRefusal>
+> => {
+  const parsedCommand = protectedBoardArrangementCommandSchema.safeParse(commandCandidate);
+  if (!parsedCommand.success)
+    return { kind: "available", value: refusal("request_invalid") };
+  const command = parsedCommand.data;
+
+  const producedSummary = await queries.boardSummary(caller, selection, {
+    moduleRootId: command.moduleRootId,
+    queryId: command.queryId,
+    inputValues: command.inputValues,
+    choiceFieldId: command.choiceFieldId,
+    filter: command.filter,
+    filterableFieldIds: command.filterableFieldIds,
+  });
+  if (producedSummary.kind !== "available") return producedSummary;
+
+  const summaryResult = protectedQueryBoardSummaryResultSchema.safeParse(producedSummary.value);
+  if (!summaryResult.success)
+    return { kind: "available", value: refusal("dataset_invalid") };
+  if (summaryResult.data.outcome === "refused")
+    return { kind: "available", value: refusal(summaryResult.data.reasonCode) };
+
+  const summary = summaryResult.data;
+  if (
+    lower(summary.moduleRootId) !== lower(command.moduleRootId) ||
+    lower(summary.queryId) !== lower(command.queryId) ||
+    lower(summary.choiceFieldId) !== lower(command.choiceFieldId)
+  )
+    return { kind: "available", value: refusal("dataset_invalid") };
+
+  const pages = new Map<string, ProtectedBoardArrangementPage>();
+  let unassignedPage: ProtectedBoardArrangementPage | null = null;
+  const readColumn = async (
+    selector: ProtectedQueryBoardSelector,
+    token?: string,
+  ): Promise<HumanOrganizationRequestResult<ArrangementRefusal> | undefined> => {
+    const result = await readProtectedBoardPage(
+      queries,
+      caller,
+      selection,
+      command,
+      summary.moduleReleaseVersion,
+      selector,
+      token,
+    );
+    if (result.kind !== "available") return result;
+    if ("outcome" in result.value) return { kind: "available", value: result.value };
+    if (selector.column.kind === "unassigned") unassignedPage = result.value;
+    else pages.set(selector.column.value, result.value);
+    return undefined;
+  };
+
+  if (command.pageRequest.kind === "initial") {
+    for (const column of summary.columns) {
+      const failure = await readColumn({
+        choiceFieldId: summary.choiceFieldId,
+        column: { kind: "option", value: column.value },
+      });
+      if (failure !== undefined) return failure;
+    }
+    const failure = await readColumn({
+      choiceFieldId: summary.choiceFieldId,
+      column: { kind: "unassigned" },
+    });
+    if (failure !== undefined) return failure;
+  } else {
+    const selector = command.pageRequest.selector;
+    if (lower(selector.choiceFieldId) !== lower(summary.choiceFieldId))
+      return { kind: "available", value: refusal("cursor_stale") };
+    if (selector.column.kind === "option") {
+      const selectedValue = selector.column.value;
+      if (!summary.columns.some((column) => column.value === selectedValue))
+        return { kind: "available", value: refusal("cursor_stale") };
+    }
+
+    const failure = await readColumn(
+      { choiceFieldId: summary.choiceFieldId, column: selector.column },
+      command.pageRequest.continuationToken,
+    );
+    if (failure !== undefined) return failure;
+  }
+
+  const completed = protectedBoardArrangementResultSchema.safeParse({
+    outcome: "completed",
+    arrangement: "board",
+    plan: {
+      moduleRootId: summary.moduleRootId,
+      moduleReleaseVersion: summary.moduleReleaseVersion,
+      queryId: summary.queryId,
+    },
+    choiceFieldId: summary.choiceFieldId,
+    declaredFieldIds: command.requestedFieldIds,
+    declaredSystemFieldKeys: command.requestedSystemFieldKeys,
+    totalRowCount: summary.totalRowCount,
+    columns: summary.columns.map((column) => ({
+      ...column,
+      page: pages.get(column.value) ?? null,
+    })),
+    unassigned: { ...summary.unassigned, page: unassignedPage },
+    aggregates: summary.aggregates,
+  });
+  if (!completed.success)
+    return { kind: "available", value: refusal("dataset_invalid") };
+  return { kind: "available", value: completed.data };
 };

@@ -15,9 +15,16 @@ import {
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/contracts";
 import {
+  protectedQueryBoardMembersCommandSchema,
+  protectedQueryBoardSelectorSchema,
+  protectedQueryBoardSummaryColumnSchema,
+  protectedQueryBoardSummaryUnassignedSchema,
+  protectedQueryPageRowSchema,
   protectedQueryRowSchema,
+  protectedQuerySummaryAggregateResultSchema,
   protectedQuerySummaryCommandSchema,
 } from "./protected-query-contracts";
+import { supportedRecordSystemFieldKeySchema } from "./record-system-values";
 
 /**
  * Most rows one arrangement accepts. Rows, counts, groups and totals are all
@@ -198,6 +205,85 @@ export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 /** Summary input identifies the installed Query; its own declaration provides groups and totals. */
 export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
 export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
+
+/** One initial set of board pages, or one column page to continue. */
+export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("initial") }).strict(),
+  z
+    .object({
+      kind: z.literal("continue"),
+      selector: protectedQueryBoardSelectorSchema,
+      continuationToken: z.string().min(1).max(65_536),
+    })
+    .strict(),
+]);
+export type ProtectedBoardArrangementPageRequest = z.infer<
+  typeof protectedBoardArrangementPageRequestSchema
+>;
+
+/** One uncached page of protected board members with record identity intact. */
+export const protectedBoardArrangementPageSchema = z
+  .object({
+    rows: z.array(protectedQueryPageRowSchema).max(200),
+    nextContinuationToken: z.string().optional(),
+  })
+  .strict();
+export type ProtectedBoardArrangementPage = z.infer<typeof protectedBoardArrangementPageSchema>;
+
+/** Additive page composer command; authority and installed options stay out of its payload. */
+export const protectedBoardArrangementCommandSchema = protectedQueryBoardMembersCommandSchema
+  .omit({ selector: true, continuationToken: true })
+  .extend({
+    choiceFieldId: fieldIdSchema,
+    pageRequest: protectedBoardArrangementPageRequestSchema,
+  })
+  .strict();
+export type ProtectedBoardArrangementCommand = z.input<
+  typeof protectedBoardArrangementCommandSchema
+>;
+
+const protectedBoardAggregateResultsSchema = z.record(
+  builderKeySchema,
+  protectedQuerySummaryAggregateResultSchema,
+);
+
+const protectedBoardArrangementColumnSchema = protectedQueryBoardSummaryColumnSchema
+  .extend({
+    /** Null means this bucket was not fetched in this response. */
+    page: protectedBoardArrangementPageSchema.nullable(),
+  })
+  .strict();
+
+const protectedBoardArrangementUnassignedSchema = protectedQueryBoardSummaryUnassignedSchema
+  .extend({
+    /** Null means this bucket was not fetched in this response. */
+    page: protectedBoardArrangementPageSchema.nullable(),
+  })
+  .strict();
+
+/** Exact protected summary metadata composed with bounded protected member pages. */
+export const protectedBoardArrangementResultSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    arrangement: z.literal("board"),
+    plan: arrangementSourcePlanSchema,
+    choiceFieldId: fieldIdSchema,
+    declaredFieldIds: declaredFieldIdsSchema,
+    declaredSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      }),
+    totalRowCount: z.number().int().nonnegative().max(100_000),
+    columns: z.array(protectedBoardArrangementColumnSchema).min(1).max(boardChoiceOptionLimit),
+    unassigned: protectedBoardArrangementUnassignedSchema,
+    aggregates: protectedBoardAggregateResultsSchema,
+  })
+  .strict();
+export type ProtectedBoardArrangementResult = z.infer<
+  typeof protectedBoardArrangementResultSchema
+>;
 
 // Results
 
