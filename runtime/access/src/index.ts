@@ -34,13 +34,8 @@ export {
   type VortexSuperAdministratorAdministrationDependencies,
 } from "./super-administrator-administration";
 export {
-  createOrganizationRuntimeSettingsAdministrationService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
-  type OrganizationDefaultApplication,
-  type OrganizationRuntimeSettingsAdministrationDependencies,
-  type SetOrganizationDefaultApplicationCommand,
-  type UpdateOrganizationRuntimeSettingsCommand,
 } from "./organization-runtime-settings-administration";
 export {
   createOrganizationLocalAdministrationService,

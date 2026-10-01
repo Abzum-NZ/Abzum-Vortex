@@ -1,56 +1,15 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import {
   unavailableError,
   databaseRevision,
-  sameId,
-  activityIdSchema,
   applicationRootIdSchema,
-  identitySessionSchema,
   organizationRuntimeSettingsSchema,
-  organizationSelectionCandidateSchema,
-  type IdentitySession,
   type ApplicationRootId,
-  type OrganizationId,
   type OrganizationRuntimeSettings,
-  type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
-  type HumanOrganizationRequestResult,
-} from "./human-organization-request";
 
-export interface UpdateOrganizationRuntimeSettingsCommand {
-  readonly expectedRevision: number;
-  readonly settings: OrganizationRuntimeSettings;
-}
-
-/**
- * Sets, changes or clears the organisation default application. A null
- * `defaultApplicationRootId` clears it so the organisation address falls back
- * to the permitted launcher.
- */
-export interface SetOrganizationDefaultApplicationCommand {
-  readonly expectedRevision: number;
-  readonly defaultApplicationRootId: ApplicationRootId | null;
-}
-
-export interface OrganizationDefaultApplication {
-  readonly organizationId: OrganizationId;
-  readonly defaultApplicationRootId: ApplicationRootId | null;
-  readonly revision: number;
-}
-
-export type OrganizationRuntimeSettingsAdministrationDependencies =
-  HumanOrganizationRequestDependencies &
-    Readonly<{
-      activityId?: () => string;
-    }>;
-
-type UpdateRow = DatabaseRow & { organization_id: unknown; settings: unknown };
 type ReadRow = DatabaseRow & {
   organization_id: unknown;
   language: unknown;
@@ -61,12 +20,6 @@ type ReadRow = DatabaseRow & {
   revision: unknown;
 };
 type DefaultApplicationRow = DatabaseRow & { default_application_root_id: unknown };
-type DefaultApplicationChangeRow = DatabaseRow & {
-  organization_id: unknown;
-  default_application_root_id: unknown;
-  revision: unknown;
-  changed: unknown;
-};
 
 const unavailableCode = "ORGANIZATION_RUNTIME_SETTINGS_UNAVAILABLE";
 
@@ -108,164 +61,4 @@ export const readCurrentOrganizationDefaultApplicationAfterAuthorization = async
   const parsed = applicationRootIdSchema.safeParse(value);
   if (!parsed.success) throw unavailableError(unavailableCode, "42501");
   return parsed.data;
-};
-
-const parseCommand = (
-  candidate: UpdateOrganizationRuntimeSettingsCommand,
-): UpdateOrganizationRuntimeSettingsCommand | undefined => {
-  const settings = organizationRuntimeSettingsSchema.safeParse(candidate.settings);
-  if (
-    !settings.success ||
-    !Number.isSafeInteger(candidate.expectedRevision) ||
-    candidate.expectedRevision < 1 ||
-    candidate.expectedRevision > Number.MAX_SAFE_INTEGER ||
-    settings.data.revision !== candidate.expectedRevision
-  )
-    return undefined;
-  return { expectedRevision: candidate.expectedRevision, settings: settings.data };
-};
-
-const parseDefaultApplicationCommand = (
-  candidate: SetOrganizationDefaultApplicationCommand,
-): SetOrganizationDefaultApplicationCommand | undefined => {
-  if (
-    !Number.isSafeInteger(candidate.expectedRevision) ||
-    candidate.expectedRevision < 1 ||
-    candidate.expectedRevision > Number.MAX_SAFE_INTEGER
-  )
-    return undefined;
-  if (candidate.defaultApplicationRootId === null)
-    return { expectedRevision: candidate.expectedRevision, defaultApplicationRootId: null };
-  const application = applicationRootIdSchema.safeParse(candidate.defaultApplicationRootId);
-  if (!application.success) return undefined;
-  return {
-    expectedRevision: candidate.expectedRevision,
-    defaultApplicationRootId: application.data,
-  };
-};
-
-/**
- * The settings object is contract-validated here, before the protected
- * request-role operation, which takes the values as arguments. SQL repeats the
- * shape, currency and format checks but not exact BCP-47 or pinned IANA zone
- * validation, so every value must reach it only through this contract check.
- * No separate staging call precedes it.
- */
-export const createOrganizationRuntimeSettingsAdministrationService = (
-  dependencies: OrganizationRuntimeSettingsAdministrationDependencies,
-) => {
-  const requests = createHumanOrganizationRequestService(dependencies);
-  const newActivityId = dependencies.activityId ?? randomUUID;
-
-  return Object.freeze({
-    async update(
-      sessionCandidate: IdentitySession,
-      selectionCandidate: OrganizationSelectionCandidate,
-      commandCandidate: UpdateOrganizationRuntimeSettingsCommand,
-    ): Promise<HumanOrganizationRequestResult<OrganizationRuntimeSettings>> {
-      const session = identitySessionSchema.safeParse(sessionCandidate);
-      const selection = organizationSelectionCandidateSchema.safeParse(selectionCandidate);
-      const command = parseCommand(commandCandidate);
-      if (!session.success || !selection.success || command === undefined)
-        return { kind: "unavailable" };
-
-      return requests.runChange(session.data, selection.data, async (transaction, scope) => {
-        if (!sameId(command.settings.organizationId, scope.organizationId))
-          throw unavailableError(unavailableCode, "42501");
-        const rows = await transaction.query<UpdateRow>`
-          select organization_id, settings
-          from vortex_access.update_organization_runtime_settings_for_administration(
-            ${command.expectedRevision}::bigint,
-            ${command.settings.language}::text,
-            ${command.settings.timeZone}::text,
-            ${command.settings.currency}::text,
-            ${command.settings.dateFormat}::text,
-            ${command.settings.numberFormat}::text
-          )
-        `;
-        if (
-          rows.length !== 1 ||
-          rows[0] === undefined ||
-          !sameId(String(rows[0].organization_id), scope.organizationId)
-        )
-          throw unavailableError(unavailableCode, "42501");
-        const settings = organizationRuntimeSettingsSchema.safeParse(rows[0].settings);
-        if (!settings.success || settings.data.revision !== command.expectedRevision + 1)
-          throw unavailableError(unavailableCode, "42501");
-        return settings.data;
-      });
-    },
-
-    /**
-     * Sets, changes or clears the organisation default application. The SQL
-     * operation derives authority and organisation from the validated request
-     * context and accepts only an exact active installed application of that
-     * organisation; nothing in the command can choose another organisation.
-     */
-    async setDefaultApplication(
-      sessionCandidate: IdentitySession,
-      selectionCandidate: OrganizationSelectionCandidate,
-      commandCandidate: SetOrganizationDefaultApplicationCommand,
-    ): Promise<HumanOrganizationRequestResult<OrganizationDefaultApplication>> {
-      const session = identitySessionSchema.safeParse(sessionCandidate);
-      const selection = organizationSelectionCandidateSchema.safeParse(selectionCandidate);
-      const command = parseDefaultApplicationCommand(commandCandidate);
-      if (!session.success || !selection.success || command === undefined)
-        return { kind: "unavailable" };
-      let activityId: string;
-      try {
-        activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
-      }
-
-      return requests.runChange(session.data, selection.data, async (transaction, scope) => {
-        const rows = await transaction.query<DefaultApplicationChangeRow>`
-          select organization_id, default_application_root_id, revision, changed
-          from vortex_access.set_organization_default_application_for_administration(
-            ${command.defaultApplicationRootId}::uuid,
-            ${command.expectedRevision}::bigint,
-            ${activityId}::uuid
-          )
-        `;
-        if (
-          rows.length !== 1 ||
-          rows[0] === undefined ||
-          !sameId(String(rows[0].organization_id), scope.organizationId)
-        )
-          throw unavailableError(unavailableCode, "42501");
-        const changed = rows[0].changed;
-        const nextRevision = databaseRevision(rows[0].revision);
-        if (
-          typeof changed !== "boolean" ||
-          typeof nextRevision !== "number" ||
-          (changed && nextRevision !== command.expectedRevision + 1) ||
-          (!changed && nextRevision !== command.expectedRevision)
-        )
-          throw unavailableError(unavailableCode, "42501");
-        const value = rows[0].default_application_root_id;
-        if (value === null) {
-          if (command.defaultApplicationRootId !== null)
-            throw unavailableError(unavailableCode, "42501");
-          return {
-            organizationId: scope.organizationId,
-            defaultApplicationRootId: null,
-            revision: nextRevision,
-          };
-        }
-        const parsed = applicationRootIdSchema.safeParse(value);
-        if (
-          !parsed.success ||
-          command.defaultApplicationRootId === null ||
-          !sameId(parsed.data, command.defaultApplicationRootId)
-        )
-          throw unavailableError(unavailableCode, "42501");
-        return {
-          organizationId: scope.organizationId,
-          defaultApplicationRootId: parsed.data,
-          revision: nextRevision,
-        };
-      });
-    },
-  });
 };
