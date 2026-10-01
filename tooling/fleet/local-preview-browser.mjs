@@ -1516,8 +1516,12 @@ function saveRestExpression(pathname, comparisonKey, saveStateKey, positionOnly 
     if (button.matches(":hover")) return { valid: false };
     const style = getComputedStyle(button);
     let expectedBackground = "";
+    let expectedForeground = "";
+    let expectedBorder = "";
     try {
-      expectedBackground = readSentinel(root, "background-color", "var(--vortex-primary)", "background-color");
+      expectedBackground = readSentinel(root, "background-color", "var(--primary)", "background-color");
+      expectedForeground = readSentinel(root, "color", "var(--primary-foreground)", "color");
+      expectedBorder = readSentinel(root, "border-top-color", "transparent", "border-top-color");
     } catch {
       return { valid: false };
     }
@@ -1540,10 +1544,11 @@ function saveRestExpression(pathname, comparisonKey, saveStateKey, positionOnly 
       persisted = false;
     }
     const valid = inViewport && persisted && visibleColor(style.backgroundColor) &&
-      style.backgroundColor === expectedBackground && visibleColor(style.color) && visibleColor(style.borderTopColor) &&
+      style.backgroundColor === expectedBackground && visibleColor(style.color) && style.color === expectedForeground &&
+      style.borderTopColor === expectedBorder &&
       borderWidth !== null && borderWidth > 0;
     if (valid) Object.defineProperty(window, ${JSON.stringify(saveStateKey)}, {
-      value: { button, root, restBoxShadow: style.boxShadow }, configurable: true,
+      value: { button, root, restBackground: style.backgroundColor }, configurable: true,
     });
     return { valid, x, y };
   `);
@@ -1554,21 +1559,26 @@ function saveHoverExpression(pathname, saveStateKey) {
     const state = window[${JSON.stringify(saveStateKey)}];
     if (!isMaiaRoot(root) || !state || !state.button || state.root !== root ||
       !state.button.isConnected || !state.root.contains(state.button) || state.button.disabled ||
+      state.button.getAttribute("aria-disabled") === "true" || accessibleName(state.button) !== "Save" ||
       state.button.getAttribute("data-vortex-variant") !== "primary" || !visible(state.button))
-      return { valid: false, hovered: false, inset: false, changed: false, background_matches: false };
+      return { valid: false, hovered: false, changed: false, background_matches: false, foreground_matches: false };
     const style = getComputedStyle(state.button);
     let expectedBackground = "";
+    let expectedForeground = "";
     try {
-      expectedBackground = readSentinel(state.root, "background-color", "var(--vortex-primary)", "background-color");
+      // Maia's shared default Button uses primary/80 on hover, resolved by the same-root browser CSS engine.
+      expectedBackground = readSentinel(state.root, "background-color",
+        "color-mix(in oklab, var(--primary) 80%, transparent)", "background-color");
+      expectedForeground = readSentinel(state.root, "color", "var(--primary-foreground)", "color");
     } catch {
-      return { valid: false, hovered: false, inset: false, changed: false, background_matches: false };
+      return { valid: false, hovered: false, changed: false, background_matches: false, foreground_matches: false };
     }
     return {
       valid: true,
       hovered: state.button.matches(":hover"),
-      inset: style.boxShadow.toLowerCase().includes("inset"),
-      changed: style.boxShadow !== state.restBoxShadow,
+      changed: style.backgroundColor !== state.restBackground,
       background_matches: visibleColor(style.backgroundColor) && style.backgroundColor === expectedBackground,
+      foreground_matches: visibleColor(style.color) && style.color === expectedForeground,
     };
   `);
 }
@@ -1578,8 +1588,8 @@ async function waitForPrimaryHover(pathname, saveStateKey) {
   while (Date.now() < deadline) {
     const observation = await devtools.evaluate(saveHoverExpression(pathname, saveStateKey));
     if (!observation?.valid) fail("theme_check_failed");
-    if (observation.hovered === true && observation.inset === true && observation.changed === true &&
-      observation.background_matches === true) return;
+    if (observation.hovered === true && observation.changed === true && observation.background_matches === true &&
+      observation.foreground_matches === true) return;
     await sleep(Math.min(50, Math.max(1, deadline - Date.now())));
   }
   fail("theme_check_failed");
