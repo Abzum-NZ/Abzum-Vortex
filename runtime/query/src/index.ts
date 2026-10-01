@@ -2,6 +2,9 @@ import "server-only";
 
 export {
   protectedQueryCommandSchema,
+  protectedQueryBoardColumnSchema,
+  protectedQueryBoardSelectorSchema,
+  protectedQueryBoardMembersCommandSchema,
   protectedQuerySortSchema,
   protectedQueryRowSchema,
   protectedQueryPageRowSchema,
@@ -18,6 +21,9 @@ export {
   protectedQuerySummaryCompletedSchema,
   protectedQuerySummaryResultSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryBoardColumn,
+  type ProtectedQueryBoardSelector,
+  type ProtectedQueryBoardMembersCommand,
   type ProtectedQuerySort,
   type ProtectedQueryRow,
   type ProtectedQueryPageRow,
