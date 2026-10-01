@@ -216,7 +216,7 @@ const hasVisibleOwningFormField = (
   const pages = installation.applicationContent?.pages;
   if (!Array.isArray(pages)) return false;
 
-  const controls: { formId?: string; visible: boolean }[] = [];
+  const controls: { formId: string | undefined; visible: boolean }[] = [];
   const fields: { formId: string; visible: boolean }[] = [];
   const inputReleases = PLATFORM_BLOCK_RELEASES.filter((release) =>
     release.supportedEvents.includes("field_changed"),
@@ -251,10 +251,11 @@ const hasVisibleOwningFormField = (
         typeof block.releaseVersion === "string" &&
         isRecord(value.settings)
       ) {
+        const blockId = block.blockId;
+        const releaseVersion = block.releaseVersion;
         const registeredInput = inputReleases.some(
           (release) =>
-            sameId(release.blockId, block.blockId) &&
-            release.releaseVersion === block.releaseVersion,
+            sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
         );
         const name = value.settings.name;
         if (
@@ -274,9 +275,9 @@ const hasVisibleOwningFormField = (
   for (const page of pages) {
     if (!isRecord(page) || !isRecord(page.composition)) continue;
     const composition = page.composition;
-    if (composition.main !== undefined) visitSlotTree(composition.main);
-    if (composition.content !== undefined) visitSlotTree(composition.content);
-    if (composition.stepContent !== undefined) visitSlotTree(composition.stepContent);
+    if ("main" in composition) visitSlotTree(composition.main);
+    if ("content" in composition) visitSlotTree(composition.content);
+    if ("stepContent" in composition) visitSlotTree(composition.stepContent);
   }
 
   if (

@@ -1477,7 +1477,7 @@ function ApplicationPageViewContent({
             server.descriptor.outcome === "partial" || server.descriptor.outcome === "uncertain"
               ? server.descriptor.outcome
               : undefined;
-          const refusalFeedback =
+          const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
               : {
