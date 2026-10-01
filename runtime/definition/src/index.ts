@@ -25,6 +25,11 @@ export * from "./application-preview-composition";
 export * from "./validation";
 export * from "./builder-authority";
 export * from "./definition-store";
+export {
+  readApplicationDefinitionDraft,
+  type ApplicationDefinitionDraftReadCommand,
+  type StoredApplicationDefinitionDraft,
+} from "./definition-draft-read";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";
 export * from "./installed-event-catalogue";
