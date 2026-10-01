@@ -2945,7 +2945,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       ]);
       const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
       const extremaFieldTypes = new Set([
-        "whole_number", "decimal_number", "money", "date", "date_time",
+        "text", "whole_number", "decimal_number", "yes_no", "money", "date", "date_time",
       ]);
       const refuseSummaryField = (ruleCode: string, field: JsonObject): void => {
         const root = rootLocation(output);
