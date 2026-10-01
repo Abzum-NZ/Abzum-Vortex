@@ -2978,12 +2978,12 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         )
           refuseSummaryField("vortex.definition.module_query_extrema_field_type", field);
       }
-      // A grouped query returns and orders by its grouping keys only. An ungrouped
-      // summary can still return totals over all permitted rows.
+      // The published projection may include explicitly selected member fields;
+      // grouped ordering still names grouping keys only. Summary output remains
+      // constrained to the groups and aggregates declared separately.
       const groupingValid =
         groupByFieldIds.length === 0 ||
-        (selectedFieldIds.every((id) => groupByFieldIds.includes(id)) &&
-          sortFieldIds.every((id) => groupByFieldIds.includes(id)));
+        sortFieldIds.every((id) => groupByFieldIds.includes(id));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
         return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
