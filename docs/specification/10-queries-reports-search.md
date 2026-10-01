@@ -93,8 +93,21 @@ belong to unassigned. Its encrypted continuation binds the installed Query
 revision, actor and installation, typed inputs, selector, filters, projection,
 page size, and record-identity order. Each page rechecks the live installation
 and record permissions, and member pages are not cached across requests. This
-operation supplies bounded column members; summary totals and board composition
-remain separate operations.
+operation supplies bounded column members.
+
+A protected board summary uses the same installed grouped Query, exact release,
+typed inputs, authority and filters. It requires the sole grouped choice field
+to appear in the published selected projection and uses its current installed
+options in order. It counts every permitted filter-matching row, including
+rows whose choice is missing, withheld, null or not an installed option; those
+rows share one unassigned bucket. It returns each option and unassigned bucket
+even when empty, with the Query's declared aggregates for that bucket and the
+same aggregates across all eligible rows. Withheld aggregate values do not
+contribute, while their readable rows still count. The operation is uncached,
+refuses neutrally above the 100,000-candidate ceiling, and returns no records,
+raw groups or option permission identifiers. It does not promise an atomic
+snapshot across separate member and summary requests, and it does not compose
+board blocks.
 
 Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. A money total is refused unless the filtered group contains at most one currency; no implicit conversion or split result is produced.
 
