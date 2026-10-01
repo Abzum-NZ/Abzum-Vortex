@@ -17,6 +17,7 @@
     "server-only": "0.0.1",
     "@vortex/contracts": "workspace:*",
     "@vortex/modules": "workspace:*",
+    "@vortex/studio": "workspace:*",
     "@vortex/ui": "workspace:*",
     "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",

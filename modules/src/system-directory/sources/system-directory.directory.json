@@ -1939,7 +1939,16 @@
     "actions": [],
     "events": [],
     "flows": [],
-    "extension_points": [],
+    "extension_points": [
+      {
+        "id": "ext_person_organisation_fields",
+        "key": "person_organisation_fields",
+        "record_type": "person",
+        "accepts": [
+          "field"
+        ]
+      }
+    ],
     "sharing_conditions": [],
     "queries": [
       {

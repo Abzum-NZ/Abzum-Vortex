@@ -19,6 +19,7 @@ import {
 } from "../components/dialog";
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
+import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/contracts";
 import type {
   FlowConfirmIntent,
   FlowFormAnswer,
@@ -50,7 +51,10 @@ export type FlowIntentHostOptions = Readonly<{
   renderForm: (
     form: FlowFormIntent,
     controls: Readonly<{
-      submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
+      submit: (
+        values: Extract<FlowFormAnswer, { kind: "submit" }>["values"],
+        choiceEvidence?: ReferenceChoiceSelectionEvidenceMap,
+      ) => void;
       cancel: () => void;
     }>,
   ) => ReactNode;
@@ -206,7 +210,12 @@ export function useFlowIntentHost(
         onDismiss={() => settle({ kind: "cancel" })}
       >
         {options.renderForm(form, {
-          submit: (values) => settle({ kind: "submit", values }),
+          submit: (values, choiceEvidence) =>
+            settle({
+              kind: "submit",
+              values,
+              ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
+            }),
           cancel: () => settle({ kind: "cancel" }),
         })}
       </FlowDialog>

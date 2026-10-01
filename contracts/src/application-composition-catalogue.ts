@@ -145,6 +145,11 @@ export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the choice input block. */
 export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.CHOICE_INPUT_BLOCK_RELEASE);
 
+/** Release 1.1.0 adds a published-query source while preserving the authored-option release. */
+export const CHOICE_INPUT_BLOCK_RELEASE_1_1_0: PlatformBlockReleaseV2 = release(
+  sources.CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+);
+
 /** Exact immutable metadata release for the validation message block. */
 export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VALIDATION_MESSAGE_BLOCK_RELEASE);
 
@@ -348,7 +353,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   CALENDAR_BLOCK_RELEASE,
 ]);
 
-/** All fifteen immutable form, layout and action block releases. */
+/** All sixteen immutable form, layout and action block releases. */
 export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_INPUT_BLOCK_RELEASE,
   LINK_INPUT_BLOCK_RELEASE,
@@ -358,6 +363,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
