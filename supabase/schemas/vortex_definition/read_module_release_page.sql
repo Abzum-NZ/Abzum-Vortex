@@ -6,7 +6,7 @@ create or replace function vortex_definition.read_module_release_page(
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -18,7 +18,7 @@ declare
   entries jsonb;
   next_after bigint;
 begin
-  checked_context := vortex_definition.validated_system_context();
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
   if p_key is null
     or pg_catalog.char_length(p_key) not between 3 and 120
     or p_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
