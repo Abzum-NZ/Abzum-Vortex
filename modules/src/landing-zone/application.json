@@ -84,7 +84,15 @@
     "connection_bindings": [],
     "interfaces": [],
     "actions": [],
-    "events": [],
+    "events": [
+      {
+        "id": "form_submit_landing_zone_bookmark_create",
+        "key": "vortex.app.events.vortex_app_landing_zone_bookmark_create",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
     "public_addresses": [],
     "platform_block_dependencies": [],
     "shells": [
@@ -583,9 +591,19 @@
                           "theme_overrides": {},
                           "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
                           "slots": {}
+                        },
+                        "bookmark_entry_submit": {
+                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
+                          "settings": {
+                            "label": { "kind": "text", "value": "Save bookmark" },
+                            "action_kind": { "kind": "choice", "value": "submit" }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
                         }
                       },
-                      "order": { "desktop": ["bookmark_entry_label", "bookmark_entry_target_kind", "bookmark_entry_application_key", "bookmark_entry_page_key", "bookmark_entry_record_type", "bookmark_entry_record_id", "bookmark_entry_external_address", "bookmark_entry_description"] }
+                      "order": { "desktop": ["bookmark_entry_label", "bookmark_entry_target_kind", "bookmark_entry_application_key", "bookmark_entry_page_key", "bookmark_entry_record_type", "bookmark_entry_record_id", "bookmark_entry_external_address", "bookmark_entry_description", "bookmark_entry_submit"] }
                     }
                   }
                 }
@@ -648,7 +666,162 @@
         }
       }
     ],
-    "flows": [],
-    "flow_bindings": []
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_bookmark_create",
+        "key": "landing_zone_bookmark_create",
+        "description": "Creates a bookmark tile from the submitted values and opens the Bookmarks page.",
+        "labels": { "name": "Add bookmark" },
+        "execution": "interactive",
+        "runAs": { "kind": "initiator" },
+        "inputs": {
+          "target_kind": { "type": "choice", "required": true },
+          "application_key": { "type": "text", "required": false },
+          "page_key": { "type": "text", "required": false },
+          "record_type": { "type": "text", "required": false },
+          "record_id": { "type": "text", "required": false },
+          "external_address": { "type": "text", "required": false },
+          "label": { "type": "text", "required": false },
+          "description": { "type": "text", "required": false }
+        },
+        "variables": {
+          "bookmark_values": { "type": "json", "default": {} }
+        },
+        "tasks": [
+          {
+            "id": "prepare_values",
+            "type": "data.set_variable",
+            "version": "1.0.0",
+            "properties": {
+              "variable": {
+                "kind": "literal",
+                "literal": { "type": "text", "value": "bookmark_values" }
+              },
+              "value": {
+                "kind": "map",
+                "entries": {
+                  "target_kind": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "target_kind" }
+                  },
+                  "application_key": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "application_key" }
+                  },
+                  "page_key": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "page_key" }
+                  },
+                  "record_type": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "record_type" }
+                  },
+                  "record_id": {
+                    "kind": "formula",
+                    "formula": {
+                      "op": "if",
+                      "condition": {
+                        "op": "is_empty",
+                        "arg": {
+                          "op": "reference",
+                          "reference": { "source": "input", "name": "record_id" }
+                        }
+                      },
+                      "then": { "op": "literal", "type": "json", "value": null },
+                      "else": {
+                        "op": "reference",
+                        "reference": { "source": "input", "name": "record_id" }
+                      }
+                    }
+                  },
+                  "external_address": {
+                    "kind": "formula",
+                    "formula": {
+                      "op": "if",
+                      "condition": {
+                        "op": "is_empty",
+                        "arg": {
+                          "op": "reference",
+                          "reference": { "source": "input", "name": "external_address" }
+                        }
+                      },
+                      "then": { "op": "literal", "type": "json", "value": null },
+                      "else": {
+                        "op": "reference",
+                        "reference": { "source": "input", "name": "external_address" }
+                      }
+                    }
+                  },
+                  "label": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "label" }
+                  },
+                  "description": {
+                    "kind": "reference",
+                    "reference": { "source": "input", "name": "description" }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": { "type": "text", "value": "vortex.landing_zone:tile" }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": { "source": "variable", "name": "bookmark_values" }
+              }
+            }
+          },
+          {
+            "id": "open_bookmarks",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": { "type": "text", "value": "page_landing_bookmarks" }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": ["vortex.landing_zone:tile"],
+            "value": {
+              "kind": "reference",
+              "reference": { "source": "task_output", "task": "save", "key": "record" }
+            }
+          }
+        }
+      }
+    ],
+    "flow_bindings": [
+      {
+        "id": "form_binding_landing_zone_bookmark_create",
+        "control": "bookmark_entry_form",
+        "event_id": "form_submit_landing_zone_bookmark_create",
+        "event": "form_submit",
+        "flow": "landing_zone_bookmark_create",
+        "inputs": {
+          "target_kind": { "kind": "caller", "name": "target_kind" },
+          "application_key": { "kind": "caller", "name": "application_key" },
+          "page_key": { "kind": "caller", "name": "page_key" },
+          "record_type": { "kind": "caller", "name": "record_type" },
+          "record_id": { "kind": "caller", "name": "record_id" },
+          "external_address": { "kind": "caller", "name": "external_address" },
+          "label": { "kind": "caller", "name": "label" },
+          "description": { "kind": "caller", "name": "description" }
+        }
+      }
+    ]
   }
 }
