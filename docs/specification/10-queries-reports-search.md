@@ -30,6 +30,12 @@ A query names:
 
 Every selected, filtered, grouped, totalled, or sorted field must permit that operation in its [field definition](05-modules-fields-and-relationships.md). An invalid or unsafe filter refuses the entire query. The platform never removes an invalid condition and runs a broader query.
 
+The published selected-field list is an explicit record projection. On a grouped
+Query, it may include card/member fields as well as the grouping key. Grouped
+sorts still name grouping keys, and a summary returns only its declared grouping
+keys and aggregates; adding selected member fields does not add them to summary
+output.
+
 A module-exposed query is this same closed query contract published under a stable module-owned identity and exact release. A flow may invoke only a query exposed by its resolved module dependency; it cannot supply raw SQL, broaden the projection, or infer a query from a label. The query executes for the flow's Access-resolved effective actor. If a different initiating viewer receives its result, the runtime applies the viewer's current readable projection before returning it, and any later write is authorised independently. [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) owns the actual protected Query execution and receipt boundary; [record actions and events #50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) owns record-operation and event declarations. These target flow semantics do not claim either runtime is delivered.
 
 A flow's Query node publishes exactly one `ProtectedOperationReference`, containing the query's owning Application or Module and its permanent query ID. That reference is part of the node's exact release mapping, so a grant cannot be reused for another node or query.
@@ -75,6 +81,20 @@ The term **saved view** replaces the outdated terms “prepared list,” “prep
 - A calendar uses the page's explicit start/end or start-plus-duration mapping from [modules and fields](05-modules-fields-and-relationships.md#field-types).
 - A summary groups and totals compatible fields.
 - A dashboard composes several bounded query blocks.
+
+A protected board-member page uses the same installed grouped Query, typed
+inputs, published filter, optional narrowing filter, and current viewer
+authority. It requires one filterable choice grouping key and its installed
+options, and returns only requested fields from the Query's published selected
+projection. The scan orders by protected record identity, never by the choice
+value. Membership uses the choice value only when that value is present in the
+current readable projection; missing, withheld, null, and undeclared values
+belong to unassigned. Its encrypted continuation binds the installed Query
+revision, actor and installation, typed inputs, selector, filters, projection,
+page size, and record-identity order. Each page rechecks the live installation
+and record permissions, and member pages are not cached across requests. This
+operation supplies bounded column members; summary totals and board composition
+remain separate operations.
 
 Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. A money total is refused unless the filtered group contains at most one currency; no implicit conversion or split result is produced.
 

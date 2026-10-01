@@ -117,6 +117,59 @@ export const protectedQueryCommandSchema = z
   .strict();
 export type ProtectedQueryCommand = z.infer<typeof protectedQueryCommandSchema>;
 
+/** One explicit, installed choice column or the unassigned member set. */
+export const protectedQueryBoardColumnSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("option"), value: z.string().min(1).max(120) }).strict(),
+  z.object({ kind: z.literal("unassigned") }).strict(),
+]);
+export type ProtectedQueryBoardColumn = z.infer<typeof protectedQueryBoardColumnSchema>;
+
+/** A closed member selector over the choice field of a grouped installed Query. */
+export const protectedQueryBoardSelectorSchema = z
+  .object({
+    choiceFieldId: fieldIdSchema,
+    column: protectedQueryBoardColumnSchema,
+  })
+  .strict();
+export type ProtectedQueryBoardSelector = z.infer<typeof protectedQueryBoardSelectorSchema>;
+
+/** One uncached, record-identity-ordered page of readable members in a board column. */
+export const protectedQueryBoardMembersCommandSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    queryId: queryIdSchema,
+    inputValues: z.record(builderKeySchema, jsonValueSchema),
+    requestedFieldIds: z
+      .array(fieldIdSchema)
+      .min(1)
+      .max(200)
+      .refine(
+        (fieldIds) =>
+          new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length,
+        { message: "Each requested field is named once" },
+      ),
+    requestedSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      })
+      .default([]),
+    filter: conditionNodeSchema.optional(),
+    filterableFieldIds: z
+      .array(fieldIdSchema)
+      .max(200)
+      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+      .default([]),
+    selector: protectedQueryBoardSelectorSchema,
+    pageSize: z.number().int().min(1).max(200),
+    continuationToken: z.string().min(1).max(65_536).optional(),
+  })
+  .strict();
+export type ProtectedQueryBoardMembersCommand = z.infer<
+  typeof protectedQueryBoardMembersCommandSchema
+>;
+
 /**
  * The record action kinds one list row can expose per row. Read is implied by the
  * row's own presence; create is not a per-existing-record action and is never listed.
