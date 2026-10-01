@@ -69,6 +69,7 @@ export {
 // Per-Block Display Payload & Event Contracts
 export {
   DISPLAY_EVENT_NAMES,
+  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -93,6 +94,11 @@ export {
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
   type DisplaySummaryValue,
+  type BoardBucketPayload,
+  type BoardColumnPayload,
+  type BoardData,
+  type BoardPage,
+  type BoardPayload,
   type GroupedData,
   type GroupedPayload,
   type ListData,

@@ -1,6 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   applicationDraftV2Schema,
+  boardBlockSourceIsSupported,
+  readBoardPlacementContract,
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   calculationMaximumNestingDepth,
@@ -3802,7 +3804,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           `${String(block.blockId)}:${String(block.releaseVersion)}`,
         )?.key;
         if (bound === undefined) {
-          if (blockKey === "platform.display.calendar")
+          if (
+            blockKey === "platform.display.calendar" ||
+            blockKey === "platform.display.board"
+          )
             failures.push(
               failure(output, "vortex.definition.application_block_settings", "broken_reference"),
             );
@@ -3811,6 +3816,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+        if (blockKey === "platform.display.board") {
+          const board = readBoardPlacementContract(settings);
+          const boardRecordType = records.get(String(object(bound.recordType).recordTypeId));
+          if (
+            board === undefined ||
+            boardRecordType === undefined ||
+            !boardBlockSourceIsSupported(bound, array(boardRecordType.fields), board)
+          )
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
         if (blockKey === "platform.display.calendar") {
           const settingFieldId = (value: unknown): string | undefined => {
             const property = object(value);

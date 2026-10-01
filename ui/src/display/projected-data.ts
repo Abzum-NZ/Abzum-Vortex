@@ -2,8 +2,13 @@ import {
   builderKeySchema,
   fieldIdSchema,
   richTextDocumentV2Schema,
+  recordIdSchema,
+  moduleRootIdSchema,
+  queryIdSchema,
+  stableDefinitionReleaseVersionSchema,
   safeHttpsUrlSchema,
   timestampSchema,
+  type BoardColumnSelector,
   type BlockPropertyValueV2Contract,
   type ComponentSemanticEventKind,
 } from "@vortex/contracts";
@@ -165,6 +170,47 @@ export type SummaryPayload = Readonly<{
   values: readonly DisplaySummaryMetric[];
 }>;
 
+/** One fetched page of cards in a protected board bucket. */
+export type BoardPage = Readonly<{
+  rows: readonly Readonly<{
+    recordId: string;
+    revision: number;
+    capabilities: DisplayRowCapabilities;
+    /** Only currently readable declared card fields are present, each with its safe label. */
+    fields: readonly DisplayField[];
+  }>[];
+  nextContinuationToken?: string;
+}>;
+
+/** Exact current protected totals plus a bounded page, or null when this bucket was untouched. */
+export type BoardBucketPayload = Readonly<{
+  rowCount: number;
+  aggregates: readonly DisplaySummaryMetric[];
+  page: BoardPage | null;
+}>;
+
+/** One installed choice column in definition order. */
+export type BoardColumnPayload = BoardBucketPayload & Readonly<{ value: string; label: string }>;
+
+/** The ready values a query-bound board block renders. */
+export type BoardPayload = Readonly<{
+  kind: "board";
+  title?: string;
+  plan: Readonly<{
+    moduleRootId: string;
+    moduleReleaseVersion: string;
+    queryId: string;
+  }>;
+  choiceFieldId: string;
+  cardTitleFieldId: string;
+  /** The only field identities a card may carry; readable values and labels may be omitted. */
+  cardFieldIds: readonly string[];
+  totalRowCount: number;
+  aggregates: readonly DisplaySummaryMetric[];
+  columns: readonly BoardColumnPayload[];
+  unassigned: BoardBucketPayload;
+}>;
+
 export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
 export type ListData = DisplayDataState<ListPayload>;
@@ -173,6 +219,7 @@ export type CalendarData = DisplayDataState<CalendarPayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
 export type GroupedData = DisplayDataState<GroupedPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;
+export type BoardData = DisplayDataState<BoardPayload>;
 
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
 export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found";
@@ -242,6 +289,11 @@ export type DisplaySemanticEvent =
       direction: "ascending" | "descending";
     }>
   | Readonly<{ event: "page_changed"; page: number }>
+  | Readonly<{
+      event: "page_changed";
+      column: BoardColumnSelector;
+      continuationToken: string;
+    }>
   | Readonly<{ event: "bulk_action"; eventId: string; recordIds: readonly string[] }>
   | Readonly<{
       event: "inline_edit";
@@ -1024,6 +1076,279 @@ export const parseSummaryPayload = (
   return Object.freeze({
     kind: "summary_values",
     values: parseSummaryMetrics(record.values, location),
+  });
+};
+
+const maximumBoardRows = 100_000;
+const maximumBoardColumns = 12;
+const maximumBoardPageSize = 200;
+
+const parseBoardCount = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): number => {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > maximumBoardRows
+  )
+    return fail(message, location);
+  return value;
+};
+
+const parseBoardMetrics = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly DisplaySummaryMetric[] => {
+  const items = requireArray(value, "Board aggregates must be an array", location);
+  if (items.length > 20) fail("A board displays at most twenty declared aggregates", location);
+  const metrics = parseSummaryMetrics(items, location);
+  if (metrics.some((metric) => metric.label.length > 60))
+    fail("A board aggregate label exceeds its bound", location);
+  return metrics;
+};
+
+const requireMatchingBoardMetrics = (
+  expected: readonly DisplaySummaryMetric[],
+  actual: readonly DisplaySummaryMetric[],
+  location: DefinitionRenderErrorLocation,
+): void => {
+  if (
+    expected.length !== actual.length ||
+    expected.some((metric, index) => metric.key !== actual[index]?.key)
+  )
+    fail("Every board bucket carries the same declared aggregate aliases in order", location);
+};
+
+const parseBoardPage = (
+  value: unknown,
+  declaredCardFields: ReadonlySet<string>,
+  seenRecordIds: Set<string>,
+  location: DefinitionRenderErrorLocation,
+): BoardPage => {
+  const record = requireRecord(value, "A board page must be an object", location);
+  requireExactKeys(record, ["rows", "nextContinuationToken"], location);
+  const candidates = requireArray(record.rows, "Board page rows must be an array", location);
+  if (candidates.length > maximumBoardPageSize)
+    fail("A board page cannot exceed the protected Query page bound", location);
+  const rows = candidates.map((candidate, index) => {
+    const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
+    const row = requireRecord(candidate, "A board card must be an object", rowLocation);
+    requireExactKeys(row, ["recordId", "revision", "capabilities", "fields"], rowLocation);
+    const parsedRecordId = recordIdSchema.safeParse(row.recordId);
+    if (!parsedRecordId.success) fail("A board card requires a valid record identity", rowLocation);
+    const normalizedRecordId = parsedRecordId.data.toLowerCase();
+    if (seenRecordIds.has(normalizedRecordId))
+      fail("A record identity appears in at most one fetched board bucket", rowLocation);
+    seenRecordIds.add(normalizedRecordId);
+
+    const revision = requirePositiveInteger(
+      row.revision,
+      "A board card requires the server-projected record revision",
+      rowLocation,
+    );
+    if (!Number.isSafeInteger(revision))
+      fail("A board card revision must be a safe integer", rowLocation);
+    const capabilities = parseRowCapabilities(row.capabilities, {
+      ...rowLocation,
+      propertyPath: [`rows[${index}]`, "capabilities"],
+    });
+    const fields = parseFields(row.fields, rowLocation);
+    const seenFields = new Set<string>();
+    for (const field of fields) {
+      const key = field.key.toLowerCase();
+      if (!declaredCardFields.has(key))
+        fail("A board card contains a field outside its declared card projection", rowLocation);
+      if (seenFields.has(key)) fail("A board card field appears once", rowLocation);
+      if (field.label.length > 60)
+        fail("A board card field label exceeds its bound", rowLocation);
+      if (field.value.kind === "text" && field.value.text.length > 1_000_000)
+        fail("A board card text value exceeds its field contract bound", rowLocation);
+      seenFields.add(key);
+    }
+    return Object.freeze({
+      recordId: parsedRecordId.data,
+      revision,
+      capabilities,
+      fields,
+    });
+  });
+  let nextContinuationToken: string | undefined;
+  if (record.nextContinuationToken !== undefined) {
+    nextContinuationToken = requireNonEmptyString(
+      record.nextContinuationToken,
+      "A board continuation token must be non-empty",
+      location,
+    );
+    if (nextContinuationToken.length > 65_536)
+      fail("A board continuation token exceeds its bound", location);
+  }
+  return Object.freeze({
+    rows: Object.freeze(rows),
+    ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+  });
+};
+
+const parseBoardBucket = (
+  value: unknown,
+  globalMetrics: readonly DisplaySummaryMetric[],
+  declaredCardFields: ReadonlySet<string>,
+  seenRecordIds: Set<string>,
+  location: DefinitionRenderErrorLocation,
+): BoardBucketPayload => {
+  const record = requireRecord(value, "A board bucket must be an object", location);
+  requireExactKeys(record, ["rowCount", "aggregates", "page"], location);
+  const rowCount = parseBoardCount(
+    record.rowCount,
+    "A board bucket requires a safe protected row count",
+    location,
+  );
+  const aggregates = parseBoardMetrics(record.aggregates, location);
+  requireMatchingBoardMetrics(globalMetrics, aggregates, location);
+  const page =
+    record.page === null
+      ? null
+      : parseBoardPage(record.page, declaredCardFields, seenRecordIds, location);
+  return Object.freeze({ rowCount, aggregates, page });
+};
+
+/** The strict bounded payload a query-bound board is allowed to render. */
+export const parseBoardPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): BoardPayload => {
+  const record = requireRecord(value, "Projected board values must be an object", location);
+  if (record.kind !== "board")
+    return fail(`Expected 'board' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(
+    record,
+    [
+      "kind",
+      "title",
+      "plan",
+      "choiceFieldId",
+      "cardTitleFieldId",
+      "cardFieldIds",
+      "totalRowCount",
+      "aggregates",
+      "columns",
+      "unassigned",
+    ],
+    location,
+  );
+
+  let title: string | undefined;
+  if (record.title !== undefined) {
+    title = requireNonEmptyString(record.title, "A board title must be non-empty", location);
+    if (title.length > 120) fail("A board title exceeds its bound", location);
+  }
+
+  const planRecord = requireRecord(record.plan, "A board requires its exact source plan", location);
+  requireExactKeys(planRecord, ["moduleRootId", "moduleReleaseVersion", "queryId"], location);
+  const moduleRootId = moduleRootIdSchema.safeParse(planRecord.moduleRootId);
+  const moduleReleaseVersion = stableDefinitionReleaseVersionSchema.safeParse(
+    planRecord.moduleReleaseVersion,
+  );
+  const queryId = queryIdSchema.safeParse(planRecord.queryId);
+  if (!moduleRootId.success || !moduleReleaseVersion.success || !queryId.success)
+    fail("A board source plan requires exact installed identities", location);
+
+  const choiceFieldId = fieldIdSchema.safeParse(record.choiceFieldId);
+  const cardTitleFieldId = fieldIdSchema.safeParse(record.cardTitleFieldId);
+  if (!choiceFieldId.success || !cardTitleFieldId.success)
+    fail("A board requires valid choice and card-title field identities", location);
+  const cardFieldCandidates = requireArray(
+    record.cardFieldIds,
+    "A board requires its closed card-field allow-list",
+    location,
+  );
+  if (cardFieldCandidates.length < 1 || cardFieldCandidates.length > 21)
+    fail("A board declares one card title and at most twenty detail fields", location);
+  const cardFieldIds = cardFieldCandidates.map((candidate) => {
+    const fieldId = fieldIdSchema.safeParse(candidate);
+    return fieldId.success
+      ? fieldId.data
+      : fail("A board card field identity is invalid", location);
+  });
+  const declaredCardFields = new Set(cardFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  if (
+    declaredCardFields.size !== cardFieldIds.length ||
+    cardFieldIds[0]?.toLowerCase() !== cardTitleFieldId.data.toLowerCase()
+  )
+    fail("Board card field identities are unique and start with the card title", location);
+
+  const totalRowCount = parseBoardCount(
+    record.totalRowCount,
+    "A board requires a safe protected total row count",
+    location,
+  );
+  const aggregates = parseBoardMetrics(record.aggregates, location);
+  const seenRecordIds = new Set<string>();
+  const columnCandidates = requireArray(record.columns, "Board columns must be an array", location);
+  if (columnCandidates.length < 1 || columnCandidates.length > maximumBoardColumns)
+    fail("A board contains one to twelve installed option columns", location);
+  const seenOptions = new Set<string>();
+  const columns = columnCandidates.map((candidate, index) => {
+    const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
+    const column = requireRecord(candidate, "A board column must be an object", columnLocation);
+    requireExactKeys(column, ["value", "label", "rowCount", "aggregates", "page"], columnLocation);
+    const optionValue = requireNonEmptyString(
+      column.value,
+      "An installed board option requires its value",
+      columnLocation,
+    );
+    if (optionValue.length > 120 || seenOptions.has(optionValue))
+      fail("Board option values are bounded and unique", columnLocation);
+    seenOptions.add(optionValue);
+    const label = requireNonEmptyString(
+      column.label,
+      "An installed board option requires its current label",
+      columnLocation,
+    );
+    if (label.length > 60)
+      fail("An installed board option label exceeds its bound", columnLocation);
+    const bucket = parseBoardBucket(
+      {
+        rowCount: column.rowCount,
+        aggregates: column.aggregates,
+        page: column.page,
+      },
+      aggregates,
+      declaredCardFields,
+      seenRecordIds,
+      columnLocation,
+    );
+    return Object.freeze({ value: optionValue, label, ...bucket });
+  });
+  const unassigned = parseBoardBucket(
+    record.unassigned,
+    aggregates,
+    declaredCardFields,
+    seenRecordIds,
+    { ...location, propertyPath: ["unassigned"] },
+  );
+  const partitionedCount =
+    columns.reduce((total, column) => total + column.rowCount, 0) + unassigned.rowCount;
+  if (!Number.isSafeInteger(partitionedCount) || partitionedCount !== totalRowCount)
+    fail("Board bucket row counts partition the protected total exactly", location);
+
+  return Object.freeze({
+    kind: "board",
+    ...(title === undefined ? {} : { title }),
+    plan: Object.freeze({
+      moduleRootId: moduleRootId.data,
+      moduleReleaseVersion: moduleReleaseVersion.data,
+      queryId: queryId.data,
+    }),
+    choiceFieldId: choiceFieldId.data,
+    cardTitleFieldId: cardTitleFieldId.data,
+    cardFieldIds: Object.freeze(cardFieldIds),
+    totalRowCount,
+    aggregates,
+    columns: Object.freeze(columns),
+    unassigned,
   });
 };
 
