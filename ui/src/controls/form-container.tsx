@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from "react";
+import type { FlowRefusalFeedback } from "@vortex/contracts";
 import { DefinitionRenderError } from "../definition-error";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
@@ -43,10 +44,46 @@ export type FormContainerProps = ControlRenderProps<FormPayload> &
   }>;
 
 /** A safe, final result returned by the form's bound flow. */
-export type FormFlowFeedback = Readonly<{
-  tone: "success" | "problem";
-  text: string;
-}>;
+export type FormFlowFeedback =
+  | Readonly<{ kind: "message"; tone: "success" | "problem"; text: string }>
+  | Readonly<{
+      kind: "refusal";
+      code: FlowRefusalFeedback["code"];
+      fieldLabel?: string;
+      recovery?: "partial" | "uncertain";
+    }>;
+
+const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
+  switch (feedback.code) {
+    case "invalid_command":
+      return feedback.fieldLabel === undefined
+        ? "The supplied inputs are invalid."
+        : `Check the ${feedback.fieldLabel} field and try again.`;
+    case "duplicate_conflict":
+      return "A conflicting item already exists.";
+    case "stale_revision":
+      return "This item changed. Refresh and try again.";
+    default:
+      return "The supplied inputs are invalid.";
+  }
+};
+
+const refusalRecoveryText = {
+  partial: "Only part of this was saved. Refresh and review what changed.",
+  uncertain: "The result is not certain yet. Refresh before trying again.",
+} as const;
+
+const formFlowFeedbackPresentation = (
+  feedback: FormFlowFeedback,
+): Readonly<{ tone: "success" | "problem"; text: string }> =>
+  feedback.kind === "message"
+    ? { tone: feedback.tone, text: feedback.text }
+    : {
+        tone: "problem",
+        text: `${refusalFeedbackText(feedback)}${
+          feedback.recovery === undefined ? "" : ` ${refusalRecoveryText[feedback.recovery]}`
+        }`,
+      };
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
 const NON_SUBMITTING_INPUT_TYPES = new Set([
@@ -229,6 +266,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const fieldsDisabled = context.unavailable || props.data?.status === "disabled" ||
     ownerGroups?.length === 0;
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
+  const flowFeedback = props.flowFeedback === undefined
+    ? undefined
+    : formFlowFeedbackPresentation(props.flowFeedback);
   if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
     return (
       <p
@@ -317,13 +357,13 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         </fieldset>
       </FormScopeContext.Provider>
       <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
-      {props.flowFeedback === undefined ? null : (
+      {flowFeedback === undefined ? null : (
         <p
-          role={props.flowFeedback.tone === "problem" ? "alert" : "status"}
+          role={flowFeedback.tone === "problem" ? "alert" : "status"}
           aria-live="polite"
-          data-vortex-form-feedback={props.flowFeedback.tone}
+          data-vortex-form-feedback={flowFeedback.tone}
         >
-          {props.flowFeedback.text}
+          {flowFeedback.text}
         </p>
       )}
     </form>

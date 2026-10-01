@@ -19,7 +19,7 @@ export type ServerDrivenResult =
       runId: string;
       descriptor: Extract<ServerFlowResponse, { kind: "result" }>["descriptor"];
       outputs: Readonly<Record<string, JsonValue>>;
-      failure?: Readonly<{ code: string; taskId?: string }>;
+      failure?: Extract<ServerFlowResponse, { kind: "result" }>["failure"];
     }>
   /** The surface is older than the installation: nothing ran and the page must reload. */
   | Readonly<{ kind: "reload"; installationRevision: number }>

@@ -5,6 +5,7 @@ import {
 } from "./application-flow-bindings";
 import { jsonValueSchema } from "./common";
 import { flowIdSchema } from "./flow-contracts";
+import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
 import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
 import {
   applicationRootIdSchema,
@@ -212,7 +213,14 @@ export const formContinuationOutcomeSchema = z.discriminatedUnion("kind", [
       ...resultCommon,
       result: safeFlowResultKindSchema,
       presentation: safeFlowResultDescriptorSchema,
-      failure: z.object({ code: z.string().min(1).max(100), taskId: builderKeySchema.optional() }).strict().optional(),
+      failure: z
+        .object({
+          code: z.string().min(1).max(100),
+          taskId: builderKeySchema.optional(),
+          diagnostic: flowRefusalFeedbackSchema.optional(),
+        })
+        .strict()
+        .optional(),
       stopped: z.string().min(1).max(200).optional(),
       outputs: z.record(z.string(), jsonValueSchema),
       draft: formContinuationDraftEvidenceSchema.optional(),

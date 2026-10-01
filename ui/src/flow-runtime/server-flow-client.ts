@@ -1,8 +1,10 @@
 import {
   flowBindingInvocationSchema,
+  flowRefusalFeedbackSchema,
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
   type FlowBindingInvocation,
+  type FlowRefusalFeedback,
   type FormContinuationAnswer,
   type FormContinuationReceipt,
   type FormContinuationTarget,
@@ -44,7 +46,7 @@ export type ServerFlowResponse =
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
       intents: readonly FlowIntent[];
-      failure?: Readonly<{ code: string; taskId?: string }>;
+      failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
     }>
   | Readonly<{
       kind: "intent";
@@ -152,6 +154,28 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       )
         return unavailable;
       const failure = candidate.failure;
+      let acceptedFailure: Extract<ServerFlowResponse, { kind: "result" }>["failure"];
+      if (failure !== undefined && !isRecord(failure)) return unavailable;
+      if (isRecord(failure)) {
+        const allowedFailureKeys = new Set(["code", "taskId", "diagnostic"]);
+        if (
+          Object.keys(failure).some((key) => !allowedFailureKeys.has(key)) ||
+          typeof failure.code !== "string" ||
+          (failure.taskId !== undefined && typeof failure.taskId !== "string")
+        )
+          return unavailable;
+        let diagnostic: FlowRefusalFeedback | undefined;
+        if (failure.diagnostic !== undefined) {
+          const parsed = flowRefusalFeedbackSchema.safeParse(failure.diagnostic);
+          if (!parsed.success || parsed.data.operationInput !== undefined) return unavailable;
+          diagnostic = parsed.data;
+        }
+        acceptedFailure = {
+          code: failure.code,
+          ...(typeof failure.taskId === "string" ? { taskId: failure.taskId } : {}),
+          ...(diagnostic === undefined ? {} : { diagnostic }),
+        };
+      }
       return {
         kind: "result",
         runId: candidate.runId,
@@ -163,14 +187,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
         intents,
-        ...(isRecord(failure) && typeof failure.code === "string"
-          ? {
-              failure: {
-                code: failure.code,
-                ...(typeof failure.taskId === "string" ? { taskId: failure.taskId } : {}),
-              },
-            }
-          : {}),
+        ...(acceptedFailure === undefined ? {} : { failure: acceptedFailure }),
       };
     }
     default:
