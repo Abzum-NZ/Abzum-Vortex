@@ -8,7 +8,13 @@ import {
   type IdentitySession,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
-import type { DatabaseRow, DatabaseValue, RequestDatabaseTransaction } from "@vortex/db";
+import {
+  requireRequestSavepoint,
+  type DatabaseRow,
+  type DatabaseValue,
+  type RequestDatabaseTransaction,
+  type SavepointRequestDatabaseTransaction,
+} from "@vortex/db";
 import { createTenantGovernanceService } from "./tenant-governance";
 
 type TenantGovernanceMethod =
@@ -30,12 +36,18 @@ type BoundRequestRow = DatabaseRow & {
   request_context: unknown;
 };
 
+type BoundHumanRequest = Readonly<{
+  context: ReturnType<typeof sessionContextSchema.parse>;
+  channel: ReturnType<typeof protectedOperationChannelSchema.parse>;
+}>;
+
 type TransactionInvocationState = {
   queue: Promise<void>;
   activeMethod?: TenantGovernanceMethod;
   runtimeCallUsed: boolean;
   identityQueryUsed: boolean;
-  savepointActive: boolean;
+  invocationTransaction?: SavepointRequestDatabaseTransaction;
+  boundRequest?: BoundHumanRequest;
   poisonedTransaction?: Error;
 };
 
@@ -48,13 +60,48 @@ const invocationStateFor = (transaction: RequestDatabaseTransaction) => {
     queue: Promise.resolve(),
     runtimeCallUsed: false,
     identityQueryUsed: false,
-    savepointActive: false,
   };
   invocationStates.set(transaction, created);
   return created;
 };
 
 const failure = (code: string) => new Error(code);
+
+class TypedMethodRefusalRollback extends Error {
+  constructor(readonly result: unknown) {
+    super("TENANT_GOVERNANCE_TYPED_REFUSAL_ROLLBACK");
+  }
+}
+
+const mappedIdentitySqlErrorCodes = new Set([
+  // Keep these aligned with tenant-governance.ts: only its known database refusals may reach it
+  // after the native exact-call child has settled and request context/role restoration is proven.
+  "V3001",
+  "V3101",
+  "V3102",
+  "V3103",
+  "42501",
+  "23503",
+  "23505",
+  "23514",
+  "40001",
+  "22023",
+]);
+
+const databaseCode = (error: unknown): string | undefined => {
+  try {
+    return typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const isMappedIdentitySqlError = (error: unknown): boolean => {
+  const code = databaseCode(error);
+  return code !== undefined && mappedIdentitySqlErrorCodes.has(code);
+};
 
 const isRuntimeSessionRole = (role: unknown): role is string =>
   role === "vortex_runtime" ||
@@ -79,7 +126,13 @@ export const createRequestBoundTenantGovernanceService = (
   const parsedScope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
   if (!parsedScope.success) throw failure("TENANT_GOVERNANCE_SCOPE_UNAVAILABLE");
   const scope = parsedScope.data;
+  const parentTransaction = requireRequestSavepoint(transaction);
   const state = invocationStateFor(transaction);
+
+  const poison = (code: string): Error => {
+    state.poisonedTransaction ??= failure(code);
+    return state.poisonedTransaction;
+  };
 
   const serialized = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
     const previous = state.queue;
@@ -96,10 +149,12 @@ export const createRequestBoundTenantGovernanceService = (
     }
   };
 
-  const readBoundHumanContext = async () => {
+  const readBoundHumanContext = async (
+    readTransaction: RequestDatabaseTransaction = parentTransaction,
+  ): Promise<BoundHumanRequest> => {
     // The stored context also carries the trusted channel. Validate that separately from the
     // strict SessionContext shape without changing the context installed on the transaction.
-    const rows = await transaction.query<BoundRequestRow>`
+    const rows = await readTransaction.query<BoundRequestRow>`
       select
         current_user::text as current_role,
         session_user::text as session_role,
@@ -129,21 +184,19 @@ export const createRequestBoundTenantGovernanceService = (
       resolved.accessVersion !== scope.accessVersion
     )
       throw failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
-    return resolved;
+    return { context: resolved, channel: channel.data };
   };
 
-  const rollbackInvocationSavepoint = async (): Promise<void> => {
-    await transaction.query`rollback to savepoint tenant_governance_request_bound`;
-    const rows = await transaction.query<DatabaseRow & { current_role: unknown }>`
-      select current_user::text as current_role
-    `;
-    if (rows.length !== 1 || rows[0]?.current_role !== "vortex_request")
-      throw failure("TENANT_GOVERNANCE_ROLE_RECOVERY_FAILED");
-  };
-
-  const releaseInvocationSavepoint = async (): Promise<void> => {
-    await transaction.query`release savepoint tenant_governance_request_bound`;
-    state.savepointActive = false;
+  const assertBoundHumanContext = async (
+    readTransaction: RequestDatabaseTransaction,
+    expected: BoundHumanRequest,
+  ): Promise<void> => {
+    const actual = await readBoundHumanContext(readTransaction);
+    if (
+      JSON.stringify(actual.context) !== JSON.stringify(expected.context) ||
+      actual.channel !== expected.channel
+    )
+      throw failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_CHANGED");
   };
 
   const isRefusedResult = (result: unknown): boolean =>
@@ -155,70 +208,86 @@ export const createRequestBoundTenantGovernanceService = (
   const runOneIdentityMethod = async <Result>(
     operation: (requestTransaction: RequestDatabaseTransaction) => Promise<Result>,
   ): Promise<Result> => {
-    if (state.activeMethod === undefined || state.runtimeCallUsed || !state.savepointActive) {
-      state.poisonedTransaction = failure("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-      throw state.poisonedTransaction;
-    }
+    const invocationTransaction = state.invocationTransaction;
+    const boundRequest = state.boundRequest;
+    if (
+      state.activeMethod === undefined ||
+      state.runtimeCallUsed ||
+      invocationTransaction === undefined ||
+      boundRequest === undefined
+    )
+      throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+
     const expectedFunction = identityFunctionForMethod[state.activeMethod];
     state.runtimeCallUsed = true;
     state.identityQueryUsed = false;
 
     try {
-      await readBoundHumanContext();
+      await assertBoundHumanContext(invocationTransaction, boundRequest);
     } catch {
-      state.poisonedTransaction = failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
-      throw state.poisonedTransaction;
+      throw poison("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
     }
 
+    let identitySqlFailureObserved = false;
+    let identitySqlFailure: unknown;
     try {
-      await transaction.query`set local role vortex_runtime`;
-      const identityTransaction: RequestDatabaseTransaction = {
-        query: async <ResultRow extends DatabaseRow>(
-          strings: TemplateStringsArray,
-          ...values: readonly DatabaseValue[]
-        ) => {
-          const statement = strings.join("?").replace(/\s+/g, " ").trim().toLowerCase();
-          if (
-            state.identityQueryUsed ||
-            !statement.startsWith(`select * from ${expectedFunction}(`) ||
-            !statement.endsWith(")") ||
-            statement.includes(";")
-          ) {
-            state.poisonedTransaction = failure("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-            throw state.poisonedTransaction;
-          }
-          state.identityQueryUsed = true;
-          return transaction.query<ResultRow>(strings, ...values);
-        },
-      };
-      const result = await operation(identityTransaction);
-      if (!state.identityQueryUsed) {
-        state.poisonedTransaction = failure("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-        throw state.poisonedTransaction;
-      }
+      return await invocationTransaction.withSavepoint(async identityTransactionScope => {
+        await identityTransactionScope.query`set local role vortex_runtime`;
 
-      try {
-        await transaction.query`set local role vortex_request`;
-        const rows = await transaction.query<DatabaseRow & { current_role: unknown }>`
-          select current_user::text as current_role
-        `;
-        if (rows.length !== 1 || rows[0]?.current_role !== "vortex_request")
-          throw failure("TENANT_GOVERNANCE_ROLE_RESTORE_FAILED");
-      } catch (error) {
-        state.poisonedTransaction = failure("TENANT_GOVERNANCE_ROLE_RESTORE_FAILED");
-        throw error;
-      }
+        const identityTransaction: RequestDatabaseTransaction = {
+          query: async <ResultRow extends DatabaseRow>(
+            strings: TemplateStringsArray,
+            ...values: readonly DatabaseValue[]
+          ) => {
+            const statement = strings.join("?").replace(/\s+/g, " ").trim().toLowerCase();
+            if (
+              state.identityQueryUsed ||
+              !statement.startsWith(`select * from ${expectedFunction}(`) ||
+              !statement.endsWith(")") ||
+              statement.includes(";")
+            )
+              throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
 
-      return result;
+            state.identityQueryUsed = true;
+            try {
+              return await identityTransactionScope.query<ResultRow>(strings, ...values);
+            } catch (error) {
+              identitySqlFailureObserved = true;
+              identitySqlFailure = error;
+              throw error;
+            }
+          },
+        };
+
+        const result = await operation(identityTransaction);
+        if (!state.identityQueryUsed)
+          throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+
+        // Restore and verify the least-privileged request role before the exact-call child settles.
+        await identityTransactionScope.query`set local role vortex_request`;
+        await assertBoundHumanContext(identityTransactionScope, boundRequest);
+        return result;
+      });
     } catch (error) {
       try {
-        await rollbackInvocationSavepoint();
+        // The native exact-call child has now settled. Its rollback must leave the parent request
+        // role, actor context and trusted channel intact before a known SQL refusal is mapped.
+        await assertBoundHumanContext(invocationTransaction, boundRequest);
       } catch {
-        state.poisonedTransaction = failure("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
-        throw state.poisonedTransaction;
+        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
       }
+
       if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
-      throw error;
+      if (
+        identitySqlFailureObserved &&
+        error === identitySqlFailure &&
+        isMappedIdentitySqlError(error)
+      )
+        throw error;
+
+      // Do not let rollback, role restoration, boundary or unknown transport errors become the
+      // Identity service's broad safe-refusal mapping. invoke() observes this poison and aborts.
+      throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
     }
   };
 
@@ -233,49 +302,54 @@ export const createRequestBoundTenantGovernanceService = (
   ): Promise<Result> =>
     serialized(async () => {
       if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
-      const context = await readBoundHumanContext();
+      const boundRequest = await readBoundHumanContext();
       const identity = identitySessionSchema.safeParse(session);
-      if (!identity.success || identity.data.identityId !== context.identityId)
+      if (!identity.success || identity.data.identityId !== boundRequest.context.identityId)
         throw failure("TENANT_GOVERNANCE_ACTOR_MISMATCH");
 
       state.activeMethod = method;
       state.runtimeCallUsed = false;
       state.identityQueryUsed = false;
+      state.boundRequest = boundRequest;
       try {
-        await transaction.query`savepoint tenant_governance_request_bound`;
-        state.savepointActive = true;
-      } catch {
-        state.poisonedTransaction = failure("TENANT_GOVERNANCE_SAVEPOINT_CREATE_FAILED");
-        throw state.poisonedTransaction;
-      }
-      try {
-        const result = await operation();
-        if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
-        if (!state.runtimeCallUsed && !isRefusedResult(result)) {
-          state.poisonedTransaction = failure("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-          throw state.poisonedTransaction;
-        }
-        if (isRefusedResult(result)) await rollbackInvocationSavepoint();
-        try {
-          await releaseInvocationSavepoint();
-        } catch {
-          state.poisonedTransaction = failure("TENANT_GOVERNANCE_SAVEPOINT_RELEASE_FAILED");
-          throw state.poisonedTransaction;
-        }
+        const result = await parentTransaction.withSavepoint(async invocationTransaction => {
+          state.invocationTransaction = invocationTransaction;
+          try {
+            const methodResult = await operation();
+            if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
+            if (!state.runtimeCallUsed && !isRefusedResult(methodResult))
+              throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+            if (isRefusedResult(methodResult)) {
+              // This includes typed/parser refusals after SQL succeeded. Throwing inside the
+              // invocation child forces all method effects to roll back before the refusal returns.
+              throw new TypedMethodRefusalRollback(methodResult);
+            }
+            return methodResult;
+          } finally {
+            delete state.invocationTransaction;
+          }
+        });
+
+        await assertBoundHumanContext(parentTransaction, boundRequest);
         return result;
       } catch (error) {
-        if (state.savepointActive) {
+        if (error instanceof TypedMethodRefusalRollback) {
           try {
-            await rollbackInvocationSavepoint();
-            await releaseInvocationSavepoint();
+            // The error can reach here only after the native invocation child rolled back.
+            await assertBoundHumanContext(parentTransaction, boundRequest);
           } catch {
-            state.poisonedTransaction = failure("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
+            throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
           }
+          return error.result as Result;
         }
-        if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
-        throw error;
+
+        // Any other child settlement failure (including unknown transport/rollback outcomes)
+        // poisons this parent so the durable callback/effect transaction cannot commit.
+        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
       } finally {
         delete state.activeMethod;
+        delete state.invocationTransaction;
+        delete state.boundRequest;
         state.runtimeCallUsed = false;
         state.identityQueryUsed = false;
       }
