@@ -34,7 +34,6 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   existing_other boolean;
-  target_locked boolean;
   update_sql text;
   changed_rows integer;
 begin
@@ -129,17 +128,10 @@ begin
   source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
     then (source_context ->> 'applicationRootId')::uuid else null end;
 
-  target_locked := false;
-  execute pg_catalog.format(
-    'select true from record_data.%I as stored
-     where stored.organisation_id = $1 and stored.record_id = $2
-       and stored.lifecycle_state = ''active'' for share',
-    target_meta ->> 'table'
-  ) into target_locked using
-    (source_context ->> 'organizationId')::uuid, target_record_id;
-  if not coalesce(target_locked, false) then
-    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
-  end if;
+  perform vortex_record.lock_relationship_target_row_internal(
+    target_type_id, target_record_id,
+    (source_context ->> 'organizationId')::uuid
+  );
 
   -- The one substitution. Executing a permitted named action must not require
   -- ordinary read authority on its own subject (#50 section 4), so when the
@@ -249,4 +241,4 @@ grant execute on function
   vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
 
 comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
-  'Private named-action edge writer: identical to the ordinary edge writer except that the command subject is authorised by re-evaluating the exact installed named action rather than ordinary read.';
+  'Private named-action edge writer: uses the ordinary or protected projection target lock and edge flow, except that the command subject is authorised by re-evaluating the exact installed named action rather than ordinary read.';

@@ -1,16 +1,27 @@
 import { developmentSetupManifest } from "./manifest";
 import {
+  createHumanOrganizationRequestService,
+  createOrganizationRuntimeSettingsAdministrationService,
+  readCurrentOrganizationDefaultApplicationAfterAuthorization,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+} from "@vortex/access";
+import {
+  applicationRootIdSchema,
+  organizationSelectionCandidateSchema,
+  provisionTenantCommandSchema,
+} from "@vortex/contracts";
+import {
   DevelopmentSetupRefusal,
   parseSetupArguments,
   requireLocalDevelopmentEnvironment,
   resolveFirstOwnerIdentity,
 } from "./guards";
-import { provisionTenantCommandSchema } from "@vortex/contracts";
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { publishShippedDefinitions } from "./definitions";
 import { installApplications, type InstallFacts } from "./install";
 import { grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
+import { nominatedOwnerSession } from "./development-authority";
 import { loadSetupState } from "./state";
 
 /**
@@ -26,6 +37,89 @@ import { loadSetupState } from "./state";
 
 const log = (message: string): void => {
   process.stdout.write(`[setup] ${message}\n`);
+};
+
+const landingZoneApplicationKey = "vortex.app.landing_zone";
+
+const initializeLandingZoneDefault = async (
+  identityAuthorityId: ReturnType<typeof requireLocalDevelopmentEnvironment>,
+  organizationId: string,
+  stewardIdentityId: string,
+  applicationRootId: string,
+  state: ReturnType<typeof loadSetupState>,
+): Promise<void> => {
+  if (state.defaultApplicationInitializationCompleted) return;
+  if (state.defaultApplicationInitializationAttempted) {
+    state.defaultApplicationInitializationCompleted = true;
+    state.save();
+    log(
+      "a prior Landing Zone default initialization was interrupted; the current default was preserved",
+    );
+    return;
+  }
+
+  const session = nominatedOwnerSession(stewardIdentityId);
+  const selection = organizationSelectionCandidateSchema.parse({ organizationId });
+  const requests = createHumanOrganizationRequestService({ identityAuthorityId });
+  const observed = await requests.run(session, selection, async (transaction, scope) => {
+    const before = await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+    const defaultApplicationRootId =
+      await readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction);
+    const after = await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+    if (
+      before === undefined ||
+      after === undefined ||
+      before.organizationId.toLowerCase() !== scope.organizationId.toLowerCase() ||
+      after.organizationId.toLowerCase() !== scope.organizationId.toLowerCase() ||
+      before.revision !== after.revision
+    )
+      return undefined;
+    return { defaultApplicationRootId, revision: after.revision };
+  });
+
+  if (observed.kind !== "available" || observed.value === undefined) {
+    state.defaultApplicationInitializationCompleted = true;
+    state.save();
+    log(
+      "Landing Zone default state was unavailable or changed during observation; leaving it unchanged",
+    );
+    return;
+  }
+
+  if (observed.value.defaultApplicationRootId !== null) {
+    state.defaultApplicationInitializationCompleted = true;
+    state.save();
+    log("preserved the organisation's existing default application");
+    return;
+  }
+
+  const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
+  // Fence reruns before the protected write. If the process stops after the write, a later
+  // explicit clear must remain the user's choice; an interrupted attempt falls back to the launcher.
+  state.defaultApplicationInitializationAttempted = true;
+  state.save();
+
+  const administration = createOrganizationRuntimeSettingsAdministrationService({
+    identityAuthorityId,
+  });
+  const result = await administration.setDefaultApplication(session, selection, {
+    expectedRevision: observed.value.revision,
+    defaultApplicationRootId,
+  });
+  state.defaultApplicationInitializationCompleted = true;
+  state.save();
+  if (
+    result.kind === "available" &&
+    result.value.defaultApplicationRootId?.toLowerCase() === defaultApplicationRootId.toLowerCase()
+  ) {
+    log(
+      `initialized the organisation default to Landing Zone at settings revision ${result.value.revision}`,
+    );
+  } else {
+    log(
+      `Landing Zone default initialization was not confirmed (${result.kind}); no follow-up write will be made`,
+    );
+  }
 };
 
 const main = async (): Promise<void> => {
@@ -78,10 +172,13 @@ const main = async (): Promise<void> => {
     accessVersion: provisioned.accessVersion,
   };
   const state = loadSetupState(provisioned.rootOrganizationId);
-  const installFacts = (releases: InstallFacts["releases"]): InstallFacts => ({
+  const installFacts = (
+    releases: InstallFacts["releases"],
+    applicationKeys: readonly (typeof manifest.applicationKeys)[number][] = manifest.applicationKeys,
+  ): InstallFacts => ({
     identityAuthorityId,
     system,
-    manifest,
+    manifest: { ...manifest, applicationKeys: [...applicationKeys] },
     stewardIdentityId,
     releases,
     state,
@@ -89,8 +186,25 @@ const main = async (): Promise<void> => {
 
   let releases: InstallFacts["releases"];
   if (state.setupCompleted) {
-    log(`the applications were already installed for account ${provisioned.organizationAccountId}`);
-    releases = new Map(Object.entries(state.releases));
+    const missingApplications = manifest.applicationKeys.filter(
+      (key) => state.releases[key] === undefined,
+    );
+    if (missingApplications.length === 0) {
+      log(
+        `the applications were already installed for account ${provisioned.organizationAccountId}`,
+      );
+      releases = new Map(Object.entries(state.releases));
+    } else {
+      log(
+        `publishing and installing newly configured applications: ${missingApplications.join(", ")}`,
+      );
+      // Mark an upgrade incomplete before recording new releases, so an interrupted installation
+      // replays the protected coordinator on the next setup run.
+      state.setupCompleted = false;
+      state.save();
+      releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
+      await installApplications(installFacts(releases, missingApplications), log);
+    }
   } else {
     releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
 
@@ -122,6 +236,16 @@ const main = async (): Promise<void> => {
       releases,
     },
     log,
+  );
+  const landingZoneRelease = releases.get(landingZoneApplicationKey);
+  if (landingZoneRelease === undefined)
+    throw new Error(`No published release recorded for ${landingZoneApplicationKey}`);
+  await initializeLandingZoneDefault(
+    identityAuthorityId,
+    system.organizationId,
+    stewardIdentityId,
+    landingZoneRelease.rootId,
+    state,
   );
   log("done. Sign in with the nominated account and open the organisation.");
 };
