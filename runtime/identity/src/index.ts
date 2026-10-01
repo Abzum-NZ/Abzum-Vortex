@@ -114,6 +114,10 @@ export {
   revokeTenantAdministrator,
   type TenantGovernanceServiceDependencies,
 } from "./tenant-governance";
+export {
+  createRequestBoundTenantGovernanceService,
+  type RequestBoundTenantGovernanceService,
+} from "./tenant-governance-request-bound";
 
 export const IdentityService = Object.freeze({
   key: "identity",
