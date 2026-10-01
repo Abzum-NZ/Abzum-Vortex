@@ -56,6 +56,16 @@ The existing mixed-currency total refusal below remains unchanged. Query, Rule
 and database-backed conditions must agree for the same typed operands. Formatting
 for display never changes filtering, ordering or the stored value.
 
+Module query minimum and maximum also accept declared text and yes/no fields.
+Text uses Unicode code-point ordering without normalization or case folding;
+yes/no orders `false` before `true`. Each result retains the selected scalar,
+including empty text or `false`, in the existing `completed`/`value`/`valueCount`
+envelope. Absent, null and withheld field values do not contribute; an empty
+minimum or maximum returns `null` with `valueCount` zero. The same semantics
+apply to readable in-memory arrangements, protected summaries and board metrics.
+Sum and average still require whole numbers, decimal numbers or money; calculation
+and total aggregate sources and complex grouping remain unsupported.
+
 These requirements belong to [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
 and its real storage path, not to a browser-only correction after rows are paged.
 

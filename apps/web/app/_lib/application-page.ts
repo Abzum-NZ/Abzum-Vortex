@@ -805,6 +805,16 @@ const summaryAggregateCellValue = (
   if (field === undefined) return undefined;
 
   switch (field.type) {
+    case "text":
+      return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
+        typeof result.value === "string"
+        ? { kind: "text", text: result.value }
+        : undefined;
+    case "yes_no":
+      return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
+        typeof result.value === "boolean"
+        ? { kind: "boolean", value: result.value }
+        : undefined;
     case "whole_number": {
       if (typeof result.value === "number" && Number.isSafeInteger(result.value))
         return { kind: "number", value: result.value };

@@ -110,6 +110,7 @@ const aggregatesSchema = z
  * A computed value. Counts are whole numbers; sums and averages of whole and
  * decimal numbers are exact decimal text; money keeps its one currency; minimum
  * and maximum return the field's own value. `null` means no value was present.
+ * Declared field and operation validation decides which scalar type is permitted.
  */
 export const aggregateValueSchema = z.union([
   exactDecimalTextV2Schema,
@@ -117,6 +118,8 @@ export const aggregateValueSchema = z.union([
   z.number().int(),
   z.iso.date(),
   z.iso.datetime({ offset: true }),
+  z.string(),
+  z.boolean(),
   z.null(),
 ]);
 export type AggregateValue = z.infer<typeof aggregateValueSchema>;
