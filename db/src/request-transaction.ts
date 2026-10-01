@@ -19,6 +19,17 @@ export interface RequestDatabaseTransaction {
   ): Promise<readonly ResultRow[]>;
 }
 
+/**
+ * A transaction with driver-owned nested recovery. A consumer must await a child scope before
+ * issuing parent or sibling work; raw SQL savepoints on the parent query tag do not clear its
+ * remembered query error, and concurrent child scopes are not supported.
+ */
+export interface SavepointRequestDatabaseTransaction extends RequestDatabaseTransaction {
+  withSavepoint<Result>(
+    operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
+  ): Promise<Result>;
+}
+
 export type RuntimeDatabaseTransaction = RequestDatabaseTransaction;
 
 interface TransactionDriver {
@@ -71,6 +82,54 @@ const databaseError = (code: string): Error => {
   return error;
 };
 
+type SavepointOperation = SavepointRequestDatabaseTransaction["withSavepoint"];
+
+const getSavepointOperation = (
+  transaction: RequestDatabaseTransaction,
+): SavepointOperation | undefined => {
+  try {
+    const operation = (transaction as Partial<SavepointRequestDatabaseTransaction>).withSavepoint;
+    return typeof operation === "function" ? operation : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabaseTransaction => {
+  const queryOnly: RequestDatabaseTransaction = {
+    query: <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => transaction.query<ResultRow>(strings, ...values),
+  };
+  const withSavepoint = getSavepointOperation(transaction);
+  if (withSavepoint === undefined) return queryOnly;
+
+  const capable: SavepointRequestDatabaseTransaction = {
+    ...queryOnly,
+    withSavepoint: <Result>(
+      operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
+    ) =>
+      (withSavepoint<Result>).call(transaction, async (child) =>
+        await operation(requireRequestSavepoint(child)),
+      ),
+  };
+  return capable;
+};
+
+/**
+ * Require native child-scope support without widening query-only transaction projections.
+ * The returned method forwards with the original transaction as its receiver.
+ */
+export const requireRequestSavepoint = (
+  transaction: RequestDatabaseTransaction,
+): SavepointRequestDatabaseTransaction => {
+  const wrapped = wrapRequestTransaction(transaction);
+  if (getSavepointOperation(wrapped) === undefined)
+    throw databaseError("DATABASE_SAVEPOINT_UNAVAILABLE");
+  return wrapped as SavepointRequestDatabaseTransaction;
+};
+
 const validateContext = (candidate: SessionContext): SessionContext => {
   const parsed = sessionContextSchema.safeParse(candidate);
   if (!parsed.success) throw databaseError("INVALID_REQUEST_CONTEXT");
@@ -113,24 +172,29 @@ export const createResolvedRequestTransactionRunner =
       await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
       await transaction.query`set local role vortex_request`;
 
-      return operation(
-        {
-          query: <ResultRow extends DatabaseRow>(
-            strings: TemplateStringsArray,
-            ...values: readonly DatabaseValue[]
-          ) => transaction.query<ResultRow>(strings, ...values),
-        },
-        resolved.scope,
-      );
+      return operation(wrapRequestTransaction(transaction), resolved.scope);
     });
 
-const createTransactionDriver = (transaction: TransactionSql): TransactionDriver => ({
+const createTransactionDriver = (
+  transaction: TransactionSql,
+): SavepointRequestDatabaseTransaction => ({
   query: async <ResultRow extends DatabaseRow>(
     strings: TemplateStringsArray,
     ...values: readonly DatabaseValue[]
   ) => {
     const rows = await transaction<ResultRow[] & Row[]>(strings, ...values);
     return rows;
+  },
+  // Use postgres.js' child TransactionSql so rejected queries poison only that child's scope;
+  // the native promise settles (including rollback failures) before this method settles.
+  withSavepoint: async <Result>(
+    operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
+  ): Promise<Result> => {
+    // Box the callback value so postgres.js does not reinterpret an array result as query work.
+    const settled = await transaction.savepoint(async (childSql) => ({
+      value: await operation(createTransactionDriver(childSql)),
+    }));
+    return settled.value;
   },
 });
 

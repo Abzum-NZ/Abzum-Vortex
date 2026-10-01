@@ -998,6 +998,10 @@
 
                                                                                                                                                                                       }
                                                                                                                                                                         },
+                                                                                                                                                       "form_description": {"block":{"block_id":"6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28","release_version":"1.0.0"},"settings":{"name":{"kind":"text","value":"description"},"label":{"kind":"text","value":"Description"},"required":{"kind":"boolean","value":true}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                       "form_customer_company": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.1.0"},"settings":{"name":{"kind":"text","value":"customer_company"},"label":{"kind":"text","value":"Customer company"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.crm.organisations:service_desk_customers"},"label_field":{"kind":"field_reference","field":"vortex.crm.organisations:company.name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                       "form_requester": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.1.0"},"settings":{"name":{"kind":"text","value":"requester"},"label":{"kind":"text","value":"Requester"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.crm.people:service_desk_requesters"},"label_field":{"kind":"field_reference","field":"vortex.crm.people:contact.full_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                       "form_service_level": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.1.0"},"settings":{"name":{"kind":"text","value":"service_level"},"label":{"kind":"text","value":"Service level"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.service_desk.sla:service_desk_service_levels"},"label_field":{"kind":"field_reference","field":"vortex.service_desk.sla:service_level.name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                        "form_submit_3":  {
                                                                                                                                                                              "block":  {
                                                                                                                                                                                            "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1035,6 +1039,10 @@
                                                                                                                                     "order":  {
                                                                                                                                                   "desktop":  [
                                                                                                                                                                   "form_field_3",
+                                                                                                                                                                  "form_description",
+                                                                                                                                                                  "form_customer_company",
+                                                                                                                                                                  "form_requester",
+                                                                                                                                                                  "form_service_level",
                                                                                                                                                                   "form_submit_3"
                                                                                                                                                               ]
                                                                                                                                               }
@@ -2900,7 +2908,7 @@
                          "contractVersion": "1.0.0",
                          "id": "sd_form_flow_0",
                          "key": "sd_form_flow_0",
-                         "description": "Saves the submitted form as a new record through the one Save record task.",
+                         "description": "Creates a new case from the submitted fields and selected service level.",
                          "labels": {
                              "name": "Continue New case"
                          },
@@ -2909,8 +2917,27 @@
                              "kind": "initiator"
                          },
                          "inputs": {
-                             "values": {
+                             "subject": {
+                                 "type": "text",
+                                 "required": true
+                             },
+                             "description": {
                                  "type": "json",
+                                 "required": true
+                             },
+                             "customer_company": {
+                                 "type": "json",
+                                 "required": true
+                             },
+                             "requester": {
+                                 "type": "json",
+                                 "required": true
+                             },
+                             "service_level_record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.sla:service_level"
+                                 ],
                                  "required": true
                              },
                              "selected_owner_group_id": {
@@ -2918,7 +2945,205 @@
                                  "required": true
                              }
                          },
+                         "variables": {
+                             "opened_at": {
+                                 "type": "date_time"
+                             },
+                             "case_values": {
+                                 "type": "json"
+                             }
+                         },
                          "tasks": [
+                             {
+                                 "id": "set_opened_at",
+                                 "type": "data.set_variable",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "variable": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "opened_at"
+                                         }
+                                     },
+                                     "value": {
+                                         "kind": "formula",
+                                         "formula": {
+                                             "op": "now"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "read_service_level",
+                                 "type": "record.read_fields",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.sla:service_level"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "service_level_record"
+                                         }
+                                     },
+                                     "fields": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "json",
+                                             "value": [
+                                                 {
+                                                     "alias": "first_response_minutes",
+                                                     "field": "vortex.service_desk.sla:service_level.first_response_minutes"
+                                                 },
+                                                 {
+                                                     "alias": "resolution_minutes",
+                                                     "field": "vortex.service_desk.sla:service_level.resolution_minutes"
+                                                 }
+                                             ]
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "service_level_link",
+                                 "type": "data.record_link",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.sla:service_level"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "service_level_record"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "set_case_values",
+                                 "type": "data.set_variable",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "variable": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "case_values"
+                                         }
+                                     },
+                                     "value": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "subject": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "subject"
+                                                 }
+                                             },
+                                             "description": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "description"
+                                                 }
+                                             },
+                                             "customer_company": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "customer_company"
+                                                 }
+                                             },
+                                             "requester": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "requester"
+                                                 }
+                                             },
+                                             "service_level": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "task_output",
+                                                     "task": "service_level_link",
+                                                     "key": "value"
+                                                 }
+                                             },
+                                             "opened_at": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "variable",
+                                                     "name": "opened_at"
+                                                 }
+                                             },
+                                             "first_response_due_at": {
+                                                 "kind": "formula",
+                                                 "formula": {
+                                                     "op": "date_add",
+                                                     "date": {
+                                                         "op": "reference",
+                                                         "reference": {
+                                                             "source": "variable",
+                                                             "name": "opened_at"
+                                                         }
+                                                     },
+                                                     "amount": {
+                                                         "op": "reference",
+                                                         "reference": {
+                                                             "source": "task_output",
+                                                             "task": "read_service_level",
+                                                             "key": "values",
+                                                             "path": [
+                                                                 "first_response_minutes"
+                                                             ]
+                                                         }
+                                                     },
+                                                     "unit": "minutes"
+                                                 }
+                                             },
+                                             "resolution_due_at": {
+                                                 "kind": "formula",
+                                                 "formula": {
+                                                     "op": "date_add",
+                                                     "date": {
+                                                         "op": "reference",
+                                                         "reference": {
+                                                             "source": "variable",
+                                                             "name": "opened_at"
+                                                         }
+                                                     },
+                                                     "amount": {
+                                                         "op": "reference",
+                                                         "reference": {
+                                                             "source": "task_output",
+                                                             "task": "read_service_level",
+                                                             "key": "values",
+                                                             "path": [
+                                                                 "resolution_minutes"
+                                                             ]
+                                                         }
+                                                     },
+                                                     "unit": "minutes"
+                                                 }
+                                             }
+                                         }
+                                     }
+                                 }
+                             },
                              {
                                  "id": "save",
                                  "type": "record.save",
@@ -2934,8 +3159,8 @@
                                      "values": {
                                          "kind": "reference",
                                          "reference": {
-                                             "source": "input",
-                                             "name": "values"
+                                             "source": "variable",
+                                             "name": "case_values"
                                          }
                                      },
                                      "selected_owner_group_id": {
@@ -3537,9 +3762,25 @@
                          "event": "form_submit",
                          "flow": "sd_form_flow_0",
                          "inputs": {
-                             "values": {
+                             "subject": {
                                  "kind": "caller",
-                                 "name": "values"
+                                 "name": "subject"
+                             },
+                             "description": {
+                                 "kind": "caller",
+                                 "name": "description"
+                             },
+                             "customer_company": {
+                                 "kind": "caller",
+                                 "name": "customer_company"
+                             },
+                             "requester": {
+                                 "kind": "caller",
+                                 "name": "requester"
+                             },
+                             "service_level_record": {
+                                 "kind": "caller",
+                                 "name": "service_level"
                              },
                              "selected_owner_group_id": {
                                  "kind": "caller",
