@@ -2239,7 +2239,8 @@ const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boole
     ),
   );
 
-const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean => page.type !== "public";
+const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean =>
+  page.type !== "public" && page.replacementOfPageId === undefined;
 
 const collectPlacementSlotV2 = (
   slotValue: unknown,
@@ -2644,6 +2645,7 @@ const comparePageV2 = (
     "type",
     "accessPermissionKey",
     "recordType",
+    "replacementOfPageId",
     "queryId",
     "publicFieldIds",
     "publicActionKey",
@@ -2801,7 +2803,7 @@ export const normaliseApplicationContentV2 = (
 export const assertUnambiguousApplicationContentV2 = (content: unknown): void => {
   const value = asRecord(content);
   assertUnambiguousApplicationSharedContent(value);
-  assertUnique(value.pages as RecordValue[], "pageId");
+  assertUnique(value.pages as RecordValue[], (page) => String(page.pageId).toLowerCase());
   assertUnique(value.platformBlockDependencies as RecordValue[], blockDependencyIdentity);
   assertUnique(value.shells as RecordValue[], "shellId");
   assertUnique(value.shells as RecordValue[], "key");

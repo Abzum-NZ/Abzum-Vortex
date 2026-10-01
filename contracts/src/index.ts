@@ -1,4 +1,5 @@
 export * from "./application-contracts";
+export { inspectApplicationPageReplacements } from "./application-page-replacement";
 export * from "./application-contract-versions";
 export * from "./application-composition-v2";
 export * from "./application-composition-catalogue";

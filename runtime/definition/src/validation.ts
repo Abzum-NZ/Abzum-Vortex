@@ -10,6 +10,7 @@ import {
   readRecordDetailContract,
   readRecordsTableContract,
   applicationSourceDocumentV2Schema,
+  inspectApplicationPageReplacements,
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
@@ -3625,6 +3626,35 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const applicationPlacementIds = new Set(
       applicationPlacementEntries.map(([placementId]) => placementId),
     );
+    for (const issue of inspectApplicationPageReplacements(
+      array(content.pages).map((page) => {
+        const record = page.recordType === undefined ? undefined : object(page.recordType);
+        return {
+          identities: [String(page.pageId)],
+          type: String(page.type),
+          permission: String(page.accessPermissionKey),
+          replaces:
+            page.replacementOfPageId === undefined ? undefined : String(page.replacementOfPageId),
+          subject:
+            record === undefined
+              ? undefined
+              : record.state === "resolved"
+                ? ([String(record.moduleRootId), String(record.recordTypeId)] as const)
+                : null,
+        };
+      }),
+    ))
+      failures.push(
+        failure(
+          output,
+          issue.kind === "identity"
+            ? "vortex.definition.application_identity_unique"
+            : issue.kind === "permission"
+              ? "vortex.definition.application_page_permission"
+              : "vortex.definition.application_page_references",
+          issue.kind === "identity" ? "duplicate_key" : "broken_reference",
+        ),
+      );
     const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
