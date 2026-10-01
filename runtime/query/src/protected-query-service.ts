@@ -48,6 +48,8 @@ import {
   protectedQueryResultSchema,
   protectedQuerySummaryCommandSchema,
   protectedQuerySummaryResultSchema,
+  protectedQueryBoardSummaryCommandSchema,
+  protectedQueryBoardSummaryResultSchema,
   protectedQueryRowCapabilitiesSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryBoardMembersCommand,
@@ -56,6 +58,8 @@ import {
   type ProtectedQueryResult,
   type ProtectedQuerySummaryCommand,
   type ProtectedQuerySummaryResult,
+  type ProtectedQueryBoardSummaryCommand,
+  type ProtectedQueryBoardSummaryResult,
 } from "./protected-query-contracts";
 import { recordSystemValuesSchema } from "./record-system-values";
 import { readThroughQueryCache, type SharedCacheStore } from "./shared-cache-adapter";
@@ -164,6 +168,10 @@ const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryRes
 const summaryRefusal = (
   reasonCode: ProtectedQueryRefusalReasonCode,
 ): ProtectedQuerySummaryResult => ({ outcome: "refused", reasonCode });
+
+const boardSummaryRefusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): ProtectedQueryBoardSummaryResult => ({ outcome: "refused", reasonCode });
 
 const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -299,8 +307,40 @@ const readSummary = async (
   return protectedQuerySummaryResultSchema.parse(one(rows));
 };
 
+const readBoardSummary = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryBoardSummaryCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+): Promise<ProtectedQueryBoardSummaryResult> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify({
+        filter: command.filter ?? null,
+        filterableFieldIds: command.filterableFieldIds,
+        boardSummary: { choiceFieldId: command.choiceFieldId },
+      })}::text::jsonb
+    ) as result
+  `;
+  return protectedQueryBoardSummaryResultSchema.parse(one(rows));
+};
+
 const summaryFilterInputRefusal = (
   command: ProtectedQuerySummaryCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const boardSummaryFilterInputRefusal = (
+  command: ProtectedQueryBoardSummaryCommand,
 ): ProtectedQueryRefusalReasonCode | undefined => {
   if (command.filter === undefined) return undefined;
   const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
@@ -342,6 +382,31 @@ const summariseCommand = async (
   }
 
   return readSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
+};
+
+const boardSummaryCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryBoardSummaryCommand,
+): Promise<ProtectedQueryBoardSummaryResult> => {
+  if (scope.applicationRootId === undefined) return boardSummaryRefusal("request_invalid");
+  const userRefusal = boardSummaryFilterInputRefusal(command);
+  if (userRefusal !== undefined) return boardSummaryRefusal(userRefusal);
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return boardSummaryRefusal(declared.reasonCode);
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return boardSummaryRefusal("descriptor_invalid");
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return boardSummaryRefusal("input_invalid");
+    throw error;
+  }
+
+  return readBoardSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
 };
 
 const readPage = async (
@@ -981,6 +1046,21 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         summariseCommand(transaction, scope, command.data),
+      );
+    },
+    async boardSummary(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryBoardSummaryResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = protectedQueryBoardSummaryCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return { kind: "available", value: boardSummaryRefusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, (transaction, scope) =>
+        boardSummaryCommand(transaction, scope, command.data),
       );
     },
   });
