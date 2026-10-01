@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
   applicationSourceDocumentV2Schema,
+  inspectApplicationPageReplacements,
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
   applicationDraftV2Schema,
@@ -380,6 +381,15 @@ function sourceToCanonicalPath(
   sourcePath: Path,
   positions: SourceContractPositions,
 ): Path {
+  if (
+    source.kind === "application" &&
+    sourcePath.length === 4 &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "pages" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "replaces_page"
+  )
+    return ["content", "pages", sourcePath[2], "replacementOfPageId"];
   if (sourcePath.length === 1 && sourcePath[0] === "root_alias")
     return source.kind === "connection_type" ? ["connectionTypeId"] : ["envelope", "rootId"];
   if (sourcePath.length === 1 && sourcePath[0] === "key")
@@ -1375,6 +1385,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   if (isOpaqueDataPath(positions, sourcePath)) return resolvesDynamicMapKey;
   return (
     path === "root_alias" ||
+    path === "body/pages/#/replaces_page" ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
     /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
@@ -3685,12 +3696,15 @@ function compileApplicationPagesV2(
   const definitionKey = String(source.key);
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
   const allowedPermissionOwners = permissionScopeSourceOwners(source);
-  return (body.pages as JsonObject[]).map((page, index) => {
+  const pages = (body.pages as JsonObject[]).map((page, index) => {
     const compiledComposition = composition.pages[index];
     if (compiledComposition === undefined)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
     const base = {
       pageId: pageId(String(page.id)),
+      ...(page.replaces_page === undefined
+        ? {}
+        : { replacementOfPageId: pageId(String(page.replaces_page)) }),
       key: page.key,
       name: page.name,
       // A page keeps its exact access permission key. An application or bound-Module permission is
@@ -3764,6 +3778,29 @@ function compileApplicationPagesV2(
       rateLimitPerMinute: page.rate_limit_per_minute,
     };
   });
+  for (const issue of inspectApplicationPageReplacements(
+    pages.map((page) => {
+      const record = "recordType" in page ? page.recordType : undefined;
+      return {
+        identities: [page.pageId],
+        type: page.type,
+        permission: page.accessPermissionKey,
+        replaces: page.replacementOfPageId,
+        subject:
+          record === undefined ? undefined : ([record.moduleRootId, record.recordTypeId] as const),
+      };
+    }),
+  ))
+    fail(
+      issue.kind === "identity"
+        ? "vortex.definition.application_identity_unique"
+        : issue.kind === "permission"
+          ? "vortex.definition.application_page_permission"
+          : "vortex.definition.application_page_references",
+      issue.kind === "identity" ? "duplicate_key" : "broken_reference",
+      resolution.location("page", String((body.pages as JsonObject[])[issue.index]!.key)),
+    );
+  return pages;
 }
 
 function compileApplication(
