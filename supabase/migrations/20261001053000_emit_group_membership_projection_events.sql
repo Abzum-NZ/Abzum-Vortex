@@ -1,5 +1,7 @@
 begin;
 
+set local role vortex_module_owner;
+
 create or replace function vortex_module.list_active_application_roots_for_module_internal(
   p_organization_id uuid,
   p_module_root_id uuid
@@ -48,6 +50,8 @@ grant execute on function vortex_module.list_active_application_roots_for_module
 ) to postgres;
 comment on function vortex_module.list_active_application_roots_for_module_internal(uuid,uuid) is
   'Returns the distinct sorted active Application root candidates bound to one Module in one organisation; callers must resolve each candidate through the exact active-scope reader under the canonical binding lock.';
+
+reset role;
 
 
 create or replace function vortex_event.append_record_occurrences_with_native_proof_internal(
@@ -1451,7 +1455,9 @@ begin
     or activity_row.actor_kind is distinct from 'organization_account'
     or activity_row.actor_id is distinct from account_id_value
     or activity_row.correlation_id is distinct from correlation_id_value
-    or activity_row.action is distinct from expected_activity_action
+    or (activity_row.action is distinct from expected_activity_action
+      and not (p_operation = 'add_membership'
+        and activity_row.action = 'add_membership'))
     or pg_catalog.cardinality(activity_row.subject_ids) <> expected_subject_count then
     raise exception using errcode = '40001',
       message = 'Group membership Event Activity is unavailable';
@@ -2068,8 +2074,6 @@ begin
       message = 'Organization Group membership removal is unavailable';
   end if;
 
-  authority_checked_at := decision.checked_at;
-
   select membership.* into membership_fact
   from vortex_access.organization_group_memberships as membership
   where membership.organization_id = context_organization_id
@@ -2156,6 +2160,8 @@ begin
     raise exception using errcode = '42501',
       message = 'Organization Group membership removal is unavailable';
   end if;
+
+  authority_checked_at := decision.checked_at;
 
   select result.* into strict changed
   from vortex_access.coordinate_organization_group_membership_change(

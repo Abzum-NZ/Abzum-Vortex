@@ -61,8 +61,6 @@ begin
       message = 'Organization Group membership removal is unavailable';
   end if;
 
-  authority_checked_at := decision.checked_at;
-
   select membership.* into membership_fact
   from vortex_access.organization_group_memberships as membership
   where membership.organization_id = context_organization_id
@@ -149,6 +147,8 @@ begin
     raise exception using errcode = '42501',
       message = 'Organization Group membership removal is unavailable';
   end if;
+
+  authority_checked_at := decision.checked_at;
 
   select result.* into strict changed
   from vortex_access.coordinate_organization_group_membership_change(

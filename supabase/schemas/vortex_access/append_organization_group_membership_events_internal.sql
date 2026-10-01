@@ -183,7 +183,9 @@ begin
     or activity_row.actor_kind is distinct from 'organization_account'
     or activity_row.actor_id is distinct from account_id_value
     or activity_row.correlation_id is distinct from correlation_id_value
-    or activity_row.action is distinct from expected_activity_action
+    or (activity_row.action is distinct from expected_activity_action
+      and not (p_operation = 'add_membership'
+        and activity_row.action = 'add_membership'))
     or pg_catalog.cardinality(activity_row.subject_ids) <> expected_subject_count then
     raise exception using errcode = '40001',
       message = 'Group membership Event Activity is unavailable';
