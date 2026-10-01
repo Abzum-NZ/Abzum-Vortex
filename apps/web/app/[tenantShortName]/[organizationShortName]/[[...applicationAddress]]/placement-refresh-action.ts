@@ -1,6 +1,9 @@
 "use server";
 
-import { containedComponentIdSchema } from "@vortex/contracts";
+import {
+  boardColumnContinuationRequestSchema,
+  containedComponentIdSchema,
+} from "@vortex/contracts";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
@@ -29,6 +32,13 @@ const placementIdsSchema = z
     [...new Set(placementIds.map((placementId) => placementId.toLowerCase()))],
   );
 
+const boardContinuationTargetSchema = z
+  .object({
+    placementId: containedComponentIdSchema,
+    request: boardColumnContinuationRequestSchema,
+  })
+  .strict();
+
 const unavailablePlacement = Object.freeze({ status: "error" }) satisfies PageDataState;
 
 const searchParametersOf = (
@@ -51,10 +61,26 @@ const searchParametersOf = (
 export async function rereadApplicationPlacements(
   addressInput: unknown,
   placementIdsInput: unknown,
+  boardContinuationInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
-  if (!address.success || !placementIds.success) return { kind: "unavailable" };
+  const boardContinuation =
+    boardContinuationInput === undefined
+      ? undefined
+      : boardContinuationTargetSchema.safeParse(boardContinuationInput);
+  if (
+    !address.success ||
+    !placementIds.success ||
+    boardContinuation?.success === false
+  )
+    return { kind: "unavailable" };
+  if (
+    boardContinuation?.success === true &&
+    (placementIds.data.length !== 1 ||
+      placementIds.data[0]?.toLowerCase() !== boardContinuation.data.placementId.toLowerCase())
+  )
+    return { kind: "unavailable" };
 
   const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable")
@@ -83,6 +109,7 @@ export async function rereadApplicationPlacements(
       },
       searchParametersOf(address.data.search),
       placementIds.data,
+      boardContinuation?.success === true ? boardContinuation.data : undefined,
     );
   } catch {
     return {

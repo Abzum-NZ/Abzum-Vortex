@@ -11,6 +11,7 @@ import {
   equalFormValue,
   getAccessibleName,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  parseBoardPayload,
   FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
   UnsavedWorkProvider,
@@ -21,6 +22,7 @@ import {
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
+  type BoardPayload,
   type FlowDispatchResult,
   type FlowFormAnswer,
   type FlowFormIntent,
@@ -33,6 +35,8 @@ import {
   parseChoiceInputPayload,
 } from "@vortex/ui";
 import {
+  boardColumnContinuationRequestSchema,
+  type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   FIELD_INPUT_BLOCK_RELEASE,
@@ -600,6 +604,95 @@ const bindingFor = (
   return ofKind.length === 1 ? ofKind[0] : undefined;
 };
 
+const boardPayloadFor = (candidate: unknown): BoardPayload | undefined => {
+  if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
+  try {
+    return parseBoardPayload(candidate.values);
+  } catch {
+    return undefined;
+  }
+};
+
+const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
+  left.plan.moduleRootId.toLowerCase() === right.plan.moduleRootId.toLowerCase() &&
+  left.plan.moduleReleaseVersion === right.plan.moduleReleaseVersion &&
+  left.plan.queryId.toLowerCase() === right.plan.queryId.toLowerCase() &&
+  left.choiceFieldId.toLowerCase() === right.choiceFieldId.toLowerCase() &&
+  left.cardTitleFieldId.toLowerCase() === right.cardTitleFieldId.toLowerCase() &&
+  left.cardFieldIds.length === right.cardFieldIds.length &&
+  left.cardFieldIds.every((fieldId, index) =>
+    fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
+  );
+
+const boardBucketForSelector = (
+  board: BoardPayload,
+  selector: BoardColumnSelector,
+): BoardPayload["unassigned"] | BoardPayload["columns"][number] | undefined =>
+  selector.kind === "unassigned"
+    ? board.unassigned
+    : board.columns.find((column) => column.value === selector.value);
+
+const mergeBoardContinuation = (
+  current: BoardPayload,
+  fresh: BoardPayload,
+  selector: BoardColumnSelector,
+): BoardPayload | undefined => {
+  if (
+    !sameBoardSource(current, fresh) ||
+    current.columns.length !== fresh.columns.length ||
+    current.columns.some(
+      (column, index) =>
+        column.value !== fresh.columns[index]?.value ||
+        column.label !== fresh.columns[index]?.label,
+    )
+  )
+    return undefined;
+  const selectedCurrent = boardBucketForSelector(current, selector);
+  const selectedFresh = boardBucketForSelector(fresh, selector);
+  if (
+    selectedCurrent?.page?.nextContinuationToken === undefined ||
+    selectedFresh?.page === undefined ||
+    selectedFresh.page === null
+  )
+    return undefined;
+  const columns = fresh.columns.map((column, index) => ({
+    ...column,
+    page:
+      selector.kind === "option" && column.value === selector.value
+        ? column.page
+        : (current.columns[index]?.page ?? null),
+  }));
+  const unassigned = {
+    ...fresh.unassigned,
+    page: selector.kind === "unassigned" ? fresh.unassigned.page : current.unassigned.page,
+  };
+  try {
+    return parseBoardPayload({ ...fresh, columns, unassigned });
+  } catch {
+    // A duplicate live record identity or strict merged-shape mismatch triggers an initial reread.
+    return undefined;
+  }
+};
+
+const compatibleBoardRowAction = (
+  bindings: readonly PlacementFlowBinding[],
+): PlacementFlowBinding | undefined => {
+  const rowActions = bindings.filter((binding) => binding.event === "row_action");
+  if (rowActions.length !== 1) return undefined;
+  const [binding] = rowActions;
+  if (binding?.recordTypeId === undefined) return undefined;
+  const canReceiveSelectedRecord = binding.callerInputs.some(
+    (inputName) =>
+      inputName === "record_id" ||
+      (binding.selectedReadInputs ?? []).some(
+        (selected) =>
+          selected.callerInputName === inputName &&
+          selected.recordTypeId.toLowerCase() === binding.recordTypeId?.toLowerCase(),
+      ),
+  );
+  return canReceiveSelectedRecord ? binding : undefined;
+};
+
 /**
  * Renders one installed application page and carries out what its people do on it. Every
  * declared component event goes to the one flow endpoint with the exact installation and binding
@@ -740,6 +833,7 @@ function ApplicationPageViewContent({
     key: string;
     generations: Map<string, ComponentRequestGeneration>;
   }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
+  const boardContinuationInFlightRef = useRef(new Set<string>());
   if (placementRequestsRef.current.base !== navigationBase) {
     navigationSequenceRef.current += 1;
     placementRequestsRef.current = {
@@ -1790,6 +1884,152 @@ function ApplicationPageViewContent({
     [applyDispatch, formOwners, flowRuntime],
   );
 
+  const continueBoardColumn = useCallback(
+    async (placementId: string, event: DisplaySemanticEvent): Promise<boolean> => {
+      if (
+        busy ||
+        event.event !== "page_changed" ||
+        !("column" in event) ||
+        typeof event.continuationToken !== "string"
+      )
+        return false;
+      const parsedId = containedComponentIdSchema.safeParse(placementId);
+      const continuation = boardColumnContinuationRequestSchema.safeParse({
+        column: event.column,
+        continuationToken: event.continuationToken,
+      });
+      const requestScope = placementRequestsRef.current;
+      if (
+        !parsedId.success ||
+        !continuation.success ||
+        requestScope.key !== navigationKey ||
+        currentPageKey === undefined
+      )
+        return false;
+
+      const displayId =
+        Object.keys(currentData).find((candidate) =>
+          candidate.toLowerCase() === parsedId.data.toLowerCase(),
+        ) ?? parsedId.data;
+      const currentBoard = boardPayloadFor(currentData[displayId]);
+      const currentBucket =
+        currentBoard === undefined
+          ? undefined
+          : boardBucketForSelector(currentBoard, continuation.data.column);
+      if (
+        currentBoard === undefined ||
+        currentBucket?.page?.nextContinuationToken !== continuation.data.continuationToken
+      )
+        return false;
+
+      const serialKey = `${requestScope.key}\u0000${parsedId.data.toLowerCase()}`;
+      if (boardContinuationInFlightRef.current.has(serialKey)) return false;
+      boardContinuationInFlightRef.current.add(serialKey);
+      const request = nextComponentRequestGeneration(
+        requestScope.generations.get(parsedId.data.toLowerCase()),
+        parsedId.data,
+        requestScope.key,
+      );
+      requestScope.generations.set(parsedId.data.toLowerCase(), request);
+
+      const clearAndReload = (): false => {
+        if (
+          placementRequestsRef.current.key === requestScope.key &&
+          isCurrentComponentRequestGeneration(
+            requestScope.generations.get(parsedId.data.toLowerCase()),
+            request,
+          )
+        ) {
+          setRefreshedPlacementData((current) => {
+            const liveScope = placementRequestsRef.current;
+            if (liveScope.key !== requestScope.key) return current;
+            const prior = current?.navigationKey === requestScope.key ? current : undefined;
+            return {
+              navigationKey: requestScope.key,
+              data: { ...(prior?.data ?? {}), [displayId]: { status: "error" } },
+              editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
+              ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
+            };
+          });
+          void refreshPlacements([parsedId.data]);
+        }
+        return false;
+      };
+
+      try {
+        let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
+        try {
+          result = await rereadApplicationPlacements(
+            {
+              tenantShortName: application.tenantShortName,
+              organizationShortName: application.organizationShortName,
+              applicationKey: application.applicationKey,
+              pageKey: currentPageKey,
+              search: currentSearch,
+            },
+            [parsedId.data],
+            { placementId: parsedId.data, request: continuation.data },
+          );
+        } catch {
+          result = { kind: "temporarily_unavailable" };
+        }
+        if (
+          placementRequestsRef.current.key !== requestScope.key ||
+          !isCurrentComponentRequestGeneration(
+            requestScope.generations.get(parsedId.data.toLowerCase()),
+            request,
+          )
+        )
+          return false;
+        if (result.kind !== "available") return clearAndReload();
+
+        const returnedData = Object.entries(result.data).find(
+          ([candidate]) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
+        )?.[1];
+        const freshBoard = boardPayloadFor(returnedData);
+        const mergedBoard =
+          freshBoard === undefined
+            ? undefined
+            : mergeBoardContinuation(currentBoard, freshBoard, continuation.data.column);
+        if (mergedBoard === undefined) return clearAndReload();
+
+        setRefreshedPlacementData((current) => {
+          const liveScope = placementRequestsRef.current;
+          if (
+            liveScope.key !== requestScope.key ||
+            !isCurrentComponentRequestGeneration(
+              liveScope.generations.get(parsedId.data.toLowerCase()),
+              request,
+            )
+          )
+            return current;
+          const prior = current?.navigationKey === requestScope.key ? current : undefined;
+          return {
+            navigationKey: requestScope.key,
+            data: {
+              ...(prior?.data ?? {}),
+              [displayId]: { status: "ready", values: mergedBoard },
+            },
+            editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
+            ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
+          };
+        });
+        return true;
+      } finally {
+        boardContinuationInFlightRef.current.delete(serialKey);
+      }
+    },
+    [
+      application,
+      busy,
+      currentData,
+      currentPageKey,
+      currentSearch,
+      navigationKey,
+      refreshPlacements,
+    ],
+  );
+
   const runtimeInputs = useMemo(() => {
     const inputs: Record<string, unknown> = {};
     // A placement may hold bindings (a form submits) without holding projected data, so both key
@@ -1810,6 +2050,9 @@ function ApplicationPageViewContent({
           : currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
+      const boardData = boardPayloadFor(data);
+      const boardRowActionBinding =
+        boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
       const supportsEvent = (eventName: string): boolean =>
         declaredEvents?.has(eventName) === true;
@@ -1828,7 +2071,8 @@ function ApplicationPageViewContent({
         for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
           if (
             supportsEvent(kind) &&
-            (kind !== "row_action" || !launcherPlacements.has(placementId)) &&
+            (kind !== "row_action" ||
+              (!launcherPlacements.has(placementId) && boardData === undefined)) &&
             bindings.some((binding) => binding.event === kind)
           )
             events[kind] = (event: DisplaySemanticEvent) => {
@@ -1845,6 +2089,23 @@ function ApplicationPageViewContent({
                     : undefined,
                 );
             };
+        if (
+          boardData !== undefined &&
+          boardRowActionBinding !== undefined &&
+          supportsEvent("row_action")
+        )
+          events.row_action = async (event: DisplaySemanticEvent) => {
+            if (event.event !== "row_action" || event.eventId !== undefined || busy) return;
+            await runBinding(
+              placementId,
+              boardRowActionBinding,
+              suppliedValues(event),
+              event.recordId,
+            );
+          };
+        if (boardData !== undefined && supportsEvent("page_changed"))
+          events.page_changed = (event: DisplaySemanticEvent) =>
+            continueBoardColumn(placementId, event);
         if (supportsEvent("refresh"))
           events.refresh = () => {
             void refreshPlacements([placementId]);
@@ -2047,6 +2308,7 @@ function ApplicationPageViewContent({
     subject,
     onOpenApplication,
     unsavedWork,
+    continueBoardColumn,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

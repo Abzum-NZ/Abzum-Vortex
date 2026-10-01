@@ -4978,5 +4978,148 @@
     },
     "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
+  },
+  "BOARD_BLOCK_RELEASE": {
+    "blockId": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
+    "key": "platform.display.board",
+    "releaseVersion": "1.0.0",
+    "name": "Board",
+    "icon": "grid",
+    "paletteGroup": "data",
+    "rendererKey": "platform.renderer.board",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the board heading",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "field_reference",
+        "key": "choice_field",
+        "label": "Choice field",
+        "help": "Installed choice field that determines each board column",
+        "required": true
+      },
+      {
+        "kind": "field_reference",
+        "key": "card_title_field",
+        "label": "Card title field",
+        "help": "Readable query field shown as each card title",
+        "required": true
+      },
+      {
+        "kind": "list",
+        "key": "detail_fields",
+        "label": "Card details",
+        "help": "Optional ordered query fields shown below each card title",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "detail_field",
+          "label": "Card detail",
+          "help": "One optional labelled field shown on each card",
+          "required": true,
+          "properties": [
+            {
+              "kind": "field_reference",
+              "key": "field",
+              "label": "Field",
+              "help": "Readable field to show on each card",
+              "required": true
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Optional label for this card field",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 60
+            }
+          ]
+        }
+      },
+      {
+        "kind": "list",
+        "key": "aggregates",
+        "label": "Board totals",
+        "help": "Optional ordered protected query totals shown above every column",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "aggregate",
+          "label": "Aggregate",
+          "help": "One declared query aggregate and its display label",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "alias",
+              "label": "Query aggregate",
+              "help": "Alias of a declared aggregate in the installed Query",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Safe display label for this aggregate",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            }
+          ]
+        }
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Neutral text shown when a fetched board bucket has no cards",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 500
+      },
+      {
+        "kind": "text",
+        "key": "refused_message",
+        "label": "Refused message",
+        "help": "Text shown when the viewer may not read this board",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "error_message",
+        "label": "Error message",
+        "help": "Text shown when the board could not be read",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "refused",
+      "accessibleName": "optional",
+      "accessibleNamePropertyPath": ["title"]
+    },
+    "supportedEvents": ["refresh", "row_action", "page_changed"],
+    "supportedStateOperations": []
   }
 }

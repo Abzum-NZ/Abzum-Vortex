@@ -43,6 +43,7 @@ import {
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  BOARD_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   calendarBlockSourceIsSupported,
@@ -58,6 +59,7 @@ import {
   organizationRuntimeSettingsSchema,
   type ApplicationShellV2,
   type BlockPropertyValueV2Contract,
+  type BoardColumnContinuationRequest,
   type CalendarMapping,
   type FlowTask,
   type IdentitySession,
@@ -71,6 +73,7 @@ import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
+import { projectBoardPlacement } from "./board-placement";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import {
   computeGuidedFormStepId,
@@ -206,6 +209,11 @@ export type ApplicationPageLoaderAddress = Readonly<{
 
 type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
+type BoardContinuationTarget = Readonly<{
+  placementId: string;
+  request: BoardColumnContinuationRequest;
+}>;
+
 /**
  * The page address parameter that carries a detail page's subject record id, the same name the
  * component event vocabulary uses for a record identity. It is only a candidate: the record read
@@ -220,6 +228,30 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+
+const isBoardPlacement = (placement: unknown): boolean => {
+  if (!isRecord(placement) || !isRecord(placement.block)) return false;
+  return (
+    typeof placement.block.blockId === "string" &&
+    sameId(placement.block.blockId, BOARD_BLOCK_RELEASE.blockId) &&
+    placement.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion
+  );
+};
+
+const projectedUseAvailability = (placement: unknown): "available" | "unavailable" | "invalid" => {
+  if (!isRecord(placement)) return "invalid";
+  const hasAvailability = Object.hasOwn(placement, "availability");
+  const hasReason = Object.hasOwn(placement, "unavailableReason");
+  if (!hasAvailability && !hasReason) return "available";
+  if (
+    hasAvailability &&
+    hasReason &&
+    placement.availability === "unavailable" &&
+    placement.unavailableReason === "operation_unavailable"
+  )
+    return "unavailable";
+  return "invalid";
+};
 
 const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
   const block = placement.block;
@@ -1180,6 +1212,7 @@ const loadApplicationPageInternal = async (
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
   selectedPlacementIds?: ReadonlySet<string>,
+  boardContinuation?: BoardContinuationTarget,
 ): Promise<ApplicationPageResult> => {
   const dependencies = requestDependencies();
   const continuationKey = getQueryContinuationKey();
@@ -1220,6 +1253,18 @@ const loadApplicationPageInternal = async (
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
   const allPlacements = collectPlacements(page);
+  if (boardContinuation !== undefined) {
+    const targets = allPlacements.filter(({ placementId }) =>
+      sameId(placementId, boardContinuation.placementId),
+    );
+    const target = targets[0]?.placement;
+    if (
+      targets.length !== 1 ||
+      !isBoardPlacement(target) ||
+      projectedUseAvailability(target) !== "available"
+    )
+      return { kind: "unavailable" };
+  }
   const choicePlacements: Array<{
     options: Record<string, unknown>;
     items: unknown[];
@@ -1520,7 +1565,8 @@ const loadApplicationPageInternal = async (
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
-    if (tableContract === undefined && detailContract === undefined) continue;
+    const isBoardBlock = isBoardPlacement(placement);
+    if (tableContract === undefined && detailContract === undefined && !isBoardBlock) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const recordTypeId =
@@ -1726,6 +1772,7 @@ const loadApplicationPageInternal = async (
       sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     const calendarContract = isCalendarBlock ? readCalendarPlacementContract(settings) : undefined;
+    const isBoardBlock = isBoardPlacement(placement);
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
@@ -1772,12 +1819,14 @@ const loadApplicationPageInternal = async (
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
     const queryBoundSummary = isSummaryValuesBlock && queryId !== undefined;
+    const queryBoundBoard = isBoardBlock && queryId !== undefined;
     if (
       tableContract === undefined &&
       detailContract === undefined &&
       !isCalendarBlock &&
       !queryBoundLauncher &&
-      !queryBoundSummary
+      !queryBoundSummary &&
+      !queryBoundBoard
     ) continue;
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
@@ -1841,6 +1890,23 @@ const loadApplicationPageInternal = async (
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
     const fieldLabels = fieldLabelsOf(bound.module);
+
+    if (queryBoundBoard) {
+      const continuation =
+        boardContinuation !== undefined && sameId(boardContinuation.placementId, placementId)
+          ? boardContinuation.request
+          : undefined;
+      data[placementId] = await projectBoardPlacement({
+        context,
+        session,
+        selection,
+        placement: placement as unknown as Parameters<typeof projectBoardPlacement>[0]["placement"],
+        parameters,
+        queries,
+        ...(continuation === undefined ? {} : { continuation }),
+      });
+      continue;
+    }
 
     if (queryBoundLauncher) {
       if (permittedApplicationKeys === undefined) {
@@ -2634,9 +2700,21 @@ export const loadApplicationPagePlacements = async (
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
   placementIds: readonly string[],
+  boardContinuation?: BoardContinuationTarget,
 ): Promise<ApplicationPagePlacementReadResult> => {
   const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
-  const loaded = await loadApplicationPageInternal(session, address, parameters, requestedIds);
+  if (
+    boardContinuation !== undefined &&
+    (placementIds.length !== 1 || !sameId(placementIds[0] ?? "", boardContinuation.placementId))
+  )
+    return { kind: "unavailable" };
+  const loaded = await loadApplicationPageInternal(
+    session,
+    address,
+    parameters,
+    requestedIds,
+    boardContinuation,
+  );
   if (loaded.kind !== "available") return loaded;
 
   const loadedData = Object.entries(loaded.model.data);
