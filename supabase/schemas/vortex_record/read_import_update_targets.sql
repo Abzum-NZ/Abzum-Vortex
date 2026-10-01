@@ -11,7 +11,7 @@ set search_path = ''
 as $function$
 declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
-  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  uuid_pattern constant text := '^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|ffffffff-ffff-ffff-ffff-ffffffffffff)$';
   context_initial jsonb;
   context_final jsonb;
   installation_initial jsonb;
@@ -261,6 +261,109 @@ begin
     if pg_catalog.jsonb_typeof(initial_read) is distinct from 'object' then
       raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
     end if;
+    -- A neutral row must not conceal malformed facts from either reader.
+    if initial_capabilities is not null then
+      if pg_catalog.jsonb_typeof(initial_capabilities) is distinct from 'object'
+        or not (initial_capabilities ?& array['actions', 'changeableFieldIds'])
+        or pg_catalog.jsonb_typeof(initial_capabilities -> 'actions') is distinct from 'array'
+        or pg_catalog.jsonb_typeof(initial_capabilities -> 'changeableFieldIds') is distinct from 'array' then
+        raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
+      end if;
+      select pg_catalog.count(*) into key_count
+      from pg_catalog.jsonb_object_keys(initial_capabilities) as supplied(key);
+      if key_count <> 2 then
+        raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
+      end if;
+    end if;
+    select pg_catalog.count(*) into key_count
+    from pg_catalog.jsonb_object_keys(initial_read) as supplied(key);
+    if initial_read ->> 'outcome' = 'refused' then
+      if key_count <> 1 then
+        raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
+      end if;
+    else
+      if initial_read ->> 'outcome' is distinct from 'allowed'
+        or pg_catalog.jsonb_typeof(initial_read -> 'values') is distinct from 'object' then
+        raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
+      end if;
+      if key_count <> 4 or not (initial_read ?& array['outcome', 'recordId', 'concurrencyNumber', 'values']) then
+        raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
+      end if;
+      if (initial_read ->> 'recordId') !~* uuid_pattern
+        or (initial_read ->> 'recordId')::uuid is distinct from target_record_id
+        or pg_catalog.jsonb_typeof(initial_read -> 'concurrencyNumber') is distinct from 'number'
+        or (initial_read ->> 'concurrencyNumber') !~ '^[1-9][0-9]*$'
+        or (initial_read ->> 'concurrencyNumber')::numeric > 9007199254740991
+        or pg_catalog.octet_length(pg_catalog.convert_to((initial_read -> 'values')::text, 'UTF8')) > 65536 then
+        raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
+      end if;
+
+      projection_field_ids := array[]::uuid[];
+      for projection_field_value in
+        select key from pg_catalog.jsonb_object_keys(initial_read -> 'values') as projected(key)
+      loop
+        if projection_field_value !~* uuid_pattern then
+          raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
+        end if;
+        begin
+          projection_field_id := projection_field_value::uuid;
+        exception when others then
+          raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
+        end;
+        if projection_field_id = nil_uuid
+          or projection_field_id = any(projection_field_ids)
+          or not exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as field(value)
+          where (field.value ->> 'fieldId')::uuid = projection_field_id
+        ) then
+          raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
+        end if;
+        projection_field_ids := pg_catalog.array_append(projection_field_ids, projection_field_id);
+      end loop;
+    end if;
+
+    if initial_capabilities is not null then
+      action_values := array[]::text[];
+      for target_item in
+        select item.value from pg_catalog.jsonb_array_elements(initial_capabilities -> 'actions') as item(value)
+      loop
+        if pg_catalog.jsonb_typeof(target_item.value) is distinct from 'string' then
+          raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
+        end if;
+        action_value := target_item.value #>> '{}';
+        if action_value not in ('update', 'delete', 'restore') or action_value = any(action_values) then
+          raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
+        end if;
+        action_values := pg_catalog.array_append(action_values, action_value);
+      end loop;
+
+      capability_field_ids := array[]::uuid[];
+      for capability_field_value in
+        select item.value #>> '{}'
+        from pg_catalog.jsonb_array_elements(initial_capabilities -> 'changeableFieldIds') as item(value)
+      loop
+        if capability_field_value !~* uuid_pattern then
+          raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
+        end if;
+        begin
+          capability_field_id := capability_field_value::uuid;
+        exception when others then
+          raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
+        end;
+        if capability_field_id = nil_uuid
+          or capability_field_id = any(capability_field_ids)
+          or not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as field(value)
+            where (field.value ->> 'fieldId')::uuid = capability_field_id
+          ) then
+          raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
+        end if;
+        capability_field_ids := pg_catalog.array_append(capability_field_ids, capability_field_id);
+      end loop;
+    end if;
+
     if initial_read ->> 'outcome' = 'refused' or initial_capabilities is null then
       row_result := pg_catalog.jsonb_build_object(
         'rowNumber', row_number_value, 'status', 'refused', 'code', 'target_unavailable'
@@ -268,95 +371,6 @@ begin
       target_results := target_results || pg_catalog.jsonb_build_array(row_result);
       continue;
     end if;
-    if initial_read ->> 'outcome' is distinct from 'allowed'
-      or pg_catalog.jsonb_typeof(initial_read -> 'values') is distinct from 'object'
-      or pg_catalog.jsonb_typeof(initial_capabilities) is distinct from 'object'
-      or not (initial_capabilities ?& array['actions', 'changeableFieldIds'])
-      or pg_catalog.jsonb_typeof(initial_capabilities -> 'actions') is distinct from 'array'
-      or pg_catalog.jsonb_typeof(initial_capabilities -> 'changeableFieldIds') is distinct from 'array' then
-      raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
-    end if;
-    select pg_catalog.count(*) into key_count
-    from pg_catalog.jsonb_object_keys(initial_read) as supplied(key);
-    if key_count <> 4 or not (initial_read ?& array['outcome', 'recordId', 'concurrencyNumber', 'values']) then
-      raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
-    end if;
-    select pg_catalog.count(*) into key_count
-    from pg_catalog.jsonb_object_keys(initial_capabilities) as supplied(key);
-    if key_count <> 2 then
-      raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
-    end if;
-    if (initial_read ->> 'recordId') !~* uuid_pattern
-      or (initial_read ->> 'recordId')::uuid is distinct from target_record_id
-      or pg_catalog.jsonb_typeof(initial_read -> 'concurrencyNumber') is distinct from 'number'
-      or (initial_read ->> 'concurrencyNumber') !~ '^[1-9][0-9]*$'
-      or (initial_read ->> 'concurrencyNumber')::numeric > 9007199254740991
-      or pg_catalog.octet_length(pg_catalog.convert_to((initial_read -> 'values')::text, 'UTF8')) > 65536 then
-      raise exception using errcode = '55000', message = 'Record reader returned malformed facts';
-    end if;
-
-    projection_field_ids := array[]::uuid[];
-    for projection_field_value in
-      select key from pg_catalog.jsonb_object_keys(initial_read -> 'values') as projected(key)
-    loop
-      if projection_field_value !~* uuid_pattern then
-        raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
-      end if;
-      begin
-        projection_field_id := projection_field_value::uuid;
-      exception when others then
-        raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
-      end;
-      if projection_field_id = nil_uuid
-        or projection_field_id = any(projection_field_ids)
-        or not exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as field(value)
-        where (field.value ->> 'fieldId')::uuid = projection_field_id
-      ) then
-        raise exception using errcode = '55000', message = 'Record projection returned malformed fields';
-      end if;
-      projection_field_ids := pg_catalog.array_append(projection_field_ids, projection_field_id);
-    end loop;
-
-    action_values := array[]::text[];
-    for target_item in
-      select item.value from pg_catalog.jsonb_array_elements(initial_capabilities -> 'actions') as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(target_item.value) is distinct from 'string' then
-        raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
-      end if;
-      action_value := target_item.value #>> '{}';
-      if action_value not in ('update', 'delete', 'restore') or action_value = any(action_values) then
-        raise exception using errcode = '55000', message = 'Record capability reader returned malformed facts';
-      end if;
-      action_values := pg_catalog.array_append(action_values, action_value);
-    end loop;
-
-    capability_field_ids := array[]::uuid[];
-    for capability_field_value in
-      select item.value #>> '{}'
-      from pg_catalog.jsonb_array_elements(initial_capabilities -> 'changeableFieldIds') as item(value)
-    loop
-      if capability_field_value !~* uuid_pattern then
-        raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
-      end if;
-      begin
-        capability_field_id := capability_field_value::uuid;
-      exception when others then
-        raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
-      end;
-      if capability_field_id = nil_uuid
-        or capability_field_id = any(capability_field_ids)
-        or not exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as field(value)
-          where (field.value ->> 'fieldId')::uuid = capability_field_id
-        ) then
-        raise exception using errcode = '55000', message = 'Record capability reader returned malformed fields';
-      end if;
-      capability_field_ids := pg_catalog.array_append(capability_field_ids, capability_field_id);
-    end loop;
 
     mapped_fields_available := 'update' = any(action_values);
     if mapped_fields_available then
