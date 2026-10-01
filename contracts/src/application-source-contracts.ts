@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { applicationExperienceStateSchema } from "./catalogues";
+import { inspectApplicationPageReplacements } from "./application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
 import { jsonValueSchema, labelSchema } from "./common";
@@ -196,6 +197,7 @@ const sourcePageV2Common = {
   id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
   key: sourceProvenanceUnchanged(builderKeySchema),
   name: sourceProvenanceUnchanged(labelSchema),
+  replaces_page: sourceProvenanceTarget(sourceAliasSchema.optional(), ["replacementOfPageId"]),
   states: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
   standard_page_replacement: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
 };
@@ -848,6 +850,19 @@ export const sourceApplicationBodyV2Schema = z
   .strict()
   .superRefine((value, context) => {
     const experiences = value.experiences ?? [];
+    for (const issue of inspectApplicationPageReplacements(
+      value.pages.map((page) => ({
+        identities: [page.id, page.key],
+        type: page.type,
+        permission: page.permission,
+        replaces: page.replaces_page,
+      })),
+    ))
+      context.addIssue({
+        code: "custom",
+        path: ["pages", issue.index, issue.kind === "identity" ? "id" : "replaces_page"],
+        message: issue.message,
+      });
     if (new Set(experiences.map((experience) => experience.state)).size !== experiences.length)
       context.addIssue({
         code: "custom",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inspectApplicationPageReplacements } from "./application-page-replacement";
 import {
   applicationDefinitionEnvelopeSchema,
   publishedApplicationReferenceSchema,
@@ -667,6 +668,7 @@ export function isPresentationOnlyApplicationExperience(
 
 const pageV2Common = {
   pageId: pageIdSchema,
+  replacementOfPageId: pageIdSchema.optional(),
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
@@ -927,6 +929,25 @@ export const applicationContentV2Schema = applicationSharedContentSchema
   .strict()
   .superRefine((value, context) => {
     const experiences = value.experiences ?? [];
+    for (const issue of inspectApplicationPageReplacements(
+      value.pages.map((page) => ({
+        identities: [page.pageId],
+        type: page.type,
+        permission: page.accessPermissionKey,
+        replaces: page.replacementOfPageId,
+        subject:
+          "recordType" in page && page.recordType !== undefined
+            ? page.recordType.state === "resolved"
+              ? ([page.recordType.moduleRootId, page.recordType.recordTypeId] as const)
+              : null
+            : undefined,
+      })),
+    ))
+      context.addIssue({
+        code: "custom",
+        path: ["pages", issue.index, issue.kind === "identity" ? "pageId" : "replacementOfPageId"],
+        message: issue.message,
+      });
     if (new Set(experiences.map((experience) => experience.state)).size !== experiences.length)
       context.addIssue({
         code: "custom",
