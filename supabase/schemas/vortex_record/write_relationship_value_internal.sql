@@ -29,7 +29,6 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   existing_other boolean;
-  target_locked boolean;
   update_sql text;
   changed_rows integer;
 begin
@@ -139,21 +138,14 @@ begin
   source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
     then (source_context ->> 'applicationRootId')::uuid else null end;
 
-  -- Prevent a selected target disappearing while its unconstrainted edge is
-  -- installed. EXECUTE does not update PL/pgSQL FOUND, so capture the selected
-  -- value explicitly. Then rebuild eligibility from the now-locked current row
-  -- rather than trusting a decision made before a concurrent deletion waited.
-  target_locked := false;
-  execute pg_catalog.format(
-    'select true from record_data.%I as stored
-     where stored.organisation_id = $1 and stored.record_id = $2
-       and stored.lifecycle_state = ''active'' for share',
-    target_meta ->> 'table'
-  ) into target_locked using
-    (source_context ->> 'organizationId')::uuid, target_record_id;
-  if not coalesce(target_locked, false) then
-    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
-  end if;
+  -- Lock the protected row behind either ordinary record storage or a
+  -- registered system projection before rebuilding eligibility from current
+  -- facts. The lock is held until commit, so the target cannot disappear while
+  -- the unconstrainted relationship edge is installed.
+  perform vortex_record.lock_relationship_target_row_internal(
+    target_type_id, target_record_id,
+    (source_context ->> 'organizationId')::uuid
+  );
 
   target_loaded := vortex_record.load_record_access_facts_internal(
     target_type_id, 'read', target_record_id, null
@@ -260,4 +252,4 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship writer: validates the declared relationship and target eligibility, share-locks the target row, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
+  'Private relationship writer: validates the declared relationship and target eligibility, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
