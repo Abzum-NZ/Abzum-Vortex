@@ -11,6 +11,7 @@ import {
   flowTaskRegistry,
   parseExactDecimal,
   platformOperationKey,
+  recordLinkValueV2Schema,
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
@@ -798,6 +799,46 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 
   if (definition.effect === "pure") {
     if (unavailablePureTasks.has(registered.type)) failed("task_not_available", "failed", taskId);
+    if (registered.type === "data.record_link") {
+      const recordType = registered.properties.record_type;
+      const record = registered.properties.record;
+      if (
+        recordType?.kind !== "literal" ||
+        recordType.literal.type !== "text" ||
+        typeof recordType.literal.value !== "string" ||
+        record?.kind !== "reference" ||
+        record.reference.source !== "input"
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const recordTypeId = recordType.literal.value;
+      const declaration = flow.inputs[record.reference.name];
+      if (
+        declaration === undefined ||
+        declaration.type !== "record_reference" ||
+        declaration.recordTypeIds?.length !== 1 ||
+        declaration.recordTypeIds[0] !== recordTypeId
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const evaluatedType = properties.record_type;
+      const evaluatedRecord = properties.record;
+      if (
+        evaluatedType?.type !== "text" ||
+        evaluatedType.value !== recordTypeId ||
+        evaluatedRecord?.type !== "record_reference" ||
+        typeof evaluatedRecord.value !== "string"
+      )
+        return failed("value_unresolved", "failed", taskId);
+
+      const link = recordLinkValueV2Schema.safeParse({
+        recordTypeId,
+        recordId: evaluatedRecord.value,
+      });
+      if (!link.success) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value: typed("json", link.data) }));
+      return { kind: "continue" };
+    }
     if (registered.type === "data.calculate") {
       if (properties.formula === undefined) return failed("value_unresolved", "failed", taskId);
       replaceTop(machine, storeTaskOutputs(next, taskId, { value: properties.formula }));

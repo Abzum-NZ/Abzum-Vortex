@@ -268,6 +268,7 @@ export const flowRegisteredTaskTypeKeys = [
   "file.attach",
   "file.move",
   "data.calculate",
+  "data.record_link",
   "data.set_values",
   "data.set_variable",
   "data.format",
@@ -644,6 +645,18 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     properties: { formula: required("formula") },
     outputs: [output("value", "json")],
     kestra: "evaluator_callback",
+  },
+  "data.record_link": {
+    title: "Build record link value",
+    summary: "Builds a canonical record link value from one declared record input.",
+    runLocations: ["server"],
+    effect: "pure",
+    properties: {
+      record_type: required("record_type_id"),
+      record: required("record_reference"),
+    },
+    outputs: [output("value", "json")],
+    kestra: "not_compiled",
   },
   "data.set_values": {
     title: "Set values",

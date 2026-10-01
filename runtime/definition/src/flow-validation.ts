@@ -14,6 +14,7 @@ import {
   flowTriggerExecutionKinds,
   isFlowControlTask,
   platformOperationKey,
+  recordTypeIdSchema,
   validateFlowCallGraph,
   validateFlowTaskPlacement,
   valueTypesCompatible,
@@ -170,8 +171,10 @@ const fits = (actual: StaticType, accepted: readonly string[] | undefined): bool
 
 const describe = (accepted: readonly string[]): string => accepted.join(" or ");
 
-const isTextLiteral = (value: FlowValue): boolean =>
-  value.kind === "literal" && value.literal.type === "text" && typeof value.literal.value === "string";
+const isTextLiteral = (value: FlowValue | undefined): boolean =>
+  value?.kind === "literal" &&
+  value.literal.type === "text" &&
+  typeof value.literal.value === "string";
 
 // ─── The validator ─────────────────────────────────────────────────────────────────────────────
 
@@ -801,6 +804,76 @@ export function validateFlow(
     }
   };
 
+  const checkRecordLinkTask = (
+    task: Extract<FlowTask, { properties: unknown }>,
+    path: Path,
+  ) => {
+    const properties = task.properties as Readonly<Record<string, FlowValue>>;
+    const recordType = properties.record_type;
+    let targetTypeId: string | undefined;
+    if (!isTextLiteral(recordType)) {
+      add(
+        [...path, "properties", "record_type"],
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        "Build record link value requires one literal record type identity",
+      );
+    } else {
+      targetTypeId = String((recordType as { literal: { value: unknown } }).literal.value);
+      const canonicalFlow = Object.hasOwn(flow, "namespace");
+      if (canonicalFlow && !recordTypeIdSchema.safeParse(targetTypeId).success) {
+        add(
+          [...path, "properties", "record_type"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "The compiled record type must be a valid canonical identity",
+        );
+        targetTypeId = undefined;
+      } else if (!canonicalFlow && recordTypeIdSchema.safeParse(targetTypeId).success) {
+        add(
+          [...path, "properties", "record_type"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A source record type must be a readable alias, not a canonical identity",
+        );
+        targetTypeId = undefined;
+      }
+    }
+
+    const record = properties.record;
+    if (record?.kind !== "reference" || record.reference.source !== "input") {
+      add(
+        [...path, "properties", "record"],
+        "vortex.definition.workflow_node_references",
+        "invalid_value",
+        "Build record link value must reference one declared record input directly",
+      );
+      return;
+    }
+
+    const declaration = flow.inputs[record.reference.name];
+    if (
+      declaration === undefined ||
+      declaration.type !== "record_reference" ||
+      declaration.recordTypeIds?.length !== 1
+    ) {
+      add(
+        [...path, "properties", "record"],
+        "vortex.definition.workflow_node_references",
+        "invalid_value",
+        "The record input must declare exactly one record_reference type",
+      );
+      return;
+    }
+    if (targetTypeId !== undefined && targetTypeId !== declaration.recordTypeIds[0])
+      add(
+        [...path, "properties", "record"],
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        "The declared record input must target the task's record type identity",
+      );
+  };
+
   const checkTask = (task: FlowTask, path: Path, scope: Scope) => {
     const where: Where = { nowAllowed: timeAllowed, scope, triggerOnly: false };
     switch (task.type) {
@@ -873,6 +946,7 @@ export function validateFlow(
           if (definition === undefined) valueType(value, where, propertyPath);
           else checkProperty(node, definition, name, value, where, propertyPath);
         }
+        if (node.type === "data.record_link") checkRecordLinkTask(node, path);
       }
     }
   };

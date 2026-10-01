@@ -20,6 +20,7 @@ import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
+  recordTypeIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "./identifiers";
 
@@ -368,7 +369,66 @@ const refineReadFieldsTask = (
   });
 };
 
-const refineSourceReadFields = (
+const refineRecordLinkTask = (
+  task: SourceFlowTask,
+  taskPath: (string | number)[],
+  inputs: Readonly<Record<string, z.infer<typeof sourceInputDeclarationSchema>>>,
+  context: z.RefinementCtx,
+) => {
+  if (task.type !== "data.record_link" || !("properties" in task)) return;
+  const properties = task.properties as Readonly<Record<string, FlowValue>>;
+  const targetAlias = readFieldsTextAlias(properties.record_type);
+  if (
+    targetAlias === undefined ||
+    !flowAliasSchema.safeParse(targetAlias).success ||
+    recordTypeIdSchema.safeParse(targetAlias).success
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record_type"],
+      message: "Build record link value requires one literal record type alias, not a canonical identity",
+    });
+  }
+
+  const record = properties.record;
+  let inputTypeAlias: string | undefined;
+  if (record?.kind !== "reference" || record.reference.source !== "input") {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record"],
+      message: "Build record link value must reference one declared record input",
+    });
+  } else {
+    const declaration = inputs[record.reference.name];
+    if (
+      declaration === undefined ||
+      declaration.type !== "record_reference" ||
+      declaration.recordTypeIds?.length !== 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: [...taskPath, "properties", "record"],
+        message: "The record input must declare exactly one record_reference type",
+      });
+    } else {
+      inputTypeAlias = declaration.recordTypeIds[0];
+    }
+  }
+
+  if (
+    targetAlias !== undefined &&
+    inputTypeAlias !== undefined &&
+    targetAlias !== inputTypeAlias
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: [...taskPath, "properties", "record"],
+      message: "The declared record input must target the task's record type alias",
+    });
+  }
+};
+
+const refineSourceTaskContracts = (
   flow: {
     inputs: Readonly<Record<string, z.infer<typeof sourceInputDeclarationSchema>>>;
     tasks: readonly SourceFlowTask[];
@@ -389,6 +449,7 @@ const refineSourceReadFields = (
     tasks.forEach((task, index) => {
       const taskPath = [...path, index];
       refineReadFieldsTask(task, taskPath, flow.inputs, context);
+      refineRecordLinkTask(task, taskPath, flow.inputs, context);
       const node = task as TaskChildren;
       if (node.then) visit(node.then, [...taskPath, "then"]);
       if (node.else) visit(node.else, [...taskPath, "else"]);
@@ -438,7 +499,7 @@ export const sourceFlowSchema = z
       .optional(),
   })
   .strict()
-  .superRefine(refineSourceReadFields);
+  .superRefine(refineSourceTaskContracts);
 export type SourceFlow = z.infer<typeof sourceFlowSchema>;
 
 /** The flows one module or application owns. Every flow has exactly one owner. */
