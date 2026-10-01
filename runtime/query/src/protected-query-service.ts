@@ -2,12 +2,13 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  sameId,
+  canonicalJson,
   fieldIdSchema,
   jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  sameId,
   stableDefinitionReleaseVersionSchema,
   type IdentitySession,
   type ExecutionAuthorityContext,
@@ -44,6 +45,9 @@ import {
 import {
   protectedQueryCommandSchema,
   protectedQueryBoardMembersCommandSchema,
+  protectedQueryGroupedMembersCommandSchema,
+  protectedQueryGroupedMembersResultSchema,
+  protectedQueryPageRowSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryResultSchema,
   protectedQuerySummaryCommandSchema,
@@ -53,6 +57,8 @@ import {
   protectedQueryRowCapabilitiesSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryBoardMembersCommand,
+  type ProtectedQueryGroupedMembersCommand,
+  type ProtectedQueryGroupedMembersResult,
   type ProtectedQueryPage,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
@@ -224,6 +230,26 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
     .strict(),
   refusedSchema,
 ]);
+const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("completed"),
+      moduleReleaseRevision: revisionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+      groupByFieldIds: z.array(fieldIdSchema).min(1).max(10),
+      groupValues: z.record(fieldIdSchema, jsonValueSchema),
+      rows: z.array(protectedQueryPageRowSchema).max(200),
+      next: z
+        .object({
+          sortKey: z.array(z.string().nullable()).max(20),
+          recordId: recordIdSchema,
+        })
+        .strict()
+        .nullable(),
+    })
+    .strict(),
+  refusedSchema,
+]);
 
 /**
  * The user-facing sort, filter and search a request carries, plus the component-declared
@@ -336,7 +362,9 @@ const summaryFilterInputRefusal = (
   const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
   const referenced = new Set<string>();
   conditionFieldIds(command.filter, referenced);
-  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+  return [...referenced].some((fieldId) => !filterable.has(fieldId))
+    ? "filter_invalid"
+    : undefined;
 };
 
 const boardSummaryFilterInputRefusal = (
@@ -351,6 +379,16 @@ const boardSummaryFilterInputRefusal = (
 
 const boardMembersFilterInputRefusal = (
   command: ProtectedQueryBoardMembersCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const groupedMembersFilterInputRefusal = (
+  command: ProtectedQueryGroupedMembersCommand,
 ): ProtectedQueryRefusalReasonCode | undefined => {
   if (command.filter === undefined) return undefined;
   const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
@@ -461,6 +499,40 @@ const readBoardMemberPage = async (
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
+};
+
+const readGroupedMemberPage = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryGroupedMembersCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+  selector: ProtectedQueryGroupedMembersCommand["selector"],
+  after: QueryContinuation | undefined,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${command.pageSize}::integer,
+      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb,
+      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
+      ${JSON.stringify({
+        sort: [],
+        filter: command.filter ?? null,
+        search: null,
+        sortableFieldIds: [],
+        filterableFieldIds: command.filterableFieldIds,
+        searchableFieldIds: [],
+        groupMember: selector,
+      })}::text::jsonb
+    ) as result
+  `;
+  const page = groupedMemberPageReadSchema.safeParse(one(rows));
+  if (!page.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return page.data;
 };
 
 const normalizeConditionFieldIdentifiers = (condition: unknown): unknown => {
@@ -586,6 +658,161 @@ const boardMembersCommand = async (
           ),
         }),
   };
+};
+
+const groupedMembersCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  caller: IdentitySession,
+  command: ProtectedQueryGroupedMembersCommand,
+  continuationKey: QueryContinuationKey,
+): Promise<z.infer<typeof protectedQueryGroupedMembersResultSchema>> => {
+  const applicationRootId = scope.applicationRootId;
+  if (applicationRootId === undefined)
+    return { outcome: "refused", reasonCode: "request_invalid" };
+  const filterRefusal = groupedMembersFilterInputRefusal(command);
+  if (filterRefusal !== undefined) return { outcome: "refused", reasonCode: filterRefusal };
+
+  let after: QueryContinuation | undefined;
+  if (command.continuationToken !== undefined) {
+    try {
+      after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
+    } catch (error) {
+      if (error instanceof QueryContinuationTokenError)
+        return { outcome: "refused", reasonCode: "cursor_invalid" };
+      throw error;
+    }
+    if (
+      !sameId(after.organizationId, scope.organizationId) ||
+      !sameId(after.applicationRootId, applicationRootId) ||
+      !sameId(after.organizationAccountId, scope.organizationAccountId) ||
+      !sameId(after.moduleRootId, command.moduleRootId) ||
+      !sameId(after.queryId, command.queryId)
+    )
+      return { outcome: "refused", reasonCode: "cursor_stale" };
+    if (after.sortKey.length !== 0) return { outcome: "refused", reasonCode: "cursor_stale" };
+  }
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused")
+    return { outcome: "refused", reasonCode: declared.reasonCode };
+  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
+    return { outcome: "refused", reasonCode: "cursor_stale" };
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return { outcome: "refused", reasonCode: "descriptor_invalid" };
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError)
+      return { outcome: "refused", reasonCode: "input_invalid" };
+    throw error;
+  }
+
+  const selector = {
+    values: command.selector.values
+      .map((value) => ({ ...value, fieldId: fieldIdSchema.parse(value.fieldId.toLowerCase()) }))
+      .sort((left, right) =>
+        left.fieldId < right.fieldId ? -1 : left.fieldId > right.fieldId ? 1 : 0,
+      ),
+  };
+  const inputFingerprint = fingerprintQueryInputs({
+    operation: "protected-group-members-v1",
+    actorIdentityId: caller.identityId,
+    inputValues,
+    selector,
+    filter: normalizeConditionFieldIdentifiers(command.filter ?? null),
+    filterableFieldIds: command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
+    requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
+    requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
+    pageSize: command.pageSize,
+    memberOrder: "record_id_ascending",
+  });
+  if (after !== undefined && after.inputFingerprint !== inputFingerprint)
+    return { outcome: "refused", reasonCode: "cursor_stale" };
+
+  const page = await readGroupedMemberPage(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+    selector,
+    after,
+  );
+  if (page.outcome === "refused") return { outcome: "refused", reasonCode: page.reasonCode };
+  if (
+    page.moduleReleaseRevision !== declared.moduleReleaseRevision ||
+    page.moduleReleaseVersion !== declared.moduleReleaseVersion
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+
+  const selectorIds = selector.values.map((value) => value.fieldId);
+  const pageIds = page.groupByFieldIds.map((fieldId) => fieldId.toLowerCase());
+  if (
+    pageIds.length !== selectorIds.length ||
+    new Set(pageIds).size !== pageIds.length ||
+    selectorIds.some((fieldId) => !pageIds.includes(fieldId))
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  const expectedGroupValues = Object.fromEntries(
+    selector.values.map(({ fieldId, value }) => [fieldId, value]),
+  );
+  if (canonicalJson(page.groupValues) !== canonicalJson(expectedGroupValues))
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+
+  const requestedFieldIds = new Set(
+    command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()),
+  );
+  const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
+  for (const row of page.rows) {
+    const disclosedFieldIds = Object.keys(row.values).map((fieldId) => fieldId.toLowerCase());
+    const disclosedSystemKeys = Object.keys(row.systemValues ?? {});
+    if (
+      new Set(disclosedFieldIds).size !== disclosedFieldIds.length ||
+      disclosedFieldIds.some((fieldId) => !requestedFieldIds.has(fieldId)) ||
+      disclosedSystemKeys.some((key) => !declaredSystemKeys.has(key)) ||
+      (declaredSystemKeys.size > 0) !== (row.systemValues !== undefined) ||
+      declaredSystemKeys.size !== disclosedSystemKeys.length
+    )
+      throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  }
+  if (page.next !== null && page.next.sortKey.length !== 0)
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+
+  const result = protectedQueryGroupedMembersResultSchema.safeParse({
+    outcome: "completed",
+    moduleRootId: command.moduleRootId,
+    moduleReleaseVersion: page.moduleReleaseVersion,
+    queryId: command.queryId,
+    groupByFieldIds: page.groupByFieldIds,
+    groupValues: page.groupValues,
+    rows: page.rows,
+  });
+  if (!result.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  if (page.next === null) return result.data;
+
+  const nextContinuationToken = encodeQueryContinuationToken(
+    {
+      version: 1,
+      organizationId: scope.organizationId,
+      applicationRootId,
+      organizationAccountId: scope.organizationAccountId,
+      moduleRootId: command.moduleRootId,
+      queryId: command.queryId,
+      moduleReleaseRevision: page.moduleReleaseRevision,
+      inputFingerprint,
+      sortKey: page.next.sortKey,
+      recordId: page.next.recordId,
+    },
+    continuationKey,
+  );
+  const completedWithToken = protectedQueryGroupedMembersResultSchema.safeParse({
+    ...result.data,
+    nextContinuationToken,
+  });
+  if (!completedWithToken.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return completedWithToken.data;
 };
 
 const runCommand = async (
@@ -1031,6 +1258,25 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         boardMembersCommand(transaction, scope, command.data, continuationKey),
+      );
+    },
+    async groupedMembers(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const personCaller: IdentitySession = caller;
+      const command = protectedQueryGroupedMembersCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return {
+          kind: "available",
+          value: { outcome: "refused", reasonCode: "request_invalid" },
+        };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(personCaller, selection, (transaction, scope) =>
+        groupedMembersCommand(transaction, scope, personCaller, command.data, continuationKey),
       );
     },
     async summarise(
