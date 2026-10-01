@@ -12,6 +12,7 @@ import {
   createTenantOrganizationCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   findPlatformServiceOperation,
+  flowRefusalFeedbackSchema,
   identitySessionSchema,
   jsonValueSchema,
   organizationRuntimeSettingsSchema,
@@ -41,6 +42,7 @@ import {
   revisionSchema,
   type CreateTenantOrganizationCommand,
   type CreateTenantOrganizationResult,
+  type FlowRefusalFeedback,
   type IdentitySession,
   type ExecutionAuthorityContext,
   type JsonValue,
@@ -126,19 +128,23 @@ export type DurableProtectedOperationExecutionRequest = Readonly<{
 export type ProtectedOperationValue = JsonValue;
 
 /** The safe results the executor itself can report. */
+type ProtectedOperationFailure =
+  | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
+  | Readonly<{ outcome: "conflict" | "failed" }>;
+
 export type ProtectedOperationExecution =
   | Readonly<{
       outcome: "completed" | "committed";
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
     }>
-  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
+  | ProtectedOperationFailure;
 
 type DurableProtectedOperationExecution =
   | Readonly<{
       outcome: "committed";
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
     }>
-  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
+  | ProtectedOperationFailure;
 
 const durableActorOperationPurposeSchema = z
   .object({
@@ -247,11 +253,23 @@ type TenantOrganizationMutationResult =
   | SuspendTenantOrganizationResult
   | ReactivateTenantOrganizationResult;
 
+type ConfirmedOperationFailure = Readonly<{
+  kind: "confirmed_failure";
+  outcome: "refused" | "validation";
+  diagnostic: FlowRefusalFeedback;
+}>;
+
+type OperationResult =
+  | HumanOrganizationRequestResult<Outputs>
+  | "validation"
+  | "conflict"
+  | ConfirmedOperationFailure;
+
 type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
   caller: ProtectedOperationCaller,
   inputs: Inputs,
-) => Promise<HumanOrganizationRequestResult<Outputs> | "validation" | "conflict">;
+) => Promise<OperationResult>;
 type Operation = Readonly<{
   authorityKind: ProtectedOperationDescriptor["requiredAuthority"]["kind"];
   execute: OperationRunner;
@@ -295,7 +313,7 @@ const operation =
       services: ProtectedOperationExecutorDependencies,
       caller: ProtectedOperationCaller,
       command: z.output<Schema>,
-    ) => Promise<HumanOrganizationRequestResult<Outputs> | "validation" | "conflict">;
+    ) => Promise<OperationResult>;
   }, authorityKind: Operation["authorityKind"] = "permission"): Operation =>
     Object.freeze({
       authorityKind,
@@ -375,7 +393,7 @@ const runTenantOrganizationCreation = async (
   services: ProtectedOperationExecutorDependencies,
   caller: ProtectedOperationCaller,
   command: CreateTenantOrganizationOperationCommand,
-): Promise<HumanOrganizationRequestResult<Outputs> | "validation"> => {
+): Promise<HumanOrganizationRequestResult<Outputs> | "validation" | ConfirmedOperationFailure> => {
   const scoped = await services.tenantGovernance.run(
     caller.session,
     caller.selection,
@@ -400,7 +418,16 @@ const runTenantOrganizationCreation = async (
 
       const result = await operations.createOrganization(caller.session, candidate.data);
       if (result.outcome === "refused") {
-        if (result.code === "invalid_command") return "validation" as const;
+        if (
+          result.code === "invalid_command" ||
+          result.code === "duplicate_conflict" ||
+          result.code === "stale_revision"
+        )
+          return {
+            kind: "confirmed_failure",
+            outcome: result.code === "invalid_command" ? "validation" : "refused",
+            diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
+          } as const;
         if (result.code === "operation_unavailable")
           return { kind: "temporarily_unavailable" } as const;
         return { kind: "unavailable" } as const;
@@ -1108,6 +1135,8 @@ export const createProtectedOperationExecutor = (
       );
       if (result === "validation") return { outcome: "validation" };
       if (result === "conflict") return { outcome: "conflict" };
+      if (result.kind === "confirmed_failure")
+        return { outcome: result.outcome, diagnostic: result.diagnostic };
       if (result.kind === "unavailable") return { outcome: "refused" };
       if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
       const outputs = declaredOutputs(registered.descriptor, result.value);
