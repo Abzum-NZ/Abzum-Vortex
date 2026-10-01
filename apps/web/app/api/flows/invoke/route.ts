@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
-  createOrganizationRuntimeSettingsAdministrationService,
 } from "@vortex/access";
 import {
   createDatabaseFlowStores,
@@ -479,10 +478,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const selectedRecordReader = createViewerSafeRecordLinkReadService();
     const executor = createProtectedOperationExecutor({
       accessAdministration: createOrganizationAccessAdministrationService({
-        identityAuthorityId: authorityId,
-        telemetry,
-      }),
-      runtimeSettings: createOrganizationRuntimeSettingsAdministrationService({
         identityAuthorityId: authorityId,
         telemetry,
       }),

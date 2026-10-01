@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
-  createOrganizationRuntimeSettingsAdministrationService,
   type DurableActorRequestScope,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
@@ -119,7 +118,6 @@ const createCallbackService = () => {
     const durableRequests = humanOrganizationRequestsFor(requestDependencies);
     return {
       accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
-      runtimeSettings: createOrganizationRuntimeSettingsAdministrationService(requestDependencies),
       tenantGovernance: {
         run: <Result>(
           session: IdentitySession,
