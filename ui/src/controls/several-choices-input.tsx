@@ -2,7 +2,7 @@
 
 import { useRef, type ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
-import { Field, FieldLabel } from "../components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { DefinitionRenderError } from "../definition-error";
 import type { SeveralChoicesInputPayload } from "./projected-data";
 import {
@@ -94,10 +94,10 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
       aria-required={required || described["aria-required"] === true}
       aria-invalid={fieldError !== undefined}
     >
-      <fieldset disabled={disabled} className="flex flex-col gap-2">
-        <legend id={ids.label} className="vortex-field-label">
+      <FieldSet disabled={disabled} className="flex flex-col gap-2">
+        <FieldLegend id={ids.label} variant="label">
           <FieldLabelText label={label} required={required} />
-        </legend>
+        </FieldLegend>
         <div className="max-h-64 overflow-y-auto">
           {options.map((option, index) => {
             const optionId = `${ids.control}-option-${index}`;
@@ -116,7 +116,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
             );
           })}
         </div>
-      </fieldset>
+      </FieldSet>
       <FieldMessages
         ids={ids}
         help={help}

@@ -19,17 +19,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
-.vortex-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vortex-space-xs);
-}
-
-.vortex-field-label {
-  font-weight: 600;
-  color: var(--vortex-text);
-}
-
 .vortex-field-note {
   color: var(--vortex-text-muted);
 }
