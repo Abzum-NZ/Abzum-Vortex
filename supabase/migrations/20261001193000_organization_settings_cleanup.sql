@@ -53,6 +53,9 @@ comment on function vortex_access.validation_reference_list(text) is
 alter function vortex_access.validation_reference_list(text)
   owner to vortex_access_owner;
 
+-- Constraint validation reads this private helper as the table-owning migration
+-- role. Give that role EXECUTE only until all existing rows have been checked.
+grant execute on function vortex_access.validation_reference_list(text) to postgres;
 reset role;
 
 -- BEGIN GENERATED: organization settings reference seed
@@ -269,6 +272,10 @@ alter table vortex_identity.organization_runtime_settings
       vortex_access.validation_reference_list('organization_runtime_settings_number_format')
     )
   );
+
+set local role vortex_access_owner;
+revoke execute on function vortex_access.validation_reference_list(text) from postgres;
+reset role;
 
 create or replace function vortex_identity.assert_organization_runtime_settings_values(
   p_language text,
