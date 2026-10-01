@@ -105,16 +105,16 @@ const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabase
   const withSavepoint = getSavepointOperation(transaction);
   if (withSavepoint === undefined) return queryOnly;
 
-  return {
+  const capable: SavepointRequestDatabaseTransaction = {
     ...queryOnly,
     withSavepoint: <Result>(
       operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
     ) =>
-      withSavepoint.call(transaction, async (child) => {
-        const wrappedChild = wrapRequestTransaction(child);
-        return await operation(requireRequestSavepoint(wrappedChild));
-      }),
+      (withSavepoint<Result>).call(transaction, async (child) =>
+        await operation(requireRequestSavepoint(child)),
+      ),
   };
+  return capable;
 };
 
 /**
@@ -189,10 +189,13 @@ const createTransactionDriver = (
   // the native promise settles (including rollback failures) before this method settles.
   withSavepoint: async <Result>(
     operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
-  ) =>
-    await transaction.savepoint(async (childSql) =>
-      await operation(createTransactionDriver(childSql)),
-    ),
+  ): Promise<Result> => {
+    // Box the callback value so postgres.js does not reinterpret an array result as query work.
+    const settled = await transaction.savepoint(async (childSql) => ({
+      value: await operation(createTransactionDriver(childSql)),
+    }));
+    return settled.value;
+  },
 });
 
 const createPostgresDriver = (client: Sql): DatabaseDriver => ({
