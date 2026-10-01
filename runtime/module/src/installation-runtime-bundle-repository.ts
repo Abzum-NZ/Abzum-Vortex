@@ -19,6 +19,19 @@ import {
   type JsonValue,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import {
+  configureInstallationRuntimeBundleCache,
+  readInstallationRuntimeBundleCachePart,
+  readInstallationRuntimeBundleCacheStatus,
+  retainInstallationRuntimeBundleCachePart,
+  type InstallationRuntimeBundleCacheStatus,
+} from "./installation-runtime-bundle-cache";
+
+export {
+  configureInstallationRuntimeBundleCache,
+  readInstallationRuntimeBundleCacheStatus,
+  type InstallationRuntimeBundleCacheStatus,
+};
 
 type BundleIndexRow = DatabaseRow & { readonly bundle_index: unknown };
 type BundlePartsRow = DatabaseRow & { readonly bundle_parts: unknown };
@@ -136,6 +149,16 @@ const requireMatchingKey = (
     throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
 };
 
+const sortParts = (
+  parts: readonly InstallationRuntimeBundlePart[],
+): InstallationRuntimeBundlePart[] =>
+  [...parts].sort((left, right) =>
+    left.section === right.section
+      ? left.ordinal - right.ordinal
+      : installationRuntimeBundleSections.indexOf(left.section) -
+        installationRuntimeBundleSections.indexOf(right.section),
+  );
+
 export interface InstallationRuntimeBundleRepository {
   write(command: InstallationRuntimeBundleWriteCommand): Promise<InstallationRuntimeBundleIndex>;
   readIndex(key: InstallationRuntimeBundleKey): Promise<InstallationRuntimeBundleIndex>;
@@ -188,6 +211,16 @@ export const createInstallationRuntimeBundleRepository = (
     });
     if (!command.success)
       throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+    const expected = index.parts.filter((part) => command.data.sections.includes(part.section));
+    const cachedParts = expected.map((metadata) =>
+      readInstallationRuntimeBundleCachePart(index, metadata),
+    );
+    const completeCachedParts = cachedParts.filter(
+      (part): part is InstallationRuntimeBundlePart => part !== undefined,
+    );
+    if (expected.length > 0 && completeCachedParts.length === expected.length)
+      return sortParts(completeCachedParts);
+
     try {
       const rows = await transaction.query<BundlePartsRow>`
         select vortex_module.read_installation_runtime_bundle_parts(
@@ -205,7 +238,6 @@ export const createInstallationRuntimeBundleRepository = (
       if (!parsedParts.success)
         throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
       const parts = parsedParts.data;
-      const expected = index.parts.filter((part) => command.data.sections.includes(part.section));
       if (parts.length !== expected.length)
         throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
       const expectedByKey = new Map(
@@ -225,12 +257,9 @@ export const createInstallationRuntimeBundleRepository = (
       }
       if (expectedByKey.size !== 0)
         throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
-      return parts.sort((left, right) =>
-        left.section === right.section
-          ? left.ordinal - right.ordinal
-          : installationRuntimeBundleSections.indexOf(left.section) -
-            installationRuntimeBundleSections.indexOf(right.section),
-      );
+      const sortedParts = sortParts(parts);
+      for (const part of sortedParts) retainInstallationRuntimeBundleCachePart(index, part);
+      return sortedParts;
     } catch (error) {
       throw mapFailure(error);
     }
