@@ -109,11 +109,9 @@ begin
       from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'relationships') as item(value)
       where (item.value ->> 'fromFieldId')::uuid = (field_item ->> 'fieldId')::uuid;
 
-      -- #402 supports the existing fixed-target to-one relationship contract.
-      -- A polymorphic declaration is not inferred here.
-      if relationship_value -> 'toRecordType' ->> 'state' <> 'resolved'
-        or not (relationship_value -> 'toRecordType' ? 'recordTypeId')
-        or pg_catalog.jsonb_typeof(retained_value) <> 'object'
+      -- The retained value names its concrete target type; it must be one of
+      -- the relationship's declared targets and the retained edge's target.
+      if pg_catalog.jsonb_typeof(retained_value) <> 'object'
         or not (retained_value ?& array['recordTypeId', 'recordId'])
         or retained_value - array['recordTypeId', 'recordId'] <> '{}'::jsonb then
         raise exception using errcode = '23514', message = 'Required relationship is unavailable';
@@ -127,8 +125,9 @@ begin
       if retained_target_record_id = '00000000-0000-0000-0000-000000000000'::uuid then
         raise exception using errcode = '23514', message = 'Required relationship is unavailable';
       end if;
-      if retained_target_type_id <>
-          (relationship_value -> 'toRecordType' ->> 'recordTypeId')::uuid then
+      if not vortex_record.relationship_declares_target_internal(
+        relationship_value, retained_target_type_id
+      ) then
         raise exception using errcode = '23514', message = 'Required relationship is unavailable';
       end if;
 
