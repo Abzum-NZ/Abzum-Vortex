@@ -22,9 +22,9 @@ type CalculateAndFinalizeInput = Readonly<{
   recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
   existingValues?: Readonly<Record<string, unknown>>;
   issuedAt: string;
-  organizationCurrency?: string;
-  timeZone?: string;
-  rules?: BeforeSaveRuleExecution;
+  organizationCurrency?: string | undefined;
+  timeZone?: string | undefined;
+  rules?: BeforeSaveRuleExecution | undefined;
 }>;
 
 const localDate = (instant: string, timeZone: string): string | undefined => {
