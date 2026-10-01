@@ -21,8 +21,10 @@ type Money = Readonly<{ amount: string; currency: string }>;
 
 const summableTypes: ReadonlySet<FieldType> = new Set(["whole_number", "decimal_number", "money"]);
 const orderedTypes: ReadonlySet<FieldType> = new Set([
+  "text",
   "whole_number",
   "decimal_number",
+  "yes_no",
   "money",
   "date",
   "date_time",
@@ -87,6 +89,20 @@ const exact = (text: string): ExactDecimal => {
 const codeUnitOrder = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
+/** Compares Unicode code points, preserving case, characters and prefix order. */
+const codePointOrder = (left: string, right: string): number => {
+  const leftPoints = left[Symbol.iterator]();
+  const rightPoints = right[Symbol.iterator]();
+  while (true) {
+    const leftPoint = leftPoints.next();
+    const rightPoint = rightPoints.next();
+    if (leftPoint.done || rightPoint.done)
+      return leftPoint.done ? (rightPoint.done ? 0 : -1) : 1;
+    const difference = leftPoint.value.codePointAt(0)! - rightPoint.value.codePointAt(0)!;
+    if (difference !== 0) return difference < 0 ? -1 : 1;
+  }
+};
+
 /** Date-times order by instant; equal instants order by their text so the result is stable. */
 const dateTimeOrder = (left: string, right: string): number => {
   const difference = Date.parse(left) - Date.parse(right);
@@ -103,7 +119,7 @@ const numericResult = (values: readonly ExactDecimal[], aggregate: AggregateDesc
 
 /**
  * Computes one aggregate over rows whose values were already checked against
- * the field's declared type. Missing, empty and withheld values are skipped and
+ * the field's declared type. Missing, null and withheld values are skipped and
  * reported through `valueCount`. Decimal and money arithmetic is exact BigInt
  * arithmetic on canonical text; nothing passes through a JavaScript number.
  */
@@ -127,6 +143,13 @@ const computeAggregate = (
   if (valueCount === 0) return { outcome: "completed", value: null, valueCount };
 
   switch (fieldType) {
+    case "yes_no": {
+      const values = present as readonly boolean[];
+      const chosen = aggregate.operation === "minimum"
+        ? values.every((value) => value)
+        : values.some((value) => value);
+      return { outcome: "completed", value: chosen, valueCount };
+    }
     case "money": {
       const money = present as unknown as readonly Money[];
       const currency = money[0]!.currency;
@@ -168,9 +191,12 @@ const computeAggregate = (
         };
       return { outcome: "completed", value: numericResult(values, aggregate), valueCount };
     }
+    case "text":
     case "date":
     case "date_time": {
-      const order = fieldType === "date" ? codeUnitOrder : dateTimeOrder;
+      const order = fieldType === "text"
+        ? codePointOrder
+        : fieldType === "date" ? codeUnitOrder : dateTimeOrder;
       const texts = present as readonly string[];
       let chosen = texts[0]!;
       for (const text of texts) {
