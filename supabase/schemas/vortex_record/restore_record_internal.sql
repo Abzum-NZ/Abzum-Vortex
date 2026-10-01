@@ -1,3 +1,5 @@
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.restore_record_internal(
   p_record_type_id uuid,
   p_record_id uuid,
@@ -27,6 +29,8 @@ declare
   target_decision jsonb;
   target_record jsonb;
   target_scope jsonb;
+  field_required boolean;
+  application_root_required boolean;
   changed_rows integer;
   app_scope uuid;
 begin
@@ -84,13 +88,22 @@ begin
     -- target. Full final-value settings validation remains owned by #47.
     for field_item in
       select item.value from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as item(value)
-      where (item.value ->> 'required')::boolean
+      where coalesce((item.value ->> 'required')::boolean, false)
+        or (item.value ->> 'type' in ('link', 'link_to_one_of_several')
+          and coalesce((item.value #>> '{settings,applicationRootIdRequired}')::boolean, false))
     loop
+      field_required := coalesce((field_item ->> 'required')::boolean, false);
+      application_root_required := coalesce(
+        (field_item #>> '{settings,applicationRootIdRequired}')::boolean, false
+      );
       retained_value := record_fact -> 'fieldValues'
         -> pg_catalog.lower(field_item ->> 'fieldId');
       if not ((record_fact -> 'fieldValues') ? pg_catalog.lower(field_item ->> 'fieldId'))
         or pg_catalog.jsonb_typeof(retained_value) = 'null' then
-        raise exception using errcode = '23514', message = 'Required retained value is unavailable';
+        if field_required then
+          raise exception using errcode = '23514', message = 'Required retained value is unavailable';
+        end if;
+        continue;
       end if;
 
       if field_item ->> 'type' not in ('link', 'link_to_one_of_several') then
@@ -147,6 +160,11 @@ begin
         and catalogue.record_type_id = retained_target_type_id
         and catalogue.physical_schema_token in ('record_data', 'system_projection')
         and catalogue.state = 'active';
+      if application_root_required
+        and (target_catalogue.physical_schema_token is distinct from 'system_projection'
+          or target_catalogue.protected_read_model_key is distinct from 'organization_accounts') then
+        raise exception using errcode = '23514', message = 'Required relationship is unavailable';
+      end if;
 
       perform vortex_record.lock_relationship_target_row_internal(
         retained_target_type_id, retained_target_record_id,
@@ -176,6 +194,14 @@ begin
         or edge_row.to_application_root_id is distinct from (
           case when target_scope ->> 'storageScope' = 'application_contained'
             then (target_scope ->> 'applicationRootId')::uuid else null end
+        ) then
+        raise exception using errcode = '23514', message = 'Required relationship is unavailable';
+      end if;
+      if application_root_required
+        and not vortex_access.organization_account_has_current_application_access_internal(
+          (context_value ->> 'organizationId')::uuid,
+          retained_target_record_id,
+          (context_value ->> 'applicationRootId')::uuid
         ) then
         raise exception using errcode = '23514', message = 'Required relationship is unavailable';
       end if;
@@ -225,4 +251,4 @@ revoke all on function vortex_record.restore_record_internal(uuid, uuid, bigint)
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.restore_record_internal(uuid, uuid, bigint) is
-  'Private revision-checked restore primitive over retained facts, current Access, current definition and required relationships; it locks record or protected projection targets through the canonical relationship lock and enforces no recovery window.';
+  'Private revision-checked restore primitive over retained facts, current Access, current definition, required relationships and every non-null Person link with required application access; it locks record or protected projection targets through the canonical relationship lock and enforces no recovery window.';
