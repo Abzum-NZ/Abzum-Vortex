@@ -16,8 +16,11 @@ import {
 import {
   crmApplication,
   crmModuleSources,
+  hrModuleSources,
   iamApplication,
   iamModule,
+  landingZoneApplication,
+  landingZoneModuleSources,
   operationsApplication,
   operationsModuleSources,
   organisationAdministrationApplication,
@@ -73,9 +76,11 @@ const moduleSources = [
   tenantAdministrationModule,
   organisationAdministrationModule,
   systemDirectoryModule,
+  ...landingZoneModuleSources,
   ...crmModuleSources,
   ...serviceDeskModuleSources,
   ...operationsModuleSources,
+  ...hrModuleSources,
 ] as readonly StoredDefinitionSource[];
 
 const applicationSources = [
@@ -85,6 +90,7 @@ const applicationSources = [
   operationsApplication,
   crmApplication,
   serviceDeskApplication,
+  landingZoneApplication,
 ] as readonly StoredDefinitionSource[];
 
 /** The shipped application source for a manifest key, or a refusal for anything unshipped. */

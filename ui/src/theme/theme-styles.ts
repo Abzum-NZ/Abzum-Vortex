@@ -19,62 +19,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
-/* Definition-driven action buttons */
-.vortex-button {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vortex-space-xs);
-  min-height: var(--vortex-control-min-height);
-  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-secondary);
-  color: var(--vortex-on-secondary);
-  font: inherit;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  transition: box-shadow var(--vortex-motion-feedback) ease-out;
-}
-
-.vortex-button-primary {
-  background-color: var(--vortex-primary);
-  color: var(--vortex-on-primary);
-  border-color: var(--vortex-primary);
-}
-
-.vortex-button-danger {
-  background-color: var(--vortex-danger);
-  color: var(--vortex-on-danger);
-  border-color: var(--vortex-danger);
-}
-
-.vortex-button-ghost {
-  background-color: transparent;
-  color: var(--vortex-text);
-  border-color: transparent;
-}
-
-.vortex-button:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 0.125rem currentColor;
-}
-
-.vortex-button:active:not(:disabled) {
-  box-shadow: inset 0 0 0 0.25rem currentColor;
-}
-
-.vortex-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.vortex-button[aria-busy="true"] {
-  cursor: progress;
-  opacity: 0.75;
-}
-
 /* Group heading */
 .vortex-group-heading {
   margin: 0;
@@ -96,48 +40,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
   color: var(--vortex-text);
 }
 
-.vortex-field-help,
 .vortex-field-note {
   color: var(--vortex-text-muted);
-}
-
-/* Search and rich text inputs */
-.vortex-input,
-.vortex-textarea {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: var(--vortex-control-min-height);
-  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-surface);
-  color: var(--vortex-text);
-  font: inherit;
-  transition: border-color var(--vortex-motion-feedback) ease-out;
-}
-
-.vortex-textarea {
-  min-height: 5.5rem;
-  resize: vertical;
-}
-
-.vortex-input:hover:not(:disabled):not([readonly]),
-.vortex-textarea:hover:not(:disabled):not([readonly]) {
-  border-color: var(--vortex-text);
-}
-
-.vortex-textarea[readonly] {
-  border-style: dashed;
-}
-
-.vortex-textarea:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.vortex-textarea[aria-invalid="true"] {
-  border-color: var(--vortex-danger-text);
-  box-shadow: inset 0 0 0 0.0625rem var(--vortex-danger-text);
 }
 
 /* Single-select table control */
@@ -151,50 +55,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-selection-radio:hover:not(:disabled) {
   box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
-}
-
-/* Validation messages: meaning is carried by text; the severity colour is an accent */
-.vortex-validation-message {
-  padding: var(--vortex-space-sm) var(--vortex-space-md);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-left-width: 0.25rem;
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-surface);
-  color: var(--vortex-text);
-}
-
-.vortex-validation-error {
-  border-left-color: var(--vortex-danger-text);
-}
-
-.vortex-validation-warning {
-  border-left-color: var(--vortex-warning-text);
-}
-
-.vortex-validation-info {
-  border-left-color: var(--vortex-info-text);
-}
-
-.vortex-validation-title {
-  margin: 0 0 var(--vortex-space-xs);
-  font-weight: 700;
-}
-
-.vortex-validation-error .vortex-validation-title {
-  color: var(--vortex-danger-text);
-}
-
-.vortex-validation-warning .vortex-validation-title {
-  color: var(--vortex-warning-text);
-}
-
-.vortex-validation-info .vortex-validation-title {
-  color: var(--vortex-info-text);
-}
-
-.vortex-validation-text,
-.vortex-validation-list {
-  margin: 0;
 }
 
 /* Grouped data */
