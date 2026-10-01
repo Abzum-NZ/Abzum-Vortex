@@ -255,10 +255,11 @@ begin
               and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'date');
           when 'date_time' then
             group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$'
               and pg_catalog.substr(group_selector_value #>> '{}', 12, 2) between '00' and '23'
               and pg_catalog.substr(group_selector_value #>> '{}', 15, 2) between '00' and '59'
-              and pg_catalog.substr(group_selector_value #>> '{}', 18, 2) between '00' and '59'
+              and (pg_catalog.substr(group_selector_value #>> '{}', 17, 1) <> ':'
+                or pg_catalog.substr(group_selector_value #>> '{}', 18, 2) between '00' and '59')
               and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'timestamp with time zone');
           when 'link', 'link_to_one_of_several' then
             group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
