@@ -135,7 +135,7 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): DisplayCellVal
       const option = field.settings.options.find((candidate) => candidate.value === value);
       return option === undefined || option.requiredPermissionId !== undefined
         ? undefined
-        : { kind: "choice", key: option.value, label: option.label };
+        : { kind: "text", text: option.label };
     }
     case "several_choices": {
       if (typeof value !== "object" || !Array.isArray(value)) return undefined;
@@ -151,7 +151,7 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): DisplayCellVal
         : undefined;
     }
     default:
-      // Structured, identity-bearing and multi-choice values have no matching closed display cell.
+      // Other structured and identity-bearing values have no matching closed display cell.
       return undefined;
   }
 };

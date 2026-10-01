@@ -1294,12 +1294,12 @@ export const parseBoardPayload = (
     const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
     const column = requireRecord(candidate, "A board column must be an object", columnLocation);
     requireExactKeys(column, ["value", "label", "rowCount", "aggregates", "page"], columnLocation);
-    const optionValue = requireNonEmptyString(
+    const optionValue = requireString(
       column.value,
       "An installed board option requires its value",
       columnLocation,
     );
-    if (optionValue.length > 120 || seenOptions.has(optionValue))
+    if (optionValue.length < 1 || optionValue.length > 120 || seenOptions.has(optionValue))
       fail("Board option values are bounded and unique", columnLocation);
     seenOptions.add(optionValue);
     const label = requireNonEmptyString(
