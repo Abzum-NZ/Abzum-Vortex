@@ -728,6 +728,10 @@ const sourceLinkSettingsSchema = z
     on_parent_delete: sourceProvenanceUnchanged(
       z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     ),
+    application_root_required: sourceProvenanceTarget(
+      z.boolean().optional(),
+      ["applicationRootIdRequired"],
+    ),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z

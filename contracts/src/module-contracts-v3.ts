@@ -264,6 +264,7 @@ const linkSettingsSchema = z
     target: recordTypeReferenceSchema,
     reverseKey: builderKeySchema,
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    applicationRootIdRequired: z.boolean().optional(),
   })
   .strict();
 const multiLinkSettingsSchema = z
