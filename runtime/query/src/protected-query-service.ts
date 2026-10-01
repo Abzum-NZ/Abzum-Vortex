@@ -712,10 +712,10 @@ const groupedMembersCommand = async (
 
   const selector = {
     values: command.selector.values
-      .map((value) => ({ ...value, fieldId: value.fieldId.toLowerCase() }))
-        .sort((left, right) =>
-          left.fieldId < right.fieldId ? -1 : left.fieldId > right.fieldId ? 1 : 0,
-        ),
+      .map((value) => ({ ...value, fieldId: fieldIdSchema.parse(value.fieldId.toLowerCase()) }))
+      .sort((left, right) =>
+        left.fieldId < right.fieldId ? -1 : left.fieldId > right.fieldId ? 1 : 0,
+      ),
   };
   const inputFingerprint = fingerprintQueryInputs({
     operation: "protected-group-members-v1",
