@@ -9,6 +9,8 @@ import {
   DRAWER_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  flowRefusalFeedbackCodeSchema,
+  labelSchema,
   LINK_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
@@ -313,13 +315,40 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
   draftFeedback: (value, location) => parseDraftFeedbackSupply(value, location),
   flowFeedback: (value, location): FormFlowFeedback => {
     const feedback = requireRecord(value, "Flow feedback must be an object", location);
-    requireExactKeys(feedback, ["tone", "text"], location);
-    if (feedback.tone !== "success" && feedback.tone !== "problem")
-      fail("Flow feedback tone must be success or problem", location);
-    return Object.freeze({
-      tone: feedback.tone,
-      text: requireNonEmptyString(feedback.text, "Flow feedback requires a message", location),
-    });
+    if (feedback.kind === "message") {
+      requireExactKeys(feedback, ["kind", "tone", "text"], location);
+      if (feedback.tone !== "success" && feedback.tone !== "problem")
+        fail("Flow feedback tone must be success or problem", location);
+      return Object.freeze({
+        kind: "message",
+        tone: feedback.tone,
+        text: requireNonEmptyString(feedback.text, "Flow feedback requires a message", location),
+      });
+    }
+    if (feedback.kind === "refusal") {
+      requireExactKeys(feedback, ["kind", "code", "fieldLabel", "recovery"], location);
+      if (
+        feedback.recovery !== undefined &&
+        feedback.recovery !== "partial" &&
+        feedback.recovery !== "uncertain"
+      )
+        fail("Flow refusal recovery must be partial or uncertain", location);
+      const code = flowRefusalFeedbackCodeSchema.safeParse(feedback.code);
+      if (!code.success) fail("Flow refusal feedback code is unsupported", location);
+      if (feedback.fieldLabel !== undefined && code.data !== "invalid_command")
+        fail("Only invalid command feedback may identify a field", location);
+      const fieldLabel =
+        feedback.fieldLabel === undefined ? undefined : labelSchema.safeParse(feedback.fieldLabel);
+      if (fieldLabel !== undefined && !fieldLabel.success)
+        fail("Flow refusal feedback field label is invalid", location);
+      return Object.freeze({
+        kind: "refusal",
+        code: code.data,
+        ...(fieldLabel?.success ? { fieldLabel: fieldLabel.data } : {}),
+        ...(feedback.recovery === undefined ? {} : { recovery: feedback.recovery }),
+      });
+    }
+    fail("Flow feedback kind must be message or refusal", location);
   },
 });
 
