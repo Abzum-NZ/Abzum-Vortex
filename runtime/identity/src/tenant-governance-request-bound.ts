@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   identitySessionSchema,
+  protectedOperationChannelSchema,
   selectedOrganizationScopeSchema,
   sessionContextSchema,
   type IdentitySession,
@@ -25,6 +26,7 @@ type BoundRequestRow = DatabaseRow & {
   current_role: unknown;
   session_role: unknown;
   can_set_runtime: unknown;
+  request_channel: unknown;
   request_context: unknown;
 };
 
@@ -95,21 +97,26 @@ export const createRequestBoundTenantGovernanceService = (
   };
 
   const readBoundHumanContext = async () => {
+    // The stored context also carries the trusted channel. Validate that separately from the
+    // strict SessionContext shape without changing the context installed on the transaction.
     const rows = await transaction.query<BoundRequestRow>`
       select
         current_user::text as current_role,
         session_user::text as session_role,
         pg_catalog.pg_has_role(session_user, 'vortex_runtime', 'SET') as can_set_runtime,
-        vortex_context.current_context() as request_context
+        vortex_context.current_context() - 'channel' as request_context,
+        vortex_context.channel() as request_channel
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) throw failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
     const context = sessionContextSchema.safeParse(row.request_context);
+    const channel = protectedOperationChannelSchema.safeParse(row.request_channel);
     if (
       row.current_role !== "vortex_request" ||
       !isRuntimeSessionRole(row.session_role) ||
       row.can_set_runtime !== true ||
-      !context.success
+      !context.success ||
+      !channel.success
     )
       throw failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
     const resolved = context.data;
