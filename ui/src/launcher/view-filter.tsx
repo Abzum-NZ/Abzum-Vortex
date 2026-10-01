@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useState, type ChangeEvent, type ReactElement } from "react";
+import { Field, FieldDescription, FieldLabel } from "../components/field";
+import { Input } from "../components/input";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readLauncherSettings } from "./launcher-context";
 import {
@@ -50,30 +52,24 @@ export function ViewFilter(props: PlatformBlockRenderProps): ReactElement {
     <section
       data-vortex-control="view-filter"
       data-vortex-placement-id={placementId}
-      className="vortex-view-filter"
       aria-label={label}
     >
-      <div className="vortex-view-filter-field">
-        <label htmlFor={inputId} className="vortex-field-label">
-          {label}
-        </label>
-        <input
+      <Field>
+        <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+        <Input
           id={inputId}
           type="search"
           value={query}
           onChange={onChange}
           {...(placeholder === undefined ? {} : { placeholder })}
           {...(help === undefined ? {} : { "aria-describedby": `${inputId}-help` })}
-          className="vortex-input"
         />
         {help === undefined ? null : (
-          <p id={`${inputId}-help`} className="vortex-field-help">
-            {help}
-          </p>
+          <FieldDescription id={`${inputId}-help`}>{help}</FieldDescription>
         )}
-      </div>
+      </Field>
       <LauncherRowFilterContext.Provider value={filter}>
-        <div className="vortex-view-filter-content">{props.slots.content ?? null}</div>
+        <div>{props.slots.content ?? null}</div>
       </LauncherRowFilterContext.Provider>
     </section>
   );

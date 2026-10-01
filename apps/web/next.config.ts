@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@vortex/contracts",
     "@vortex/modules",
+    "@vortex/studio",
     "@vortex/ui",
     "@vortex/access",
     "@vortex/app",

@@ -1,5 +1,14 @@
 export const uiPackage = "@vortex/ui" as const;
 
+// Shared notice component (#1607)
+export {
+  Notice,
+  type NoticeContent,
+  type NoticeContentPart,
+  type NoticeProps,
+  type NoticeSeverity,
+} from "./components/notice";
+
 // Platform Component Registry
 export {
   assertRuntimeInputKeysArePlacements,
@@ -249,6 +258,7 @@ export {
   BOOLEAN_INPUT_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CONTROL_BLOCK_RELEASES,
   CONTROL_COMPONENT_REGISTRATIONS,
   createControlComponentRegistry,
@@ -268,11 +278,13 @@ export {
 
 // Launcher List Payload & Binding Contracts
 export {
+  applicationLauncherQueryRowsToListValues,
   linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   readLauncherSettings,
   resolveLauncherListContext,
+  type ApplicationLauncherQueryRow,
   type LauncherListContext,
   type LauncherRenderProps,
   type LauncherSettings,

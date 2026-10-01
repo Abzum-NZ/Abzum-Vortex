@@ -4,7 +4,7 @@ create or replace function vortex_definition.read_module_release(
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -14,7 +14,7 @@ declare
   root_row vortex_definition.roots%rowtype;
   release_row vortex_definition.releases%rowtype;
 begin
-  checked_context := vortex_definition.validated_system_context();
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
   context_organization_id := (checked_context ->> 'organizationId')::uuid;
 
   if p_root_id is null

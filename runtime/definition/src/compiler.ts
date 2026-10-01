@@ -62,6 +62,7 @@ import {
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
 } from "@vortex/contracts";
+import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { isPlatformPermissionKey } from "@vortex/modules";
 import {
   canonicalJson,
@@ -89,7 +90,11 @@ import type {
 } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
-import { compileFlowSources, type ResolvedFlowIdentity } from "./flow-compilation";
+import {
+  compileFlowSources,
+  type ResolvedFlowFieldMetadata,
+  type ResolvedFlowIdentity,
+} from "./flow-compilation";
 import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
 import {
   findOperationCallIssue,
@@ -5332,10 +5337,95 @@ function compileApplicationV2Internal(
  * dependency manifest contribution only ever names definitions the source already declares, so
  * the definition's own resolved dependencies stay the one record of exact releases.
  */
-function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
+function compileOwnedFlowSources(
+  source: JsonObject,
+  resolution: Resolution,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+) {
   const parsed = sourceFlowCollectionSchema.safeParse(asObject(source.body).flows);
   if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
   const ownKey = String(source.key);
+  const declaredDefinitionKeys = dependencyOrder(source).filter((key) => key !== ownKey);
+  const declaredDefinitionKeySet = new Set(declaredDefinitionKeys);
+  const body = asObject(source.body);
+  const moduleDependencyEntries =
+    source.kind === "module"
+      ? (Array.isArray(body.dependencies) ? (body.dependencies as JsonObject[]) : [])
+      : source.kind === "application"
+        ? (Array.isArray(body.module_bindings) ? (body.module_bindings as JsonObject[]) : [])
+        : [];
+  const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutputV3 => {
+    const bindings = moduleDependencyEntries.filter(
+      (binding) => String(binding.module) === moduleKey,
+    );
+    if (moduleKey === ownKey || !declaredDefinitionKeySet.has(moduleKey) || bindings.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const snapshotMatches = resolution.snapshot.definitions.filter(
+      (definition) => definition.kind === "module" && definition.key === moduleKey,
+    );
+    if (snapshotMatches.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const expected = resolution.definition(moduleKey, "module");
+    const requirement = bindings[0]!.version as Parameters<typeof compatibleVersion>[0];
+    if (!compatibleVersion(requirement, expected.exactVersion))
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+
+    const candidates = dependencyOutputs.filter(
+      (output): output is ModuleCompilationOutputV3 =>
+        output.kind === "module" && output.artifact.definitionKey === moduleKey,
+    );
+    if (candidates.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const output = candidates[0]!;
+    const canonical = asObject(output.canonical);
+    const envelope = asObject(canonical.envelope);
+    const content = asObject(canonical.content);
+    if (
+      output.artifact.rootId !== expected.rootId ||
+      output.artifact.exactVersion !== expected.exactVersion ||
+      output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
+      output.artifact.contentFingerprint !== fingerprintCanonicalValue(content) ||
+      // The Module kind belongs to the canonical envelope, not the canonical draft root.
+      envelope.kind !== "module" ||
+      envelope.key !== moduleKey ||
+      envelope.rootId !== expected.rootId
+    )
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    return output;
+  };
+  const fieldMetadataById = new Map<string, ResolvedFlowFieldMetadata[]>();
+  const addFieldMetadata = (metadata: ResolvedFlowFieldMetadata) => {
+    const matches = fieldMetadataById.get(metadata.identifier);
+    if (matches === undefined) fieldMetadataById.set(metadata.identifier, [metadata]);
+    else matches.push(metadata);
+  };
+  for (const recordType of Array.isArray(body.record_types)
+    ? (body.record_types as JsonObject[])
+    : []) {
+    const recordKey = String(recordType.key);
+    const qualifiedRecordType = `${ownKey}:${recordKey}`;
+    const recordTypeId = resolution.recordType(qualifiedRecordType).recordTypeId;
+    for (const field of recordType.fields as JsonObject[])
+      addFieldMetadata({
+        identifier: resolution.field(qualifiedRecordType, String(field.id)),
+        recordTypeId,
+        type: String(field.type),
+      });
+  }
+  for (const output of dependencyOutputs) {
+    if (
+      output.kind !== "module" ||
+      !declaredDefinitionKeySet.has(output.artifact.definitionKey)
+    )
+      continue;
+    for (const recordType of output.canonical.content.recordTypes as unknown as JsonObject[])
+      for (const field of recordType.fields as JsonObject[])
+        addFieldMetadata({
+          identifier: String(field.fieldId),
+          recordTypeId: String(recordType.recordTypeId),
+          type: String(field.type),
+        });
+  }
   const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
     const split = alias.indexOf(":");
     const definitionKey = split < 1 ? ownKey : alias.slice(0, split);
@@ -5349,7 +5439,7 @@ function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
   const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
   return compileFlowSources({
     flows: parsed.data,
-    declaredDefinitionKeys: dependencyOrder(source).filter((key) => key !== ownKey),
+    declaredDefinitionKeys,
     resolver: {
       definitionKey: ownKey,
       flow: (alias) => owned("flow", alias),
@@ -5361,6 +5451,20 @@ function compileOwnedFlowSources(source: JsonObject, resolution: Resolution) {
         identifier: resolution.field(qualifiedRecord(record), alias),
         definitionKey: recordOwner(record),
       }),
+      fieldMetadata: (fieldId) => fieldMetadataById.get(fieldId) ?? [],
+      dependencyFieldMetadata: (definitionKey, fieldId) => {
+        const moduleOutput = dependencyModuleOutput(definitionKey);
+        return (moduleOutput.canonical.content.recordTypes as unknown as JsonObject[]).flatMap(
+          (recordType) =>
+            (recordType.fields as JsonObject[])
+              .filter((field) => String(field.fieldId) === fieldId)
+              .map((field) => ({
+                identifier: String(field.fieldId),
+                recordTypeId: String(recordType.recordTypeId),
+                type: String(field.type),
+              })),
+        );
+      },
       relationship: (record, alias) => ({
         identifier: resolution.relationship(qualifiedRecord(record), alias),
         definitionKey: recordOwner(record),
@@ -5388,7 +5492,7 @@ function compileCheckedFlowSources(
   resolution: Resolution,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
 ) {
-  const flowSet = compileOwnedFlowSources(source, resolution);
+  const flowSet = compileOwnedFlowSources(source, resolution, dependencyOutputs);
   const actions = new Map<string, ReturnType<typeof namedActionInputs>>();
   const remember = (candidates: unknown) => {
     for (const action of (Array.isArray(candidates) ? candidates : []) as JsonObject[])
@@ -5474,6 +5578,7 @@ function compileParsedApplicationV2Request(
     const output = applicationCompilationOutputV2Schema.safeParse({
       kind: "application",
       validationContractVersion: "2.0.0",
+      platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,
       provenance: applicationProvenanceV2(source, canonical, resolution, flowSet),

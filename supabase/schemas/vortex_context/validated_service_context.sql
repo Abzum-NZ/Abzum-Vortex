@@ -28,6 +28,8 @@ grant execute on function vortex_context.validated_service_context()
   to vortex_connection_owner;
 grant execute on function vortex_context.validated_service_context()
   to vortex_file_owner;
+grant execute on function vortex_context.validated_service_context()
+  to vortex_record_owner;
 
 comment on function vortex_context.validated_service_context() is
   'Dispatches an established request context through the authoritative human or system validator.';

@@ -43,13 +43,23 @@ import {
 } from "./cache-policy";
 import {
   protectedQueryCommandSchema,
+  protectedQueryBoardMembersCommandSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryResultSchema,
+  protectedQuerySummaryCommandSchema,
+  protectedQuerySummaryResultSchema,
+  protectedQueryBoardSummaryCommandSchema,
+  protectedQueryBoardSummaryResultSchema,
   protectedQueryRowCapabilitiesSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryBoardMembersCommand,
   type ProtectedQueryPage,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryResult,
+  type ProtectedQueryBoardSummaryCommand,
+  type ProtectedQueryBoardSummaryResult,
 } from "./protected-query-contracts";
 import { recordSystemValuesSchema } from "./record-system-values";
 import { readThroughQueryCache, type SharedCacheStore } from "./shared-cache-adapter";
@@ -155,6 +165,14 @@ const refusal = (reasonCode: ProtectedQueryRefusalReasonCode): ProtectedQueryRes
   reasonCode,
 });
 
+const summaryRefusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): ProtectedQuerySummaryResult => ({ outcome: "refused", reasonCode });
+
+const boardSummaryRefusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): ProtectedQueryBoardSummaryResult => ({ outcome: "refused", reasonCode });
+
 const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   return rows[0].result;
@@ -257,7 +275,7 @@ const userInputRefusal = (
 
 const readInputs = async (
   transaction: RequestDatabaseTransaction,
-  command: ProtectedQueryCommand,
+  command: Pick<ProtectedQueryCommand, "moduleRootId" | "queryId">,
 ) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.read_module_query_inputs(
@@ -266,6 +284,129 @@ const readInputs = async (
     ) as result
   `;
   return inputsReadSchema.parse(one(rows));
+};
+
+const readSummary = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQuerySummaryCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify({
+        filter: command.filter ?? null,
+        filterableFieldIds: command.filterableFieldIds,
+      })}::text::jsonb
+    ) as result
+  `;
+  return protectedQuerySummaryResultSchema.parse(one(rows));
+};
+
+const readBoardSummary = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryBoardSummaryCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+): Promise<ProtectedQueryBoardSummaryResult> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify({
+        filter: command.filter ?? null,
+        filterableFieldIds: command.filterableFieldIds,
+        boardSummary: { choiceFieldId: command.choiceFieldId },
+      })}::text::jsonb
+    ) as result
+  `;
+  return protectedQueryBoardSummaryResultSchema.parse(one(rows));
+};
+
+const summaryFilterInputRefusal = (
+  command: ProtectedQuerySummaryCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const boardSummaryFilterInputRefusal = (
+  command: ProtectedQueryBoardSummaryCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const boardMembersFilterInputRefusal = (
+  command: ProtectedQueryBoardMembersCommand,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+const summariseCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQuerySummaryCommand,
+): Promise<ProtectedQuerySummaryResult> => {
+  if (scope.applicationRootId === undefined) return summaryRefusal("request_invalid");
+  const userRefusal = summaryFilterInputRefusal(command);
+  if (userRefusal !== undefined) return summaryRefusal(userRefusal);
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return summaryRefusal(declared.reasonCode);
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return summaryRefusal("descriptor_invalid");
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return summaryRefusal("input_invalid");
+    throw error;
+  }
+
+  return readSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
+};
+
+const boardSummaryCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryBoardSummaryCommand,
+): Promise<ProtectedQueryBoardSummaryResult> => {
+  if (scope.applicationRootId === undefined) return boardSummaryRefusal("request_invalid");
+  const userRefusal = boardSummaryFilterInputRefusal(command);
+  if (userRefusal !== undefined) return boardSummaryRefusal(userRefusal);
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return boardSummaryRefusal(declared.reasonCode);
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return boardSummaryRefusal("descriptor_invalid");
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return boardSummaryRefusal("input_invalid");
+    throw error;
+  }
+
+  return readBoardSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
 };
 
 const readPage = async (
@@ -289,6 +430,162 @@ const readPage = async (
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
+};
+
+const readBoardMemberPage = async (
+  transaction: RequestDatabaseTransaction,
+  command: ProtectedQueryBoardMembersCommand,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+  after: QueryContinuation | undefined,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${command.pageSize}::integer,
+      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, recordId: after.recordId })}::text::jsonb,
+      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
+      ${JSON.stringify({
+        sort: [],
+        filter: command.filter ?? null,
+        search: null,
+        sortableFieldIds: [],
+        filterableFieldIds: command.filterableFieldIds,
+        searchableFieldIds: [],
+        boardMember: command.selector,
+      })}::text::jsonb
+    ) as result
+  `;
+  return pageReadSchema.parse(one(rows));
+};
+
+const normalizeConditionFieldIdentifiers = (condition: unknown): unknown => {
+  if (Array.isArray(condition)) return condition.map(normalizeConditionFieldIdentifiers);
+  if (condition === null || typeof condition !== "object") return condition;
+  const record = condition as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    normalized[key] =
+      key === "fieldId" && record.source === "field" && typeof value === "string"
+        ? value.toLowerCase()
+        : normalizeConditionFieldIdentifiers(value);
+  }
+  return normalized;
+};
+
+const boardMembersCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryBoardMembersCommand,
+  continuationKey: QueryContinuationKey,
+): Promise<ProtectedQueryResult> => {
+  const applicationRootId = scope.applicationRootId;
+  if (applicationRootId === undefined) return refusal("request_invalid");
+  const filterRefusal = boardMembersFilterInputRefusal(command);
+  if (filterRefusal !== undefined) return refusal(filterRefusal);
+
+  let after: QueryContinuation | undefined;
+  if (command.continuationToken !== undefined) {
+    try {
+      after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
+    } catch (error) {
+      if (error instanceof QueryContinuationTokenError) return refusal("cursor_invalid");
+      throw error;
+    }
+    if (
+      !sameId(after.organizationId, scope.organizationId) ||
+      !sameId(after.applicationRootId, applicationRootId) ||
+      !sameId(after.organizationAccountId, scope.organizationAccountId) ||
+      !sameId(after.moduleRootId, command.moduleRootId) ||
+      !sameId(after.queryId, command.queryId)
+    )
+      return refusal("cursor_stale");
+    // Board pages have one fixed record-identity order. A row-query keyset can
+    // never be interpreted as a member-page position.
+    if (after.sortKey.length !== 0) return refusal("cursor_stale");
+  }
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return refusal(declared.reasonCode);
+  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
+    return refusal("cursor_stale");
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return refusal("descriptor_invalid");
+
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
+    throw error;
+  }
+
+  const inputFingerprint = fingerprintQueryInputs({
+    operation: "protected-board-members-v1",
+    inputValues,
+    selector: {
+      choiceFieldId: command.selector.choiceFieldId.toLowerCase(),
+      column: command.selector.column,
+    },
+    filter: normalizeConditionFieldIdentifiers(command.filter ?? null),
+    filterableFieldIds: command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
+    requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
+    requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
+    pageSize: command.pageSize,
+    memberOrder: "record_id_ascending",
+  });
+  if (after !== undefined && after.inputFingerprint !== inputFingerprint)
+    return refusal("cursor_stale");
+
+  const page = await readBoardMemberPage(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+    after,
+  );
+  if (page.outcome === "refused") return refusal(page.reasonCode);
+  const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
+  for (const row of page.rows) {
+    const disclosed = Object.keys(row.systemValues ?? {});
+    if (
+      disclosed.some((key) => !declaredSystemKeys.has(key)) ||
+      declaredSystemKeys.size > 0 !== (row.systemValues !== undefined) ||
+      declaredSystemKeys.size !== disclosed.length
+    )
+      throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  }
+
+  return {
+    outcome: "completed",
+    moduleRootId: command.moduleRootId,
+    moduleReleaseVersion: page.moduleReleaseVersion,
+    queryId: command.queryId,
+    rows: page.rows,
+    ...(page.next === null
+      ? {}
+      : {
+          nextContinuationToken: encodeQueryContinuationToken(
+            {
+              version: 1,
+              organizationId: scope.organizationId,
+              applicationRootId,
+              organizationAccountId: scope.organizationAccountId,
+              moduleRootId: command.moduleRootId,
+              queryId: command.queryId,
+              moduleReleaseRevision: page.moduleReleaseRevision,
+              inputFingerprint,
+              sortKey: page.next.sortKey,
+              recordId: page.next.recordId,
+            },
+            continuationKey,
+          ),
+        }),
+  };
 };
 
 const runCommand = async (
@@ -720,6 +1017,50 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
             };
       return requests.run(caller, selection, (transaction, scope) =>
         runCommand(transaction, scope, command.data, continuationKey, cache),
+      );
+    },
+    async boardMembers(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = protectedQueryBoardMembersCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, (transaction, scope) =>
+        boardMembersCommand(transaction, scope, command.data, continuationKey),
+      );
+    },
+    async summarise(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return { kind: "available", value: summaryRefusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, (transaction, scope) =>
+        summariseCommand(transaction, scope, command.data),
+      );
+    },
+    async boardSummary(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryBoardSummaryResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = protectedQueryBoardSummaryCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return { kind: "available", value: boardSummaryRefusal("request_invalid") };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, (transaction, scope) =>
+        boardSummaryCommand(transaction, scope, command.data),
       );
     },
   });

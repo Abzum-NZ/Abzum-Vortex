@@ -14,7 +14,17 @@ import {
   recordIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/contracts";
-import { protectedQueryRowSchema } from "./protected-query-contracts";
+import {
+  protectedQueryBoardMembersCommandSchema,
+  protectedQueryBoardSelectorSchema,
+  protectedQueryBoardSummaryColumnSchema,
+  protectedQueryBoardSummaryUnassignedSchema,
+  protectedQueryPageRowSchema,
+  protectedQueryRowSchema,
+  protectedQuerySummaryAggregateResultSchema,
+  protectedQuerySummaryCommandSchema,
+} from "./protected-query-contracts";
+import { supportedRecordSystemFieldKeySchema } from "./record-system-values";
 
 /**
  * Most rows one arrangement accepts. Rows, counts, groups and totals are all
@@ -175,28 +185,15 @@ export const calendarArrangementDescriptorSchema = z
   })
   .strict();
 
-export const summaryArrangementDescriptorSchema = z
-  .object({
-    type: z.literal("summary"),
-    /** Fields the summary may group or total; a summary emits no rows. */
-    declaredFieldIds: declaredFieldIdsSchema,
-    groupByFieldIds: groupByFieldIdsSchema.default([]),
-    aggregates: aggregatesSchema.min(1),
-  })
-  .strict();
-
 export const arrangementDescriptorSchema = z.discriminatedUnion("type", [
   tableArrangementDescriptorSchema,
   boardArrangementDescriptorSchema,
   calendarArrangementDescriptorSchema,
-  summaryArrangementDescriptorSchema,
 ]);
 export type ArrangementDescriptor = z.infer<typeof arrangementDescriptorSchema>;
 export type TableArrangementDescriptor = z.infer<typeof tableArrangementDescriptorSchema>;
 export type BoardArrangementDescriptor = z.infer<typeof boardArrangementDescriptorSchema>;
 export type CalendarArrangementDescriptor = z.infer<typeof calendarArrangementDescriptorSchema>;
-export type SummaryArrangementDescriptor = z.infer<typeof summaryArrangementDescriptorSchema>;
-
 export const arrangementCommandSchema = z
   .object({
     dataset: arrangementDatasetSchema,
@@ -204,6 +201,89 @@ export const arrangementCommandSchema = z
   })
   .strict();
 export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
+
+/** Summary input identifies the installed Query; its own declaration provides groups and totals. */
+export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
+export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
+
+/** One initial set of board pages, or one column page to continue. */
+export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("initial") }).strict(),
+  z
+    .object({
+      kind: z.literal("continue"),
+      selector: protectedQueryBoardSelectorSchema,
+      continuationToken: z.string().min(1).max(65_536),
+    })
+    .strict(),
+]);
+export type ProtectedBoardArrangementPageRequest = z.infer<
+  typeof protectedBoardArrangementPageRequestSchema
+>;
+
+/** One uncached page of protected board members with record identity intact. */
+export const protectedBoardArrangementPageSchema = z
+  .object({
+    rows: z.array(protectedQueryPageRowSchema).max(200),
+    nextContinuationToken: z.string().min(1).max(65_536).optional(),
+  })
+  .strict();
+export type ProtectedBoardArrangementPage = z.infer<typeof protectedBoardArrangementPageSchema>;
+
+/** Additive page composer command; authority and installed options stay out of its payload. */
+export const protectedBoardArrangementCommandSchema = protectedQueryBoardMembersCommandSchema
+  .omit({ selector: true, continuationToken: true })
+  .extend({
+    choiceFieldId: fieldIdSchema,
+    pageRequest: protectedBoardArrangementPageRequestSchema,
+  })
+  .strict();
+export type ProtectedBoardArrangementCommand = z.input<
+  typeof protectedBoardArrangementCommandSchema
+>;
+
+const protectedBoardAggregateResultsSchema = z.record(
+  builderKeySchema,
+  protectedQuerySummaryAggregateResultSchema,
+);
+
+const protectedBoardArrangementColumnSchema = protectedQueryBoardSummaryColumnSchema
+  .extend({
+    /** Null means this bucket was not fetched in this response. */
+    page: protectedBoardArrangementPageSchema.nullable(),
+  })
+  .strict();
+
+const protectedBoardArrangementUnassignedSchema = protectedQueryBoardSummaryUnassignedSchema
+  .extend({
+    /** Null means this bucket was not fetched in this response. */
+    page: protectedBoardArrangementPageSchema.nullable(),
+  })
+  .strict();
+
+/** Exact protected summary metadata composed with bounded protected member pages. */
+export const protectedBoardArrangementResultSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    arrangement: z.literal("board"),
+    plan: arrangementSourcePlanSchema,
+    choiceFieldId: fieldIdSchema,
+    declaredFieldIds: declaredFieldIdsSchema,
+    declaredSystemFieldKeys: z
+      .array(supportedRecordSystemFieldKeySchema)
+      .max(5)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: "Each system field is declared once",
+      }),
+    totalRowCount: z.number().int().nonnegative().max(100_000),
+    columns: z.array(protectedBoardArrangementColumnSchema).min(1).max(boardChoiceOptionLimit),
+    unassigned: protectedBoardArrangementUnassignedSchema,
+    aggregates: protectedBoardAggregateResultsSchema,
+  })
+  .strict();
+export type ProtectedBoardArrangementResult = z.infer<
+  typeof protectedBoardArrangementResultSchema
+>;
 
 // Results
 
@@ -315,6 +395,16 @@ export const arrangementRefusalReasonCodes = [
   "dataset_invalid",
   /** The complete result is larger than one arrangement accepts. */
   "dataset_limit_exceeded",
+  /** The installed Query could not be resolved for the current Application release. */
+  "query_unavailable",
+  "input_invalid",
+  "field_unbounded",
+  "filter_invalid",
+  "sort_invalid",
+  "relationship_invalid",
+  "page_size_invalid",
+  "cursor_invalid",
+  "cursor_stale",
   /** The calendar time zone is not a known IANA zone. */
   "time_zone_invalid",
 ] as const;

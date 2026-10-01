@@ -2,6 +2,9 @@ import "server-only";
 
 export {
   protectedQueryCommandSchema,
+  protectedQueryBoardColumnSchema,
+  protectedQueryBoardSelectorSchema,
+  protectedQueryBoardMembersCommandSchema,
   protectedQuerySortSchema,
   protectedQueryRowSchema,
   protectedQueryPageRowSchema,
@@ -12,7 +15,20 @@ export {
   protectedQueryRefusalSchema,
   protectedQueryPageSchema,
   protectedQueryResultSchema,
+  protectedQuerySummaryCommandSchema,
+  protectedQuerySummaryAggregateResultSchema,
+  protectedQuerySummaryGroupSchema,
+  protectedQuerySummaryCompletedSchema,
+  protectedQuerySummaryResultSchema,
+  protectedQueryBoardSummaryCommandSchema,
+  protectedQueryBoardSummaryColumnSchema,
+  protectedQueryBoardSummaryUnassignedSchema,
+  protectedQueryBoardSummaryCompletedSchema,
+  protectedQueryBoardSummaryResultSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryBoardColumn,
+  type ProtectedQueryBoardSelector,
+  type ProtectedQueryBoardMembersCommand,
   type ProtectedQuerySort,
   type ProtectedQueryRow,
   type ProtectedQueryPageRow,
@@ -22,6 +38,16 @@ export {
   type ProtectedQueryRefusal,
   type ProtectedQueryPage,
   type ProtectedQueryResult,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryCompleted,
+  type ProtectedQuerySummaryAggregateResult,
+  type ProtectedQuerySummaryGroup,
+  type ProtectedQuerySummaryResult,
+  type ProtectedQueryBoardSummaryCommand,
+  type ProtectedQueryBoardSummaryColumn,
+  type ProtectedQueryBoardSummaryUnassigned,
+  type ProtectedQueryBoardSummaryCompleted,
+  type ProtectedQueryBoardSummaryResult,
 } from "./protected-query-contracts";
 
 export {
@@ -41,8 +67,10 @@ export {
 export {
   createViewerSafeRecordLinkReadService,
   viewerSafeRecordLinkTitleReadResultSchema,
+  viewerSafeRecordLinkFieldsReadResultSchema,
   type ViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
+  type ViewerSafeRecordLinkFieldsReadResult,
 } from "./viewer-safe-record-link-read";
 
 export type { QueryContinuationKey } from "./continuation-token";
@@ -60,7 +88,16 @@ export {
   type TableArrangementDescriptor,
   type BoardArrangementDescriptor,
   type CalendarArrangementDescriptor,
-  type SummaryArrangementDescriptor,
+  summaryArrangementCommandSchema,
+  type SummaryArrangementCommand,
+  protectedBoardArrangementPageRequestSchema,
+  protectedBoardArrangementPageSchema,
+  protectedBoardArrangementCommandSchema,
+  protectedBoardArrangementResultSchema,
+  type ProtectedBoardArrangementPageRequest,
+  type ProtectedBoardArrangementPage,
+  type ProtectedBoardArrangementCommand,
+  type ProtectedBoardArrangementResult,
   type AggregateDescriptor,
   type AggregateValue,
   type AggregateResult,
@@ -77,7 +114,7 @@ export {
   type ArrangementResult,
 } from "./arrangement-contracts";
 
-export { arrangeDataset } from "./arrangements";
+export { arrangeDataset, arrangeSummary, arrangeProtectedBoard } from "./arrangements";
 
 export {
   createUsageProjectionService,

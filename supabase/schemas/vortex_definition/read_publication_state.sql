@@ -3,7 +3,7 @@ create or replace function vortex_definition.read_publication_state(
 )
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -14,7 +14,7 @@ declare
   draft_row vortex_definition.drafts%rowtype;
   history_latest_release_revision bigint;
 begin
-  checked_context := vortex_definition.validated_system_context();
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
   context_organization_id := (checked_context ->> 'organizationId')::uuid;
   if p_root_id is null or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
