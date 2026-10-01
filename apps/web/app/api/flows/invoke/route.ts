@@ -39,7 +39,7 @@ import {
   createDatabaseApplicationBoundReleaseSetService,
   flowReadFieldsScalarTypeForField,
 } from "@vortex/definition";
-import { createTenantGovernanceService } from "@vortex/identity";
+import { createRequestBoundTenantGovernanceService } from "@vortex/identity";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import {
   createPageFormRequestAdapter,
@@ -47,7 +47,6 @@ import {
   createPrivateFormSubmitAdapter,
 } from "@vortex/page";
 import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/record";
-import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
@@ -492,11 +491,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           requests.runChange(session, selection, (transaction, scope) =>
             operation({
               tenantId: scope.tenantId,
-              operations: createTenantGovernanceService({
-                runtimeTransaction: <Result>(
-                  run: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-                ) => run(transaction),
-              }),
+              operations: createRequestBoundTenantGovernanceService(transaction, scope),
             }),
           ),
       },
