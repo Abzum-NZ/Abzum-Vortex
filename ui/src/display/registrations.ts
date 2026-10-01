@@ -1,4 +1,5 @@
 import {
+  BOARD_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   DISPLAY_BLOCK_RELEASES,
   GROUPED_DATA_BLOCK_RELEASE,
@@ -30,6 +31,7 @@ import {
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   parseCalendarPayload,
+  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -40,6 +42,7 @@ import {
   parseTablePayload,
   parseTextPayload,
   type CalendarPayload,
+  type BoardPayload,
   type GroupedPayload,
   type ListPayload,
   type RecordDetailPayload,
@@ -50,6 +53,7 @@ import {
 } from "./projected-data";
 import { GroupedDataDisplay } from "./grouped-data";
 import { CalendarDisplay } from "./calendar";
+import { BoardDisplay } from "./board";
 import { ListDisplay } from "./list";
 import { RecordDetailDisplay } from "./record-detail";
 import { RichTextDisplay } from "./rich-text-component";
@@ -64,6 +68,7 @@ import { PlainTextDisplay } from "./text";
  */
 export {
   DISPLAY_BLOCK_RELEASES,
+  BOARD_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
@@ -92,6 +97,7 @@ const RICH_TEXT_PAYLOAD_PARSER = displayPayloadParser<RichTextPayload>(parseRich
 const LIST_PAYLOAD_PARSER = displayPayloadParser<ListPayload>(parseListPayload);
 const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload>(parseTablePayload);
 const CALENDAR_PAYLOAD_PARSER = displayPayloadParser<CalendarPayload>(parseCalendarPayload);
+const BOARD_PAYLOAD_PARSER = displayPayloadParser<BoardPayload>(parseBoardPayload);
 const RECORD_DETAIL_PAYLOAD_PARSER =
   displayPayloadParser<RecordDetailPayload>(parseRecordDetailPayload);
 const GROUPED_DATA_PAYLOAD_PARSER = displayPayloadParser<GroupedPayload>(parseGroupedPayload);
@@ -199,6 +205,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: CALENDAR_BLOCK_RELEASE,
       render: CalendarDisplay,
       parsePayload: CALENDAR_PAYLOAD_PARSER,
+    }),
+    Object.freeze({
+      metadata: BOARD_BLOCK_RELEASE,
+      render: BoardDisplay,
+      parsePayload: BOARD_PAYLOAD_PARSER,
     }),
   ]);
 
