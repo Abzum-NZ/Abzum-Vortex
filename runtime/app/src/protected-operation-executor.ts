@@ -130,7 +130,8 @@ export type ProtectedOperationValue = JsonValue;
 /** The safe results the executor itself can report. */
 type ProtectedOperationFailure =
   | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
-  | Readonly<{ outcome: "conflict" | "failed" }>;
+  | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
+  | Readonly<{ outcome: "failed" }>;
 
 export type ProtectedOperationExecution =
   | Readonly<{
@@ -255,7 +256,7 @@ type TenantOrganizationMutationResult =
 
 type ConfirmedOperationFailure = Readonly<{
   kind: "confirmed_failure";
-  outcome: "refused" | "validation";
+  outcome: "refused" | "conflict" | "validation";
   diagnostic: FlowRefusalFeedback;
 }>;
 
@@ -304,6 +305,7 @@ const duplicateKeyFor = (
 const operation =
   <Schema extends z.ZodType>(definition: {
     schema: Schema;
+    inputAliases?: Readonly<Record<string, string>>;
     command: (
       inputs: Inputs,
       selection: OrganizationSelectionCandidate,
@@ -321,7 +323,30 @@ const operation =
         const command = definition.schema.safeParse(
           definition.command(inputs, caller.selection, caller.effectKey),
         );
-        if (!command.success) return "validation";
+        if (!command.success) {
+          const issue = command.error.issues.length === 1 ? command.error.issues[0] : undefined;
+          const structuralIssueCodes: ReadonlySet<string> = new Set([
+            "invalid_type",
+            "too_small",
+            "too_big",
+            "invalid_format",
+            "not_multiple_of",
+            "invalid_value",
+          ]);
+          const issuePath = issue?.path;
+          const operationInput =
+            issue !== undefined &&
+            structuralIssueCodes.has(issue.code) &&
+            issuePath?.length === 1 &&
+            typeof issuePath[0] === "string"
+              ? definition.inputAliases?.[issuePath[0]]
+              : undefined;
+          return {
+            kind: "confirmed_failure",
+            outcome: "validation",
+            diagnostic: invalidCommandFeedback(operationInput),
+          };
+        }
         return definition.run(services, caller, command.data);
       },
     });
@@ -349,18 +374,37 @@ const mapAvailable = <Value>(
 ): HumanOrganizationRequestResult<Outputs> =>
   result.kind === "available" ? { kind: "available", value: project(result.value) } : result;
 
+const invalidCommandFeedback = (operationInput?: string): FlowRefusalFeedback =>
+  flowRefusalFeedbackSchema.parse({
+    code: "invalid_command",
+    ...(operationInput === undefined ? {} : { operationInput }),
+  });
+
 const runTenantOrganizationMutation = async (
   services: ProtectedOperationExecutorDependencies,
   caller: ProtectedOperationCaller,
   execute: (scope: TenantGovernanceRequestScope) => Promise<TenantOrganizationMutationResult>,
-): Promise<HumanOrganizationRequestResult<Outputs> | "conflict"> => {
+): Promise<HumanOrganizationRequestResult<Outputs> | ConfirmedOperationFailure> => {
   const scoped = await services.tenantGovernance.run(
     caller.session,
     caller.selection,
     async (scope) => {
       const result = await execute(scope);
-      if (result.outcome === "refused" && result.code === "stale_revision") return "conflict" as const;
-      if (result.outcome === "refused") return { kind: "unavailable" } as const;
+      if (result.outcome === "refused") {
+        if (result.code === "stale_revision")
+          return {
+            kind: "confirmed_failure",
+            outcome: "conflict",
+            diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
+          } as const;
+        if (result.code === "invalid_command" || result.code === "duplicate_conflict")
+          return {
+            kind: "confirmed_failure",
+            outcome: result.code === "invalid_command" ? "validation" : "refused",
+            diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
+          } as const;
+        return { kind: "unavailable" } as const;
+      }
       return {
         kind: "available",
         value: {
@@ -521,6 +565,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   }),
   add_group_membership: operation({
     schema: addOrganizationAdministrationMembershipCommandSchema,
+    inputAliases: { startsAt: "starts_at", expiresAt: "expires_at" },
     command: (inputs) => ({
       groupId: inputs.group_id,
       organizationAccountId: inputs.organization_account_id,
@@ -696,6 +741,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   }),
   assign_role_assignment: operation({
     schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
+    inputAliases: { startsAt: "starts_at", expiresAt: "expires_at" },
     command: (inputs) => ({
       roleId: inputs.role_id,
       expectedRoleRevision: inputs.expected_role_revision,
@@ -1043,6 +1089,10 @@ const valueMatches = (type: string, value: unknown): value is ProtectedOperation
   return false;
 };
 
+type DeclaredInputResult =
+  | Readonly<{ inputs: Inputs }>
+  | Readonly<{ diagnostic: FlowRefusalFeedback }>;
+
 /**
  * The declared inputs only: every declared required input present, no undeclared input and every
  * value of its declared type. An absent or null optional input is left out.
@@ -1050,19 +1100,28 @@ const valueMatches = (type: string, value: unknown): value is ProtectedOperation
 const declaredInputs = (
   descriptor: ProtectedOperationDescriptor,
   candidate: Readonly<Record<string, unknown>>,
-): Inputs | undefined => {
-  if (Object.keys(candidate).some((key) => !Object.hasOwn(descriptor.inputs, key))) return undefined;
+): DeclaredInputResult => {
+  if (Object.keys(candidate).some((key) => !Object.hasOwn(descriptor.inputs, key)))
+    return { diagnostic: invalidCommandFeedback() };
   const inputs: Record<string, ProtectedOperationValue> = {};
+  const invalidInputs: string[] = [];
   for (const [key, declaration] of Object.entries(descriptor.inputs)) {
     const value = Object.hasOwn(candidate, key) ? candidate[key] : undefined;
     if (value === undefined || value === null) {
-      if (declaration.required) return undefined;
+      if (declaration.required) invalidInputs.push(key);
       continue;
     }
-    if (!valueMatches(declaration.type, value)) return undefined;
+    if (!valueMatches(declaration.type, value)) {
+      invalidInputs.push(key);
+      continue;
+    }
     inputs[key] = value;
   }
-  return inputs;
+  if (invalidInputs.length > 0)
+    return {
+      diagnostic: invalidCommandFeedback(invalidInputs.length === 1 ? invalidInputs[0] : undefined),
+    };
+  return { inputs };
 };
 
 /**
@@ -1121,8 +1180,9 @@ export const createProtectedOperationExecutor = (
         Array.isArray(request.inputs)
       )
         return { outcome: "validation" };
-      const inputs = declaredInputs(registered.descriptor, request.inputs);
-      if (inputs === undefined) return { outcome: "validation" };
+      const checkedInputs = declaredInputs(registered.descriptor, request.inputs);
+      if ("diagnostic" in checkedInputs)
+        return { outcome: "validation", diagnostic: checkedInputs.diagnostic };
 
       const result = await registeredOperation.execute(
         services,
@@ -1131,7 +1191,7 @@ export const createProtectedOperationExecutor = (
           selection: selection.data,
           ...(request.effectKey === undefined ? {} : { effectKey: request.effectKey }),
         },
-        inputs,
+        checkedInputs.inputs,
       );
       if (result === "validation") return { outcome: "validation" };
       if (result === "conflict") return { outcome: "conflict" };

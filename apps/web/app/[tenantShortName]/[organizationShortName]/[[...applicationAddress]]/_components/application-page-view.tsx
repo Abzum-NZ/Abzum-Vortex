@@ -9,6 +9,7 @@ import {
   createFormBlockRuntime,
   createFullPlatformComponentRegistry,
   equalFormValue,
+  getAccessibleName,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   PageLayoutRenderer,
@@ -24,6 +25,7 @@ import {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowInvokeClient,
+  type FormFlowFeedback,
   type FormBlockRuntime,
   type LinkNavigationEnvironment,
   type ProjectedPageCapability,
@@ -107,7 +109,6 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
  */
 type EventHandlers = Record<string, (event: never) => void>;
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
-type FormNotice = Readonly<{ tone: "success" | "problem"; text: string }>;
 type SubmittedForm = Readonly<{
   formId: string;
   values: Readonly<Record<string, unknown>>;
@@ -157,6 +158,14 @@ const finishedNotice = (outcome: string | undefined, failureCode: unknown): Noti
   failureCode === "task_not_available"
     ? notAvailableNotice
     : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
+
+const refusalNotices: Readonly<
+  Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
+> = {
+  invalid_command: { tone: "problem", text: "The supplied inputs are invalid." },
+  duplicate_conflict: { tone: "problem", text: "A conflicting item already exists." },
+  stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
+};
 
 /** The JSON a table cell reports when a surface hands it to a flow as a caller input. */
 const cellToJson = (value: unknown): unknown => {
@@ -336,6 +345,84 @@ const formSurfaceComposition = (
     placementIds: [...placementIds],
     placements,
   };
+};
+
+const isVisibleInCurrentDocument = (element: HTMLElement): boolean => {
+  if (!element.isConnected || element.getClientRects().length === 0) return false;
+  for (let current: HTMLElement | null = element; current !== null; current = current.parentElement) {
+    const style = window.getComputedStyle(current);
+    if (
+      current.hidden ||
+      current.getAttribute("aria-hidden") === "true" ||
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    )
+      return false;
+  }
+  return true;
+};
+
+/** Returns a label only when the current visible owning form contains this exact registered field. */
+const visibleOwningFormFieldLabel = (
+  page: Readonly<Record<string, unknown>>,
+  pageId: string,
+  formId: string,
+  fieldKey: string,
+): string | undefined => {
+  if (typeof document === "undefined") return undefined;
+  const surface = formSurfaceComposition(page, pageId, formId);
+  if (surface === undefined) return undefined;
+  const ownerForm = surface.placements[formId];
+  const ownerBlock = ownerForm?.block;
+  if (
+    !isRecord(ownerBlock) ||
+    typeof ownerBlock.blockId !== "string" ||
+    ownerBlock.blockId.toLowerCase() !== FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase() ||
+    ownerBlock.releaseVersion !== FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
+  )
+    return undefined;
+  const matchingPlacements = surface.placementIds.flatMap((placementId) => {
+    const placement = surface.placements[placementId];
+    const block = placement?.block;
+    const settings = placement?.settings;
+    if (
+      !isRecord(block) ||
+      typeof block.blockId !== "string" ||
+      typeof block.releaseVersion !== "string" ||
+      !isRecord(settings) ||
+      !isRecord(settings.name) ||
+      settings.name.kind !== "text" ||
+      settings.name.value !== fieldKey
+    )
+      return [];
+    const registration = platformComponentRegistry.get(block.blockId, block.releaseVersion);
+    if (
+      registration === undefined ||
+      !registration.metadata.supportedEvents.includes("field_changed")
+    )
+      return [];
+    const label = getAccessibleName(
+      settings as Parameters<typeof getAccessibleName>[0],
+      registration.metadata,
+    );
+    return label === undefined ? [] : [{ placementId, label }];
+  });
+  if (matchingPlacements.length !== 1) return undefined;
+
+  const forms = [...document.querySelectorAll<HTMLFormElement>(
+    'form[data-vortex-control="form-container"]',
+  )].filter(
+    (form) => form.dataset.vortexPlacementId === formId && isVisibleInCurrentDocument(form),
+  );
+  if (forms.length !== 1) return undefined;
+  const fieldNodes = [...forms[0]!.querySelectorAll<HTMLElement>("[data-vortex-field-key]")].filter(
+    (element) =>
+      element.dataset.vortexFieldKey === fieldKey &&
+      element.dataset.vortexPlacementId === matchingPlacements[0]!.placementId &&
+      isVisibleInCurrentDocument(element),
+  );
+  return fieldNodes.length === 1 ? matchingPlacements[0]!.label : undefined;
 };
 
 /** Preserves the Show form task's scalar defaults on the matching authored control. */
@@ -570,7 +657,7 @@ function ApplicationPageViewContent({
     | undefined
   >(undefined);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormNotice>>>({});
+  const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
   const [busy, setBusy] = useState(false);
   const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
@@ -1343,12 +1430,16 @@ function ApplicationPageViewContent({
           delete next[formPlacementId];
           return next;
         });
-      const showResult = (resultNotice: Notice): void => {
+      const showResult = (
+        resultNotice: Notice,
+        refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
+      ): void => {
         setNotice(resultNotice);
         if (formPlacementId !== undefined)
           setFormFeedback((current) => ({
             ...current,
-            [formPlacementId]: {
+            [formPlacementId]: refusalFeedback ?? {
+              kind: "message",
               tone: resultNotice.tone === "problem" ? "problem" : "success",
               text: resultNotice.text,
             },
@@ -1372,6 +1463,25 @@ function ApplicationPageViewContent({
         }
         if (server.kind === "finished") {
           let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          const diagnostic = server.failure?.diagnostic;
+          const fieldLabel =
+            diagnostic?.submittedField === undefined || formPlacementId === undefined
+              ? undefined
+              : visibleOwningFormFieldLabel(
+                  model.page,
+                  model.pageId,
+                  formPlacementId,
+                  diagnostic.submittedField,
+                );
+          const refusalFeedback =
+            diagnostic === undefined
+              ? undefined
+              : {
+                  kind: "refusal" as const,
+                  code: diagnostic.code,
+                  ...(fieldLabel === undefined ? {} : { fieldLabel }),
+                };
+          if (diagnostic !== undefined) resultNotice = refusalNotices[diagnostic.code];
           if (
             afterAccepted !== undefined &&
             ["completed", "committed", "background_pending"].includes(
@@ -1385,7 +1495,7 @@ function ApplicationPageViewContent({
             }
           }
           if (!isCurrentNavigation()) return;
-          showResult(resultNotice);
+          showResult(resultNotice, refusalFeedback);
           // A finished guided-form submission may have abandoned its draft. Keep the journey
           // visible but inactive until a new page load establishes the next draft.
           if (
@@ -1421,7 +1531,15 @@ function ApplicationPageViewContent({
         if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
-    [model.guidedForm, navigationKey, refreshPlacements, refreshTargetsForBinding, router],
+    [
+      model.guidedForm,
+      model.page,
+      model.pageId,
+      navigationKey,
+      refreshPlacements,
+      refreshTargetsForBinding,
+      router,
+    ],
   );
 
   const guidedSummaryStepId = useMemo(() => {
@@ -1817,7 +1935,7 @@ function ApplicationPageViewContent({
             setNotice({ tone: "info", text: "No changes to save." });
             setFormFeedback((current) => ({
               ...current,
-              [placementId]: { tone: "success", text: "No changes to save." },
+              [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
             }));
             return;
           }

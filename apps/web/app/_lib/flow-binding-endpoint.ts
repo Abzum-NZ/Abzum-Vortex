@@ -5,9 +5,14 @@ import { z } from "zod";
 import {
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
+  flowRefusalFeedbackSchema,
+  flowSchema,
+  flowTaskChildLists,
   flowBindingInvocationSchema,
+  FORM_CONTAINER_BLOCK_RELEASE,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
+  PLATFORM_BLOCK_RELEASES,
   safeFlowResultDescriptors,
   recordIdSchema,
   recordTypeIdSchema,
@@ -19,6 +24,9 @@ import {
   type ApplicationContentV2,
   type ModuleDefinitionConsumerReadResultV3,
   type FlowBindingInvocation,
+  type FlowDefinition,
+  type FlowRefusalFeedback,
+  type FlowTask,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -155,7 +163,11 @@ export type FlowBindingEndpointResult =
       /** Browser intents such as navigation or a message, for the surface to carry out. */
       intents: SafeIntents;
       unavailable: readonly FlowUnavailableNotice[];
-      failure?: Readonly<{ code: string; taskId?: string }>;
+      failure?: Readonly<{
+        code: string;
+        taskId?: string;
+        diagnostic?: FlowRefusalFeedback;
+      }>;
     }>
   /** The run waits for the person: a form or confirmation intent and the single-use continuation. */
   | Readonly<{
@@ -179,6 +191,208 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+
+const isPlacementProvenVisible = (placement: Record<string, unknown>): boolean => {
+  if (
+    placement.visibilityCondition !== undefined ||
+    placement.viewPermissionKey !== undefined ||
+    placement.usePermissionKey !== undefined ||
+    !isRecord(placement.responsive)
+  )
+    return false;
+  const responsive = placement.responsive;
+  return ["desktop", "tablet", "phone"].every((breakpoint) => {
+    const layout = responsive[breakpoint];
+    return isRecord(layout) && layout.visible === true;
+  });
+};
+
+/** A field can be named only when this exact binding control owns one current visible form field. */
+const hasVisibleOwningFormField = (
+  installation: InstalledFlowBindings,
+  controlId: string,
+  callerInputName: string,
+): boolean => {
+  const pages = installation.applicationContent?.pages;
+  if (!Array.isArray(pages)) return false;
+
+  const controls: { formId?: string; visible: boolean }[] = [];
+  const fields: { formId: string; visible: boolean }[] = [];
+  const inputReleases = PLATFORM_BLOCK_RELEASES.filter((release) =>
+    release.supportedEvents.includes("field_changed"),
+  );
+  const visitSlotTree = (
+    candidate: unknown,
+    currentFormId?: string,
+    ancestorsVisible = true,
+  ): void => {
+    if (!isRecord(candidate)) return;
+    if (!isRecord(candidate.placements)) {
+      for (const child of Object.values(candidate)) visitSlotTree(child, currentFormId, ancestorsVisible);
+      return;
+    }
+    for (const [placementId, value] of Object.entries(candidate.placements)) {
+      if (!isRecord(value)) continue;
+      const block = value.block;
+      const blockIsForm =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        typeof block.releaseVersion === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
+        block.releaseVersion === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion;
+      const formId = blockIsForm ? placementId : currentFormId;
+      const visible = ancestorsVisible && isPlacementProvenVisible(value);
+      if (sameId(placementId, controlId)) controls.push({ formId, visible });
+
+      if (
+        formId !== undefined &&
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        typeof block.releaseVersion === "string" &&
+        isRecord(value.settings)
+      ) {
+        const registeredInput = inputReleases.some(
+          (release) =>
+            sameId(release.blockId, block.blockId) &&
+            release.releaseVersion === block.releaseVersion,
+        );
+        const name = value.settings.name;
+        if (
+          registeredInput &&
+          isRecord(name) &&
+          name.kind === "text" &&
+          name.value === callerInputName
+        )
+          fields.push({ formId, visible });
+      }
+
+      if (isRecord(value.slots))
+        for (const child of Object.values(value.slots)) visitSlotTree(child, formId, visible);
+    }
+  };
+
+  for (const page of pages) {
+    if (!isRecord(page) || !isRecord(page.composition)) continue;
+    const composition = page.composition;
+    if (composition.main !== undefined) visitSlotTree(composition.main);
+    if (composition.content !== undefined) visitSlotTree(composition.content);
+    if (composition.stepContent !== undefined) visitSlotTree(composition.stepContent);
+  }
+
+  if (
+    controls.length !== 1 ||
+    !controls[0]!.visible ||
+    controls[0]!.formId === undefined ||
+    !sameId(controls[0]!.formId, controlId)
+  )
+    return false;
+  const ownerFormId = controls[0]!.formId;
+  const matchingFields = fields.filter(
+    (field) => field.formId === ownerFormId && field.visible,
+  );
+  return matchingFields.length === 1;
+};
+
+const directFlowInputName = (candidate: unknown): string | undefined => {
+  if (
+    !isRecord(candidate) ||
+    candidate.kind !== "reference" ||
+    !isRecord(candidate.reference) ||
+    candidate.reference.source !== "input" ||
+    typeof candidate.reference.name !== "string" ||
+    candidate.reference.path !== undefined
+  )
+    return undefined;
+  return candidate.reference.name;
+};
+
+const operationInputFlowInput = (
+  flow: FlowDefinition,
+  taskId: string,
+  operationInput: string,
+): string | undefined => {
+  const matches: FlowTask[] = [];
+  const visit = (tasks: readonly FlowTask[]): void => {
+    for (const task of tasks) {
+      if (task.id === taskId) matches.push(task);
+      for (const child of flowTaskChildLists(task)) visit(child.tasks);
+    }
+  };
+  visit(flow.tasks);
+  visit(flow.errors);
+  visit(flow.finally);
+  if (matches.length !== 1 || matches[0]!.type !== "operation.call") return undefined;
+
+  const matchedTask = matches[0]!;
+  if (!isRecord(matchedTask.properties)) return undefined;
+  const properties = matchedTask.properties;
+  const taskInputs = properties.inputs;
+  if (taskInputs === undefined)
+    return Object.hasOwn(flow.inputs, operationInput) ? operationInput : undefined;
+  if (!isRecord(taskInputs) || taskInputs.kind !== "map" || !isRecord(taskInputs.entries))
+    return undefined;
+  const flowInputName = directFlowInputName(taskInputs.entries[operationInput]);
+  return flowInputName !== undefined && Object.hasOwn(flow.inputs, flowInputName)
+    ? flowInputName
+    : undefined;
+};
+
+const submittedFieldForDiagnostic = (
+  diagnostic: FlowRefusalFeedback,
+  taskId: string | undefined,
+  flowId: string,
+  binding: ComponentFlowBinding | undefined,
+  installation: InstalledFlowBindings,
+): string | undefined => {
+  const operationInput = diagnostic.operationInput;
+  if (
+    diagnostic.code !== "invalid_command" ||
+    operationInput === undefined ||
+    taskId === undefined ||
+    binding === undefined ||
+    binding.event !== "form_submit" ||
+    !sameId(binding.flow.flowId, flowId)
+  )
+    return undefined;
+  const rawFlow = installation.flows.get(flowId);
+  const parsedFlow = flowSchema.safeParse(rawFlow);
+  if (!parsedFlow.success) return undefined;
+  const flowInputName = operationInputFlowInput(parsedFlow.data, taskId, operationInput);
+  if (flowInputName === undefined) return undefined;
+  const bindingInput = binding.flow.inputs[flowInputName];
+  if (
+    !isRecord(bindingInput) ||
+    bindingInput.kind !== "caller" ||
+    typeof bindingInput.name !== "string"
+  )
+    return undefined;
+  return hasVisibleOwningFormField(installation, binding.controlId, bindingInput.name)
+    ? bindingInput.name
+    : undefined;
+};
+
+const surfaceDiagnostic = (
+  diagnostic: FlowRefusalFeedback | undefined,
+  taskId: string | undefined,
+  flowId: string,
+  binding: ComponentFlowBinding | undefined,
+  installation: InstalledFlowBindings,
+): FlowRefusalFeedback | undefined => {
+  if (diagnostic === undefined) return undefined;
+  const parsed = flowRefusalFeedbackSchema.safeParse(diagnostic);
+  if (!parsed.success) return undefined;
+  const submittedField = submittedFieldForDiagnostic(
+    parsed.data,
+    taskId,
+    flowId,
+    binding,
+    installation,
+  );
+  return flowRefusalFeedbackSchema.parse({
+    code: parsed.data.code,
+    ...(submittedField === undefined ? {} : { submittedField }),
+  });
+};
 
 const selectedRecordInputSchema = z
   .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
@@ -276,6 +490,11 @@ const bindingInputs = (
 
 const finishedResult = (
   response: Extract<FlowOrchestratorResponse, { kind: "finished" }>,
+  context: Readonly<{
+    flowId: string;
+    binding?: ComponentFlowBinding;
+    installation: InstalledFlowBindings;
+  }>,
 ): FlowBindingEndpointResult => {
   // Only committed changes contribute to this count, so a successful read step cannot turn a
   // later refusal into a false `partial` result. An uncertain effect stays `uncertain`.
@@ -287,6 +506,16 @@ const finishedResult = (
       ? response.outcome
       : "partial";
   const descriptor = safeFlowResultDescriptors[outcome];
+  const diagnostic =
+    response.failure === undefined
+      ? undefined
+      : surfaceDiagnostic(
+          response.failure.diagnostic,
+          response.failure.taskId,
+          context.flowId,
+          context.binding,
+          context.installation,
+        );
   return {
     kind: "result",
     runId: response.runId,
@@ -294,7 +523,17 @@ const finishedResult = (
     outputs: descriptor.outputs === "available" ? response.outputs : {},
     intents: response.intents,
     unavailable: response.unavailable,
-    ...(response.failure === undefined ? {} : { failure: response.failure }),
+    ...(response.failure === undefined
+      ? {}
+      : {
+          failure: {
+            code: response.failure.code,
+            ...(response.failure.taskId === undefined
+              ? {}
+              : { taskId: response.failure.taskId }),
+            ...(diagnostic === undefined ? {} : { diagnostic }),
+          },
+        }),
   };
 };
 
@@ -335,11 +574,17 @@ const suspendedTarget = (
 
 const toResult = (
   response: FlowOrchestratorResponse,
-  context: Readonly<{ applicationRootId: string; installationRevision: number; flowId: string }>,
+  context: Readonly<{
+    applicationRootId: string;
+    installationRevision: number;
+    flowId: string;
+    binding?: ComponentFlowBinding;
+    installation: InstalledFlowBindings;
+  }>,
 ): FlowBindingEndpointResult => {
   switch (response.kind) {
     case "finished":
-      return finishedResult(response);
+      return finishedResult(response, context);
     case "suspended": {
       const target = suspendedTarget(response, context);
       const receipt = formContinuationReceiptSchema.safeParse({
@@ -367,9 +612,21 @@ const toResult = (
 const continuationResult = (
   outcome: FormContinuationOutcome,
   installationRevision: number,
+  context: Readonly<{
+    flowId: string;
+    binding?: ComponentFlowBinding;
+    installation: InstalledFlowBindings;
+  }>,
 ): FlowBindingEndpointResult => {
   switch (outcome.kind) {
-    case "finished":
+    case "finished": {
+      const diagnostic = surfaceDiagnostic(
+        outcome.failure?.diagnostic,
+        outcome.failure?.taskId,
+        context.flowId,
+        context.binding,
+        context.installation,
+      );
       return {
         kind: "result",
         runId: outcome.runId,
@@ -382,10 +639,14 @@ const continuationResult = (
           : {
               failure: {
                 code: outcome.failure.code,
-                ...(outcome.failure.taskId === undefined ? {} : { taskId: outcome.failure.taskId }),
+                ...(outcome.failure.taskId === undefined
+                  ? {}
+                  : { taskId: outcome.failure.taskId }),
+                ...(diagnostic === undefined ? {} : { diagnostic }),
               },
             }),
       };
+    }
     case "form_requested":
       return {
         kind: "intent",
@@ -468,7 +729,10 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               answer: request.answer,
               ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
             });
-            return continuationResult(outcome, installation.installationRevision);
+            return continuationResult(outcome, installation.installationRevision, {
+              flowId: request.flowId,
+              installation,
+            });
           }
           // A form answer must pass through the paused-target adapter, which resolves every
           // reference-choice key before the flow sees the submitted values.
@@ -493,6 +757,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             applicationRootId: installation.applicationRootId,
             installationRevision: installation.installationRevision,
             flowId: request.flowId,
+            installation,
           });
         }
 
@@ -540,6 +805,8 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           applicationRootId: installation.applicationRootId,
           installationRevision: installation.installationRevision,
           flowId: binding.flow.flowId,
+          binding,
+          installation,
         });
       } catch {
         return refused;

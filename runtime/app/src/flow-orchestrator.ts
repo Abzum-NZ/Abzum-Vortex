@@ -38,6 +38,7 @@ import {
   type FlowDefinition,
   type FlowReadFieldsScalarType,
   type ExecuteNamedActionResultV2,
+  type FlowRefusalFeedback,
   type FlowTask,
   type FlowValue,
   type IdentitySession,
@@ -447,7 +448,11 @@ export type FlowOrchestratorResponse =
        */
       outcome: "committed" | "completed" | FlowFailureOutcome;
       /** Set only for a failure: which rule ended the run, and at which task. */
-      failure?: Readonly<{ code: FlowFailureCode; taskId?: string }>;
+      failure?: Readonly<{
+        code: FlowFailureCode;
+        taskId?: string;
+        diagnostic?: FlowRefusalFeedback;
+      }>;
       stopped?: string;
       /** Protected effects this run committed, across every resume: a later failure is then partial. */
       committedEffects: number;
@@ -859,6 +864,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         failure: {
           code: notAvailable ? "task_not_available" : step.result.failure.code,
           ...(failedTaskId === undefined ? {} : { taskId: failedTaskId }),
+          ...(!notAvailable && step.result.failure.diagnostic !== undefined
+            ? { diagnostic: step.result.failure.diagnostic }
+            : {}),
         },
         outputs: {},
         intents,
@@ -899,7 +907,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     | Readonly<{ kind: "save"; command: SaveRecordCommandV2 }>
     | Readonly<{ kind: "action"; command: ExecuteNamedActionCommandV2 }>;
 
-  type TaskResult = { outcome: FlowTaskOutcome; outputs?: Record<string, JsonValue> };
+  type TaskResult = {
+    outcome: FlowTaskOutcome;
+    outputs?: Record<string, JsonValue>;
+    diagnostic?: FlowRefusalFeedback;
+  };
 
   const flowTaskOutcomes = new Set<FlowTaskOutcome>([
     "completed",
@@ -1197,7 +1209,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       operationSucceeded
         ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
         : {};
-    return { result: { outcome, outputs }, stored };
+    return {
+      result: {
+        outcome,
+        outputs,
+        ...(executed.diagnostic === undefined ? {} : { diagnostic: executed.diagnostic }),
+      },
+      stored,
+    };
   };
 
   /**
@@ -1386,6 +1405,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         kind: "task_result",
         outcome: result.outcome,
         ...(result.outputs === undefined ? {} : { outputs: result.outputs }),
+        ...(result.diagnostic === undefined ? {} : { diagnostic: result.diagnostic }),
       };
       step = resumeFlowRun(step.state, resume, run.library);
     }

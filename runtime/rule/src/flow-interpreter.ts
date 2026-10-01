@@ -15,6 +15,7 @@ import {
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
+  type FlowRefusalFeedback,
   type FlowReference,
   type FlowTask,
   type FlowValue,
@@ -81,6 +82,7 @@ export type FlowFailure = Readonly<{
   outcome: FlowFailureOutcome;
   code: FlowFailureCode;
   taskId?: string;
+  diagnostic?: FlowRefusalFeedback;
 }>;
 
 export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
@@ -246,6 +248,7 @@ export type FlowRunResume =
       kind: "task_result";
       outcome: FlowTaskOutcome;
       outputs?: Readonly<Record<string, JsonValue>>;
+      diagnostic?: FlowRefusalFeedback;
     }>
   | FormContinuationAnswer;
 
@@ -1169,6 +1172,7 @@ export const resumeFlowRun = (
         outcome: resume.outcome,
         code: "task_refused",
         taskId: awaiting.taskId,
+        ...(resume.diagnostic === undefined ? {} : { diagnostic: resume.diagnostic }),
       }),
     );
     return drive(machine, observer);
