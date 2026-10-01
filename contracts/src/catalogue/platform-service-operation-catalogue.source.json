@@ -57,6 +57,87 @@
       }
     }
   },
+  "create_tenant_organization": {
+    "key": "create_tenant_organization",
+    "name": "Create tenant organisation",
+    "release": {
+      "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92",
+      "operationId": "12d1b239-bd2f-4075-9cf4-17f7d3f51256",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92"
+        },
+        "operationId": "12d1b239-bd2f-4075-9cf4-17f7d3f51256"
+      },
+      "inputs": {
+        "parent_organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "short_name": {
+          "type": "text",
+          "required": true
+        },
+        "display_name": {
+          "type": "text",
+          "required": true
+        },
+        "steward_display_name": {
+          "type": "text",
+          "required": true
+        },
+        "language": {
+          "type": "text",
+          "required": true
+        },
+        "time_zone": {
+          "type": "text",
+          "required": true
+        },
+        "currency": {
+          "type": "text",
+          "required": true
+        },
+        "date_format": {
+          "type": "choice",
+          "required": true
+        },
+        "number_format": {
+          "type": "choice",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "requiredAuthority": {
+        "kind": "tenant_capability",
+        "capability": "platform.tenant.organizations.create"
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "validation",
+        "failed"
+      ]
+    }
+  },
   "rename_group": {
     "key": "rename_group",
     "name": "Rename group",
