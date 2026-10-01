@@ -20,6 +20,11 @@ export {
   protectedQuerySummaryGroupSchema,
   protectedQuerySummaryCompletedSchema,
   protectedQuerySummaryResultSchema,
+  protectedQueryBoardSummaryCommandSchema,
+  protectedQueryBoardSummaryColumnSchema,
+  protectedQueryBoardSummaryUnassignedSchema,
+  protectedQueryBoardSummaryCompletedSchema,
+  protectedQueryBoardSummaryResultSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryBoardColumn,
   type ProtectedQueryBoardSelector,
@@ -38,6 +43,11 @@ export {
   type ProtectedQuerySummaryAggregateResult,
   type ProtectedQuerySummaryGroup,
   type ProtectedQuerySummaryResult,
+  type ProtectedQueryBoardSummaryCommand,
+  type ProtectedQueryBoardSummaryColumn,
+  type ProtectedQueryBoardSummaryUnassigned,
+  type ProtectedQueryBoardSummaryCompleted,
+  type ProtectedQueryBoardSummaryResult,
 } from "./protected-query-contracts";
 
 export {
