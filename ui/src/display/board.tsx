@@ -1,3 +1,5 @@
+"use client";
+
 import { useRef, useState, type ReactElement } from "react";
 import type { BoardColumnSelector } from "@vortex/contracts";
 import { Button } from "../components/button";
