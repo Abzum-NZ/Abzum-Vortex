@@ -28,11 +28,11 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import {
-  operationClock,
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
   revision,
 } from "./save-record";
+import { operationClock } from "./field-candidate";
 
 type Row = DatabaseRow & { readonly result: unknown };
 
