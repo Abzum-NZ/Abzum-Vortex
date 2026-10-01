@@ -8,6 +8,10 @@ begin;
 
 grant usage on schema vortex_access to vortex_identity_owner;
 
+-- Replace the existing private reader under its established owner. The
+-- migration role may SET this role but does not inherit its privileges.
+set local role vortex_access_owner;
+
 create or replace function vortex_access.validation_reference_list(p_list text)
 returns text[]
 language plpgsql
@@ -48,6 +52,8 @@ comment on function vortex_access.validation_reference_list(text) is
 
 alter function vortex_access.validation_reference_list(text)
   owner to vortex_access_owner;
+
+reset role;
 
 -- BEGIN GENERATED: organization settings reference seed
 insert into vortex_access.validation_reference_values (
@@ -327,6 +333,10 @@ drop function vortex_access.update_organization_runtime_settings_for_administrat
 drop function vortex_access.set_organization_default_application_for_administration(
   uuid, bigint, uuid
 );
+-- These retired routines now belong to the Identity owner. Drop them as
+-- that owner, then restore the migration role before dropping its table.
+set local role vortex_identity_owner;
+
 drop function vortex_identity.update_organization_runtime_settings_internal(
   uuid, bigint, text, text, text, text, text
 );
@@ -335,6 +345,8 @@ drop function vortex_identity.update_organization_default_application_internal(
 );
 drop function vortex_identity.read_staged_organization_runtime_settings_update();
 drop function vortex_identity.stage_organization_runtime_settings_update(jsonb);
+reset role;
+
 drop table vortex_identity.organization_runtime_settings_update_staging;
 
 commit;
