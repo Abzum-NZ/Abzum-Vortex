@@ -70,8 +70,8 @@ const mapError = (error: unknown): OrganizationRuntimeSettingsError => {
 };
 
 /**
- * Identity-owned adapter for trusted setup and trusted runtime staging. The
- * request-role reader belongs to Access, which owns that protected boundary.
+ * Identity-owned adapter for trusted setup. Changes belong to the generic
+ * revision-checked organization settings record save.
  */
 export const createOrganizationRuntimeSettingsStore = (
   dependencies: OrganizationRuntimeSettingsStoreDependencies = {},
@@ -104,28 +104,9 @@ export const createOrganizationRuntimeSettingsStore = (
         throw mapError(error);
       }
     },
-
-    async stageUpdate(
-      transaction: RequestDatabaseTransaction,
-      settingsCandidate: OrganizationRuntimeSettings,
-    ): Promise<void> {
-      const settings = organizationRuntimeSettingsSchema.safeParse(settingsCandidate);
-      if (!settings.success)
-        throw new OrganizationRuntimeSettingsError("INVALID_ORGANIZATION_RUNTIME_SETTINGS");
-      try {
-        await transaction.query`
-          select vortex_identity.stage_organization_runtime_settings_update(
-            ${JSON.stringify(settings.data)}::text::jsonb
-          )
-        `;
-      } catch (error) {
-        throw mapError(error);
-      }
-    },
   });
 };
 
 const defaultStore = createOrganizationRuntimeSettingsStore();
 
 export const initializeOrganizationRuntimeSettings = defaultStore.initialize;
-export const stageOrganizationRuntimeSettingsUpdate = defaultStore.stageUpdate;

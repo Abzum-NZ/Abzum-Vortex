@@ -1,6 +1,8 @@
 import {
   modulePlatformPermissionDeclarationSchema,
   moduleSourceDocumentSchema,
+  organizationRuntimeSettingsDateFormatOptions,
+  organizationRuntimeSettingsNumberFormatOptions,
   type ModuleSourceDocument,
 } from "@vortex/contracts";
 
@@ -567,7 +569,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           storage_scope: "organisation_shared",
           ownership_mode: "none",
           standard_actions: ["read", "update"],
-          custom_actions: ["act_update_organization_settings", "act_set_default_application"],
+          custom_actions: [],
           system_projection: {
             protected_view: "organization_runtime_settings",
             organization_field: "organization_id",
@@ -653,12 +655,9 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               public_display: "refused",
               type: "choice",
               settings: {
-                options: [
-                  { value: "short", label: "Short" },
-                  { value: "medium", label: "Medium" },
-                  { value: "long", label: "Long" },
-                  { value: "full", label: "Full" },
-                ],
+                options: organizationRuntimeSettingsDateFormatOptions.map((option) => ({
+                  ...option,
+                })),
               },
             },
             {
@@ -673,12 +672,9 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               public_display: "refused",
               type: "choice",
               settings: {
-                options: [
-                  { value: "auto", label: "Automatic" },
-                  { value: "always", label: "Always show decimals" },
-                  { value: "min2", label: "At least two decimals" },
-                  { value: "never", label: "Never show decimals" },
-                ],
+                options: organizationRuntimeSettingsNumberFormatOptions.map((option) => ({
+                  ...option,
+                })),
               },
             },
             {
@@ -1028,44 +1024,6 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           field_policy: { readable_fields: settingsAllFields, changeable_fields: [] },
         },
         {
-          id: "perm_settings_update",
-          key: "vortex.organisation_administration.organization_settings.update",
-          label: "Update organisation settings",
-          description:
-            "Allows updating the organisation settings document through its protected operation.",
-          record_type: "organization_settings",
-          action_kind: "named",
-          named_action: "update",
-          administrative: false,
-          record_scope: { routes: [{ kind: "all_records" }] },
-          field_policy: {
-            readable_fields: [
-              "language",
-              "time_zone",
-              "currency",
-              "date_format",
-              "number_format",
-            ],
-            changeable_fields: [],
-          },
-        },
-        {
-          id: "perm_settings_set_default_application",
-          key: "vortex.organisation_administration.organization_settings.set_default_application",
-          label: "Set default application",
-          description:
-            "Allows setting or clearing the organisation's default application through its protected operation.",
-          record_type: "organization_settings",
-          action_kind: "named",
-          named_action: "set_default_application",
-          administrative: false,
-          record_scope: { routes: [{ kind: "all_records" }] },
-          field_policy: {
-            readable_fields: ["default_application_root_id"],
-            changeable_fields: [],
-          },
-        },
-        {
           id: "perm_installed_application_read",
           key: "vortex.organisation_administration.installed_application.read",
           label: "Read installed applications",
@@ -1238,76 +1196,6 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               properties: { values: { closed_at: "{{ execution.now }}" } },
             },
           ],
-        },
-        {
-          id: "act_update_organization_settings",
-          key: "vortex.organisation_administration.organization_settings.update",
-          label: "Update organisation settings",
-          record_type: "organization_settings",
-          permission: "vortex.organisation_administration.organization_settings.update",
-          shareable: false,
-          // The settings document's identity and revision reach the operation
-          // automatically, so only the new values are the actor's input.
-          inputs: [
-            {
-              key: "language",
-              label: "Language",
-              required: true,
-              type: "text",
-              validation: { maximum_length: 35 },
-            },
-            {
-              key: "time_zone",
-              label: "Time zone",
-              required: true,
-              type: "text",
-              validation: { maximum_length: 100 },
-            },
-            {
-              key: "currency",
-              label: "Currency",
-              required: true,
-              type: "text",
-              validation: { minimum_length: 3, maximum_length: 3 },
-            },
-            {
-              key: "date_format",
-              label: "Date format",
-              required: true,
-              type: "text",
-              validation: { minimum_length: 1, maximum_length: 20 },
-            },
-            {
-              key: "number_format",
-              label: "Number format",
-              required: true,
-              type: "text",
-              validation: { minimum_length: 1, maximum_length: 20 },
-            },
-          ],
-          tasks: [],
-          protected_operation: "update_runtime_settings",
-        },
-        {
-          id: "act_set_default_application",
-          key: "vortex.organisation_administration.organization_settings.set_default_application",
-          label: "Set default application",
-          record_type: "organization_settings",
-          permission: "vortex.organisation_administration.organization_settings.set_default_application",
-          shareable: false,
-          // The settings document's identity and revision reach the operation
-          // automatically; an absent application clears the default.
-          inputs: [
-            {
-              key: "default_application_root_id",
-              label: "Default application",
-              required: false,
-              type: "text",
-              validation: { maximum_length: 36 },
-            },
-          ],
-          tasks: [],
-          protected_operation: "set_default_application",
         },
       ],
       events: [],

@@ -15,7 +15,6 @@ import {
   flowRefusalFeedbackSchema,
   identitySessionSchema,
   jsonValueSchema,
-  organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   reactivateOrganizationAccountCommandSchema,
@@ -60,7 +59,6 @@ import {
 import type {
   createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
-  createOrganizationRuntimeSettingsAdministrationService,
   HumanOrganizationRequestResult,
 } from "@vortex/access";
 import { verifiedDurableActorContextSchema } from "@vortex/access";
@@ -219,10 +217,6 @@ type ProtectedOperationServices = Readonly<{
     | "updateOwnProfile"
     | "createOrganizationInvitation"
     | "revokeOrganizationInvitation"
-  >;
-  runtimeSettings: Pick<
-    ReturnType<typeof createOrganizationRuntimeSettingsAdministrationService>,
-    "update" | "setDefaultApplication"
   >;
   tenantGovernance: Readonly<{
     run<Result>(
@@ -823,57 +817,6 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           delegation_authority_id: value.delegation.delegationAuthorityId,
           revision: value.delegation.revision,
           access_version: value.accessVersion,
-        }),
-      ),
-  }),
-  update_runtime_settings: operation({
-    schema: z
-      .object({
-        expectedRevision: z.number(),
-        settings: organizationRuntimeSettingsSchema,
-      })
-      .strict(),
-    // The organisation is the initiator's own selection, never an input, and the expected
-    // revision is the revision the submitted settings are based on.
-    command: (inputs, selection) => ({
-      expectedRevision: inputs.expected_revision,
-      settings: {
-        organizationId: selection.organizationId,
-        language: inputs.language,
-        timeZone: inputs.time_zone,
-        currency: inputs.currency,
-        dateFormat: inputs.date_format,
-        numberFormat: inputs.number_format,
-        revision: inputs.expected_revision,
-      },
-    }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.runtimeSettings.update(caller.session, caller.selection, command),
-        (value) => ({ revision: value.revision }),
-      ),
-  }),
-  set_default_application: operation({
-    schema: z
-      .object({
-        expectedRevision: z.number(),
-        defaultApplicationRootId: applicationRootIdSchema.nullable(),
-      })
-      .strict(),
-    command: (inputs) => ({
-      expectedRevision: inputs.expected_revision,
-      defaultApplicationRootId: inputs.default_application_root_id ?? null,
-    }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.runtimeSettings.setDefaultApplication(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (value) => ({
-          default_application_root_id: value.defaultApplicationRootId,
-          revision: value.revision,
         }),
       ),
   }),

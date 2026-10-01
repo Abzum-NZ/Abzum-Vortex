@@ -31,7 +31,7 @@ revoke all on function vortex_access.validation_reference_list(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 grant execute on function vortex_access.validation_reference_list(text)
-  to vortex_request, vortex_runtime;
+  to vortex_request, vortex_runtime, vortex_identity_owner;
 
 comment on function vortex_access.validation_reference_list(text) is
   'Returns the ordered values of one seeded validation reference list; refuses an unknown or empty list so no check can pass against a missing list.';
