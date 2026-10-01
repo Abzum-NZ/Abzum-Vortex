@@ -19,16 +19,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
-/* Group heading */
-.vortex-group-heading {
-  margin: 0;
-  font-family: var(--vortex-heading-font-family);
-  font-size: var(--vortex-heading-font-size);
-  line-height: var(--vortex-heading-line-height);
-  font-weight: var(--vortex-heading-font-weight);
-  color: var(--vortex-text);
-}
-
 .vortex-field {
   display: flex;
   flex-direction: column;
@@ -55,72 +45,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-selection-radio:hover:not(:disabled) {
   box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
-}
-
-/* Grouped data */
-.vortex-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vortex-space-xs);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.vortex-group-item {
-  display: flex;
-  align-items: center;
-  gap: var(--vortex-space-sm);
-  padding: var(--vortex-cell-padding-y) var(--vortex-cell-padding-x);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-surface);
-  transition: border-color var(--vortex-motion-feedback) ease-out;
-}
-
-.vortex-group-item:hover {
-  border-color: var(--vortex-text);
-}
-
-.vortex-group-item-content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
-.vortex-group-item-heading {
-  font-weight: 600;
-}
-
-.vortex-group-item-secondary,
-.vortex-group-empty,
-.vortex-group-summary-label {
-  color: var(--vortex-text-muted);
-}
-
-.vortex-data-group + .vortex-data-group {
-  margin-top: var(--vortex-space-lg);
-}
-
-.vortex-group-heading {
-  margin-bottom: var(--vortex-space-sm);
-}
-
-.vortex-group-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--vortex-space-md);
-  margin: var(--vortex-space-sm) 0 0;
-}
-
-.vortex-group-summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vortex-space-xs);
-}
-
-.vortex-group-summary-value {
-  margin: 0;
 }
 
 /* Display cells and rich text */
