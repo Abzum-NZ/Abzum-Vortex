@@ -251,8 +251,38 @@ if (!process.argv.includes("--worker")) {
     value !== null && typeof value === "object" && !Array.isArray(value)
       ? mapValueShape(Object.keys(value).map((key) => ({ kind: "key", value: key })))
       : unknownValueShape();
+  const unavailableInputShape = () => ({ kind: "unknown", unavailableInput: true });
+  const usesUnavailableInput = (value, inputs, state) => {
+    if (value?.kind === "literal") return false;
+    const unavailableReference = (reference) => {
+      const shape = reference?.source === "input"
+        ? inputs.get(reference.name)
+        : reference?.source === "variable"
+          ? state.variables.get(reference.name)
+          : reference?.source === "task_output"
+            ? state.taskValues.get(reference.task + ":" + reference.key)
+            : undefined;
+      return shape?.unavailableInput === true;
+    };
+    if (value?.kind === "reference") return unavailableReference(value.reference);
+    if (value?.kind === "map")
+      return Object.values(value.entries).some((entry) => usesUnavailableInput(entry, inputs, state));
+    if (value?.kind === "formula") {
+      const visit = (node) => {
+        if (node === null || typeof node !== "object") return false;
+        if (node.op === "literal") return false;
+        if (node.op === "reference") return unavailableReference(node.reference);
+        return Object.values(node).some((child) =>
+          Array.isArray(child) ? child.some(visit) : visit(child),
+        );
+      };
+      return visit(value.formula);
+    }
+    return false;
+  };
   const flowValueShape = (value, inputs, state) => {
     if (value === null || typeof value !== "object") return unknownValueShape();
+    if (usesUnavailableInput(value, inputs, state)) return unavailableInputShape();
     if (value.kind === "map" && value.entries && typeof value.entries === "object")
       return mapValueShape(Object.keys(value.entries).map((key) => ({ kind: "key", value: key })));
     if (value.kind === "literal" && value.literal?.type === "json")
@@ -272,7 +302,9 @@ if (!process.argv.includes("--worker")) {
       shapes.length === 0 ||
       shapes.some((shape) => shape.kind !== "map" || shape.complete !== true)
     )
-      return unknownValueShape();
+      return shapes.some((shape) => shape.unavailableInput === true)
+        ? unavailableInputShape()
+        : unknownValueShape();
     const common = new Map(shapes[0].keys.map((token) => [tokenKey(token), token]));
     for (const shape of shapes.slice(1)) {
       const present = new Set(shape.keys.map(tokenKey));
@@ -418,8 +450,8 @@ if (!process.argv.includes("--worker")) {
         control = { name, token: { kind: "key", value: name } };
       }
       const sameName = form.controls.filter((candidate) => candidate.name === control.name);
-      if (sameName.some((candidate) => tokenKey(candidate.token) !== tokenKey(control.token))) {
-        addFormIssue(form, "the owning form has ambiguous registered input names");
+      if (sameName.length > 0) {
+        addFormIssue(form, "the owning form has duplicate registered input names");
         return;
       }
       if (
@@ -606,18 +638,25 @@ if (!process.argv.includes("--worker")) {
       const byKey = new Map();
       for (const field of fields) {
         if (typeof field.fieldId !== "string" || typeof field.key !== "string") return undefined;
-        if (byId.has(field.fieldId) || byKey.has(field.key)) return undefined;
-        byId.set(field.fieldId, field);
-        byKey.set(field.key, field);
+        const id = field.fieldId.toLowerCase();
+        const key = field.key.toLowerCase();
+        if (byId.has(id) || byKey.has(key)) return undefined;
+        byId.set(id, field);
+        byKey.set(key, field);
       }
       const ids = new Set();
       for (const token of shape.keys) {
+        const name = token.value.toLowerCase();
         const candidates =
           token.kind === "id"
-            ? [byId.get(token.value)].filter(Boolean)
-            : [byKey.get(token.value), byId.get(token.value)].filter(Boolean);
-        if (new Set(candidates.map((field) => field.fieldId)).size > 1) return undefined;
-        for (const field of candidates) ids.add(field.fieldId);
+            ? [byId.get(name)].filter(Boolean)
+            : [byKey.get(name), byId.get(name)].filter(Boolean);
+        const candidateIds = new Set(candidates.map((field) => field.fieldId));
+        if (candidateIds.size !== 1) return undefined;
+        for (const field of candidates) {
+          if (ids.has(field.fieldId)) return undefined;
+          ids.add(field.fieldId);
+        }
       }
       return { ids, fields };
     };
@@ -688,7 +727,7 @@ if (!process.argv.includes("--worker")) {
         find({ tasks: candidate.finally ?? [] })
       );
     };
-    const analyzeFlow = (flow, inputShapes, form, bindingIssue, eventRecordTypeId, callStack) => {
+    const analyzeFlow = (flow, inputShapes, form, bindingIssue, callStack) => {
       const variables = new Map();
       for (const [name, declaration] of Object.entries(flow.variables ?? {}))
         variables.set(
@@ -698,21 +737,54 @@ if (!process.argv.includes("--worker")) {
             : unknownValueShape(),
         );
       const state = { variables, taskValues: new Map(), reachable: true };
-      const walkTasks = (tasks, workingState, currentInputs, stack) => {
+      // Loop iterations and parallel branches cannot borrow a value that another execution
+      // of the same body may overwrite. A local assignment can establish its shape again.
+      const invalidateWrittenShapes = (tasks, workingState) => {
+        for (const task of tasks ?? []) {
+          if (task.type === "data.set_variable") {
+            const value = task.properties?.variable;
+            const name =
+              value?.kind === "literal" && value.literal?.type === "text"
+                ? value.literal.value
+                : undefined;
+            if (typeof name === "string")
+              workingState.variables.set(name, unknownValueShape());
+            else
+              for (const key of workingState.variables.keys())
+                workingState.variables.set(key, unknownValueShape());
+          }
+          for (const key of workingState.taskValues.keys())
+            if (key.startsWith(task.id + ":"))
+              workingState.taskValues.set(key, unknownValueShape());
+          const children =
+            task.type === "if"
+              ? [task.then, task.else ?? []]
+              : task.type === "switch"
+                ? [...(task.cases ?? []).map((entry) => entry.tasks), task.default ?? []]
+                : task.type === "parallel"
+                  ? task.branches ?? []
+                  : Array.isArray(task.tasks)
+                    ? [task.tasks]
+                    : [];
+          for (const child of children) invalidateWrittenShapes(child, workingState);
+        }
+      };
+      const walkTasks = (tasks, workingState, currentInputs, stack, concurrentLists = []) => {
         for (const task of tasks ?? []) {
           if (!workingState.reachable) break;
+          for (const list of concurrentLists) invalidateWrittenShapes(list, workingState);
           if (task.type === "sequential") {
-            walkTasks(task.tasks, workingState, currentInputs, stack);
+            walkTasks(task.tasks, workingState, currentInputs, stack, concurrentLists);
             continue;
           }
           if (task.type === "if") {
             const thenState = cloneFlowState(workingState);
-            walkTasks(task.then, thenState, currentInputs, stack);
+            walkTasks(task.then, thenState, currentInputs, stack, concurrentLists);
             const branches = [thenState];
             if (task.else === undefined) branches.push(cloneFlowState(workingState));
             else {
               const elseState = cloneFlowState(workingState);
-              walkTasks(task.else, elseState, currentInputs, stack);
+              walkTasks(task.else, elseState, currentInputs, stack, concurrentLists);
               branches.push(elseState);
             }
             Object.assign(workingState, joinFlowStates(branches));
@@ -722,13 +794,13 @@ if (!process.argv.includes("--worker")) {
             const branches = [];
             for (const entry of task.cases ?? []) {
               const branch = cloneFlowState(workingState);
-              walkTasks(entry.tasks, branch, currentInputs, stack);
+              walkTasks(entry.tasks, branch, currentInputs, stack, concurrentLists);
               branches.push(branch);
             }
             if (task.default === undefined) branches.push(cloneFlowState(workingState));
             else {
               const fallback = cloneFlowState(workingState);
-              walkTasks(task.default, fallback, currentInputs, stack);
+              walkTasks(task.default, fallback, currentInputs, stack, concurrentLists);
               branches.push(fallback);
             }
             Object.assign(workingState, joinFlowStates(branches));
@@ -736,15 +808,25 @@ if (!process.argv.includes("--worker")) {
           }
           if (task.type === "for_each") {
             const body = cloneFlowState(workingState);
-            walkTasks(task.tasks, body, currentInputs, stack);
+            invalidateWrittenShapes(task.tasks, body);
+            walkTasks(task.tasks, body, currentInputs, stack, concurrentLists);
             Object.assign(workingState, joinFlowStates([cloneFlowState(workingState), body]));
             continue;
           }
           if (task.type === "parallel") {
-            const branches = [];
+            const entry = cloneFlowState(workingState);
+            for (const branchTasks of task.branches ?? [])
+              invalidateWrittenShapes(branchTasks, entry);
+            const branches = [entry];
             for (const branchTasks of task.branches ?? []) {
-              const branch = cloneFlowState(workingState);
-              walkTasks(branchTasks, branch, currentInputs, stack);
+              const branch = cloneFlowState(entry);
+              walkTasks(
+                branchTasks,
+                branch,
+                currentInputs,
+                stack,
+                [...concurrentLists, ...(task.branches ?? [])],
+              );
               branches.push(branch);
             }
             if (branches.length > 0) Object.assign(workingState, joinFlowStates(branches));
@@ -781,7 +863,7 @@ if (!process.argv.includes("--worker")) {
                 value === undefined
                   ? Object.hasOwn(declaration, "default")
                     ? jsonObjectShape(declaration.default)
-                    : unknownValueShape()
+                    : unavailableInputShape()
                   : flowValueShape(value, currentInputs, workingState),
               );
             }
@@ -792,7 +874,6 @@ if (!process.argv.includes("--worker")) {
               childInputs,
               form,
               bindingIssue,
-              eventRecordTypeId,
               childStack,
             );
             for (const [name, shape] of childResult.outputs)
@@ -847,17 +928,6 @@ if (!process.argv.includes("--worker")) {
                   [],
                 ),
               );
-            else if (eventRecordTypeId !== undefined && eventRecordTypeId !== targetId)
-              findings.push(
-                diagnostic(
-                  form,
-                  flow,
-                  task,
-                  targetRecord,
-                  "the bound form event record type differs from the create target",
-                  [],
-                ),
-              );
             else {
               const submittedShape = flowValueShape(
                 properties.values,
@@ -884,7 +954,7 @@ if (!process.argv.includes("--worker")) {
                       flow,
                       task,
                       targetRecord,
-                      "the submitted field map has ambiguous target-field identities",
+                      "the submitted field map has foreign or duplicate target-field identities",
                       [],
                     ),
                   );
@@ -977,7 +1047,7 @@ if (!process.argv.includes("--worker")) {
           shapes.set(name, jsonObjectShape(value.literal?.value));
         else if (Object.hasOwn(declaration, "default"))
           shapes.set(name, jsonObjectShape(declaration.default));
-        else shapes.set(name, unknownValueShape());
+        else shapes.set(name, unavailableInputShape());
       }
       return shapes;
     };
@@ -986,10 +1056,22 @@ if (!process.argv.includes("--worker")) {
       const flow = flowById.get(binding.flow?.flowId);
       const matchingForms = formsByPlacement.get(binding.controlId) ?? [];
       const event = eventById.get(binding.eventId);
+      const missingNamedControl = Object.values(binding.flow?.inputs ?? {}).some(
+        (value) =>
+          value?.kind === "caller" &&
+          value.name !== "values" &&
+          // This is the form adapter's separate owner selector, not a record field.
+          value.name !== "selected_owner_group_id" &&
+          matchingForms.some(
+            (form) => !form.controls.some((control) => control.name === value.name),
+          ),
+      );
       const bindingIssue =
         event === undefined || typeof event.recordTypeId !== "string"
           ? "the bound form event does not resolve to one declared Application event"
-          : undefined;
+          : missingNamedControl
+            ? "a named caller input has no registered control in its owning form"
+            : undefined;
       if (flow === undefined) {
         findings.push(
           diagnostic(
@@ -1010,7 +1092,6 @@ if (!process.argv.includes("--worker")) {
           bindingInputShapes(flow, binding, form),
           form,
           bindingIssue,
-          event?.recordTypeId,
           new Set([flow.id]),
         );
     }
