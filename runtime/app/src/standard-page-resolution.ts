@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  activeApplicationInstallationEvidenceSchema,
   inspectApplicationPageReplacements,
   pageIdSchema,
   sameId,
@@ -55,6 +56,7 @@ const verifyContext = (context: InstalledRuntimeContext): void => {
   const installation = context.installation;
   const registration = context.permissionRegistration;
   const registeredRelease = registration.applicationRelease;
+  if (!activeApplicationInstallationEvidenceSchema.safeParse(installation).success) unavailable();
   if (
     !sameId(application.organizationId, context.organizationId) ||
     !sameId(application.rootId, context.applicationRootId) ||
