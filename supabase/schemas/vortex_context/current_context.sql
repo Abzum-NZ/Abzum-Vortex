@@ -24,7 +24,7 @@ revoke execute on function vortex_context.current_context()
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_context.current_context()
   to vortex_request, vortex_record_adapter, vortex_search_owner,
-    vortex_record_inventory_owner, vortex_connection_owner,
+    vortex_record_inventory, vortex_connection_owner,
     vortex_identity_owner;
 
 comment on function vortex_context.current_context() is

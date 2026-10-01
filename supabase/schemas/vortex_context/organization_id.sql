@@ -11,7 +11,7 @@ revoke execute on function vortex_context.organization_id()
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_context.organization_id()
   to vortex_request, vortex_record_adapter, vortex_search_owner,
-    vortex_record_inventory_owner, vortex_connection_owner;
+    vortex_record_inventory, vortex_connection_owner;
 
 comment on function vortex_context.organization_id() is
   'Returns the organisation identifier from the validated request context.';
