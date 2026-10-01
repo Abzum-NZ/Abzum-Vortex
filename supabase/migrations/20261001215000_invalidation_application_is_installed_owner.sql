@@ -1,3 +1,17 @@
+begin;
+
+grant usage on schema vortex_access to vortex_invalidation_owner;
+
+set local role vortex_access_owner;
+grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
+  to vortex_invalidation_owner;
+reset role;
+
+alter function vortex_invalidation.application_is_installed(uuid, uuid)
+  owner to vortex_invalidation_owner;
+
+set local role vortex_invalidation_owner;
+
 create or replace function vortex_invalidation.application_is_installed(
   p_organization_id uuid,
   p_application_root_id uuid
@@ -26,9 +40,14 @@ $function$;
 
 revoke all on function vortex_invalidation.application_is_installed(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.application_is_installed(uuid, uuid)
+  to postgres;
 
 comment on function vortex_invalidation.application_is_installed(uuid, uuid) is
   'Private check that an application has an active registration and an active installation binding for its registered release in one organisation.';
 
 alter function vortex_invalidation.application_is_installed(uuid, uuid)
   owner to vortex_invalidation_owner;
+
+reset role;
+commit;

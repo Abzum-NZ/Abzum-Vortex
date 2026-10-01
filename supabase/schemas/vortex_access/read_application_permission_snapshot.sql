@@ -55,6 +55,8 @@ revoke execute on function vortex_access.read_application_permission_snapshot(uu
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
   to vortex_module_owner;
+grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
+  to vortex_invalidation_owner;
 comment on function vortex_access.read_application_permission_snapshot(uuid, uuid) is
   'Owner-only active exact release reference and deterministic application-only permission snapshot; role templates remain in Definition.';
 alter function vortex_access.read_application_permission_snapshot(uuid, uuid)
