@@ -40,27 +40,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
   color: var(--vortex-text);
 }
 
-.vortex-field-help,
 .vortex-field-note {
   color: var(--vortex-text-muted);
-}
-
-/* Search input */
-.vortex-input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: var(--vortex-control-min-height);
-  padding: var(--vortex-control-padding-y) var(--vortex-control-padding-x);
-  border: var(--vortex-border-width) var(--vortex-border-style) var(--vortex-border-color);
-  border-radius: var(--vortex-radius-md);
-  background-color: var(--vortex-surface);
-  color: var(--vortex-text);
-  font: inherit;
-  transition: border-color var(--vortex-motion-feedback) ease-out;
-}
-
-.vortex-input:hover:not(:disabled):not([readonly]) {
-  border-color: var(--vortex-text);
 }
 
 /* Single-select table control */
