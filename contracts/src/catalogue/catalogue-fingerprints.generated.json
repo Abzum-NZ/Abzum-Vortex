@@ -289,14 +289,6 @@
     "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8:fef76b5f-d5e8-4a96-abca-b232f924db84:1.0.0": {
       "contentFingerprint": "sha256:f533d70cfdf903000f28667cd7b1c7fb8ee56b4c2b5db2bd74f0eaf05e15895e",
       "catalogueFingerprint": "sha256:3c7c98a8b1b3411a0c9a23a186a400ec1f513443ffbb1ab764e0ec4009897c61"
-    },
-    "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f:4de3ad3d-c6d2-4523-9113-255093526b45:1.0.0": {
-      "contentFingerprint": "sha256:91717c74e833e72181e50269abe845833771a26d0cd3201a70dcb3120254ef09",
-      "catalogueFingerprint": "sha256:0d4e918afe06d745bf6debfa9db35fb548c5c35c649f3e838be50b07936aa115"
-    },
-    "e0a60e5a-cb5c-449d-ab9d-4a47ab344e3f:9116e660-375d-4157-b3be-d0943a1c988a:1.0.0": {
-      "contentFingerprint": "sha256:2230e6c267989319c5b4c9634f3e8bee2f0eb32226e423cda7e9b011d1b60baf",
-      "catalogueFingerprint": "sha256:1688ea6fb70729a2b84ebdfe5787355f25dc47052a374c1093e89bf71bdbad7a"
     }
   },
   "platformConnectionTypes": {
