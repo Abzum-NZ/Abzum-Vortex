@@ -894,7 +894,11 @@ if (!process.argv.includes("--worker")) {
                     (field) =>
                       field.required === true &&
                       !generated.has(field.type) &&
-                      !(Object.hasOwn(field, "default") && field.default !== null) &&
+                      !(
+                        Object.hasOwn(field, "default") &&
+                        field.default !== undefined &&
+                        field.default !== null
+                      ) &&
                       !fieldMap.ids.has(field.fieldId),
                   );
                   if (missingFields.length > 0)
