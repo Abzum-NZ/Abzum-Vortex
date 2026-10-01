@@ -326,7 +326,13 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
       });
     }
     if (feedback.kind === "refusal") {
-      requireExactKeys(feedback, ["kind", "code", "fieldLabel"], location);
+      requireExactKeys(feedback, ["kind", "code", "fieldLabel", "recovery"], location);
+      if (
+        feedback.recovery !== undefined &&
+        feedback.recovery !== "partial" &&
+        feedback.recovery !== "uncertain"
+      )
+        fail("Flow refusal recovery must be partial or uncertain", location);
       const code = flowRefusalFeedbackCodeSchema.safeParse(feedback.code);
       if (!code.success) fail("Flow refusal feedback code is unsupported", location);
       if (feedback.fieldLabel !== undefined && code.data !== "invalid_command")
@@ -339,6 +345,7 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
         kind: "refusal",
         code: code.data,
         ...(fieldLabel?.success ? { fieldLabel: fieldLabel.data } : {}),
+        ...(feedback.recovery === undefined ? {} : { recovery: feedback.recovery }),
       });
     }
     fail("Flow feedback kind must be message or refusal", location);

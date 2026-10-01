@@ -1473,6 +1473,10 @@ function ApplicationPageViewContent({
                   formPlacementId,
                   diagnostic.submittedField,
                 );
+          const recovery =
+            server.descriptor.outcome === "partial" || server.descriptor.outcome === "uncertain"
+              ? server.descriptor.outcome
+              : undefined;
           const refusalFeedback =
             diagnostic === undefined
               ? undefined
@@ -1480,8 +1484,15 @@ function ApplicationPageViewContent({
                   kind: "refusal" as const,
                   code: diagnostic.code,
                   ...(fieldLabel === undefined ? {} : { fieldLabel }),
+                  ...(recovery === undefined ? {} : { recovery }),
                 };
-          if (diagnostic !== undefined) resultNotice = refusalNotices[diagnostic.code];
+          if (diagnostic !== undefined) {
+            const reason = refusalNotices[diagnostic.code];
+            resultNotice = {
+              ...reason,
+              text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,
+            };
+          }
           if (
             afterAccepted !== undefined &&
             ["completed", "committed", "background_pending"].includes(

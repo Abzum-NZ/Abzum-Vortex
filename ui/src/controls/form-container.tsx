@@ -50,6 +50,7 @@ export type FormFlowFeedback =
       kind: "refusal";
       code: FlowRefusalFeedback["code"];
       fieldLabel?: string;
+      recovery?: "partial" | "uncertain";
     }>;
 
 const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
@@ -67,12 +68,22 @@ const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusa
   }
 };
 
+const refusalRecoveryText = {
+  partial: "Only part of this was saved. Refresh and review what changed.",
+  uncertain: "The result is not certain yet. Refresh before trying again.",
+} as const;
+
 const formFlowFeedbackPresentation = (
   feedback: FormFlowFeedback,
 ): Readonly<{ tone: "success" | "problem"; text: string }> =>
   feedback.kind === "message"
     ? { tone: feedback.tone, text: feedback.text }
-    : { tone: "problem", text: refusalFeedbackText(feedback) };
+    : {
+        tone: "problem",
+        text: `${refusalFeedbackText(feedback)}${
+          feedback.recovery === undefined ? "" : ` ${refusalRecoveryText[feedback.recovery]}`
+        }`,
+      };
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
 const NON_SUBMITTING_INPUT_TYPES = new Set([
