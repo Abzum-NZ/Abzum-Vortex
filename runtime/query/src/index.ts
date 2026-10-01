@@ -90,6 +90,14 @@ export {
   type CalendarArrangementDescriptor,
   summaryArrangementCommandSchema,
   type SummaryArrangementCommand,
+  protectedBoardArrangementPageRequestSchema,
+  protectedBoardArrangementPageSchema,
+  protectedBoardArrangementCommandSchema,
+  protectedBoardArrangementResultSchema,
+  type ProtectedBoardArrangementPageRequest,
+  type ProtectedBoardArrangementPage,
+  type ProtectedBoardArrangementCommand,
+  type ProtectedBoardArrangementResult,
   type AggregateDescriptor,
   type AggregateValue,
   type AggregateResult,
@@ -106,7 +114,7 @@ export {
   type ArrangementResult,
 } from "./arrangement-contracts";
 
-export { arrangeDataset, arrangeSummary } from "./arrangements";
+export { arrangeDataset, arrangeSummary, arrangeProtectedBoard } from "./arrangements";
 
 export {
   createUsageProjectionService,
