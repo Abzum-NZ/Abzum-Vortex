@@ -6,6 +6,8 @@ import {
   selectedOrganizationScopeSchema,
   sessionContextSchema,
   type IdentitySession,
+  type ProtectedOperationChannel,
+  type SessionContext,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
 import {
@@ -37,8 +39,8 @@ type BoundRequestRow = DatabaseRow & {
 };
 
 type BoundHumanRequest = Readonly<{
-  context: ReturnType<typeof sessionContextSchema.parse>;
-  channel: ReturnType<typeof protectedOperationChannelSchema.parse>;
+  context: SessionContext;
+  channel: ProtectedOperationChannel;
 }>;
 
 type TransactionInvocationState = {
