@@ -42,6 +42,7 @@ import {
   guidedFormPageCompositionV2Schema,
   pageCompositionV2Schema,
   platformBlockDependenciesV2Schema,
+  type ComponentSettingValue,
 } from "./application-composition-v2";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { flowSchema } from "./flow-contracts";
@@ -320,6 +321,247 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
+const boardCardFieldSchema = z
+  .object({ field: fieldIdSchema, label: labelSchema.optional() })
+  .strict();
+const boardAggregateMetricSchema = z
+  .object({ alias: builderKeySchema, label: labelSchema })
+  .strict();
+
+/** The closed settings a trusted query-bound board placement may display. */
+export const boardPlacementContractSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    choiceField: fieldIdSchema,
+    cardTitleField: fieldIdSchema,
+    detailFields: z.array(boardCardFieldSchema).max(20),
+    aggregateMetrics: z.array(boardAggregateMetricSchema).max(20),
+    emptyMessage: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const fields = [value.cardTitleField, ...value.detailFields.map((entry) => entry.field)];
+    if (new Set(fields.map((field) => field.toLowerCase())).size !== fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["detailFields"],
+        message: "A board card field is declared once",
+      });
+    const aliases = value.aggregateMetrics.map((metric) => metric.alias);
+    if (new Set(aliases).size !== aliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["aggregateMetrics"],
+        message: "A displayed board aggregate is declared once",
+      });
+  });
+
+export type BoardPlacementContract = z.infer<typeof boardPlacementContractSchema>;
+
+type BoardSettingValue = ComponentSettingValue;
+type BoardSettings = Readonly<Record<string, BoardSettingValue>>;
+
+const boardGroup = (value: BoardSettingValue | undefined): BoardSettings | undefined =>
+  value?.kind === "group" ? value.properties : undefined;
+const boardItems = (
+  value: BoardSettingValue | undefined,
+): readonly BoardSettingValue[] | undefined => (value?.kind === "list" ? value.items : undefined);
+const boardText = (value: BoardSettingValue | undefined): string | undefined =>
+  value?.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
+const boardField = (value: BoardSettingValue | undefined): string | undefined =>
+  value?.kind !== "field_reference"
+    ? undefined
+    : "fieldId" in value
+      ? String(value.fieldId)
+      : String(value.field);
+
+/**
+ * Reads board settings after the block's shared property validator has accepted them. The reader
+ * is also used by publication validation, so server projection and the published mapping agree.
+ */
+export const readBoardPlacementContract = (
+  settings: BoardSettings,
+): BoardPlacementContract | undefined => {
+  const supportedKeys = new Set([
+    "title",
+    "choice_field",
+    "card_title_field",
+    "detail_fields",
+    "aggregates",
+    "empty_message",
+    "refused_message",
+    "error_message",
+  ]);
+  if (Object.keys(settings).some((key) => !supportedKeys.has(key))) return undefined;
+  const choiceField = boardField(settings.choice_field);
+  const cardTitleField = boardField(settings.card_title_field);
+  if (choiceField === undefined || cardTitleField === undefined) return undefined;
+
+  const detailItems = boardItems(settings.detail_fields);
+  const aggregateItems = boardItems(settings.aggregates);
+  if (
+    (settings.detail_fields !== undefined && detailItems === undefined) ||
+    (settings.aggregates !== undefined && aggregateItems === undefined)
+  )
+    return undefined;
+
+  const detailFields: Array<{ field: string; label?: string }> = [];
+  for (const item of detailItems ?? []) {
+    const group = boardGroup(item);
+    const field = group === undefined ? undefined : boardField(group.field);
+    if (group === undefined || field === undefined) return undefined;
+    const label = boardText(group.label);
+    if (group.label !== undefined && label === undefined) return undefined;
+    detailFields.push({ field, ...(label === undefined ? {} : { label }) });
+  }
+
+  const aggregateMetrics: Array<{ alias: string; label: string }> = [];
+  for (const item of aggregateItems ?? []) {
+    const group = boardGroup(item);
+    const alias = group === undefined ? undefined : boardText(group.alias);
+    const label = group === undefined ? undefined : boardText(group.label);
+    if (group === undefined || alias === undefined || label === undefined) return undefined;
+    aggregateMetrics.push({ alias, label });
+  }
+
+  const title = boardText(settings.title);
+  const emptyMessage = boardText(settings.empty_message);
+  if (
+    (settings.title !== undefined && title === undefined) ||
+    (settings.empty_message !== undefined && emptyMessage === undefined)
+  )
+    return undefined;
+
+  const parsed = boardPlacementContractSchema.safeParse({
+    ...(title === undefined ? {} : { title }),
+    choiceField,
+    cardTitleField,
+    detailFields,
+    aggregateMetrics,
+    ...(emptyMessage === undefined ? {} : { emptyMessage }),
+  });
+  return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Whether the exact published Query and record type can back the declared board. Installed option
+ * permissions remain a protected Query concern; publication validates only the bounded published
+ * option set, and the Query producer returns the viewer's current installed subset.
+ */
+export const boardBlockSourceIsSupported = (
+  queryCandidate: unknown,
+  fieldsCandidate: readonly unknown[],
+  contract: BoardPlacementContract,
+): boolean => {
+  if (
+    queryCandidate === null ||
+    typeof queryCandidate !== "object" ||
+    Array.isArray(queryCandidate) ||
+    !Array.isArray(fieldsCandidate)
+  )
+    return false;
+  const query = queryCandidate as Record<string, unknown>;
+  if (
+    !Array.isArray(query.selectedFieldIds) ||
+    !Array.isArray(query.groupByFieldIds) ||
+    !Array.isArray(query.aggregates) ||
+    typeof query.relationshipHops !== "number" ||
+    typeof query.pageSize !== "number" ||
+    !Number.isInteger(query.pageSize) ||
+    query.pageSize < 1 ||
+    query.pageSize > 200 ||
+    query.relationshipHops !== 0 ||
+    query.groupByFieldIds.length !== 1 ||
+    typeof query.groupByFieldIds[0] !== "string" ||
+    query.groupByFieldIds[0].toLowerCase() !== contract.choiceField.toLowerCase()
+  )
+    return false;
+
+  const selected = new Set(
+    query.selectedFieldIds.flatMap((fieldId) =>
+      typeof fieldId === "string" ? [fieldId.toLowerCase()] : [],
+    ),
+  );
+  if (selected.size !== query.selectedFieldIds.length) return false;
+  const displayFields = [
+    contract.choiceField,
+    contract.cardTitleField,
+    ...contract.detailFields.map((entry) => entry.field),
+  ];
+  if (displayFields.some((fieldId) => !selected.has(fieldId.toLowerCase()))) return false;
+
+  const fieldById = new Map<string, Record<string, unknown>>();
+  for (const candidate of fieldsCandidate) {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
+      return false;
+    const field = candidate as Record<string, unknown>;
+    if (typeof field.fieldId !== "string") return false;
+    const key = field.fieldId.toLowerCase();
+    if (fieldById.has(key)) return false;
+    fieldById.set(key, field);
+  }
+  const choiceField = fieldById.get(contract.choiceField.toLowerCase());
+  const choiceSettings = choiceField?.settings;
+  if (
+    choiceField?.type !== "choice" ||
+    choiceField.filterable !== true ||
+    choiceSettings === null ||
+    typeof choiceSettings !== "object" ||
+    Array.isArray(choiceSettings)
+  )
+    return false;
+  const options = (choiceSettings as Record<string, unknown>).options;
+  if (!Array.isArray(options) || options.length < 1 || options.length > 12) return false;
+  const optionValues = new Set<string>();
+  for (const option of options) {
+    if (option === null || typeof option !== "object" || Array.isArray(option)) return false;
+    const candidate = option as Record<string, unknown>;
+    if (
+      typeof candidate.value !== "string" ||
+      candidate.value.length < 1 ||
+      candidate.value.length > 120 ||
+      typeof candidate.label !== "string" ||
+      candidate.label.trim().length === 0 ||
+      optionValues.has(candidate.value)
+    )
+      return false;
+    optionValues.add(candidate.value);
+  }
+
+  for (const fieldId of [
+    contract.cardTitleField,
+    ...contract.detailFields.map((entry) => entry.field),
+  ])
+    if (!fieldById.has(fieldId.toLowerCase())) return false;
+
+  const aliases = new Set<string>();
+  for (const aggregate of query.aggregates) {
+    if (aggregate === null || typeof aggregate !== "object" || Array.isArray(aggregate))
+      return false;
+    const alias = (aggregate as Record<string, unknown>).alias;
+    if (typeof alias !== "string" || aliases.has(alias)) return false;
+    aliases.add(alias);
+  }
+  return contract.aggregateMetrics.every((metric) => aliases.has(metric.alias));
+};
+
+/** The closed selector carried by a single board-column continuation request. */
+export const boardColumnSelectorSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("option"), value: z.string().min(1).max(120) }).strict(),
+  z.object({ kind: z.literal("unassigned") }).strict(),
+]);
+
+/** The browser may name one bucket and its opaque token; every source/authority fact is rebound. */
+export const boardColumnContinuationRequestSchema = z
+  .object({
+    column: boardColumnSelectorSchema,
+    continuationToken: z.string().min(1).max(65_536),
+  })
+  .strict();
+
+export type BoardColumnSelector = z.infer<typeof boardColumnSelectorSchema>;
+export type BoardColumnContinuationRequest = z.infer<typeof boardColumnContinuationRequestSchema>;
 
 /** Query shapes and title fields that a query-bound Calendar block can display. */
 export const calendarBlockSourceIsSupported = (query: unknown, titleFieldType: unknown): boolean => {
