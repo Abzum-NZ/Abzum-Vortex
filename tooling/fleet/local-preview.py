@@ -9,6 +9,9 @@ and leaves its declared source fixtures in the caller's checkout for inspection.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import ctypes
+from ctypes import wintypes
 import hashlib
 import ipaddress
 import json
@@ -30,6 +33,10 @@ import urllib.error
 import urllib.request
 import uuid
 import zlib
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -229,6 +236,96 @@ RUN_TIMEOUTS = {
     "server_stop": 20,
 }
 MAX_CAPTURED_OUTPUT = 64 * 1024
+PREVIEW_LEASE_TTL_SECONDS = 120
+PREVIEW_LEASE_RENEW_INTERVAL_SECONDS = 30
+PREVIEW_LEASE_MAX_LIFETIME_SECONDS = 2 * 60 * 60
+PREVIEW_LEASE_MAX_OWNED_PROCESSES = 32
+PREVIEW_LEASE_GUARD_WAIT_SECONDS = 10
+PREVIEW_LEASE_SCHEMA = "vortex.local-preview.lease.v2"
+PREVIEW_EXTERNAL_OPERATION_COMPLETIONS = {
+    "database.reset.local": "command_exit_0+supabase_status+api_url_matches",
+    "local_auth.create": "http_success+owner_id_returned",
+    "setup.local": "command_exit_0",
+    "browser.adapter": "adapter_json_pass+required_checks_pass",
+    "diagnostic.owner_rotation": "http_success+owner_identity_matches",
+}
+# These host ports identify one physical local Supabase stack, regardless of the
+# checkout's project_id. Keep this identity fixed across all local preview copies.
+PREVIEW_RESOURCE_NAME = "supabase.local-preview.host-ports:54320,54321,54322,54323,54324,54327,54329"
+PREVIEW_LEASE_OPERATOR_GUIDANCE = (
+    "Do not remove the preview lock while its owner PID still has the recorded process-start identity. "
+    "For a hung owner, verify the exact PID and process-start identity before stopping that PID; never stop a reused PID. "
+    "After owner exit, verify every recorded owned PID against its process-start identity and verify the recorded web "
+    "port has no listener; the shared Supabase stack remains reserved and may intentionally be running. On Windows, the "
+    "external supervisor contains ordinary descendants in a kill-on-close Job Object, but a hard-deadline kill cannot prove "
+    "that a Docker-daemon database reset already submitted by a CLI has stopped or completed. The runner therefore keeps "
+    "the lease after any hard-deadline termination. Before database reset/setup, Auth writes, or browser mutations, the "
+    "lease records pending_external_operation; it clears only after the operation's positive completion evidence is stored. "
+    "A lease with recovery_state=operation_pending or operator_required is sticky: owner exit and a free web port never "
+    "clear it. Review pending_external_operation, recovery_reason, completed_external_operations, the owner result and "
+    "preview-deadline evidence. An operator must positively verify that no reset/exec is still active for this "
+    "local stack, verify the database and API are healthy and stable, and verify the recorded web port is free; then review "
+    "the lease under local-preview.guard, preserve its bytes, and quarantine only the same recognized lease_id. "
+    "Do not unlink an unrecognized legacy lock automatically. Keep the lock whenever any evidence is uncertain."
+)
+_SUPERVISED_OWNER_MODE = False
+_SUPERVISED_OWNER_START_ID: str | None = None
+_WINDOWS_JOB_KILL_ON_CLOSE = 0x2000
+_WINDOWS_JOB_BASIC_ACCOUNTING = 1
+_WINDOWS_JOB_EXTENDED_LIMITS = 9
+_WINDOWS_WAIT_OBJECT_0 = 0
+_WINDOWS_WAIT_TIMEOUT = 258
+_WINDOWS_DUPLICATE_SAME_ACCESS = 0x00000002
+_WINDOWS_DATETIME_TICKS_OFFSET = 504911232000000000
+
+
+class _WindowsJobBasicLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("PerProcessUserTimeLimit", ctypes.c_longlong),
+        ("PerJobUserTimeLimit", ctypes.c_longlong),
+        ("LimitFlags", wintypes.DWORD),
+        ("MinimumWorkingSetSize", ctypes.c_size_t),
+        ("MaximumWorkingSetSize", ctypes.c_size_t),
+        ("ActiveProcessLimit", wintypes.DWORD),
+        ("Affinity", ctypes.c_size_t),
+        ("PriorityClass", wintypes.DWORD),
+        ("SchedulingClass", wintypes.DWORD),
+    ]
+
+
+class _WindowsIoCounters(ctypes.Structure):
+    _fields_ = [
+        ("ReadOperationCount", ctypes.c_ulonglong),
+        ("WriteOperationCount", ctypes.c_ulonglong),
+        ("OtherOperationCount", ctypes.c_ulonglong),
+        ("ReadTransferCount", ctypes.c_ulonglong),
+        ("WriteTransferCount", ctypes.c_ulonglong),
+        ("OtherTransferCount", ctypes.c_ulonglong),
+    ]
+
+
+class _WindowsJobExtendedLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("BasicLimitInformation", _WindowsJobBasicLimitInformation),
+        ("IoInfo", _WindowsIoCounters),
+        ("ProcessMemoryLimit", ctypes.c_size_t),
+        ("JobMemoryLimit", ctypes.c_size_t),
+        ("PeakProcessMemoryUsed", ctypes.c_size_t),
+        ("PeakJobMemoryUsed", ctypes.c_size_t),
+    ]
+
+
+class _WindowsJobBasicAccountingInformation(ctypes.Structure):
+    _fields_ = [
+        ("TotalUserTime", ctypes.c_longlong),
+        ("TotalKernelTime", ctypes.c_longlong),
+        ("ThisPeriodTotalUserTime", ctypes.c_longlong),
+        ("ThisPeriodTotalKernelTime", ctypes.c_longlong),
+        ("TotalPageFaultCount", wintypes.DWORD),
+        ("TotalProcesses", wintypes.DWORD),
+        ("ActiveProcesses", wintypes.DWORD),
+        ("TotalTerminatedProcesses", wintypes.DWORD),
+    ]
 
 
 class PreviewError(Exception):
@@ -258,6 +355,627 @@ class CommandResult:
     timed_out: bool = False
     stdout: bytes = b""
     stopped: bool = True
+    cancelled: bool = False
+
+
+_LEASE_GUARD_MUTEXES: dict[str, threading.Lock] = {}
+_LEASE_GUARD_MUTEXES_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _lease_guard(path: Path, *, create: bool = True):
+    """Serialize lease updates without unlinking the stable guard file."""
+    key = os.path.normcase(str(path.resolve(strict=False)))
+    with _LEASE_GUARD_MUTEXES_LOCK:
+        mutex = _LEASE_GUARD_MUTEXES.setdefault(key, threading.Lock())
+    if not mutex.acquire(timeout=PREVIEW_LEASE_GUARD_WAIT_SECONDS):
+        raise PreviewError("lease_guard_busy", "Timed out waiting for the in-process preview lease guard")
+    fd: int | None = None
+    locked = False
+    try:
+        if path.exists() or path.is_symlink():
+            try:
+                info = path.lstat()
+            except OSError:
+                raise PreviewError("lease_guard_unavailable", "The stable preview lease guard cannot be inspected") from None
+            if _is_reparse_point(info) or not stat.S_ISREG(info.st_mode):
+                raise PreviewError("lease_guard_unavailable", "The stable preview lease guard must be a regular file")
+        flags = os.O_RDWR | (os.O_CREAT if create else 0)
+        try:
+            fd = os.open(path, flags, 0o600)
+        except OSError:
+            raise PreviewError("lease_guard_unavailable", "The stable preview lease guard cannot be opened") from None
+        if os.name == "nt":
+            try:
+                if os.fstat(fd).st_size == 0:
+                    os.write(fd, b"\0")
+                deadline = time.monotonic() + PREVIEW_LEASE_GUARD_WAIT_SECONDS
+                while True:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    try:
+                        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                        locked = True
+                        break
+                    except OSError:
+                        if time.monotonic() >= deadline:
+                            raise PreviewError("lease_guard_busy", "Timed out waiting for the cross-process preview lease guard") from None
+                        time.sleep(0.05)
+            except PreviewError:
+                raise
+            except OSError:
+                raise PreviewError("lease_guard_unavailable", "The cross-process preview lease guard cannot be locked") from None
+        else:
+            deadline = time.monotonic() + PREVIEW_LEASE_GUARD_WAIT_SECONDS
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked = True
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise PreviewError("lease_guard_busy", "Timed out waiting for the cross-process preview lease guard") from None
+                    time.sleep(0.05)
+        yield
+    finally:
+        if fd is not None:
+            if locked:
+                try:
+                    if os.name == "nt":
+                        os.lseek(fd, 0, os.SEEK_SET)
+                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                    else:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+            os.close(fd)
+        mutex.release()
+
+
+def _windows_kernel32() -> Any:
+    if os.name != "nt":
+        raise PreviewError("deadline_supervision_unavailable", "Windows Job Object supervision is unavailable on this platform")
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel.SetInformationJobObject.restype = wintypes.BOOL
+    kernel.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel.TerminateJobObject.restype = wintypes.BOOL
+    kernel.QueryInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    kernel.QueryInformationJobObject.restype = wintypes.BOOL
+    kernel.GetProcessTimes.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    ]
+    kernel.GetProcessTimes.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    return kernel
+
+
+def _windows_process_handle(child: subprocess.Popen[Any]) -> wintypes.HANDLE:
+    try:
+        return wintypes.HANDLE(int(child._handle))
+    except (AttributeError, TypeError, ValueError):
+        raise PreviewError("deadline_supervision_unavailable", "The Windows process handle cannot be inspected safely") from None
+
+
+def _windows_process_start_id(handle: wintypes.HANDLE) -> str:
+    kernel = _windows_kernel32()
+    created = wintypes.FILETIME()
+    exited = wintypes.FILETIME()
+    kernel_time = wintypes.FILETIME()
+    user_time = wintypes.FILETIME()
+    if not kernel.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel_time), ctypes.byref(user_time)):
+        raise PreviewError("deadline_supervision_unavailable", "The supervised owner process-start identity cannot be verified")
+    filetime = (created.dwHighDateTime << 32) | created.dwLowDateTime
+    return str(filetime + _WINDOWS_DATETIME_TICKS_OFFSET)
+
+
+def _windows_create_kill_job() -> wintypes.HANDLE:
+    kernel = _windows_kernel32()
+    job = kernel.CreateJobObjectW(None, None)
+    if not job:
+        raise PreviewError("deadline_supervision_unavailable", "Could not create the Windows preview containment job")
+    limits = _WindowsJobExtendedLimitInformation()
+    limits.BasicLimitInformation.LimitFlags = _WINDOWS_JOB_KILL_ON_CLOSE
+    if not kernel.SetInformationJobObject(
+        job,
+        _WINDOWS_JOB_EXTENDED_LIMITS,
+        ctypes.byref(limits),
+        ctypes.sizeof(limits),
+    ):
+        kernel.CloseHandle(job)
+        raise PreviewError("deadline_supervision_unavailable", "Could not enable kill-on-close for the Windows preview job")
+    return job
+
+
+def _windows_assign_job(job: wintypes.HANDLE, child: subprocess.Popen[Any]) -> None:
+    kernel = _windows_kernel32()
+    if not kernel.AssignProcessToJobObject(job, _windows_process_handle(child)):
+        raise PreviewError("deadline_supervision_unavailable", "Could not place the gated preview owner in its Windows containment job")
+
+
+def _windows_job_active_processes(job: wintypes.HANDLE) -> int:
+    kernel = _windows_kernel32()
+    accounting = _WindowsJobBasicAccountingInformation()
+    returned = wintypes.DWORD()
+    if not kernel.QueryInformationJobObject(
+        job,
+        _WINDOWS_JOB_BASIC_ACCOUNTING,
+        ctypes.byref(accounting),
+        ctypes.sizeof(accounting),
+        ctypes.byref(returned),
+    ):
+        raise PreviewError("deadline_cleanup_unconfirmed", "Could not query Windows preview-job process accounting")
+    return int(accounting.ActiveProcesses)
+
+
+def _windows_terminate_job(job: wintypes.HANDLE, exit_code: int) -> None:
+    kernel = _windows_kernel32()
+    if not kernel.TerminateJobObject(job, exit_code):
+        raise PreviewError("deadline_cleanup_unconfirmed", "Could not terminate every process in the Windows preview job")
+
+
+def _lease_iso_after(seconds: float) -> str:
+    return datetime.fromtimestamp(time.time() + seconds, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _lease_time(value: Any, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise PreviewError("preview_lease_invalid", f"Preview lease {label} is missing or invalid")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise PreviewError("preview_lease_invalid", f"Preview lease {label} is missing or invalid") from None
+    if parsed.tzinfo is None:
+        raise PreviewError("preview_lease_invalid", f"Preview lease {label} must include a UTC offset")
+    return parsed.astimezone(timezone.utc)
+
+
+def _preview_resource_name(checkout: Path) -> str:
+    # The fixed ports are shared on this host even when separate worktrees use
+    # different Supabase project_id values. Do not derive the lease key from a
+    # checkout-local identifier.
+    del checkout
+    return PREVIEW_RESOURCE_NAME
+
+
+def _lease_paths(lock_dir: Path, resource_name: str) -> tuple[Path, Path]:
+    if resource_name != PREVIEW_RESOURCE_NAME:
+        raise PreviewError("preview_resource_unknown", "The local preview resource identity is not the fixed host-port resource")
+    # Interoperate with the retired runner's O_EXCL lock acquisition. While this
+    # path exists the old runner cannot acquire the same physical preview stack.
+    return lock_dir / "local-preview.lock", lock_dir / "local-preview.guard"
+
+
+def _validate_preview_lease_dir(lock_dir: Path) -> None:
+    _reject_reparse_components(lock_dir, "preview lease directory")
+    try:
+        info = lock_dir.lstat()
+        if _is_reparse_point(info) or not stat.S_ISDIR(info.st_mode) or lock_dir.resolve(strict=True) != lock_dir:
+            raise PreviewError("preview_lease_dir_invalid", "Preview lease directory must be a canonical regular directory")
+        if os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077:
+            raise PreviewError("preview_lease_dir_invalid", "Preview lease directory must be private to the current user")
+    except PreviewError:
+        raise
+    except OSError:
+        raise PreviewError("preview_lease_dir_invalid", "Preview lease directory cannot be inspected") from None
+
+
+def _atomic_lease_write(path: Path, payload: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(12)}.tmp")
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    try:
+        fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise PreviewError("preview_lease_write_failed", "Could not atomically update the local preview lease") from None
+
+
+def _exclusive_lease_create(path: Path, payload: dict[str, Any]) -> None:
+    """Create the shared legacy-compatible fence without replacing a contender."""
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        raise PreviewError("preview_lease_race", "The shared local preview lock appeared during exclusive acquisition") from None
+    except OSError:
+        raise PreviewError("preview_lease_write_failed", "Could not exclusively create the shared local preview lock") from None
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+    except OSError:
+        # Preserve an incomplete fence. A later owner must fail closed and have
+        # an operator inspect it; removing it here could race another contender.
+        raise PreviewError("preview_lease_write_failed", "Could not persist the exclusive local preview lock") from None
+
+
+def _read_preview_lease(path: Path, resource_name: str) -> dict[str, Any]:
+    try:
+        info = path.lstat()
+        if _is_reparse_point(info) or not stat.S_ISREG(info.st_mode) or info.st_size > 64 * 1024:
+            raise PreviewError("preview_lease_invalid", "Preview lease is not a small regular file")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except PreviewError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise PreviewError("preview_lease_invalid", "Preview lease cannot be read as valid JSON") from None
+    if not isinstance(payload, dict) or payload.get("schema") != PREVIEW_LEASE_SCHEMA:
+        raise PreviewError("preview_lease_invalid", "Preview lease schema is unknown")
+    if payload.get("resource_name") != resource_name:
+        raise PreviewError("preview_lease_resource_mismatch", "Preview lease belongs to a different local resource")
+    for key in ("lease_id", "run_id", "checkout", "head_sha", "owner_process_start_id"):
+        if not isinstance(payload.get(key), str) or not payload[key]:
+            raise PreviewError("preview_lease_invalid", f"Preview lease field {key} is missing or invalid")
+    if not re.fullmatch(r"[0-9]{1,32}", payload["owner_process_start_id"]):
+        raise PreviewError("preview_lease_invalid", "Preview lease owner process-start identity is invalid")
+    if not re.fullmatch(r"[0-9a-f]{48}", payload["lease_id"]):
+        raise PreviewError("preview_lease_invalid", "Preview lease identifier is invalid")
+    if not re.fullmatch(r"[0-9a-f]{24}", payload["run_id"]):
+        raise PreviewError("preview_lease_invalid", "Preview run identifier is invalid")
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", payload["head_sha"]):
+        raise PreviewError("preview_lease_invalid", "Preview lease head SHA is invalid")
+    if not Path(payload["checkout"]).is_absolute():
+        raise PreviewError("preview_lease_invalid", "Preview lease checkout is not absolute")
+    if payload.get("result_path") is not None and (
+        not isinstance(payload["result_path"], str) or not Path(payload["result_path"]).is_absolute()
+    ):
+        raise PreviewError("preview_lease_invalid", "Preview lease result path is invalid")
+    for key in ("owner_pid", "web_port", "renewal_count"):
+        if type(payload.get(key)) is not int or payload[key] < 0:
+            raise PreviewError("preview_lease_invalid", f"Preview lease field {key} is invalid")
+    if payload["owner_pid"] < 1 or not 1024 <= payload["web_port"] <= 65535:
+        raise PreviewError("preview_lease_invalid", "Preview lease owner PID or web port is invalid")
+    if payload["renewal_count"] > PREVIEW_LEASE_MAX_LIFETIME_SECONDS // PREVIEW_LEASE_RENEW_INTERVAL_SECONDS:
+        raise PreviewError("preview_lease_invalid", "Preview lease renewal count exceeds its bounded lifetime")
+    if payload.get("optional_pr") is not None:
+        optional_pr = payload["optional_pr"]
+        if (
+            not isinstance(optional_pr, dict)
+            or set(optional_pr) != {"repo", "number"}
+            or not isinstance(optional_pr["repo"], str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", optional_pr["repo"])
+            or type(optional_pr["number"]) is not int
+            or optional_pr["number"] < 1
+        ):
+            raise PreviewError("preview_lease_invalid", "Preview lease optional PR identity is invalid")
+    created_at = _lease_time(payload.get("created_at"), "created_at")
+    expires_at = _lease_time(payload.get("expires_at"), "expires_at")
+    if expires_at < created_at or expires_at - created_at > PREVIEW_LEASE_MAX_LIFETIME_SECONDS + PREVIEW_LEASE_TTL_SECONDS:
+        raise PreviewError("preview_lease_invalid", "Preview lease expiry is outside its bounded lifetime")
+    if payload.get("state") not in {"active", "released"}:
+        raise PreviewError("preview_lease_invalid", "Preview lease state is invalid")
+    recovery_state = payload.get("recovery_state")
+    recovery_reason = payload.get("recovery_reason")
+    pending_operation = payload.get("pending_external_operation")
+    completed_operation = payload.get("last_completed_external_operation")
+    operation_history = payload.get("completed_external_operations")
+    if recovery_state not in {"clear", "operation_pending", "operator_required"}:
+        raise PreviewError("preview_lease_invalid", "Preview lease recovery state is invalid")
+    if recovery_reason is not None and (
+        not isinstance(recovery_reason, str) or not recovery_reason or len(recovery_reason) > 160
+    ):
+        raise PreviewError("preview_lease_invalid", "Preview lease recovery reason is invalid")
+    if pending_operation is not None:
+        if (
+            not isinstance(pending_operation, dict)
+            or set(pending_operation) != {"name", "started_at"}
+            or not isinstance(pending_operation.get("name"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", pending_operation["name"])
+        ):
+            raise PreviewError("preview_lease_invalid", "Preview lease pending external operation is invalid")
+        _lease_time(pending_operation.get("started_at"), "pending external operation started_at")
+    if completed_operation is not None:
+        if (
+            not isinstance(completed_operation, dict)
+            or set(completed_operation) != {"name", "completed_at", "evidence"}
+            or not isinstance(completed_operation.get("name"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", completed_operation["name"])
+            or not isinstance(completed_operation.get("evidence"), str)
+            or not completed_operation["evidence"]
+            or len(completed_operation["evidence"]) > 128
+        ):
+            raise PreviewError("preview_lease_invalid", "Preview lease completed external operation is invalid")
+        _lease_time(completed_operation.get("completed_at"), "completed external operation completed_at")
+    if not isinstance(operation_history, list) or len(operation_history) > 16:
+        raise PreviewError("preview_lease_invalid", "Preview lease completed operation history is invalid")
+    for item in operation_history:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"name", "completed_at", "evidence"}
+            or not isinstance(item.get("name"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", item["name"])
+            or not isinstance(item.get("evidence"), str)
+            or not item["evidence"]
+            or len(item["evidence"]) > 128
+        ):
+            raise PreviewError("preview_lease_invalid", "Preview lease operation history entry is invalid")
+        if PREVIEW_EXTERNAL_OPERATION_COMPLETIONS.get(item["name"]) != item["evidence"]:
+            raise PreviewError("preview_lease_invalid", "Preview lease operation history lacks the required completion evidence")
+        _lease_time(item.get("completed_at"), "completed operation history completed_at")
+    if (operation_history[-1] if operation_history else None) != completed_operation:
+        raise PreviewError("preview_lease_invalid", "Preview lease last completed operation differs from its history")
+    if recovery_state == "clear" and (recovery_reason is not None or pending_operation is not None):
+        raise PreviewError("preview_lease_invalid", "A clear preview recovery state cannot have an unresolved operation")
+    if recovery_state == "operation_pending" and (
+        recovery_reason is None or pending_operation is None or recovery_reason != pending_operation["name"]
+    ):
+        raise PreviewError("preview_lease_invalid", "A pending preview recovery state must identify its external operation")
+    if recovery_state == "operator_required" and recovery_reason is None:
+        raise PreviewError("preview_lease_invalid", "Operator recovery state requires a reason")
+    owned_processes = payload.get("owned_processes")
+    if not isinstance(owned_processes, list) or len(owned_processes) > PREVIEW_LEASE_MAX_OWNED_PROCESSES:
+        raise PreviewError("preview_lease_invalid", "Preview lease owned-process inventory is invalid")
+    for item in owned_processes:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("role"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", item["role"])
+            or type(item.get("pid")) is not int
+            or item["pid"] < 1
+            or not isinstance(item.get("process_start_id"), str)
+            or not re.fullmatch(r"[0-9]{1,32}", item["process_start_id"])
+            or item.get("process_group_id") is not None and (type(item["process_group_id"]) is not int or item["process_group_id"] < 1)
+        ):
+            raise PreviewError("preview_lease_invalid", "Preview lease contains an invalid owned-process identity")
+    pending_process_roles = payload.get("pending_process_roles")
+    if (
+        not isinstance(pending_process_roles, list)
+        or len(pending_process_roles) > PREVIEW_LEASE_MAX_OWNED_PROCESSES
+        or any(not isinstance(role, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", role) for role in pending_process_roles)
+    ):
+        raise PreviewError("preview_lease_invalid", "Preview lease process-registration state is invalid")
+    return payload
+
+
+def _remove_owned_preview_lease(path: Path, resource_name: str, lease_id: str) -> None:
+    """Retire only this lease by renaming its verified inode before unlinking it."""
+    try:
+        before = path.lstat()
+        if _is_reparse_point(before) or not stat.S_ISREG(before.st_mode):
+            raise PreviewError("preview_lease_release_failed", "The shared preview lock is no longer a regular lease file")
+        payload = _read_preview_lease(path, resource_name)
+        if payload.get("lease_id") != lease_id or payload.get("state") != "released":
+            raise PreviewError("preview_lease_lost", "This run no longer owns the released local preview lease")
+        after = path.lstat()
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise PreviewError("preview_lease_release_race", "The shared preview lock changed during ownership verification")
+        tombstone = path.with_name(f".{path.name}.{lease_id}.released")
+        os.rename(path, tombstone)
+        moved = tombstone.lstat()
+        if (before.st_dev, before.st_ino) != (moved.st_dev, moved.st_ino):
+            # Leave the unexpected file in place for operator review. In
+            # particular, do not unlink or overwrite a lock acquired by another
+            # runner after the rename.
+            raise PreviewError("preview_lease_release_race", "The renamed preview lock is not the verified lease inode")
+        tombstone.unlink()
+    except PreviewError:
+        raise
+    except OSError:
+        raise PreviewError("preview_lease_release_failed", "Could not safely retire the owned local preview lease") from None
+
+
+class PreviewLease:
+    def __init__(self, lock_dir: Path, resource_name: str, path: Path, guard_path: Path, payload: dict[str, Any]):
+        self.lock_dir = lock_dir
+        self.resource_name = resource_name
+        self.path = path
+        self.guard_path = guard_path
+        self.lease_id = payload["lease_id"]
+        self.owner_pid = payload["owner_pid"]
+        self.owner_process_start_id = payload["owner_process_start_id"]
+        self.started_monotonic = time.monotonic()
+        self.cancel_event = threading.Event()
+        self.deferred_release = False
+
+    def assert_active(self) -> None:
+        if self.cancel_event.is_set():
+            raise PreviewError(
+                "preview_lease_cancelled",
+                f"The preview lease expired or renewal failed; owned children are being stopped. {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+            )
+
+    def _update(self, change: Any) -> dict[str, Any]:
+        with _lease_guard(self.guard_path):
+            payload = _read_preview_lease(self.path, self.resource_name)
+            if payload["lease_id"] != self.lease_id:
+                raise PreviewError("preview_lease_lost", "This run no longer owns the local preview lease")
+            change(payload)
+            _atomic_lease_write(self.path, payload)
+            return payload
+
+    def renew(self) -> None:
+        now = datetime.now(timezone.utc)
+        def change(payload: dict[str, Any]) -> None:
+            created = _lease_time(payload["created_at"], "created_at")
+            if payload["renewal_count"] >= PREVIEW_LEASE_MAX_LIFETIME_SECONDS // PREVIEW_LEASE_RENEW_INTERVAL_SECONDS:
+                raise PreviewError("preview_lease_lifetime_exhausted", "The preview lease reached its bounded renewal count")
+            hard_deadline = created.timestamp() + PREVIEW_LEASE_MAX_LIFETIME_SECONDS
+            expires = min(now.timestamp() + PREVIEW_LEASE_TTL_SECONDS, hard_deadline)
+            if expires <= now.timestamp():
+                raise PreviewError("preview_lease_lifetime_exhausted", "The preview lease reached its bounded maximum lifetime")
+            payload["expires_at"] = datetime.fromtimestamp(expires, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            payload["renewal_count"] += 1
+        self._update(change)
+
+    def register_process(self, role: str, pid: int, process_start_id: str, *, process_group_id: int | None = None) -> None:
+        def change(payload: dict[str, Any]) -> None:
+            processes = payload["owned_processes"]
+            entry = {
+                "role": role,
+                "pid": pid,
+                "process_start_id": process_start_id,
+                "process_group_id": process_group_id,
+            }
+            for index, current in enumerate(processes):
+                if current == entry:
+                    payload["pending_process_roles"] = [item for item in payload["pending_process_roles"] if item != role]
+                    return
+                if current["role"] == role and current["pid"] == pid and current["process_start_id"] == "0":
+                    processes[index] = entry
+                    payload["pending_process_roles"] = [item for item in payload["pending_process_roles"] if item != role]
+                    return
+            if len(processes) >= PREVIEW_LEASE_MAX_OWNED_PROCESSES:
+                raise PreviewError("preview_lease_process_limit", "The preview lease reached its owned-process inventory limit")
+            processes.append(entry)
+            payload["pending_process_roles"] = [item for item in payload["pending_process_roles"] if item != role]
+        self._update(change)
+
+    def begin_process(self, role: str) -> None:
+        def change(payload: dict[str, Any]) -> None:
+            if role not in payload["pending_process_roles"]:
+                if len(payload["pending_process_roles"]) >= PREVIEW_LEASE_MAX_OWNED_PROCESSES:
+                    raise PreviewError("preview_lease_process_limit", "The preview lease reached its pending-process limit")
+                payload["pending_process_roles"].append(role)
+        self._update(change)
+
+    def clear_pending_process(self, role: str) -> None:
+        def change(payload: dict[str, Any]) -> None:
+            payload["pending_process_roles"] = [item for item in payload["pending_process_roles"] if item != role]
+        self._update(change)
+
+    def begin_external_operation(self, name: str) -> None:
+        if name not in PREVIEW_EXTERNAL_OPERATION_COMPLETIONS:
+            raise PreviewError("preview_lease_invalid", "External operation name is invalid")
+        def change(payload: dict[str, Any]) -> None:
+            if payload["recovery_state"] != "clear" or payload["pending_external_operation"] is not None:
+                raise PreviewError("preview_lease_recovery_required", "An earlier external operation still requires recovery")
+            payload["recovery_state"] = "operation_pending"
+            payload["recovery_reason"] = name
+            payload["pending_external_operation"] = {"name": name, "started_at": _utc_now()}
+        self._update(change)
+
+    def complete_external_operation(self, name: str, evidence: str) -> None:
+        if (
+            PREVIEW_EXTERNAL_OPERATION_COMPLETIONS.get(name) != evidence
+        ):
+            raise PreviewError("preview_lease_invalid", "External operation completion evidence is invalid")
+        def change(payload: dict[str, Any]) -> None:
+            pending = payload["pending_external_operation"]
+            if (
+                payload["recovery_state"] != "operation_pending"
+                or not isinstance(pending, dict)
+                or pending.get("name") != name
+            ):
+                raise PreviewError("preview_lease_recovery_required", "External operation completion does not match its pending lease state")
+            payload["last_completed_external_operation"] = {
+                "name": name,
+                "completed_at": _utc_now(),
+                "evidence": evidence,
+            }
+            if len(payload["completed_external_operations"]) >= 16:
+                raise PreviewError("preview_lease_operation_limit", "The preview lease reached its bounded external-operation history")
+            payload["completed_external_operations"].append(payload["last_completed_external_operation"])
+            payload["pending_external_operation"] = None
+            payload["recovery_state"] = "clear"
+            payload["recovery_reason"] = None
+        self._update(change)
+
+    def require_operator_recovery(self, reason: str) -> None:
+        safe_reason = re.sub(r"[^A-Za-z0-9_.:-]", "_", reason)[:160] or "uncertain_cleanup"
+        def change(payload: dict[str, Any]) -> None:
+            if payload["recovery_state"] != "operator_required":
+                payload["recovery_state"] = "operator_required"
+                payload["recovery_reason"] = safe_reason
+        self._update(change)
+
+    def recovery_status(self) -> dict[str, Any]:
+        with _lease_guard(self.guard_path):
+            payload = _read_preview_lease(self.path, self.resource_name)
+            if payload["lease_id"] != self.lease_id:
+                raise PreviewError("preview_lease_lost", "This run no longer owns the local preview lease")
+            return {
+                "state": payload["recovery_state"],
+                "reason": payload["recovery_reason"],
+                "pending_external_operation": payload["pending_external_operation"],
+                "last_completed_external_operation": payload["last_completed_external_operation"],
+                "completed_external_operations": payload["completed_external_operations"],
+            }
+
+    def release(self) -> None:
+        def change(payload: dict[str, Any]) -> None:
+            if payload["recovery_state"] != "clear" or payload["pending_external_operation"] is not None:
+                raise PreviewError(
+                    "preview_lease_recovery_required",
+                    f"The preview lease is sticky in recovery state {payload['recovery_state']}: {payload['recovery_reason']}",
+                )
+            created = _lease_time(payload["created_at"], "created_at")
+            released_epoch = min(time.time(), created.timestamp() + PREVIEW_LEASE_MAX_LIFETIME_SECONDS)
+            released_at = datetime.fromtimestamp(released_epoch, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            payload["state"] = "released"
+            payload["released_at"] = released_at
+            payload["expires_at"] = released_at
+        with _lease_guard(self.guard_path):
+            payload = _read_preview_lease(self.path, self.resource_name)
+            if payload["lease_id"] != self.lease_id:
+                raise PreviewError("preview_lease_lost", "This run no longer owns the local preview lease")
+            change(payload)
+            _atomic_lease_write(self.path, payload)
+            if _SUPERVISED_OWNER_MODE:
+                self.deferred_release = True
+            else:
+                _remove_owned_preview_lease(self.path, self.resource_name, self.lease_id)
+
+
+class PreviewLeaseKeeper:
+    def __init__(self, lease: PreviewLease):
+        self.lease = lease
+        self.stop_event = threading.Event()
+        self.failure: str | None = None
+        self.thread = threading.Thread(target=self._run, name="preview-lease-renewal", daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _run(self) -> None:
+        deadline = self.lease.started_monotonic + PREVIEW_LEASE_MAX_LIFETIME_SECONDS
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self.failure = "preview_lease_lifetime_exhausted"
+                self.lease.cancel_event.set()
+                return
+            if self.stop_event.wait(min(PREVIEW_LEASE_RENEW_INTERVAL_SECONDS, remaining)):
+                return
+            if time.monotonic() >= deadline:
+                self.failure = "preview_lease_lifetime_exhausted"
+                self.lease.cancel_event.set()
+                return
+            try:
+                self.lease.renew()
+            except PreviewError as error:
+                self.failure = error.code
+                self.lease.cancel_event.set()
+                return
+            except Exception:
+                self.failure = "preview_lease_renewal_error"
+                self.lease.cancel_event.set()
+                return
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.thread.join(timeout=PREVIEW_LEASE_GUARD_WAIT_SECONDS + 1)
+        if self.thread.is_alive() and self.failure is None:
+            self.failure = "preview_lease_renewal_still_running"
+            self.lease.cancel_event.set()
 
 
 def _utc_now() -> str:
@@ -481,8 +1199,15 @@ def _run_process(
     timeout: int,
     env: dict[str, str] | None = None,
     capture_stdout: bool = False,
+    lease: PreviewLease | None = None,
+    lease_role: str | None = None,
 ) -> CommandResult:
     started = time.monotonic()
+    if lease is not None:
+        lease.assert_active()
+        if not lease_role:
+            raise PreviewError("preview_lease_process_role_missing", "Owned preview subprocess tracking requires a process role")
+        lease.begin_process(lease_role)
     creationflags = 0
     options: dict[str, Any] = {}
     if os.name == "nt":
@@ -503,18 +1228,51 @@ def _run_process(
             **options,
         )
     except OSError:
+        if lease is not None and lease_role is not None:
+            lease.clear_pending_process(lease_role)
         return CommandResult(127, time.monotonic() - started)
 
-    if not capture_stdout:
+    if lease is not None:
         try:
-            child.wait(timeout=timeout)
-            return CommandResult(
-                child.returncode if child.returncode is not None else 1,
-                time.monotonic() - started,
-            )
-        except subprocess.TimeoutExpired:
+            process_group_id = child.pid if sys.platform.startswith("linux") else None
+            lease.register_process(lease_role, child.pid, "0", process_group_id=process_group_id)
+            identity = _process_record(child.pid, cwd=cwd, env=env or _base_env())
+            if identity is not None:
+                lease.register_process(lease_role, child.pid, str(identity["created"]), process_group_id=process_group_id)
+        except PreviewError:
             stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
-            return CommandResult(124, time.monotonic() - started, timed_out=True, stopped=stopped)
+            if not stopped:
+                raise PreviewError("owned_process_stop_unconfirmed", "Could not safely stop a preview child whose lease identity was not recorded") from None
+            try:
+                lease.clear_pending_process(lease_role)
+            except PreviewError:
+                pass
+            raise
+
+    if not capture_stdout:
+        deadline = started + timeout
+        while child.poll() is None:
+            cancelled = lease is not None and lease.cancel_event.is_set()
+            if cancelled or time.monotonic() >= deadline:
+                stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
+                try:
+                    child.wait(timeout=RUN_TIMEOUTS["server_stop"])
+                except subprocess.TimeoutExpired:
+                    stopped = False
+                return CommandResult(
+                    125 if cancelled else 124,
+                    time.monotonic() - started,
+                    timed_out=not cancelled,
+                    stopped=stopped,
+                    cancelled=cancelled,
+                )
+            time.sleep(0.05)
+        if lease is not None and lease.cancel_event.is_set():
+            return CommandResult(125, time.monotonic() - started, cancelled=True)
+        return CommandResult(
+            child.returncode if child.returncode is not None else 1,
+            time.monotonic() - started,
+        )
 
     assert child.stdout is not None
     captured = bytearray()
@@ -538,6 +1296,16 @@ def _run_process(
     reader.start()
     deadline = started + timeout
     while True:
+        cancelled = lease is not None and lease.cancel_event.is_set()
+        if cancelled:
+            stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
+            try:
+                child.wait(timeout=RUN_TIMEOUTS["server_stop"])
+            except subprocess.TimeoutExpired:
+                stopped = False
+            reader_stopped = _finish_capture_reader(reader, child.stdout)
+            stopped = stopped and reader_stopped
+            return CommandResult(125, time.monotonic() - started, stdout=bytes(captured), stopped=stopped, cancelled=True)
         if overflow.is_set():
             stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
             try:
@@ -552,6 +1320,8 @@ def _run_process(
                 return CommandResult(125, time.monotonic() - started, stdout=bytes(captured), stopped=False)
             if overflow.is_set() or read_failed.is_set():
                 return CommandResult(125, time.monotonic() - started)
+            if lease is not None and lease.cancel_event.is_set():
+                return CommandResult(125, time.monotonic() - started, stdout=bytes(captured), cancelled=True)
             return CommandResult(child.returncode or 0, time.monotonic() - started, stdout=bytes(captured))
         if time.monotonic() >= deadline:
             stopped = _stop_owned_tree(child, timeout=RUN_TIMEOUTS["server_stop"])
@@ -1005,13 +1775,16 @@ def _diagnostic_preflight(args: argparse.Namespace, *, check_availability: bool 
     if base["fixtures"][TEST_SIGN_IN_HELPER.as_posix()] != DIAGNOSTIC_HELPER_SHA256:
         raise PreviewError("diagnostic_helper_mismatch", "Diagnosis requires the reviewed existing-user-only sign-in helper")
     setup_hash = _diagnostic_setup_state(checkout, args.setup_state_sha256)
-    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    lock_dir_input = Path.home() / ".vortex-local-preview"
+    _reject_reparse_components(lock_dir_input, "preview lease directory")
+    lock_dir = lock_dir_input.resolve(strict=False)
     _outside_checkout(lock_dir, checkout, "preview lock directory")
     _outside_git_worktrees(lock_dir, "preview lock directory")
+    resource_name = _preview_resource_name(checkout)
     if check_availability:
-        lock = lock_dir / "local-preview.lock"
-        if lock.exists() or lock.is_symlink():
-            raise PreviewError("preview_locked", "The shared local preview lock already exists")
+        if lock_dir.exists():
+            _validate_preview_lease_dir(lock_dir)
+        _ensure_preview_lease_available(lock_dir, resource_name, checkout)
         if not _port_is_free(args.port):
             raise PreviewError("web_port_occupied", "The requested loopback web port is already occupied")
     _, local_values = _validate_env_file(args.web_env_file, checkout)
@@ -1082,14 +1855,27 @@ def _command_step(
     steps: list[dict[str, Any]],
     log_file: Any,
     capture_stdout: bool = False,
+    lease: PreviewLease | None = None,
 ) -> bytes:
-    result = _run_process(command, cwd=cwd, env=env, timeout=timeout, capture_stdout=capture_stdout)
+    if lease is not None:
+        lease.assert_active()
+    tracked_lease = lease
+    result = _run_process(
+        command,
+        cwd=cwd,
+        env=env,
+        timeout=timeout,
+        capture_stdout=capture_stdout,
+        lease=tracked_lease,
+        lease_role=name if tracked_lease is not None else None,
+    )
     _record(
         steps,
         log_file,
         step=name,
         exit_code=result.exit_code,
         timed_out=result.timed_out,
+        cancelled=result.cancelled,
         elapsed_seconds=round(result.elapsed_seconds, 3),
         owned_process_tree_stopped=result.stopped,
     )
@@ -1097,6 +1883,12 @@ def _command_step(
         raise PreviewError("owned_process_stop_unconfirmed", f"Step {name} left process cleanup uncertain", step=name)
     if result.timed_out:
         raise PreviewError("command_timeout", f"Step {name} exceeded its bounded timeout", step=name)
+    if result.cancelled or lease is not None and lease.cancel_event.is_set():
+        raise PreviewError(
+            "preview_lease_cancelled",
+            f"The preview lease expired during step {name}; owned children are being stopped. {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+            step=name,
+        )
     if result.exit_code != 0:
         raise PreviewError("command_failed", f"Step {name} exited nonzero ({result.exit_code})", step=name)
     return result.stdout
@@ -1110,6 +1902,7 @@ def _supabase_status(
     steps: list[dict[str, Any]],
     log_file: Any,
     step: str,
+    lease: PreviewLease | None = None,
 ) -> tuple[str, str]:
     raw = _command_step(
         step,
@@ -1120,6 +1913,7 @@ def _supabase_status(
         steps=steps,
         log_file=log_file,
         capture_stdout=True,
+        lease=lease,
     )
     if len(raw) > 64 * 1024:
         raise PreviewError("status_output_too_large", "Local Supabase status output exceeded its safe limit", step=step)
@@ -1178,7 +1972,9 @@ def _diagnostic_uuid(value: Any, label: str) -> str:
     return str(parsed)
 
 
-def _diagnostic_status(checkout: Path, node: str, cli: Path, env: dict[str, str]) -> tuple[str, str]:
+def _diagnostic_status(
+    checkout: Path, node: str, cli: Path, env: dict[str, str], lease: PreviewLease | None = None
+) -> tuple[str, str]:
     """Read status without writing the local Auth key into preflight evidence."""
     result = _run_process(
         [node, str(cli), "status", "--output", "json"],
@@ -1186,7 +1982,11 @@ def _diagnostic_status(checkout: Path, node: str, cli: Path, env: dict[str, str]
         env=env,
         timeout=RUN_TIMEOUTS["supabase_status"],
         capture_stdout=True,
+        lease=lease,
+        lease_role="supabase.status.diagnostic" if lease is not None else None,
     )
+    if lease is not None:
+        lease.assert_active()
     if not result.stopped:
         raise PreviewError("owned_process_stop_unconfirmed", "The read-only local status process did not stop")
     if result.timed_out or result.exit_code != 0 or len(result.stdout) > MAX_CAPTURED_OUTPUT:
@@ -1573,6 +2373,285 @@ def _process_record(pid: int, *, cwd: Path, env: dict[str, str]) -> dict[str, An
     return record
 
 
+def _linux_preview_process_groups(group_ids: set[int]) -> list[dict[str, int]]:
+    if not group_ids:
+        return []
+    matches: list[dict[str, int]] = []
+    try:
+        processes = list(Path("/proc").iterdir())
+    except OSError:
+        raise PreviewError("preview_process_scan_unknown", "Cannot enumerate Linux processes for preview lease recovery") from None
+    for process in processes:
+        if not process.name.isdigit():
+            continue
+        try:
+            stat_line = (process / "stat").read_text(encoding="ascii")
+            fields = stat_line[stat_line.rfind(")") + 2 :].split()
+            pid = int(process.name)
+            parent_pid = int(fields[1])
+            process_group_id = int(fields[2])
+            start_id = int(fields[19])
+        except FileNotFoundError:
+            continue
+        except (OSError, UnicodeError, ValueError, IndexError):
+            raise PreviewError("preview_process_scan_unknown", "Cannot verify Linux process-group evidence") from None
+        if process_group_id in group_ids:
+            matches.append({"pid": pid, "parent_pid": parent_pid, "process_group_id": process_group_id, "process_start_id": start_id})
+    return matches
+
+
+def _preview_lease_recovery_evidence(
+    payload: dict[str, Any], *, checkout: Path, env: dict[str, str]
+) -> dict[str, Any]:
+    expires = _lease_time(payload["expires_at"], "expires_at")
+    now = datetime.now(timezone.utc)
+    evidence: dict[str, Any] = {
+        "lease_id": payload["lease_id"],
+        "run_id": payload["run_id"],
+        "checkout": payload["checkout"],
+        "head_sha": payload["head_sha"],
+        "resource_name": payload["resource_name"],
+        "lease_expired": now >= expires,
+        "expires_at": payload["expires_at"],
+        "owner_pid": payload["owner_pid"],
+        "owner_process_start_id": payload["owner_process_start_id"],
+        "owned_processes": [],
+        "owned_process_identity_checks": [],
+        "owned_process_groups": [],
+        "pending_process_roles": payload["pending_process_roles"],
+        "web_port": payload["web_port"],
+        "port_listener_pids": [],
+        "port_free": None,
+        "owner_exit_verified": False,
+        "process_tree_complete": None,
+        "recovery_state": payload["recovery_state"],
+        "recovery_reason": payload["recovery_reason"],
+        "pending_external_operation": payload["pending_external_operation"],
+        "last_completed_external_operation": payload["last_completed_external_operation"],
+        "completed_external_operations": payload["completed_external_operations"],
+        "recoverable": False,
+        "operator_recovery_guidance": PREVIEW_LEASE_OPERATOR_GUIDANCE,
+    }
+    if now < expires:
+        evidence["block_reason"] = "lease_not_expired"
+        return evidence
+    try:
+        owner = _process_record(payload["owner_pid"], cwd=checkout, env=env)
+    except PreviewError as error:
+        raise PreviewError(
+            "preview_lease_recovery_blocked",
+            f"Preview lease is expired, but owner-process identity could not be verified ({error.code}); evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+        ) from None
+    if owner is not None and str(owner["created"]) == payload["owner_process_start_id"]:
+        evidence["owner_exit_verified"] = False
+        evidence["owner_process_created"] = owner["created"]
+        evidence["block_reason"] = "owner_process_still_running"
+        return evidence
+    evidence["owner_exit_verified"] = True
+    evidence["owner_process_created"] = None if owner is None else owner["created"]
+    if evidence["pending_process_roles"]:
+        evidence["block_reason"] = "owned_process_registration_incomplete"
+        return evidence
+
+    process_roots: set[int] = set()
+    process_group_ids: set[int] = set()
+    for item in payload["owned_processes"]:
+        pid = item["pid"]
+        process_roots.add(pid)
+        if item.get("process_group_id") is not None:
+            process_group_ids.add(item["process_group_id"])
+        try:
+            current = _process_record(pid, cwd=checkout, env=env)
+        except PreviewError as error:
+            raise PreviewError(
+                "preview_lease_recovery_blocked",
+                f"Preview lease is expired and owner exit is verified, but owned process {pid} identity is unknown ({error.code}); evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+            ) from None
+        if current is not None and (item["process_start_id"] == "0" or str(current["created"]) == item["process_start_id"]):
+            evidence["owned_processes"].append({"role": item["role"], "pid": pid, "process_start_id": item["process_start_id"], "running": True})
+            evidence["owned_process_identity_checks"].append(
+                {
+                    "role": item["role"],
+                    "pid": pid,
+                    "recorded_process_start_id": item["process_start_id"],
+                    "current_process_start_id": str(current["created"]),
+                    "matching_process_running": True,
+                }
+            )
+        else:
+            evidence["owned_process_identity_checks"].append(
+                {
+                    "role": item["role"],
+                    "pid": pid,
+                    "recorded_process_start_id": item["process_start_id"],
+                    "current_process_start_id": None if current is None else str(current["created"]),
+                    "matching_process_running": False,
+                }
+            )
+
+    if evidence["owned_processes"]:
+        evidence["block_reason"] = "owned_preview_process_still_running"
+        return evidence
+
+    if os.name == "nt" and process_roots:
+        # A ParentProcessId snapshot is not durable containment. A child can
+        # outlive or reparent from a recorded root between scans, so a Windows
+        # lease with child records always requires operator evidence.
+        evidence["process_tree_complete"] = False
+        evidence["block_reason"] = "windows_process_tree_completeness_unverified"
+        return evidence
+    elif sys.platform.startswith("linux") and process_roots and any(
+        item.get("process_group_id") is None for item in payload["owned_processes"]
+    ):
+        evidence["process_tree_complete"] = False
+        evidence["block_reason"] = "owned_process_group_identity_incomplete"
+        return evidence
+    elif sys.platform.startswith("linux") and process_roots:
+        try:
+            evidence["owned_process_groups"] = _linux_preview_process_groups(process_group_ids)
+            evidence["process_tree_complete"] = True
+        except PreviewError as error:
+            raise PreviewError(
+                "preview_lease_recovery_blocked",
+                f"Preview lease is expired and owner exit is verified, but owned process groups are unknown ({error.code}); evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+            ) from None
+    elif process_roots and os.name != "nt" and not sys.platform.startswith("linux"):
+        raise PreviewError(
+            "preview_lease_recovery_blocked",
+            f"Cannot verify owned preview processes on this platform; evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+        )
+    elif not process_roots:
+        evidence["process_tree_complete"] = True
+
+    if evidence["owned_processes"] or evidence["owned_process_groups"]:
+        evidence["block_reason"] = "owned_preview_process_still_running"
+        return evidence
+    try:
+        listeners = sorted(_listener_pids(payload["web_port"], cwd=checkout, env=env))
+    except PreviewError as error:
+        raise PreviewError(
+            "preview_lease_recovery_blocked",
+            f"Preview lease is expired and owner exit is verified, but port {payload['web_port']} ownership is unknown ({error.code}); evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+        ) from None
+    evidence["port_listener_pids"] = listeners
+    if listeners:
+        evidence["block_reason"] = "preview_port_has_listener"
+        return evidence
+    evidence["port_free"] = _port_is_free(payload["web_port"])
+    if not evidence["port_free"]:
+        evidence["block_reason"] = "preview_port_not_confirmed_free"
+        return evidence
+    if payload["recovery_state"] != "clear" or payload["pending_external_operation"] is not None:
+        evidence["block_reason"] = (
+            "sticky_operator_recovery_required"
+            if payload["recovery_state"] == "operator_required"
+            else "external_operation_completion_unverified"
+        )
+        return evidence
+    evidence["recoverable"] = True
+    evidence["block_reason"] = None
+    return evidence
+
+
+def _read_existing_preview_lease(path: Path, resource_name: str) -> dict[str, Any]:
+    try:
+        return _read_preview_lease(path, resource_name)
+    except PreviewError as error:
+        raise PreviewError(
+            "legacy_preview_lock_present",
+            f"The shared local-preview.lock is not a recognized scoped lease ({error.code}); it was left untouched. "
+            f"evidence={{\"path\":{json.dumps(str(path))},\"recognized_lease\":false}}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+        ) from None
+
+
+def _ensure_preview_lease_available(
+    lock_dir: Path, resource_name: str, checkout: Path
+) -> dict[str, Any] | None:
+    lease_path, _ = _lease_paths(lock_dir, resource_name)
+    if not lease_path.exists() and not lease_path.is_symlink():
+        return None
+    payload = _read_existing_preview_lease(lease_path, resource_name)
+    evidence = _preview_lease_recovery_evidence(payload, checkout=checkout, env=_base_env())
+    if not evidence["recoverable"]:
+        raise PreviewError(
+            "preview_lease_busy",
+            f"Local preview resource lease cannot be recovered; evidence={json.dumps(evidence, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+        )
+    return evidence
+
+
+def _acquire_preview_lease(
+    lock_dir: Path,
+    run_id: str,
+    checkout: Path,
+    sha: str,
+    optional_pr: dict[str, Any] | None,
+    resource_name: str,
+    port: int,
+    result_path: Path | None = None,
+) -> PreviewLease:
+    lease_path, guard_path = _lease_paths(lock_dir, resource_name)
+    if _SUPERVISED_OWNER_MODE:
+        if _SUPERVISED_OWNER_START_ID is None:
+            raise PreviewError("deadline_supervision_unavailable", "The supervised owner has no captured process-start identity")
+        owner = {"created": int(_SUPERVISED_OWNER_START_ID)}
+    else:
+        owner = _process_record(os.getpid(), cwd=checkout, env=_base_env())
+    if owner is None:
+        raise PreviewError("preview_owner_identity_unknown", "Cannot capture this run's process-start identity for the preview lease")
+    with _lease_guard(guard_path):
+        recovered: dict[str, Any] | None = None
+        previous: dict[str, Any] | None = None
+        if lease_path.exists() or lease_path.is_symlink():
+            previous = _read_existing_preview_lease(lease_path, resource_name)
+            recovered = _preview_lease_recovery_evidence(previous, checkout=checkout, env=_base_env())
+            if not recovered["recoverable"]:
+                raise PreviewError(
+                    "preview_lease_busy",
+                    f"Local preview resource lease cannot be recovered; evidence={json.dumps(recovered, sort_keys=True)}; {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+                )
+        now = _utc_now()
+        payload: dict[str, Any] = {
+            "schema": PREVIEW_LEASE_SCHEMA,
+            "lease_id": secrets.token_hex(24),
+            "run_id": run_id,
+            "owner_pid": os.getpid(),
+            "owner_process_start_id": str(owner["created"]),
+            "checkout": str(checkout),
+            "head_sha": sha,
+            "optional_pr": optional_pr,
+            "resource_name": resource_name,
+            "web_port": port,
+            "result_path": None if result_path is None else str(result_path),
+            "created_at": now,
+            "expires_at": _lease_iso_after(PREVIEW_LEASE_TTL_SECONDS),
+            "renewal_count": 0,
+            "state": "active",
+            "recovery_state": "clear",
+            "recovery_reason": None,
+            "pending_external_operation": None,
+            "last_completed_external_operation": None,
+            "completed_external_operations": [],
+            "owned_processes": [],
+            "pending_process_roles": [],
+        }
+        if recovered is not None:
+            payload["recovered_from"] = {
+                "run_id": previous["run_id"] if previous is not None else None,
+                "owner_pid": recovered["owner_pid"],
+                "owner_process_start_id": recovered["owner_process_start_id"],
+                "expires_at": recovered["expires_at"],
+                "recovery_evidence": recovered,
+            }
+        if previous is None:
+            _exclusive_lease_create(lease_path, payload)
+        else:
+            # The verified candidate lease already fences the old O_EXCL runner.
+            # Replacing it atomically keeps the fence present throughout recovery.
+            _atomic_lease_write(lease_path, payload)
+    return PreviewLease(lock_dir, resource_name, lease_path, guard_path, payload)
+
+
 def _same_path(actual: str, expected: Path) -> bool:
     try:
         left = Path(actual).resolve(strict=True)
@@ -1640,15 +2719,20 @@ def _assert_owned_listener(
 
 
 def _await_server(
-    child: subprocess.Popen[bytes], base_url: str, port: int, *, cwd: Path, env: dict[str, str], timeout: int
+    child: subprocess.Popen[bytes], base_url: str, port: int, *, cwd: Path, env: dict[str, str], timeout: int,
+    lease: PreviewLease | None = None,
 ) -> tuple[float, tuple[int, int]]:
     started = time.monotonic()
     deadline = started + timeout
     ready_url = f"{base_url}/auth/sign-in"
     while time.monotonic() < deadline:
+        if lease is not None:
+            lease.assert_active()
         if child.poll() is not None:
             raise PreviewError("server_exited", "The owned local web server exited before readiness", step="server_ready")
         if _http_ready(ready_url):
+            if lease is not None:
+                lease.assert_active()
             time.sleep(0.25)
             pids = _assert_owned_listener(child, port, cwd=cwd, env=env)
             return time.monotonic() - started, pids
@@ -1774,39 +2858,533 @@ def _write_result(
     return target
 
 
-def _acquire_lock(lock_dir: Path, run_id: str, checkout: Path, sha: str) -> tuple[Path, str]:
-    lock = lock_dir / "local-preview.lock"
-    token = secrets.token_hex(24)
-    payload = {
-        "token": token,
-        "run_id": run_id,
-        "pid": os.getpid(),
-        "checkout": str(checkout),
-        "head_sha": sha,
-        "created_at": _utc_now(),
-    }
+def _write_supervisor_json(path: Path, document: dict[str, Any], *, exclusive: bool) -> None:
+    encoded = (json.dumps(document, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    if exclusive:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except OSError:
+            raise PreviewError("deadline_evidence_write_failed", "Could not exclusively preserve deadline evidence") from None
+        with os.fdopen(fd, "wb") as output:
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+        return
+    if path.exists() or path.is_symlink():
+        info = path.lstat()
+        if _is_reparse_point(info) or not stat.S_ISREG(info.st_mode) or info.st_size > 1024 * 1024:
+            raise PreviewError("deadline_result_invalid", "The supervised result file is not a bounded regular file")
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(12)}.tmp")
     try:
-        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError:
-        raise PreviewError("preview_locked", "The shared local preview lock already exists; resolve it by owner evidence") from None
+        fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
     except OSError:
-        raise PreviewError("lock_failed", "Could not acquire the shared local preview lock") from None
-    with os.fdopen(fd, "w", encoding="utf-8") as output:
-        output.write(json.dumps(payload, sort_keys=True) + "\n")
-        output.flush()
-        os.fsync(output.fileno())
-    return lock, token
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise PreviewError("deadline_result_write_failed", "Could not atomically update the supervised result") from None
 
 
-def _release_lock(lock: Path, token: str) -> bool:
+def _publish_supervisor_start_marker(path: Path, document: dict[str, Any]) -> None:
+    """Publish a complete start authorization only after the owner is contained."""
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(12)}.tmp")
+    encoded = (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     try:
-        current = json.loads(lock.read_text(encoding="utf-8"))
-        if current.get("token") != token:
-            return False
-        lock.unlink()
-        return True
+        fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(encoded)
+            output.flush()
+            os.fsync(output.fileno())
+        if path.exists() or path.is_symlink():
+            raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker already exists")
+        # The candidate runs on Windows. os.rename fails if the target appeared
+        # after the check, while preventing the gated child from reading a
+        # partially written authorization.
+        os.rename(temporary, path)
+    except PreviewError:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+    except OSError:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise PreviewError("deadline_supervision_unavailable", "Could not atomically publish the preview owner start marker") from None
+
+
+def _wait_supervisor_start(marker: Path, nonce: str, *, timeout: float = 60.0) -> str:
+    expected_parent = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    if not marker.is_absolute() or marker.parent.resolve(strict=False) != expected_parent:
+        raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker is outside the private lock directory")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if marker.exists() or marker.is_symlink():
+            try:
+                info = marker.lstat()
+                if _is_reparse_point(info) or not stat.S_ISREG(info.st_mode) or info.st_size > 4096:
+                    raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker is invalid")
+                document = json.loads(marker.read_text(encoding="utf-8"))
+            except PreviewError:
+                raise
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker cannot be read") from None
+            if (
+                not isinstance(document, dict)
+                or document.get("nonce") != nonce
+                or document.get("owner_pid") != os.getpid()
+                or not isinstance(document.get("owner_process_start_id"), str)
+                or not re.fullmatch(r"[0-9]{1,32}", document["owner_process_start_id"])
+            ):
+                raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker identity does not match")
+            try:
+                marker.unlink()
+            except OSError:
+                raise PreviewError("deadline_supervision_unavailable", "The preview owner start marker could not be retired") from None
+            return document["owner_process_start_id"]
+        time.sleep(0.05)
+    raise PreviewError("deadline_supervision_unavailable", "The external deadline supervisor did not authorize owner startup")
+
+
+def _read_supervised_result(payload: dict[str, Any]) -> tuple[Path | None, dict[str, Any] | None]:
+    result_path_raw = payload.get("result_path")
+    if not isinstance(result_path_raw, str):
+        raise PreviewError("deadline_result_invalid", "The preview lease has no external result path")
+    result_path = Path(result_path_raw)
+    checkout = Path(payload["checkout"]).resolve(strict=True)
+    if _inside(result_path.resolve(strict=False), checkout):
+        raise PreviewError("deadline_result_invalid", "The supervised result path points into the checkout")
+    if not result_path.exists() and not result_path.is_symlink():
+        return result_path, None
+    try:
+        info = result_path.lstat()
+        if _is_reparse_point(info) or not stat.S_ISREG(info.st_mode) or info.st_size > 1024 * 1024:
+            raise PreviewError("deadline_result_invalid", "The supervised result file is not a bounded regular file")
+        document = json.loads(result_path.read_text(encoding="utf-8"))
+    except PreviewError:
+        raise
     except (OSError, UnicodeError, json.JSONDecodeError):
-        return False
+        raise PreviewError("deadline_result_invalid", "The supervised result file cannot be read") from None
+    if (
+        not isinstance(document, dict)
+        or document.get("run_id") != payload["run_id"]
+        or document.get("checkout") != payload["checkout"]
+        or document.get("head_sha") != payload["head_sha"]
+    ):
+        raise PreviewError("deadline_result_invalid", "The supervised result identity differs from its lease")
+    return result_path, document
+
+
+def _write_supervised_result(
+    payload: dict[str, Any], evidence: dict[str, Any], *, cleanup_confirmed: bool, timed_out: bool
+) -> Path:
+    result_path, document = _read_supervised_result(payload)
+    if result_path is None:
+        raise PreviewError("deadline_result_invalid", "The preview lease has no external result path")
+    if document is None:
+        diagnostic = result_path.name.startswith("local-diagnostic-")
+        document = {
+            "schema": "vortex.local-preview.diagnostic.v2" if diagnostic else "vortex.local-preview.result.v2",
+            "run_id": payload["run_id"],
+            "status": "FAIL",
+            "started_at": payload["created_at"],
+            "finished_at": _utc_now(),
+            "checkout": payload["checkout"],
+            "head_sha": payload["head_sha"],
+            "resource_name": payload["resource_name"],
+            "lease_file": str(Path.home() / ".vortex-local-preview" / "local-preview.lock"),
+            "failure": {"code": "preview_lease_lifetime_exhausted" if timed_out else "deadline_owner_terminated", "step": "deadline.enforcer"},
+            "lease_recovery": {
+                "state": payload["recovery_state"],
+                "reason": payload["recovery_reason"],
+                "pending_external_operation": payload["pending_external_operation"],
+                "last_completed_external_operation": payload["last_completed_external_operation"],
+                "completed_external_operations": payload["completed_external_operations"],
+            },
+            "operator_recovery_required": True,
+        }
+        if diagnostic:
+            document.update({"scope": "browser-only-existing-setup", "product_preview_pass": False})
+    document["lease_released"] = cleanup_confirmed
+    document["deadline_enforcement"] = evidence
+    document["lease_recovery"] = {
+        "state": payload["recovery_state"],
+        "reason": payload["recovery_reason"],
+        "pending_external_operation": payload["pending_external_operation"],
+        "last_completed_external_operation": payload["last_completed_external_operation"],
+        "completed_external_operations": payload["completed_external_operations"],
+    }
+    document["operator_recovery_required"] = bool(document.get("operator_recovery_required")) or timed_out or not cleanup_confirmed or payload["recovery_state"] != "clear"
+    if timed_out:
+        document["status"] = "FAIL"
+        document["failure"] = {
+            "code": "preview_lease_lifetime_exhausted",
+            "step": "deadline.enforcer",
+        }
+    elif not cleanup_confirmed:
+        document["status"] = "FAIL"
+        if not isinstance(document.get("failure"), dict):
+            document["failure"] = {"code": "deadline_cleanup_unconfirmed", "step": "deadline.enforcer"}
+    _write_supervisor_json(result_path, document, exclusive=False)
+    return result_path
+
+
+def _mark_supervisor_recovery_required(
+    lock_dir: Path,
+    payload: dict[str, Any],
+    evidence: dict[str, Any],
+    *,
+    owner_pid: int,
+    owner_start_id: str,
+    reason: str,
+) -> dict[str, Any]:
+    safe_reason = re.sub(r"[^A-Za-z0-9_.:-]", "_", reason)[:160] or "uncertain_external_state"
+    lock_path = lock_dir / "local-preview.lock"
+    with _lease_guard(lock_dir / "local-preview.guard"):
+        current = _read_existing_preview_lease(lock_path, PREVIEW_RESOURCE_NAME)
+        if (
+            current["lease_id"] != payload["lease_id"]
+            or current["owner_pid"] != owner_pid
+            or current["owner_process_start_id"] != owner_start_id
+        ):
+            raise PreviewError("deadline_lease_changed", "The shared preview lease changed before sticky recovery marking")
+        if current["recovery_state"] != "operator_required":
+            current["recovery_state"] = "operator_required"
+            current["recovery_reason"] = f"deadline:{safe_reason}"
+        evidence["lease_recovery_state"] = current["recovery_state"]
+        evidence["lease_recovery_reason"] = current["recovery_reason"]
+        evidence["pending_external_operation"] = current["pending_external_operation"]
+        evidence["last_completed_external_operation"] = current["last_completed_external_operation"]
+        evidence["completed_external_operations"] = current["completed_external_operations"]
+        evidence["operator_recovery_required"] = True
+        current["deadline_enforcement"] = evidence
+        _atomic_lease_write(lock_path, current)
+    return current
+
+
+def _windows_supervisor_finalize(
+    job: wintypes.HANDLE,
+    child: subprocess.Popen[bytes],
+    owner_start_id: str,
+    lock_dir: Path,
+    *,
+    timed_out: bool,
+) -> tuple[bool, dict[str, Any], Path | None]:
+    handle = _windows_process_handle(child)
+    if child.poll() is None or _windows_process_start_id(handle) != owner_start_id:
+        raise PreviewError("deadline_owner_exit_unverified", "The supervised owner exit/start identity is not positively verified")
+    active_before = _windows_job_active_processes(job)
+    termination_requested = False
+    if active_before:
+        _windows_terminate_job(job, 124 if timed_out else 125)
+        termination_requested = True
+    deadline = time.monotonic() + RUN_TIMEOUTS["server_stop"]
+    active_after = _windows_job_active_processes(job)
+    while active_after and time.monotonic() < deadline:
+        time.sleep(0.05)
+        active_after = _windows_job_active_processes(job)
+    evidence: dict[str, Any] = {
+        "schema": "vortex.local-preview.deadline-enforcement.v1",
+        "owner_pid": child.pid,
+        "owner_process_start_id": owner_start_id,
+        "owner_exit_verified": True,
+        "owner_exit_code": child.returncode,
+        "job_assignment_verified": True,
+        "job_object_termination_requested": termination_requested,
+        "job_active_processes_before_cleanup": active_before,
+        "job_active_processes_after_cleanup": active_after,
+        "timed_out_at_hard_deadline": timed_out,
+        "verified_at": _utc_now(),
+        "web_port": None,
+        "web_port_listener_pids": None,
+        "web_port_free": None,
+        "shared_database_state": "unverified",
+        "recoverable": False,
+    }
+    lock_path = lock_dir / "local-preview.lock"
+    if not lock_path.exists() and not lock_path.is_symlink():
+        evidence["recoverable"] = active_after == 0
+        evidence["block_reason"] = None if evidence["recoverable"] else "preview_job_processes_remain"
+        evidence["lease_present"] = False
+        return evidence["recoverable"], evidence, None
+    payload = _read_existing_preview_lease(lock_path, PREVIEW_RESOURCE_NAME)
+    if payload["owner_pid"] != child.pid or payload["owner_process_start_id"] != owner_start_id:
+        raise PreviewError("deadline_lease_owner_mismatch", "The shared preview lease does not belong to the verified supervised owner")
+    evidence.update({
+        "lease_id": payload["lease_id"],
+        "run_id": payload["run_id"],
+        "resource_name": payload["resource_name"],
+        "checkout": payload["checkout"],
+        "head_sha": payload["head_sha"],
+        "web_port": payload["web_port"],
+        "lease_recovery_state": payload["recovery_state"],
+        "lease_recovery_reason": payload["recovery_reason"],
+        "pending_external_operation": payload["pending_external_operation"],
+        "last_completed_external_operation": payload["last_completed_external_operation"],
+        "completed_external_operations": payload["completed_external_operations"],
+    })
+    result_path, owner_result = _read_supervised_result(payload)
+    owner_recovery = owner_result.get("lease_recovery") if owner_result is not None else None
+    owner_requested_recovery = owner_result.get("operator_recovery_required") if owner_result is not None else None
+    evidence["owner_result_status"] = None if owner_result is None else owner_result.get("status")
+    evidence["owner_requested_operator_recovery"] = owner_requested_recovery
+    evidence["owner_result_lease_recovery"] = owner_recovery
+    if payload["recovery_state"] == "clear" and payload["pending_external_operation"] is None:
+        completed_names = [item["name"] for item in payload["completed_external_operations"]]
+        evidence["shared_database_state"] = (
+            "database_reset_exit_and_followup_status_confirmed"
+            if "database.reset.local" in completed_names
+            else "setup_command_exit_0_confirmed"
+            if "setup.local" in completed_names
+            else "shared_stack_mutation_completion_recorded"
+            if any(name in completed_names for name in ("local_auth.create", "browser.adapter", "diagnostic.owner_rotation"))
+            else "no_shared_mutation_recorded"
+        )
+    if active_after:
+        evidence["block_reason"] = "preview_job_processes_remain"
+        payload = _mark_supervisor_recovery_required(
+            lock_dir, payload, evidence, owner_pid=child.pid, owner_start_id=owner_start_id, reason="owned_process_cleanup_unconfirmed"
+        )
+        result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=False, timed_out=timed_out)
+        evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+        _write_supervisor_json(evidence_path, evidence, exclusive=True)
+        return False, evidence, result_path
+    try:
+        listener_pids = sorted(_listener_pids(payload["web_port"], cwd=Path(payload["checkout"]), env=_base_env()))
+    except PreviewError as error:
+        evidence["block_reason"] = f"web_port_ownership_unknown:{error.code}"
+        payload = _mark_supervisor_recovery_required(
+            lock_dir, payload, evidence, owner_pid=child.pid, owner_start_id=owner_start_id, reason="web_port_ownership_unknown"
+        )
+        result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=False, timed_out=timed_out)
+        evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+        _write_supervisor_json(evidence_path, evidence, exclusive=True)
+        return False, evidence, result_path
+    evidence["web_port_listener_pids"] = listener_pids
+    evidence["web_port_free"] = not listener_pids and _port_is_free(payload["web_port"])
+    if listener_pids or not evidence["web_port_free"]:
+        evidence["block_reason"] = "web_port_not_confirmed_free"
+        payload = _mark_supervisor_recovery_required(
+            lock_dir, payload, evidence, owner_pid=child.pid, owner_start_id=owner_start_id, reason="web_port_not_confirmed_free"
+        )
+        result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=False, timed_out=timed_out)
+        evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+        _write_supervisor_json(evidence_path, evidence, exclusive=True)
+        return False, evidence, result_path
+
+    if timed_out:
+        # Killing the CLI tree cannot revoke a request already accepted by the
+        # Docker daemon. Preserve the lease for operator recovery even after
+        # the Windows job and requested web port are confirmed empty.
+        evidence["block_reason"] = "hard_deadline_docker_database_state_unverified_operator_recovery_required"
+        evidence["operator_guidance"] = PREVIEW_LEASE_OPERATOR_GUIDANCE
+        payload = _mark_supervisor_recovery_required(
+            lock_dir,
+            payload,
+            evidence,
+            owner_pid=child.pid,
+            owner_start_id=owner_start_id,
+            reason="hard_deadline_docker_database_state_unverified",
+        )
+        result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=False, timed_out=True)
+        evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+        _write_supervisor_json(evidence_path, evidence, exclusive=True)
+        return False, evidence, result_path
+
+    owner_result_recovery_state = owner_recovery.get("state") if isinstance(owner_recovery, dict) else None
+    owner_result_recovery_reason = owner_recovery.get("reason") if isinstance(owner_recovery, dict) else None
+    owner_result_pending = owner_recovery.get("pending_external_operation") if isinstance(owner_recovery, dict) else None
+    owner_result_history = owner_recovery.get("completed_external_operations") if isinstance(owner_recovery, dict) else None
+    unresolved_reason: str | None = None
+    if payload["recovery_state"] != "clear" or payload["pending_external_operation"] is not None:
+        unresolved_reason = f"lease_{payload['recovery_state']}:{payload['recovery_reason']}"
+    elif owner_requested_recovery is not False:
+        unresolved_reason = "owner_result_missing_or_requested_operator_recovery"
+    elif owner_result_recovery_state != "clear":
+        unresolved_reason = f"owner_result_{owner_result_recovery_state or 'recovery_state_missing'}:{owner_result_recovery_reason}"
+    elif owner_result_pending != payload["pending_external_operation"] or owner_result_history != payload["completed_external_operations"]:
+        unresolved_reason = "owner_result_external_operation_evidence_mismatch"
+    elif owner_recovery.get("last_completed_external_operation") != payload["last_completed_external_operation"]:
+        unresolved_reason = "owner_result_last_completion_evidence_mismatch"
+    if unresolved_reason is not None:
+        evidence["block_reason"] = "sticky_external_state_uncertain_operator_recovery_required"
+        evidence["recovery_block_detail"] = unresolved_reason
+        evidence["recoverable"] = False
+        evidence["operator_recovery_required"] = True
+        evidence["operator_guidance"] = PREVIEW_LEASE_OPERATOR_GUIDANCE
+        payload = _mark_supervisor_recovery_required(
+            lock_dir, payload, evidence, owner_pid=child.pid, owner_start_id=owner_start_id, reason=unresolved_reason
+        )
+        result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=False, timed_out=False)
+        evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+        _write_supervisor_json(evidence_path, evidence, exclusive=True)
+        return False, evidence, result_path
+
+    evidence["recoverable"] = True
+    evidence["lease_present"] = True
+    completed_names = [item["name"] for item in payload["completed_external_operations"]]
+    evidence["shared_database_state"] = (
+        "database_reset_exit_and_followup_status_confirmed"
+        if "database.reset.local" in completed_names
+        else "setup_command_exit_0_confirmed"
+        if "setup.local" in completed_names
+        else "shared_stack_mutation_completion_recorded"
+        if any(name in completed_names for name in ("local_auth.create", "browser.adapter", "diagnostic.owner_rotation"))
+        else "no_shared_mutation_recorded"
+    )
+    evidence["block_reason"] = None
+    evidence_path = lock_dir / f"preview-deadline-{payload['lease_id']}-{secrets.token_hex(6)}.json"
+    _write_supervisor_json(evidence_path, evidence, exclusive=True)
+    with _lease_guard(lock_dir / "local-preview.guard"):
+        current = _read_existing_preview_lease(lock_path, PREVIEW_RESOURCE_NAME)
+        if (
+            current["lease_id"] != payload["lease_id"]
+            or current["owner_pid"] != child.pid
+            or current["owner_process_start_id"] != owner_start_id
+            or current["recovery_state"] != "clear"
+            or current["pending_external_operation"] is not None
+        ):
+            raise PreviewError("deadline_lease_changed", "The shared preview lease changed or became uncertain before positive-evidence release")
+        current["state"] = "released"
+        current["released_at"] = _utc_now()
+        current["expires_at"] = current["released_at"]
+        current["deadline_enforcement"] = evidence
+        _atomic_lease_write(lock_path, current)
+        _remove_owned_preview_lease(lock_path, PREVIEW_RESOURCE_NAME, current["lease_id"])
+    result_path = _write_supervised_result(payload, evidence, cleanup_confirmed=True, timed_out=timed_out)
+    return True, evidence, result_path
+
+
+def _windows_supervised_entrypoint(mode: str) -> int:
+    """Own the kill-on-close job outside the preview owner event loop."""
+    if os.environ.get("VERCEL") or os.environ.get("CI", "").lower() == "true":
+        message = (
+            "Diagnostic runner refuses Vercel or CI environments"
+            if mode == "diagnose-existing"
+            else "Preview runner refuses Vercel or CI environments"
+        )
+        raise PreviewError("noninteractive_environment", message)
+    lock_dir = Path.home() / ".vortex-local-preview"
+    marker: Path | None = None
+    job: wintypes.HANDLE | None = None
+    child: subprocess.Popen[bytes] | None = None
+    timed_out = False
+    owner_start_id: str | None = None
+    try:
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        _validate_preview_lease_dir(lock_dir)
+        job = _windows_create_kill_job()
+        nonce = secrets.token_hex(24)
+        marker = lock_dir / f".preview-owner-start-{nonce}.json"
+        script = Path(__file__).resolve(strict=True)
+        child = subprocess.Popen(
+            [sys.executable, str(script), "--_supervised-owner", str(marker), nonce, *sys.argv[1:]],
+            cwd=str(Path.cwd()),
+            env=_base_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=None,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            close_fds=True,
+        )
+        child_handle = _windows_process_handle(child)
+        owner_start_id = _windows_process_start_id(child_handle)
+        # The child is still gated on the marker and cannot start preview work.
+        # Assigning it first makes every ordinary descendant inherit this job.
+        _windows_assign_job(job, child)
+        marker_data = {
+            "nonce": nonce,
+            "owner_pid": child.pid,
+            "owner_process_start_id": owner_start_id,
+        }
+        _publish_supervisor_start_marker(marker, marker_data)
+        hard_deadline = time.monotonic() + PREVIEW_LEASE_MAX_LIFETIME_SECONDS
+        kernel = _windows_kernel32()
+        while True:
+            remaining = hard_deadline - time.monotonic()
+            if remaining <= 0:
+                timed_out = True
+                _windows_terminate_job(job, 124)
+                wait_status = kernel.WaitForSingleObject(child_handle, RUN_TIMEOUTS["server_stop"] * 1000)
+                if wait_status != _WINDOWS_WAIT_OBJECT_0:
+                    raise PreviewError("deadline_owner_termination_unconfirmed", "The Windows deadline supervisor could not confirm owner termination")
+                break
+            wait_ms = max(1, min(1000, int(remaining * 1000)))
+            wait_status = kernel.WaitForSingleObject(child_handle, wait_ms)
+            if wait_status == _WINDOWS_WAIT_OBJECT_0:
+                break
+            if wait_status != _WINDOWS_WAIT_TIMEOUT:
+                raise PreviewError("deadline_supervision_unavailable", "The Windows deadline supervisor could not wait on the owner process handle")
+
+        child.poll()
+        cleanup_confirmed, evidence, result_path = _windows_supervisor_finalize(
+            job, child, owner_start_id, lock_dir, timed_out=timed_out
+        )
+        owner_exit_code = child.returncode
+        expected_result_status = "PASS" if mode == "run" else DIAGNOSTIC_STATUS
+        owner_result_status = evidence.get("owner_result_status")
+        owner_result_ok = result_path is not None and owner_exit_code == 0 and owner_result_status == expected_result_status
+        final_status = (
+            "FAIL"
+            if timed_out or not cleanup_confirmed or not owner_result_ok
+            else expected_result_status
+        )
+        summary: dict[str, Any] = {
+            "status": final_status,
+            "scope": "exact-head-product-preview" if mode == "run" else "browser-only-existing-setup",
+            "product_preview_pass": final_status == "PASS" and mode == "run",
+            "result_file": None if result_path is None else str(result_path),
+            "head_sha": evidence.get("head_sha"),
+            "owner_exit_code": owner_exit_code,
+            "failure": None if cleanup_confirmed and not timed_out and owner_result_ok else {
+                "code": (
+                    "preview_lease_lifetime_exhausted" if timed_out else
+                    "deadline_cleanup_unconfirmed" if not cleanup_confirmed else
+                    "preview_owner_failed" if owner_exit_code not in (None, 0) else
+                    "preview_owner_result_missing_or_status_mismatch"
+                ),
+                "step": "deadline.enforcer",
+            },
+            "deadline_evidence": evidence,
+        }
+        print(json.dumps(summary, sort_keys=True))
+        if not cleanup_confirmed or not owner_result_ok:
+            return 2
+        if timed_out:
+            return 2
+        return child.returncode if child.returncode is not None else 2
+    finally:
+        if marker is not None:
+            try:
+                marker.unlink()
+            except OSError:
+                pass
+        if child is not None and child.poll() is None:
+            try:
+                if job is not None:
+                    _windows_terminate_job(job, 125)
+            except PreviewError:
+                pass
+            try:
+                if child.poll() is None:
+                    # Popen retains the exact process handle, so this cannot
+                    # terminate a later process that reused the PID.
+                    child.kill()
+                child.wait(timeout=RUN_TIMEOUTS["server_stop"])
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if job is not None:
+            try:
+                _windows_kernel32().CloseHandle(job)
+            except (PreviewError, OSError):
+                pass
 
 
 def _browser_report(
@@ -1917,6 +3495,37 @@ def _browser_report(
         evidence["action_stage_valid"] = safe_stage is not None
         if safe_stage is not None:
             evidence["action_stage"] = safe_stage
+    if report_fields_valid and "navigation_transition_diagnostic" in result:
+        raw_navigation = result.get("navigation_transition_diagnostic")
+        navigation_valid = (
+            result_value == "FAIL"
+            and safe_reason == "navigation_timeout"
+            and safe_stage == "company_create_route"
+            and isinstance(raw_navigation, dict)
+            and set(raw_navigation) == {
+                "prior_route",
+                "expected_route",
+                "final_route_category",
+                "alert_or_status_present",
+            }
+            and type(raw_navigation.get("prior_route")) is str
+            and raw_navigation.get("prior_route")
+            in {"companies-list", "company-create", "application-base", "other"}
+            and type(raw_navigation.get("expected_route")) is str
+            and raw_navigation.get("expected_route") == "company-create"
+            and type(raw_navigation.get("final_route_category")) is str
+            and raw_navigation.get("final_route_category")
+            in {"unchanged", "application-base", "expected", "other"}
+            and type(raw_navigation.get("alert_or_status_present")) is bool
+        )
+        evidence["navigation_transition_diagnostic_valid"] = navigation_valid
+        if navigation_valid:
+            evidence["navigation_transition_diagnostic"] = {
+                "prior_route": raw_navigation["prior_route"],
+                "expected_route": raw_navigation["expected_route"],
+                "final_route_category": raw_navigation["final_route_category"],
+                "alert_or_status_present": raw_navigation["alert_or_status_present"],
+            }
     if report_fields_valid and (
         (result_value == "FAIL" and safe_stage == "maia_active_menu" and safe_reason == "theme_check_failed")
         or "maia_active_menu_failed_predicate" in result
@@ -2105,7 +3714,9 @@ def _run(args: argparse.Namespace) -> int:
     state_dir = _resolve_future(args.state_dir, "--state-dir")
     _outside_checkout(state_dir, checkout, "--state-dir")
     _outside_git_worktrees(state_dir, "--state-dir")
-    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    lock_dir_input = Path.home() / ".vortex-local-preview"
+    _reject_reparse_components(lock_dir_input, "preview lease directory")
+    lock_dir = lock_dir_input.resolve(strict=False)
     _outside_checkout(lock_dir, checkout, "preview lock directory")
     _outside_git_worktrees(lock_dir, "preview lock directory")
     if not _safe_email(args.owner_email):
@@ -2113,6 +3724,8 @@ def _run(args: argparse.Namespace) -> int:
     if os.environ.get("VERCEL") or os.environ.get("CI", "").lower() == "true":
         raise PreviewError("noninteractive_environment", "Preview runner refuses Vercel or CI environments")
     pair = _pr_pair(args)
+    optional_pr = None if pair is None else {"repo": pair[0], "number": pair[1]}
+    resource_name = _preview_resource_name(checkout)
     node = shutil.which("node")
     if node is None:
         raise PreviewError("runtime_missing", "Node.js is unavailable")
@@ -2123,15 +3736,25 @@ def _run(args: argparse.Namespace) -> int:
         if os.name != "nt":
             os.chmod(state_dir, 0o700)
             os.chmod(lock_dir, 0o700)
+        _validate_preview_lease_dir(lock_dir)
     except OSError:
         raise PreviewError("state_dir_failed", "Could not prepare the external result directory") from None
-    lock, token = _acquire_lock(lock_dir, run_id, checkout, sha)
+    result_path = state_dir / f"local-preview-{run_id}.json"
+    lease = _acquire_preview_lease(
+        lock_dir, run_id, checkout, sha, optional_pr, resource_name, args.port, result_path=result_path
+    )
     log_path = state_dir / f"local-preview-{run_id}.jsonl"
     try:
         log_file = log_path.open("x", encoding="utf-8")
     except OSError:
-        _release_lock(lock, token)
+        try:
+            lease.release()
+        except PreviewError:
+            pass
         raise PreviewError("log_create_failed", "Could not create the private structured run log") from None
+
+    lease_keeper = PreviewLeaseKeeper(lease)
+    lease_keeper.start()
 
     steps: list[dict[str, Any]] = []
     status = "FAIL"
@@ -2147,7 +3770,9 @@ def _run(args: argparse.Namespace) -> int:
     server_pid: int | None = None
     server_stopped: bool | None = None
     listener_identity: tuple[int, int] | None = None
-    preserve_lock = False
+    preserve_lease = False
+    lease_recovery: dict[str, Any] | None = None
+    operator_recovery_required = False
     cli = checkout / "node_modules" / "supabase" / "dist" / "supabase.js"
     base_env = _base_env()
     local_values: dict[str, str] = {}
@@ -2180,14 +3805,16 @@ def _run(args: argparse.Namespace) -> int:
             timeout=RUN_TIMEOUTS["auth_prepare"],
             steps=steps,
             log_file=log_file,
+            lease=lease,
         )
         api_url, pre_reset_key = _supabase_status(
-            checkout, node, cli, base_env, steps, log_file, "supabase.status.before"
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.before", lease=lease
         )
         if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
             raise PreviewError("supabase_url_mismatch", "The running local Supabase URL differs from the local app URL")
         pre_reset_key = ""
         _ensure_setup_state_absent(checkout)
+        lease.begin_external_operation("database.reset.local")
         _command_step(
             "database.reset.local",
             [node, str(cli), "--yes", "db", "reset", "--local"],
@@ -2196,17 +3823,24 @@ def _run(args: argparse.Namespace) -> int:
             timeout=RUN_TIMEOUTS["database_reset"],
             steps=steps,
             log_file=log_file,
+            lease=lease,
         )
         api_url, service_key = _supabase_status(
-            checkout, node, cli, base_env, steps, log_file, "supabase.status.after_reset"
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.after_reset", lease=lease
         )
         if api_url != _loopback_url(local_values["VORTEX_SUPABASE_URL"], "VORTEX_SUPABASE_URL", port=54321):
             raise PreviewError("supabase_url_mismatch", "The reset stack URL differs from the declared local app URL")
+        lease.complete_external_operation(
+            "database.reset.local", "command_exit_0+supabase_status+api_url_matches"
+        )
         test_password = secrets.token_urlsafe(36)
+        lease.assert_active()
         try:
+            lease.begin_external_operation("local_auth.create")
             owner_status, _owner_id = _create_local_owner(
                 api_url, service_key, args.owner_email, test_password
             )
+            lease.complete_external_operation("local_auth.create", "http_success+owner_id_returned")
         finally:
             service_key = ""
         _record(steps, log_file, step="local_owner.create", http_status=owner_status, exit_code=0)
@@ -2220,6 +3854,7 @@ def _run(args: argparse.Namespace) -> int:
             }
         )
         _ensure_setup_state_absent(checkout)
+        lease.begin_external_operation("setup.local")
         _command_step(
             "setup.local",
             [
@@ -2237,7 +3872,9 @@ def _run(args: argparse.Namespace) -> int:
             timeout=RUN_TIMEOUTS["setup_local"],
             steps=steps,
             log_file=log_file,
+            lease=lease,
         )
+        lease.complete_external_operation("setup.local", "command_exit_0")
 
         if not _port_is_free(args.port):
             raise PreviewError("web_port_occupied", "The requested loopback web port is already occupied")
@@ -2263,9 +3900,11 @@ def _run(args: argparse.Namespace) -> int:
             raise PreviewError("env_file_changed", "The local web environment changed before Next startup")
         # Recheck the local stack without passing its admin key to the Next child.
         _, server_key = _supabase_status(
-            checkout, node, cli, base_env, steps, log_file, "supabase.status.browser"
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.browser", lease=lease
         )
         next_entry = checkout / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
+        lease.assert_active()
+        lease.begin_process("next.server.cli")
         try:
             server = subprocess.Popen(
                 [node, str(next_entry), "dev", "--hostname", "127.0.0.1", "--port", str(args.port)],
@@ -2283,11 +3922,20 @@ def _run(args: argparse.Namespace) -> int:
                 start_new_session=os.name != "nt",
             )
         except OSError:
+            lease.clear_pending_process("next.server.cli")
             raise PreviewError("server_start_failed", "Could not start the hidden local Next.js child process", step="server_start") from None
         finally:
             server_key = ""
             server_env["VORTEX_DEV_TEST_PASSWORD"] = ""
         server_pid = server.pid
+        server_group_id = server.pid if sys.platform.startswith("linux") else None
+        lease.register_process("next.server.cli", server.pid, "0", process_group_id=server_group_id)
+        server_process = _process_record(server.pid, cwd=checkout, env=base_env)
+        if server_process is not None:
+            lease.register_process("next.server.cli", server.pid, str(server_process["created"]), process_group_id=server_group_id)
+        else:
+            raise PreviewError("server_identity_unknown", "Cannot record the owned Next.js process identity", step="server_start")
+        lease.register_process("next.server.cli", server.pid, str(server_process["created"]), process_group_id=server_group_id)
         ready_elapsed, listener_identity = _await_server(
             server,
             base_url,
@@ -2295,6 +3943,7 @@ def _run(args: argparse.Namespace) -> int:
             cwd=checkout,
             env=base_env,
             timeout=RUN_TIMEOUTS["server_ready"],
+            lease=lease,
         )
         _record(
             steps,
@@ -2306,6 +3955,10 @@ def _run(args: argparse.Namespace) -> int:
             elapsed_seconds=round(ready_elapsed, 3),
             local_url=base_url,
         )
+        listener_process = _process_record(listener_identity[0], cwd=checkout, env=base_env)
+        if listener_process is None or listener_process["created"] != listener_identity[1]:
+            raise PreviewError("server_identity_unknown", "Cannot record the owned Next.js listener identity", step="server_ready")
+        lease.register_process("next.server.listener", listener_identity[0], str(listener_identity[1]))
 
         adapter = Path(args.browser_adapter).resolve(strict=True)
         _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
@@ -2320,6 +3973,7 @@ def _run(args: argparse.Namespace) -> int:
                 "VORTEX_PREVIEW_FIXTURE_FINGERPRINTS": json.dumps(fixtures, sort_keys=True),
             }
         )
+        lease.begin_external_operation("browser.adapter")
         browser_invoked = True
         browser_command = _run_process(
             [node, str(adapter)],
@@ -2327,6 +3981,8 @@ def _run(args: argparse.Namespace) -> int:
             env=browser_env,
             timeout=RUN_TIMEOUTS["browser_smoke"],
             capture_stdout=True,
+            lease=lease,
+            lease_role="browser.adapter",
         )
         _record(
             steps,
@@ -2334,9 +3990,16 @@ def _run(args: argparse.Namespace) -> int:
             step="browser.smoke",
             exit_code=browser_command.exit_code,
             timed_out=browser_command.timed_out,
+            cancelled=browser_command.cancelled,
             elapsed_seconds=round(browser_command.elapsed_seconds, 3),
             owned_process_tree_stopped=browser_command.stopped,
         )
+        if browser_command.cancelled or lease.cancel_event.is_set():
+            raise PreviewError(
+                "preview_lease_cancelled",
+                f"The preview lease expired during the browser adapter; owned children are being stopped. {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+                step="browser.smoke",
+            )
         browser_evidence, browser_cleanup_confirmed, contract_error = _browser_report(
             browser_command.stdout, sha, run_id, fixtures
         )
@@ -2362,6 +4025,7 @@ def _run(args: argparse.Namespace) -> int:
             raise PreviewError("browser_result_failed", "The browser adapter did not declare PASS", step="browser.smoke")
         if any(browser_evidence["checks"].get(name) is not True for name in REQUIRED_BROWSER_CHECKS):
             raise PreviewError("browser_checks_failed", "Browser evidence lacks a required PASS", step="browser.smoke")
+        lease.complete_external_operation("browser.adapter", "adapter_json_pass+required_checks_pass")
         owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
         _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=[owner_identity[0]])
         status = "PASS"
@@ -2371,10 +4035,10 @@ def _run(args: argparse.Namespace) -> int:
             failure["adapter_reason"] = browser_reason
         if browser_stage is not None:
             failure["adapter_action_stage"] = browser_stage
-        preserve_lock = preserve_lock or error.code == "owned_process_stop_unconfirmed"
+        preserve_lease = preserve_lease or error.code == "owned_process_stop_unconfirmed" or error.code.startswith("preview_lease")
     except Exception:
         failure = {"code": "unexpected_failure", "step": None}
-        preserve_lock = True
+        preserve_lease = True
     finally:
         if server is not None:
             server_stopped = _stop_owned_server(server, listener_identity, args.port, cwd=checkout, env=base_env)
@@ -2390,15 +4054,15 @@ def _run(args: argparse.Namespace) -> int:
             if not server_stopped:
                 status = "FAIL"
                 failure = {"code": "owned_server_stop_unconfirmed", "step": "server.stop_owned_tree"}
-                preserve_lock = True
+                preserve_lease = True
         try:
             final_identity, final_process_uncertain = _final_identity_checks(
                 checkout, sha, fixtures, args.browser_adapter, args.browser_adapter_sha256, pair
             )
-            preserve_lock = preserve_lock or final_process_uncertain
+            preserve_lease = preserve_lease or final_process_uncertain
         except Exception:
             final_identity = {"error": "unexpected_failure"}
-            preserve_lock = True
+            preserve_lease = True
         _record(steps, log_file, step="final.identity_checked", checks=final_identity)
         required_identity = ("head_matches", "fixtures_match", "adapter_matches")
         if pair is not None:
@@ -2407,20 +4071,58 @@ def _run(args: argparse.Namespace) -> int:
             status = "FAIL"
             failure = {"code": "final_identity_unconfirmed", "step": "final.identity_checked"}
         if browser_invoked and not browser_cleanup_confirmed:
-            preserve_lock = True
+            preserve_lease = True
             if status == "PASS":
                 status = "FAIL"
                 failure = {"code": "browser_cleanup_unconfirmed", "step": "browser.smoke"}
+        lease_keeper.stop()
+        if lease_keeper.failure is not None:
+            preserve_lease = True
+            status = "FAIL"
+            failure = {"code": "preview_lease_renewal_failed", "step": "lease.renew", "reason": lease_keeper.failure}
+            _record(steps, log_file, step="lease.renewal.failed", code=lease_keeper.failure)
+        if preserve_lease:
+            try:
+                lease.require_operator_recovery(
+                    str((failure or {}).get("code") or "cleanup_unconfirmed")
+                )
+            except PreviewError as error:
+                status = "FAIL"
+                failure = {"code": "lease_recovery_state_write_failed", "step": "lease.recovery", "reason": error.code}
+        try:
+            lease_recovery = lease.recovery_status()
+            if lease_recovery["state"] != "clear":
+                preserve_lease = True
+                if status == "PASS":
+                    status = "FAIL"
+                    failure = {"code": "external_operation_completion_unverified", "step": "lease.recovery"}
+        except PreviewError as error:
+            preserve_lease = True
+            lease_recovery = {"state": "unknown", "reason": error.code}
+            status = "FAIL"
+            failure = {"code": "lease_recovery_state_unavailable", "step": "lease.recovery"}
+        operator_recovery_required = preserve_lease or lease_recovery is None or lease_recovery.get("state") != "clear"
+        _record(
+            steps,
+            log_file,
+            step="lease.recovery_state",
+            state=None if lease_recovery is None else lease_recovery.get("state"),
+            reason=None if lease_recovery is None else lease_recovery.get("reason"),
+            pending_external_operation=None if lease_recovery is None else lease_recovery.get("pending_external_operation"),
+            operator_recovery_required=operator_recovery_required,
+        )
         log_file.close()
 
     result = {
-        "schema": "vortex.local-preview.result.v1",
+        "schema": "vortex.local-preview.result.v2",
         "run_id": run_id,
         "status": status,
         "started_at": steps[0]["at"] if steps else _utc_now(),
         "finished_at": _utc_now(),
         "checkout": str(checkout),
         "head_sha": sha,
+        "resource_name": resource_name,
+        "lease_file": str(lease.path),
         "optional_pr": None if pair is None else {"repo": pair[0], "number": pair[1]},
         "fixtures": fixtures,
         "browser_adapter": {
@@ -2435,15 +4137,18 @@ def _run(args: argparse.Namespace) -> int:
         "steps": steps,
         "failure": failure,
         "log_file": str(log_path),
-        "lock_released": False,
+        "lease_released": False,
+        "lease_recovery": lease_recovery,
+        "operator_recovery_required": operator_recovery_required,
     }
     result_path = _write_result(state_dir, run_id, result)
-    if not preserve_lock:
-        if _release_lock(lock, token):
-            result["lock_released"] = True
-        else:
+    if not preserve_lease:
+        try:
+            lease.release()
+            result["lease_released"] = not lease.deferred_release
+        except PreviewError:
             result["status"] = status = "FAIL"
-            result["failure"] = failure = {"code": "lock_release_failed", "step": "lock.release"}
+            result["failure"] = failure = {"code": "lease_release_failed", "step": "lease.release"}
         _write_result(state_dir, run_id, result)
     print(json.dumps({"status": status, "result_file": str(result_path), "head_sha": sha, "failure": failure}, sort_keys=True))
     return 0 if status == "PASS" else 2
@@ -2475,9 +4180,12 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         validated_paths = _prepare_screenshot_target(args, checkout)
         if validated_paths != (state_dir, screenshot_target):
             raise PreviewError("screenshot_path_invalid", "Screenshot destination changed during preflight")
-    lock_dir = (Path.home() / ".vortex-local-preview").resolve(strict=False)
+    lock_dir_input = Path.home() / ".vortex-local-preview"
+    _reject_reparse_components(lock_dir_input, "preview lease directory")
+    lock_dir = lock_dir_input.resolve(strict=False)
     _outside_checkout(lock_dir, checkout, "preview lock directory")
     _outside_git_worktrees(lock_dir, "preview lock directory")
+    resource_name = _preview_resource_name(checkout)
     node = shutil.which("node")
     if node is None:
         raise PreviewError("runtime_missing", "Node.js is unavailable")
@@ -2488,15 +4196,25 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         if os.name != "nt":
             os.chmod(state_dir, 0o700)
             os.chmod(lock_dir, 0o700)
+        _validate_preview_lease_dir(lock_dir)
     except OSError:
         raise PreviewError("state_dir_failed", "Could not prepare the external diagnostic result directory") from None
-    lock, token = _acquire_lock(lock_dir, run_id, checkout, sha)
+    result_path = state_dir / f"local-diagnostic-{run_id}.json"
+    lease = _acquire_preview_lease(
+        lock_dir, run_id, checkout, sha, None, resource_name, args.port, result_path=result_path
+    )
     log_path = state_dir / f"local-diagnostic-{run_id}.jsonl"
     try:
         log_file = log_path.open("x", encoding="utf-8")
     except OSError:
-        _release_lock(lock, token)
+        try:
+            lease.release()
+        except PreviewError:
+            pass
         raise PreviewError("log_create_failed", "Could not create the private diagnostic step log") from None
+
+    lease_keeper = PreviewLeaseKeeper(lease)
+    lease_keeper.start()
 
     steps: list[dict[str, Any]] = []
     status = "FAIL"
@@ -2514,7 +4232,9 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
     server_pid: int | None = None
     server_stopped: bool | None = None
     listener_identity: tuple[int, int] | None = None
-    preserve_lock = False
+    preserve_lease = False
+    lease_recovery: dict[str, Any] | None = None
+    operator_recovery_required = False
     base_env = _base_env()
     cli = checkout / "node_modules" / "supabase" / "dist" / "supabase.js"
     try:
@@ -2535,7 +4255,7 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             raise PreviewError("web_port_occupied", "The requested loopback web port is already occupied")
         _, local_values = _validate_env_file(args.web_env_file, checkout)
         api_url, service_key = _supabase_status(
-            checkout, node, cli, base_env, steps, log_file, "supabase.status.diagnostic"
+            checkout, node, cli, base_env, steps, log_file, "supabase.status.diagnostic", lease=lease
         )
         password = ""
         try:
@@ -2546,8 +4266,11 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
                 raise PreviewError("diagnostic_owner_mismatch", "The disposable local Auth UUID changed")
             _record(steps, log_file, step="diagnostic.owner_verified", owner_id=owner_id)
             password = secrets.token_urlsafe(36)
+            lease.assert_active()
+            lease.begin_external_operation("diagnostic.owner_rotation")
             rotation_attempted = True
             _rotate_diagnostic_owner(api_url, service_key, owner_id, password)
+            lease.complete_external_operation("diagnostic.owner_rotation", "http_success+owner_identity_matches")
             rotation_confirmed = True
             _record(steps, log_file, step="diagnostic.owner_password_rotated", owner_id=owner_id, exit_code=0)
         finally:
@@ -2573,6 +4296,8 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         if next_local_values != local_values:
             raise PreviewError("env_file_changed", "The local web environment changed before Next startup")
         next_entry = checkout / "apps" / "web" / "node_modules" / "next" / "dist" / "bin" / "next"
+        lease.assert_active()
+        lease.begin_process("next.server.cli")
         try:
             server = subprocess.Popen(
                 [node, str(next_entry), "dev", "--hostname", "127.0.0.1", "--port", str(args.port)],
@@ -2590,13 +4315,22 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
                 start_new_session=os.name != "nt",
             )
         except OSError:
+            lease.clear_pending_process("next.server.cli")
             raise PreviewError("server_start_failed", "Could not start the hidden local Next.js child", step="server_start") from None
         finally:
             password = ""
             server_env["VORTEX_DEV_TEST_PASSWORD"] = ""
         server_pid = server.pid
+        server_group_id = server.pid if sys.platform.startswith("linux") else None
+        lease.register_process("next.server.cli", server.pid, "0", process_group_id=server_group_id)
+        server_process = _process_record(server.pid, cwd=checkout, env=base_env)
+        if server_process is not None:
+            lease.register_process("next.server.cli", server.pid, str(server_process["created"]), process_group_id=server_group_id)
+        else:
+            raise PreviewError("server_identity_unknown", "Cannot record the owned Next.js process identity", step="server_start")
+        lease.register_process("next.server.cli", server.pid, str(server_process["created"]), process_group_id=server_group_id)
         ready_elapsed, listener_identity = _await_server(
-            server, base_url, args.port, cwd=checkout, env=base_env, timeout=RUN_TIMEOUTS["server_ready"]
+            server, base_url, args.port, cwd=checkout, env=base_env, timeout=RUN_TIMEOUTS["server_ready"], lease=lease
         )
         _record(
             steps,
@@ -2608,6 +4342,10 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             elapsed_seconds=round(ready_elapsed, 3),
             local_url=base_url,
         )
+        listener_process = _process_record(listener_identity[0], cwd=checkout, env=base_env)
+        if listener_process is None or listener_process["created"] != listener_identity[1]:
+            raise PreviewError("server_identity_unknown", "Cannot record the owned Next.js listener identity", step="server_ready")
+        lease.register_process("next.server.listener", listener_identity[0], str(listener_identity[1]))
         adapter = Path(args.browser_adapter).resolve(strict=True)
         _checked_digest(_sha256(adapter), args.browser_adapter_sha256, "Browser adapter")
         owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
@@ -2628,6 +4366,7 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
                     "VORTEX_PREVIEW_SCREENSHOT_STATE_DIR": str(state_dir),
                 }
             )
+        lease.begin_external_operation("browser.adapter")
         browser_invoked = True
         browser_command = _run_process(
             [node, str(adapter)],
@@ -2635,6 +4374,8 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             env=browser_env,
             timeout=RUN_TIMEOUTS["browser_smoke"],
             capture_stdout=True,
+            lease=lease,
+            lease_role="browser.adapter",
         )
         _record(
             steps,
@@ -2642,9 +4383,16 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             step="browser.smoke",
             exit_code=browser_command.exit_code,
             timed_out=browser_command.timed_out,
+            cancelled=browser_command.cancelled,
             elapsed_seconds=round(browser_command.elapsed_seconds, 3),
             owned_process_tree_stopped=browser_command.stopped,
         )
+        if browser_command.cancelled or lease.cancel_event.is_set():
+            raise PreviewError(
+                "preview_lease_cancelled",
+                f"The preview lease expired during the browser adapter; owned children are being stopped. {PREVIEW_LEASE_OPERATOR_GUIDANCE}",
+                step="browser.smoke",
+            )
         browser_evidence, browser_cleanup_confirmed, contract_error = _browser_report(
             browser_command.stdout,
             sha,
@@ -2675,6 +4423,7 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             raise PreviewError("browser_result_failed", "The browser adapter did not declare PASS", step="browser.smoke")
         if any(browser_evidence["checks"].get(name) is not True for name in REQUIRED_BROWSER_CHECKS):
             raise PreviewError("browser_checks_failed", "Browser evidence lacks a required PASS", step="browser.smoke")
+        lease.complete_external_operation("browser.adapter", "adapter_json_pass+required_checks_pass")
         owner_identity = _assert_owned_listener(server, args.port, cwd=checkout, env=base_env, expected=listener_identity)
         _record(steps, log_file, step="server.owner.after_browser", pid=server.pid, listener_pids=[owner_identity[0]])
         status = DIAGNOSTIC_STATUS
@@ -2684,10 +4433,10 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             failure["adapter_reason"] = browser_reason
         if browser_stage is not None:
             failure["adapter_action_stage"] = browser_stage
-        preserve_lock = error.code == "owned_process_stop_unconfirmed"
+        preserve_lease = error.code == "owned_process_stop_unconfirmed" or error.code.startswith("preview_lease")
     except Exception:
         failure = {"code": "unexpected_failure", "step": None}
-        preserve_lock = True
+        preserve_lease = True
     finally:
         if server is not None:
             server_stopped = _stop_owned_server(server, listener_identity, args.port, cwd=checkout, env=base_env)
@@ -2703,15 +4452,15 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             if not server_stopped:
                 status = "FAIL"
                 failure = {"code": "owned_server_stop_unconfirmed", "step": "server.stop_owned_tree"}
-                preserve_lock = True
+                preserve_lease = True
         try:
             final_identity, final_process_uncertain = _final_identity_checks(
                 checkout, sha, fixtures, args.browser_adapter, args.browser_adapter_sha256, None
             )
-            preserve_lock = preserve_lock or final_process_uncertain
+            preserve_lease = preserve_lease or final_process_uncertain
         except Exception:
             final_identity = {"error": "unexpected_failure"}
-            preserve_lock = True
+            preserve_lease = True
         try:
             final_identity["setup_state_matches"] = (
                 _diagnostic_setup_state(checkout, args.setup_state_sha256) == preflight["setup_state_sha256"]
@@ -2721,7 +4470,7 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             final_identity["setup_state_error"] = error.code
         if rotation_confirmed:
             try:
-                final_api, final_key = _diagnostic_status(checkout, node, cli, base_env)
+                final_api, final_key = _diagnostic_status(checkout, node, cli, base_env, lease=lease)
                 try:
                     final_identity["owner_matches"] = (
                         final_api == api_url and _diagnostic_owner_still_matches(final_api, final_key, owner_id)
@@ -2731,7 +4480,7 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             except PreviewError as error:
                 final_identity["owner_matches"] = None
                 final_identity["owner_error"] = error.code
-                preserve_lock = preserve_lock or error.code == "owned_process_stop_unconfirmed"
+                preserve_lease = preserve_lease or error.code == "owned_process_stop_unconfirmed"
         else:
             final_identity["owner_matches"] = None
         _record(steps, log_file, step="final.identity_checked", checks=final_identity)
@@ -2740,16 +4489,52 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
             status = "FAIL"
             failure = {"code": "final_identity_unconfirmed", "step": "final.identity_checked"}
         if browser_invoked and not browser_cleanup_confirmed:
-            preserve_lock = True
+            preserve_lease = True
             if status == DIAGNOSTIC_STATUS:
                 status = "FAIL"
                 failure = {"code": "browser_cleanup_unconfirmed", "step": "browser.smoke"}
         if rotation_attempted and not rotation_confirmed:
-            preserve_lock = True
+            preserve_lease = True
+        lease_keeper.stop()
+        if lease_keeper.failure is not None:
+            preserve_lease = True
+            status = "FAIL"
+            failure = {"code": "preview_lease_renewal_failed", "step": "lease.renew", "reason": lease_keeper.failure}
+            _record(steps, log_file, step="lease.renewal.failed", code=lease_keeper.failure)
+        if preserve_lease:
+            try:
+                lease.require_operator_recovery(
+                    str((failure or {}).get("code") or "cleanup_unconfirmed")
+                )
+            except PreviewError as error:
+                status = "FAIL"
+                failure = {"code": "lease_recovery_state_write_failed", "step": "lease.recovery", "reason": error.code}
+        try:
+            lease_recovery = lease.recovery_status()
+            if lease_recovery["state"] != "clear":
+                preserve_lease = True
+                if status == "PASS":
+                    status = "FAIL"
+                    failure = {"code": "external_operation_completion_unverified", "step": "lease.recovery"}
+        except PreviewError as error:
+            preserve_lease = True
+            lease_recovery = {"state": "unknown", "reason": error.code}
+            status = "FAIL"
+            failure = {"code": "lease_recovery_state_unavailable", "step": "lease.recovery"}
+        operator_recovery_required = preserve_lease or lease_recovery is None or lease_recovery.get("state") != "clear"
+        _record(
+            steps,
+            log_file,
+            step="lease.recovery_state",
+            state=None if lease_recovery is None else lease_recovery.get("state"),
+            reason=None if lease_recovery is None else lease_recovery.get("reason"),
+            pending_external_operation=None if lease_recovery is None else lease_recovery.get("pending_external_operation"),
+            operator_recovery_required=operator_recovery_required,
+        )
         log_file.close()
 
     result = {
-        "schema": "vortex.local-preview.diagnostic.v1",
+        "schema": "vortex.local-preview.diagnostic.v2",
         "scope": "browser-only-existing-setup",
         "run_id": run_id,
         "status": status,
@@ -2758,6 +4543,8 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         "finished_at": _utc_now(),
         "checkout": str(checkout),
         "head_sha": sha,
+        "resource_name": resource_name,
+        "lease_file": str(lease.path),
         "fixtures": fixtures,
         "setup_state_sha256": preflight["setup_state_sha256"],
         "owner_email": DIAGNOSTIC_OWNER_EMAIL,
@@ -2775,21 +4562,24 @@ def _diagnose_existing(args: argparse.Namespace) -> int:
         "steps": steps,
         "failure": failure,
         "log_file": str(log_path),
-        "lock_released": False,
+        "lease_released": False,
+        "lease_recovery": lease_recovery,
+        "operator_recovery_required": operator_recovery_required,
     }
     result_path = _write_result(state_dir, run_id, result, prefix="local-diagnostic")
-    if not preserve_lock:
-        if _release_lock(lock, token):
-            result["lock_released"] = True
-        else:
+    if not preserve_lease:
+        try:
+            lease.release()
+            result["lease_released"] = not lease.deferred_release
+        except PreviewError:
             result["status"] = status = "FAIL"
-            result["failure"] = failure = {"code": "lock_release_failed", "step": "lock.release"}
+            result["failure"] = failure = {"code": "lease_release_failed", "step": "lease.release"}
         _write_result(state_dir, run_id, result, prefix="local-diagnostic")
     print(json.dumps({"status": status, "result_file": str(result_path), "head_sha": sha, "failure": failure}, sort_keys=True))
     return 0 if status == DIAGNOSTIC_STATUS else 2
 
 
-def main() -> int:
+def _main_body() -> int:
     parser = _build_parser()
     args = parser.parse_args()
     try:
@@ -2830,6 +4620,33 @@ def main() -> int:
     except PreviewError as error:
         print(json.dumps({"status": "BLOCKED", "code": error.code, "step": error.step, "message": str(error)}), file=sys.stderr)
         return 2
+
+
+def main() -> int:
+    global _SUPERVISED_OWNER_MODE, _SUPERVISED_OWNER_START_ID
+    if os.name == "nt" and len(sys.argv) > 1 and sys.argv[1] == "--_supervised-owner":
+        if len(sys.argv) < 5:
+            print("The internal preview owner invocation is incomplete.", file=sys.stderr)
+            return 2
+        marker = Path(sys.argv[2])
+        nonce = sys.argv[3]
+        try:
+            _SUPERVISED_OWNER_START_ID = _wait_supervisor_start(marker, nonce)
+        except PreviewError as error:
+            print(json.dumps({"status": "BLOCKED", "code": error.code, "step": "deadline.supervisor", "message": str(error)}), file=sys.stderr)
+            return 2
+        _SUPERVISED_OWNER_MODE = True
+        sys.argv = [sys.argv[0], *sys.argv[4:]]
+        return _main_body()
+    if os.name == "nt":
+        parsed = _build_parser().parse_args()
+        if parsed.mode in {"run", "diagnose-existing"}:
+            try:
+                return _windows_supervised_entrypoint(parsed.mode)
+            except PreviewError as error:
+                print(json.dumps({"status": "BLOCKED", "code": error.code, "step": "deadline.supervisor", "message": str(error)}), file=sys.stderr)
+                return 2
+    return _main_body()
 
 
 if __name__ == "__main__":
