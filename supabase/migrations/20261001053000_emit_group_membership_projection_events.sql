@@ -499,21 +499,7 @@ begin
         message = 'Installed system projection revision field is unavailable';
     end if;
     if native_event_kind = 'changed' then
-      if exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
-        where field.value ->> 'key' in (
-            select attribute.value #>> '{}'
-            from pg_catalog.jsonb_array_elements(native_changed_attributes) as attribute(value)
-          )
-          and (field.value ->> 'fieldId')::uuid not in (
-            native_organization_field_id, native_revision_field_id
-          )
-          and field.value ->> 'personalData' is distinct from 'none'
-      ) then
-        raise exception using errcode = '55000',
-          message = 'Installed system projection fields are incompatible';
-      end if;
+      -- Changed carries installed field identities, never classified values.
       select coalesce(pg_catalog.array_agg(field_id order by field_id), array[]::uuid[])
       into native_expected_field_ids
       from (
@@ -528,7 +514,6 @@ begin
             and (field.value ->> 'fieldId')::uuid not in (
               native_organization_field_id, native_revision_field_id
             )
-            and field.value ->> 'personalData' = 'none'
           )
       ) as selected;
       if not (native_revision_field_id = any (native_expected_field_ids)) then
@@ -1186,21 +1171,7 @@ begin
         changed_attributes := proof_subject -> 'changedProjectionAttributes';
         changed_field_ids := array[]::uuid[];
         if event_kind_value = 'changed' then
-          if exists (
-            select 1
-            from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
-            where field.value ->> 'key' in (
-                select attribute.value #>> '{}'
-                from pg_catalog.jsonb_array_elements(changed_attributes) as attribute(value)
-              )
-              and (field.value ->> 'fieldId')::uuid not in (
-                organization_field_id, revision_field_id
-              )
-              and field.value ->> 'personalData' is distinct from 'none'
-          ) then
-            raise exception using errcode = '55000',
-              message = 'Installed system projection fields are incompatible';
-          end if;
+          -- Changed carries installed field identities, never classified values.
           select coalesce(pg_catalog.array_agg(field_id order by field_id), array[]::uuid[])
           into changed_field_ids
           from (
@@ -1215,7 +1186,6 @@ begin
                 and (field.value ->> 'fieldId')::uuid not in (
                   organization_field_id, revision_field_id
                 )
-                and field.value ->> 'personalData' = 'none'
               )
           ) as selected;
           if not (revision_field_id = any (changed_field_ids)) then
