@@ -80,6 +80,13 @@ export type DisplaySummaryValue = Readonly<{
   value: DisplayCellValue;
 }>;
 
+/** One summary-block aggregate, which may be unavailable on its own. */
+export type DisplaySummaryMetric = Readonly<{
+  key: string;
+  label: string;
+  value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
+}>;
+
 /** One permission-projected group with stable group identity and its own rows. */
 export type DisplayGroup = Readonly<{
   groupId: string;
@@ -119,6 +126,29 @@ export type TablePayload = Readonly<{
   pageCount?: number;
 }>;
 
+export type CalendarView = "month" | "week" | "agenda";
+
+/** One permitted query row placed on a calendar day and shown with its declared title field. */
+export type CalendarItemPayload = Readonly<{
+  recordId: string;
+  start: string;
+  end: string | null;
+  title: string;
+}>;
+
+/** The server-computed bounded window and arranged calendar items for one placement. */
+export type CalendarPayload = Readonly<{
+  kind: "calendar";
+  view: CalendarView;
+  date: string;
+  windowStart: string;
+  windowEnd: string;
+  timeZone: string;
+  endExclusive: boolean;
+  truncated: boolean;
+  items: readonly CalendarItemPayload[];
+}>;
+
 /** The ready values a record-detail block renders. */
 export type RecordDetailPayload = Readonly<{
   kind: "record_detail";
@@ -132,13 +162,14 @@ export type GroupedPayload = Readonly<{ kind: "grouped_data"; groups: readonly D
 /** The ready values a summary-values block renders. */
 export type SummaryPayload = Readonly<{
   kind: "summary_values";
-  values: readonly DisplaySummaryValue[];
+  values: readonly DisplaySummaryMetric[];
 }>;
 
 export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
 export type ListData = DisplayDataState<ListPayload>;
 export type TableData = DisplayDataState<TablePayload>;
+export type CalendarData = DisplayDataState<CalendarPayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
 export type GroupedData = DisplayDataState<GroupedPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;
@@ -256,6 +287,18 @@ const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+const isValidIsoCalendarDate = (text: string): boolean => {
+  if (!ISO_CALENDAR_DATE.test(text)) return false;
+  const [year, month, day] = text.split("-").map(Number) as [number, number, number];
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
 
 function fail(
   message: string,
@@ -605,10 +648,22 @@ const parsePagination = (
   return Object.freeze({ page: parsedPage, pageCount: parsedCount });
 };
 
-const parseSummaryValues = (
+const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryValue[] => {
+): DisplaySummaryMetric["value"] => {
+  if (isRecord(value) && value.kind === "unavailable") {
+    requireExactKeys(value, ["kind"], location);
+    return Object.freeze({ kind: "unavailable" });
+  }
+  return parseCellValue(value, location);
+};
+
+const parseSummaryEntries = <Value>(
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+  parseValue: (value: unknown, location: DefinitionRenderErrorLocation) => Value,
+): readonly Readonly<{ key: string; label: string; value: Value }>[] => {
   const items = requireArray(value, "Projected summary values must be an array", location);
   const seen = new Set<string>();
   return Object.freeze(
@@ -630,11 +685,22 @@ const parseSummaryValues = (
           "A summary value requires a label",
           summaryLocation,
         ),
-        value: parseCellValue(record.value, summaryLocation),
+        value: parseValue(record.value, summaryLocation),
       });
     }),
   );
 };
+
+const parseSummaryMetrics = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly DisplaySummaryMetric[] =>
+  parseSummaryEntries(value, location, parseSummaryValue);
+
+const parseSummaryValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly DisplaySummaryValue[] => parseSummaryEntries(value, location, parseCellValue);
 
 const parseFields = (
   value: unknown,
@@ -825,6 +891,86 @@ export const parseTablePayload = (
   });
 };
 
+/** The ready values a calendar block accepts. */
+export const parseCalendarPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): CalendarPayload => {
+  const record = requireRecord(value, "Projected display values must be an object", location);
+  if (record.kind !== "calendar")
+    return fail(`Expected 'calendar' projected values, got '${String(record.kind)}'`, location);
+  requireExactKeys(
+    record,
+    ["kind", "view", "date", "windowStart", "windowEnd", "timeZone", "endExclusive", "truncated", "items"],
+    location,
+  );
+  const calendarDate = (candidate: unknown, message: string): string => {
+    const text = requireNonEmptyString(candidate, message, location);
+    if (!isValidIsoCalendarDate(text)) return fail(message, location);
+    return text;
+  };
+  const dateOrTimestamp = (candidate: unknown, message: string): string => {
+    const text = requireNonEmptyString(candidate, message, location);
+    const date = isValidIsoCalendarDate(text);
+    if (!date && !timestampSchema.safeParse(text).success) return fail(message, location);
+    return text;
+  };
+  const view = record.view;
+  if (view !== "month" && view !== "week" && view !== "agenda")
+    return fail("A calendar view must be month, week or agenda", location);
+  const date = calendarDate(record.date, "A calendar requires an ISO date");
+  const windowStart = calendarDate(record.windowStart, "A calendar requires a window start date");
+  const windowEnd = calendarDate(record.windowEnd, "A calendar requires a window end date");
+  if (windowStart >= windowEnd) return fail("A calendar window must have positive length", location);
+  const timeZone = requireNonEmptyString(record.timeZone, "A calendar requires a time zone", location);
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format(0);
+  } catch {
+    return fail("A calendar time zone must be supported", location);
+  }
+  if (typeof record.truncated !== "boolean")
+    return fail("A calendar requires a truncation flag", location);
+  if (typeof record.endExclusive !== "boolean")
+    return fail("A calendar requires an end boundary rule", location);
+  const seen = new Set<string>();
+  const items = requireArray(record.items, "Calendar items must be an array", location).map(
+    (candidate): CalendarItemPayload => {
+      const item = requireRecord(candidate, "A calendar item must be an object", location);
+      requireExactKeys(item, ["recordId", "start", "end", "title"], location);
+      const recordId = requireNonEmptyString(
+        item.recordId,
+        "A calendar item requires a record identity",
+        location,
+      );
+      const normalizedRecordId = recordId.toLowerCase();
+      if (seen.has(normalizedRecordId)) fail("Each calendar record appears once", location);
+      seen.add(normalizedRecordId);
+      const start = dateOrTimestamp(item.start, "A calendar item requires a valid start");
+      const end =
+        item.end === null ? null : dateOrTimestamp(item.end, "A calendar item end must be valid");
+      if (end !== null && isValidIsoCalendarDate(start) !== isValidIsoCalendarDate(end))
+        fail("A calendar item start and end must use the same date precision", location);
+      return Object.freeze({
+        recordId,
+        start,
+        end,
+        title: requireString(item.title, "A calendar item requires a title", location),
+      });
+    },
+  );
+  return Object.freeze({
+    kind: "calendar",
+    view,
+    date,
+    windowStart,
+    windowEnd,
+    timeZone,
+    endExclusive: record.endExclusive,
+    truncated: record.truncated,
+    items: Object.freeze(items),
+  });
+};
+
 /** The ready values a record-detail block accepts. */
 export const parseRecordDetailPayload = (
   value: unknown,
@@ -877,7 +1023,7 @@ export const parseSummaryPayload = (
   requireExactKeys(record, ["kind", "values"], location);
   return Object.freeze({
     kind: "summary_values",
-    values: parseSummaryValues(record.values, location),
+    values: parseSummaryMetrics(record.values, location),
   });
 };
 

@@ -10,29 +10,37 @@ import {
   databaseRevision,
   databaseTimestamp,
   entitlementCheckRequestSchema,
+  identitySessionSchema,
   namespacedKeySchema,
   organizationIdSchema,
+  organizationSelectionCandidateSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
   type ConfiguredTenantAdministrationOperatorContext,
   type EntitlementCheckRequest,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "@vortex/db";
+import {
+  createHumanOrganizationRequestService,
+  type HumanOrganizationRequestDependencies,
+  type HumanOrganizationRequestResult,
+} from "./human-organization-request";
 
 /*
  * Entitlement limits (#1384, owner decision of 27 Sep 2026):
  *
- * - The platform operator publishes capability policies and sets each tenant's
- *   ceiling. The operator is the configured system operator: it is read from
- *   trusted server configuration here and is reachable only through the
- *   runtime role in a transaction without a request context, so it is never a
- *   customer role and never follows from a tenant or organisation role.
+ * - The configured system operator publishes capability policies and retains
+ *   the context-free ceiling bootstrap path. An active named Vortex super
+ *   administrator can also set, re-pin and revoke ceilings as a verified
+ *   person in the account-bound human request transaction.
  * - A tenant administrator allocates or lowers a limit for the whole tenant or
  *   one organisation, and is refused above the live ceiling. The acting person
  *   comes from the bound request context, never from the command.
@@ -431,6 +439,8 @@ export const capabilityPolicyRefusalCodes = [
   "CAPABILITY_POLICY_COMMAND_INVALID",
   "CAPABILITY_POLICY_DUPLICATE_CONFLICT",
   "CAPABILITY_POLICY_STALE",
+  "CAPABILITY_POLICY_AUTHORITY_UNAVAILABLE",
+  "CAPABILITY_POLICY_RECENT_AUTHENTICATION_REQUIRED",
   "CAPABILITY_ALLOCATION_ABOVE_CEILING",
   "CAPABILITY_POLICY_SCOPE_UNAVAILABLE",
   "CAPABILITY_POLICY_OPERATOR_NOT_CONFIGURED",
@@ -491,9 +501,9 @@ const configuredPlatformOperator = (
 };
 
 /**
- * Platform-operator commands: policy publication and tenant ceilings. Each
- * runs in its own runtime transaction with no request context, which the
- * database requires before it accepts the operator.
+ * Platform-operator commands: policy publication and bootstrap tenant ceilings.
+ * Each runs in its own runtime transaction with no request context, which the
+ * database requires before it accepts the configured operator.
  */
 export const createCapabilityPolicyPlatformOperatorService = (
   dependencies: CapabilityPolicyPlatformOperatorDependencies = {},
@@ -613,6 +623,173 @@ export const createCapabilityPolicyPlatformOperatorService = (
 export type CapabilityPolicyPlatformOperatorService = ReturnType<
   typeof createCapabilityPolicyPlatformOperatorService
 >;
+
+type CapabilityCeilingPersonOperation =
+  | "set_capability_policy_ceiling"
+  | "revoke_capability_policy_ceiling";
+
+export type CapabilityCeilingPersonMutationResult =
+  | (CapabilityCeilingResult & { readonly operation: "set_capability_policy_ceiling" })
+  | (CapabilityCeilingRevocationResult & { readonly operation: "revoke_capability_policy_ceiling" })
+  | Readonly<{
+      outcome: "refused";
+      operation: CapabilityCeilingPersonOperation;
+      code: CapabilityPolicyRefusalCode;
+    }>;
+
+export type CapabilityPolicyPersonDependencies = HumanOrganizationRequestDependencies;
+
+const personRefusal = (
+  operation: CapabilityCeilingPersonOperation,
+  code: string,
+): CapabilityCeilingPersonMutationResult | undefined => {
+  switch (code) {
+    case "22023":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_COMMAND_INVALID" };
+    case "V3001":
+    case "V3143":
+    case "23505":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_DUPLICATE_CONFLICT" };
+    case "V3102":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_STALE" };
+    case "V3141":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_AUTHORITY_UNAVAILABLE" };
+    case "V3142":
+      return {
+        outcome: "refused",
+        operation,
+        code: "CAPABILITY_POLICY_RECENT_AUTHENTICATION_REQUIRED",
+      };
+    case "42501":
+    case "V3101":
+    case "V3140":
+    case "23503":
+    case "23514":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_SCOPE_UNAVAILABLE" };
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Person-backed ceiling changes use the existing account-bound human request
+ * transaction. SQL derives the actor, source and correlation from its
+ * validated context; the selected organisation is only the request anchor.
+ */
+export const createCapabilityPolicyPersonService = (
+  dependencies: CapabilityPolicyPersonDependencies,
+) => {
+  const requests = createHumanOrganizationRequestService(dependencies);
+
+  return Object.freeze({
+    async setCeiling(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: CapabilityCeilingCommand,
+    ): Promise<HumanOrganizationRequestResult<CapabilityCeilingPersonMutationResult>> {
+      const verifiedSession = identitySessionSchema.safeParse(session);
+      const verifiedSelection = organizationSelectionCandidateSchema.safeParse(selection);
+      const command = capabilityCeilingCommandSchema.safeParse(commandCandidate);
+      if (!verifiedSession.success || !verifiedSelection.success) return { kind: "unavailable" };
+      if (!command.success)
+        return {
+          kind: "available",
+          value: {
+            outcome: "refused",
+            operation: "set_capability_policy_ceiling",
+            code: "CAPABILITY_POLICY_COMMAND_INVALID",
+          },
+        };
+
+      return requests.runChangeWithRefusal(
+        verifiedSession.data,
+        verifiedSelection.data,
+        async (transaction) => {
+          const value = command.data;
+          const rows = await transaction.query<CeilingMutationRow>`
+            select * from vortex_access.set_capability_policy_ceiling(
+              null::uuid, ${value.duplicateKey}::uuid,
+              ${value.tenantId}::uuid, ${value.ceilingId}::uuid,
+              ${value.policyId}::uuid, ${value.policyRevision}::bigint,
+              ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz,
+              ${value.expectedRevision ?? null}::bigint
+            )
+          `;
+          if (rows.length !== 1 || rows[0] === undefined)
+            throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+          const row = rows[0];
+          const parsed = capabilityCeilingResultSchema.safeParse({
+            outcome: row.outcome,
+            ceilingId: row.assignment_id,
+            tenantId: row.tenant_id,
+            policyId: row.policy_id,
+            policyRevision: databaseRevision(row.policy_revision),
+            capabilityKey: row.capability_key,
+            unit: row.unit,
+            quantityLimit: quantity(row.quantity_limit),
+            revision: databaseRevision(row.revision),
+            correlationId: row.correlation_id,
+            acceptedAt: databaseTimestamp(row.accepted_at),
+          });
+          if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+          return { ...parsed.data, operation: "set_capability_policy_ceiling" };
+        },
+        (code) => personRefusal("set_capability_policy_ceiling", code),
+      );
+    },
+
+    async revokeCeiling(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: CapabilityCeilingRevocationCommand,
+    ): Promise<HumanOrganizationRequestResult<CapabilityCeilingPersonMutationResult>> {
+      const verifiedSession = identitySessionSchema.safeParse(session);
+      const verifiedSelection = organizationSelectionCandidateSchema.safeParse(selection);
+      const command = capabilityCeilingRevocationCommandSchema.safeParse(commandCandidate);
+      if (!verifiedSession.success || !verifiedSelection.success) return { kind: "unavailable" };
+      if (!command.success)
+        return {
+          kind: "available",
+          value: {
+            outcome: "refused",
+            operation: "revoke_capability_policy_ceiling",
+            code: "CAPABILITY_POLICY_COMMAND_INVALID",
+          },
+        };
+
+      return requests.runChangeWithRefusal(
+        verifiedSession.data,
+        verifiedSelection.data,
+        async (transaction) => {
+          const value = command.data;
+          const rows = await transaction.query<CeilingRevocationRow>`
+            select * from vortex_access.revoke_capability_policy_ceiling(
+              null::uuid, ${value.duplicateKey}::uuid,
+              ${value.tenantId}::uuid, ${value.ceilingId}::uuid,
+              ${value.expectedRevision}::bigint
+            )
+          `;
+          if (rows.length !== 1 || rows[0] === undefined)
+            throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+          const row = rows[0];
+          const parsed = capabilityCeilingRevocationResultSchema.safeParse({
+            outcome: row.outcome,
+            ceilingId: row.assignment_id,
+            tenantId: row.tenant_id,
+            revision: databaseRevision(row.revision),
+            correlationId: row.correlation_id,
+            acceptedAt: databaseTimestamp(row.accepted_at),
+          });
+          if (!parsed.success) throw new Error("CAPABILITY_CEILING_UNAVAILABLE");
+          return { ...parsed.data, operation: "revoke_capability_policy_ceiling" };
+        },
+        (code) => personRefusal("revoke_capability_policy_ceiling", code),
+      );
+    },
+  });
+};
+
+export type CapabilityPolicyPersonService = ReturnType<typeof createCapabilityPolicyPersonService>;
 
 /**
  * Tenant-administrator allocation for the whole tenant or one organisation,

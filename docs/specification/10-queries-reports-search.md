@@ -59,6 +59,7 @@ and its real storage path, not to a browser-only correction after rows are paged
 - A stable unique tie-breaker is appended to every sort.
 - Page-size limits depend on the calling surface and are listed in the [data contracts](appendices/data-contracts.md#query-limits).
 - Counts and totals use the same access scope and filters as the rows.
+- A database-backed summary examines at most 100,000 candidate rows per request (`summary_candidate_limit`). Above that ceiling it returns the neutral `dataset_limit_exceeded` refusal without groups or totals.
 - Exports and workflow loops page through the same query contract rather than requesting an unlimited result.
 
 ## Saved views
