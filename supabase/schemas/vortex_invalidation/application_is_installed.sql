@@ -26,6 +26,8 @@ $function$;
 
 revoke all on function vortex_invalidation.application_is_installed(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_invalidation.application_is_installed(uuid, uuid)
+  to postgres;
 
 comment on function vortex_invalidation.application_is_installed(uuid, uuid) is
   'Private check that an application has an active registration and an active installation binding for its registered release in one organisation.';
