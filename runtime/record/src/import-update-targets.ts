@@ -287,7 +287,7 @@ const parseProducerResult = (
   scope: Readonly<{
     organizationId: string;
     organizationAccountId: string;
-    applicationRootId?: string;
+    applicationRootId?: string | undefined;
     accessVersion: number;
   }>,
   requestIssuedAt: string,
