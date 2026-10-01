@@ -14,7 +14,6 @@ import {
   writableSystemProjectionRegistrations,
   type IdentitySession,
   type ExecutionAuthorityContext,
-  type JsonValue,
   type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
   type SaveRecordCommandV2,
@@ -29,26 +28,19 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import type { BeforeSaveRuleWarning } from "@vortex/rule";
 import {
-  applyBeforeSaveRules,
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   beginBeforeSaveRuleExecution,
   parseBeforeSaveRuleSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
-import { evaluateRecordCalculations } from "./calculations";
-import { isDateDeadlineDueFieldV2 } from "./deadline-transitions";
-import {
-  finalizeRecordFieldCandidateV2,
-  prepareInitialRecordFieldCandidateV2,
-  type PrepareRecordFieldValuesV2Result,
-  type RecordFieldValueRequirementV2,
-} from "./field-values";
 import {
   calculateLockedRelationshipTotalSave,
   type LockedRelationshipTotalPreparation,
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
+import { calculateAndFinalize, operationClock } from "./field-candidate";
+export { calculateAndFinalize, operationClock };
 
 type PreparationRow = DatabaseRow & { readonly preparation: unknown };
 type SaveRow = DatabaseRow & { readonly result: unknown };
@@ -196,176 +188,6 @@ const correctionCode = (code: string): RecordSaveFieldCorrection["code"] => {
   )
     return "field_refused";
   return "invalid_value";
-};
-
-const localDate = (instant: string, timeZone: string): string | undefined => {
-  const date = new Date(instant);
-  if (!Number.isFinite(date.valueOf())) return undefined;
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const value = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((part) => part.type === type)?.value;
-    const year = value("year");
-    const month = value("month");
-    const day = value("day");
-    return year && month && day ? `${year}-${month}-${day}` : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-type CalculatedFieldValues =
-  | PrepareRecordFieldValuesV2Result
-  | Readonly<{
-      success: false;
-      issues: ReadonlyArray<
-        Readonly<{
-          code: string;
-          fieldId?: string;
-          path: readonly (string | number)[];
-        }>
-      >;
-    }>;
-
-/**
- * Builds one complete candidate before the fixed writer sees it. Submitted
- * generated values were already refused by the initial preparation; only the
- * trusted calculation engine can add calculation values here.
- */
-/** @internal Shared only by the fixed named-action save composition. */
-export const calculateAndFinalize = (
-  prepared: Extract<PreparationOutcome, { outcome: "prepared" }>,
-  command: SaveRecordCommandV2,
-  issuedAt: string,
-  organizationCurrency: string | undefined,
-  timeZone: string | undefined,
-  rules?: BeforeSaveRuleExecution,
-): CalculatedFieldValues => {
-  const initial = prepareInitialRecordFieldCandidateV2({
-    operation: command.operation,
-    recordType: prepared.recordType,
-    submittedValues: command.submittedValues,
-    ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-    ...(command.operation === "update" ? { existingValues: prepared.existingValues } : {}),
-  });
-  if (!initial.success) return initial;
-
-  // Every applicable compiled rule runs exactly once here, before calculations
-  // and final field policy, so rule effects are revalidated like any other value.
-  let ruleCandidateValues: Readonly<Record<string, JsonValue>> = initial.candidate.candidateValues;
-  let requirements: readonly RecordFieldValueRequirementV2[] = [];
-  if (rules !== undefined) {
-    const applied = applyBeforeSaveRules({
-      execution: rules,
-      recordType: prepared.recordType,
-      initialCandidate: initial.candidate,
-      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-    });
-    if (!applied.success)
-      return {
-        success: false,
-        issues: [
-          applied.reason === "refused"
-            ? {
-                code: beforeSaveRuleRefusedIssueCode,
-                ...(applied.fieldId === undefined ? {} : { fieldId: applied.fieldId }),
-                path: ["rules"],
-              }
-            : { code: beforeSaveRuleUnavailableIssueCode, path: ["rules"] },
-        ],
-      };
-    ruleCandidateValues = applied.candidateValues;
-    requirements = applied.requirements;
-  }
-
-  const calculationFieldIds = prepared.recordType.fields
-    .filter((field) => field.type === "calculation")
-    .map((field) => field.fieldId);
-  if (calculationFieldIds.length === 0)
-    return finalizeRecordFieldCandidateV2({
-      recordType: prepared.recordType,
-      initialCandidate: initial.candidate,
-      candidateValues: ruleCandidateValues,
-      requirements,
-      requiredGeneratedFieldIds: [],
-      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-    });
-
-  // Most calculation forms do not use the organisation clock. Only a date
-  // deadline comparison needs the organisation-local date; date-time
-  // deadlines compare exact instants and remain deterministic without it.
-  const needsOrganizationLocalDate = prepared.recordType.fields.some((field) => {
-    if (field.type !== "calculation") return false;
-    const expression = field.settings.expression;
-    if (expression.kind !== "deadline_passed") return false;
-    const dueField = prepared.recordType.fields.find(
-      (candidate) => candidate.fieldId === expression.dueFieldId,
-    );
-    return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
-  });
-  const organizationLocalDate = needsOrganizationLocalDate
-    ? timeZone === undefined
-      ? undefined
-      : localDate(issuedAt, timeZone)
-    : issuedAt.slice(0, 10);
-  if (organizationLocalDate === undefined)
-    return {
-      success: false,
-      issues: [{ code: "invalid_input", path: ["organizationRuntimeSettings"] }],
-    };
-
-  const calculations = evaluateRecordCalculations({
-    recordType: prepared.recordType,
-    authoritativeFieldValues: ruleCandidateValues,
-    clock: { instant: issuedAt, organizationLocalDate },
-  });
-  if (!calculations.success) return calculations;
-
-  const candidateValues: Record<string, unknown> = {
-    ...ruleCandidateValues,
-    ...calculations.setValues,
-  };
-  for (const fieldId of calculations.clearFieldIds) delete candidateValues[fieldId];
-  return finalizeRecordFieldCandidateV2({
-    recordType: prepared.recordType,
-    initialCandidate: initial.candidate,
-    candidateValues,
-    requirements,
-    requiredGeneratedFieldIds: calculationFieldIds,
-    ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-  });
-};
-
-/** @internal Shared only by the fixed named-action save composition. */
-export const operationClock = (
-  recordTypes: readonly ReturnType<typeof recordTypeDefinitionV3Schema.parse>[],
-  issuedAt: string,
-  timeZone: string | undefined,
-): Readonly<{ instant: string; organizationLocalDate: string }> | undefined => {
-  const needsOrganizationLocalDate = recordTypes.some((recordType) =>
-    recordType.fields.some((field) => {
-      if (field.type !== "calculation") return false;
-      const expression = field.settings.expression;
-      if (expression.kind !== "deadline_passed") return false;
-      const dueField = recordType.fields.find(
-        (candidate) => candidate.fieldId === expression.dueFieldId,
-      );
-      return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
-    }),
-  );
-  const organizationLocalDate = needsOrganizationLocalDate
-    ? timeZone === undefined
-      ? undefined
-      : localDate(issuedAt, timeZone)
-    : issuedAt.slice(0, 10);
-  return organizationLocalDate === undefined
-    ? undefined
-    : { instant: issuedAt, organizationLocalDate };
 };
 
 const correctionsFor = (
@@ -827,14 +649,16 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                       success: false as const,
                       issues: [{ code: "invalid_input", recordKey: "root", path: ["clock"] }],
                     }
-                  : calculateAndFinalize(
-                      prepared,
-                      command.data,
+                  : calculateAndFinalize({
+                      operation: command.data.operation,
+                      submittedValues: command.data.submittedValues,
+                      recordType: prepared.recordType,
+                      existingValues: prepared.existingValues,
                       issuedAt,
-                      settings?.currency,
-                      settings?.timeZone,
-                      attempted.rules,
-                    );
+                      organizationCurrency: settings?.currency,
+                      timeZone: settings?.timeZone,
+                      rules: attempted.rules,
+                    });
             if (!values.success) {
               if (
                 values.issues.some(

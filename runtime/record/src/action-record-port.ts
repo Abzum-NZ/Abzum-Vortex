@@ -48,14 +48,12 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import {
-  calculateAndFinalize,
-  operationClock,
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
   revision,
-  type PreparedSave,
   type RelationshipTotalPreparationOutcome,
 } from "./save-record";
+import { calculateAndFinalize, operationClock } from "./field-candidate";
 
 type ResultRow = DatabaseRow & { readonly value: unknown };
 
@@ -240,19 +238,14 @@ const creationFinalValues = (
       submittedValues: creation.values,
     });
     if (!command.success) return undefined;
-    const calculated = calculateAndFinalize(
-      {
-        outcome: "prepared",
-        recordType: target.recordType,
-        existingValues: {},
-        readableFieldIds: new Set(target.recordType.fields.map((field) => field.fieldId)),
-        correlationId: prepared.correlationId,
-      } satisfies PreparedSave,
-      command.data,
+    const calculated = calculateAndFinalize({
+      operation: command.data.operation,
+      submittedValues: command.data.submittedValues,
+      recordType: target.recordType,
       issuedAt,
       organizationCurrency,
       timeZone,
-    );
+    });
     if (!calculated.success) return undefined;
     if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
       return undefined;
@@ -641,20 +634,16 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     })
                   : totalPreparation.outcome === "prepared"
                     ? { success: false as const, issues: [] }
-                    : calculateAndFinalize(
-                        {
-                          outcome: "prepared",
-                          recordType: prepared.recordType,
-                          existingValues: prepared.existingValues,
-                          readableFieldIds: prepared.readableFieldIds,
-                          correlationId: prepared.correlationId,
-                        } satisfies PreparedSave,
-                        saveCommand,
+                    : calculateAndFinalize({
+                        operation: saveCommand.operation,
+                        submittedValues: saveCommand.submittedValues,
+                        recordType: prepared.recordType,
+                        existingValues: prepared.existingValues,
                         issuedAt,
-                        settings?.currency,
-                        settings?.timeZone,
-                        attempted.rules,
-                      );
+                        organizationCurrency: settings?.currency,
+                        timeZone: settings?.timeZone,
+                        rules: attempted.rules,
+                      });
               if (
                 !calculated.success ||
                 (totalPreparation.outcome === "prepared" && root === undefined)
