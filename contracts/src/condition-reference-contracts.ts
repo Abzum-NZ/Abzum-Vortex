@@ -100,7 +100,7 @@ const moduleConditionReferenceDeclarationsSchema = z
   .strict()
   .superRefine((declarations, context) => {
     reportDuplicate(
-      declarations.fields.map((field) => field.fieldId),
+      declarations.fields.map((field) => field.fieldId.toLowerCase()),
       "fields",
       context,
       "Module field identities must be unique",
@@ -128,7 +128,7 @@ const ruleGraphConditionReferenceDeclarationsSchema = z
   .strict()
   .superRefine((declarations, context) => {
     reportDuplicate(
-      declarations.fields.map((field) => field.fieldId),
+      declarations.fields.map((field) => field.fieldId.toLowerCase()),
       "fields",
       context,
       "Rule graph field identities must be unique",
@@ -140,7 +140,7 @@ const ruleGraphConditionReferenceDeclarationsSchema = z
       "Rule graph field catalogue keys must be unique",
     );
     reportDuplicate(
-      declarations.inputs.map((input) => input.inputId),
+      declarations.inputs.map((input) => input.inputId.toLowerCase()),
       "inputs",
       context,
       "Rule graph input identities must be unique",
@@ -152,7 +152,7 @@ const ruleGraphConditionReferenceDeclarationsSchema = z
       "Rule graph input catalogue keys must be unique",
     );
     reportDuplicate(
-      declarations.variables.map((variable) => variable.variableId),
+      declarations.variables.map((variable) => variable.variableId.toLowerCase()),
       "variables",
       context,
       "Rule graph variable identities must be unique",
@@ -241,16 +241,19 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
   .pipe(conditionReferenceContractBaseSchema)
   .superRefine((contract, context) => {
     const module = contract.sourceProfile === "module";
-    const fieldIds = new Set(contract.declarations.fields.map((field) => field.fieldId));
+    // UUID comparison keys follow platform identity semantics without rewriting authored evidence.
+    const fieldIds = new Set(
+      contract.declarations.fields.map((field) => field.fieldId.toLowerCase()),
+    );
     const moduleParameterKeys = module
       ? new Set(contract.declarations.parameters.map((parameter) => parameter.key))
       : new Set<string>();
     const graphInputIds = module
       ? new Set<string>()
-      : new Set(contract.declarations.inputs.map((input) => input.inputId));
+      : new Set(contract.declarations.inputs.map((input) => input.inputId.toLowerCase()));
     const graphVariableIds = module
       ? new Set<string>()
-      : new Set(contract.declarations.variables.map((variable) => variable.variableId));
+      : new Set(contract.declarations.variables.map((variable) => variable.variableId.toLowerCase()));
 
     const operands = operandsIn(contract.condition);
     for (const { operand, path } of operands) {
@@ -263,7 +266,7 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
           });
           continue;
         }
-        if (operand.kind === "module_field" && !fieldIds.has(operand.fieldId))
+        if (operand.kind === "module_field" && !fieldIds.has(operand.fieldId.toLowerCase()))
           context.addIssue({ code: "custom", path, message: "Module field reference is unbound" });
         if (operand.kind === "module_parameter" && !moduleParameterKeys.has(operand.key))
           context.addIssue({
@@ -282,12 +285,12 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
         }
         if (
           (operand.kind === "graph_current_field" || operand.kind === "graph_previous_field") &&
-          !fieldIds.has(operand.fieldId)
+          !fieldIds.has(operand.fieldId.toLowerCase())
         )
           context.addIssue({ code: "custom", path, message: "Rule graph field reference is unbound" });
-        if (operand.kind === "graph_input" && !graphInputIds.has(operand.inputId))
+        if (operand.kind === "graph_input" && !graphInputIds.has(operand.inputId.toLowerCase()))
           context.addIssue({ code: "custom", path, message: "Rule graph input reference is unbound" });
-        if (operand.kind === "graph_variable" && !graphVariableIds.has(operand.variableId))
+        if (operand.kind === "graph_variable" && !graphVariableIds.has(operand.variableId.toLowerCase()))
           context.addIssue({
             code: "custom",
             path,
