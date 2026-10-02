@@ -16,6 +16,7 @@ catalog:
   "@supabase/supabase-js": 2.116.0
   "@tailwindcss/postcss": 4.3.3
   "@types/semver": 7.8.0
+  "@types/ws": 8.18.1
   date-fns: 4.4.0
   postgres: 3.4.9
   react-day-picker: 10.0.1
@@ -24,6 +25,7 @@ catalog:
   tailwindcss: 4.3.3
   tsx: 4.23.15
   vitest: 4.1.11
+  ws: 8.21.3
 
 catalogMode: strict
 

@@ -10,6 +10,7 @@ import {
   createDefaultIdentitySessionService,
   createIdentityVerifier,
   type VerifiedSignInResult,
+  type IdentityVerificationExecution,
 } from "@vortex/identity";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
@@ -47,10 +48,11 @@ const staleCookieDeletions = (
   );
 };
 
-const sessionService = () => {
+const sessionService = (execution?: IdentityVerificationExecution) => {
   const journey = getIdentityJourneyConfiguration();
   return createDefaultIdentitySessionService(
-    createIdentityVerifier(getIdentityAuthorityConfiguration(), journey.publishableKey),
+    createIdentityVerifier(getIdentityAuthorityConfiguration(), journey.publishableKey,
+      execution === undefined ? {} : { execution }),
   );
 };
 
@@ -128,30 +130,61 @@ export const bootstrapIdentitySession = async (
   return outcome;
 };
 
-export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> => {
+type RequestIdentityResolution = Readonly<{
+  resolution: IdentitySessionResolution;
+  /** Present only when this exact token passed Identity resolution. Server request only. */
+  accessToken?: string;
+}>;
+
+const resolveRequestIdentity = async (
+  execution?: IdentityVerificationExecution,
+): Promise<RequestIdentityResolution> => {
+  execution?.checkpoint();
   const proxyState = (await headers()).get(identitySessionProxyHeader);
-  if (proxyState === "missing") return identitySessionResolutionSchema.parse({ kind: "missing" });
-  if (proxyState === "invalid") return invalid();
-  if (proxyState !== "verified") return unavailable();
+  if (proxyState === "missing")
+    return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
+  if (proxyState === "invalid") return { resolution: invalid() };
+  if (proxyState !== "verified") return { resolution: unavailable() };
 
   let boundary: IdentitySessionClient;
   try {
-    boundary = createIdentitySessionClient(await requestCookies());
+    boundary = createIdentitySessionClient(await requestCookies(), {
+      verificationOnly: true, ...(execution === undefined ? {} : { execution }),
+    });
   } catch {
-    return unavailable();
+    return { resolution: unavailable() };
   }
   if (boundary.stage.initialState.kind === "missing")
-    return identitySessionResolutionSchema.parse({ kind: "missing" });
-  if (boundary.stage.initialState.kind === "invalid") return invalid();
+    return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
+  if (boundary.stage.initialState.kind === "invalid") return { resolution: invalid() };
 
+  const beforeRead = boundary.stage.snapshot();
+  if (beforeRead.refused || beforeRead.mutations.length > 0)
+    return { resolution: unavailable() };
+  execution?.checkpoint();
   const current = await boundary.client.auth.getSession();
-  if (current.error) return providerFailure(current.error);
+  execution?.checkpoint();
+  if (boundary.verificationRefused()) return { resolution: unavailable() };
+  if (current.error) return { resolution: providerFailure(current.error) };
   if (!current.data.session?.access_token)
-    return identitySessionResolutionSchema.parse({ kind: "missing" });
+    return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
   const staged = boundary.stage.snapshot();
-  if (staged.refused || staged.mutations.length > 0) return unavailable();
-  return sessionService().resolve(current.data.session.access_token);
+  if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
+  const accessToken = current.data.session.access_token;
+  const resolution = await sessionService(execution).resolve(accessToken);
+  execution?.checkpoint();
+  return resolution.kind === "active" ? { resolution, accessToken } : { resolution };
 };
+
+export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
+  (await resolveRequestIdentity()).resolution;
+
+/**
+ * Private delivery composition only. This shares every ordinary resolution guard
+ * and retains the very token Identity verified, without changing the public union.
+ * Never serialize this result, cache it, or use it outside its live Web request.
+ */
+export const resolveIdentitySessionForPrivateInvalidation = resolveRequestIdentity;
 
 /**
  * Revokes the browser's own provider session (its refresh token) from the given session cookies,
