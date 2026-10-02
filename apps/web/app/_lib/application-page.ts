@@ -199,8 +199,13 @@ export type ApplicationPagePlacementReadResult =
       >;
       subject: ApplicationPageModel["subject"] | null;
     }>
+  | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
+
+type ApplicationPageInternalResult =
+  | ApplicationPageResult
+  | Readonly<{ kind: "reload" }>;
 
 export type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;
@@ -1242,9 +1247,11 @@ const loadApplicationPageInternal = async (
   parameters: SearchParameters,
   selectedPlacementIds?: ReadonlySet<string>,
   boardContinuation?: BoardContinuationTarget,
-): Promise<ApplicationPageResult> => {
+  expectedInstallationRevision?: number,
+): Promise<ApplicationPageInternalResult> => {
   const dependencies = requestDependencies();
-  const continuationKey = getQueryContinuationKey();
+  const initialContinuationKey =
+    expectedInstallationRevision === undefined ? getQueryContinuationKey() : undefined;
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
@@ -1254,6 +1261,13 @@ const loadApplicationPageInternal = async (
   const loaded = await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
+  if (
+    expectedInstallationRevision !== undefined &&
+    context.applicationReleaseRevision !== expectedInstallationRevision
+  )
+    return { kind: "reload" };
+
+  const continuationKey = initialContinuationKey ?? getQueryContinuationKey();
   const application = context.releaseSet.application;
 
   // The offered release is read under the viewer's own application scope. A refusal or an absent
@@ -2758,7 +2772,10 @@ export const loadApplicationPage = (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
-): Promise<ApplicationPageResult> => loadApplicationPageInternal(session, address, parameters);
+): Promise<ApplicationPageResult> =>
+  loadApplicationPageInternal(session, address, parameters).then((result) =>
+    result.kind === "reload" ? { kind: "unavailable" } : result,
+  );
 
 /** Loads only the requested placements through the same protected page, Query and Record reads. */
 export const loadApplicationPagePlacements = async (
@@ -2766,6 +2783,7 @@ export const loadApplicationPagePlacements = async (
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
   placementIds: readonly string[],
+  expectedInstallationRevision: number,
   boardContinuation?: BoardContinuationTarget,
 ): Promise<ApplicationPagePlacementReadResult> => {
   const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
@@ -2780,7 +2798,9 @@ export const loadApplicationPagePlacements = async (
     parameters,
     requestedIds,
     boardContinuation,
+    expectedInstallationRevision,
   );
+  if (loaded.kind === "reload") return loaded;
   if (loaded.kind !== "available") return loaded;
 
   const loadedData = Object.entries(loaded.model.data);

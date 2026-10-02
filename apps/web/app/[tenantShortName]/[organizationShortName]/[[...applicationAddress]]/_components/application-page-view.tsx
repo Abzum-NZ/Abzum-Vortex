@@ -933,6 +933,7 @@ function ApplicationPageViewContent({
               organizationShortName: application.organizationShortName,
               applicationKey: application.applicationKey,
               pageKey,
+              installationRevision: application.installationRevision,
               search: currentSearch,
             },
             batch.map(([, request]) => request.componentId),
@@ -941,6 +942,17 @@ function ApplicationPageViewContent({
           result = { kind: "temporarily_unavailable" };
         }
         if (placementRequestsRef.current.key !== requestScope.key) return;
+        if (result.kind === "reload") {
+          if (
+            batch.some(([key, request]) =>
+              isCurrentComponentRequestGeneration(requestScope.generations.get(key), request),
+            )
+          ) {
+            router.refresh();
+            return;
+          }
+          continue;
+        }
 
         for (const [key, request] of batch) {
           if (
@@ -1045,7 +1057,15 @@ function ApplicationPageViewContent({
           : current;
       });
     },
-    [application, currentPageKey, currentSearch, model.data, model.editFormBaselines, navigationKey],
+    [
+      application,
+      currentPageKey,
+      currentSearch,
+      model.data,
+      model.editFormBaselines,
+      navigationKey,
+      router,
+    ],
   );
   const refreshTargetsForBinding = useCallback(
     (bindingId: string): readonly string[] => {
@@ -1965,6 +1985,7 @@ function ApplicationPageViewContent({
               organizationShortName: application.organizationShortName,
               applicationKey: application.applicationKey,
               pageKey: currentPageKey,
+              installationRevision: application.installationRevision,
               search: currentSearch,
             },
             [parsedId.data],
@@ -1981,6 +2002,10 @@ function ApplicationPageViewContent({
           )
         )
           return false;
+        if (result.kind === "reload") {
+          router.refresh();
+          return false;
+        }
         if (result.kind !== "available") return clearAndReload();
 
         const returnedData = Object.entries(result.data).find(
@@ -2027,6 +2052,7 @@ function ApplicationPageViewContent({
       currentSearch,
       navigationKey,
       refreshPlacements,
+      router,
     ],
   );
 
