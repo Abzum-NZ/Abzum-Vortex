@@ -741,7 +741,7 @@
                   },
                   "theme_overrides": {},
                   "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+                  "slots": {}
                 }
               },
               "order": { "desktop": ["saved_tiles_summary", "managed_saved_tiles"] }
