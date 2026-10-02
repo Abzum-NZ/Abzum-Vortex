@@ -72,6 +72,8 @@ export * from "./runtime-primitives";
 export * from "./record-share-operations";
 export * from "./rule-graph-contracts";
 export * from "./rule-graph-source-contracts";
+export * from "./condition-reference-contracts";
+export * from "./condition-reference-mapping";
 export * from "./shared-result-groups";
 export * from "./storage";
 export * from "./super-administrator-governance";
