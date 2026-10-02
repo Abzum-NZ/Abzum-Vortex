@@ -476,6 +476,10 @@
                                                                                                                           "title":  {
                                                                                                                                         "kind":  "text",
                                                                                                                                         "value":  "CRM overview"
+                                                                                                                                    },
+                                                                                                                          "text":  {
+                                                                                                                                        "kind":  "text",
+                                                                                                                                        "value":  "Review companies, contacts, leads, opportunities and activities. Open the corresponding page to view records and use the actions available to you."
                                                                                                                                     }
                                                                                                                       },
                                                                                                          "theme_overrides":  {
