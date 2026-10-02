@@ -3,6 +3,7 @@
 import {
   boardColumnContinuationRequestSchema,
   containedComponentIdSchema,
+  revisionSchema,
 } from "@vortex/contracts";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
@@ -20,6 +21,7 @@ const placementRefreshAddressSchema = z
     organizationShortName: z.string().min(1).max(80),
     applicationKey: z.string().min(1).max(80),
     pageKey: z.string().min(1).max(80),
+    installationRevision: z.number().finite().pipe(revisionSchema),
     search: z.string().max(8_192),
   })
   .strict();
@@ -109,6 +111,7 @@ export async function rereadApplicationPlacements(
       },
       searchParametersOf(address.data.search),
       placementIds.data,
+      address.data.installationRevision,
       boardContinuation?.success === true ? boardContinuation.data : undefined,
     );
   } catch {
