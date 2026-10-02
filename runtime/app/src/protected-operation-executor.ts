@@ -16,6 +16,7 @@ import {
   identitySessionSchema,
   jsonValueSchema,
   organizationSelectionCandidateSchema,
+  organizationStewardshipAppointmentCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
@@ -206,6 +207,7 @@ type ProtectedOperationServices = Readonly<{
     | "createCustomRoleFromTemplate"
     | "acceptApplicationRoleTemplate"
     | "acceptApplicationRoleRevision"
+    | "appointOrganizationSteward"
     | "assignRoleAssignment"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
@@ -1021,6 +1023,31 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           access_version: value.accessVersion,
         }),
       ),
+  }),
+  appoint_organization_steward: operation({
+    schema: organizationStewardshipAppointmentCommandSchema,
+    inputAliases: {
+      organizationAccountId: "target_account_id",
+      expectedAccountRevision: "expected_account_revision",
+    },
+    command: (inputs) => ({
+      operation: "appoint_organization_steward",
+      organizationAccountId: inputs.target_account_id,
+      expectedAccountRevision: inputs.expected_account_revision,
+    }),
+    run: async (services, caller, command) => {
+      const attempt = await services.accessAdministration.appointOrganizationSteward(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (attempt.kind !== "available") return attempt;
+      if (attempt.value.outcome === "conflict") return "conflict";
+      return {
+        kind: "available",
+        value: { appointment_outcome: attempt.value.outcome },
+      };
+    },
   }),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
