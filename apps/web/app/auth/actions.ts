@@ -9,6 +9,12 @@ import {
 } from "@vortex/identity";
 import { redirect } from "next/navigation";
 import { getIdentityJourneyConfiguration } from "./_lib/authority-configuration";
+import {
+  applicationHomeAddressPath,
+  parseSingleApplicationHomeContinuation,
+  serializeApplicationHomeContinuation,
+  type ApplicationHomeContinuation,
+} from "./_lib/application-home-continuation";
 import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
@@ -32,6 +38,16 @@ const configuredAuthority = () => {
   }
 };
 
+const signInStatusPath = (
+  status: string,
+  applicationHome: ApplicationHomeContinuation | undefined,
+): string => {
+  const query = new URLSearchParams({ status });
+  if (applicationHome !== undefined)
+    query.set("applicationHome", serializeApplicationHomeContinuation(applicationHome));
+  return `/auth/sign-in?${query.toString()}`;
+};
+
 export async function register(formData: FormData): Promise<never> {
   const configuration = configuredAuthority();
   if (!configuration) redirect("/auth/register?status=unavailable");
@@ -49,8 +65,11 @@ export async function register(formData: FormData): Promise<never> {
 }
 
 export async function signIn(formData: FormData): Promise<never> {
+  const applicationHome = parseSingleApplicationHomeContinuation(
+    formData.getAll("applicationHome"),
+  );
   const configuration = configuredAuthority();
-  if (!configuration) redirect("/auth/sign-in?status=unavailable");
+  if (!configuration) redirect(signInStatusPath("unavailable", applicationHome));
   const result = await signInWithPassword(
     configuration,
     formValue(formData, "email"),
@@ -60,8 +79,13 @@ export async function signIn(formData: FormData): Promise<never> {
   const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
   redirect(
     result.ok && session?.kind === "active"
-      ? "/signed-in"
-      : `/auth/sign-in?status=${result.ok ? "unavailable" : failureStatus(result.code)}`,
+      ? applicationHome === undefined
+        ? "/signed-in"
+        : applicationHomeAddressPath(applicationHome)
+      : signInStatusPath(
+          result.ok ? "unavailable" : failureStatus(result.code),
+          applicationHome,
+        ),
   );
 }
 
