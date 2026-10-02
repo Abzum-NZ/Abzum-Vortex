@@ -91,7 +91,14 @@ declare
   board_totals_sql text;
   board_empty_aggregates_sql text;
   result_value jsonb;
+  preview_address text;
 begin
+  preview_address := nullif(
+    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+  );
+  if preview_address is not null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
   if p_module_root_id is null or p_query_id is null
     or p_module_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_query_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -903,4 +910,4 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
   to vortex_request;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
-  'Runs one bounded database-backed Module query summary or protected board summary. It uses shared query preparation and the same organisation, Application, record visibility, published filter and declared user filter as list reads, counts rows only after vortex_record.read_record admits them unless the exact readable-field plan permits SQL aggregation, normalizes unreadable board choices to one unassigned bucket, and refuses neutrally above 100000 candidate rows.';
+  'Runs one bounded database-backed installed Module query summary or protected board summary. It uses shared query preparation and the same organisation, Application, record visibility, published filter and declared user filter as list reads, counts rows only after vortex_record.read_record admits them unless the exact readable-field plan permits SQL aggregation, normalizes unreadable board choices to one unassigned bucket, refuses every explicit preview address before preparation, and refuses neutrally above 100000 candidate rows.';
