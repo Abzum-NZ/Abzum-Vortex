@@ -540,6 +540,7 @@ export const computeDeclaredScheduleOccurrence = (
     if (matchingTriggers.length !== 1) return refuseDeclared("invalid_definition");
 
     const trigger = matchingTriggers[0];
+    if (trigger === undefined) return refuseDeclared("invalid_definition");
     if (trigger.type !== "Schedule") return refuseDeclared("trigger_not_schedule");
     // flowSchema requires scheduled_instant for every Schedule declaration.
     if (trigger.duplicateProtection !== "scheduled_instant")
