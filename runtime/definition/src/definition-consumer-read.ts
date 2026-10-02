@@ -350,6 +350,9 @@ export const projectStoredConsumerRelease = async (
     contentFingerprint: release.contentFingerprint,
     resolutionFingerprint: release.resolutionFingerprint,
     content: output.canonical.content,
+    ...(release.kind === "application" && output.kind === "application"
+      ? { toolBundle: output.toolBundle }
+      : {}),
     dependencyManifest: release.dependencyManifest,
     ...(platformCompatibilityVersion !== undefined
       ? { platformCompatibilityVersion }
