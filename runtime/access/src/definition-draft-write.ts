@@ -279,14 +279,16 @@ export const createHumanApplicationDraftWriter = (
     mode: "create" | "save",
   ): Promise<HumanApplicationDraftWriteResult> => {
     const organization = organizationIdSchema.safeParse(organizationId);
-    const command =
-      mode === "create"
-        ? createDefinitionRootCommandSchema.safeParse(candidate)
-        : saveDefinitionDraftCommandSchema.safeParse(candidate);
-    if (!organization.success || !command.success) return { kind: "refused" };
+    const createCommand =
+      mode === "create" ? createDefinitionRootCommandSchema.safeParse(candidate) : undefined;
+    const saveCommandResult =
+      mode === "save" ? saveDefinitionDraftCommandSchema.safeParse(candidate) : undefined;
+    const command = createCommand ?? saveCommandResult;
+    if (!organization.success || command === undefined || !command.success)
+      return { kind: "refused" };
     const source = applicationSourceDocumentV2Schema.safeParse(command.data.source);
     if (!source.success || !validateDefinitionSource(source.data).valid) return { kind: "refused" };
-    const saveCommand = mode === "save" && "rootId" in command.data ? command.data : undefined;
+    const saveCommand = saveCommandResult?.success ? saveCommandResult.data : undefined;
     // Detached validated source is reused for hashing, identities, storage and result comparison.
     let failure: HumanApplicationDraftWriteResult | undefined;
     const result = await dependencies.requests.runChange(
