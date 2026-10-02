@@ -473,18 +473,18 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
     const options = {
       prepare: false,
       max: 1,
-      host: [hostname],
+      host: hostname,
       idle_timeout: 0,
       max_lifetime: null,
       connect_timeout: 10,
-      ssl: false as const,
+      ssl: false,
       socket: this.sockets.open,
       connection: { application_name: "vortex-runtime" },
       onnotice: (notice: postgres.Notice) => {
         if (notice.severity !== "NOTICE")
           console.warn(`[db] server ${String(notice.severity)} ${String(notice.code)}`);
       },
-    };
+    } satisfies postgres.Options<{}> & { socket: RequestOwnedSocketFactory["open"] };
     owner.registerResource({ stop: () => this.stop(), settled: () => this.settled() });
     this.client = postgres(configuration.connectionString, options);
   }

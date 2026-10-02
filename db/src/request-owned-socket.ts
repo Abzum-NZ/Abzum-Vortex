@@ -31,10 +31,10 @@ class RequestOwnedBridge extends Duplex {
   private assignmentScheduled = false;
   private assignmentReady = false;
   private readonly assigned = deferred<void>();
-  private readonly closed = deferred<void>();
+  private readonly closureLatch = deferred<void>();
   private readonly writes = new Set<Promise<void>>();
   readonly assignment = this.assigned.promise;
-  readonly closure = this.closed.promise;
+  readonly closure = this.closureLatch.promise;
 
   constructor(
     private readonly physical: Socket | TLSSocket,
@@ -49,7 +49,7 @@ class RequestOwnedBridge extends Duplex {
     this.physical.on("close", this.physicallyClosed);
     // Register our close observer first. The driver may remove all listeners in its own close
     // handler; our terminal-delivery latch must already have observed that event.
-    this.once("close", () => this.closed.resolve());
+    this.once("close", () => this.closureLatch.resolve());
     // Public stream error observation, without logging transport/connection details.
     this.on("error", () => undefined);
   }
