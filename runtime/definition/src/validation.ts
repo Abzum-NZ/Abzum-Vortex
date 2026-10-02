@@ -14,6 +14,7 @@ import {
   applicationCompilationRequestV2Schema,
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
+  moduleQueryDefinitionV3Schema,
   moduleCompilationRequestV3Schema,
   savedSharingConditionV3Schema,
   connectionTypeSchema,
@@ -84,6 +85,7 @@ import {
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { deriveFormCommitActionKeys } from "./form-commit";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
+import { tableQueryParameterFailures } from "./table-query-parameters";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -983,14 +985,22 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         )
           continue;
         const aggregateRecord = records.get(qualifiedRecord.slice(recordSeparator + 1));
+        if (!aggregateRecord) {
+          valid = false;
+          continue;
+        }
         const aggregateFields = fieldsFor(aggregateRecord);
-        const relationship = array(aggregateRecord?.relationships).find(
+        const relationship = array(aggregateRecord.relationships).find(
           (candidate) =>
             String(candidate.key) === relationshipReference.slice(relationshipSeparator + 1),
         );
-        const targets = relationship?.to_record_type
+        if (!relationship) {
+          valid = false;
+          continue;
+        }
+        const targets = relationship.to_record_type
           ? [String(relationship.to_record_type)]
-          : array(relationship?.to_record_types).map(String);
+          : array(relationship.to_record_types).map(String);
         const ownerReference = `${source.key}:${recordKey}`;
         const aggregateField =
           settings.field === undefined ? undefined : aggregateFields.get(String(settings.field));
@@ -3092,7 +3102,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       return (
         boundRoots.has(rootId) &&
         exactSnapshots?.length === 1 &&
-        canonical.kind === "module" &&
         envelope.kind === "module" &&
         expected?.key === module.artifact.definitionKey &&
         expected.exactVersion === module.artifact.exactVersion &&
@@ -3949,6 +3958,14 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             );
         }
         if (table === undefined && detail === undefined) continue;
+        if (table !== undefined) {
+          const query = moduleQueryDefinitionV3Schema.safeParse(bound);
+          const families = query.success
+            ? tableQueryParameterFailures(table, query.data.inputs)
+            : (["broken_reference"] as const);
+          for (const family of families)
+            failures.push(failure(output, "vortex.definition.application_block_settings", family));
+        }
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
         const selected = lower(array(bound.selectedFieldIds));
