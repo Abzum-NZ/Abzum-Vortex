@@ -11,12 +11,15 @@ import {
   projectLiveApplicationRolePermissions,
   revisionSchema,
   sessionContextSchema,
+  systemApplicationBoundReleaseSetResultSchema,
   type ApplicationInstallationLifecycleResult,
   type ApplicationRootId,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
   type ModuleInstallationStorageResult,
   type ModuleRootId,
+  type ModuleContentV3,
+  type ModuleContributionV3,
   type OrganizationId,
   type PreparedApplicationRoleTemplates,
   type SelectedOrganizationScope,
@@ -40,6 +43,7 @@ import {
   createInstallationRuntimeBundleCleanupRepository,
   createModuleInstallationStorageRepository,
   type InstallationRuntimeBundleRemovalReport,
+  type ResolvedContributionBinding,
 } from "@vortex/module";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -66,8 +70,9 @@ import { z } from "zod";
  *
  * 1. Align Access: register, update or reactivate the permission registration for the exact target
  *    release when it does not already name it. Registration assigns nothing to anybody.
- * 2. Switch: detach the previously active release (upgrade only), prepare storage for every pinned
- *    Module release, activate the complete binding set through the fixed operation (which also
+ * 2. Switch: detach the previously active release and its contributions (upgrade only), prepare
+ *    every pinned Module's storage and attach the new contributions, then activate the complete
+ *    binding set through the fixed operation (which also
  *    gates executable lifecycle policies) and append the lifecycle Activity. Any failure rolls the
  *    whole switch back, so the previously active exact release stays selected, and an upgrade then
  *    restores the registration to that still-active release.
@@ -77,8 +82,8 @@ import { z } from "zod";
  * policies the activation gate requires. An upgrade cannot pre-provision a Module its active
  * release still binds, so its storage is prepared inside the atomic switch.
  *
- * Withdrawal is one transaction: detach the active binding set (storage and records are retained),
- * append its Activity, then withdraw the permission registration through the Access coordinator,
+ * Withdrawal is one transaction: detach the active or prepared binding set and retire its contributions
+ * (storage and records are retained), append its Activity, then withdraw the permission registration,
  * which refuses a change that would leave the organisation without a permanent steward.
  */
 
@@ -239,6 +244,19 @@ export type HumanInstallationDefinitionAccess = Readonly<{
 export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Readonly<{
   /** Installer request runner; each call opens one human change transaction. */
   installerRequests: InstallerRequests;
+  /** Pure Definition resolver over the complete immutable Module release set. */
+  resolveModuleContributions: (
+    releases: readonly Readonly<{
+      moduleRootId: string;
+      definitionKey: string;
+      releaseVersion: string;
+      content: ModuleContentV3;
+    }>[],
+  ) => Readonly<{
+    outcome: "resolved" | "conflicted";
+    bindings: readonly ResolvedContributionBinding[];
+    conflicts: readonly unknown[];
+  }>;
   /**
    * Server-minted live system context and reader for immutable Definition evidence. The target
    * organisation is still proved by the installer's own transaction and the Access coordinator.
@@ -313,10 +331,16 @@ const installationDrainResultSchema = z
 type InstallationBindings = z.infer<typeof installationBindingsSchema>;
 type ExpectedModuleBinding = Readonly<{ moduleRootId: ModuleRootId; bindingRevision: number }>;
 type ModulePin = Readonly<{ moduleRootId: ModuleRootId; moduleReleaseRevision: number }>;
-type ExactRelease = Readonly<{
+type ContributionGroup = ModulePin & Readonly<{
+  contributions: readonly ResolvedContributionBinding[];
+}>;
+type ExactStorageRelease = Readonly<{
   releaseSet: SystemApplicationBoundReleaseSetResult;
-  preparedTemplates: PreparedApplicationRoleTemplates;
   pins: readonly ModulePin[];
+  contributionGroups: readonly ContributionGroup[];
+}>;
+type ExactRelease = ExactStorageRelease & Readonly<{
+  preparedTemplates: PreparedApplicationRoleTemplates;
 }>;
 type ReleaseTarget = InstallationReleaseTarget;
 
@@ -583,13 +607,99 @@ const summary = (
   moduleBindings: result.moduleBindings,
 });
 
+/** Prove the complete exact pin set before changing any contribution mapping. */
+const requireExactBindings = (
+  target: ReleaseTarget,
+  pins: readonly ModulePin[],
+  bindings: readonly ModuleInstallationBindingEvidence[],
+  state: "active" | "detached" | "provisioned",
+): void => {
+  const byRoot = new Map(
+    bindings.map((binding) => [canonicalModuleRootId(binding.moduleRootId), binding]),
+  );
+  if (
+    bindings.length !== pins.length ||
+    byRoot.size !== pins.length ||
+    pins.some((pin) => {
+      const binding = byRoot.get(pin.moduleRootId);
+      return (
+        binding === undefined ||
+        binding.state !== state ||
+        !sameId(binding.organizationId, target.organizationId) ||
+        !sameId(binding.applicationRootId, target.applicationRootId) ||
+        binding.applicationReleaseRevision !== target.applicationReleaseRevision ||
+        binding.moduleReleaseRevision !== pin.moduleReleaseRevision
+      );
+    })
+  )
+    throw fail("APPLICATION_INSTALLATION_STALE");
+};
+
+const changeContributions = async (
+  transaction: InstallerTransaction,
+  target: ReleaseTarget,
+  groups: readonly ContributionGroup[],
+  bindings: readonly Pick<
+    ModuleInstallationBindingEvidence,
+    "moduleRootId" | "bindingRevision" | "applicationReleaseRevision" | "moduleReleaseRevision"
+  >[],
+  mode: "attach" | "detach",
+): Promise<boolean> => {
+  const storage = createModuleInstallationStorageRepository(transaction);
+  const byRoot = new Map(
+    bindings.map((binding) => [canonicalModuleRootId(binding.moduleRootId), binding]),
+  );
+  if (byRoot.size !== bindings.length) throw fail("APPLICATION_INSTALLATION_FAILED");
+  let changed = false;
+  for (const group of groups) {
+    const binding = byRoot.get(group.moduleRootId);
+    if (
+      binding === undefined ||
+      binding.applicationReleaseRevision !== target.applicationReleaseRevision ||
+      binding.moduleReleaseRevision !== group.moduleReleaseRevision
+    )
+      throw fail("APPLICATION_INSTALLATION_FAILED");
+    const command = {
+      applicationRootId: target.applicationRootId,
+      applicationReleaseRevision: target.applicationReleaseRevision,
+      moduleRootId: group.moduleRootId,
+      moduleReleaseRevision: group.moduleReleaseRevision,
+      expectedBindingRevision: binding.bindingRevision,
+      mode,
+      contributions: group.contributions,
+    };
+    const result =
+      mode === "attach"
+        ? await storage.attachContributions(command)
+        : await storage.detachContributions(command);
+    const expectedIds = new Set(group.contributions.map((item) => item.contributionId.toLowerCase()));
+    const actualIds = result.contributionIds.map((id) => id.toLowerCase());
+    if (
+      !sameId(result.applicationRootId, target.applicationRootId) ||
+      result.applicationReleaseRevision !== target.applicationReleaseRevision ||
+      !sameId(result.moduleRootId, group.moduleRootId) ||
+      result.moduleReleaseRevision !== group.moduleReleaseRevision ||
+      result.state !== (mode === "attach" ? "attached" : "detached") ||
+      result.bindingRevision !== binding.bindingRevision ||
+      actualIds.length !== expectedIds.size ||
+      new Set(actualIds).size !== expectedIds.size ||
+      actualIds.some((id) => !expectedIds.has(id))
+    )
+      throw fail("APPLICATION_INSTALLATION_FAILED");
+    changed = changed || result.changed;
+  }
+  return changed;
+};
+
 const requireLifecycleResult = (
   result: ApplicationInstallationLifecycleResult,
+  organizationId: OrganizationId,
   applicationRootId: ApplicationRootId,
   applicationReleaseRevision: number,
   state: "active" | "detached",
 ): ApplicationInstallationLifecycleResult => {
   if (
+    !sameId(result.organizationId, organizationId) ||
     !sameId(result.applicationRootId, applicationRootId) ||
     result.applicationReleaseRevision !== applicationReleaseRevision ||
     result.state !== state
@@ -743,6 +853,131 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     }
   };
 
+  /** Resolve the whole set before mutations; partial resolution is never an empty fallback. */
+  const resolveStorageRelease = (
+    target: ReleaseTarget,
+    candidate: SystemApplicationBoundReleaseSetResult,
+  ): ExactStorageRelease => {
+    const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
+    if (!parsed.success) throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+    const releaseSet = parsed.data;
+    const application = releaseSet.application;
+    if (
+      !sameId(application.organizationId, target.organizationId) ||
+      !sameId(application.rootId, target.applicationRootId) ||
+      application.releaseRevision !== target.applicationReleaseRevision
+    )
+      throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+    if (releaseSet.modules.length === 0) throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
+    const modules = new Map(
+      releaseSet.modules.map((module) => [canonicalModuleRootId(module.rootId), module]),
+    );
+    if (modules.size !== releaseSet.modules.length)
+      throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
+    const declared = new Map<
+      string,
+      { moduleRootId: ModuleRootId; contribution: ModuleContributionV3 }
+    >();
+    for (const module of releaseSet.modules) {
+      for (const contribution of module.content.contributions ?? []) {
+        const id = contribution.contributionId.toLowerCase();
+        if (declared.has(id)) throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
+        declared.set(id, {
+          moduleRootId: canonicalModuleRootId(module.rootId), contribution,
+        });
+      }
+    }
+    let resolution: ReturnType<
+      ApplicationInstallationCoordinatorDependencies<InstalledEvents>["resolveModuleContributions"]
+    >;
+    try {
+      resolution = dependencies.resolveModuleContributions(
+        releaseSet.modules.map((module) => ({
+          moduleRootId: module.rootId,
+          definitionKey: module.definitionKey,
+          releaseVersion: module.releaseVersion,
+          content: module.content,
+        })),
+      );
+    } catch (error) {
+      throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
+    }
+    if (
+      resolution.outcome !== "resolved" || resolution.conflicts.length !== 0 ||
+      resolution.bindings.length !== declared.size
+    )
+      throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
+    const seen = new Set<string>();
+    const groups = new Map<ModuleRootId, ResolvedContributionBinding[]>();
+    for (const binding of resolution.bindings) {
+      const id = binding.contributionId.toLowerCase();
+      const source = declared.get(id);
+      const contributorRoot = canonicalModuleRootId(binding.contributorModuleRootId);
+      const contributor = modules.get(contributorRoot);
+      const targetModule = modules.get(canonicalModuleRootId(binding.targetModuleRootId));
+      const point = targetModule?.content.extensionPoints.find((candidate) =>
+        sameId(candidate.extensionPointId, binding.targetExtensionPointId),
+      );
+      if (
+        seen.has(id) || source === undefined || source.moduleRootId !== contributorRoot ||
+        source.contribution.kind !== binding.kind ||
+        contributor === undefined || targetModule === undefined ||
+        sameId(contributor.rootId, targetModule.rootId) ||
+        contributor.releaseVersion !== binding.contributorReleaseVersion ||
+        targetModule.releaseVersion !== binding.targetModuleReleaseVersion ||
+        !sameId(source.contribution.targetModule.moduleRootId, targetModule.rootId) ||
+        source.contribution.targetModule.moduleKey !== targetModule.definitionKey ||
+        source.contribution.targetModule.resolvedVersion !== targetModule.releaseVersion ||
+        !sameId(source.contribution.targetExtensionPointId, binding.targetExtensionPointId) ||
+        point === undefined ||
+        !sameId(point.recordTypeId, binding.targetRecordTypeId) ||
+        source.contribution.recordTypeId !== binding.recordTypeId ||
+        source.contribution.fieldId !== binding.fieldId ||
+        source.contribution.actionId !== binding.actionId
+      )
+        throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
+      seen.add(id);
+      const group = groups.get(contributorRoot) ?? [];
+      group.push(binding);
+      groups.set(contributorRoot, group);
+    }
+    const contributionGroups: ContributionGroup[] = [];
+    for (const [moduleRootId, contributions] of groups) {
+      const module = modules.get(moduleRootId);
+      if (module === undefined || contributions.length === 0 || contributions.length > 100)
+        throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
+      contributionGroups.push({
+        moduleRootId,
+        moduleReleaseRevision: module.releaseRevision,
+        contributions: [...contributions].sort((a, b) => {
+          const left = a.contributionId.toLowerCase();
+          const right = b.contributionId.toLowerCase();
+          return left < right ? -1 : left > right ? 1 : 0;
+        }),
+      });
+    }
+    return {
+      releaseSet,
+      pins: byModuleRoot(releaseSet.modules.map((module) => ({
+        moduleRootId: canonicalModuleRootId(module.rootId),
+        moduleReleaseRevision: module.releaseRevision,
+      }))),
+      contributionGroups: byModuleRoot(contributionGroups),
+    };
+  };
+
+  const exactStorageRelease = (
+    target: ReleaseTarget,
+    releaseSet: SystemApplicationBoundReleaseSetResult,
+  ): ExactStorageRelease => {
+    try {
+      return resolveStorageRelease(target, releaseSet);
+    } catch (error) {
+      if (error instanceof ApplicationInstallationCoordinatorError) throw error;
+      throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
+    }
+  };
+
   /** Loads the exact Application and its resolved Module pin set, never the latest release. */
   const readExactRelease = async (
     session: IdentitySession,
@@ -789,15 +1024,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         target.applicationReleaseRevision
     )
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-    // The fixed activation requires at least one pinned Module binding.
-    if (releaseSet.modules.length === 0) throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
-    const pins: ModulePin[] = byModuleRoot(
-      releaseSet.modules.map((module) => ({
-        moduleRootId: canonicalModuleRootId(module.rootId),
-        moduleReleaseRevision: module.releaseRevision,
-      })),
-    );
-    return { releaseSet, preparedTemplates, pins };
+    return { ...exactStorageRelease(target, releaseSet), preparedTemplates };
   };
 
   /**
@@ -986,9 +1213,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             pins,
             currentBindingRevisions(state),
           );
+          const contributionsChanged = await changeContributions(
+            transaction, request, exact.contributionGroups, provisioned, "attach",
+          );
           return {
             outcome:
-              accessChanged || provisioned.some((result) => result.changed)
+              accessChanged || contributionsChanged || provisioned.some((result) => result.changed)
                 ? "prepared"
                 : "unchanged",
             organizationId: state.organizationId,
@@ -1039,6 +1269,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
           requireNotDraining(state);
           const mode = requireExpectedActive(request, activeRelease(state));
+          if (mode === "already_active") {
+            const installation = activeSummary(request, state);
+            requireExactBindings(request, pins, installation.moduleBindings, "active");
+          }
           await alignAccess(
             transaction,
             authority,
@@ -1051,13 +1285,32 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           return mode === "already_active" ? activeSummary(request, state) : null;
         },
       );
-      if (alreadyActive !== null)
+      if (alreadyActive !== null) {
+        // Access realignment may advance its version. A fresh human transaction repairs storage
+        // after that commit, without a lifecycle transition or binding revision advance.
+        const repaired = await inInstallerTransaction(
+          verifiedSession.data,
+          request.organizationId,
+          installOperation(request.applicationRootId, exact, false),
+          async (transaction) => {
+            const state = await readInstallationBindings(
+              transaction, request.organizationId, request.applicationRootId,
+            );
+            requireNotDraining(state);
+            const installation = activeSummary(request, state);
+            requireExactBindings(request, pins, installation.moduleBindings, "active");
+            await changeContributions(transaction, request, exact.contributionGroups,
+              installation.moduleBindings, "attach");
+            return installation;
+          },
+        );
         return {
           outcome: "unchanged",
           previousApplicationReleaseRevision: request.applicationReleaseRevision,
-          installation: alreadyActive,
-          installedEvents: installedEvents(releaseSet, alreadyActive),
+          installation: repaired,
+          installedEvents: installedEvents(releaseSet, repaired),
         };
+      }
 
       // 2. Switch atomically: detach the prior release, prepare storage, activate, record Activity.
       let switched: Omit<
@@ -1065,6 +1318,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         "installedEvents"
       >;
       try {
+        const oldTarget = request.expectedActiveReleaseRevision === null
+          ? null
+          : {
+              organizationId: request.organizationId,
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.expectedActiveReleaseRevision,
+            };
+        const oldExact = oldTarget === null
+          ? null
+          : exactStorageRelease(oldTarget, await readReleaseSet(verifiedSession.data, oldTarget));
         switched = await inInstallerTransaction(
           verifiedSession.data,
           request.organizationId,
@@ -1077,41 +1340,58 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             );
             requireNotDraining(state);
             const active = activeRelease(state);
-            if (requireExpectedActive(request, active) === "already_active")
+            if (requireExpectedActive(request, active) === "already_active") {
+              const installation = activeSummary(request, state);
+              requireExactBindings(request, pins, installation.moduleBindings, "active");
+              await changeContributions(transaction, request, exact.contributionGroups,
+                installation.moduleBindings, "attach");
               return {
                 outcome: "unchanged" as const,
                 previousApplicationReleaseRevision: request.applicationReleaseRevision,
-                installation: activeSummary(request, state),
+                installation,
               };
+            }
 
             const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
             const current = currentBindingRevisions(state);
             if (active !== null) {
+              if (oldTarget === null || oldExact === null ||
+                active.releaseRevision !== oldTarget.applicationReleaseRevision)
+                throw fail("APPLICATION_INSTALLATION_STALE");
+              requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
               const detached = requireLifecycleResult(
                 await lifecycle.detach({
                   applicationRootId: request.applicationRootId,
                   applicationReleaseRevision: active.releaseRevision,
                   expectedModuleBindings: expectedBindings(active.bindings),
                 }),
+                request.organizationId,
                 request.applicationRootId,
                 active.releaseRevision,
                 "detached",
               );
+              requireExactBindings(oldTarget, oldExact.pins, detached.moduleBindings, "detached");
+              await changeContributions(transaction, oldTarget, oldExact.contributionGroups,
+                detached.moduleBindings, "detach");
               for (const binding of detached.moduleBindings)
                 current.set(canonicalModuleRootId(binding.moduleRootId), binding.bindingRevision);
             }
 
             const provisioned = await provisionPins(transaction, request, pins, current);
+            await changeContributions(transaction, request, exact.contributionGroups,
+              provisioned, "attach");
             const activated = requireLifecycleResult(
               await lifecycle.activate({
                 applicationRootId: request.applicationRootId,
                 applicationReleaseRevision: request.applicationReleaseRevision,
                 expectedModuleBindings: expectedBindings(provisioned),
               }),
+              request.organizationId,
               request.applicationRootId,
               request.applicationReleaseRevision,
               "active",
             );
+            requireExactBindings(request, pins, activated.moduleBindings, "active");
             if (activated.changed)
               await recordOutcome(
                 transaction,
@@ -1145,7 +1425,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
     /**
      * Withdraws exactly the named release. Bindings are detached, never deleted, so stored
-     * records remain; a prepared release that never became active keeps its inactive storage. The
+     * records remain; prepared bindings also become detached without becoming active. The
      * Access coordinator preserves final-steward, supplier and continuity safeguards. A draining
      * installation is refused: its uninstall owns what happens to it next.
      */
@@ -1159,6 +1439,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
       const packageFacts = await readReleaseSet(verifiedSession.data, request);
+      const exact = exactStorageRelease(request, packageFacts);
 
       return inInstallerTransaction(
         verifiedSession.data,
@@ -1191,34 +1472,47 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 binding.applicationReleaseRevision === request.applicationReleaseRevision,
             ),
           );
-          // The active set, or a retried withdrawal's already detached set. A prepared release
-          // was never active, so only its registration is withdrawn; a retry finds it withdrawn.
-          const detachable =
-            active?.bindings ?? releaseBindings.filter((binding) => binding.state === "detached");
+          if (state.moduleBindings.some((binding) => binding.state !== "detached" &&
+            binding.applicationReleaseRevision !== request.applicationReleaseRevision))
+            throw fail("APPLICATION_INSTALLATION_STALE");
           if (releaseBindings.length === 0 && state.registeredReleaseRevision === null)
             throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-
-          let detached: ApplicationInstallationLifecycleResult | null = null;
-          if (detachable.length > 0) {
-            detached = requireLifecycleResult(
-              await createApplicationInstallationLifecycleRepository(transaction).detach({
-                applicationRootId: request.applicationRootId,
-                applicationReleaseRevision: request.applicationReleaseRevision,
-                expectedModuleBindings: expectedBindings(detachable),
-              }),
+          const bindingState = releaseBindings[0]?.state;
+          if (bindingState !== "active" && bindingState !== "detached" &&
+            bindingState !== "provisioned")
+            throw fail("APPLICATION_INSTALLATION_STALE");
+          requireExactBindings(request, exact.pins, releaseBindings, bindingState);
+          // Terminate the complete homogeneous active/provisioned set, or replay a detached set.
+          // Retained storage is not evidence that a withdrawn prepared installation is still live.
+          const detached = requireLifecycleResult(
+            await createApplicationInstallationLifecycleRepository(transaction).detach({
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.applicationReleaseRevision,
+              expectedModuleBindings: expectedBindings(releaseBindings),
+            }),
+            request.organizationId,
+            request.applicationRootId,
+            request.applicationReleaseRevision,
+            "detached",
+          );
+          requireExactBindings(request, exact.pins, detached.moduleBindings, "detached");
+          if (detached.changed)
+            await recordOutcome(
+              transaction,
+              newActivityId(),
               request.applicationRootId,
               request.applicationReleaseRevision,
               "detached",
             );
-            if (detached.changed)
-              await recordOutcome(
-                transaction,
-                newActivityId(),
-                request.applicationRootId,
-                request.applicationReleaseRevision,
-                "detached",
-              );
-          }
+
+          // Every group uses the protected terminal transition's returned revisions.
+          const contributionsChanged = await changeContributions(
+            transaction,
+            request,
+            exact.contributionGroups,
+            detached.moduleBindings,
+            "detach",
+          );
 
           // Bundle registrations belong to Module and are removed only after this installation's
           // bindings have left active service. The report keeps the exact bundle keys and counts.
@@ -1237,13 +1531,13 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
           return {
             outcome:
-              detached?.changed === true || access.outcome === "changed"
+              detached.changed || contributionsChanged || access.outcome === "changed"
                 ? "withdrawn"
                 : "unchanged",
             organizationId: state.organizationId,
             applicationRootId: request.applicationRootId,
             applicationReleaseRevision: request.applicationReleaseRevision,
-            moduleBindings: detached?.moduleBindings ?? releaseBindings,
+            moduleBindings: detached.moduleBindings,
             runtimeBundles,
           } satisfies ApplicationInstallationWithdrawalResult;
         },
