@@ -4,7 +4,11 @@ import { Socket } from "node:net";
 import { Duplex } from "node:stream";
 import { connect as connectTls, type TLSSocket } from "node:tls";
 
-import { requestDatabaseError, type RequestDatabaseLifetimeOwner } from "./request-lifetime";
+import {
+  requestDatabaseError,
+  type RequestDatabaseLifetimeOwner,
+  type RequestDatabaseLookupOwner,
+} from "./request-lifetime";
 
 interface RequestSocketConfiguration {
   readonly hostname: string;
@@ -167,6 +171,7 @@ interface SocketAttempt {
   readonly physical: Set<Socket | TLSSocket>;
   readonly closures: Promise<void>[];
   readonly writes: Promise<void>[];
+  readonly lookup?: RequestDatabaseLookupOwner;
   bridge?: RequestOwnedBridge;
 }
 
@@ -207,6 +212,7 @@ export class RequestOwnedSocketFactory {
   stop(): void {
     this.stopped = true;
     for (const attempt of this.attempts) {
+      attempt.lookup?.stop();
       attempt.bridge?.stop();
       for (const physical of attempt.physical) physical.destroy();
     }
@@ -216,6 +222,12 @@ export class RequestOwnedSocketFactory {
     if (this.initialEntryExpected && !this.entered) await this.firstEntry.promise;
     while (this.factories.size > 0) await Promise.all([...this.factories]);
     for (const attempt of this.attempts) {
+      // Stop drops request-owned delivery before native DNS finishes in its clean context.
+      // A reentrant delivery may still be on the stack; join its actual synchronous return.
+      if (attempt.lookup !== undefined && !attempt.lookup.stop())
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+      if (attempt.lookup !== undefined && !attempt.lookup.lookupDeliverySettled)
+        throw requestDatabaseError("DATABASE_LOOKUP_DELIVERY_NOT_SETTLED");
       await Promise.all(attempt.closures);
       await Promise.all(attempt.writes);
       if (attempt.bridge !== undefined) {
@@ -241,13 +253,21 @@ export class RequestOwnedSocketFactory {
   private async establish(): Promise<Duplex> {
     this.owner.checkpoint();
     if (this.stopped) throw requestDatabaseError("DATABASE_REQUEST_STOPPED");
-    const attempt: SocketAttempt = { physical: new Set(), closures: [], writes: [] };
+    const lookup = this.owner.createOwnedLookup();
+    const attempt: SocketAttempt = {
+      physical: new Set(), closures: [], writes: [],
+      ...(lookup === undefined ? {} : { lookup }),
+    };
     this.attempts.add(attempt);
     const raw = new Socket();
     const rawClosure = this.registerPhysical(attempt, raw);
     try {
       await this.waitFor(raw, "connect", () => {
-        raw.connect({ host: this.configuration.hostname, port: this.configuration.port });
+        raw.connect({
+          host: this.configuration.hostname,
+          port: this.configuration.port,
+          ...(attempt.lookup === undefined ? {} : { lookup: attempt.lookup.lookup }),
+        });
       });
       this.owner.checkpoint();
       let transport: Socket | TLSSocket = raw;
@@ -273,6 +293,7 @@ export class RequestOwnedSocketFactory {
       if (this.stopped || this.owner.stopped) bridge.stop();
       return bridge;
     } catch {
+      attempt.lookup?.stop();
       for (const socket of attempt.physical) socket.destroy();
       if (!this.owner.stopped) this.owner.stop("abort");
       await Promise.all(attempt.closures);
@@ -342,6 +363,10 @@ export class RequestOwnedSocketFactory {
         removePhase();
         if (success) resolve();
         else {
+          // Abort/deadline reaches this listener before the owner's resource stop.
+          // Remove DNS delivery first on this early physical-destruction path too.
+          for (const attempt of this.attempts)
+            if (attempt.physical.has(socket)) attempt.lookup?.stop();
           socket.destroy();
           reject(requestDatabaseError("DATABASE_OWNED_CONNECTION_UNAVAILABLE"));
         }

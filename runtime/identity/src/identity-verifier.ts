@@ -34,8 +34,15 @@ type IdentityClaimsClient = {
   };
 };
 
+/** Trusted server execution control only; it supplies no token, issuer or actor. */
+export type IdentityVerificationExecution = Readonly<{
+  fetch: typeof fetch;
+  checkpoint(): void;
+}>;
+
 type IdentityVerifierOptions = Readonly<{
   clock?: () => Date;
+  execution?: IdentityVerificationExecution;
 }>;
 
 export const identityVerifierMaximumClockSkewSeconds = 60;
@@ -43,6 +50,7 @@ export const identityVerifierMaximumClockSkewSeconds = 60;
 export type IdentityVerifier = Readonly<{
   authority: IdentityAuthority;
   verifyAccessToken(accessToken: string): Promise<VerifiedIdentity>;
+  checkpoint?(): void;
 }>;
 
 const refuse = (refusalCode: IdentityVerificationRefusalCode): never => {
@@ -186,17 +194,21 @@ export const createIdentityVerifierWithClient = (
 
   return Object.freeze({
     authority,
+    ...(options.execution === undefined ? {} : { checkpoint: options.execution.checkpoint }),
     async verifyAccessToken(accessToken: string) {
       if (accessToken.trim().length === 0) return refuse("vortex.identity.missing_access_token");
 
       let result: ClaimsVerificationResult;
       try {
+        options.execution?.checkpoint();
         // `jwksUrl` remains explicit authority evidence and is constrained by the
         // contract to Supabase's standard discovery path. The official client
         // derives and fetches that same path from the issuer origin. We allow the
         // SDK to skip only its zero-skew expiry check so this boundary can apply
         // one deterministic, bounded clock policy after signature verification.
         result = await client.auth.getClaims(accessToken, { allowExpired: true });
+        // Includes actual provider body parsing and WebCrypto import/verification settlement.
+        options.execution?.checkpoint();
       } catch (error) {
         return refuse(
           isAuthRetryableFetchError(error)
@@ -225,6 +237,7 @@ export const createIdentityVerifier = (
   const publicApiKey = parsePublishableKey(publishableKey);
 
   const client = createClient(new URL(authority.issuer).origin, publicApiKey, {
+    ...(options.execution === undefined ? {} : { global: { fetch: options.execution.fetch } }),
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,
