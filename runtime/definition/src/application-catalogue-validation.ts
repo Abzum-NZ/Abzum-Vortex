@@ -201,8 +201,8 @@ export function validateApplicationSourceCatalogue(
       checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");
       const inputs = new Set<string>();
       for (const parameter of table.parameters) {
-        // An Application query declares no inputs, so no input name can be bound to it.
-        report("vortex.definition.application_block_settings", "unknown_property", at("query_parameters"));
+        // The exact bound Module query owns the input names and types. Publication checks them;
+        // draft save can check only the authored parameter structure here.
         if (inputs.has(parameter.input))
           report("vortex.definition.application_block_settings", "duplicate_key", at("query_parameters"));
         inputs.add(parameter.input);
