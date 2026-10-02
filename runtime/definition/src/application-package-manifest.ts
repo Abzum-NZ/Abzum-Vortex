@@ -51,9 +51,9 @@ export class ApplicationPackageManifestError extends Error {
   }
 }
 
-const refuse = (code: ApplicationPackageManifestErrorCode): never => {
+function refuse(code: ApplicationPackageManifestErrorCode): never {
   throw new ApplicationPackageManifestError(code);
-};
+}
 
 /**
  * Accept only bounded JSON data. This runs before Zod so cycles, accessors, custom prototypes and
@@ -123,7 +123,7 @@ const assertBoundedJsonEvidence = (input: unknown): void => {
   } catch {
     refuse("INVALID_EVIDENCE");
   }
-  if (Buffer.byteLength(serialized!, "utf8") > maximumInputBytes) refuse("INVALID_EVIDENCE");
+  if (Buffer.byteLength(serialized, "utf8") > maximumInputBytes) refuse("INVALID_EVIDENCE");
 };
 
 const sortDefinitions = <Value extends { kind: string; key: string; exactVersion: string }>(
@@ -393,7 +393,11 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
   const output = application.compilationOutput;
   if (output.kind !== "application") refuse("RELEASE_INTEGRITY_FAILED");
   const moduleOutputs = [...reached]
-    .map((key) => modulesByNode.get(key)!)
+    .map((key) => {
+      const module = modulesByNode.get(key);
+      if (module === undefined) return refuse("DEPENDENCY_CLOSURE_INVALID");
+      return module;
+    })
     .sort((left, right) => compareCanonicalStrings(left.release.rootId.toLowerCase(), right.release.rootId.toLowerCase()));
 
   // Placement follows publication's direct Application bindings. Transitive Modules remain in
@@ -430,6 +434,7 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
     );
     if (
       dependency === undefined ||
+      dependency.kind !== "platform_block" ||
       dependency.contentFingerprint !== block.contentFingerprint ||
       dependency.catalogueFingerprint !== block.catalogueFingerprint
     )
