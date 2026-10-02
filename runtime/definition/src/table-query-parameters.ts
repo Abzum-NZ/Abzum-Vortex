@@ -34,17 +34,16 @@ export function tableQueryParameterFailures(
       failures.push("unsupported_choice");
       continue;
     }
-    if (parameter.source === "page") {
-      if (parameter.pageParameter === undefined) {
-        failures.push("required_value");
-        continue;
-      }
-      // The page adapter stores one converted value per alias, shared by every bound input.
+    if (parameter.pageParameter !== undefined) {
+      // Web writes every declared alias, including aliases on fixed-source parameters.
       const conversion =
         input.type === "number" ? "number" : input.type === "boolean" ? "boolean" : "string";
       const previous = pageConversions.get(parameter.pageParameter);
       if (previous !== undefined && previous !== conversion) failures.push("unsupported_choice");
       pageConversions.set(parameter.pageParameter, conversion);
+    }
+    if (parameter.source === "page") {
+      if (parameter.pageParameter === undefined) failures.push("required_value");
       continue;
     }
     const value = parameter.fixedValue;
