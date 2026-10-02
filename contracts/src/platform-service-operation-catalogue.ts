@@ -95,6 +95,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   update_own_profile: entry(sources.update_own_profile),
   create_organization_invitation: entry(sources.create_organization_invitation),
   revoke_organization_invitation: entry(sources.revoke_organization_invitation),
+  appoint_organization_steward: entry(sources.appoint_organization_steward),
 });
 
 /** Every registered release, in registration order, for the publication catalogue. */
