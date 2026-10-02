@@ -15,6 +15,7 @@ import {
 } from "@vortex/contracts";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
+  resolveModuleContributions,
 } from "@vortex/definition";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
 import { developmentPublicationCatalogue } from "./definitions";
@@ -62,6 +63,7 @@ const coordinatorDependencies = (
   }),
   definitionSystemContext: () => mintSystemContext(facts.system),
   definitionReader: definitionReader(facts),
+  resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
 });

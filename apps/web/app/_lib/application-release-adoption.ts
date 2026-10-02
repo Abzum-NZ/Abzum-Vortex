@@ -19,6 +19,7 @@ import {
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseApplicationReleaseAdoptionTargetService,
+  resolveModuleContributions,
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/definition";
 import {
@@ -80,6 +81,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
 const coordinator = () =>
   createApplicationInstallationCoordinator({
     installerRequests: requests(),
+    resolveModuleContributions,
     builderAuthority: (transaction, scope) =>
       createBuilderAuthority({
         transaction,
