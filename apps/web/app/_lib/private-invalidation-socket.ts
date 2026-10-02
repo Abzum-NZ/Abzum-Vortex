@@ -331,6 +331,7 @@ export class PrivateInvalidationTransportOwner {
           closeTimeout: number; maxBufferedChunks: number; maxFragments: number;
         };
         this.socket = new WebSocket(address, protocols, socketOptions);
+        this.socket.binaryType = "arraybuffer";
         const closed = deferred();
         owner.track(closed.promise);
         const stop = () => this.socket.terminate();
@@ -341,9 +342,27 @@ export class PrivateInvalidationTransportOwner {
           try { this.onopen?.(event); this.dispatchEvent(event); } catch { owner.fail(); }
         });
         this.socket.on("message", (data, binary) => {
-          if (owner.stopping || binary) return;
-          const event = new MessageEvent("message", { data: data.toString() });
-          try { this.onmessage?.(event); this.dispatchEvent(event); } catch { owner.fail(); }
+          if (owner.stopping) return;
+          try {
+            const length = Array.isArray(data)
+              ? data.reduce((total, fragment) => total + fragment.byteLength, 0)
+              : data.byteLength;
+            if (length > 16_384) { owner.fail(); return; }
+            const bytes = data instanceof ArrayBuffer ? new Uint8Array(data)
+              : Array.isArray(data) ? Buffer.concat(data, length) : data;
+            let payload: string | ArrayBuffer;
+            if (binary) {
+              // The pinned public SDK decodes its v2 Broadcast JSON binary frame.
+              // Copy only this message's span, never a pooled Buffer's whole backing store.
+              payload = new ArrayBuffer(bytes.byteLength);
+              new Uint8Array(payload).set(bytes);
+            } else {
+              payload = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf8");
+            }
+            const event = new MessageEvent("message", { data: payload });
+            this.onmessage?.(event);
+            this.dispatchEvent(event);
+          } catch { owner.fail(); }
         });
         this.socket.on("ping", (data) => {
           if (owner.stopping) return;
