@@ -1,5 +1,9 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { getIdentityJourneyConfiguration } from "../_lib/authority-configuration";
+import {
+  parseSingleApplicationHomeContinuation,
+  serializeApplicationHomeContinuation,
+} from "../_lib/application-home-continuation";
 import { verifiesSessionCleanupProof } from "../_lib/session-cleanup-proof";
 import {
   identitySessionCookieDeletions,
@@ -31,6 +35,14 @@ export function GET(request: NextRequest): NextResponse {
   try {
     siteUrl = getIdentityJourneyConfiguration().siteUrl;
     destination = new URL(destinationPath, siteUrl);
+    const applicationHome = parseSingleApplicationHomeContinuation(
+      request.nextUrl.searchParams.getAll("applicationHome"),
+    );
+    if (applicationHome !== undefined)
+      destination.searchParams.set(
+        "applicationHome",
+        serializeApplicationHomeContinuation(applicationHome),
+      );
   } catch {
     siteUrl = undefined;
     destination = new URL(destinationPath, request.url);
