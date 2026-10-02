@@ -5,8 +5,12 @@ import {
   isLoopbackHostname,
   type IdentityAuthority,
 } from "@vortex/contracts";
-import type { IdentityJourneyConfiguration } from "@vortex/identity";
-import { requiredEnvironmentValue } from "../../_lib/server-configuration";
+import {
+  localDevelopmentSignInAvailable,
+  type IdentityJourneyConfiguration,
+  type LocalDevelopmentSignInConfiguration,
+} from "@vortex/identity";
+import { optionalEnvironmentValue, requiredEnvironmentValue } from "../../_lib/server-configuration";
 
 export const getIdentityJourneyConfiguration = (): IdentityJourneyConfiguration => ({
   supabaseUrl: requiredEnvironmentValue("VORTEX_SUPABASE_URL"),
@@ -34,4 +38,21 @@ export const getIdentityAuthorityConfiguration = (): IdentityAuthority => {
     audience: "authenticated",
     signingAlgorithm: "ES256",
   });
+};
+
+export const getLocalDevelopmentSignInConfiguration = (): LocalDevelopmentSignInConfiguration | undefined => {
+  if (optionalEnvironmentValue("VORTEX_LOCAL_DEVELOPMENT_SIGN_IN_ENABLED") !== "true")
+    return undefined;
+  try {
+    const configuration: LocalDevelopmentSignInConfiguration = {
+      enabled: true,
+      journey: getIdentityJourneyConfiguration(),
+      authority: getIdentityAuthorityConfiguration(),
+      identityId: requiredEnvironmentValue("VORTEX_LOCAL_DEVELOPMENT_IDENTITY_ID"),
+      adminKey: requiredEnvironmentValue("VORTEX_LOCAL_SUPABASE_AUTH_ADMIN_KEY"),
+    };
+    return localDevelopmentSignInAvailable(configuration) ? configuration : undefined;
+  } catch {
+    return undefined;
+  }
 };

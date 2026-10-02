@@ -10,10 +10,13 @@ export {
   confirmEmail,
   requestPasswordRecovery,
   requestRegistration,
+  localDevelopmentSignInAvailable,
+  signInWithLocalDevelopmentAccount,
   signInWithPassword,
   type IdentityJourneyConfiguration,
   type IdentityJourneyFailure,
   type IdentityJourneyResult,
+  type LocalDevelopmentSignInConfiguration,
   type VerifiedSignInResult,
 } from "./auth-journeys";
 export {
