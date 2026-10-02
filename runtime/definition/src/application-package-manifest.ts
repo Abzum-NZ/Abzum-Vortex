@@ -15,6 +15,7 @@ import {
   applicationPackageDependencySubject,
   applicationPackageManifestInputSchema,
   applicationPackageManifestSchema,
+  applicationPackagePermissionDeclarationSchema,
   type ApplicationPackageManifest,
   type ApplicationPackageManifestInput,
 } from "@vortex/contracts/application-package-contracts";
@@ -36,7 +37,8 @@ export type ApplicationPackageManifestErrorCode =
   | "DEPENDENCY_CLOSURE_INVALID"
   | "BLOCK_OR_THEME_EVIDENCE_INVALID"
   | "UNSUPPORTED_ASSET_REFERENCE"
-  | "UNSUPPORTED_SCRIPT_REFERENCE";
+  | "UNSUPPORTED_SCRIPT_REFERENCE"
+  | "UNSUPPORTED_PERMISSION_DECLARATION";
 
 /** A finite error suitable for a caller boundary; it never includes input values or parser detail. */
 export class ApplicationPackageManifestError extends Error {
@@ -204,7 +206,14 @@ const verifyReleaseEvidence = (
   if (
     !sameCanonicalJson(
       sortDefinitions(manifestResolvedDependencies),
-      sortDefinitions(output.resolvedDependencies),
+      // Exact dependency rows declare release identity, not connection operation selection.
+      // Complete operationKeys remain checked above against the authentic resolution snapshot.
+      sortDefinitions(output.resolvedDependencies.map((definition) => ({
+        kind: definition.kind,
+        key: definition.key,
+        rootId: definition.rootId,
+        exactVersion: definition.exactVersion,
+      }))),
     )
   )
     refuse("RELEASE_INTEGRITY_FAILED");
@@ -462,9 +471,14 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
   const storage: ApplicationPackageManifest["storage"] = [];
   const flows: ApplicationPackageManifest["flows"] = [];
   const allFlows: FlowDefinition[] = [];
+  const packagePermission = (declaration: unknown): ApplicationPackageManifest["permissions"][number]["declaration"] => {
+    const parsed = applicationPackagePermissionDeclarationSchema.safeParse(declaration);
+    if (!parsed.success) return refuse("UNSUPPORTED_PERMISSION_DECLARATION");
+    return parsed.data;
+  };
   const permissions: ApplicationPackageManifest["permissions"] = output.canonical.content.permissions.map((declaration) => ({
     owner: applicationOwner,
-    declaration,
+    declaration: packagePermission(declaration),
   }));
   for (const flow of output.canonical.content.flows) {
     allFlows.push(flow);
@@ -476,7 +490,7 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
     packagePermissions.push(
       ...moduleOutput.canonical.content.permissions.map((declaration) => ({
         owner: module.release,
-        declaration,
+        declaration: packagePermission(declaration),
       })),
     );
     for (const recordType of moduleOutput.canonical.content.recordTypes) {

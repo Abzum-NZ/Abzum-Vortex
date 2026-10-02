@@ -25,7 +25,11 @@ import {
   storageContractIdSchema,
 } from "./identifiers";
 import { moduleSystemProjectionV3Schema } from "./module-contracts-v3";
-import { permissionDeclarationSchema } from "./permissions";
+import {
+  permissionDeclarationSchema,
+  permissionRecordScopeSchema,
+  permissionSavedConditionRestrictionSchema,
+} from "./permissions";
 import {
   customComponentDataContractV2Schema,
   customComponentEventV2Schema,
@@ -105,8 +109,39 @@ const roleDeclarationSchema = z
       context.addIssue({ code: "custom", path: ["declaration", "permissionKeys"], message: "Role permissions must use canonical order" });
   });
 
+/**
+ * Package declarations preserve the complete supported permission meaning. Literal saved-condition
+ * bindings are unsupported: arbitrary JSON values are not package declaration metadata. Refuse
+ * them instead of removing a restriction or copying customer payload into the manifest.
+ */
+export const applicationPackagePermissionDeclarationSchema = permissionDeclarationSchema.pipe(
+  z
+    .object({
+      ...permissionDeclarationSchema.shape,
+      recordScope: z
+        .object({
+          ...permissionRecordScopeSchema.shape,
+          savedCondition: z
+            .object({
+              ...permissionSavedConditionRestrictionSchema.shape,
+              parameterBindings: z.array(
+                z.object({
+                  key: builderKeySchema,
+                  source: z.literal("current_organization_account_id"),
+                }).strict(),
+              ).max(10_000),
+            })
+            .strict()
+            .optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
+);
+
 const permissionDeclarationEntrySchema = z
-  .object({ owner: ownerSchema, declaration: permissionDeclarationSchema })
+  .object({ owner: ownerSchema, declaration: applicationPackagePermissionDeclarationSchema })
   .strict();
 
 const flowDeclarationSchema = z
