@@ -559,6 +559,7 @@ function PlacementView({
 
   return (
     <div
+      data-vortex-layout-wrapper=""
       data-vortex-placement-id={placementId}
       data-vortex-block-id={metadata.blockId}
       data-vortex-block-key={metadata.key}
@@ -789,6 +790,10 @@ export type PageLayoutRendererProps = Readonly<{
   guidedSummaryValues?: Readonly<Record<string, unknown>>;
   className?: string;
   style?: CSSProperties;
+  /** Viewport surface for an installed application; embedded previews keep their host's bounds. */
+  applicationSurface?: boolean;
+  /** Host-owned outcomes rendered inside the same application theme as the composition. */
+  feedback?: ReactNode;
   /**
    * Raw component runtime inputs keyed by stable placement identity. Every key must name a
    * placement in the resolved tree, and each entry is validated fail-closed by that placement's own
@@ -837,6 +842,8 @@ export function PageLayoutRenderer({
   guidedSummaryValues,
   className,
   style,
+  applicationSurface = false,
+  feedback,
   runtimeInputs,
   projectedNavigation,
   resolvePageHref,
@@ -916,6 +923,7 @@ export function PageLayoutRenderer({
     <VortexStyleRoot
       {...createThemeRootProps(applicationTheme, themeMode)}
       {...vortexStyleProps}
+      {...(applicationSurface ? { "data-vortex-application-surface": "" } : {})}
       {...(breakpoint === undefined ? { [LIVE_LAYOUT_SCOPE_ATTRIBUTE]: liveLayoutScope } : {})}
     >
       <VortexStyleStylesheet style={vortexStyle.style} />
@@ -926,6 +934,9 @@ export function PageLayoutRenderer({
       {/* Every icon below draws with the icon library the resolved theme selected. */}
       <IconLibraryProvider library={applicationTheme?.selection?.iconLibrary}>
         <DateFormatProvider locale={locale} timeZone={timeZone}>
+          {feedback === undefined || feedback === null ? null : (
+            <div data-vortex-page-feedback="">{feedback}</div>
+          )}
           {breakpoint === undefined ? (
             // Live page: breakpoint-independent HTML plus one stylesheet scoped to this root, so the
             // same server HTML adapts at every width before any script runs. The browser provider

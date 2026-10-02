@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ApplicationAccountActionsProvider,
@@ -45,6 +45,7 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
 } from "@vortex/contracts";
 import { Button } from "@vortex/ui/components/button";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   Dialog,
   DialogContent,
@@ -703,10 +704,12 @@ export function ApplicationPageView({
   model,
   guidedFormActions,
   onOpenApplication,
+  pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  pageFeedback?: ReactNode;
 }>): ReactElement {
   return (
     <UnsavedWorkProvider>
@@ -714,6 +717,7 @@ export function ApplicationPageView({
         model={model}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}
+        pageFeedback={pageFeedback}
       />
     </UnsavedWorkProvider>
   );
@@ -723,10 +727,12 @@ function ApplicationPageViewContent({
   model,
   guidedFormActions,
   onOpenApplication,
+  pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  pageFeedback?: ReactNode;
 }>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -1548,8 +1554,10 @@ function ApplicationPageViewContent({
         resultNotice: Notice,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
-        setNotice(resultNotice);
-        if (formPlacementId !== undefined)
+        if (formPlacementId === undefined) {
+          setNotice(resultNotice);
+        } else {
+          setNotice(undefined);
           setFormFeedback((current) => ({
             ...current,
             [formPlacementId]: refusalFeedback ?? {
@@ -1558,6 +1566,7 @@ function ApplicationPageViewContent({
               text: resultNotice.text,
             },
           }));
+        }
       };
       let settles = true;
       try {
@@ -2352,13 +2361,24 @@ function ApplicationPageViewContent({
 
   return (
     <>
-      {notice === undefined ? null : (
-        <p role={notice.tone === "problem" ? "alert" : "status"} data-vortex-notice={notice.tone}>
-          {notice.text}
-        </p>
-      )}
       <ApplicationAccountActionsProvider actions={accountActions}>
       <PageLayoutRenderer
+        applicationSurface
+        feedback={pageFeedback === undefined && notice === undefined ? undefined : (
+          <>
+            {pageFeedback}
+            {notice === undefined ? null : (
+              <Alert
+                variant={notice.tone === "problem" ? "destructive" : "default"}
+                role={notice.tone === "problem" ? "alert" : "status"}
+                aria-live="polite"
+                data-vortex-notice={notice.tone}
+              >
+                <AlertDescription>{notice.text}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
         composition={model.page as unknown as ProjectedPageCapability}
         registry={platformComponentRegistry}
         shells={model.shells}
