@@ -82,6 +82,7 @@ export {
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
+  QUERY_NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
@@ -89,3 +90,10 @@ export {
   TEXT_BLOCK_RELEASE,
   createDisplayComponentRegistry,
 } from "./registrations";
+
+export {
+  QueryNoticeDisplay,
+  parseQueryNoticePayload,
+  type QueryNoticeItem,
+  type QueryNoticePayload,
+} from "./query-notice";
