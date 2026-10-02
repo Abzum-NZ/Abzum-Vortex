@@ -64,6 +64,7 @@ export {
 
 // Shared Display Components
 export { PlainTextDisplay } from "./text";
+export { NoticeBlock } from "./notice";
 export { RichTextDisplay } from "./rich-text-component";
 export { ListDisplay } from "./list";
 export { TableDisplay } from "./table";
@@ -80,6 +81,7 @@ export {
   DISPLAY_COMPONENT_REGISTRATIONS,
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
+  NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
