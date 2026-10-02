@@ -92,39 +92,39 @@ const toRuleGraphReferenceOperand = (operand: RuleGraphOperand): ConditionRefere
 };
 
 const toModuleReferenceNode = (node: ConditionNode): ConditionReferenceNode => {
-  if (node.kind === "all" || node.kind === "any")
-    return { kind: node.kind, conditions: node.conditions.map(toModuleReferenceNode) };
+  if (node.kind === "comparison") {
+    const left = toModuleReferenceOperand(node.left);
+    if (node.operator === "is_empty" || node.operator === "is_not_empty")
+      return { kind: "comparison", operator: node.operator, left };
+    if (node.right === undefined)
+      throw new TypeError("A binary Module condition must contain its right operand");
+    return {
+      kind: "comparison",
+      operator: node.operator,
+      left,
+      right: toModuleReferenceOperand(node.right),
+    };
+  }
   if (node.kind === "not")
     return { kind: "not", condition: toModuleReferenceNode(node.condition) };
-
-  const left = toModuleReferenceOperand(node.left);
-  if (node.operator === "is_empty" || node.operator === "is_not_empty")
-    return { kind: "comparison", operator: node.operator, left };
-  if (node.right === undefined)
-    throw new TypeError("A binary Module condition must contain its right operand");
-  return {
-    kind: "comparison",
-    operator: node.operator,
-    left,
-    right: toModuleReferenceOperand(node.right),
-  };
+  return { kind: node.kind, conditions: node.conditions.map(toModuleReferenceNode) };
 };
 
 const toRuleGraphReferenceNode = (node: RuleGraphCondition): ConditionReferenceNode => {
-  if (node.kind === "all" || node.kind === "any")
-    return { kind: node.kind, conditions: node.conditions.map(toRuleGraphReferenceNode) };
+  if (node.kind === "comparison") {
+    const left = toRuleGraphReferenceOperand(node.left);
+    if ("right" in node)
+      return {
+        kind: "comparison",
+        operator: node.operator,
+        left,
+        right: toRuleGraphReferenceOperand(node.right),
+      };
+    return { kind: "comparison", operator: node.operator, left };
+  }
   if (node.kind === "not")
     return { kind: "not", condition: toRuleGraphReferenceNode(node.condition) };
-
-  const left = toRuleGraphReferenceOperand(node.left);
-  if (node.operator === "is_empty" || node.operator === "is_not_empty")
-    return { kind: "comparison", operator: node.operator, left };
-  return {
-    kind: "comparison",
-    operator: node.operator,
-    left,
-    right: toRuleGraphReferenceOperand(node.right),
-  };
+  return { kind: node.kind, conditions: node.conditions.map(toRuleGraphReferenceNode) };
 };
 
 /** Project a strict Module ConditionNode into its structural reference representation. */
@@ -135,11 +135,14 @@ export const projectModuleConditionToReferences = (
   boundedRuleGraphConditionInputSchema.parse(condition);
   const parsedCondition = conditionNodeSchema.parse(condition);
   assertModuleUnaryRightAbsent(condition);
-  return conditionReferenceContractSchema.parse({
+  const contract = conditionReferenceContractSchema.parse({
     sourceProfile: "module",
     condition: toModuleReferenceNode(parsedCondition),
     declarations,
-  }) as ModuleReferenceContract;
+  });
+  if (contract.sourceProfile !== "module")
+    throw new TypeError("A Module projection requires its Module source profile");
+  return contract;
 };
 
 /** Project a strict executable RuleGraphCondition into its structural reference representation. */
@@ -148,11 +151,14 @@ export const projectRuleGraphConditionToReferences = (
   declarations: RuleGraphConditionReferenceDeclarations,
 ): RuleGraphReferenceContract => {
   const parsedCondition = ruleGraphConditionSchema.parse(condition);
-  return conditionReferenceContractSchema.parse({
+  const contract = conditionReferenceContractSchema.parse({
     sourceProfile: "rule_graph",
     condition: toRuleGraphReferenceNode(parsedCondition),
     declarations,
-  }) as RuleGraphReferenceContract;
+  });
+  if (contract.sourceProfile !== "rule_graph")
+    throw new TypeError("A rule-graph projection requires its rule-graph source profile");
+  return contract;
 };
 
 const fromModuleReferenceOperand = (operand: ConditionReferenceOperand): ModuleOperand => {
@@ -186,35 +192,37 @@ const fromRuleGraphReferenceOperand = (operand: ConditionReferenceOperand): Rule
 };
 
 const fromModuleReferenceNode = (node: ConditionReferenceNode): ConditionNode => {
-  if (node.kind === "all" || node.kind === "any")
-    return { kind: node.kind, conditions: node.conditions.map(fromModuleReferenceNode) };
+  if (node.kind === "comparison") {
+    const left = fromModuleReferenceOperand(node.left);
+    if ("right" in node)
+      return {
+        kind: "comparison",
+        operator: node.operator,
+        left,
+        right: fromModuleReferenceOperand(node.right),
+      };
+    return { kind: "comparison", operator: node.operator, left };
+  }
   if (node.kind === "not")
     return { kind: "not", condition: fromModuleReferenceNode(node.condition) };
-  const left = fromModuleReferenceOperand(node.left);
-  if ("right" in node)
-    return {
-      kind: "comparison",
-      operator: node.operator,
-      left,
-      right: fromModuleReferenceOperand(node.right),
-    };
-  return { kind: "comparison", operator: node.operator, left };
+  return { kind: node.kind, conditions: node.conditions.map(fromModuleReferenceNode) };
 };
 
 const fromRuleGraphReferenceNode = (node: ConditionReferenceNode): RuleGraphCondition => {
-  if (node.kind === "all" || node.kind === "any")
-    return { kind: node.kind, conditions: node.conditions.map(fromRuleGraphReferenceNode) };
+  if (node.kind === "comparison") {
+    const left = fromRuleGraphReferenceOperand(node.left);
+    if ("right" in node)
+      return {
+        kind: "comparison",
+        operator: node.operator,
+        left,
+        right: fromRuleGraphReferenceOperand(node.right),
+      };
+    return { kind: "comparison", operator: node.operator, left };
+  }
   if (node.kind === "not")
     return { kind: "not", condition: fromRuleGraphReferenceNode(node.condition) };
-  const left = fromRuleGraphReferenceOperand(node.left);
-  if ("right" in node)
-    return {
-      kind: "comparison",
-      operator: node.operator,
-      left,
-      right: fromRuleGraphReferenceOperand(node.right),
-    };
-  return { kind: "comparison", operator: node.operator, left };
+  return { kind: node.kind, conditions: node.conditions.map(fromRuleGraphReferenceNode) };
 };
 
 /** Invert only a Module-profile representation; declaration context is revalidated, not rebound. */
