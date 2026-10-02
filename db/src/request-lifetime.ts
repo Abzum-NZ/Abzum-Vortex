@@ -1,6 +1,18 @@
 import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { LookupFunction } from "node:net";
+
+/**
+ * Execution-only DNS delivery owner. It selects no database endpoint or authority.
+ * Trusted composition must dispatch native lookup outside the live request context;
+ * stop irrevocably removes delivery and joins its synchronous callback return only.
+ */
+export interface RequestDatabaseLookupOwner {
+  readonly lookup: LookupFunction;
+  stop(): boolean;
+  readonly lookupDeliverySettled: boolean;
+}
 
 export type RequestDatabaseStopReason = "abort" | "deadline" | "completed";
 
@@ -24,6 +36,7 @@ export interface RequestDatabaseLifetime {
 export interface RequestDatabaseLifetimeOptions {
   readonly signal: AbortSignal;
   readonly deadline: number;
+  readonly createOwnedLookup?: () => RequestDatabaseLookupOwner;
 }
 
 export const requestDatabaseError = (code: string): Error => {
@@ -81,6 +94,11 @@ export class RequestDatabaseLifetimeOwner implements RequestDatabaseLifetime {
     this.tighten(options);
   }
 
+  readonly createOwnedLookup = (): RequestDatabaseLookupOwner | undefined =>
+    this.lookupFactory?.();
+
+  private lookupFactory: (() => RequestDatabaseLookupOwner) | undefined;
+
   get signal(): AbortSignal {
     return this.controller.signal;
   }
@@ -101,6 +119,12 @@ export class RequestDatabaseLifetimeOwner implements RequestDatabaseLifetime {
 
   /** Nested scopes retain the same owner and may only shorten its lifetime. */
   tighten(options: RequestDatabaseLifetimeOptions): void {
+    if (options.createOwnedLookup !== undefined) {
+      if ((this.lookupFactory !== undefined || this.resources.size > 0) &&
+          this.lookupFactory !== options.createOwnedLookup)
+        throw requestDatabaseError("DATABASE_LOOKUP_OWNER_MISMATCH");
+      this.lookupFactory = options.createOwnedLookup;
+    }
     if (
       !Number.isSafeInteger(options.deadline) ||
       options.deadline <= 0 ||
@@ -183,7 +207,9 @@ export const currentRequestDatabaseLifetimeOwner = (): RequestDatabaseLifetimeOw
  * Only registered DB I/O, checkpoints and finite synchronous work are supported in callbacks
  * passed to database runners inside this scope. An arbitrary/provider/DNS/crypto promise is
  * unsupported; it is never raced away or described as settled. The enclosing operation itself
- * is not part of database_resources_settled. A caller still owns its complete request lifetime.
+ * is not part of database_resources_settled. An explicit lookup owner joins request delivery;
+ * native lookup completion in its clean context is not certified. A caller still owns its
+ * complete request lifetime.
  */
 export const withRequestDatabaseLifetime = async <Result>(
   options: RequestDatabaseLifetimeOptions,

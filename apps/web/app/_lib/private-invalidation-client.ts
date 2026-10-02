@@ -34,6 +34,7 @@ export const privateInvalidationTransportLimits = Object.freeze({
   maximumPendingNotices: 32,
   joinMilliseconds: 10_000,
   authorityMilliseconds: 10_000,
+  sdkDisconnectDrainMilliseconds: 10_000,
   maximumStreamMilliseconds: 300_000,
   subscriberMilliseconds: 10_000,
   reconnectDelaysMilliseconds: Object.freeze([250, 1000, 3000]),

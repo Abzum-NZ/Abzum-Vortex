@@ -16,10 +16,14 @@ import {
   type PrivateInvalidationTopicScope,
 } from "@vortex/event";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import type { IdentityVerificationExecution } from "@vortex/identity";
 import { z } from "zod";
 import { resolveApplicationAddress } from "./application-address";
 import { humanOrganizationRequests } from "./server-composition";
-import { resolveIdentitySession } from "../auth/_lib/session-server";
+import {
+  resolveIdentitySession,
+  resolveIdentitySessionForPrivateInvalidation,
+} from "../auth/_lib/session-server";
 
 const currentPageAddressSchema = z
   .object({
@@ -159,6 +163,7 @@ const sameAddressFacts = (
 export const createWebPrivateInvalidationChannelAuthority = (
   currentPageAddressInput: unknown,
   targetApplicationKeyInput: unknown,
+  execution?: IdentityVerificationExecution,
 ): WebPrivateInvalidationChannelAuthority => {
   const currentPageAddressResult = (() => {
     try {
@@ -189,7 +194,11 @@ export const createWebPrivateInvalidationChannelAuthority = (
       return undefined;
 
     try {
-      const resolution = await resolveIdentitySession();
+      execution?.checkpoint();
+      const resolution = execution === undefined
+        ? await resolveIdentitySession()
+        : (await resolveIdentitySessionForPrivateInvalidation(execution)).resolution;
+      execution?.checkpoint();
       if (resolution.kind !== "active" || !isLiveSession(resolution.session))
         return undefined;
       const session = resolution.session;
@@ -199,6 +208,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
         currentPageAddress,
         targetApplicationKey,
       );
+      execution?.checkpoint();
       if (initialFacts === undefined || !isLiveSession(session)) return undefined;
 
       const targetScope = Object.freeze({
@@ -207,6 +217,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
       });
       const requests = humanOrganizationRequests();
       const accessAResult = await requests.resolve(session, targetScope);
+      execution?.checkpoint();
       if (
         accessAResult.kind !== "available" ||
         !matchesSelectedScope(
@@ -224,6 +235,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
         currentPageAddress,
         targetApplicationKey,
       );
+      execution?.checkpoint();
       if (repeatedFacts === undefined || !sameAddressFacts(initialFacts, repeatedFacts))
         return undefined;
 
@@ -237,6 +249,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
           ).readCurrent(),
         }),
       );
+      execution?.checkpoint();
       if (
         installationResult.kind !== "available" ||
         !sameSelectedScope(accessA, installationResult.value.scope) ||

@@ -10,6 +10,7 @@ import {
   createDefaultIdentitySessionService,
   createIdentityVerifier,
   type VerifiedSignInResult,
+  type IdentityVerificationExecution,
 } from "@vortex/identity";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
@@ -47,10 +48,11 @@ const staleCookieDeletions = (
   );
 };
 
-const sessionService = () => {
+const sessionService = (execution?: IdentityVerificationExecution) => {
   const journey = getIdentityJourneyConfiguration();
   return createDefaultIdentitySessionService(
-    createIdentityVerifier(getIdentityAuthorityConfiguration(), journey.publishableKey),
+    createIdentityVerifier(getIdentityAuthorityConfiguration(), journey.publishableKey,
+      execution === undefined ? {} : { execution }),
   );
 };
 
@@ -134,7 +136,10 @@ type RequestIdentityResolution = Readonly<{
   accessToken?: string;
 }>;
 
-const resolveRequestIdentity = async (): Promise<RequestIdentityResolution> => {
+const resolveRequestIdentity = async (
+  execution?: IdentityVerificationExecution,
+): Promise<RequestIdentityResolution> => {
+  execution?.checkpoint();
   const proxyState = (await headers()).get(identitySessionProxyHeader);
   if (proxyState === "missing")
     return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
@@ -143,7 +148,9 @@ const resolveRequestIdentity = async (): Promise<RequestIdentityResolution> => {
 
   let boundary: IdentitySessionClient;
   try {
-    boundary = createIdentitySessionClient(await requestCookies());
+    boundary = createIdentitySessionClient(await requestCookies(), {
+      verificationOnly: true, ...(execution === undefined ? {} : { execution }),
+    });
   } catch {
     return { resolution: unavailable() };
   }
@@ -151,14 +158,21 @@ const resolveRequestIdentity = async (): Promise<RequestIdentityResolution> => {
     return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
   if (boundary.stage.initialState.kind === "invalid") return { resolution: invalid() };
 
+  const beforeRead = boundary.stage.snapshot();
+  if (beforeRead.refused || beforeRead.mutations.length > 0)
+    return { resolution: unavailable() };
+  execution?.checkpoint();
   const current = await boundary.client.auth.getSession();
+  execution?.checkpoint();
+  if (boundary.verificationRefused()) return { resolution: unavailable() };
   if (current.error) return { resolution: providerFailure(current.error) };
   if (!current.data.session?.access_token)
     return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const resolution = await sessionService().resolve(accessToken);
+  const resolution = await sessionService(execution).resolve(accessToken);
+  execution?.checkpoint();
   return resolution.kind === "active" ? { resolution, accessToken } : { resolution };
 };
 

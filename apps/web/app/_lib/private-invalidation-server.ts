@@ -1,7 +1,9 @@
 import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import { setTimeout as delay } from "node:timers/promises";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { withRequestDatabaseLifetime } from "@vortex/db";
 import { liveInvalidationSchema, type LiveInvalidation } from "@vortex/contracts";
 import {
   privateInvalidationBroadcastEvent,
@@ -22,6 +24,8 @@ import {
   type WebPrivateInvalidationScope,
   type WebPrivateInvalidationSelectors,
 } from "./private-invalidation-client";
+import { PrivateInvalidationTransportOwner } from "./private-invalidation-socket";
+import { createOwnedNetworkLookup } from "./owned-network-lookup";
 
 const encoder = new TextEncoder();
 const streamHeaders = {
@@ -104,12 +108,20 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
     AsyncLocalStorage.snapshot();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let client: SupabaseClient | undefined;
+  let channel: ReturnType<SupabaseClient["channel"]> | undefined;
   let authority: WebPrivateInvalidationChannelAuthority | undefined;
   let verifiedToken: string | undefined;
   let authorizationRequest: PrivateInvalidationAuthorizationRequest | undefined;
   let scope: WebPrivateInvalidationScope | undefined;
   let expiresAt = 0;
-  let disposed = false;
+  const stopController = new AbortController();
+  const transport = new PrivateInvalidationTransportOwner(
+    new URL(configuration.supabaseUrl), Date.now() + limits.maximumStreamMilliseconds,
+    () => { void finish(ready ? "gap" : "unavailable"); },
+  );
+  const operations = new Set<Promise<void>>();
+  let stopping = false;
+  let disposal: Promise<void> | undefined;
   let joined = false;
   let ready = false;
   let pumping = false;
@@ -118,51 +130,90 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
   let workTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const live = (): boolean => !disposed && !request.signal.aborted &&
+  const live = (): boolean => !stopping && !request.signal.aborted &&
     expiresAt > Date.now();
 
-  const finish = (control?: "gap" | "unavailable"): void => {
-    if (disposed) return;
-    disposed = true;
+  const track = (operation: Promise<void>): void => {
+    const observed = operation.catch(() => { finish("unavailable"); });
+    operations.add(observed);
+    void observed.then(() => operations.delete(observed));
+  };
+
+  const finish = (control?: "gap" | "unavailable"): Promise<void> => {
+    if (disposal !== undefined) return disposal;
+    stopping = true;
+    stopController.abort();
     request.signal.removeEventListener("abort", onAbort);
     if (joinTimer !== undefined) clearTimeout(joinTimer);
     if (expiryTimer !== undefined) clearTimeout(expiryTimer);
     if (workTimer !== undefined) clearTimeout(workTimer);
     joinTimer = expiryTimer = workTimer = undefined;
     pending.length = 0;
-    verifiedToken = undefined;
-    authority = undefined;
-    authorizationRequest = undefined;
-    scope = undefined;
-    runInRequest = undefined;
-    const previous = client;
+    let previous = client;
     client = undefined;
-    if (previous !== undefined) {
-      // Disconnect the entire owned client, not just its channel. In particular,
-      // heartbeat/reconnect work is stopped through the public cleanup APIs.
-      // SDK socket-close settlement is asynchronous and has its own finite bound.
-      // removeAllChannels also tears down every channel and disconnects this
-      // entire socket. Fall back to whole-socket disconnect on cleanup failure.
-      void previous.removeAllChannels()
-        .catch(() => previous.realtime.disconnect())
-        .catch(() => undefined);
-      // The callback now returns null. Clear the SDK's original JWT as well;
-      // no refresh, provider sign-out, cookie mutation or private SDK access.
-      void previous.realtime.setAuth(null).catch(() => undefined);
-    }
-    const output = controller;
-    controller = undefined;
-    if (output !== undefined) {
-      try {
-        // At most one queued frame. On backpressure, EOF is itself a gap to the
-        // client; do not grow the queue merely to enqueue a terminal control.
-        if (control !== undefined && (output.desiredSize ?? 0) > 0)
-          output.enqueue(frame("control", { kind: control }));
-        output.close();
-      } catch { /* Cancelled readers need no output or error details. */ }
-    }
+    transport.fence();
+    let cleanupFailed = false;
+    // Phoenix must mark this disconnect clean before our physical close can
+    // reach its onclose callback; otherwise it schedules a reconnect timer.
+    const disconnected = previous?.realtime.disconnect().catch(() => { cleanupFailed = true; });
+    transport.stop();
+    // Start channel teardown immediately too. A socket already closing can make
+    // disconnect return early; unsubscribe's local close and subsequent disconnect
+    // still reset Phoenix's reconnect work while provider/crypto operations drain.
+    const removed = previous?.removeAllChannels().catch(() => {
+      cleanupFailed = true;
+    }).finally(() => {
+      try { channel?.teardown(); } catch { cleanupFailed = true; }
+      channel = undefined;
+    });
+    // Fence first; join actual accepted operations and physical closure before
+    // declaring disposal or releasing this route's captured request context.
+    disposal = (async () => {
+      while (operations.size > 0) await Promise.all([...operations]);
+      await transport.settled().catch(() => { cleanupFailed = true; });
+      await disconnected;
+      await removed;
+      if (previous !== undefined) {
+        // Now the exact socket is closed, so this call cannot take the SDK's
+        // early "already closing" branch. It resets any late reconnect attempt.
+        await previous.realtime.disconnect().catch(() => { cleanupFailed = true; });
+        // Channel leave/teardown has now settled, so clearing auth cannot create
+        // channel updates. The accessToken callback has been fenced to null.
+        await previous.realtime.setAuth(null).catch(() => { cleanupFailed = true; });
+        // Pinned realtime-js 2.116.0 SocketAdapter.disconnect installs an
+        // uncleared 10s timer before Phoenix disconnect. All disconnect/leave
+        // calls above have returned and no callback can dispatch a new one.
+        // This later timer drains that known timer; it replaces no I/O join.
+        await delay(limits.sdkDisconnectDrainMilliseconds);
+      }
+      // Public teardown cancels channel work; releasing the final client reference
+      // also releases its inert socket send buffer without private SDK inspection.
+      previous = undefined;
+      verifiedToken = undefined;
+      authority = undefined;
+      authorizationRequest = undefined;
+      scope = undefined;
+      runInRequest = undefined;
+      const output = controller;
+      controller = undefined;
+      if (output !== undefined) {
+        try {
+          if (control !== undefined && (output.desiredSize ?? 0) > 0)
+            output.enqueue(frame("control", { kind: control }));
+          output.close();
+        } catch { /* Cancelled readers need no output or error details. */ }
+      }
+      if (cleanupFailed) throw new Error("PRIVATE_INVALIDATION_SETTLEMENT_FAILED");
+    })();
+    void disposal.catch(() => {
+      // Failed settlement remains a failure; it never certifies resource disposal.
+      const output = controller;
+      controller = undefined;
+      try { output?.close(); } catch { /* Reader already cancelled. */ }
+    });
+    return disposal;
   };
-  const onAbort = (): void => finish();
+  const onAbort = (): void => { void finish(); };
 
   const emit = (event: "control" | "invalidation", value: WebPrivateInvalidationControl | LiveInvalidation): boolean => {
     if (!live()) { finish("unavailable"); return false; }
@@ -178,13 +229,23 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
 
   const inRequest = async <T>(operation: () => Promise<T>): Promise<T | undefined> => {
     const context = runInRequest;
-    if (disposed || context === undefined) return undefined;
-    // The unchanged protected reader has no cancellation argument. An in-flight
-    // read may settle after disposal; no continuation may schedule or emit then.
-    workTimer = setTimeout(() => finish("unavailable"), limits.authorityMilliseconds);
+    if (stopping || context === undefined) return undefined;
+    workTimer = setTimeout(() => { void finish("unavailable"); }, limits.authorityMilliseconds);
     try {
-      const result = await context(operation);
-      return disposed ? undefined : result;
+      const result = await context(() => withRequestDatabaseLifetime({
+        signal: stopController.signal,
+        deadline: Math.min(Date.now() + limits.authorityMilliseconds,
+          expiresAt || Date.now() + limits.authorityMilliseconds),
+        createOwnedLookup: createOwnedNetworkLookup,
+      }, async (lifetime) => {
+        transport.checkpoint();
+        lifetime.checkpoint();
+        const result = await operation();
+        transport.checkpoint();
+        lifetime.checkpoint();
+        return result;
+      }));
+      return stopping ? undefined : result;
     } finally {
       if (workTimer !== undefined) clearTimeout(workTimer);
       workTimer = undefined;
@@ -197,7 +258,7 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
     const currentAuthority = authority;
     const bound = authorizationRequest;
     const result = await inRequest(async () => {
-      const identity = await resolveIdentitySessionForPrivateInvalidation();
+      const identity = await resolveIdentitySessionForPrivateInvalidation(transport.execution);
       if (!live() || identity.resolution.kind !== "active" ||
           identity.accessToken === undefined || identity.accessToken !== verifiedToken ||
           Date.parse(identity.resolution.session.accessTokenExpiresAt) !== expiresAt)
@@ -210,7 +271,7 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
   };
 
   const pump = async (): Promise<void> => {
-    if (pumping || disposed || !joined) return;
+    if (pumping || stopping || !joined) return;
     pumping = true;
     try {
       if (!ready) {
@@ -220,7 +281,7 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
         if (joinTimer !== undefined) clearTimeout(joinTimer);
         joinTimer = undefined;
       }
-      while (!disposed && pending.length > 0) {
+      while (!stopping && pending.length > 0) {
         const notice = pending.shift();
         if (notice === undefined) break;
         if (!await authorizeFresh()) { finish("unavailable"); return; }
@@ -232,18 +293,22 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
 
   const initialize = async (): Promise<void> => {
     try {
-      const identity = await inRequest(resolveIdentitySessionForPrivateInvalidation);
-      if (disposed || identity === undefined || identity.resolution.kind !== "active" ||
+      const identity = await inRequest(() =>
+        resolveIdentitySessionForPrivateInvalidation(transport.execution));
+      if (stopping || identity === undefined || identity.resolution.kind !== "active" ||
           identity.accessToken === undefined) { finish("unavailable"); return; }
       expiresAt = Date.parse(identity.resolution.session.accessTokenExpiresAt);
       if (!live()) { finish("unavailable"); return; }
       verifiedToken = identity.accessToken;
       const remaining = expiresAt - Date.now();
+      transport.tighten(Math.min(expiresAt, Date.now() + limits.maximumStreamMilliseconds));
       expiryTimer = setTimeout(() => finish(
         remaining <= limits.maximumStreamMilliseconds ? "unavailable" : "gap",
       ), Math.min(remaining, limits.maximumStreamMilliseconds));
       const { targetApplicationKey, ...pageAddress } = selectors;
-      authority = createWebPrivateInvalidationChannelAuthority(pageAddress, targetApplicationKey);
+      authority = createWebPrivateInvalidationChannelAuthority(
+        pageAddress, targetApplicationKey, transport.execution,
+      );
       const initialAuthority = authority;
       const initial = await inRequest(() => initialAuthority.readInitial());
       if (!live() || initial === undefined || "kind" in initial ||
@@ -261,7 +326,9 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
         // refresh it or fall back to an unrelated empty Auth client's session.
         accessToken: async () => live() ? verifiedToken ?? null : null,
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: { fetch: transport.execution.fetch },
         realtime: {
+          transport: transport.transport,
           timeout: limits.joinMilliseconds,
           disconnectOnEmptyChannelsAfterMs: 0,
           accessToken: async () => live() ? verifiedToken ?? null : null,
@@ -271,7 +338,8 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
       const ownedClient = client;
       await ownedClient.realtime.setAuth(verifiedToken);
       if (!live() || authorizationRequest === undefined) { finish("unavailable"); return; }
-      ownedClient.channel(authorizationRequest.topic, { config: { private: true } })
+      channel = ownedClient.channel(authorizationRequest.topic, { config: { private: true } });
+      channel
         .on("broadcast", { event: privateInvalidationBroadcastEvent }, (message: unknown) => {
           if (!live() || scope === undefined) return;
           try {
@@ -285,15 +353,15 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
             }
             if (pending.length >= limits.maximumPendingNotices) { finish("gap"); return; }
             pending.push(notice);
-            void pump();
+            track(pump());
           } catch { /* Malformed Broadcast input is never forwarded or logged. */ }
         })
         .subscribe((status) => {
-          if (disposed) return;
+          if (stopping) return;
           if (status !== "SUBSCRIBED") { finish(ready ? "gap" : "unavailable"); return; }
           if (joined) { finish("gap"); return; }
           joined = true;
-          void pump();
+          track(pump());
         }, limits.joinMilliseconds);
     } catch { finish("unavailable"); }
   };
@@ -304,9 +372,9 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
       request.signal.addEventListener("abort", onAbort, { once: true });
       if (request.signal.aborted) { finish(); return; }
       joinTimer = setTimeout(() => finish("unavailable"), limits.joinMilliseconds);
-      void initialize();
+      track(initialize());
     },
-    cancel() { finish(); },
+    cancel() { return finish(); },
   }, { highWaterMark: 1, size: () => 1 });
   return new Response(stream, { headers: streamHeaders });
 };
