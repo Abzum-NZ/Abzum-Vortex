@@ -82,7 +82,7 @@ import { z } from "zod";
  * policies the activation gate requires. An upgrade cannot pre-provision a Module its active
  * release still binds, so its storage is prepared inside the atomic switch.
  *
- * Withdrawal is one transaction: detach the active binding set and retire its contributions
+ * Withdrawal is one transaction: detach the active or prepared binding set and retire its contributions
  * (storage and records are retained), append its Activity, then withdraw the permission registration,
  * which refuses a change that would leave the organisation without a permanent steward.
  */
@@ -1425,7 +1425,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
     /**
      * Withdraws exactly the named release. Bindings are detached, never deleted, so stored
-     * records remain; a prepared release that never became active keeps its inactive storage. The
+     * records remain; prepared bindings also become detached without becoming active. The
      * Access coordinator preserves final-steward, supplier and continuity safeguards. A draining
      * installation is refused: its uninstall owns what happens to it next.
      */
@@ -1482,39 +1482,37 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             bindingState !== "provisioned")
             throw fail("APPLICATION_INSTALLATION_STALE");
           requireExactBindings(request, exact.pins, releaseBindings, bindingState);
-          // The active set, or a retried withdrawal's already detached set. Prepared bindings
-          // retain inactive storage and use only contribution detach below.
-          const detachable =
-            active?.bindings ?? releaseBindings.filter((binding) => binding.state === "detached");
-
-          let detached: ApplicationInstallationLifecycleResult | null = null;
-          if (detachable.length > 0) {
-            detached = requireLifecycleResult(
-              await createApplicationInstallationLifecycleRepository(transaction).detach({
-                applicationRootId: request.applicationRootId,
-                applicationReleaseRevision: request.applicationReleaseRevision,
-                expectedModuleBindings: expectedBindings(detachable),
-              }),
-              request.organizationId,
+          // Terminate the complete homogeneous active/provisioned set, or replay a detached set.
+          // Retained storage is not evidence that a withdrawn prepared installation is still live.
+          const detached = requireLifecycleResult(
+            await createApplicationInstallationLifecycleRepository(transaction).detach({
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.applicationReleaseRevision,
+              expectedModuleBindings: expectedBindings(releaseBindings),
+            }),
+            request.organizationId,
+            request.applicationRootId,
+            request.applicationReleaseRevision,
+            "detached",
+          );
+          requireExactBindings(request, exact.pins, detached.moduleBindings, "detached");
+          if (detached.changed)
+            await recordOutcome(
+              transaction,
+              newActivityId(),
               request.applicationRootId,
               request.applicationReleaseRevision,
               "detached",
             );
-            requireExactBindings(request, exact.pins, detached.moduleBindings, "detached");
-            if (detached.changed)
-              await recordOutcome(
-                transaction,
-                newActivityId(),
-                request.applicationRootId,
-                request.applicationReleaseRevision,
-                "detached",
-              );
-          }
 
-          // Provisioned bindings stay inactive: the contribution operation alone retires their
-          // mappings. Active/detached bindings use the lifecycle operation's returned revisions.
-          const contributionsChanged = await changeContributions(transaction, request,
-            exact.contributionGroups, detached?.moduleBindings ?? releaseBindings, "detach");
+          // Every group uses the protected terminal transition's returned revisions.
+          const contributionsChanged = await changeContributions(
+            transaction,
+            request,
+            exact.contributionGroups,
+            detached.moduleBindings,
+            "detach",
+          );
 
           // Bundle registrations belong to Module and are removed only after this installation's
           // bindings have left active service. The report keeps the exact bundle keys and counts.
@@ -1533,13 +1531,13 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
           return {
             outcome:
-              detached?.changed === true || contributionsChanged || access.outcome === "changed"
+              detached.changed || contributionsChanged || access.outcome === "changed"
                 ? "withdrawn"
                 : "unchanged",
             organizationId: state.organizationId,
             applicationRootId: request.applicationRootId,
             applicationReleaseRevision: request.applicationReleaseRevision,
-            moduleBindings: detached?.moduleBindings ?? releaseBindings,
+            moduleBindings: detached.moduleBindings,
             runtimeBundles,
           } satisfies ApplicationInstallationWithdrawalResult;
         },
