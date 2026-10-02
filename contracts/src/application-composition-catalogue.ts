@@ -56,6 +56,9 @@ export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(source
 /** Exact immutable metadata release for the summary values display block. */
 export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.SUMMARY_VALUES_BLOCK_RELEASE);
 
+/** Exact immutable metadata release for the authored Notice display block. */
+export const NOTICE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.NOTICE_BLOCK_RELEASE);
+
 /**
  * Release 1.1.0 of each display block adds an optional authored `empty_message` shown in place of
  * the block family's fixed neutral empty text. The 1.0.0 releases stay published unchanged, so an
@@ -333,7 +336,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
-/** All twenty immutable display block releases, including calendar and query-bound board releases. */
+/** All twenty-one immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
@@ -342,6 +345,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   RECORD_DETAIL_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  NOTICE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
   LIST_BLOCK_RELEASE_1_1_0,

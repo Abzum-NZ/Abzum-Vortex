@@ -6,6 +6,7 @@ import {
   GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   LIST_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE_1_1_0,
+  NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
@@ -24,6 +25,7 @@ import {
 import {
   createPayloadParser,
   createPlatformComponentRegistry,
+  noRuntimeInputs,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
@@ -60,6 +62,7 @@ import { RichTextDisplay } from "./rich-text-component";
 import { SummaryValuesDisplay } from "./summary-values";
 import { TableDisplay } from "./table";
 import { PlainTextDisplay } from "./text";
+import { NoticeBlock } from "./notice";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -72,6 +75,7 @@ export {
   CALENDAR_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
+  NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
@@ -140,6 +144,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: SUMMARY_VALUES_BLOCK_RELEASE,
       render: SummaryValuesDisplay,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
+    }),
+    Object.freeze({
+      metadata: NOTICE_BLOCK_RELEASE,
+      render: NoticeBlock,
+      parsePayload: noRuntimeInputs,
     }),
     // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
     Object.freeze({
