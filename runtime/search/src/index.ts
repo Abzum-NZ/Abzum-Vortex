@@ -51,6 +51,19 @@ export {
 } from "./permitted-search";
 
 export {
+  literalSearchLimits,
+  literalSearchRefusalReasonCodes,
+  matchLiteralSearch,
+  type LiteralSearchCompleted,
+  type LiteralSearchInput,
+  type LiteralSearchMatch,
+  type LiteralSearchMatchedField,
+  type LiteralSearchRefusal,
+  type LiteralSearchRefusalReasonCode,
+  type LiteralSearchResult,
+} from "./literal-search";
+
+export {
   sharedResultGroupDecisions,
   sharedResultGroupExclusionReasonCodes,
   sharedResultPolicyLimits,
