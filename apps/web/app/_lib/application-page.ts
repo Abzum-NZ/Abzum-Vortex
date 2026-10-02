@@ -33,6 +33,7 @@ import {
 import {
   createPageSubjectReader,
   createRecordsTableQueryResolver,
+  createQueryNoticeQueryResolver,
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
   projectRecordDetailData,
@@ -46,10 +47,12 @@ import {
   BOARD_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
+  QUERY_NOTICE_BLOCK_RELEASE,
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
   exactDecimalTextV2Schema,
+  jsonValueSchema,
   readRecordDetailContract,
   recordIdSchema,
   readRecordsTableContract,
@@ -780,6 +783,22 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
   }
 };
 
+/** Structured Notice-query inputs are plain JSON; the Query service validates their declared type. */
+const noticeQueryInput = (raw: string, type: string): JsonValue | undefined => {
+  if (
+    type === "formatted_text" || type === "money" ||
+    type === "record_reference" || type === "organization_account_reference"
+  ) {
+    try {
+      const parsed = jsonValueSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return coerceInput(raw, type);
+};
+
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
 const summaryAggregateLabel = (alias: string): string =>
@@ -1442,6 +1461,7 @@ const loadApplicationPageInternal = async (
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
   const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
+  const queryNotices = createQueryNoticeQueryResolver(queries);
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -1776,6 +1796,10 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, CALENDAR_BLOCK_RELEASE.blockId);
+    const isQueryNoticeBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, QUERY_NOTICE_BLOCK_RELEASE.blockId);
     const isSummaryValuesBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -1834,6 +1858,7 @@ const loadApplicationPageInternal = async (
       tableContract === undefined &&
       detailContract === undefined &&
       !isCalendarBlock &&
+      !isQueryNoticeBlock &&
       !queryBoundLauncher &&
       !queryBoundSummary &&
       !queryBoundBoard
@@ -1900,6 +1925,29 @@ const loadApplicationPageInternal = async (
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
     const fieldLabels = fieldLabelsOf(bound.module);
+
+    if (isQueryNoticeBlock) {
+      if (!isRecord(block) || block.releaseVersion !== QUERY_NOTICE_BLOCK_RELEASE.releaseVersion) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const inputValues: Record<string, JsonValue> = {};
+      let invalidInput = false;
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : noticeQueryInput(raw, declared.type);
+        if (raw !== undefined && value === undefined) invalidInput = true;
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      if (invalidInput) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      data[placementId] = await queryNotices.resolve(
+        session, selection, context, queryId, settings, inputValues,
+      );
+      continue;
+    }
 
     if (queryBoundBoard) {
       const continuation =

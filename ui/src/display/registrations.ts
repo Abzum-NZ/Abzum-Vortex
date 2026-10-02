@@ -7,6 +7,7 @@ import {
   LIST_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE_1_1_0,
   NOTICE_BLOCK_RELEASE,
+  QUERY_NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
@@ -63,6 +64,7 @@ import { SummaryValuesDisplay } from "./summary-values";
 import { TableDisplay } from "./table";
 import { PlainTextDisplay } from "./text";
 import { NoticeBlock } from "./notice";
+import { QueryNoticeDisplay, QUERY_NOTICE_PAYLOAD_PARSER } from "./query-notice";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -76,6 +78,7 @@ export {
   GROUPED_DATA_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
+  QUERY_NOTICE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
@@ -149,6 +152,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: NOTICE_BLOCK_RELEASE,
       render: NoticeBlock,
       parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      metadata: QUERY_NOTICE_BLOCK_RELEASE,
+      render: QueryNoticeDisplay,
+      parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
     }),
     // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
     Object.freeze({

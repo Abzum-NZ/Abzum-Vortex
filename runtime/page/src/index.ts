@@ -169,3 +169,13 @@ export const PageService = Object.freeze({
   key: "page",
   boundary: "@vortex/page",
 });
+
+export {
+  buildQueryNoticeQueryBinding,
+  createQueryNoticeQueryResolver,
+  type ProjectedQueryNotice,
+  type ProjectedQueryNoticePage,
+  type QueryNoticeQueryBinding,
+  type QueryNoticeResolution,
+  type QueryNoticeSeverity,
+} from "./notice-query-projection";
