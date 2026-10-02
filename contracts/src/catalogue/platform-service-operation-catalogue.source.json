@@ -1660,5 +1660,56 @@
         "key": "platform.organization.roles.manage"
       }
     }
+  },
+  "appoint_organization_steward": {
+    "key": "appoint_organization_steward",
+    "name": "Appoint organisation steward",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "eb9db9a2-8d32-47da-8968-884fdd568ff5",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "eb9db9a2-8d32-47da-8968-884fdd568ff5"
+      },
+      "inputs": {
+        "target_account_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_account_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "appointment_outcome": {
+          "type": "choice",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
+    }
   }
 }
