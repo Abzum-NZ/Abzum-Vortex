@@ -396,6 +396,17 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
     .map((key) => modulesByNode.get(key)!)
     .sort((left, right) => compareCanonicalStrings(left.release.rootId.toLowerCase(), right.release.rootId.toLowerCase()));
 
+  // Placement follows publication's direct Application bindings. Transitive Modules remain in
+  // the complete package closure, but their presence does not authorize component placement.
+  const boundModuleReleases = output.canonical.content.moduleBindings.map((binding) => {
+    const module = modulesByNode.get(moduleNodeKey(binding.moduleRootId, binding.resolvedVersion));
+    if (module === undefined) return refuse("DEPENDENCY_CLOSURE_INVALID");
+    return {
+      moduleKey: module.compilationOutput.canonical.envelope.key,
+      releaseVersion: module.release.releaseVersion,
+    };
+  });
+
   if (
     input.selectedBlockReleases.length !==
     application.dependencyManifest.filter((entry) => entry.kind === "platform_block").length
@@ -427,10 +438,7 @@ const build = (candidate: unknown): ApplicationPackageManifest => {
     if (custom !== undefined) {
       const allowed = customComponentPlacementAllowedV2(custom.owner, {
         applicationKey: output.canonical.envelope.key,
-        boundModuleReleases: moduleOutputs.map((module) => ({
-          moduleKey: module.compilationOutput.canonical.envelope.key,
-          releaseVersion: module.release.releaseVersion,
-        })),
+        boundModuleReleases,
       });
       if (
         !allowed ||
