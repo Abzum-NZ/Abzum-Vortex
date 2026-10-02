@@ -331,7 +331,7 @@ begin
     into filter_values_sql
     from (
       select (pair.position - 1) / 50 as chunk_index,
-        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_tex
+        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
       from pg_catalog.unnest(filter_expression_pairs)
         with ordinality as pair(value, position)
       group by (pair.position - 1) / 50
@@ -670,7 +670,7 @@ begin
     -- every filter and aggregate uses only the fields this read returned.
     selected_sql := pg_catalog.format(
       'with readable as materialized (
-         select vortex_record.read_record(%L::uuid, candidate.record_id) as resul
+         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
          from candidate
          where (select value from candidate_count) <= %s
        )
@@ -698,7 +698,7 @@ begin
             from pg_catalog.unnest($16::text[]) as referenced(id)),
            $14, $15, false
          ))',
-      record_type_id_value::text, summary_candidate_limi
+      record_type_id_value::text, summary_candidate_limit
     );
   end if;
 
@@ -883,7 +883,7 @@ begin
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::tex
+      pg_catalog.to_jsonb(group_ids)::text
     );
   end if;
 

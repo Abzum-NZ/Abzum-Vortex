@@ -120,10 +120,10 @@ begin
         and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
       end if;
-      if preview_context ->> 'organizationId' is distinct from context_organization_id::tex
-        or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::tex
-        or prepared_plan #>> '{scope,organizationId}' is distinct from context_organization_id::tex
-        or prepared_plan #>> '{scope,applicationRootId}' is distinct from context_application_root_id::tex
+      if preview_context ->> 'organizationId' is distinct from context_organization_id::text
+        or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
+        or prepared_plan #>> '{scope,organizationId}' is distinct from context_organization_id::text
+        or prepared_plan #>> '{scope,applicationRootId}' is distinct from context_application_root_id::text
         or prepared_plan -> 'preview' is distinct from pg_catalog.jsonb_build_object(
           'previewInstallationId', preview_installation_id,
           'candidateRevision', preview_candidate_revision
@@ -215,8 +215,8 @@ begin
   context_organization_id := (context_value ->> 'organizationId')::uuid;
   context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
   if preview_mode and (
-    preview_context ->> 'organizationId' is distinct from context_organization_id::tex
-    or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::tex
+    preview_context ->> 'organizationId' is distinct from context_organization_id::text
+    or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
   end if;
@@ -296,13 +296,13 @@ begin
         or catalogue_row.record_type_id is distinct from record_type_id_value
         or catalogue_row.storage_scope is distinct from (resolved ->> 'storageScope')
         or catalogue_row.first_compatible_release_revision is distinct from
-          (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         or catalogue_row.last_compatible_release_revision is distinct from
-          (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         or catalogue_row.record_type_definition ->> 'storageContractId'
-          is distinct from preview_storage_contract_id::tex
+          is distinct from preview_storage_contract_id::text
         or pg_catalog.lower(catalogue_row.record_type_definition ->> 'recordTypeId')
-          is distinct from record_type_id_value::tex
+          is distinct from record_type_id_value::text
         or catalogue_row.record_type_definition ->> 'storageScope'
           is distinct from (resolved ->> 'storageScope') then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -332,7 +332,7 @@ begin
             and mapping.introduced_by_module_root_id is not distinct from
               (resolved ->> 'recordTypeModuleRootId')::uuid
             and mapping.introduced_at_release_revision is not distinct from
-              (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+              (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         )
       ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');

@@ -125,10 +125,10 @@ begin
         and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
       end if;
-      if preview_context ->> 'organizationId' is distinct from context_organization_id::tex
-        or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::tex
-        or prepared_plan #>> '{scope,organizationId}' is distinct from context_organization_id::tex
-        or prepared_plan #>> '{scope,applicationRootId}' is distinct from context_application_root_id::tex
+      if preview_context ->> 'organizationId' is distinct from context_organization_id::text
+        or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
+        or prepared_plan #>> '{scope,organizationId}' is distinct from context_organization_id::text
+        or prepared_plan #>> '{scope,applicationRootId}' is distinct from context_application_root_id::text
         or prepared_plan -> 'preview' is distinct from pg_catalog.jsonb_build_object(
           'previewInstallationId', preview_installation_id,
           'candidateRevision', preview_candidate_revision
@@ -220,8 +220,8 @@ begin
   context_organization_id := (context_value ->> 'organizationId')::uuid;
   context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
   if preview_mode and (
-    preview_context ->> 'organizationId' is distinct from context_organization_id::tex
-    or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::tex
+    preview_context ->> 'organizationId' is distinct from context_organization_id::text
+    or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
   end if;
@@ -301,13 +301,13 @@ begin
         or catalogue_row.record_type_id is distinct from record_type_id_value
         or catalogue_row.storage_scope is distinct from (resolved ->> 'storageScope')
         or catalogue_row.first_compatible_release_revision is distinct from
-          (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         or catalogue_row.last_compatible_release_revision is distinct from
-          (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         or catalogue_row.record_type_definition ->> 'storageContractId'
-          is distinct from preview_storage_contract_id::tex
+          is distinct from preview_storage_contract_id::text
         or pg_catalog.lower(catalogue_row.record_type_definition ->> 'recordTypeId')
-          is distinct from record_type_id_value::tex
+          is distinct from record_type_id_value::text
         or catalogue_row.record_type_definition ->> 'storageScope'
           is distinct from (resolved ->> 'storageScope') then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -337,7 +337,7 @@ begin
             and mapping.introduced_by_module_root_id is not distinct from
               (resolved ->> 'recordTypeModuleRootId')::uuid
             and mapping.introduced_at_release_revision is not distinct from
-              (resolved ->> 'recordTypeModuleReleaseRevision')::bigin
+              (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
         )
       ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -1286,8 +1286,8 @@ begin
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
-  -- Search authority: the record type's own declared search priority. A componen
-  -- with only a search box declares no per-field list, so an empty declared se
+  -- Search authority: the record type's own declared search priority. A component
+  -- with only a search box declares no per-field list, so an empty declared set
   -- searches every field the record type marks searchable; a declared set narrows
   -- it. A row matches only through a field the reader can see on that row, so a
   -- hidden searchable value never decides a match.
@@ -1585,7 +1585,7 @@ begin
        select (filter_pair.pair_number - 1) / 50 as chunk_index,
          pg_catalog.string_agg(
            filter_pair.pair_text, ', ' order by filter_pair.pair_number
-         ) as pairs_tex
+         ) as pairs_text
        from pg_catalog.unnest(filter_expressions)
          with ordinality as filter_pair(pair_text, pair_number)
        group by (filter_pair.pair_number - 1) / 50
@@ -2132,7 +2132,7 @@ begin
     into filter_values_sql
     from (
       select (pair.position - 1) / 50 as chunk_index,
-        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_tex
+        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
       from pg_catalog.unnest(filter_expression_pairs)
         with ordinality as pair(value, position)
       group by (pair.position - 1) / 50
@@ -2471,7 +2471,7 @@ begin
     -- every filter and aggregate uses only the fields this read returned.
     selected_sql := pg_catalog.format(
       'with readable as materialized (
-         select vortex_record.read_record(%L::uuid, candidate.record_id) as resul
+         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
          from candidate
          where (select value from candidate_count) <= %s
        )
@@ -2499,7 +2499,7 @@ begin
             from pg_catalog.unnest($16::text[]) as referenced(id)),
            $14, $15, false
          ))',
-      record_type_id_value::text, summary_candidate_limi
+      record_type_id_value::text, summary_candidate_limit
     );
   end if;
 
@@ -2684,7 +2684,7 @@ begin
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::tex
+      pg_catalog.to_jsonb(group_ids)::text
     );
   end if;
 

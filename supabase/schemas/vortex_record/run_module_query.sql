@@ -521,8 +521,8 @@ begin
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
-  -- Search authority: the record type's own declared search priority. A componen
-  -- with only a search box declares no per-field list, so an empty declared se
+  -- Search authority: the record type's own declared search priority. A component
+  -- with only a search box declares no per-field list, so an empty declared set
   -- searches every field the record type marks searchable; a declared set narrows
   -- it. A row matches only through a field the reader can see on that row, so a
   -- hidden searchable value never decides a match.
@@ -820,7 +820,7 @@ begin
        select (filter_pair.pair_number - 1) / 50 as chunk_index,
          pg_catalog.string_agg(
            filter_pair.pair_text, ', ' order by filter_pair.pair_number
-         ) as pairs_tex
+         ) as pairs_text
        from pg_catalog.unnest(filter_expressions)
          with ordinality as filter_pair(pair_text, pair_number)
        group by (filter_pair.pair_number - 1) / 50
