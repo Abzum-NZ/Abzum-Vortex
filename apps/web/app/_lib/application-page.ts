@@ -1596,7 +1596,15 @@ const loadApplicationPageInternal = async (
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
     const isBoardBlock = isBoardPlacement(placement);
-    if (tableContract === undefined && detailContract === undefined && !isBoardBlock) continue;
+    const isQueryNoticeBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, QUERY_NOTICE_BLOCK_RELEASE.blockId) &&
+      block.releaseVersion === QUERY_NOTICE_BLOCK_RELEASE.releaseVersion;
+    if (
+      tableContract === undefined && detailContract === undefined &&
+      !isBoardBlock && !isQueryNoticeBlock
+    ) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const recordTypeId =
