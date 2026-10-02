@@ -86,6 +86,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
   rename_tenant_organization: entry(sources.rename_tenant_organization),
+  reparent_tenant_organization: entry(sources.reparent_tenant_organization),
   suspend_tenant_organization: entry(sources.suspend_tenant_organization),
   reactivate_tenant_organization: entry(sources.reactivate_tenant_organization),
   suspend_organization_account: entry(sources.suspend_organization_account),

@@ -1046,6 +1046,64 @@
       ]
     }
   },
+  "reparent_tenant_organization": {
+    "key": "reparent_tenant_organization",
+    "name": "Move tenant organisation",
+    "release": {
+      "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92",
+      "operationId": "425b56a5-f936-475e-9948-3f50605bcb3d",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "a90f1734-08a8-4dac-bbc5-23e1c7b68d92"
+        },
+        "operationId": "425b56a5-f936-475e-9948-3f50605bcb3d"
+      },
+      "inputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "parent_organization_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "organization_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "requiredAuthority": {
+        "kind": "tenant_capability",
+        "capability": "platform.tenant.organizations.reparent"
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ]
+    }
+  },
   "suspend_tenant_organization": {
     "key": "suspend_tenant_organization",
     "name": "Suspend tenant organisation",
