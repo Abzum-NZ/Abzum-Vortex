@@ -303,17 +303,18 @@ export class PrivateInvalidationTransportOwner {
       get protocol(): string { return this.socket.protocol; }
       get bufferedAmount(): number { return this.socket.bufferedAmount; }
 
-      constructor(address: string, protocols?: string | string[]) {
+      constructor(address: string | URL, protocols?: string | string[]) {
         super();
         owner.checkpoint();
-        const url = new URL(address);
+        const destination = String(address);
+        const url = new URL(destination);
         const expected = new URL(owner.providerUrl);
         expected.protocol = expected.protocol === "https:" ? "wss:" : "ws:";
         if (owner.socketConstructed || url.origin !== expected.origin ||
             url.pathname !== "/realtime/v1/websocket" || url.username || url.password || url.hash)
           throw unavailable();
         owner.socketConstructed = true; // Reconnect requires a new route admission.
-        this.url = address;
+        this.url = destination;
         const secure = url.protocol === "wss:";
         // These documented ws 8.21.3 options are not yet in @types/ws 8.18.1.
         const socketOptions = {
@@ -330,7 +331,7 @@ export class PrivateInvalidationTransportOwner {
         } satisfies WebSocket.ClientOptions & {
           closeTimeout: number; maxBufferedChunks: number; maxFragments: number;
         };
-        this.socket = new WebSocket(address, protocols, socketOptions);
+        this.socket = new WebSocket(destination, protocols, socketOptions);
         this.socket.binaryType = "arraybuffer";
         const closed = deferred();
         owner.track(closed.promise);
