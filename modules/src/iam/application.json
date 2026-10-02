@@ -1624,6 +1624,682 @@
                 },
                 "slots": {},
                 "query": "vortex.system_directory:group_memberships"
+              },
+              "form_add_group_membership_picker": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Add group membership"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_add_group_membership_starts_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "starts_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_add_group_membership_expires_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": false
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_add_group_membership_person": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.1.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "organization_account_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Person"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "choice_source": {
+                            "kind": "group",
+                            "properties": {
+                              "query": {
+                                "kind": "query_reference",
+                                "query": "vortex.system_directory:people"
+                              },
+                              "label_field": {
+                                "kind": "field_reference",
+                                "field": "vortex.system_directory:person.display_name"
+                              }
+                            }
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_add_group_membership_person",
+                        "input_add_group_membership_starts_at",
+                        "input_add_group_membership_expires_at"
+                      ]
+                    }
+                  }
+                }
+              },
+              "form_assign_role_assignment_kind": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Choose assignee type"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_assign_role_assignment_assignee_kind": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "assignee_kind"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Assignee kind"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "options": {
+                            "kind": "list",
+                            "items": [
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "organization_account"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Person"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "group"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Group"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_assign_role_assignment_assignee_kind"
+                      ]
+                    }
+                  }
+                }
+              },
+              "form_assign_role_assignment_person": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Assign role to person"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_assign_role_assignment_person": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.1.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "organization_account_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Person"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "choice_source": {
+                            "kind": "group",
+                            "properties": {
+                              "query": {
+                                "kind": "query_reference",
+                                "query": "vortex.system_directory:people"
+                              },
+                              "label_field": {
+                                "kind": "field_reference",
+                                "field": "vortex.system_directory:person.display_name"
+                              }
+                            }
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_person_assignment_kind": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "assignment_kind"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Assignment kind"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "options": {
+                            "kind": "list",
+                            "items": [
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "standing"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Standing"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "eligible"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Eligible"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_person_starts_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "starts_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_person_expires_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": false
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_assign_role_assignment_person",
+                        "input_assign_role_assignment_person_assignment_kind",
+                        "input_assign_role_assignment_person_starts_at",
+                        "input_assign_role_assignment_person_expires_at"
+                      ]
+                    }
+                  }
+                }
+              },
+              "form_assign_role_assignment_group": {
+                "block": {
+                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "title": {
+                    "kind": "text",
+                    "value": "Assign role to group"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {
+                  "content": {
+                    "placements": {
+                      "input_assign_role_assignment_group": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.1.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "group_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Group"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "choice_source": {
+                            "kind": "group",
+                            "properties": {
+                              "query": {
+                                "kind": "query_reference",
+                                "query": "vortex.system_directory:groups"
+                              },
+                              "label_field": {
+                                "kind": "field_reference",
+                                "field": "vortex.system_directory:group.label"
+                              }
+                            }
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_group_assignment_kind": {
+                        "block": {
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "assignment_kind"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Assignment kind"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          },
+                          "options": {
+                            "kind": "list",
+                            "items": [
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "standing"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Standing"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "eligible"
+                                  },
+                                  "label": {
+                                    "kind": "text",
+                                    "value": "Eligible"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_group_starts_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "starts_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Starts at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": true
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      },
+                      "input_assign_role_assignment_group_expires_at": {
+                        "block": {
+                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "name": {
+                            "kind": "text",
+                            "value": "expires_at"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Expires at"
+                          },
+                          "required": {
+                            "kind": "boolean",
+                            "value": false
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        },
+                        "slots": {}
+                      }
+                    },
+                    "order": {
+                      "desktop": [
+                        "input_assign_role_assignment_group",
+                        "input_assign_role_assignment_group_assignment_kind",
+                        "input_assign_role_assignment_group_starts_at",
+                        "input_assign_role_assignment_group_expires_at"
+                      ]
+                    }
+                  }
+                }
               }
             },
             "order": {
@@ -1631,7 +2307,11 @@
                 "iam_roles_groups_heading",
                 "iam_roles_region",
                 "iam_groups_region",
-                "iam_group_memberships_region"
+                "iam_group_memberships_region",
+                "form_add_group_membership_picker",
+                "form_assign_role_assignment_kind",
+                "form_assign_role_assignment_person",
+                "form_assign_role_assignment_group"
               ]
             }
           } }
@@ -2292,155 +2972,6 @@
                   }
                 }
               },
-              "form_add_group_membership_picker": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Add group membership"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_add_group_membership_starts_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_expires_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_add_group_membership_person": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.1.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "organization_account_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Person"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "choice_source": {
-                            "kind": "group",
-                            "properties": {
-                              "query": {
-                                "kind": "query_reference",
-                                "query": "vortex.system_directory:people"
-                              },
-                              "label_field": {
-                                "kind": "field_reference",
-                                "field": "vortex.system_directory:person.display_name"
-                              }
-                            }
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_add_group_membership_person",
-                        "input_add_group_membership_starts_at",
-                        "input_add_group_membership_expires_at"
-                      ]
-                    }
-                  }
-                }
-              },
               "form_create_custom_role": {
                 "block": {
                   "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
@@ -2981,7 +3512,6 @@
                 "iam_manage_roles_groups_heading",
                 "form_revise_role_metadata",
                 "form_create_group",
-                "form_add_group_membership_picker",
                 "form_rename_group",
                 "form_create_custom_role",
                 "form_accept_application_role_template"
@@ -3029,541 +3559,11 @@
                   }
                 },
                 "slots": {}
-              },
-              "form_assign_role_assignment_kind": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Choose assignee type"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_assign_role_assignment_assignee_kind": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "assignee_kind"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Assignee kind"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "organization_account"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Person"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "group"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Group"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_assign_role_assignment_assignee_kind"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_assign_role_assignment_person": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Assign role to person"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_assign_role_assignment_person": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.1.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "organization_account_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Person"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "choice_source": {
-                            "kind": "group",
-                            "properties": {
-                              "query": {
-                                "kind": "query_reference",
-                                "query": "vortex.system_directory:people"
-                              },
-                              "label_field": {
-                                "kind": "field_reference",
-                                "field": "vortex.system_directory:person.display_name"
-                              }
-                            }
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_person_assignment_kind": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "assignment_kind"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Assignment kind"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "standing"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Standing"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "eligible"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Eligible"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_person_starts_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_person_expires_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_assign_role_assignment_person",
-                        "input_assign_role_assignment_person_assignment_kind",
-                        "input_assign_role_assignment_person_starts_at",
-                        "input_assign_role_assignment_person_expires_at"
-                      ]
-                    }
-                  }
-                }
-              },
-              "form_assign_role_assignment_group": {
-                "block": {
-                  "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Assign role to group"
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {
-                  "content": {
-                    "placements": {
-                      "input_assign_role_assignment_group": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.1.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "group_id"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Group"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "choice_source": {
-                            "kind": "group",
-                            "properties": {
-                              "query": {
-                                "kind": "query_reference",
-                                "query": "vortex.system_directory:groups"
-                              },
-                              "label_field": {
-                                "kind": "field_reference",
-                                "field": "vortex.system_directory:group.label"
-                              }
-                            }
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_group_assignment_kind": {
-                        "block": {
-                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "assignment_kind"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Assignment kind"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          },
-                          "options": {
-                            "kind": "list",
-                            "items": [
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "standing"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Standing"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "group",
-                                "properties": {
-                                  "key": {
-                                    "kind": "text",
-                                    "value": "eligible"
-                                  },
-                                  "label": {
-                                    "kind": "text",
-                                    "value": "Eligible"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_group_starts_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "starts_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Starts at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": true
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      },
-                      "input_assign_role_assignment_group_expires_at": {
-                        "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "name": {
-                            "kind": "text",
-                            "value": "expires_at"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Expires at"
-                          },
-                          "required": {
-                            "kind": "boolean",
-                            "value": false
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
-                      }
-                    },
-                    "order": {
-                      "desktop": [
-                        "input_assign_role_assignment_group",
-                        "input_assign_role_assignment_group_assignment_kind",
-                        "input_assign_role_assignment_group_starts_at",
-                        "input_assign_role_assignment_group_expires_at"
-                      ]
-                    }
-                  }
-                }
               }
             },
             "order": {
               "desktop": [
-                "iam_manage_assignments_heading",
-                "form_assign_role_assignment_kind",
-                "form_assign_role_assignment_person",
-                "form_assign_role_assignment_group"
+                "iam_manage_assignments_heading"
               ]
             }
           } }
