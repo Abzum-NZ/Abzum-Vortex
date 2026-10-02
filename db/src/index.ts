@@ -1,6 +1,14 @@
 import "server-only";
 
 export {
+  withRequestDatabaseLifetime,
+  type RequestDatabaseLifetime,
+  type RequestDatabaseLifetimeOptions,
+  type DatabaseResourcesSettled,
+  type RequestDatabaseStopReason,
+} from "./request-lifetime";
+
+export {
   withRuntimeTransaction,
   withResolvedRequestTransaction,
   type DatabaseRow,
