@@ -102,13 +102,14 @@ function refuseAdditionalLookup(
   options: LookupOptions,
   callback: LookupCallback,
 ): void {
+  // Own the pending refusal before a selector getter can reenter stop.
+  cell.invocationCount += 1;
   let all = false;
   try {
     all = options?.all === true;
   } catch {
     // The fixed refusal owns neither this selector exception nor its options.
   }
-  cell.invocationCount += 1;
   let callbackFailed = false;
   try {
     callback(

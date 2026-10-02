@@ -98,6 +98,8 @@ function createUnavailableLookup(): OwnedNetworkLookup {
   let outcome: LookupDeliveryOutcome = "open";
   const settled = (): boolean => (stopped || started) && invocationCount === 0;
   const lookup: LookupFunction = (_hostname, options, callback) => {
+    // Own the pending refusal before a selector getter can reenter stop.
+    invocationCount += 1;
     let all = false;
     try {
       all = options?.all === true;
@@ -113,7 +115,6 @@ function createUnavailableLookup(): OwnedNetworkLookup {
     if (outcome !== "callback_failed") outcome = stopped ? "stopped" : "refused";
     const error: NodeJS.ErrnoException = new Error("Owned network lookup is unavailable.");
     error.code = code;
-    invocationCount += 1;
     try {
       callback(error, all ? [] : "");
     } catch {
