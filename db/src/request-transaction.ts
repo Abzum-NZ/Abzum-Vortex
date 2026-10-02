@@ -29,7 +29,7 @@ export interface RequestDatabaseTransaction {
 }
 
 /**
- * A transaction with driver-owned nested recovery. A consumer must await a child scope before
+ * A transaction with owned nested recovery. A consumer must await a child scope before
  * issuing parent or sibling work; raw SQL savepoints on the parent query tag do not clear its
  * remembered query error, and concurrent child scopes are not supported.
  */
@@ -127,7 +127,7 @@ const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabase
 };
 
 /**
- * Require native child-scope support without widening query-only transaction projections.
+ * Require child-scope support without widening query-only transaction projections.
  * The returned method forwards with the original transaction as its receiver.
  */
 export const requireRequestSavepoint = (
@@ -288,25 +288,48 @@ class RequestDatabaseQueue {
 }
 
 class ScopedTransactionDriver implements SavepointRequestDatabaseTransaction {
-  private closed = false;
+  private accepting = true;
   private childActive = false;
+  private firstQueryFailure: { readonly error: unknown } | undefined;
+  private readonly acceptedQueries = new Set<Promise<void>>();
   private readonly children = new Set<Promise<void>>();
 
   constructor(
-    private readonly sql: TransactionSql,
+    private readonly driver: RequestOwnedPostgresDriver,
     private readonly owner: RequestDatabaseLifetimeOwner,
-    private readonly queries: RequestDatabaseQueue,
-    private readonly stoppedTransportSettled: () => Promise<void>,
   ) {}
 
-  private assertOpen(): void {
+  private checkpoint(): void {
     this.owner.checkpoint();
-    if (this.closed) throw requestDatabaseError("DATABASE_TRANSACTION_SCOPE_CLOSED");
+    if (!this.accepting) throw requestDatabaseError("DATABASE_TRANSACTION_SCOPE_CLOSED");
+    if (this.childActive) throw requestDatabaseError("DATABASE_SAVEPOINT_SCOPE_BUSY");
   }
 
-  private checkpoint(): void {
-    this.assertOpen();
-    if (this.childActive) throw requestDatabaseError("DATABASE_SAVEPOINT_SCOPE_BUSY");
+  private rememberQueryFailure(error: unknown): void {
+    this.firstQueryFailure ??= { error };
+  }
+
+  private acceptQuery<Result>(dispatch: () => Promise<Result>): Promise<Result> {
+    let result: Promise<Result>;
+    try {
+      result = dispatch();
+    } catch (error) {
+      this.rememberQueryFailure(error);
+      throw error;
+    }
+    // Record failure even when the caller catches it or does not await its public projection.
+    // The observation itself is retained until that exact accepted result settles.
+    const observed = result.then(
+      () => undefined,
+      (error: unknown) => this.rememberQueryFailure(error),
+    );
+    this.acceptedQueries.add(observed);
+    void observed.then(() => this.acceptedQueries.delete(observed));
+    return result;
+  }
+
+  private async drainQueries(): Promise<void> {
+    while (this.acceptedQueries.size > 0) await Promise.all([...this.acceptedQueries]);
   }
 
   readonly query = <ResultRow extends DatabaseRow>(
@@ -314,35 +337,61 @@ class ScopedTransactionDriver implements SavepointRequestDatabaseTransaction {
     ...values: readonly DatabaseValue[]
   ): Promise<readonly ResultRow[]> => {
     this.checkpoint();
-    return this.queries.enqueue(async () => {
-      // Work accepted before a child reservation drains before native savepoint dispatch.
-      // New parent work is refused while that child owns the native transaction.
-      this.assertOpen();
-      // Only the active owner-held FIFO item constructs and observes a native PendingQuery.
-      const native = this.sql<ResultRow[] & Row[]>(strings, ...values);
-      const rows = await this.owner.track(native);
-      this.assertOpen();
-      return rows;
-    });
+    // Scope sealing prevents new admission; previously accepted identities may still drain.
+    return this.acceptQuery(() => this.driver.query<ResultRow>(strings, values));
   };
 
   async run<Result>(
     operation: (transaction: SavepointRequestDatabaseTransaction) => Promise<Result>,
   ): Promise<Result> {
+    let value!: Result;
+    let failed = false;
+    let failure: unknown;
     try {
-      return await invokeRequestDatabaseCallback(() => operation(this));
+      value = await invokeRequestDatabaseCallback(() => {
+        let actual: Promise<Result>;
+        try {
+          actual = operation(this);
+        } catch (error) {
+          this.accepting = false;
+          throw error;
+        }
+        // Close admission at the actual callback-result boundary, before outer checkpoint
+        // wrappers resume. Keep both that actual result and the sealing continuation joined.
+        return this.owner.track(actual).then(
+          (result) => {
+            this.accepting = false;
+            return result;
+          },
+          (error: unknown) => {
+            this.accepting = false;
+            throw error;
+          },
+        );
+      });
+    } catch (error) {
+      failed = true;
+      failure = error;
     } finally {
-      // An unawaited but registered query cannot escape automatic commit/rollback. Parent and
-      // child savepoint use stays serial; the capability is closed after its actual I/O joins.
-      await this.queries.settled();
+      // Seal immediately after the actual callback, before waiting for its accepted work.
+      this.accepting = false;
+      await this.drainQueries();
       while (this.children.size > 0) await Promise.all([...this.children]);
-      // end0 may reject an active query while the native connection is still marked full.
-      // Hold this ACTUAL callback result until public end and the delivered bridge close have
-      // joined. Only then can native scope attempt rollback: its closed/terminated connection
-      // refuses immediately instead of stranding that query in its private reserved queue.
-      if (this.owner.stopped) await this.stoppedTransportSettled();
-      this.closed = true;
+      if (this.owner.stopped) await this.driver.transportSettled();
     }
+    this.owner.checkpoint();
+    if (failed) {
+      // Match native recovery's preference for the first query failure over a later 25P02.
+      if (
+        failure instanceof postgres.PostgresError &&
+        failure.code === "25P02" &&
+        this.firstQueryFailure !== undefined
+      )
+        throw this.firstQueryFailure.error;
+      throw failure;
+    }
+    if (this.firstQueryFailure !== undefined) throw this.firstQueryFailure.error;
+    return value;
   }
 
   readonly withSavepoint = <Result>(
@@ -364,26 +413,33 @@ class ScopedTransactionDriver implements SavepointRequestDatabaseTransaction {
     operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
   ): Promise<Result> {
     try {
-      await this.queries.settled();
+      // Parent work admitted before the child reservation completes before SAVEPOINT.
+      await this.drainQueries();
       this.owner.checkpoint();
-      const native = this.sql.savepoint((childSql) =>
-        this.owner.track((async () => {
-          this.owner.checkpoint();
-          const child = new ScopedTransactionDriver(
-            childSql,
-            this.owner,
-            this.queries,
-            this.stoppedTransportSettled,
-          );
-          const value = await this.owner.track(child.run(operation));
-          this.owner.checkpoint();
-          return { value };
-        })()),
-      );
-      const settled = await this.owner.track(native);
-      this.owner.checkpoint();
-      return settled.value;
+      const name = this.driver.nextSavepoint();
+      // Creation failure belongs to the parent: there is no recoverable child scope yet.
+      await this.acceptQuery(() => this.driver.control(`SAVEPOINT ${name}`));
+      const child = new ScopedTransactionDriver(this.driver, this.owner);
+      try {
+        const value = await this.owner.track(child.run(operation));
+        this.owner.checkpoint();
+        return value;
+      } catch (error) {
+        if (!this.owner.stopped) {
+          try {
+            // Acknowledged child recovery stays local and does not poison its parent.
+            await this.driver.control(`ROLLBACK TO SAVEPOINT ${name}`);
+          } catch (rollbackError) {
+            // Failed recovery makes the dedicated connection unusable for any outer scope.
+            this.owner.stop("abort");
+            throw rollbackError;
+          }
+        }
+        throw error;
+      }
     } finally {
+      // Recursive stopped unwinds join transport only; they construct no automatic rollback.
+      if (this.owner.stopped) await this.driver.transportSettled();
       this.childActive = false;
     }
   }
@@ -398,6 +454,7 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
   private readonly client: Sql | undefined;
   private ended: Promise<void> | undefined;
   private firstBegin = true;
+  private savepointSequence = 0;
 
   constructor(
     private readonly owner: RequestDatabaseLifetimeOwner,
@@ -438,36 +495,76 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
     if (ownedTransactionStorage.getStore() === this)
       throw requestDatabaseError("DATABASE_NESTED_TRANSACTION_UNSUPPORTED");
     return this.transactions.enqueue(async () => {
+      try {
+        this.owner.checkpoint();
+        await this.control("BEGIN", true);
+        return await ownedTransactionStorage.run(this, async () => {
+          const transaction = new ScopedTransactionDriver(this, this.owner);
+          try {
+            const value = await this.owner.track(transaction.run(operation));
+            this.owner.checkpoint();
+            await this.control("COMMIT");
+            this.owner.checkpoint();
+            return value;
+          } catch (error) {
+            if (!this.owner.stopped) {
+              try {
+                await this.control("ROLLBACK");
+              } catch (rollbackError) {
+                this.owner.stop("abort");
+                throw rollbackError;
+              }
+            }
+            throw error;
+          }
+        });
+      } finally {
+        // Includes a stopped initial BEGIN, before any supported callback has been entered.
+        if (this.owner.stopped) await this.transportSettled();
+      }
+    });
+  };
+
+  nextSavepoint(): string {
+    this.owner.checkpoint();
+    if (this.savepointSequence >= Number.MAX_SAFE_INTEGER)
+      throw requestDatabaseError("DATABASE_SAVEPOINT_LIMIT_EXCEEDED");
+    // Generated finite ASCII identifier, never a caller-provided SQL identifier or value.
+    return `vortex_request_sp_${this.savepointSequence++}`;
+  }
+
+  query<ResultRow extends DatabaseRow>(
+    strings: TemplateStringsArray,
+    values: readonly DatabaseValue[],
+  ): Promise<readonly ResultRow[]> {
+    return this.dispatch<ResultRow>((sql) => sql<ResultRow[] & Row[]>(strings, ...values));
+  }
+
+  control(statement: string, initialBegin = false): Promise<readonly Row[]> {
+    return this.dispatch<Row>((sql) => sql.unsafe<Row[]>(statement), initialBegin);
+  }
+
+  private dispatch<ResultRow extends DatabaseRow>(
+    construct: (sql: Sql) => postgres.PendingQuery<ResultRow[] & Row[]>,
+    initialBegin = false,
+  ): Promise<readonly ResultRow[]> {
+    return this.queries.enqueue(async () => {
       this.owner.checkpoint();
       const client = this.client;
       if (client === undefined) throw requestDatabaseError("DATABASE_CLIENT_UNAVAILABLE");
-      if (this.firstBegin) {
+      const native = construct(client);
+      // Construction precedes latch arming. execute() enters the public deferred handler in
+      // this guarded turn, before tracking/assimilation/await or any concurrent end0 turn.
+      if (initialBegin && this.firstBegin) {
         this.firstBegin = false;
         this.sockets.expectInitialEntry();
       }
-      const native = client.begin((sql) =>
-        this.owner.track(
-          ownedTransactionStorage.run(this, async () => {
-            this.owner.checkpoint();
-            const transaction = new ScopedTransactionDriver(
-              sql,
-              this.owner,
-              this.queries,
-              () => this.transportSettled(),
-            );
-            const value = await this.owner.track(transaction.run(operation));
-            this.owner.checkpoint();
-            // Box arrays so native begin does not reinterpret a value as query work. This
-            // actual callback result is joined separately from begin's close-raced result.
-            return { value };
-          }),
-        ),
-      );
-      const result = await this.owner.track(native);
+      native.execute();
+      const rows = await this.owner.track(native);
       this.owner.checkpoint();
-      return result.value;
+      return rows;
     });
-  };
+  }
 
   private stop(): void {
     this.transactions.stop();
@@ -478,7 +575,7 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
     void this.ended.catch(() => undefined);
   }
 
-  private async transportSettled(): Promise<void> {
+  async transportSettled(): Promise<void> {
     let endFailed = false;
     await this.ended?.catch(() => {
       endFailed = true;

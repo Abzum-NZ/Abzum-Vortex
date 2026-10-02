@@ -212,7 +212,7 @@ export const withRequestDatabaseLifetime = async <Result>(
   });
 };
 
-/** Register resolver/operation/savepoint callback results independently of native begin. */
+/** Register actual resolver/operation/savepoint callback results independently of orchestration. */
 export const invokeRequestDatabaseCallback = async <Result>(
   operation: () => Promise<Result>,
 ): Promise<Result> => {

@@ -91,8 +91,8 @@ class RequestOwnedBridge extends Duplex {
 
   private retainTerminal(): void {
     this.terminal ??= requestDatabaseError("DATABASE_OWNED_CONNECTION_CLOSED");
-    // A lost dedicated transport also stops the execution owner. Native begin can reject on
-    // close before its callback has settled; do not admit another transaction behind it.
+    // A lost dedicated transport stops the execution owner before any other transaction or
+    // control query can enter. Actual callback and orchestration results still join separately.
     if (!this.owner.stopped) this.owner.stop("abort");
     this.deliverTerminal();
   }
@@ -184,7 +184,7 @@ export class RequestOwnedSocketFactory {
     private readonly owner: RequestDatabaseLifetimeOwner,
   ) {}
 
-  /** Arm immediately before the first native begin dispatch, never for refused queued work. */
+  /** Arm in the first admitted BEGIN execute turn, never for refused or lazy queued work. */
   expectInitialEntry(): void {
     this.initialEntryExpected = true;
   }
