@@ -1,3 +1,7 @@
+begin;
+
+set local role vortex_module_owner;
+
 create or replace function vortex_module.detach_application_installation(
   p_application_root_id uuid,
   p_application_release_revision bigint,
@@ -248,3 +252,6 @@ grant execute on function vortex_module.detach_application_installation(uuid, bi
   to vortex_request;
 comment on function vortex_module.detach_application_installation(uuid, bigint, jsonb) is
   'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records.';
+
+reset role;
+commit;
