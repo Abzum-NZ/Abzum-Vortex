@@ -114,7 +114,10 @@ const roleDeclarationSchema = z
  * bindings are unsupported: arbitrary JSON values are not package declaration metadata. Refuse
  * them instead of removing a restriction or copying customer payload into the manifest.
  */
-export const applicationPackagePermissionDeclarationSchema = permissionDeclarationSchema.pipe(
+// Validate the same input against both complete permission semantics and the closed metadata
+// profile. An intersection preserves branded output identities without piping raw schema inputs.
+export const applicationPackagePermissionDeclarationSchema = z.intersection(
+  permissionDeclarationSchema,
   z
     .object({
       ...permissionDeclarationSchema.shape,
