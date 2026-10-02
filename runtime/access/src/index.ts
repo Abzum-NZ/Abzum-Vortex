@@ -1,6 +1,12 @@
 import "server-only";
 
 export {
+  createHumanApplicationDraftWriter,
+  type HumanApplicationDraftWriterDependencies,
+  type HumanApplicationDraftWriteResult,
+} from "./definition-draft-write";
+
+export {
   createStoredApplicationPermissionSource,
   type StoredApplicationPermissionSourceDependencies,
   type StoredApplicationPermissionSourceEvidence,
