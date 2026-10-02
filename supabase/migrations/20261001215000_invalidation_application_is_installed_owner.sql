@@ -1,3 +1,17 @@
+begin;
+
+grant usage on schema vortex_access to vortex_invalidation_owner;
+
+set local role vortex_access_owner;
+grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
+  to vortex_invalidation_owner;
+reset role;
+
+alter function vortex_invalidation.application_is_installed(uuid, uuid)
+  owner to vortex_invalidation_owner;
+
+set local role vortex_invalidation_owner;
+
 create or replace function vortex_invalidation.application_is_installed(
   p_organization_id uuid,
   p_application_root_id uuid
@@ -34,3 +48,6 @@ comment on function vortex_invalidation.application_is_installed(uuid, uuid) is
 
 alter function vortex_invalidation.application_is_installed(uuid, uuid)
   owner to vortex_invalidation_owner;
+
+reset role;
+commit;
