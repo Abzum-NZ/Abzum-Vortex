@@ -972,8 +972,24 @@
           "record": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] },
           "is_favourite": { "type": "yes_no", "required": true }
         },
-        "variables": {},
+        "variables": {
+          "favourite_values": { "type": "json", "default": {} }
+        },
         "tasks": [
+          {
+            "id": "prepare_favourite_values",
+            "type": "data.set_variable",
+            "version": "1.0.0",
+            "properties": {
+              "variable": { "kind": "literal", "literal": { "type": "text", "value": "favourite_values" } },
+              "value": {
+                "kind": "map",
+                "entries": {
+                  "is_favourite": { "kind": "reference", "reference": { "source": "input", "name": "is_favourite" } }
+                }
+              }
+            }
+          },
           {
             "id": "save_favourite_status",
             "type": "record.save",
@@ -982,10 +998,8 @@
               "record_type": { "kind": "literal", "literal": { "type": "text", "value": "vortex.landing_zone:tile" } },
               "record": { "kind": "reference", "reference": { "source": "input", "name": "record" } },
               "values": {
-                "kind": "map",
-                "entries": {
-                  "is_favourite": { "kind": "reference", "reference": { "source": "input", "name": "is_favourite" } }
-                }
+                "kind": "reference",
+                "reference": { "source": "variable", "name": "favourite_values" }
               }
             }
           },
