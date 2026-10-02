@@ -245,7 +245,8 @@ export const matchLiteralSearch = async (
   dependencies: PermittedSearchDependencies,
 ): Promise<LiteralSearchResult> => {
   if (!isLiteralSearchInput(input)) return refusal("input_invalid");
-  if (Object.hasOwn(input.search, "shared")) return refusal("unsupported_scope");
+  // Refuse own or inherited groups before #645 can inspect them.
+  if ("shared" in input.search) return refusal("unsupported_scope");
 
   if (input.expression.length > literalSearchLimits.expressionLength)
     return refusal("expression_too_long");
