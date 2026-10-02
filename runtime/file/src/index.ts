@@ -137,6 +137,10 @@ export {
   type FileReadSqlTransaction,
 } from "./read-repository";
 export {
+  createSqlVersionedFileMetadataRepository,
+  type VersionedFileMetadataRepository,
+} from "./versioned-metadata-repository";
+export {
   COMPONENT_BUNDLE_BUCKET,
   COMPONENT_BUNDLE_CONTENT_ADDRESS_LENGTH,
   COMPONENT_BUNDLE_CORS_ORIGIN,
