@@ -30,3 +30,5 @@ grant execute on function vortex_file.read_versioned_file_metadata(uuid) to vort
 
 comment on function vortex_file.read_versioned_file_metadata(uuid) is
   'Reads one organization-scoped File metadata revision and its canonical FileRecord projection.';
+
+alter function vortex_file.read_versioned_file_metadata(uuid) owner to vortex_file_owner;
