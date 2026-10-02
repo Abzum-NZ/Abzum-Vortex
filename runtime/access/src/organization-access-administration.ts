@@ -61,6 +61,7 @@ import {
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   organizationStewardshipAppointmentCommandSchema,
+  organizationStewardshipAppointmentAttemptSchema,
   organizationStewardshipAppointmentResultSchema,
   type AddOrganizationAdministrationMembershipCommand,
   type AssignOrganizationAdministrationRoleAssignmentCommand,
@@ -99,7 +100,7 @@ import {
   type OrganizationRoleChangeCandidate,
   type OrganizationSelectionCandidate,
   type OrganizationStewardshipAppointmentCommand,
-  type OrganizationStewardshipAppointmentResult,
+  type OrganizationStewardshipAppointmentAttempt,
   type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
   type PrepareOrganizationAdministrationRoleChangeCommand,
@@ -1215,7 +1216,7 @@ export const createOrganizationAccessAdministrationService = (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       commandCandidate: OrganizationStewardshipAppointmentCommand,
-    ): Promise<HumanOrganizationRequestResult<OrganizationStewardshipAppointmentResult>> => {
+    ): Promise<HumanOrganizationRequestResult<OrganizationStewardshipAppointmentAttempt>> => {
       const command = organizationStewardshipAppointmentCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
       return mapRecordedRefusal(
@@ -1238,20 +1239,35 @@ export const createOrganizationAccessAdministrationService = (
             )
           )
             return recordedRefusal;
-          const summary =
-            typeof row.appointment_summary === "object" &&
-            row.appointment_summary !== null &&
-            !Array.isArray(row.appointment_summary)
-              ? row.appointment_summary
-              : {};
+          if (
+            typeof row.organization_id !== "string" ||
+            !sameId(row.organization_id, scope.organizationId)
+          )
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          if (row.outcome === "conflict") {
+            if (
+              row.appointment_summary !== null ||
+              databaseRevision(row.access_version) !== scope.accessVersion
+            )
+              throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+            return organizationStewardshipAppointmentAttemptSchema.parse({
+              operation: "appoint_organization_steward",
+              outcome: "conflict",
+            });
+          }
+          const summary = organizationStewardshipAppointmentResultSchema
+            .omit({ operation: true, outcome: true, accessVersion: true })
+            .safeParse(row.appointment_summary);
+          if (!summary.success)
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
           const parsed = organizationStewardshipAppointmentResultSchema.safeParse({
-            ...summary,
+            ...summary.data,
             operation: "appoint_organization_steward",
             outcome: row.outcome,
             accessVersion: databaseRevision(row.access_version),
           });
           const expectedAccessVersion =
-            row.outcome === "changed" ? scope.accessVersion + 2 : scope.accessVersion;
+            row.outcome === "changed" ? scope.accessVersion + 1 : scope.accessVersion;
           if (
             typeof row.organization_id !== "string" ||
             !sameId(row.organization_id, scope.organizationId) ||
