@@ -425,10 +425,13 @@ export function validateFlow(
             const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
               (candidate) => platformOperationKey(candidate.key) === key,
             );
-            if (entry?.descriptor.effect === "read" && reference.path.length === 1) {
-              const field = entry.descriptor.outputs[reference.path[0]!];
-              if (field !== undefined) return field.type;
-            }
+            if (
+              entry !== undefined &&
+              (entry.descriptor.effect === "read" || entry.descriptor.effect === "change") &&
+              reference.path.length === 1 &&
+              Object.hasOwn(entry.descriptor.outputs, reference.path[0]!)
+            )
+              return entry.descriptor.outputs[reference.path[0]!]!.type;
           }
           const inputs =
             task.type === "interface.show_form"
