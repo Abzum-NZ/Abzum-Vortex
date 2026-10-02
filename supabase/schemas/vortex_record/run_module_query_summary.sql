@@ -91,7 +91,14 @@ declare
   board_totals_sql text;
   board_empty_aggregates_sql text;
   result_value jsonb;
+  preview_address text;
 begin
+  preview_address := nullif(
+    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+  );
+  if preview_address is not null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
   if p_module_root_id is null or p_query_id is null
     or p_module_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_query_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -324,7 +331,7 @@ begin
     into filter_values_sql
     from (
       select (pair.position - 1) / 50 as chunk_index,
-        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
+        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_tex
       from pg_catalog.unnest(filter_expression_pairs)
         with ordinality as pair(value, position)
       group by (pair.position - 1) / 50
@@ -663,7 +670,7 @@ begin
     -- every filter and aggregate uses only the fields this read returned.
     selected_sql := pg_catalog.format(
       'with readable as materialized (
-         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
+         select vortex_record.read_record(%L::uuid, candidate.record_id) as resul
          from candidate
          where (select value from candidate_count) <= %s
        )
@@ -691,7 +698,7 @@ begin
             from pg_catalog.unnest($16::text[]) as referenced(id)),
            $14, $15, false
          ))',
-      record_type_id_value::text, summary_candidate_limit
+      record_type_id_value::text, summary_candidate_limi
     );
   end if;
 
@@ -876,7 +883,7 @@ begin
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text
+      pg_catalog.to_jsonb(group_ids)::tex
     );
   end if;
 
@@ -903,4 +910,4 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
   to vortex_request;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
-  'Runs one bounded database-backed Module query summary or protected board summary. It uses shared query preparation and the same organisation, Application, record visibility, published filter and declared user filter as list reads, counts rows only after vortex_record.read_record admits them unless the exact readable-field plan permits SQL aggregation, normalizes unreadable board choices to one unassigned bucket, and refuses neutrally above 100000 candidate rows.';
+  'Runs one bounded database-backed installed Module query summary or protected board summary. It uses shared query preparation and the same organisation, Application, record visibility, published filter and declared user filter as list reads, counts rows only after vortex_record.read_record admits them unless the exact readable-field plan permits SQL aggregation, normalizes unreadable board choices to one unassigned bucket, refuses every explicit preview address before preparation, and refuses neutrally above 100000 candidate rows.';
