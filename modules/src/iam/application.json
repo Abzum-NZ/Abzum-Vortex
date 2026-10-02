@@ -380,6 +380,13 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_make_steward",
+        "key": "vortex.app.iam.make_steward",
+        "record_type": "vortex.system_directory:person",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_revoke_role_assignment",
         "key": "vortex.app.iam.revoke_role_assignment",
         "record_type": "vortex.system_directory:role_assignment",
@@ -1002,6 +1009,24 @@
                   "title": {
                     "kind": "text",
                     "value": "People (organisation accounts)"
+                  },
+                  "row_actions": {
+                    "kind": "list",
+                    "items": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_make_steward"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Make steward"
+                          }
+                        }
+                      }
+                    ]
                   },
                   "columns": {
                     "kind": "list",
@@ -5355,6 +5380,307 @@
       },
       {
         "contractVersion": "1.0.0",
+        "id": "flow_make_steward",
+        "key": "make_steward",
+        "description": "Appoints the person in the selected organisation-account row through the protected operation after confirmation.",
+        "labels": {
+          "name": "Make steward"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "target_account_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
+          },
+          "revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Make steward"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Make the person in this row an organisation steward with permanent management access and organisation-catalogue delegation? The existing steward keeps their access until it is explicitly revoked."
+                }
+              }
+            }
+          },
+          {
+            "id": "confirmation",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "confirm",
+                "key": "confirmed"
+              }
+            },
+            "cases": [
+              {
+                "key": "confirmed",
+                "when": {
+                  "type": "yes_no",
+                  "value": true
+                },
+                "tasks": [
+                  {
+                    "id": "call",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "allowRefusal": true,
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.appoint_organization_steward"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "target_account_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "target_account_id"
+                            }
+                          },
+                          "expected_account_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "revision"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "appointment_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "call",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "appointment_change",
+                            "type": "switch",
+                            "value": {
+                              "kind": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call",
+                                "key": "result",
+                                "path": [
+                                  "appointment_outcome"
+                                ]
+                              }
+                            },
+                            "cases": [
+                              {
+                                "key": "changed",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "changed"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "show_changed",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The selected person was made an organisation steward."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "unchanged",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "unchanged"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "show_unchanged",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The selected person is already an organisation steward."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "default": [
+                              {
+                                "id": "show_unknown_appointment",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "The appointment result could not be confirmed. Refresh People before taking further action."
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The steward appointment was refused. No access was granted."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The person changed since this row was loaded. Refresh People before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "validation",
+                        "when": {
+                          "type": "choice",
+                          "value": "validation"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_validation",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The steward appointment could not be applied because its input was invalid. Refresh People and try again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "show_unknown_result",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The appointment did not return a confirmed result. Refresh People before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "stop_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
         "id": "flow_revoke_role_assignment",
         "key": "revoke_role_assignment",
         "labels": {
@@ -7134,6 +7460,23 @@
           "record_id": {
             "kind": "caller",
             "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_make_steward",
+        "control": "iam_people_region",
+        "event_id": "event_make_steward",
+        "event": "row_action",
+        "flow": "flow_make_steward",
+        "inputs": {
+          "target_account_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       },
