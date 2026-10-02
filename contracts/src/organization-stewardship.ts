@@ -121,6 +121,17 @@ export const organizationStewardshipAppointmentResultSchema = z
   })
   .strict();
 
+/** A conflict proves only that an authorized target's expected revision is stale. */
+export const organizationStewardshipAppointmentAttemptSchema = z.union([
+  organizationStewardshipAppointmentResultSchema,
+  z
+    .object({
+      outcome: z.literal("conflict"),
+      operation: z.literal("appoint_organization_steward"),
+    })
+    .strict(),
+]);
+
 export type OrganizationStewardshipRequirement = z.infer<
   typeof organizationStewardshipRequirementSchema
 >;
@@ -135,4 +146,7 @@ export type OrganizationStewardshipAppointmentCommand = z.infer<
 >;
 export type OrganizationStewardshipAppointmentResult = z.infer<
   typeof organizationStewardshipAppointmentResultSchema
+>;
+export type OrganizationStewardshipAppointmentAttempt = z.infer<
+  typeof organizationStewardshipAppointmentAttemptSchema
 >;
