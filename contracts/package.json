@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./platform-compatibility": "./src/platform-compatibility.ts",
-    "./shadcn-theme-releases": "./src/shadcn-theme-releases.ts"
+    "./shadcn-theme-releases": "./src/shadcn-theme-releases.ts",
+    "./application-package-contracts": "./src/application-package-contracts.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit",
