@@ -142,7 +142,6 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const fieldKey = settings.fieldKey();
   const label = context.accessibleName ?? props.metadata.name;
   const authoredHelp = settings.text("help_text");
-  const placeholder = settings.text("placeholder");
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
   const draftFeedback = useFieldFeedback(fieldKey);
@@ -205,7 +204,6 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
         disabled={disabled}
         readOnly={readOnly}
         required={required}
-        placeholder={placeholder}
         aria-invalid={error !== undefined}
         {...describedBy(ids, help, error, note, draftFeedback)}
       />
