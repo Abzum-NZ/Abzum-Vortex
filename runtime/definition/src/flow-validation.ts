@@ -525,6 +525,19 @@ export function validateFlow(
         return formula.type;
       case "reference":
         return resolveReference(formula.reference, where, [...path, "reference"]);
+      case "record_id": {
+        const type = child(formula.arg, "arg");
+        if (type !== "json") {
+          add(
+            [...path, "arg"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `The record_id operand must have a declared JSON type, found ${type ?? "an unknown type"}`,
+          );
+          return undefined;
+        }
+        return "text";
+      }
       case "now":
         if (!where.nowAllowed)
           add(

@@ -288,6 +288,7 @@ export const flowFormulaOperatorKeys = [
   "literal",
   "reference",
   "now",
+  "record_id",
   "add",
   "subtract",
   "multiply",
@@ -319,6 +320,7 @@ export type FlowFormula =
   | { op: "literal"; type: FlowLiteral["type"]; value: JsonValue }
   | { op: "reference"; reference: FlowReference }
   | { op: "now" }
+  | { op: "record_id"; arg: FlowFormula }
   | ({ op: "add" | "multiply"; args: FlowFormula[] } & ArithmeticPrecision)
   | ({ op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
   | ({ op: "round"; arg: FlowFormula } & ArithmeticPrecision)
@@ -358,6 +360,7 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       }),
     z.object({ op: z.literal("reference"), reference: flowReferenceSchema }).strict(),
     z.object({ op: z.literal("now") }).strict(),
+    z.object({ op: z.literal("record_id"), arg: flowFormulaTreeSchema }).strict(),
     z
       .object({
         op: z.literal("add"),
@@ -458,6 +461,7 @@ const formulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
     case "or":
       return formula.args;
     case "round":
+    case "record_id":
     case "is_empty":
     case "is_not_empty":
     case "not":
