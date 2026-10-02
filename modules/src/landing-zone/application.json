@@ -77,6 +77,13 @@
         "label": "All applications",
         "page": "all_applications",
         "permission": "application.landing_zone.open"
+      },
+      {
+        "id": "nav_landing_manage_saved_tiles",
+        "type": "page",
+        "label": "Manage saved tiles",
+        "page": "manage_saved_tiles",
+        "permission": "application.landing_zone.open"
       }
     ],
     "queries": [],
@@ -88,6 +95,20 @@
       {
         "id": "form_submit_landing_zone_bookmark_create",
         "key": "vortex.app.events.vortex_app_landing_zone_bookmark_create",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_landing_zone_edit_favourite",
+        "key": "vortex.app.events.vortex_app_landing_zone_edit_favourite",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "form_submit_landing_zone_favourite_status",
+        "key": "vortex.app.events.vortex_app_landing_zone_favourite_status",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -664,6 +685,117 @@
             "slot_rail": { "placements": {}, "order": { "desktop": [] } }
           }
         }
+      },
+      {
+        "id": "page_landing_manage_saved_tiles",
+        "key": "manage_saved_tiles",
+        "name": "Manage saved tiles",
+        "type": "dashboard",
+        "permission": "application.landing_zone.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "saved_tiles_summary": {
+                  "block": { "block_id": "addfad00-1b11-4674-83fa-913667f87e79", "release_version": "1.1.0" },
+                  "settings": {
+                    "title": { "kind": "text", "value": "Saved configuration" },
+                    "text": { "kind": "text", "value": "This bounded view shows at most 200 saved tile records returned by the permitted Records query." }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {}
+                },
+                "managed_saved_tiles": {
+                  "block": { "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.4.0" },
+                  "query": "vortex.landing_zone:landing_zone_tiles",
+                  "settings": {
+                    "title": { "kind": "text", "value": "Saved tile configuration" },
+                    "empty_message": { "kind": "text", "value": "No saved tile records were returned." },
+                    "refused_message": { "kind": "text", "value": "Saved tiles are unavailable for this account." },
+                    "error_message": { "kind": "text", "value": "Saved tiles could not be read." },
+                    "page_size": { "kind": "number", "value": 200 },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.target_kind" }, "label": { "kind": "text", "value": "Saved target type" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.label" }, "label": { "kind": "text", "value": "Saved label" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.application_key" }, "label": { "kind": "text", "value": "Saved application" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.page_key" }, "label": { "kind": "text", "value": "Saved page" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_type" }, "label": { "kind": "text", "value": "Saved record type" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_id" }, "label": { "kind": "text", "value": "Saved record identifier" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.external_address" }, "label": { "kind": "text", "value": "Saved external HTTPS address" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.description" }, "label": { "kind": "text", "value": "Saved description" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.open_behaviour" }, "label": { "kind": "text", "value": "Saved open behaviour" }, "format": { "kind": "choice", "value": "text" } } },
+                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.is_favourite" }, "label": { "kind": "text", "value": "Favourite status" }, "format": { "kind": "choice", "value": "boolean" } } }
+                      ]
+                    },
+                    "row_actions": {
+                      "kind": "list",
+                      "items": [
+                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_edit_favourite" }, "label": { "kind": "text", "value": "Edit favourite" }, "capability": { "kind": "choice", "value": "update" } } }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {}
+                }
+              },
+              "order": { "desktop": ["saved_tiles_summary", "managed_saved_tiles"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_favourite_status",
+        "key": "favourite_status",
+        "name": "Favourite status",
+        "type": "form",
+        "record_type": "vortex.landing_zone:tile",
+        "permission": "vortex.landing_zone.tile.update",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "favourite_status_form": {
+                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
+                  "settings": { "title": { "kind": "text", "value": "Favourite status" } },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_landing_tile_is_favourite": {
+                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
+                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.is_favourite" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "button_landing_save_favourite": {
+                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
+                          "settings": { "label": { "kind": "text", "value": "Save favourite" }, "action_kind": { "kind": "choice", "value": "submit" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        }
+                      },
+                      "order": { "desktop": ["input_landing_tile_is_favourite", "button_landing_save_favourite"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["favourite_status_form"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
       }
     ],
     "flows": [
@@ -802,6 +934,91 @@
             }
           }
         }
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_open_favourite_status",
+        "key": "landing_zone_open_favourite_status",
+        "description": "Opens the protected Favourite status form for one returned tile record.",
+        "labels": { "name": "Edit favourite" },
+        "execution": "interactive",
+        "runAs": { "kind": "initiator" },
+        "inputs": {
+          "record_id": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+        },
+        "variables": {},
+        "tasks": [
+          {
+            "id": "open_favourite_status",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_favourite_status" } },
+              "parameters": { "kind": "map", "entries": { "record_id": "{{ inputs.record_id }}" } }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_save_favourite_status",
+        "key": "landing_zone_save_favourite_status",
+        "description": "Saves only the submitted favourite status for the protected tile subject, then returns to saved tile management.",
+        "labels": { "name": "Save favourite" },
+        "execution": "interactive",
+        "runAs": { "kind": "initiator" },
+        "inputs": {
+          "record": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] },
+          "is_favourite": { "type": "yes_no", "required": true }
+        },
+        "variables": {
+          "favourite_values": { "type": "json", "default": {} }
+        },
+        "tasks": [
+          {
+            "id": "prepare_favourite_values",
+            "type": "data.set_variable",
+            "version": "1.0.0",
+            "properties": {
+              "variable": { "kind": "literal", "literal": { "type": "text", "value": "favourite_values" } },
+              "value": {
+                "kind": "map",
+                "entries": {
+                  "is_favourite": { "kind": "reference", "reference": { "source": "input", "name": "is_favourite" } }
+                }
+              }
+            }
+          },
+          {
+            "id": "save_favourite_status",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": { "kind": "literal", "literal": { "type": "text", "value": "vortex.landing_zone:tile" } },
+              "record": { "kind": "reference", "reference": { "source": "input", "name": "record" } },
+              "values": {
+                "kind": "reference",
+                "reference": { "source": "variable", "name": "favourite_values" }
+              }
+            }
+          },
+          {
+            "id": "return_to_manage_saved_tiles",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_manage_saved_tiles" } }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": ["vortex.landing_zone:tile"],
+            "value": { "kind": "reference", "reference": { "source": "task_output", "task": "save_favourite_status", "key": "record" } }
+          }
+        }
       }
     ],
     "flow_bindings": [
@@ -820,6 +1037,27 @@
           "external_address": { "kind": "caller", "name": "external_address" },
           "label": { "kind": "caller", "name": "label" },
           "description": { "kind": "caller", "name": "description" }
+        }
+      },
+      {
+        "id": "binding_landing_zone_edit_favourite",
+        "control": "managed_saved_tiles",
+        "event_id": "row_action_landing_zone_edit_favourite",
+        "event": "row_action",
+        "flow": "landing_zone_open_favourite_status",
+        "inputs": {
+          "record_id": { "kind": "caller", "name": "record_id" }
+        }
+      },
+      {
+        "id": "binding_landing_zone_save_favourite_status",
+        "control": "favourite_status_form",
+        "event_id": "form_submit_landing_zone_favourite_status",
+        "event": "form_submit",
+        "flow": "landing_zone_save_favourite_status",
+        "inputs": {
+          "record": { "kind": "caller", "name": "record" },
+          "is_favourite": { "kind": "caller", "name": "is_favourite" }
         }
       }
     ]
