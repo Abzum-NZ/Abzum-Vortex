@@ -2387,7 +2387,7 @@
                       "input_add_group_membership_person": {
                         "block": {
                           "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
+                          "release_version": "1.1.0"
                         },
                         "settings": {
                           "name": {
@@ -3158,7 +3158,7 @@
                       "input_assign_role_assignment_person": {
                         "block": {
                           "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
+                          "release_version": "1.1.0"
                         },
                         "settings": {
                           "name": {
@@ -3372,7 +3372,7 @@
                       "input_assign_role_assignment_group": {
                         "block": {
                           "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                          "release_version": "1.0.0"
+                          "release_version": "1.1.0"
                         },
                         "settings": {
                           "name": {
@@ -5547,6 +5547,32 @@
                   "type": "text",
                   "value": "form_add_group_membership_picker"
                 }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "organization_account_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "json",
+                      "value": null
+                    }
+                  },
+                  "starts_at": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "expires_at": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
               }
             }
           },
@@ -5638,15 +5664,20 @@
                     }
                   },
                   "organization_account_id": {
-                    "kind": "reference",
-                    "reference": {
-                      "source": "task_output",
-                      "task": "person_form",
-                      "key": "values",
-                      "path": [
-                        "organization_account_id",
-                        "recordId"
-                      ]
+                    "kind": "formula",
+                    "formula": {
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "person_form",
+                          "key": "values",
+                          "path": [
+                            "organization_account_id"
+                          ]
+                        }
+                      }
                     }
                   },
                   "starts_at": {
@@ -5676,19 +5707,7 @@
             }
           }
         ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
+        "outputs": {}
       },
       {
         "contractVersion": "1.0.0",
@@ -5725,6 +5744,18 @@
                 "literal": {
                   "type": "text",
                   "value": "form_assign_role_assignment_kind"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "assignee_kind": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "choice",
+                      "value": "organization_account"
+                    }
+                  }
                 }
               }
             }
@@ -5783,6 +5814,39 @@
                         "literal": {
                           "type": "text",
                           "value": "form_assign_role_assignment_person"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "organization_account_id": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "json",
+                              "value": null
+                            }
+                          },
+                          "assignment_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "choice",
+                              "value": "standing"
+                            }
+                          },
+                          "starts_at": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": ""
+                            }
+                          },
+                          "expires_at": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": ""
+                            }
+                          }
                         }
                       }
                     }
@@ -5889,15 +5953,20 @@
                             }
                           },
                           "organization_account_id": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "person_form",
-                              "key": "values",
-                              "path": [
-                                "organization_account_id",
-                                "recordId"
-                              ]
+                            "kind": "formula",
+                            "formula": {
+                              "op": "record_id",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "person_form",
+                                  "key": "values",
+                                  "path": [
+                                    "organization_account_id"
+                                  ]
+                                }
+                              }
                             }
                           },
                           "assignment_kind": {
@@ -5956,6 +6025,39 @@
                         "literal": {
                           "type": "text",
                           "value": "form_assign_role_assignment_group"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "group_id": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "json",
+                              "value": null
+                            }
+                          },
+                          "assignment_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "choice",
+                              "value": "standing"
+                            }
+                          },
+                          "starts_at": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": ""
+                            }
+                          },
+                          "expires_at": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": ""
+                            }
+                          }
                         }
                       }
                     }
@@ -6062,15 +6164,20 @@
                             }
                           },
                           "group_id": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "group_form",
-                              "key": "values",
-                              "path": [
-                                "group_id",
-                                "recordId"
-                              ]
+                            "kind": "formula",
+                            "formula": {
+                              "op": "record_id",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "group_form",
+                                  "key": "values",
+                                  "path": [
+                                    "group_id"
+                                  ]
+                                }
+                              }
                             }
                           },
                           "assignment_kind": {
@@ -6122,52 +6229,7 @@
             ]
           }
         ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "formula",
-              "formula": {
-                "op": "if",
-                "condition": {
-                  "op": "eq",
-                  "left": {
-                    "op": "reference",
-                    "reference": {
-                      "source": "task_output",
-                      "task": "kind_form",
-                      "key": "values",
-                      "path": [
-                        "assignee_kind"
-                      ]
-                    }
-                  },
-                  "right": {
-                    "op": "literal",
-                    "type": "choice",
-                    "value": "organization_account"
-                  }
-                },
-                "then": {
-                  "op": "reference",
-                  "reference": {
-                    "source": "task_output",
-                    "task": "call_person",
-                    "key": "result"
-                  }
-                },
-                "else": {
-                  "op": "reference",
-                  "reference": {
-                    "source": "task_output",
-                    "task": "call_group",
-                    "key": "result"
-                  }
-                }
-              }
-            }
-          }
-        }
+        "outputs": {}
       },
       {
         "contractVersion": "1.0.0",
