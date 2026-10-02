@@ -30,6 +30,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   reactivateTenantOrganizationCommandSchema,
   renameTenantOrganizationCommandSchema,
+  reparentTenantOrganizationCommandSchema,
   suspendOrganizationAccountCommandSchema,
   suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
@@ -53,6 +54,8 @@ import {
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
   type RenameTenantOrganizationResult,
+  type ReparentTenantOrganizationCommand,
+  type ReparentTenantOrganizationResult,
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
   type TenantId,
@@ -177,6 +180,10 @@ type TenantGovernanceOperations = Readonly<{
     session: IdentitySession,
     command: RenameTenantOrganizationCommand,
   ) => Promise<RenameTenantOrganizationResult>;
+  reparentOrganization: (
+    session: IdentitySession,
+    command: ReparentTenantOrganizationCommand,
+  ) => Promise<ReparentTenantOrganizationResult>;
   suspendOrganization: (
     session: IdentitySession,
     command: SuspendTenantOrganizationCommand,
@@ -247,6 +254,7 @@ type ProtectedOperationCaller = Readonly<{
 
 type TenantOrganizationMutationResult =
   | RenameTenantOrganizationResult
+  | ReparentTenantOrganizationResult
   | SuspendTenantOrganizationResult
   | ReactivateTenantOrganizationResult;
 
@@ -835,6 +843,26 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         operations.renameOrganization(caller.session, {
           ...command,
           operation: "rename_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }, "tenant_capability"),
+  reparent_tenant_organization: operation({
+    schema: reparentTenantOrganizationCommandSchema
+      .omit({ tenantId: true, operation: true })
+      .extend({ parentOrganizationId: organizationIdSchema }),
+    inputAliases: { parentOrganizationId: "parent_organization_id" },
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+      parentOrganizationId: inputs.parent_organization_id,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.reparentOrganization(caller.session, {
+          ...command,
+          operation: "reparent_tenant_organization",
           tenantId,
         }),
       ),

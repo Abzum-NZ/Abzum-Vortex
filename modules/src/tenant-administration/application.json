@@ -69,6 +69,15 @@
         }
       },
       {
+        "id": "app_permission_organization_move",
+        "key": "vortex.tenant_administration.organization.move",
+        "label": "Move organisations",
+        "description": "Allows invoking an organisation move; the protected operation also requires the tenant reparent capability.",
+        "action_kind": "named",
+        "named_action": "move_organization",
+        "administrative": false
+      },
+      {
         "id": "app_permission_tenant_administrator_read",
         "key": "vortex.tenant_administration.tenant_administrator.read",
         "label": "Read tenant administrators",
@@ -101,6 +110,7 @@
         "permissions": [
           "application.tenant_administration.open",
           "vortex.tenant_administration.organization.read",
+          "vortex.tenant_administration.organization.move",
           "vortex.tenant_administration.tenant_administrator.read"
         ]
       }
@@ -165,6 +175,13 @@
       {
         "id": "event_rename_organization",
         "key": "vortex.app.tenant_administration.organization_rename",
+        "record_type": "vortex.system_directory:organization",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_move_organization",
+        "key": "vortex.app.tenant_administration.organization_move",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -701,6 +718,19 @@
                           "properties": {
                             "event_id": {
                               "kind": "text",
+                              "value": "event_move_organization"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Move organisation"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
                               "value": "event_create_child_organization"
                             },
                             "label": {
@@ -791,6 +821,87 @@
                       "order": {
                         "desktop": [
                           "input_rename_organization_display_name"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "form_move_organization": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Move organisation"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "input_move_organization_parent": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "parent_organization_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "New parent organisation"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.system_directory:organizations"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.system_directory:organization.display_name"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "input_move_organization_parent"
                         ]
                       }
                     }
@@ -1267,6 +1378,7 @@
                 "desktop": [
                   "structure_region",
                   "form_rename_organization",
+                  "form_move_organization",
                   "form_create_child_organization"
                 ]
               }
@@ -2078,6 +2190,315 @@
       },
       {
         "contractVersion": "1.0.0",
+        "id": "flow_reparent_tenant_organization",
+        "key": "reparent_tenant_organization",
+        "labels": {
+          "name": "Move organisation"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "invocationPermissionId": "app_permission_organization_move",
+        "inputs": {
+          "organization_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:organization"
+            ]
+          },
+          "revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "parent_form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_move_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "parent_organization_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "json",
+                      "value": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "parent_form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "parent_form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_parent_form_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "confirm_move",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Confirm organisation move"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Move the organisation shown in this row under the selected parent organisation?"
+                }
+              }
+            }
+          },
+          {
+            "id": "move_declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm_move",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_move_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.reparent_tenant_organization"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "organization_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "organization_id"
+                    }
+                  },
+                  "expected_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "revision"
+                    }
+                  },
+                  "parent_organization_id": {
+                    "kind": "formula",
+                    "formula": {
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "parent_form",
+                          "key": "values",
+                          "path": [
+                            "parent_organization_id"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "allowRefusal": true
+          },
+          {
+            "id": "move_outcome",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "committed",
+                "when": {
+                  "type": "choice",
+                  "value": "committed"
+                },
+                "tasks": [
+                  {
+                    "id": "message_committed",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "The organisation was moved."
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "key": "conflict",
+                "when": {
+                  "type": "choice",
+                  "value": "conflict"
+                },
+                "tasks": [
+                  {
+                    "id": "message_conflict",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "The organisation changed since this row was shown. Refresh the page and choose Move organisation again."
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "warning"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "key": "refused",
+                "when": {
+                  "type": "choice",
+                  "value": "refused"
+                },
+                "tasks": [
+                  {
+                    "id": "message_refused",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "The organisation could not be moved with your current access and the selected parent."
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "warning"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "key": "validation",
+                "when": {
+                  "type": "choice",
+                  "value": "validation"
+                },
+                "tasks": [
+                  {
+                    "id": "message_validation",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "The organisation move is invalid. Refresh the page and select a permitted parent organisation."
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "warning"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
         "id": "flow_open_tenant_organization",
         "key": "open_tenant_organization",
         "labels": {
@@ -2259,6 +2680,23 @@
             "name": "record_id"
           },
           "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_move_organization",
+        "control": "structure_region",
+        "event_id": "event_move_organization",
+        "event": "row_action",
+        "flow": "flow_reparent_tenant_organization",
+        "inputs": {
+          "organization_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "revision": {
             "kind": "caller",
             "name": "revision"
           }

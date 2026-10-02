@@ -2,18 +2,22 @@ import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
+  runOrganizationAccessOperation,
 } from "@vortex/access";
 import {
   createDatabaseFlowStores,
   createFlowOrchestrator,
   createFormContinuationService,
   createProtectedOperationExecutor,
+  createHumanInstalledRuntimeContextLoader,
   type FlowNamedAction,
   type FlowRecordType,
   type FlowRelease,
 } from "@vortex/app";
 import {
   flowTaskChildLists,
+  canonicalJson,
+  flowSchema,
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   fieldIdSchema,
@@ -570,6 +574,175 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             (await subjectReader.read(session, selection, subject)).kind,
         },
         selectedRecordReads: selectedRecordReadsFor(installation),
+        authorizeInvocation: async (session, selection, flow) => {
+          try {
+            // Only this request's verified person and captured installed release may ask for a
+            // decision. The permission identity comes from the compiled flow, never request JSON.
+            if (
+              canonicalJson(session) !== canonicalJson(identity.session) ||
+              !(Date.parse(session.accessTokenExpiresAt) > Date.now()) ||
+              !sameId(selection.organizationId, installation.organizationId) ||
+              selection.applicationRootId === undefined ||
+              !sameId(selection.applicationRootId, installation.applicationRootId) ||
+              release.releaseKey !== installation.releaseKey ||
+              release.flows !== installation.flows ||
+              installation.applicationContent === undefined ||
+              installation.modules === undefined ||
+              flow.invocationPermissionId === undefined
+            )
+              return false;
+
+            const capturedApplication = installation.applicationContent;
+            const capturedModules = installation.modules;
+            const permissionId = flow.invocationPermissionId;
+            const capturedOwners = [
+              ...capturedApplication.flows.map((candidate) => ({
+                flow: candidate,
+                ownerKind: "application" as const,
+                ownerId: installation.applicationRootId,
+              })),
+              ...capturedModules.flatMap((module) =>
+                module.content.flows.map((candidate) => ({
+                  flow: candidate,
+                  ownerKind: "module" as const,
+                  ownerId: module.rootId,
+                })),
+              ),
+            ].filter((candidate) => sameId(String(candidate.flow.id), String(flow.id)));
+            const capturedOwner = capturedOwners.length === 1 ? capturedOwners[0] : undefined;
+            if (
+              capturedOwner === undefined ||
+              canonicalJson(flowSchema.parse(capturedOwner.flow)) !== canonicalJson(flow) ||
+              canonicalJson(flowSchema.parse(installation.flows.get(String(flow.id)))) !==
+                canonicalJson(flow)
+            )
+              return false;
+
+            const checked = await requests.run(session, selection, async (transaction, scope) => {
+              if (
+                !sameId(scope.organizationId, installation.organizationId) ||
+                scope.applicationRootId === undefined ||
+                !sameId(scope.applicationRootId, installation.applicationRootId)
+              )
+                return false;
+              const current = await createHumanInstalledRuntimeContextLoader({
+                activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+                releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+                  installedReleaseCatalogue,
+                  transaction,
+                ),
+                scope: {
+                  organizationId: scope.organizationId,
+                  applicationRootId: scope.applicationRootId,
+                },
+              }).load();
+              const application = current.releaseSet.application;
+              const modules = installedModuleClosure(application, current.releaseSet.modules);
+              if (
+                !sameId(current.organizationId, installation.organizationId) ||
+                !sameId(current.applicationRootId, installation.applicationRootId) ||
+                current.applicationReleaseRevision !== installation.installationRevision ||
+                [
+                  application.releaseVersion,
+                  application.contentFingerprint,
+                  application.resolutionFingerprint,
+                ].join(":") !== installation.releaseKey ||
+                modules === undefined ||
+                modules.size !== capturedModules.length
+              )
+                return false;
+              // Every bound Module must still be the exact captured immutable release, including
+              // dependencies reached through other Modules. A matching flow ID alone is insufficient.
+              for (const captured of capturedModules) {
+                const module = modules.get(captured.rootId.toLowerCase());
+                if (
+                  module === undefined ||
+                  module.definitionKey !== captured.definitionKey ||
+                  module.releaseRevision !== captured.releaseRevision ||
+                  module.releaseVersion !== captured.releaseVersion ||
+                  module.validationContractVersion !== captured.validationContractVersion ||
+                  module.contentFingerprint !== captured.contentFingerprint ||
+                  module.resolutionFingerprint !== captured.resolutionFingerprint
+                )
+                  return false;
+              }
+              const currentOwners = [
+                ...application.content.flows.map((candidate) => ({
+                  flow: candidate,
+                  ownerKind: "application" as const,
+                  ownerId: application.rootId,
+                })),
+                ...[...modules.values()].flatMap((module) =>
+                  module.content.flows.map((candidate) => ({
+                    flow: candidate,
+                    ownerKind: "module" as const,
+                    ownerId: module.rootId,
+                  })),
+                ),
+              ].filter((candidate) => sameId(String(candidate.flow.id), String(flow.id)));
+              const currentOwner = currentOwners.length === 1 ? currentOwners[0] : undefined;
+              if (
+                currentOwner === undefined ||
+                currentOwner.ownerKind !== capturedOwner.ownerKind ||
+                !sameId(currentOwner.ownerId, capturedOwner.ownerId) ||
+                canonicalJson(flowSchema.parse(currentOwner.flow)) !== canonicalJson(flow)
+              )
+                return false;
+
+              const permissions = current.permissionRegistration.entries.filter((entry) =>
+                sameId(entry.permission.permissionId, permissionId),
+              );
+              const entry = permissions.length === 1 ? permissions[0] : undefined;
+              if (
+                entry === undefined ||
+                !sameId(entry.applicationRootId, installation.applicationRootId) ||
+                entry.permission.recordTypeId !== undefined ||
+                entry.permission.recordScope !== undefined ||
+                entry.permission.fieldPolicy !== undefined
+              )
+                return false;
+              const decision = await runOrganizationAccessOperation(
+                transaction,
+                scope,
+                {
+                  operationKey: entry.permission.key,
+                  action: {
+                    actionKind: entry.permission.actionKind,
+                    ...(entry.permission.namedAction === undefined
+                      ? {}
+                      : { namedAction: entry.permission.namedAction }),
+                  },
+                  target: {
+                    kind: "application",
+                    applicationRootId: current.applicationRootId,
+                  },
+                  requiredPermission: {
+                    applicationRootId: entry.applicationRootId,
+                    ownerKind: entry.ownerKind,
+                    ownerId: entry.ownerId,
+                    permissionId: entry.permission.permissionId,
+                  },
+                  recentAuthentication: { kind: "none" },
+                  authority: { kind: "permission" },
+                },
+                async (allowed) => {
+                  const now = Date.now();
+                  return (
+                    allowed.accessVersion === scope.accessVersion &&
+                    Date.parse(allowed.checkedAt) <= now &&
+                    Date.parse(allowed.validUntil) > now &&
+                    Date.parse(session.accessTokenExpiresAt) > now
+                  );
+                },
+              );
+              return decision.outcome === "completed" && decision.value === true;
+            });
+            return checked.kind === "available" && checked.value === true;
+          } catch {
+            // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal.
+            return false;
+          }
+        },
         continuations: stores.continuations,
         ledger: stores.ledger,
         // The release was read from the trusted installation for this exact request.
