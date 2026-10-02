@@ -8,12 +8,13 @@ import { AuthShell } from "../_components/auth-shell";
 import { StatusMessage } from "../_components/status-message";
 import { SubmitButton } from "../_components/submit-button";
 import { identitySessionNavigationHint } from "../_lib/session-request-state";
+import { getLocalDevelopmentSignInConfiguration } from "../_lib/authority-configuration";
 import {
   applicationHomeAddressPath,
   parseApplicationHomeContinuation,
   serializeApplicationHomeContinuation,
 } from "../_lib/application-home-continuation";
-import { signIn } from "../actions";
+import { signIn, signInWithDevelopmentAccount } from "../actions";
 
 type SignInPageProps = Readonly<{
   searchParams: Promise<{ status?: string; applicationHome?: unknown }>;
@@ -25,6 +26,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     headers(),
   ]);
   const applicationHome = parseApplicationHomeContinuation(applicationHomeValue);
+  const localDevelopmentSignInEnabled = getLocalDevelopmentSignInConfiguration() !== undefined;
   const sessionState = identitySessionNavigationHint(requestHeaders);
   if (sessionState === "verified")
     redirect(
@@ -93,6 +95,20 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </Field>
         <SubmitButton pendingLabel="Signing in…">Sign in</SubmitButton>
       </form>
+      {localDevelopmentSignInEnabled ? (
+        <form className="mt-5 flex flex-col gap-3" action={signInWithDevelopmentAccount}>
+          {applicationHome === undefined ? null : (
+            <input
+              type="hidden"
+              name="applicationHome"
+              value={serializeApplicationHomeContinuation(applicationHome)}
+            />
+          )}
+          <SubmitButton pendingLabel="Signing in…">
+            Continue with local development account
+          </SubmitButton>
+        </form>
+      ) : null}
     </AuthShell>
   );
 }
