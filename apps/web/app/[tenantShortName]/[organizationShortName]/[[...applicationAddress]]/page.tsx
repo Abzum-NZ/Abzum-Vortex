@@ -13,6 +13,7 @@ import {
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
 import { AuthShell } from "../../../auth/_components/auth-shell";
+import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
@@ -57,9 +58,16 @@ export default async function ApplicationAddressPage({
   params,
   searchParams,
 }: ApplicationAddressPageProps) {
-  const identity = await continueSessionOrEnd(await resolveIdentitySession());
-
   const { tenantShortName, organizationShortName, applicationAddress } = await params;
+  const applicationHome = applicationHomeContinuationFromAddress(
+    tenantShortName,
+    organizationShortName,
+    applicationAddress,
+  );
+  const identity = await continueSessionOrEnd(
+    await resolveIdentitySession(),
+    applicationHome,
+  );
   const addressSegments = applicationAddress ?? [];
 
   /**

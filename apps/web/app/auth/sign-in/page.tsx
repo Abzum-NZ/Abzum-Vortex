@@ -8,14 +8,36 @@ import { AuthShell } from "../_components/auth-shell";
 import { StatusMessage } from "../_components/status-message";
 import { SubmitButton } from "../_components/submit-button";
 import { identitySessionNavigationHint } from "../_lib/session-request-state";
+import {
+  applicationHomeAddressPath,
+  parseApplicationHomeContinuation,
+  serializeApplicationHomeContinuation,
+} from "../_lib/application-home-continuation";
 import { signIn } from "../actions";
 
-type SignInPageProps = Readonly<{ searchParams: Promise<{ status?: string }> }>;
+type SignInPageProps = Readonly<{
+  searchParams: Promise<{ status?: string; applicationHome?: unknown }>;
+}>;
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const [{ status }, requestHeaders] = await Promise.all([searchParams, headers()]);
+  const [{ status, applicationHome: applicationHomeValue }, requestHeaders] = await Promise.all([
+    searchParams,
+    headers(),
+  ]);
+  const applicationHome = parseApplicationHomeContinuation(applicationHomeValue);
   const sessionState = identitySessionNavigationHint(requestHeaders);
-  if (sessionState === "verified") redirect("/signed-in");
+  if (sessionState === "verified")
+    redirect(
+      applicationHome === undefined
+        ? "/signed-in"
+        : applicationHomeAddressPath(applicationHome),
+    );
+  const retryHref =
+    applicationHome === undefined
+      ? "/auth/sign-in"
+      : `/auth/sign-in?${new URLSearchParams({
+          applicationHome: serializeApplicationHomeContinuation(applicationHome),
+        }).toString()}`;
   if (sessionState === "temporarily_unavailable")
     return (
       <AuthShell
@@ -23,7 +45,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         title="Account access is temporarily unavailable"
         description="Vortex could not confirm this browser session right now. Try again to continue."
       >
-        <a className="font-medium underline underline-offset-4" href="/auth/sign-in">
+        <a className="font-medium underline underline-offset-4" href={retryHref}>
           Try again
         </a>
       </AuthShell>
@@ -47,6 +69,13 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     >
       <StatusMessage status={status} />
       <form className="flex flex-col gap-5" action={signIn}>
+        {applicationHome === undefined ? null : (
+          <input
+            type="hidden"
+            name="applicationHome"
+            value={serializeApplicationHomeContinuation(applicationHome)}
+          />
+        )}
         <Field>
           <Label htmlFor="email">Email address</Label>
           <Input id="email" name="email" type="email" autoComplete="email" required />
