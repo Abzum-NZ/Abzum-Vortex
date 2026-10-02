@@ -4,6 +4,7 @@ export {
   withRequestDatabaseLifetime,
   type RequestDatabaseLifetime,
   type RequestDatabaseLifetimeOptions,
+  type RequestDatabaseLookupOwner,
   type DatabaseResourcesSettled,
   type RequestDatabaseStopReason,
 } from "./request-lifetime";

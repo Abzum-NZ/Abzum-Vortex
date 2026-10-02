@@ -31,12 +31,14 @@
     "@vortex/query": "workspace:*",
     "@vortex/record": "workspace:*",
     "@vortex/workflow": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "catalog:",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ws": "catalog:",
     "postcss": "8.5.28",
     "tailwindcss": "catalog:",
     "tsx": "catalog:",

@@ -28,6 +28,7 @@ export type IdentitySessionServiceDependencies = Readonly<{
   ensureProjection: EnsureProjection;
   readProjection: ReadProjection;
   clock?: () => Date;
+  checkpoint?(): void;
 }>;
 
 const closed = (result: IdentitySessionResolution): IdentitySessionResolution =>
@@ -97,7 +98,10 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
   > => {
     if (accessToken.trim().length === 0) return { ok: false, result: closed({ kind: "missing" }) };
     try {
-      return { ok: true, identity: await dependencies.verifyAccessToken(accessToken) };
+      dependencies.checkpoint?.();
+      const identity = await dependencies.verifyAccessToken(accessToken);
+      dependencies.checkpoint?.();
+      return { ok: true, identity };
     } catch (error) {
       return { ok: false, result: verificationFailure(error) };
     }
@@ -111,9 +115,11 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
       const verified = await verify(accessToken);
       if (!verified.ok) return verified.result;
       try {
+        dependencies.checkpoint?.();
         const projection = await dependencies.ensureProjection(verified.identity, {
           correlationId,
         });
+        dependencies.checkpoint?.();
         return activeResult(verified.identity, projection, clock);
       } catch {
         return projectionFailure();
@@ -124,9 +130,12 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
       const verified = await verify(accessToken);
       if (!verified.ok) return verified.result;
       try {
+        dependencies.checkpoint?.();
+        const projection = await dependencies.readProjection(verified.identity);
+        dependencies.checkpoint?.();
         return activeResult(
           verified.identity,
-          await dependencies.readProjection(verified.identity),
+          projection,
           clock,
         );
       } catch {
@@ -141,4 +150,5 @@ export const createDefaultIdentitySessionService = (verifier: IdentityVerifier) 
     verifyAccessToken: verifier.verifyAccessToken,
     ensureProjection: ensureIdentityProjection,
     readProjection: readIdentityProjection,
+    ...(verifier.checkpoint === undefined ? {} : { checkpoint: verifier.checkpoint }),
   });
