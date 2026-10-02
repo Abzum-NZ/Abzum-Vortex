@@ -46,6 +46,14 @@ export {
 } from "./kestra-compiler";
 
 export {
+  computeDeclaredScheduleOccurrence,
+  declaredScheduleOccurrenceRefusalReasons,
+  type DeclaredScheduleOccurrenceInput,
+  type DeclaredScheduleOccurrenceRefusalReason,
+  type DeclaredScheduleOccurrenceResult,
+} from "./schedule-occurrence";
+
+export {
   planInstallationWorkflowActivation,
   reconcileInstallationWorkflowWithdrawal,
   installationWorkflowReadinessErrorCodes,

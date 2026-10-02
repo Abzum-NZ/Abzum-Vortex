@@ -10,9 +10,11 @@ import {
   builderKeySchema,
   flowIdSchema,
   flowScheduleRecurrenceSchema,
+  flowSchema,
   organizationIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
+  type FlowDefinition,
   type FlowTrigger,
 } from "@vortex/contracts";
 
@@ -442,5 +444,118 @@ export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccur
     };
   } catch {
     return refused("invalid_input");
+  }
+};
+
+/**
+ * The private server input for calculating one explicitly selected declaration.
+ * `definition` is validated again at this boundary; callers still own its trusted provenance.
+ */
+export type DeclaredScheduleOccurrenceInput = Readonly<{
+  identity: KestraFlowIdentity;
+  definition: FlowDefinition;
+  triggerId: string;
+  afterUtc: string;
+  throughUtc: string;
+}>;
+
+export const declaredScheduleOccurrenceRefusalReasons = [
+  "invalid_definition",
+  "not_durable",
+  "trigger_not_found",
+  "trigger_not_schedule",
+  "condition_not_supported",
+  "invalid_schedule_trigger",
+  ...scheduleOccurrenceRefusalReasons,
+] as const;
+
+export type DeclaredScheduleOccurrenceRefusalReason =
+  (typeof declaredScheduleOccurrenceRefusalReasons)[number];
+
+export type DeclaredScheduleOccurrenceResult =
+  | Readonly<{
+      outcome: "occurrence";
+      scheduledForUtc: string;
+      occurrenceId: string;
+    }>
+  | Readonly<{ outcome: "none" }>
+  | Readonly<{
+      outcome: "refused";
+      reason: DeclaredScheduleOccurrenceRefusalReason;
+    }>;
+
+const declaredInputKeys = [
+  "identity",
+  "definition",
+  "triggerId",
+  "afterUtc",
+  "throughUtc",
+] as const;
+
+const hasExactlyKeys = (
+  value: Readonly<Record<string, unknown>>,
+  allowed: readonly string[],
+): boolean => {
+  const keys = Reflect.ownKeys(value);
+  return (
+    keys.length === allowed.length &&
+    keys.every((key) => typeof key === "string" && allowed.includes(key)) &&
+    allowed.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+  );
+};
+
+const refuseDeclared = (
+  reason: DeclaredScheduleOccurrenceRefusalReason,
+): DeclaredScheduleOccurrenceResult => ({ outcome: "refused", reason });
+
+/**
+ * Calculates the next occurrence from one canonical durable flow and one named Schedule.
+ * This validates declaration shape only; it proves neither source provenance nor execution authority.
+ */
+export const computeDeclaredScheduleOccurrence = (
+  candidate: unknown,
+): DeclaredScheduleOccurrenceResult => {
+  try {
+    if (!isRecord(candidate) || !hasExactlyKeys(candidate, declaredInputKeys))
+      return refuseDeclared("invalid_input");
+
+    const identity = candidate.identity;
+    const definitionCandidate = candidate.definition;
+    const requestedTriggerId = candidate.triggerId;
+    const afterUtc = candidate.afterUtc;
+    const throughUtc = candidate.throughUtc;
+
+    const parsedDefinition = flowSchema.safeParse(definitionCandidate);
+    if (!parsedDefinition.success) return refuseDeclared("invalid_definition");
+    const definition = parsedDefinition.data;
+    if (definition.execution !== "durable") return refuseDeclared("not_durable");
+
+    const parsedTriggerId = builderKeySchema.safeParse(requestedTriggerId);
+    if (!parsedTriggerId.success) return refuseDeclared("invalid_trigger_id");
+
+    const matchingTriggers = definition.triggers.filter(
+      (trigger) => trigger.id === parsedTriggerId.data,
+    );
+    if (matchingTriggers.length === 0) return refuseDeclared("trigger_not_found");
+    if (matchingTriggers.length !== 1) return refuseDeclared("invalid_definition");
+
+    const trigger = matchingTriggers[0];
+    if (trigger === undefined) return refuseDeclared("invalid_definition");
+    if (trigger.type !== "Schedule") return refuseDeclared("trigger_not_schedule");
+    // flowSchema requires scheduled_instant for every Schedule declaration.
+    if (trigger.duplicateProtection !== "scheduled_instant")
+      return refuseDeclared("invalid_schedule_trigger");
+    if (trigger.condition !== undefined) return refuseDeclared("condition_not_supported");
+
+    return computeNextScheduleOccurrence({
+      identity,
+      flowId: definition.id,
+      triggerId: trigger.id,
+      recurrence: trigger.recurrence,
+      afterUtc,
+      throughUtc,
+    });
+  } catch {
+    return refuseDeclared("invalid_input");
   }
 };
