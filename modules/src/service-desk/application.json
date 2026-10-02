@@ -400,6 +400,10 @@
                                                                                                                           "title":  {
                                                                                                                                         "kind":  "text",
                                                                                                                                         "value":  "Service overview"
+                                                                                                                                    },
+                                                                                                                          "text":  {
+                                                                                                                                        "kind":  "text",
+                                                                                                                                        "value":  "Review the case queue, knowledge articles and service levels. Open a case to view its details and use the actions available to you."
                                                                                                                                     }
                                                                                                                       },
                                                                                                          "theme_overrides":  {
