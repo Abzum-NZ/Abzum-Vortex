@@ -15,7 +15,7 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "./identifiers";
-import { moduleContentV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
+import { moduleDraftV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
@@ -183,19 +183,19 @@ export const applicationVersionImpactRequestV2Schema = z
   })
   .strict();
 
-/** The one current Module history evidence; publication dispatch requires this exact pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact 3.0.0 pair. */
 export const moduleVersionImpactHistoryEntryV3Schema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
       validationContractVersion: z.literal("3.0.0"),
     }),
-    content: moduleContentV3Schema,
+    content: storedModuleContentV3Schema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(moduleContentV3Schema, value.content, context, ["content"]),
+    requireResolvedRecordTypeReferences(storedModuleContentV3Schema, value.content, context, ["content"]),
   );
 
 export const moduleVersionImpactRequestV3Schema = z
