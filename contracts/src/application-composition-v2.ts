@@ -2279,6 +2279,7 @@ export const protectedReadModelKeys = [
   "tenant_administrators",
   "installed_applications",
   "landing_zone_applications",
+  "application_role_templates",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
@@ -2375,6 +2376,12 @@ export const protectedReadModelDeclarations = Object.freeze({
   }),
   landing_zone_applications: Object.freeze({
     label: "Landing Zone applications",
+    ownerReader: "unavailable",
+    filters: Object.freeze([] as const),
+    resultContract: "ProtectedReadModelResolution",
+  }),
+  application_role_templates: Object.freeze({
+    label: "Application role templates",
     ownerReader: "unavailable",
     filters: Object.freeze([] as const),
     resultContract: "ProtectedReadModelResolution",
