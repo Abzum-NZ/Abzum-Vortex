@@ -99,6 +99,7 @@ import {
   getIdentityJourneyConfiguration,
 } from "../auth/_lib/authority-configuration";
 import {
+  bindReferenceChoiceField,
   hasReferenceChoiceSource,
   projectedReferenceChoiceForm,
   resolveReferenceChoiceOption,
@@ -152,6 +153,8 @@ export type ApplicationPageModel = Readonly<{
     placementId: string;
     formId: string;
     fieldKey: string;
+    releaseVersion: "1.1.0" | "1.2.0";
+    dependency?: Readonly<{ fieldKey: string; placementId: string }>;
   }>[];
   guidedForm?: Readonly<{
     draftId: string;
@@ -691,6 +694,7 @@ export const loadReferenceChoicePage = async (
     continuationToken?: string;
     selectedKey?: string;
     selectedEvidence?: ReferenceChoiceSelectionEvidence;
+    dependencyChoice?: Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>;
   }>,
 ): Promise<ReferenceChoicePageResult> => {
   try {
@@ -709,11 +713,32 @@ export const loadReferenceChoicePage = async (
       placement.formId,
     );
     const field = form?.placements.get(request.placementId);
-    if (field === undefined) return { kind: "refused" };
+    if (field === undefined || form === undefined) return { kind: "refused" };
 
     const service = createReferenceChoiceService({ ...dependencies, continuationKey });
+    let currentField = field;
+    let dependencyKey: string | null | undefined;
+    if (field.dependency !== undefined) {
+      if (request.dependencyChoice === undefined)
+        return {
+          kind: "completed",
+          values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
+        };
+      const parent = form.fields.get(field.dependency.fromField);
+      if (parent === undefined) return { kind: "refused" };
+      const selected = await resolveReferenceChoiceOption({
+        service, session, selection, field: parent,
+        key: request.dependencyChoice.key,
+        evidence: request.dependencyChoice.evidence,
+      });
+      if (selected === undefined) return { kind: "refused" };
+      const bound = bindReferenceChoiceField(form.fields, field, selected);
+      if (bound === undefined) return { kind: "refused" };
+      currentField = bound;
+      dependencyKey = selected.key;
+    } else if (request.dependencyChoice !== undefined) return { kind: "refused" };
     const result = await service.run(session, selection, {
-      ...field.command,
+      ...currentField.command,
       ...(request.search === undefined || request.search.trim() === ""
         ? {}
         : { search: request.search }),
@@ -740,7 +765,7 @@ export const loadReferenceChoicePage = async (
         service,
         session,
         selection,
-        field,
+        field: currentField,
         key: request.selectedKey,
         evidence: request.selectedEvidence,
       });
@@ -758,6 +783,7 @@ export const loadReferenceChoicePage = async (
         selectedChoice?.key ?? null,
         undefined,
         {
+          ...(dependencyKey === undefined ? {} : { dependencyKey }),
           ...(request.search === undefined ? {} : { search: request.search }),
           ...(request.continuationToken === undefined
             ? {}
@@ -2012,7 +2038,7 @@ const loadApplicationPageInternal = async (
         values: { kind: "date_time_input", ...dateTimeZones },
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  const referenceChoiceInputs: Array<{ placementId: string; formId: string; fieldKey: string }> = [];
+  const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
   for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
@@ -2090,7 +2116,23 @@ const loadApplicationPageInternal = async (
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
         continue;
       }
-      referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
+      const parent = field.dependency === undefined ? undefined :
+        [...(form?.placements ?? [])].find(([, candidate]) =>
+          candidate.fieldKey === field.dependency?.fromField,
+        );
+      referenceChoiceInputs.push({
+        placementId, formId, fieldKey: field.fieldKey, releaseVersion: field.releaseVersion,
+        ...(parent === undefined ? {} : {
+          dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
+        }),
+      });
+      if (field.dependency !== undefined) {
+        data[placementId] = {
+          status: "ready",
+          values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
+        };
+        continue;
+      }
       const result = await referenceChoices.run(session, selection, field.command);
       if (result.kind !== "available" || result.value.outcome !== "completed") {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
