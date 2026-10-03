@@ -13,7 +13,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
 } from "./identifiers";
-import { moduleContentV3Schema, moduleQueryDefinitionV3Schema } from "./module-contracts-v3";
+import { moduleQueryDefinitionV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
@@ -129,12 +129,12 @@ export const applicationDefinitionConsumerReadResultV2Schema = z
       });
   });
 
-/** The one current Module consumer-read result and exact release identity. */
+/** The Module 3.0.0 stored consumer projection and its exact immutable release identity. */
 export const moduleDefinitionConsumerReadResultV3Schema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
-    content: moduleContentV3Schema,
+    content: storedModuleContentV3Schema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("3.0.0"),
   })

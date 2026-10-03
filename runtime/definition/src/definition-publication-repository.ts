@@ -3,7 +3,7 @@ import "server-only";
 import {
   actorIdSchema,
   assertModuleContractPair,
-  definitionCompilationOutputSchema,
+  storedDefinitionCompilationOutputSchema,
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
   definitionResolutionSnapshotV2Schema,
@@ -132,7 +132,7 @@ const storedReleaseEvidenceSchema = z
     authoredSource: storedDefinitionSourceSchema,
     authoredSourceFingerprint: fingerprintSchema,
     sourceContractVersion: semanticVersionSchema,
-    compilationOutput: definitionCompilationOutputSchema,
+    compilationOutput: storedDefinitionCompilationOutputSchema,
     resolutionSnapshot: z.union([
       definitionResolutionSnapshotSchema,
       definitionResolutionSnapshotV2Schema,
@@ -200,7 +200,7 @@ const rawModuleReleaseSchema = z
     releaseVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
-    compilationOutput: definitionCompilationOutputSchema,
+    compilationOutput: storedDefinitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotV3Schema,
     identities: z.array(sourceIdentityAssignmentV3Schema),
     published: rawPublishedModuleSchema,
@@ -265,7 +265,7 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
  * manifest check belongs to consumer reads, which receive the full manifest.
  */
 const dependencyReferencesMatch = (
-  output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
+  output: Exclude<z.infer<typeof storedDefinitionCompilationOutputSchema>, { kind: "connection_type" }>,
   references: readonly { readonly kind: string }[],
 ): boolean => {
   const dependencies =
