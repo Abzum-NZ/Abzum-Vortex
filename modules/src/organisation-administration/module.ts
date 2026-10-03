@@ -182,6 +182,15 @@ const installedApplicationAllFields = [
   "release_revision",
   "is_default",
 ];
+const applicationRoleTemplateAllFields = [
+  "organization_id",
+  "revision",
+  "application_root_id",
+  "source_role_id",
+  "key",
+  "label",
+  "continuity_revision",
+];
 
 /**
  * Ordinary, application-contained records for the Organisation Administration
@@ -191,7 +200,8 @@ const installedApplicationAllFields = [
  * System Directory and are read through its ordinary module queries. Protected
  * operations remain their only write path, and raw invitation secrets and stored
  * fingerprints are never projected. The writable, extendable organisation
- * settings record and the installed-application projection remain declared here.
+ * settings record, installed-application projection and registered application
+ * role-template projection remain declared here.
  */
 export const organisationAdministrationModule: ModuleSourceDocument =
   moduleSourceDocumentSchema.parse({
@@ -781,6 +791,120 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           relationships: [],
         },
+        {
+          id: "rt_application_role_template",
+          key: "application_role_template",
+          name: "Application role template",
+          plural_name: "Application role templates",
+          title_field: "label",
+          storage_contract_id: "srt_org_admin_application_role_template",
+          storage_scope: "organisation_shared",
+          ownership_mode: "none",
+          standard_actions: ["read"],
+          custom_actions: [],
+          system_projection: {
+            protected_view: "application_role_templates",
+            organization_field: "organization_id",
+            revision_field: "revision",
+            filterable_fields: ["application_root_id"],
+            sortable_fields: ["key", "label"],
+          },
+          fields: [
+            {
+              id: "fld_application_role_template_organization_id",
+              key: "organization_id",
+              label: "Organisation",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+            {
+              id: "fld_application_role_template_revision",
+              key: "revision",
+              label: "Registration revision",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "whole_number",
+              settings: {},
+            },
+            {
+              id: "fld_application_role_template_application_root_id",
+              key: "application_root_id",
+              label: "Application",
+              required: true,
+              unique: false,
+              filterable: true,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+            {
+              id: "fld_application_role_template_source_role_id",
+              key: "source_role_id",
+              label: "Source role",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 36 },
+            },
+            {
+              id: "fld_application_role_template_key",
+              key: "key",
+              label: "Key",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: true,
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 120 },
+            },
+            {
+              id: "fld_application_role_template_label",
+              key: "label",
+              label: "Label",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: true,
+              search_priority: "first",
+              personal_data: "none",
+              public_display: "refused",
+              type: "text",
+              settings: { max_length: 120 },
+            },
+            {
+              id: "fld_application_role_template_continuity_revision",
+              key: "continuity_revision",
+              label: "Continuity revision",
+              required: true,
+              unique: false,
+              filterable: false,
+              sortable: false,
+              personal_data: "none",
+              public_display: "refused",
+              type: "whole_number",
+              settings: {},
+            },
+          ],
+          relationships: [],
+        },
       ],
       permissions: [
         {
@@ -1038,6 +1162,21 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             changeable_fields: [],
           },
         },
+        {
+          id: "perm_application_role_template_read",
+          key: "vortex.organisation_administration.application_role_template.read",
+          label: "Read application role templates",
+          description:
+            "Allows reading the protected application-role-template projection as a system record.",
+          record_type: "application_role_template",
+          action_kind: "read",
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" }] },
+          field_policy: {
+            readable_fields: applicationRoleTemplateAllFields,
+            changeable_fields: [],
+          },
+        },
       ],
       actions: [
         {
@@ -1274,6 +1413,59 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           "page_size": 50,
           "relationship_hops": 0
+        },
+        {
+          "id": "qry_installed_applications",
+          "key": "installed_applications",
+          "record_type": "installed_application",
+          "inputs": [],
+          "select": [
+            "key",
+            "release_revision",
+            "is_default"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "key",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
+        {
+          id: "qry_application_role_templates",
+          key: "application_role_templates",
+          record_type: "application_role_template",
+          inputs: [
+            {
+              key: "selected_application",
+              label: "Selected application",
+              required: true,
+              type: "text",
+              validation: { minimum_length: 36, maximum_length: 36 },
+            },
+          ],
+          select: [
+            "application_root_id",
+            "source_role_id",
+            "key",
+            "label",
+            "continuity_revision",
+          ],
+          filter: {
+            field: "application_root_id",
+            operator: "equals",
+            parameter: "selected_application",
+          },
+          group_by: [],
+          aggregates: [],
+          sort: [{ field: "label", direction: "ascending" }],
+          page_size: 50,
+          relationship_hops: 0,
         },
       ],
     },

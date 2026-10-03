@@ -27,8 +27,11 @@ export * from "./builder-authority";
 export * from "./definition-store";
 export {
   readApplicationDefinitionDraft,
+  readModuleDefinitionDraft,
   type ApplicationDefinitionDraftReadCommand,
+  type ModuleDefinitionDraftReadCommand,
   type StoredApplicationDefinitionDraft,
+  type StoredModuleDefinitionDraft,
 } from "./definition-draft-read";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";

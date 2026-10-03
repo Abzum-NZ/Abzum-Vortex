@@ -3,6 +3,7 @@ import {
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   CONTROL_BLOCK_RELEASES,
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
@@ -31,6 +32,7 @@ import {
   parseBooleanInputPayload,
   parseButtonPayload,
   parseChoiceInputPayload,
+  parseDependentChoiceInputPayload,
   parseControlData,
   parseControlEventHandlers,
   parseDateInputPayload,
@@ -394,6 +396,11 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       metadata: CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
       render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
+    }),
+    Object.freeze({
+      metadata: CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+      render: ChoiceInput,
+      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),
     Object.freeze({
       metadata: FIELD_INPUT_BLOCK_RELEASE,

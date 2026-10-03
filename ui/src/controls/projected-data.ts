@@ -143,6 +143,8 @@ export type ChoiceInputPayload = Readonly<{
   options?: readonly ChoiceOption[];
   optionEvidence?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
   nextContinuationToken?: string;
+  /** Choice 1.2.0 only: current parent option key used to reset local edits. */
+  dependencyKey?: string | null;
   error?: string;
 }>;
 
@@ -574,7 +576,9 @@ export const parseDateTimeInputPayload = (
 export const parseChoiceInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
+  releaseVersion?: "1.1.0" | "1.2.0",
 ): ChoiceInputPayload => {
+  if (releaseVersion === "1.2.0") return parseDependentChoiceInputPayload(value, location);
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "choice_input")
     return fail(
@@ -620,6 +624,26 @@ export const parseChoiceInputPayload = (
     ...(optionEvidence === undefined ? {} : { optionEvidence }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
     ...optionalError(record, location),
+  });
+};
+
+/** The new immutable release alone accepts a dependency reset context. */
+export const parseDependentChoiceInputPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): ChoiceInputPayload => {
+  const record = requireRecord(value, "Projected control values must be an object", location);
+  requireExactKeys(record,
+    ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error", "dependencyKey"],
+    location,
+  );
+  const { dependencyKey, ...ordinary } = record;
+  if (dependencyKey !== undefined && dependencyKey !== null &&
+      !builderKeySchema.safeParse(dependencyKey).success)
+    return fail("A Choice dependency must be an offered option key or null", location);
+  return Object.freeze({
+    ...parseChoiceInputPayload(ordinary, location),
+    ...(dependencyKey === undefined ? {} : { dependencyKey: dependencyKey as string | null }),
   });
 };
 

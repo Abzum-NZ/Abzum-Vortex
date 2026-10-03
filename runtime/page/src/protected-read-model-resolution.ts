@@ -298,6 +298,7 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
           return refused;
         }
         case "landing_zone_applications":
+        case "application_role_templates":
           return refused;
       }
     } catch {

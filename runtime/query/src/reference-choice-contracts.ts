@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  builderKeySchema,
   fieldIdSchema,
   organizationAccountIdSchema,
   publishedModuleQueryDescriptorV3Schema,
@@ -30,6 +31,8 @@ export const recordReferenceChoiceCommandSchema = z
     source: publishedModuleQueryDescriptorV3Schema,
     /** A field the source query selects, shown as each choice's label. */
     labelFieldId: fieldIdSchema,
+    /** Supplied only by the composing server after resolving a current permitted parent choice. */
+    boundInput: z.object({ key: builderKeySchema, value: recordIdSchema }).strict().optional(),
     /** Narrows each bounded page to choices whose label contains this text. */
     search: choiceSearchSchema.optional(),
     pageSize: choicePageSizeSchema,

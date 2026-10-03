@@ -96,6 +96,11 @@ export {
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
 export {
+  createOrganizationSetupReceiptReader,
+  readOrganizationSetupReceipt,
+  type OrganizationSetupReceiptReaderDependencies,
+} from "./organization-setup-receipt";
+export {
   createOrganizationRuntimeSettingsStore,
   initializeOrganizationRuntimeSettings,
   OrganizationRuntimeSettingsError,
