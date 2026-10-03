@@ -18,7 +18,7 @@
         "storage_scope": "application_contained",
         "ownership_mode": "organisation_account",
         "standard_actions": ["create", "read", "update", "soft_delete"],
-        "custom_actions": [],
+        "custom_actions": ["act_landing_zone_tile_remove"],
         "fields": [
           {
             "id": "fld_landing_zone_tile_target_kind",
@@ -331,6 +331,21 @@
         }
       },
       {
+        "id": "perm_landing_zone_tile_remove",
+        "key": "vortex.landing_zone.tile.remove",
+        "label": "Remove tile",
+        "description": "Allows the named removal of tiles owned by the current organisation account, with current standard delete authority also required.",
+        "record_type": "tile",
+        "action_kind": "named",
+        "named_action": "remove",
+        "administrative": false,
+        "record_scope": { "routes": [{ "kind": "ownership" }] },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
         "id": "perm_landing_zone_application_read",
         "key": "vortex.landing_zone.application.read",
         "label": "Read applications",
@@ -345,7 +360,24 @@
         }
       }
     ],
-    "actions": [],
+    "actions": [
+      {
+        "id": "act_landing_zone_tile_remove",
+        "key": "vortex.landing_zone.tile.remove",
+        "label": "Remove tile",
+        "record_type": "tile",
+        "permission": "vortex.landing_zone.tile.remove",
+        "shareable": false,
+        "inputs": [],
+        "tasks": [
+          {
+            "id": "delete_subject",
+            "type": "record.delete",
+            "properties": {}
+          }
+        ]
+      }
+    ],
     "events": [],
     "flows": [],
     "extension_points": [],
