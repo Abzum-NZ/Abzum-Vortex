@@ -2,18 +2,22 @@ import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
+  runOrganizationAccessOperation,
 } from "@vortex/access";
 import {
   createDatabaseFlowStores,
   createFlowOrchestrator,
   createFormContinuationService,
   createProtectedOperationExecutor,
+  createHumanInstalledRuntimeContextLoader,
   type FlowNamedAction,
   type FlowRecordType,
   type FlowRelease,
 } from "@vortex/app";
 import {
   flowTaskChildLists,
+  canonicalJson,
+  flowSchema,
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   fieldIdSchema,
@@ -86,6 +90,70 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const maximumRequestBodyLength = 131_072;
+
+const localFlowLedgerSqlStates = new Set<string>([
+  "22023", "42501", "P0002", "40001", "23503", "23505", "23514", "55000",
+  "57014", "40P01", "57P01", "08000", "08001", "08003", "08006",
+]);
+const localFlowLedgerClaimKinds = new Set<string>([
+  "claimed", "completed", "in_progress", "unavailable",
+]);
+
+const localFlowLedgerSqlState = (error: unknown): string => {
+  try {
+    if (typeof error !== "object" || error === null) return "NONE";
+    const descriptor = Object.getOwnPropertyDescriptor(error, "code");
+    if (descriptor === undefined) return "NONE";
+    const code: unknown = descriptor.value;
+    return typeof code === "string" && localFlowLedgerSqlStates.has(code) ? code : "OTHER";
+  } catch {
+    return "OTHER";
+  }
+};
+
+const localFlowLedgerClaimKind = (claim: unknown): string => {
+  try {
+    if (typeof claim !== "object" || claim === null) return "OTHER";
+    const kind: unknown = Object.getOwnPropertyDescriptor(claim, "kind")?.value;
+    return typeof kind === "string" && localFlowLedgerClaimKinds.has(kind) ? kind : "OTHER";
+  } catch {
+    return "OTHER";
+  }
+};
+
+/** One bounded, best-effort server recorder shared by this POST's ledger delegates. */
+const createLocalFlowLedgerDiagnostic = () => {
+  let emitted = 0;
+  return (stage: "BEGIN_ENTER" | "BEGIN_RETURN" | "BEGIN_THREW", value?: unknown): void => {
+    try {
+      if (
+        emitted >= 32 ||
+        process.env.VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" ||
+        process.env.VORTEX_ENVIRONMENT !== "local"
+      ) return;
+      const journey = getIdentityJourneyConfiguration();
+      const authority = getIdentityAuthorityConfiguration();
+      if (
+        authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
+      ) return;
+      const event = stage === "BEGIN_RETURN"
+        ? { stage, claimKind: localFlowLedgerClaimKind(value) }
+        : stage === "BEGIN_THREW"
+          ? { stage, sqlstate: localFlowLedgerSqlState(value) }
+          : { stage };
+      // Count the attempt before logging so logger failure cannot bypass the request cap.
+      emitted += 1;
+      console.error("VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC:" + JSON.stringify(event));
+    } catch {
+      // Configuration, inspection and logging cannot change the original ledger outcome.
+    }
+  };
+};
 
 /**
  * The browser names only an application address and the invocation. The organisation, installation
@@ -492,6 +560,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
     const stores = createDatabaseFlowStores();
+    const diagnoseLedger = createLocalFlowLedgerDiagnostic();
+    const ledger: typeof stores.ledger = {
+      async begin(key) {
+        diagnoseLedger("BEGIN_ENTER");
+        try {
+          const claim = await stores.ledger.begin(key);
+          diagnoseLedger("BEGIN_RETURN", claim);
+          return claim;
+        } catch (error) {
+          diagnoseLedger("BEGIN_THREW", error);
+          throw error;
+        }
+      },
+      complete: (key, outcome, outputs) => stores.ledger.complete(key, outcome, outputs),
+    };
     // #1369, #1370: Save record tasks and named actions run through the record service's own
     // protected paths, under the initiator's verified request and in their own transactions.
     const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
@@ -570,8 +653,177 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             (await subjectReader.read(session, selection, subject)).kind,
         },
         selectedRecordReads: selectedRecordReadsFor(installation),
+        authorizeInvocation: async (session, selection, flow) => {
+          try {
+            // Only this request's verified person and captured installed release may ask for a
+            // decision. The permission identity comes from the compiled flow, never request JSON.
+            if (
+              canonicalJson(session) !== canonicalJson(identity.session) ||
+              !(Date.parse(session.accessTokenExpiresAt) > Date.now()) ||
+              !sameId(selection.organizationId, installation.organizationId) ||
+              selection.applicationRootId === undefined ||
+              !sameId(selection.applicationRootId, installation.applicationRootId) ||
+              release.releaseKey !== installation.releaseKey ||
+              release.flows !== installation.flows ||
+              installation.applicationContent === undefined ||
+              installation.modules === undefined ||
+              flow.invocationPermissionId === undefined
+            )
+              return false;
+
+            const capturedApplication = installation.applicationContent;
+            const capturedModules = installation.modules;
+            const permissionId = flow.invocationPermissionId;
+            const capturedOwners = [
+              ...capturedApplication.flows.map((candidate) => ({
+                flow: candidate,
+                ownerKind: "application" as const,
+                ownerId: installation.applicationRootId,
+              })),
+              ...capturedModules.flatMap((module) =>
+                module.content.flows.map((candidate) => ({
+                  flow: candidate,
+                  ownerKind: "module" as const,
+                  ownerId: module.rootId,
+                })),
+              ),
+            ].filter((candidate) => sameId(String(candidate.flow.id), String(flow.id)));
+            const capturedOwner = capturedOwners.length === 1 ? capturedOwners[0] : undefined;
+            if (
+              capturedOwner === undefined ||
+              canonicalJson(flowSchema.parse(capturedOwner.flow)) !== canonicalJson(flow) ||
+              canonicalJson(flowSchema.parse(installation.flows.get(String(flow.id)))) !==
+                canonicalJson(flow)
+            )
+              return false;
+
+            const checked = await requests.run(session, selection, async (transaction, scope) => {
+              if (
+                !sameId(scope.organizationId, installation.organizationId) ||
+                scope.applicationRootId === undefined ||
+                !sameId(scope.applicationRootId, installation.applicationRootId)
+              )
+                return false;
+              const current = await createHumanInstalledRuntimeContextLoader({
+                activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+                releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+                  installedReleaseCatalogue,
+                  transaction,
+                ),
+                scope: {
+                  organizationId: scope.organizationId,
+                  applicationRootId: scope.applicationRootId,
+                },
+              }).load();
+              const application = current.releaseSet.application;
+              const modules = installedModuleClosure(application, current.releaseSet.modules);
+              if (
+                !sameId(current.organizationId, installation.organizationId) ||
+                !sameId(current.applicationRootId, installation.applicationRootId) ||
+                current.applicationReleaseRevision !== installation.installationRevision ||
+                [
+                  application.releaseVersion,
+                  application.contentFingerprint,
+                  application.resolutionFingerprint,
+                ].join(":") !== installation.releaseKey ||
+                modules === undefined ||
+                modules.size !== capturedModules.length
+              )
+                return false;
+              // Every bound Module must still be the exact captured immutable release, including
+              // dependencies reached through other Modules. A matching flow ID alone is insufficient.
+              for (const captured of capturedModules) {
+                const module = modules.get(captured.rootId.toLowerCase());
+                if (
+                  module === undefined ||
+                  module.definitionKey !== captured.definitionKey ||
+                  module.releaseRevision !== captured.releaseRevision ||
+                  module.releaseVersion !== captured.releaseVersion ||
+                  module.validationContractVersion !== captured.validationContractVersion ||
+                  module.contentFingerprint !== captured.contentFingerprint ||
+                  module.resolutionFingerprint !== captured.resolutionFingerprint
+                )
+                  return false;
+              }
+              const currentOwners = [
+                ...application.content.flows.map((candidate) => ({
+                  flow: candidate,
+                  ownerKind: "application" as const,
+                  ownerId: application.rootId,
+                })),
+                ...[...modules.values()].flatMap((module) =>
+                  module.content.flows.map((candidate) => ({
+                    flow: candidate,
+                    ownerKind: "module" as const,
+                    ownerId: module.rootId,
+                  })),
+                ),
+              ].filter((candidate) => sameId(String(candidate.flow.id), String(flow.id)));
+              const currentOwner = currentOwners.length === 1 ? currentOwners[0] : undefined;
+              if (
+                currentOwner === undefined ||
+                currentOwner.ownerKind !== capturedOwner.ownerKind ||
+                !sameId(currentOwner.ownerId, capturedOwner.ownerId) ||
+                canonicalJson(flowSchema.parse(currentOwner.flow)) !== canonicalJson(flow)
+              )
+                return false;
+
+              const permissions = current.permissionRegistration.entries.filter((entry) =>
+                sameId(entry.permission.permissionId, permissionId),
+              );
+              const entry = permissions.length === 1 ? permissions[0] : undefined;
+              if (
+                entry === undefined ||
+                !sameId(entry.applicationRootId, installation.applicationRootId) ||
+                entry.permission.recordTypeId !== undefined ||
+                entry.permission.recordScope !== undefined ||
+                entry.permission.fieldPolicy !== undefined
+              )
+                return false;
+              const decision = await runOrganizationAccessOperation(
+                transaction,
+                scope,
+                {
+                  operationKey: entry.permission.key,
+                  action: {
+                    actionKind: entry.permission.actionKind,
+                    ...(entry.permission.namedAction === undefined
+                      ? {}
+                      : { namedAction: entry.permission.namedAction }),
+                  },
+                  target: {
+                    kind: "application",
+                    applicationRootId: current.applicationRootId,
+                  },
+                  requiredPermission: {
+                    applicationRootId: entry.applicationRootId,
+                    ownerKind: entry.ownerKind,
+                    ownerId: entry.ownerId,
+                    permissionId: entry.permission.permissionId,
+                  },
+                  recentAuthentication: { kind: "none" },
+                  authority: { kind: "permission" },
+                },
+                async (allowed) => {
+                  const now = Date.now();
+                  return (
+                    allowed.accessVersion === scope.accessVersion &&
+                    Date.parse(allowed.checkedAt) <= now &&
+                    Date.parse(allowed.validUntil) > now &&
+                    Date.parse(session.accessTokenExpiresAt) > now
+                  );
+                },
+              );
+              return decision.outcome === "completed" && decision.value === true;
+            });
+            return checked.kind === "available" && checked.value === true;
+          } catch {
+            // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal.
+            return false;
+          }
+        },
         continuations: stores.continuations,
-        ledger: stores.ledger,
+        ledger,
         // The release was read from the trusted installation for this exact request.
         resolveRelease: async () => release,
         ...(runId === undefined ? {} : { newRunId: () => runId }),

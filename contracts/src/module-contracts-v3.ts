@@ -57,6 +57,7 @@ export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrat
 import { permissionDeclarationSchema } from "./permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
+import { isHistoricalModuleV3SystemRecordOperation } from "./historical-module-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition-v2";
 import { flowSchema } from "./flow-contracts";
 import { recordOwnershipModeSchema } from "./record-ownership-compatibility";
@@ -1246,7 +1247,9 @@ export const isSystemRecordProtectedOperation = (
  * re-checks the actor's current authority in its owning service and never accepts an organisation
  * or actor.
  */
-export const actionDefinitionV3Schema = z
+const createActionDefinitionV3Schema = (
+  registeredOperation: (reference: z.infer<typeof protectedOperationReferenceSchema>) => boolean,
+) => z
   .object({
     actionId: actionIdSchema,
     key: namespacedKeySchema,
@@ -1301,13 +1304,24 @@ export const actionDefinitionV3Schema = z
         path: ["protectedOperation"],
         message: "An action targets either ordered tasks or one registered protected operation",
       });
-    if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
+    if (operation !== undefined && !registeredOperation(operation))
       context.addIssue({
         code: "custom",
         path: ["protectedOperation"],
         message: "An action targets a registered platform-service operation on one existing row",
       });
   });
+
+export const actionDefinitionV3Schema = createActionDefinitionV3Schema(
+  isSystemRecordProtectedOperation,
+);
+
+/** Immutable Module 3.0.0 content keeps its original registration meaning, never an executor. */
+export const storedActionDefinitionV3Schema = createActionDefinitionV3Schema(
+  (reference) =>
+    isSystemRecordProtectedOperation(reference) ||
+    isHistoricalModuleV3SystemRecordOperation(reference),
+);
 
 /**
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
@@ -1319,14 +1333,16 @@ export const actionDefinitionV3Schema = z
  * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
  * no rule exists without its flow, so a save can never run without a rule its Module declares.
  */
-export const moduleContentV3Schema = z
+const createModuleContentV3Schema = (
+  actionSchema: ReturnType<typeof createActionDefinitionV3Schema>,
+) => z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
     dependencies: z.array(moduleDependencySchema),
     recordTypes: z.array(recordTypeDefinitionV3Schema).min(1).max(100),
     permissions: z.array(permissionDeclarationSchema),
-    actions: z.array(actionDefinitionV3Schema),
+    actions: z.array(actionSchema),
     events: z.array(eventDefinitionSchema),
     sharingConditions: z.array(savedSharingConditionV3Schema),
     extensionPoints: z.array(
@@ -1346,8 +1362,13 @@ export const moduleContentV3Schema = z
   })
   .strict();
 
-export const moduleDraftV3Schema = z
-  .object({ envelope: moduleDefinitionEnvelopeSchema, content: moduleContentV3Schema })
+export const moduleContentV3Schema = createModuleContentV3Schema(actionDefinitionV3Schema);
+export const storedModuleContentV3Schema = createModuleContentV3Schema(storedActionDefinitionV3Schema);
+
+const createModuleDraftV3Schema = (
+  contentSchema: ReturnType<typeof createModuleContentV3Schema>,
+) => z
+  .object({ envelope: moduleDefinitionEnvelopeSchema, content: contentSchema })
   .strict()
   .superRefine((draft, context) => {
     const invalid = (message: string, path: (string | number)[]) =>
@@ -1406,6 +1427,9 @@ export const moduleDraftV3Schema = z
         );
     });
   });
+
+export const moduleDraftV3Schema = createModuleDraftV3Schema(moduleContentV3Schema);
+export const storedModuleDraftV3Schema = createModuleDraftV3Schema(storedModuleContentV3Schema);
 
 export const moduleCanonicalDocumentV3Schema = z
   .object({

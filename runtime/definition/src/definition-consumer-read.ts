@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  definitionCompilationOutputSchema,
+  storedDefinitionCompilationOutputSchema,
   definitionConsumerReadCommandSchema,
   definitionConsumerReadDependencyManifestSchema,
   definitionConsumerReadResultSchema,
@@ -73,7 +73,7 @@ export const storedConsumerReleaseEvidenceSchema = z
     validationContractVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
-    compilationOutput: definitionCompilationOutputSchema,
+    compilationOutput: storedDefinitionCompilationOutputSchema,
     resolutionSnapshot: z.union([
       definitionResolutionSnapshotSchema,
       definitionResolutionSnapshotV2Schema,

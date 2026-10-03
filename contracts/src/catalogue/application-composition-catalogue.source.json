@@ -5317,5 +5317,304 @@
     },
     "supportedEvents": ["refresh", "row_action", "page_changed"],
     "supportedStateOperations": []
+  },
+  "CONTAINER_BLOCK_RELEASE_1_3_0": {
+    "blockId": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+    "key": "platform.layout.container",
+    "releaseVersion": "1.3.0",
+    "name": "Container",
+    "icon": "layout",
+    "paletteGroup": "layout",
+    "rendererKey": "platform.renderer.container",
+    "properties": [
+      {
+        "kind": "choice",
+        "key": "direction",
+        "label": "Direction",
+        "help": "Arrange child slots stacked in a column or side by side in a row",
+        "required": false,
+        "options": [
+          {
+            "key": "column",
+            "label": "Column"
+          },
+          {
+            "key": "row",
+            "label": "Row"
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "gap",
+        "label": "Gap",
+        "help": "Space between child slots",
+        "required": false,
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "small",
+            "label": "Small"
+          },
+          {
+            "key": "medium",
+            "label": "Medium"
+          },
+          {
+            "key": "large",
+            "label": "Large"
+          }
+        ]
+      },
+      {
+        "kind": "number",
+        "key": "menu_width",
+        "label": "Menu width",
+        "help": "Width of the menu region in rem when this container is a row",
+        "required": false,
+        "integer": false,
+        "minimum": 8,
+        "maximum": 40
+      },
+      {
+        "kind": "choice",
+        "key": "menu_placement",
+        "label": "Menu placement",
+        "help": "How the menu region follows the page",
+        "required": false,
+        "options": [
+          {
+            "key": "flow",
+            "label": "Normal flow"
+          },
+          {
+            "key": "sticky",
+            "label": "Sticky"
+          },
+          {
+            "key": "full_height",
+            "label": "Full height"
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "tablet_direction",
+        "label": "Tablet direction",
+        "help": "Override the direction on tablet widths",
+        "required": false,
+        "options": [
+          {
+            "key": "inherit",
+            "label": "Inherit"
+          },
+          {
+            "key": "column",
+            "label": "Column"
+          },
+          {
+            "key": "row",
+            "label": "Row"
+          }
+        ]
+      },
+      {
+        "kind": "number",
+        "key": "tablet_menu_width",
+        "label": "Tablet menu width",
+        "help": "Override the menu width in rem on tablet widths",
+        "required": false,
+        "integer": false,
+        "minimum": 8,
+        "maximum": 40
+      },
+      {
+        "kind": "choice",
+        "key": "tablet_menu_placement",
+        "label": "Tablet menu placement",
+        "help": "Override menu placement on tablet widths",
+        "required": false,
+        "options": [
+          {
+            "key": "inherit",
+            "label": "Inherit"
+          },
+          {
+            "key": "flow",
+            "label": "Normal flow"
+          },
+          {
+            "key": "sticky",
+            "label": "Sticky"
+          },
+          {
+            "key": "full_height",
+            "label": "Full height"
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "phone_direction",
+        "label": "Phone direction",
+        "help": "Override the direction on phone widths",
+        "required": false,
+        "options": [
+          {
+            "key": "inherit",
+            "label": "Inherit"
+          },
+          {
+            "key": "column",
+            "label": "Column"
+          },
+          {
+            "key": "row",
+            "label": "Row"
+          }
+        ]
+      },
+      {
+        "kind": "number",
+        "key": "phone_menu_width",
+        "label": "Phone menu width",
+        "help": "Override the menu width in rem on phone widths",
+        "required": false,
+        "integer": false,
+        "minimum": 8,
+        "maximum": 40
+      },
+      {
+        "kind": "choice",
+        "key": "phone_menu_placement",
+        "label": "Phone menu placement",
+        "help": "Override menu placement on phone widths",
+        "required": false,
+        "options": [
+          {
+            "key": "inherit",
+            "label": "Inherit"
+          },
+          {
+            "key": "flow",
+            "label": "Normal flow"
+          },
+          {
+            "key": "sticky",
+            "label": "Sticky"
+          },
+          {
+            "key": "full_height",
+            "label": "Full height"
+          }
+        ]
+      },
+      {
+        "kind": "boolean",
+        "key": "content_landmark",
+        "label": "Main content landmark",
+        "help": "Render the content region as the page main landmark",
+        "required": false
+      },
+      {
+        "required": false,
+        "help": "Inset all container regions using the active style spacing scale",
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "small",
+            "label": "Small"
+          },
+          {
+            "key": "medium",
+            "label": "Medium"
+          },
+          {
+            "key": "large",
+            "label": "Large"
+          }
+        ],
+        "label": "Padding",
+        "key": "padding",
+        "kind": "choice"
+      },
+      {
+        "required": false,
+        "help": "Keep this container full width or bound it to a readable centered frame",
+        "options": [
+          {
+            "key": "fill",
+            "label": "Fill available width"
+          },
+          {
+            "key": "readable",
+            "label": "Readable frame"
+          }
+        ],
+        "label": "Content width",
+        "key": "content_width",
+        "kind": "choice"
+      }
+    ],
+    "slots": [
+      {
+        "key": "header",
+        "label": "Header",
+        "required": false,
+        "allowedChildCategories": [
+          "data",
+          "figures",
+          "record",
+          "input",
+          "actions",
+          "layout",
+          "content"
+        ]
+      },
+      {
+        "key": "menu",
+        "label": "Menu",
+        "required": false,
+        "allowedChildCategories": [
+          "data",
+          "figures",
+          "record",
+          "input",
+          "actions",
+          "layout",
+          "content"
+        ]
+      },
+      {
+        "key": "content",
+        "label": "Content",
+        "required": false,
+        "allowedChildCategories": [
+          "data",
+          "figures",
+          "record",
+          "input",
+          "actions",
+          "layout",
+          "content"
+        ]
+      }
+    ],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "allowed",
+      "accessibleName": "not_applicable"
+    },
+    "supportedEvents": [],
+    "supportedStateOperations": []
   }
 }

@@ -182,6 +182,9 @@ catalogs:
     '@types/semver':
       specifier: 7.8.0
       version: 7.8.0
+    '@types/ws':
+      specifier: 8.18.1
+      version: 8.18.1
     date-fns:
       specifier: 4.4.0
       version: 4.4.0
@@ -206,6 +209,9 @@ catalogs:
     vitest:
       specifier: 4.1.11
       version: 4.1.11
+    ws:
+      specifier: 8.21.3
+      version: 8.21.3
 
 importers:
 
@@ -313,6 +319,9 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -326,6 +335,9 @@ importers:
       '@types/react-dom':
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.1
       postcss:
         specifier: 8.5.28
         version: 8.5.28

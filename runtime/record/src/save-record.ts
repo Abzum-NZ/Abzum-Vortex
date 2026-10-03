@@ -167,10 +167,26 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     : [];
   if (readableFieldIds.some((fieldId) => !fieldId.success))
     return { outcome: "unavailable", correlationId };
+  let existingValues = value.existingValues as Readonly<Record<string, unknown>>;
+  if (recordType.data.systemProjection === undefined) {
+    // Unset optional SQL columns are absent from the ordinary field candidate.
+    const ordinaryValues = { ...existingValues };
+    for (const field of recordType.data.fields) {
+      if (
+        !field.required &&
+        field.type !== "reference_number" &&
+        field.type !== "calculation" &&
+        field.type !== "total" &&
+        ordinaryValues[field.fieldId] === null
+      )
+        delete ordinaryValues[field.fieldId];
+    }
+    existingValues = ordinaryValues;
+  }
   return {
     outcome: "prepared",
     recordType: recordType.data,
-    existingValues: value.existingValues as Readonly<Record<string, unknown>>,
+    existingValues,
     readableFieldIds: new Set(
       readableFieldIds.flatMap((fieldId) => (fieldId.success ? [fieldId.data] : [])),
     ),

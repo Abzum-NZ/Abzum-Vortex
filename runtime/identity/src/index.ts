@@ -10,10 +10,13 @@ export {
   confirmEmail,
   requestPasswordRecovery,
   requestRegistration,
+  localDevelopmentSignInAvailable,
+  signInWithLocalDevelopmentAccount,
   signInWithPassword,
   type IdentityJourneyConfiguration,
   type IdentityJourneyFailure,
   type IdentityJourneyResult,
+  type LocalDevelopmentSignInConfiguration,
   type VerifiedSignInResult,
 } from "./auth-journeys";
 export {
@@ -26,7 +29,11 @@ export {
   type IdentityDisablementFailureCode,
   type IdentityDisablementResult,
 } from "./identity-authority-disablement";
-export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
+export {
+  createIdentityVerifier,
+  type IdentityVerifier,
+  type IdentityVerificationExecution,
+} from "./identity-verifier";
 export {
   bootstrapVortexSuperAdministrator,
   adoptOrganization,

@@ -13,6 +13,7 @@ import {
   actionInputDefinitionV3Schema,
   moduleContractVersionPairV3Schema,
   moduleDraftV3Schema,
+  storedModuleDraftV3Schema,
 } from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "./common";
@@ -464,11 +465,12 @@ const storedApplicationCompilationOutputV2Schema = z
       });
   });
 
-export const moduleCompilationOutputV3Schema = z
+const createModuleCompilationOutputV3Schema = (canonicalSchema: typeof moduleDraftV3Schema) =>
+  z
   .object({
     kind: z.literal("module"),
     validationContractVersion: z.literal("3.0.0"),
-    canonical: moduleDraftV3Schema,
+    canonical: canonicalSchema,
     artifact: compiledModuleArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
     dependencyOrder: z.array(namespacedKeySchema),
@@ -477,21 +479,37 @@ export const moduleCompilationOutputV3Schema = z
   })
   .strict();
 
-export const definitionCompilationOutputSchema = z.union([
+export const moduleCompilationOutputV3Schema = createModuleCompilationOutputV3Schema(moduleDraftV3Schema);
+export const storedModuleCompilationOutputV3Schema = createModuleCompilationOutputV3Schema(
+  storedModuleDraftV3Schema,
+);
+
+const createDefinitionCompilationOutputSchema = (
+  moduleSchema: typeof moduleCompilationOutputV3Schema,
+) =>
+  z.union([
+    moduleSchema,
+    storedApplicationCompilationOutputV2Schema,
+    z
+      .object({
+        kind: z.literal("connection_type"),
+        canonical: connectionTypeSchema,
+        artifact: compiledConnectionArtifactSchema,
+        provenance: z.array(definitionProvenanceEntrySchema),
+        dependencyOrder: z.array(namespacedKeySchema),
+        resolvedDependencies: z.array(resolvedDefinitionSchema),
+        resolutionFingerprint: fingerprintSchema,
+      })
+      .strict(),
+  ]);
+
+export const definitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
   moduleCompilationOutputV3Schema,
-  storedApplicationCompilationOutputV2Schema,
-  z
-    .object({
-      kind: z.literal("connection_type"),
-      canonical: connectionTypeSchema,
-      artifact: compiledConnectionArtifactSchema,
-      provenance: z.array(definitionProvenanceEntrySchema),
-      dependencyOrder: z.array(namespacedKeySchema),
-      resolvedDependencies: z.array(resolvedDefinitionSchema),
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict(),
-]);
+);
+/** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
+export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
+  storedModuleCompilationOutputV3Schema,
+);
 
 const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntryV3Schema;
 

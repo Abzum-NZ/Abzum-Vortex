@@ -2,6 +2,7 @@ import {
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_1_0,
   CONTAINER_BLOCK_RELEASE_1_2_0,
+  CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
   LAYOUT_BLOCK_RELEASES,
 } from "@vortex/contracts";
@@ -23,6 +24,7 @@ export {
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_1_0,
   CONTAINER_BLOCK_RELEASE_1_2_0,
+  CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
   LAYOUT_BLOCK_RELEASES,
 };
@@ -45,6 +47,11 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
     }),
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE_1_2_0,
+      render: Container,
+      parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      metadata: CONTAINER_BLOCK_RELEASE_1_3_0,
       render: Container,
       parsePayload: noRuntimeInputs,
     }),

@@ -188,7 +188,7 @@ function cssAttributeValue(value: string): string {
 }
 
 function placementCssSelector(scope: string, placementId: string): string {
-  return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}="${cssAttributeValue(scope)}"] [data-vortex-placement-id="${cssAttributeValue(placementId)}"]`;
+  return `[${LIVE_LAYOUT_SCOPE_ATTRIBUTE}="${cssAttributeValue(scope)}"] [data-vortex-layout-wrapper][data-vortex-placement-id="${cssAttributeValue(placementId)}"]`;
 }
 
 /**
@@ -295,6 +295,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 
 .vortex-placement-wrapper {
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .vortex-width-fill {

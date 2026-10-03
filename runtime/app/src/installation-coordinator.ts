@@ -21,6 +21,8 @@ import {
   type ModuleContentV3,
   type ModuleContributionV3,
   type OrganizationId,
+  type PermissionRegistryDefinitionRelease,
+  type PermissionRegistryEntryCandidate,
   type PreparedApplicationRoleTemplates,
   type SelectedOrganizationScope,
   type SessionContext,
@@ -29,7 +31,10 @@ import {
 import {
   BuilderAuthorityError,
   createApplicationRoleTemplateAdapter,
+  fingerprintPermissionMeaning,
+  prepareApplicationRoleTemplatesForHumanRequest,
   requireBuilderAuthority,
+  verifyPreparedApplicationRoleTemplates,
   type BuilderAuthority,
   type BuilderConferredPermission,
   type BuilderOperation,
@@ -635,6 +640,54 @@ const requireExactBindings = (
     throw fail("APPLICATION_INSTALLATION_STALE");
 };
 
+/** Compare complete sets without collapsing duplicate identities into a map. */
+const sameUniqueEvidence = <Value>(
+  left: readonly Value[],
+  right: readonly Value[],
+  identity: (value: Value) => string,
+  evidence: (value: Value) => string,
+): boolean => {
+  if (left.length !== right.length) return false;
+  const ordered = (values: readonly Value[]) => values
+    .map((value) => ({ identity: identity(value), evidence: evidence(value) }))
+    .sort((a, b) => a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0);
+  const oldEntries = ordered(left);
+  const newEntries = ordered(right);
+  return new Set(oldEntries.map((entry) => entry.identity)).size === left.length &&
+    new Set(newEntries.map((entry) => entry.identity)).size === right.length &&
+    oldEntries.every((entry, index) => entry.identity === newEntries[index]!.identity &&
+      entry.evidence === newEntries[index]!.evidence);
+};
+
+/** The full immutable release evidence; request-specific correlation is not release identity. */
+const releaseEvidenceKey = (release: PermissionRegistryDefinitionRelease): string =>
+  JSON.stringify([
+    release.kind, release.rootId, release.definitionKey, release.releaseRevision,
+    release.releaseVersion, release.validationContractVersion,
+    release.contentFingerprint, release.resolutionFingerprint,
+  ]);
+
+const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
+  JSON.stringify([
+    entry.applicationRootId, entry.ownerKind, entry.ownerId, entry.permission.permissionId,
+  ]);
+
+/** Used only after each candidate has been verified against its own exact release. */
+const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string =>
+  JSON.stringify([
+    permissionIdentity(entry),
+    fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),
+    entry.ownerKind === "application"
+      ? [entry.sourceRelease.kind, entry.sourceRelease.rootId,
+          entry.sourceRelease.definitionKey, entry.sourceRelease.validationContractVersion]
+      : releaseEvidenceKey(entry.sourceRelease),
+  ]);
+
+const samePermissionAuthority = (
+  left: readonly PermissionRegistryEntryCandidate[],
+  right: readonly PermissionRegistryEntryCandidate[],
+): boolean => sameUniqueEvidence(left, right, permissionIdentity, permissionAuthorityKey);
+
 const changeContributions = async (
   transaction: InstallerTransaction,
   target: ReleaseTarget,
@@ -1028,6 +1081,97 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   };
 
   /**
+   * Re-derive the full candidate from its own release, rather than trusting self-consistent
+   * fingerprints or a candidate prepared from a different release with the same authority.
+   */
+  const verifiedOwnReleaseTemplates = (exact: ExactRelease): PreparedApplicationRoleTemplates => {
+    const application = exact.releaseSet.application;
+    const prepared = verifyPreparedApplicationRoleTemplates(exact.preparedTemplates);
+    const own = prepareApplicationRoleTemplatesForHumanRequest(application.organizationId, {
+      applicationRootId: application.rootId,
+      releaseRevision: application.releaseRevision,
+    }, exact.releaseSet);
+    if (prepared.preparationBasis.kind !== "registration_candidate" ||
+      prepared.candidateFingerprint !== own.candidateFingerprint)
+      throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+    return prepared;
+  };
+
+  /**
+   * Proves only an ordinary active upgrade with unchanged complete authority and exact Modules.
+   * The caller has already checked the expected active release under the installation lock.
+   * Missing evidence or any difference retains the normal template-acceptance decision.
+   */
+  const preservesRegisteredAuthority = (
+    request: ApplicationInstallationActivationRequest,
+    state: InstallationBindings,
+    prior: ExactRelease | null,
+    target: ExactRelease,
+  ): boolean => {
+    if (prior === null || request.expectedActiveReleaseRevision === null ||
+      request.expectedActiveReleaseRevision >= request.applicationReleaseRevision ||
+      state.registeredReleaseRevision !== request.expectedActiveReleaseRevision ||
+      state.moduleBindings.some((binding) =>
+        binding.state !== "active" && binding.state !== "detached"))
+      return false;
+    // Invalid target evidence remains a refusal; only unavailable prior comparison evidence may
+    // fall back to the normal acceptance branch. Each full fingerprint binds its own release.
+    let newTemplates: PreparedApplicationRoleTemplates;
+    try {
+      newTemplates = verifiedOwnReleaseTemplates(target);
+    } catch (error) {
+      throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
+    }
+    try {
+      const active = activeRelease(state);
+      if (active?.releaseRevision !== request.expectedActiveReleaseRevision) return false;
+      requireExactBindings({
+        ...request, applicationReleaseRevision: request.expectedActiveReleaseRevision,
+      }, prior.pins, active.bindings, "active");
+      const oldApplication = prior.releaseSet.application;
+      const newApplication = target.releaseSet.application;
+      if (!sameId(oldApplication.organizationId, request.organizationId) ||
+        !sameId(newApplication.organizationId, request.organizationId) ||
+        !sameId(oldApplication.rootId, request.applicationRootId) ||
+        !sameId(newApplication.rootId, request.applicationRootId) ||
+        oldApplication.releaseRevision !== request.expectedActiveReleaseRevision ||
+        newApplication.releaseRevision !== request.applicationReleaseRevision ||
+        oldApplication.definitionKey !== newApplication.definitionKey ||
+        oldApplication.validationContractVersion !== newApplication.validationContractVersion ||
+        [...prior.releaseSet.modules, ...target.releaseSet.modules].some((module) =>
+          !sameId(module.organizationId, request.organizationId)) ||
+        !sameUniqueEvidence(prior.releaseSet.modules, target.releaseSet.modules,
+          (module) => module.rootId, releaseEvidenceKey) ||
+        dependencies.containsCustomComponents(prior.releaseSet) !== false ||
+        dependencies.containsCustomComponents(target.releaseSet) !== false)
+        return false;
+
+      // Application revision/version/content/resolution are verified separately before their
+      // necessarily changing values can be excluded from cross-release authority comparison.
+      const oldTemplates = verifiedOwnReleaseTemplates(prior);
+      const oldRegistration = oldTemplates.permissionRegistration;
+      const newRegistration = newTemplates.permissionRegistration;
+      return oldRegistration.applicationCatalogueFingerprint ===
+          newRegistration.applicationCatalogueFingerprint &&
+        sameUniqueEvidence(oldRegistration.applicationPermissionIds,
+          newRegistration.applicationPermissionIds, (id) => id, (id) => id) &&
+        samePermissionAuthority(oldRegistration.entries, newRegistration.entries) &&
+        sameUniqueEvidence(oldTemplates.templates, newTemplates.templates,
+          (prepared) => prepared.template.roleId,
+          (prepared) => prepared.sourceTemplateFingerprint) &&
+        oldTemplates.templates.every((prepared) => {
+          const next = newTemplates.templates.find((candidate) =>
+            sameId(candidate.template.roleId, prepared.template.roleId));
+          return next !== undefined &&
+            samePermissionAuthority(prepared.sourcePermissions, next.sourcePermissions) &&
+            samePermissionAuthority(prepared.livePermissions, next.livePermissions);
+        });
+    } catch {
+      return false;
+    }
+  };
+
+  /**
    * Points the permission registration at exactly this release when it names another one or none.
    * Returns whether Access changed; an unchanged registration costs no Access-version advance.
    */
@@ -1038,17 +1182,20 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     applicationRootId: ApplicationRootId,
     applicationReleaseRevision: number,
     exact: ExactRelease,
-    acceptance: "accept_role_templates" | "restore_accepted_role_templates",
+    acceptance: "accept_role_templates" | "preserve_registered_authority" |
+      "restore_accepted_role_templates",
   ): Promise<boolean> => {
     if (state.registeredReleaseRevision === applicationReleaseRevision) return false;
-    // Registering the release accepts its role templates. That needs the installer's recent
-    // authentication and every permission the templates confer inside the installer's delegated
+    // Without a proof of unchanged authority, registration follows the role-template acceptance
+    // check: recent authentication and every conferred permission inside the installer's delegated
     // assignment scope, whatever any approval workflow says. It is decided in the same
     // transaction and before registration: registering advances the Access version the request
     // context is pinned to, so no decision can be made after it, and a permission the current
     // registration does not yet hold lies outside every bounded delegated scope. Restoring the
     // registration of a release that was already accepted grants nothing new and is not a fresh
-    // acceptance.
+    // acceptance. A proved active upgrade with identical authority only advances registration;
+    // it also grants nothing new. The complete target evidence still goes to the normal SQL
+    // continuity/narrowing writer, without changing any acceptance or assignment evidence.
     if (acceptance === "accept_role_templates")
       await requireBuilderAuthority(authority, installOperation(applicationRootId, exact, true));
     const access = await changeAccess(
@@ -1253,6 +1400,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const request = parsed.data;
       const exact = await readExactRelease(verifiedSession.data, request);
       const { releaseSet, pins } = exact;
+      // Optional evidence for the equality-only registration decision. Failure never turns the
+      // prior release into an empty catalogue or suppresses the normal target authority check.
+      const prior = request.expectedActiveReleaseRevision === null ||
+        request.expectedActiveReleaseRevision >= request.applicationReleaseRevision
+        ? null
+        : await readExactRelease(verifiedSession.data, {
+            organizationId: request.organizationId,
+            applicationRootId: request.applicationRootId,
+            applicationReleaseRevision: request.expectedActiveReleaseRevision,
+          }).catch(() => null);
 
       // 1. Align Access with the exact target release. This must commit before the switch: it
       //    advances the Access version that the fixed lifecycle operations pin to. An already
@@ -1280,7 +1437,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.applicationRootId,
             request.applicationReleaseRevision,
             exact,
-            "accept_role_templates",
+            mode === "switch" && preservesRegisteredAuthority(request, state, prior, exact)
+              ? "preserve_registered_authority"
+              : "accept_role_templates",
           );
           return mode === "already_active" ? activeSummary(request, state) : null;
         },

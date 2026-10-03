@@ -16,6 +16,7 @@ import {
   identitySessionSchema,
   jsonValueSchema,
   organizationSelectionCandidateSchema,
+  organizationStewardshipAppointmentCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
@@ -29,6 +30,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   reactivateTenantOrganizationCommandSchema,
   renameTenantOrganizationCommandSchema,
+  reparentTenantOrganizationCommandSchema,
   suspendOrganizationAccountCommandSchema,
   suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
@@ -52,6 +54,8 @@ import {
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
   type RenameTenantOrganizationResult,
+  type ReparentTenantOrganizationCommand,
+  type ReparentTenantOrganizationResult,
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
   type TenantId,
@@ -176,6 +180,10 @@ type TenantGovernanceOperations = Readonly<{
     session: IdentitySession,
     command: RenameTenantOrganizationCommand,
   ) => Promise<RenameTenantOrganizationResult>;
+  reparentOrganization: (
+    session: IdentitySession,
+    command: ReparentTenantOrganizationCommand,
+  ) => Promise<ReparentTenantOrganizationResult>;
   suspendOrganization: (
     session: IdentitySession,
     command: SuspendTenantOrganizationCommand,
@@ -206,6 +214,7 @@ type ProtectedOperationServices = Readonly<{
     | "createCustomRoleFromTemplate"
     | "acceptApplicationRoleTemplate"
     | "acceptApplicationRoleRevision"
+    | "appointOrganizationSteward"
     | "assignRoleAssignment"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
@@ -245,6 +254,7 @@ type ProtectedOperationCaller = Readonly<{
 
 type TenantOrganizationMutationResult =
   | RenameTenantOrganizationResult
+  | ReparentTenantOrganizationResult
   | SuspendTenantOrganizationResult
   | ReactivateTenantOrganizationResult;
 
@@ -837,6 +847,26 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }, "tenant_capability"),
+  reparent_tenant_organization: operation({
+    schema: reparentTenantOrganizationCommandSchema
+      .omit({ tenantId: true, operation: true })
+      .extend({ parentOrganizationId: organizationIdSchema }),
+    inputAliases: { parentOrganizationId: "parent_organization_id" },
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+      parentOrganizationId: inputs.parent_organization_id,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.reparentOrganization(caller.session, {
+          ...command,
+          operation: "reparent_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }, "tenant_capability"),
   suspend_tenant_organization: operation({
     schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
     command: (inputs, _selection, effectKey) => ({
@@ -1021,6 +1051,31 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           access_version: value.accessVersion,
         }),
       ),
+  }),
+  appoint_organization_steward: operation({
+    schema: organizationStewardshipAppointmentCommandSchema,
+    inputAliases: {
+      organizationAccountId: "target_account_id",
+      expectedAccountRevision: "expected_account_revision",
+    },
+    command: (inputs) => ({
+      operation: "appoint_organization_steward",
+      organizationAccountId: inputs.target_account_id,
+      expectedAccountRevision: inputs.expected_account_revision,
+    }),
+    run: async (services, caller, command) => {
+      const attempt = await services.accessAdministration.appointOrganizationSteward(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (attempt.kind !== "available") return attempt;
+      if (attempt.value.outcome === "conflict") return "conflict";
+      return {
+        kind: "available",
+        value: { appointment_outcome: attempt.value.outcome },
+      };
+    },
   }),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
