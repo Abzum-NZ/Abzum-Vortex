@@ -1275,6 +1275,28 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           "page_size": 50,
           "relationship_hops": 0
         },
+        {
+          "id": "qry_installed_applications",
+          "key": "installed_applications",
+          "record_type": "installed_application",
+          "inputs": [],
+          "select": [
+            "key",
+            "release_revision",
+            "is_default"
+          ],
+          "filter": null,
+          "group_by": [],
+          "aggregates": [],
+          "sort": [
+            {
+              "field": "key",
+              "direction": "ascending"
+            }
+          ],
+          "page_size": 50,
+          "relationship_hops": 0
+        },
       ],
     },
   });
