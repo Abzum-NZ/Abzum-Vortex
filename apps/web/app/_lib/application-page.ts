@@ -1495,7 +1495,7 @@ const localPageCompositionObserver = (
               tableState: "NOT_OBSERVED" };
         const frame = JSON.stringify({ stage, result, ...metrics, readGate: "UNKNOWN" });
         const line = "VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC:" + frame;
-        if (Buffer.byteLength(line, "utf8") <= 2048) console.error(line);
+        if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
       } catch {
         // Diagnostics must never change the original result, error or rendering model.
       }
