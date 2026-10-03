@@ -91,6 +91,70 @@ export const dynamic = "force-dynamic";
 
 const maximumRequestBodyLength = 131_072;
 
+const localFlowLedgerSqlStates = new Set<string>([
+  "22023", "42501", "P0002", "40001", "23503", "23505", "23514", "55000",
+  "57014", "40P01", "57P01", "08000", "08001", "08003", "08006",
+]);
+const localFlowLedgerClaimKinds = new Set<string>([
+  "claimed", "completed", "in_progress", "unavailable",
+]);
+
+const localFlowLedgerSqlState = (error: unknown): string => {
+  try {
+    if (typeof error !== "object" || error === null) return "NONE";
+    const descriptor = Object.getOwnPropertyDescriptor(error, "code");
+    if (descriptor === undefined) return "NONE";
+    const code: unknown = descriptor.value;
+    return typeof code === "string" && localFlowLedgerSqlStates.has(code) ? code : "OTHER";
+  } catch {
+    return "OTHER";
+  }
+};
+
+const localFlowLedgerClaimKind = (claim: unknown): string => {
+  try {
+    if (typeof claim !== "object" || claim === null) return "OTHER";
+    const kind: unknown = Object.getOwnPropertyDescriptor(claim, "kind")?.value;
+    return typeof kind === "string" && localFlowLedgerClaimKinds.has(kind) ? kind : "OTHER";
+  } catch {
+    return "OTHER";
+  }
+};
+
+/** One bounded, best-effort server recorder shared by this POST's ledger delegates. */
+const createLocalFlowLedgerDiagnostic = () => {
+  let emitted = 0;
+  return (stage: "BEGIN_ENTER" | "BEGIN_RETURN" | "BEGIN_THREW", value?: unknown): void => {
+    try {
+      if (
+        emitted >= 32 ||
+        process.env.VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" ||
+        process.env.VORTEX_ENVIRONMENT !== "local"
+      ) return;
+      const journey = getIdentityJourneyConfiguration();
+      const authority = getIdentityAuthorityConfiguration();
+      if (
+        authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
+      ) return;
+      const event = stage === "BEGIN_RETURN"
+        ? { stage, claimKind: localFlowLedgerClaimKind(value) }
+        : stage === "BEGIN_THREW"
+          ? { stage, sqlstate: localFlowLedgerSqlState(value) }
+          : { stage };
+      // Count the attempt before logging so logger failure cannot bypass the request cap.
+      emitted += 1;
+      console.error("VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC:" + JSON.stringify(event));
+    } catch {
+      // Configuration, inspection and logging cannot change the original ledger outcome.
+    }
+  };
+};
+
 /**
  * The browser names only an application address and the invocation. The organisation, installation
  * and bindings are resolved on the server from the signed-in person's own permitted address.
@@ -496,6 +560,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
     const stores = createDatabaseFlowStores();
+    const diagnoseLedger = createLocalFlowLedgerDiagnostic();
+    const ledger: typeof stores.ledger = {
+      async begin(key) {
+        diagnoseLedger("BEGIN_ENTER");
+        try {
+          const claim = await stores.ledger.begin(key);
+          diagnoseLedger("BEGIN_RETURN", claim);
+          return claim;
+        } catch (error) {
+          diagnoseLedger("BEGIN_THREW", error);
+          throw error;
+        }
+      },
+      complete: (key, outcome, outputs) => stores.ledger.complete(key, outcome, outputs),
+    };
     // #1369, #1370: Save record tasks and named actions run through the record service's own
     // protected paths, under the initiator's verified request and in their own transactions.
     const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
@@ -744,7 +823,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           }
         },
         continuations: stores.continuations,
-        ledger: stores.ledger,
+        ledger,
         // The release was read from the trusted installation for this exact request.
         resolveRelease: async () => release,
         ...(runId === undefined ? {} : { newRunId: () => runId }),
