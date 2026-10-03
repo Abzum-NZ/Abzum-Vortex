@@ -5,6 +5,7 @@ import {
   moneyValueV2Schema,
   parseExactDecimal,
   powerOfTen,
+  recordLinkValueV2Schema,
   type ExactDecimal,
   type FlowDateUnit,
   type FlowFormula,
@@ -478,6 +479,21 @@ export const evaluateFlowFormula = (
         return scope.reference(node.reference as FlowReference);
       case "now":
         return value("date_time", scope.now);
+      case "record_id": {
+        const operand = evaluate(node.arg);
+        if (
+          operand?.type !== "json" ||
+          operand.value === null ||
+          typeof operand.value !== "object" ||
+          Array.isArray(operand.value) ||
+          Reflect.ownKeys(operand.value).length !== 2 ||
+          !Object.hasOwn(operand.value, "recordTypeId") ||
+          !Object.hasOwn(operand.value, "recordId")
+        )
+          return undefined;
+        const record = recordLinkValueV2Schema.safeParse(operand.value);
+        return record.success ? value("text", record.data.recordId) : undefined;
+      }
       case "add":
       case "multiply":
       case "subtract":

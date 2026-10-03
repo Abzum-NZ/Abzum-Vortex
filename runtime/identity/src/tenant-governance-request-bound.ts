@@ -22,6 +22,7 @@ import { createTenantGovernanceService } from "./tenant-governance";
 type TenantGovernanceMethod =
   | "createOrganization"
   | "renameOrganization"
+  | "reparentOrganization"
   | "suspendOrganization"
   | "reactivateOrganization";
 
@@ -112,12 +113,13 @@ const isRuntimeSessionRole = (role: unknown): role is string =>
 const identityFunctionForMethod: Readonly<Record<TenantGovernanceMethod, string>> = {
   createOrganization: "vortex_identity.create_tenant_organization",
   renameOrganization: "vortex_identity.rename_tenant_organization",
+  reparentOrganization: "vortex_identity.reparent_tenant_organization",
   suspendOrganization: "vortex_identity.suspend_tenant_organization",
   reactivateOrganization: "vortex_identity.reactivate_tenant_organization",
 };
 
 /**
- * Binds the four organization-governance methods to an already-resolved human request transaction.
+ * Binds the organization-governance methods to an already-resolved human request transaction.
  * The runtime role is entered only around the existing typed Identity method call; callers receive
  * neither a role-switch function nor a general elevated query callback.
  */
@@ -368,6 +370,11 @@ export const createRequestBoundTenantGovernanceService = (
       command: Parameters<typeof service.renameOrganization>[1],
     ) =>
       invoke("renameOrganization", session, () => service.renameOrganization(session, command)),
+    reparentOrganization: (
+      session: IdentitySession,
+      command: Parameters<typeof service.reparentOrganization>[1],
+    ) =>
+      invoke("reparentOrganization", session, () => service.reparentOrganization(session, command)),
     suspendOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.suspendOrganization>[1],

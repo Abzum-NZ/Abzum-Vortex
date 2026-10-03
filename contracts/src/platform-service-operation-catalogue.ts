@@ -86,6 +86,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
   rename_tenant_organization: entry(sources.rename_tenant_organization),
+  reparent_tenant_organization: entry(sources.reparent_tenant_organization),
   suspend_tenant_organization: entry(sources.suspend_tenant_organization),
   reactivate_tenant_organization: entry(sources.reactivate_tenant_organization),
   suspend_organization_account: entry(sources.suspend_organization_account),
@@ -95,6 +96,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   update_own_profile: entry(sources.update_own_profile),
   create_organization_invitation: entry(sources.create_organization_invitation),
   revoke_organization_invitation: entry(sources.revoke_organization_invitation),
+  appoint_organization_steward: entry(sources.appoint_organization_steward),
 });
 
 /** Every registered release, in registration order, for the publication catalogue. */

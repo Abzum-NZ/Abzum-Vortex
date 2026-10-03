@@ -17,6 +17,7 @@ import {
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
+  storedModuleCompilationOutputV3Schema,
   sourceIdentityKindV2Schema,
   type DefinitionCompilationOutput,
   type ApplicationCompilationOutputV2,
@@ -415,12 +416,12 @@ const sortedManifest = (
     compareCanonicalStrings(subjectOf(left), subjectOf(right)),
   );
 
-const verifyModuleRelease = (
+const verifyParsedModuleRelease = (
   candidate: ValidatedDefinitionPublicationCandidate,
   expectedKey: string,
   release: ResolvableModuleRelease,
+  parsedOutput: ReturnType<typeof definitionCompilationOutputSchema.safeParse>,
 ): void => {
-  const parsedOutput = definitionCompilationOutputSchema.safeParse(release.compilationOutput);
   const publication = release.published.publication;
   try {
     assertModuleContractPair(
@@ -474,6 +475,32 @@ const verifyModuleRelease = (
   )
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
 };
+
+/** Every selected, pinned or transitive dependency must satisfy the current Module contract. */
+const verifyModuleRelease = (
+  candidate: ValidatedDefinitionPublicationCandidate,
+  expectedKey: string,
+  release: ResolvableModuleRelease,
+): void =>
+  verifyParsedModuleRelease(
+    candidate,
+    expectedKey,
+    release,
+    definitionCompilationOutputSchema.safeParse(release.compilationOutput),
+  );
+
+/** Historical enumeration preserves stored semantics before current dependency selection. */
+const verifyHistoricalModuleRelease = (
+  candidate: ValidatedDefinitionPublicationCandidate,
+  expectedKey: string,
+  release: ResolvableModuleRelease,
+): void =>
+  verifyParsedModuleRelease(
+    candidate,
+    expectedKey,
+    release,
+    storedModuleCompilationOutputV3Schema.safeParse(release.compilationOutput),
+  );
 
 const sameModuleReleaseLocator = (
   left: ResolvableModuleRelease,
@@ -539,7 +566,7 @@ const selectModuleRelease = async (
         release.releaseRevision > currentAnchorRevision
       )
         refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-      verifyModuleRelease(candidate, key, release);
+      verifyHistoricalModuleRelease(candidate, key, release);
       foldModuleSelection(selection, release, requirements);
       previousReleaseRevision = release.releaseRevision;
     }

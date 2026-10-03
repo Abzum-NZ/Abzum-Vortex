@@ -425,10 +425,13 @@ export function validateFlow(
             const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
               (candidate) => platformOperationKey(candidate.key) === key,
             );
-            if (entry?.descriptor.effect === "read" && reference.path.length === 1) {
-              const field = entry.descriptor.outputs[reference.path[0]!];
-              if (field !== undefined) return field.type;
-            }
+            if (
+              entry !== undefined &&
+              (entry.descriptor.effect === "read" || entry.descriptor.effect === "change") &&
+              reference.path.length === 1 &&
+              Object.hasOwn(entry.descriptor.outputs, reference.path[0]!)
+            )
+              return entry.descriptor.outputs[reference.path[0]!]!.type;
           }
           const inputs =
             task.type === "interface.show_form"
@@ -525,6 +528,19 @@ export function validateFlow(
         return formula.type;
       case "reference":
         return resolveReference(formula.reference, where, [...path, "reference"]);
+      case "record_id": {
+        const type = child(formula.arg, "arg");
+        if (type !== "json") {
+          add(
+            [...path, "arg"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `The record_id operand must have a declared JSON type, found ${type ?? "an unknown type"}`,
+          );
+          return undefined;
+        }
+        return "text";
+      }
       case "now":
         if (!where.nowAllowed)
           add(

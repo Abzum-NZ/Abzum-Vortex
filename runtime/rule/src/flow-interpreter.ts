@@ -348,16 +348,22 @@ const declaredOutputFieldType = (
   activation: Activation,
   flow: FlowDefinition,
   taskId: string,
+  outputKey: string,
   path: readonly string[],
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
-  if (task?.type === "operation.call" && path.length === 1) {
+  if (task?.type === "operation.call" && outputKey === "result" && path.length === 1) {
     const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.operation;
     const key = operation?.kind === "literal" ? operation.literal.value : undefined;
     const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
       (candidate) => platformOperationKey(candidate.key) === key,
     );
-    if (entry?.descriptor.effect === "read") return entry.descriptor.outputs[path[0]!]?.type;
+    if (
+      entry !== undefined &&
+      (entry.descriptor.effect === "read" || entry.descriptor.effect === "change") &&
+      Object.hasOwn(entry.descriptor.outputs, path[0]!)
+    )
+      return entry.descriptor.outputs[path[0]!]!.type;
   }
   if (task?.type === "record.read_fields" && path.length === 1) {
     const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
@@ -423,7 +429,14 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
             return undefined;
           selected = (selected as Record<string, unknown>)[name];
         }
-        const type = declaredOutputFieldType(state, activation, flow, reference.task, reference.path);
+        const type = declaredOutputFieldType(
+          state,
+          activation,
+          flow,
+          reference.task,
+          reference.key,
+          reference.path,
+        );
         return type !== undefined && valueMatchesType(type, selected)
           ? typed(type, selected as JsonValue)
           : undefined;

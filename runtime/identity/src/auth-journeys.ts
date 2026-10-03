@@ -1,7 +1,13 @@
 import "server-only";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { isLoopbackHostname } from "@vortex/contracts";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import {
+  identityAuthoritySchema,
+  identityIdSchema,
+  isLoopbackHostname,
+  type IdentityAuthority,
+} from "@vortex/contracts";
+import { createIdentityVerifier } from "./identity-verifier";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const MINIMUM_PASSWORD_LENGTH = 8;
@@ -11,6 +17,15 @@ export type IdentityJourneyConfiguration = Readonly<{
   supabaseUrl: string;
   publishableKey: string;
   siteUrl: string;
+}>;
+
+/** Explicit server configuration for the existing local development account only. */
+export type LocalDevelopmentSignInConfiguration = Readonly<{
+  enabled: boolean;
+  journey: IdentityJourneyConfiguration;
+  authority: IdentityAuthority;
+  identityId: string;
+  adminKey: string;
 }>;
 
 export type IdentityJourneyFailure =
@@ -91,6 +106,116 @@ const validAccessToken = (value: string): boolean =>
 
 const validRefreshToken = (value: string): boolean =>
   value.length > 0 && value.length <= 2_048 && !/\s/u.test(value);
+
+export const localDevelopmentSignInAvailable = (
+  configuration: LocalDevelopmentSignInConfiguration,
+): boolean => {
+  if (process.env.NODE_ENV !== "development" || configuration.enabled !== true) return false;
+  try {
+    validateConfiguration(configuration.journey);
+    const authority = identityAuthoritySchema.safeParse(configuration.authority);
+    return (
+      authority.success &&
+      authority.data.environment === "local" &&
+      identityIdSchema.safeParse(configuration.identityId).success &&
+      new URL(configuration.journey.siteUrl).href === "http://127.0.0.1:3000/" &&
+      new URL(configuration.journey.supabaseUrl).href === "http://127.0.0.1:54321/" &&
+      authority.data.issuer === "http://127.0.0.1:54321/auth/v1" &&
+      authority.data.jwksUrl === "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json" &&
+      configuration.adminKey.length <= 512 &&
+      /^sb_secret_[A-Za-z0-9_-]+$/u.test(configuration.adminKey)
+    );
+  } catch {
+    return false;
+  }
+};
+
+type ConfirmedLocalDevelopmentUser = User & Readonly<{ email: string }>;
+
+const confirmedLocalDevelopmentUser = (
+  user: User | null,
+  identityId: string,
+): user is ConfirmedLocalDevelopmentUser =>
+  user !== null &&
+  user.id === identityId &&
+  user.is_anonymous !== true &&
+  user.deleted_at === undefined &&
+  typeof user.email === "string" &&
+  validEmail(user.email) &&
+  typeof user.email_confirmed_at === "string" &&
+  Number.isFinite(Date.parse(user.email_confirmed_at)) &&
+  Date.parse(user.email_confirmed_at) <= Date.now() &&
+  (user.banned_until === undefined ||
+    (Number.isFinite(Date.parse(user.banned_until)) && Date.parse(user.banned_until) <= Date.now()));
+
+export const signInWithLocalDevelopmentAccount = async (
+  configuration: LocalDevelopmentSignInConfiguration,
+): Promise<VerifiedSignInResult> => {
+  if (!localDevelopmentSignInAvailable(configuration))
+    return { ok: false, code: "vortex.identity.authority_unavailable" };
+
+  let sessionClient: SupabaseClient | undefined;
+  let accepted = false;
+  try {
+    const admin = createClient(configuration.journey.supabaseUrl, configuration.adminKey, {
+      auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+    });
+    const existing = await admin.auth.admin.getUserById(configuration.identityId);
+    if (existing.error || !confirmedLocalDevelopmentUser(existing.data.user, configuration.identityId))
+      return { ok: false, code: "vortex.identity.authority_unavailable" };
+
+    // Recovery refuses absent users. Magic-link generation can create an account.
+    const generated = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: existing.data.user.email,
+    });
+    if (
+      generated.error ||
+      !confirmedLocalDevelopmentUser(generated.data.user, configuration.identityId) ||
+      generated.data.user.email !== existing.data.user.email ||
+      generated.data.properties?.verification_type !== "recovery" ||
+      !generated.data.properties.hashed_token ||
+      generated.data.properties.hashed_token.length > 2_048
+    )
+      return { ok: false, code: "vortex.identity.authority_unavailable" };
+
+    sessionClient = createAuthorityClient(configuration.journey);
+    const verified = await sessionClient.auth.verifyOtp({
+      token_hash: generated.data.properties.hashed_token,
+      type: "recovery",
+    });
+    const session = verified.data.session;
+    if (
+      verified.error ||
+      !confirmedLocalDevelopmentUser(verified.data.user, configuration.identityId) ||
+      !session ||
+      !confirmedLocalDevelopmentUser(session.user, configuration.identityId) ||
+      !validAccessToken(session.access_token) ||
+      !validRefreshToken(session.refresh_token)
+    )
+      return { ok: false, code: "vortex.identity.authority_unavailable" };
+
+    const identity = await createIdentityVerifier(
+      configuration.authority,
+      configuration.journey.publishableKey,
+    ).verifyAccessToken(session.access_token);
+    if (identity.identityId !== configuration.identityId)
+      return { ok: false, code: "vortex.identity.authority_unavailable" };
+
+    accepted = true;
+    return { ok: true, accessToken: session.access_token, refreshToken: session.refresh_token };
+  } catch {
+    return { ok: false, code: "vortex.identity.authority_unavailable" };
+  } finally {
+    if (!accepted && sessionClient !== undefined) {
+      try {
+        await sessionClient.auth.signOut({ scope: "local" });
+      } catch {
+        // Best-effort revocation; rejected credentials never reach cookie bootstrap.
+      }
+    }
+  }
+};
 
 const confirmationUrl = (configuration: IdentityJourneyConfiguration): string =>
   new URL("/auth/confirm", configuration.siteUrl).toString();

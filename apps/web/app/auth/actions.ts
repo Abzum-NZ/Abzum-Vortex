@@ -5,10 +5,15 @@ import {
   confirmEmail as confirmEmailWithAuthority,
   requestPasswordRecovery,
   requestRegistration,
+  signInWithLocalDevelopmentAccount,
   signInWithPassword,
 } from "@vortex/identity";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getIdentityJourneyConfiguration } from "./_lib/authority-configuration";
+import {
+  getIdentityJourneyConfiguration,
+  getLocalDevelopmentSignInConfiguration,
+} from "./_lib/authority-configuration";
 import {
   applicationHomeAddressPath,
   parseSingleApplicationHomeContinuation,
@@ -92,6 +97,33 @@ export async function signIn(formData: FormData): Promise<never> {
 export async function signOut(): Promise<never> {
   await endIdentitySession();
   redirect("/auth/sign-in?status=signed-out");
+}
+
+export async function signInWithDevelopmentAccount(formData: FormData): Promise<never> {
+  const applicationHome = parseSingleApplicationHomeContinuation(
+    formData.getAll("applicationHome"),
+  );
+  const configuration = getLocalDevelopmentSignInConfiguration();
+  if (!configuration) redirect(signInStatusPath("unavailable", applicationHome));
+  const requestHeaders = await headers();
+  const site = new URL(configuration.journey.siteUrl);
+  const forwardedProtocol = requestHeaders.get("x-forwarded-proto");
+  if (
+    requestHeaders.get("origin") !== site.origin ||
+    requestHeaders.get("host") !== site.host ||
+    (forwardedProtocol !== null && forwardedProtocol !== "http")
+  )
+    redirect(signInStatusPath("unavailable", applicationHome));
+
+  const result = await signInWithLocalDevelopmentAccount(configuration);
+  const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
+  redirect(
+    result.ok && session?.kind === "active"
+      ? applicationHome === undefined
+        ? "/signed-in"
+        : applicationHomeAddressPath(applicationHome)
+      : signInStatusPath("unavailable", applicationHome),
+  );
 }
 
 export async function requestRecovery(formData: FormData): Promise<never> {

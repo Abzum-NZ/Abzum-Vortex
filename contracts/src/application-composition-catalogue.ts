@@ -197,6 +197,11 @@ export const CONTAINER_BLOCK_RELEASE_1_2_0: PlatformBlockReleaseV2 = release(
   sources.CONTAINER_BLOCK_RELEASE_1_2_0,
 );
 
+/** Adds declared surface padding and an optional readable frame without changing older releases. */
+export const CONTAINER_BLOCK_RELEASE_1_3_0: PlatformBlockReleaseV2 = release(
+  sources.CONTAINER_BLOCK_RELEASE_1_3_0,
+);
+
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.HEADING_BLOCK_RELEASE);
 
@@ -397,6 +402,7 @@ export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.f
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_1_0,
   CONTAINER_BLOCK_RELEASE_1_2_0,
+  CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
 ]);
 
