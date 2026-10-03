@@ -179,3 +179,10 @@ export {
   type QueryNoticeResolution,
   type QueryNoticeSeverity,
 } from "./notice-query-projection";
+export {
+  buildLinkTilesQueryBinding,
+  createLinkTilesQueryResolver,
+  type LinkTilesQueryBinding,
+  type LinkTilesQueryResolution,
+  type ProjectedLinkTilesValues,
+} from "./link-tiles-query";
