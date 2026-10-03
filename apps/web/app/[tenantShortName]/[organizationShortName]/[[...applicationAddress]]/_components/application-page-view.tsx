@@ -2247,7 +2247,7 @@ function ApplicationPageViewContent({
                   ),
                 );
           if (baseline !== undefined && Object.keys(values).length === 0) {
-            setNotice({ tone: "info", text: "No changes to save." });
+            setNotice(undefined);
             setFormFeedback((current) => ({
               ...current,
               [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
