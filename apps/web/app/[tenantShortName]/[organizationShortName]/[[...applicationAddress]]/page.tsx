@@ -1,6 +1,9 @@
+import "server-only";
+
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ApplicationInstallationCoordinatorError } from "@vortex/app";
 import {
   ALL_UI_STYLES_CSS,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -19,6 +22,10 @@ import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/appli
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
+  getIdentityAuthorityConfiguration,
+  getIdentityJourneyConfiguration,
+} from "../../../auth/_lib/authority-configuration";
+import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
@@ -32,6 +39,92 @@ import {
 } from "./guided-form-actions";
 
 export const dynamic = "force-dynamic";
+
+const adoptionDiagnosticCoordinatorCodes = new Set<string>([
+  "INVALID_APPLICATION_INSTALLATION_COMMAND",
+  "APPLICATION_INSTALLATION_REFUSED",
+  "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
+  "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
+  "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
+  "APPLICATION_INSTALLATION_STALE",
+  "APPLICATION_INSTALLATION_INCOMPLETE",
+  "APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE",
+  "APPLICATION_INSTALLATION_TEMPORARILY_UNAVAILABLE",
+  "APPLICATION_INSTALLATION_FAILED",
+]);
+
+const adoptionDiagnosticCauseCodes = new Set<string>([
+  ...adoptionDiagnosticCoordinatorCodes,
+  "BUILDER_PERMISSION_REFUSED",
+  "BUILDER_RECENT_AUTHENTICATION_REQUIRED",
+  "BUILDER_AUTHORITY_UNAVAILABLE",
+  "ORGANIZATION_ACCESS_DECISION_UNAVAILABLE",
+  "INVALID_DEFINITION_READ_COMMAND",
+  "DEFINITION_RELEASE_NOT_FOUND",
+  "DEFINITION_CONTEXT_REFUSED",
+  "DEFINITION_DEPENDENCY_UNAVAILABLE",
+  "DEFINITION_RELEASE_INTEGRITY_FAILED",
+  "DEFINITION_READ_FAILED",
+]);
+
+const adoptionDiagnosticSqlStates = new Set<string>([
+  "22023", "42501", "P0002", "40001", "23503", "23505", "23514", "55000",
+  "57014", "40P01", "57P01", "08000", "08001", "08003", "08006",
+]);
+
+/** Only a known coordinator exception can select the display-only authentication notice. */
+const adoptionCoordinatorCode = (error: unknown): string => {
+  try {
+    if (!(error instanceof ApplicationInstallationCoordinatorError)) return "UNKNOWN";
+    const code: unknown = Object.getOwnPropertyDescriptor(error, "code")?.value;
+    return typeof code === "string" && adoptionDiagnosticCoordinatorCodes.has(code)
+      ? code
+      : "UNKNOWN";
+  } catch {
+    return "UNKNOWN";
+  }
+};
+
+/** Temporary server-only observation; diagnostics must never change the adoption outcome. */
+const diagnoseLocalAdoptionRefusal = (error: unknown): void => {
+  try {
+    if (
+      process.env.VORTEX_LOCAL_ADOPTION_DIAGNOSTIC !== "1" ||
+      process.env.NODE_ENV === "production" ||
+      process.env.VORTEX_ENVIRONMENT !== "local"
+    ) return;
+    const journey = getIdentityJourneyConfiguration();
+    const authority = getIdentityAuthorityConfiguration();
+    if (
+      authority.environment !== "local" ||
+      new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+      new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+      authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+      authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
+    ) return;
+
+    const causes: string[] = [];
+    let cause: unknown = error;
+    for (let depth = 0; depth < 5 && cause instanceof Error; depth += 1) {
+      // Own data descriptors avoid invoking arbitrary error accessors or coercing values.
+      const code: unknown = Object.getOwnPropertyDescriptor(cause, "code")?.value;
+      causes.push(
+        typeof code !== "string" ? "NONE"
+          : adoptionDiagnosticCauseCodes.has(code) ? code
+            : adoptionDiagnosticSqlStates.has(code) ? code
+              : /^[A-Z0-9]{5}$/.test(code) ? "OTHER" : "UNKNOWN",
+      );
+      cause = Object.getOwnPropertyDescriptor(cause, "cause")?.value;
+    }
+    console.error("VORTEX_LOCAL_ADOPTION_DIAGNOSTIC:" + JSON.stringify({
+      stage: "ADOPTION_CATCH",
+      code: adoptionCoordinatorCode(error),
+      causes,
+    }));
+  } catch {
+    // Configuration, inspection and logger failures preserve the original refusal.
+  }
+};
 
 /**
  * The one fixed neutral state for an address that is refused or missing. It never names the
@@ -138,6 +231,7 @@ export default async function ApplicationAddressPage({
     );
 
     let refused = false;
+    let recentAuthenticationRequired = false;
     try {
       await adoptApplicationRelease(currentIdentity.session, {
         organizationId: rechecked.read.organizationId,
@@ -145,12 +239,16 @@ export default async function ApplicationAddressPage({
         applicationReleaseRevision: offeredReleaseRevision,
         expectedActiveReleaseRevision,
       });
-    } catch {
+    } catch (error) {
+      diagnoseLocalAdoptionRefusal(error);
+      recentAuthenticationRequired =
+        adoptionCoordinatorCode(error) === "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED";
       refused = true;
     }
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
     // the prior release. Only a committed switch revalidates the address.
-    if (refused) redirect(`${back}?adoption=refused`);
+    if (refused)
+      redirect(`${back}?adoption=${recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`);
     revalidatePath(back);
     redirect(`${back}?adoption=adopted`);
   }
@@ -301,9 +399,11 @@ export default async function ApplicationAddressPage({
   const adoptionOutcome =
     parameters.adoption === "adopted"
       ? "The new release is now in use."
-      : parameters.adoption === "refused"
-        ? "The release could not be adopted. The current release is still in use."
-        : undefined;
+      : parameters.adoption === "recent_authentication_required"
+        ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
+        : parameters.adoption === "refused"
+          ? "The release could not be adopted. The current release is still in use."
+          : undefined;
   return (
     <ApplicationPageView
       model={page.model}
