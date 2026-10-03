@@ -52,7 +52,8 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
-    ...(props.metadata.releaseVersion === "1.1.0" ? ["choices_requested" as const] : []),
+    ...(["1.1.0", "1.2.0"].includes(props.metadata.releaseVersion)
+      ? ["choices_requested" as const] : []),
   ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
@@ -64,7 +65,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const variant = settings.choice<"select" | "radio">("variant", "select");
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
-    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true ||
+    (props.metadata.releaseVersion === "1.2.0" && context.values?.dependencyKey === null);
   const options = context.values?.options ?? settings.options("options");
   const error = context.values?.error;
   const note = inactiveNote(context);
@@ -85,6 +87,29 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const [searchTerm, setSearchTerm] = useState("");
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
+  const lastRequestedSearch = useRef<string | undefined>(undefined);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const choiceRequestGeneration = useRef(0);
+  const [previousDependency, setPreviousDependency] = useState(context.values?.dependencyKey);
+  const [previouslyOffered, setPreviouslyOffered] = useState(options.length > 0);
+  const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
+  if (props.metadata.releaseVersion === "1.2.0" &&
+      (context.values?.dependencyKey !== previousDependency ||
+        (context.inactive && !previouslyInactive) ||
+        (context.values?.dependencyKey !== undefined && previouslyOffered && options.length === 0))) {
+    setPreviousDependency(context.values?.dependencyKey);
+    setSelected(null);
+    setSearchTerm("");
+    setComboboxOpen(false);
+    setSelectOpen(false);
+    lastRequestedSearch.current = undefined;
+    setRemoteLoading(false);
+    choiceRequestGeneration.current += 1;
+  }
+  if (props.metadata.releaseVersion === "1.2.0" && previouslyOffered !== (options.length > 0))
+    setPreviouslyOffered(options.length > 0);
+  if (props.metadata.releaseVersion === "1.2.0" && previouslyInactive !== context.inactive)
+    setPreviouslyInactive(context.inactive);
 
   // Only a currently offered option may be registered in the form or submitted.
   const permittedSelected =
@@ -101,15 +126,13 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
 
   const referenceChoices = context.values?.options !== undefined;
   const choicesRequested = useRef(context.events?.choices_requested);
-  const lastRequestedSearch = useRef<string | undefined>(undefined);
-  const [remoteLoading, setRemoteLoading] = useState(false);
   choicesRequested.current = context.events?.choices_requested;
   const requestChoices = useRef(
     (search: string, continuationToken?: string): void => undefined,
   );
   requestChoices.current = (search, continuationToken) => {
     const handler = choicesRequested.current;
-    if (handler === undefined) return;
+    if (handler === undefined || (props.metadata.releaseVersion === "1.2.0" && disabled)) return;
     const boundedSearch = search.trim().slice(0, 100);
     const selectedEvidence =
       permittedSelected === null
@@ -126,8 +149,12 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
             ...(selectedEvidence === undefined ? {} : { selectedEvidence }),
           }),
     };
+    const request = ++choiceRequestGeneration.current;
     setRemoteLoading(true);
-    void Promise.resolve(handler(event)).finally(() => setRemoteLoading(false));
+    void Promise.resolve(handler(event)).finally(() => {
+      if (props.metadata.releaseVersion !== "1.2.0" || choiceRequestGeneration.current === request)
+        setRemoteLoading(false);
+    });
   };
   useEffect(() => {
     if (!referenceChoices || !comboboxOpen || choicesRequested.current === undefined) return;

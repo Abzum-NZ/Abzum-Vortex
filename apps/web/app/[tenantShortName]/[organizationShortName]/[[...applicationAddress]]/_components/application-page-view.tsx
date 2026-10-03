@@ -47,10 +47,12 @@ import {
   type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   formContinuationAnswerSchema,
   type ReferenceChoiceSelectionEvidenceMap,
+  type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -253,6 +255,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const choiceScopeKey = (placementId: string, formId?: string): string =>
   formId === undefined ? placementId : `${formId}\u0000${placementId}`;
+
+/** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */
+function ChoiceFormLifetime({ children, mount, unmount, context, baseline }: Readonly<{
+  children: ReactNode;
+  mount: () => void;
+  unmount: () => void;
+  context: unknown;
+  baseline: unknown;
+}>): ReactElement {
+  const callbacks = useRef({ mount, unmount });
+  callbacks.current = { mount, unmount };
+  useEffect(() => {
+    const current = callbacks.current;
+    current.mount();
+    return current.unmount;
+  }, [context, baseline]);
+  return <>{children}</>;
+}
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
 const formOwnersByPlacement = (
@@ -457,7 +477,8 @@ const runtimeInputWithFormDefault = (
       : undefined;
   } else if (
     blockId === CHOICE_INPUT_BLOCK_RELEASE.blockId.toLowerCase() ||
-    blockId === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId.toLowerCase()
+    blockId === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId.toLowerCase() ||
+    blockId === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.blockId.toLowerCase()
   ) {
     control = "choice";
   }
@@ -781,6 +802,11 @@ function ApplicationPageViewContent({
     ) => Promise<void>
   >(async () => undefined);
   const choiceRequestIdsRef = useRef<Record<string, number>>({});
+  const choiceSelectionsRef = useRef<Record<string, Readonly<{
+    key: string;
+    evidence: ReferenceChoiceSelectionEvidence;
+  }>>>({});
+  const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   const confirmationResolveRef = useRef<((leave: boolean) => void) | undefined>(undefined);
@@ -1119,9 +1145,19 @@ function ApplicationPageViewContent({
     setChoicePagesOwner(model);
     setChoicePages({});
     setDialogChoicePages({});
+    choiceSelectionsRef.current = {};
+    choiceDefaultContextsRef.current = {};
     for (const placementId of Object.keys(choiceRequestIdsRef.current))
       choiceRequestIdsRef.current[placementId] = (choiceRequestIdsRef.current[placementId] ?? 0) + 1;
   }, [model]);
+
+  const parseChoicePage = useCallback(
+    (placementId: string, values: unknown): ChoiceInputPayload =>
+      parseChoiceInputPayload(values, { pageId: model.pageId, placementId },
+        model.referenceChoiceInputs.find((field) => field.placementId === placementId)?.releaseVersion,
+      ),
+    [model.pageId, model.referenceChoiceInputs],
+  );
 
   const choicePayloadFor = useCallback(
     (placementId: string, formId?: string): ChoiceInputPayload | undefined => {
@@ -1131,12 +1167,12 @@ function ApplicationPageViewContent({
       const data = currentData[placementId];
       if (!isRecord(data) || data.status !== "ready") return undefined;
       try {
-        return parseChoiceInputPayload(data.values, { pageId: model.pageId, placementId });
+        return parseChoicePage(placementId, data.values);
       } catch {
         return undefined;
       }
     },
-    [activeChoicePages, activeDialogChoicePages, currentData, model.pageId],
+    [activeChoicePages, activeDialogChoicePages, currentData, parseChoicePage],
   );
 
   const choiceEvidenceFor = useCallback(
@@ -1168,6 +1204,17 @@ function ApplicationPageViewContent({
       formId?: string,
     ): Promise<void> => {
       const stateKey = choiceScopeKey(placementId, formId);
+      const field = model.referenceChoiceInputs.find((candidate) => candidate.placementId === placementId);
+      const dependencyContext = model.referenceChoiceInputs.some((candidate) =>
+        candidate.formId === field?.formId && candidate.dependency !== undefined,
+      ) ? placementRequestsRef.current.key : undefined;
+      const currentContext = (): boolean => dependencyContext === undefined ||
+        placementRequestsRef.current.key === dependencyContext;
+      const dependencyChoice = field?.dependency === undefined ? undefined :
+        choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, formId)];
+      if (field?.dependency !== undefined && dependencyChoice === undefined) return;
+      const selected = field?.dependency === undefined ||
+        choiceSelectionsRef.current[stateKey]?.key === event.selectedKey;
       const requestId = (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
       choiceRequestIdsRef.current[stateKey] = requestId;
       try {
@@ -1188,14 +1235,15 @@ function ApplicationPageViewContent({
             ...(event.continuationToken === undefined
               ? {}
               : { continuationToken: event.continuationToken }),
-            ...(event.selectedKey === undefined ? {} : { selectedKey: event.selectedKey }),
-            ...(event.selectedEvidence === undefined
+            ...(event.selectedKey === undefined || !selected ? {} : { selectedKey: event.selectedKey }),
+            ...(event.selectedEvidence === undefined || !selected
               ? {}
               : { selectedEvidence: event.selectedEvidence }),
+            ...(dependencyChoice === undefined ? {} : { dependencyChoice }),
           }),
         });
         const body: unknown = await response.json();
-        if (choiceRequestIdsRef.current[stateKey] !== requestId) return;
+        if (!currentContext() || choiceRequestIdsRef.current[stateKey] !== requestId) return;
         if (
           isRecord(body) &&
           body.kind === "reload"
@@ -1208,14 +1256,14 @@ function ApplicationPageViewContent({
           router.refresh();
           return;
         }
-        const payload = parseChoiceInputPayload(body.values, {
-          pageId: model.pageId,
-          placementId,
-        });
+        const payload = parseChoicePage(placementId, body.values);
+        if (dependencyChoice !== undefined && payload.dependencyKey !== dependencyChoice.key) return;
         const setPages = formId === undefined ? setChoicePages : setDialogChoicePages;
         setPages((current) => {
+          if (!currentContext() || choiceRequestIdsRef.current[stateKey] !== requestId) return current;
           const previous = current[stateKey] ?? choicePayloadFor(placementId, formId);
-          const append = event.continuationToken !== undefined && previous !== undefined;
+          const append = event.continuationToken !== undefined && previous !== undefined &&
+            previous.dependencyKey === payload.dependencyKey;
           const allOptions = append
             ? [
                 ...new Map(
@@ -1240,29 +1288,132 @@ function ApplicationPageViewContent({
           );
           return {
             ...current,
-            [stateKey]: parseChoiceInputPayload(
-              {
+            [stateKey]: parseChoicePage(placementId, {
                 kind: "choice_input",
                 value: payload.value ?? null,
                 options,
                 optionEvidence,
+                ...(payload.dependencyKey === undefined ? {} : { dependencyKey: payload.dependencyKey }),
                 ...(payload.nextContinuationToken === undefined
                   ? {}
                   : { nextContinuationToken: payload.nextContinuationToken }),
                 ...(payload.error === undefined ? {} : { error: payload.error }),
-              },
-              { pageId: model.pageId, placementId },
-            ),
+              }),
           };
         });
       } catch {
-        if (choiceRequestIdsRef.current[stateKey] === requestId)
+        if (currentContext() && choiceRequestIdsRef.current[stateKey] === requestId)
           setNotice(unavailableNotice);
       }
     },
-    [application, choicePayloadFor, model.pageId, router],
+    [application, choicePayloadFor, model.referenceChoiceInputs, parseChoicePage, router],
   );
   requestChoicePageRef.current = requestChoicePage;
+
+  const clearChoiceForm = useCallback((formId: string, dialogFormId?: string): void => {
+    const fields = model.referenceChoiceInputs.filter((field) =>
+      field.formId.toLowerCase() === formId.toLowerCase(),
+    );
+    if (!fields.some((field) => field.dependency !== undefined)) return;
+    const keys = new Set(fields.map((field) => choiceScopeKey(field.placementId, dialogFormId)));
+    for (const key of keys) {
+      delete choiceSelectionsRef.current[key];
+      delete choiceDefaultContextsRef.current[key];
+      choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
+    }
+    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+    setPages((current) => {
+      const pages = Object.fromEntries(Object.entries(current).filter(([key]) => !keys.has(key)));
+      for (const field of fields)
+        if (field.dependency !== undefined)
+          pages[choiceScopeKey(field.placementId, dialogFormId)] = parseChoicePage(field.placementId, {
+            kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: null,
+          });
+      return pages;
+    });
+  }, [model.referenceChoiceInputs, parseChoicePage]);
+
+  const initializeChoiceForm = useCallback((
+    formId: string,
+    dialogFormId?: string,
+    defaults?: Readonly<Record<string, unknown>>,
+  ): void => {
+    clearChoiceForm(formId, dialogFormId);
+    const fields = model.referenceChoiceInputs.filter((field) =>
+      field.formId.toLowerCase() === formId.toLowerCase(),
+    );
+    if (!fields.some((field) => field.dependency !== undefined)) return;
+    for (const field of fields) {
+      if (field.dependency !== undefined) continue;
+      const data = currentData[field.placementId];
+      if (!isRecord(data) || data.status !== "ready") continue;
+      let payload: ChoiceInputPayload;
+      try { payload = parseChoicePage(field.placementId, data.values); } catch { continue; }
+      const key = defaults !== undefined && Object.hasOwn(defaults, field.fieldKey)
+        ? defaults[field.fieldKey] : payload.value;
+      const evidence = typeof key === "string" ? payload.optionEvidence?.[key] : undefined;
+      if (typeof key === "string" && evidence !== undefined &&
+          payload.options?.some((option) => option.key === key))
+        choiceSelectionsRef.current[choiceScopeKey(field.placementId, dialogFormId)] = { key, evidence };
+    }
+    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+    for (const field of fields) {
+      if (field.dependency === undefined) continue;
+      const parent = choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, dialogFormId)];
+      if (parent === undefined) continue;
+      const key = choiceScopeKey(field.placementId, dialogFormId);
+      choiceDefaultContextsRef.current[key] = true;
+      setPages((current) => ({ ...current, [key]: parseChoicePage(field.placementId, {
+        kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: parent.key,
+      }) }));
+      void requestChoicePageRef.current(field.placementId, { event: "choices_requested" }, dialogFormId);
+    }
+  }, [clearChoiceForm, currentData, model.referenceChoiceInputs, parseChoicePage]);
+
+  useEffect(() => {
+    const forms = new Set(model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
+      .map((field) => field.formId));
+    for (const formId of forms) initializeChoiceForm(formId);
+    return () => {
+      for (const formId of forms) clearChoiceForm(formId);
+    };
+  }, [clearChoiceForm, initializeChoiceForm, model.referenceChoiceInputs]);
+
+  const changeChoiceField = useCallback((
+    placementId: string,
+    event: ControlSemanticEvent,
+    dialogFormId?: string,
+  ): void => {
+    if (event.event !== "field_changed") return;
+    const field = model.referenceChoiceInputs.find((candidate) => candidate.placementId === placementId);
+    if (field === undefined || !model.referenceChoiceInputs.some((candidate) =>
+      candidate.formId === field.formId && candidate.dependency !== undefined,
+    )) return;
+    const stateKey = choiceScopeKey(placementId, dialogFormId);
+    if (field.dependency !== undefined) delete choiceDefaultContextsRef.current[stateKey];
+    const previous = choiceSelectionsRef.current[stateKey]?.key;
+    const payload = choicePayloadFor(placementId, dialogFormId);
+    const evidence = typeof event.value === "string" ? payload?.optionEvidence?.[event.value] : undefined;
+    const next = typeof event.value === "string" && evidence !== undefined &&
+      payload?.options?.some((option) => option.key === event.value)
+      ? { key: event.value, evidence } : undefined;
+    if (next === undefined) delete choiceSelectionsRef.current[stateKey];
+    else choiceSelectionsRef.current[stateKey] = next;
+    if (previous === next?.key) return;
+    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+    for (const child of model.referenceChoiceInputs) {
+      if (child.formId !== field.formId || child.dependency?.placementId !== placementId) continue;
+      const key = choiceScopeKey(child.placementId, dialogFormId);
+      delete choiceSelectionsRef.current[key];
+      delete choiceDefaultContextsRef.current[key];
+      choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
+      setPages((current) => ({ ...current, [key]: parseChoicePage(child.placementId, {
+        kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: next?.key ?? null,
+      }) }));
+      if (next !== undefined)
+        void requestChoicePageRef.current(child.placementId, { event: "choices_requested" }, dialogFormId);
+    }
+  }, [choicePayloadFor, model.referenceChoiceInputs, parseChoicePage]);
 
   useEffect(() => {
     if (!hasUnsavedWork) return;
@@ -1446,12 +1597,28 @@ function ApplicationPageViewContent({
           typeof settings.name.value === "string"
             ? settings.name.value
             : undefined;
+        const choiceField = model.referenceChoiceInputs.find((field) => field.placementId === placementId);
+        const defaultValue = name === undefined ? undefined : form.inputs[name];
+        const defaultEvidence = typeof defaultValue === "string"
+          ? dialogChoicePage?.optionEvidence?.[defaultValue] : undefined;
+        const dependentDefaultOffered = choiceField?.dependency === undefined ||
+          (choiceDefaultContextsRef.current[choiceScopeKey(placementId, form.formId)] === true &&
+            defaultEvidence !== undefined &&
+            dialogChoicePage?.options?.some((option) => option.key === defaultValue) === true);
         if (
           placement !== undefined &&
           name !== undefined &&
-          Object.hasOwn(form.inputs, name)
-        )
+          Object.hasOwn(form.inputs, name) && dependentDefaultOffered
+        ) {
           input = runtimeInputWithFormDefault(input, placement, form.inputs[name]);
+          if (choiceField?.dependency !== undefined && typeof defaultValue === "string" &&
+              defaultEvidence !== undefined) {
+            choiceSelectionsRef.current[choiceScopeKey(placementId, form.formId)] = {
+              key: defaultValue,
+              evidence: defaultEvidence,
+            };
+          }
+        }
         const events: Record<string, unknown> = {};
         if (placementId.toLowerCase() === form.formId.toLowerCase())
           events.form_submit = (event: ControlSemanticEvent) => {
@@ -1474,12 +1641,27 @@ function ApplicationPageViewContent({
             if (event.event !== "choices_requested") return;
             return requestChoicePageRef.current(placementId, event, form.formId);
           };
+        if (isReferenceChoice)
+          events.field_changed = (event: ControlSemanticEvent) =>
+            changeChoiceField(placementId, event, form.formId);
+        if (placementId.toLowerCase() === form.formId.toLowerCase())
+          events.form_reset = (event: ControlSemanticEvent) => {
+            if (event.event === "form_reset")
+              initializeChoiceForm(form.formId, form.formId, form.inputs);
+          };
         const modalInput: Record<string, unknown> = {};
         if (input.data !== undefined) modalInput.data = input.data;
         if (Object.keys(events).length > 0) modalInput.events = events;
         if (Object.keys(modalInput).length > 0) scopedInputs[placementId] = modalInput;
       }
       return (
+        <ChoiceFormLifetime
+          key={form.taskId}
+          context={model}
+          baseline={currentData}
+          mount={() => initializeChoiceForm(form.formId, form.formId, form.inputs)}
+          unmount={() => clearChoiceForm(form.formId, form.formId)}
+        >
         <div ref={dialogFormRef} className="flex flex-col gap-4">
           <UnsavedWorkProvider>
             <PageLayoutRenderer
@@ -1505,9 +1687,11 @@ function ApplicationPageViewContent({
             </Button>
           </DialogFooter>
         </div>
+        </ChoiceFormLifetime>
       );
     },
-    [choiceEvidenceFor, choicePayloadFor, model, resolvePageHref],
+    [choiceEvidenceFor, choicePayloadFor, changeChoiceField, clearChoiceForm,
+      currentData, initializeChoiceForm, model, resolvePageHref],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,
@@ -2082,6 +2266,8 @@ function ApplicationPageViewContent({
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
+      ...model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
+        .map((field) => field.formId),
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -2193,6 +2379,8 @@ function ApplicationPageViewContent({
           if (event.event !== "choices_requested") return;
           return requestChoicePageRef.current(placementId, event);
         };
+      if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
+        events.field_changed = (event: ControlSemanticEvent) => changeChoiceField(placementId, event);
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
@@ -2299,6 +2487,16 @@ function ApplicationPageViewContent({
             resetBinding.bindingId,
           );
         };
+      if (model.referenceChoiceInputs.some((field) =>
+        field.formId === placementId && field.dependency !== undefined,
+      )) {
+        const boundReset = events.form_reset;
+        events.form_reset = (event: ControlSemanticEvent) => {
+          if (event.event !== "form_reset") return;
+          initializeChoiceForm(placementId);
+          return boundReset?.(event);
+        };
+      }
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
           inputs[placementId] = {
@@ -2329,6 +2527,8 @@ function ApplicationPageViewContent({
     formOwners,
     launcherPlacements,
     choiceEvidenceFor,
+    changeChoiceField,
+    initializeChoiceForm,
     activeChoicePages,
     model.referenceChoiceInputs,
     currentData,
