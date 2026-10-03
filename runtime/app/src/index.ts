@@ -13,6 +13,7 @@ import { createInstalledRuntimeContextLoader } from "./installed-runtime-context
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import { createOperationsAlertSink, readOpenOperationsAlertSignals } from "./operations-alert-sink";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
+import { createOrganizationSetupSourceManifestService } from "./organization-setup-source-manifest";
 import { resolveInstalledPageIdentity } from "./standard-page-resolution";
 import { createAppTelemetryCollector } from "./telemetry";
 
@@ -202,6 +203,13 @@ export {
 } from "./protected-operation-executor";
 
 export {
+  createOrganizationSetupSourceManifestService,
+  type OrganizationSetupSourceManifestSelection,
+  type OrganizationSetupSourceManifestService,
+  type OrganizationSetupSourceManifestServiceDependencies,
+} from "./organization-setup-source-manifest";
+
+export {
   createFlowOrchestrator,
   flowContinuationLifetimeSeconds,
   type FlowOrchestrator,
@@ -257,6 +265,7 @@ export const AppService = Object.freeze({
   createComponentEventDispatcher,
   createIdentityDisablementCoordinator,
   createProtectedOperationExecutor,
+  createOrganizationSetupSourceManifestService,
   createFlowOrchestrator,
   createFlowTestRunner,
   createFormContinuationService,
