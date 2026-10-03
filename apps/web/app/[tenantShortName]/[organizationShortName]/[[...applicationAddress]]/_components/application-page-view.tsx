@@ -122,7 +122,10 @@ const platformComponentRegistry = createFullPlatformComponentRegistry();
  * A placement's event callbacks. Display events and control events (the form's ready, reset and
  * submit) are both delivered through the one runtime-inputs map, so the key is the event name.
  */
-type EventHandlers = Record<string, (event: never) => void>;
+type FormResetEvent = Extract<ControlSemanticEvent, { event: "form_reset" }>;
+type EventHandlers = Record<string, (event: never) => void> & {
+  form_reset?: (event: FormResetEvent) => void | Promise<void>;
+};
 type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
 type SubmittedForm = Readonly<{
   formId: string;
