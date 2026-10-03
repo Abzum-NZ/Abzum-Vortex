@@ -30,6 +30,7 @@ import {
 } from "./form-context";
 import { useUnsavedWorkRegistry } from "./unsaved-work";
 import type { FormPayload } from "./projected-data";
+import { Alert, AlertDescription } from "../components/alert";
 
 /**
  * A form container accepts its own projected data and declared callbacks, plus one supplied #591
@@ -351,20 +352,21 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         <fieldset
           key={generation}
           disabled={fieldsDisabled}
-          className="flex min-w-0 flex-col gap-4 border-0 p-0"
+          className="vortex-form-content flex min-w-0 flex-col gap-4 border-0 p-0"
         >
           {props.slots.content ?? null}
         </fieldset>
       </FormScopeContext.Provider>
       <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
       {flowFeedback === undefined ? null : (
-        <p
+        <Alert
+          variant={flowFeedback.tone === "problem" ? "destructive" : "default"}
           role={flowFeedback.tone === "problem" ? "alert" : "status"}
           aria-live="polite"
           data-vortex-form-feedback={flowFeedback.tone}
         >
-          {flowFeedback.text}
-        </p>
+          <AlertDescription>{flowFeedback.text}</AlertDescription>
+        </Alert>
       )}
     </form>
   );

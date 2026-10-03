@@ -11,6 +11,7 @@ export type ContainerProps = PlatformBlockRenderProps;
 
 type ContainerDirection = "column" | "row";
 type ContainerGap = "none" | "small" | "medium" | "large";
+type ContainerContentWidth = "fill" | "readable";
 type MenuPlacement = "flow" | "sticky" | "full_height";
 type ContainerGeometry = Readonly<{
   direction: ContainerDirection;
@@ -29,6 +30,13 @@ const CONTAINER_GAPS: Readonly<Record<ContainerGap, string>> = Object.freeze({
   small: "gap-2",
   medium: "gap-4",
   large: "gap-6",
+});
+
+const CONTAINER_PADDING: Readonly<Record<ContainerGap, string>> = Object.freeze({
+  none: "p-0",
+  small: "p-2",
+  medium: "p-4",
+  large: "p-6",
 });
 
 /** CSS is scoped to one rendered container, including two previews of the same placement. */
@@ -79,6 +87,8 @@ export function Container(props: ContainerProps): ReactElement {
     declared.has(key) ? settings.number(key) : undefined;
   const readChoice = <Value extends string>(key: string, fallback: Value): Value =>
     declared.has(key) ? settings.choice(key, fallback) : fallback;
+  const padding = readChoice<ContainerGap>("padding", "none");
+  const contentWidth = readChoice<ContainerContentWidth>("content_width", "fill");
   const desktop: ContainerGeometry = {
     direction,
     menuWidth: readWidth("menu_width"),
@@ -131,6 +141,8 @@ export function Container(props: ContainerProps): ReactElement {
         "box-border flex w-full",
         direction === "row" ? "flex-row" : "flex-col",
         CONTAINER_GAPS[gap],
+        declared.has("padding") ? CONTAINER_PADDING[padding] : undefined,
+        contentWidth === "readable" ? "mx-auto max-w-2xl" : undefined,
       )}
     >
       {menuGeometryDeclared ? <style>{responsiveCss}</style> : null}

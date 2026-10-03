@@ -12,6 +12,8 @@ import {
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Button } from "@vortex/ui/components/button";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
@@ -303,38 +305,44 @@ export default async function ApplicationAddressPage({
         ? "The release could not be adopted. The current release is still in use."
         : undefined;
   return (
-    <>
-      {adoptionOutcome === undefined ? null : (
-        <p role="status" data-vortex-release-adoption="outcome">
-          {adoptionOutcome}
-        </p>
-      )}
-      {adoption === undefined ? null : (
-        <form action={adoptRelease} data-vortex-release-adoption="offered">
-          <input type="hidden" name="applicationKey" value={resolved.application.key} />
-          <input type="hidden" name="pageKey" value={resolved.pageKey} />
-          <input
-            type="hidden"
-            name="targetReleaseRevision"
-            value={adoption.offeredReleaseRevision}
-          />
-          <input
-            type="hidden"
-            name="expectedActiveReleaseRevision"
-            value={adoption.installedReleaseRevision}
-          />
-          <button type="submit">Adopt release {adoption.offeredReleaseVersion}</button>
-        </form>
-      )}
-      <ApplicationPageView
-        model={page.model}
-        onOpenApplication={openApplication}
+    <ApplicationPageView
+      model={page.model}
+      onOpenApplication={openApplication}
+      pageFeedback={adoption === undefined && adoptionOutcome === undefined ? undefined : (
+        <>
+          {adoptionOutcome === undefined ? null : (
+            <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
+              <AlertDescription>{adoptionOutcome}</AlertDescription>
+            </Alert>
+          )}
+          {adoption === undefined ? null : (
+            <Alert role="region" aria-label="Application release">
+              <AlertDescription>
+                <form action={adoptRelease} data-vortex-release-adoption="offered">
+                  <input type="hidden" name="applicationKey" value={resolved.application.key} />
+                  <input type="hidden" name="pageKey" value={resolved.pageKey} />
+                  <input
+                    type="hidden"
+                    name="targetReleaseRevision"
+                    value={adoption.offeredReleaseRevision}
+                  />
+                    <input
+                      type="hidden"
+                      name="expectedActiveReleaseRevision"
+                      value={adoption.installedReleaseRevision}
+                    />
+                    <Button type="submit">Adopt release {adoption.offeredReleaseVersion}</Button>
+                  </form>
+                </AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
         guidedFormActions={{
           advance: advanceGuidedFormStepAction,
           confirm: confirmGuidedFormAction,
           abandon: abandonGuidedFormDraftAction,
         }}
       />
-    </>
   );
 }

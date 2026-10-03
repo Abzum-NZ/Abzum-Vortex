@@ -1097,7 +1097,45 @@
                                                                             "page_crm_qualify_lead_details":  {
                                                                                                                  "slot_primary":  {
                                                                                                                   "placements":  {
-                                                                                                                                     "form_6_0":  {
+                                                                                                                                     "form_6_0_frame":  {
+                                                                                                                                         "block": {
+                                                                                                                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                                                                             "release_version": "1.3.0"
+                                                                                                                                         },
+                                                                                                                                         "settings": {
+                                                                                                                                             "direction": {
+                                                                                                                                                 "kind": "choice",
+                                                                                                                                                 "value": "column"
+                                                                                                                                             },
+                                                                                                                                             "gap": {
+                                                                                                                                                 "kind": "choice",
+                                                                                                                                                 "value": "medium"
+                                                                                                                                             },
+                                                                                                                                             "padding": {
+                                                                                                                                                 "kind": "choice",
+                                                                                                                                                 "value": "medium"
+                                                                                                                                             },
+                                                                                                                                             "content_width": {
+                                                                                                                                                 "kind": "choice",
+                                                                                                                                                 "value": "readable"
+                                                                                                                                             }
+                                                                                                                                         },
+                                                                                                                                         "theme_overrides": {},
+                                                                                                                                         "responsive": {
+                                                                                                                                             "desktop": {
+                                                                                                                                                 "visible": true,
+                                                                                                                                                 "width": {
+                                                                                                                                                     "kind": "fill"
+                                                                                                                                                 },
+                                                                                                                                                 "height": {
+                                                                                                                                                     "kind": "content"
+                                                                                                                                                 }
+                                                                                                                                             }
+                                                                                                                                         },
+                                                                                                                                         "slots": {
+                                                                                                                                             "content": {
+                                                                                                                                                 "placements": {
+                                                                                                                                                     "form_6_0": {
                                                                                                                                                       "block":  {
                                                                                                                                                                     "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                                                     "release_version":  "1.0.0"
@@ -1205,18 +1243,65 @@
                                                                                                                                                                                 }
                                                                                                                                                                 }
                                                                                                                                                   }
+                                                                                                                                                 },
+                                                                                                                                                 "order": {
+                                                                                                                                                     "desktop": [
+                                                                                                                                                         "form_6_0"
+                                                                                                                                                     ]
+                                                                                                                                                 }
+                                                                                                                                             }
+                                                                                                                                         }
+                                                                                                                                     }
                                                                                                                                  },
                                                                                                                   "order":  {
-                                                                                                                                "desktop":  [
-                                                                                                                                                "form_6_0"
-                                                                                                                                            ]
-                                                                                                                            }
+                                                                                                                      "desktop": [
+                                                                                                                          "form_6_0_frame"
+                                                                                                                      ]
+                                                                                                                  }
                                                                                                                   }
                                                                                                               },
                                                                             "page_crm_qualify_company_match":  {
                                                                                                                   "slot_primary":  {
                                                                                                                    "placements":  {
-                                                                                                                                      "form_6_1":  {
+                                                                                                                                      "form_6_1_frame":  {
+                                                                                                                                          "block": {
+                                                                                                                                              "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                                                                              "release_version": "1.3.0"
+                                                                                                                                          },
+                                                                                                                                          "settings": {
+                                                                                                                                              "direction": {
+                                                                                                                                                  "kind": "choice",
+                                                                                                                                                  "value": "column"
+                                                                                                                                              },
+                                                                                                                                              "gap": {
+                                                                                                                                                  "kind": "choice",
+                                                                                                                                                  "value": "medium"
+                                                                                                                                              },
+                                                                                                                                              "padding": {
+                                                                                                                                                  "kind": "choice",
+                                                                                                                                                  "value": "medium"
+                                                                                                                                              },
+                                                                                                                                              "content_width": {
+                                                                                                                                                  "kind": "choice",
+                                                                                                                                                  "value": "readable"
+                                                                                                                                              }
+                                                                                                                                          },
+                                                                                                                                          "theme_overrides": {},
+                                                                                                                                          "responsive": {
+                                                                                                                                              "desktop": {
+                                                                                                                                                  "visible": true,
+                                                                                                                                                  "width": {
+                                                                                                                                                      "kind": "fill"
+                                                                                                                                                  },
+                                                                                                                                                  "height": {
+                                                                                                                                                      "kind": "content"
+                                                                                                                                                  }
+                                                                                                                                              }
+                                                                                                                                          },
+                                                                                                                                          "slots": {
+                                                                                                                                              "content": {
+                                                                                                                                                  "placements": {
+                                                                                                                                                      "form_6_1": {
                                                                                                                                                        "block":  {
                                                                                                                                                                      "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                                                      "release_version":  "1.0.0"
@@ -1324,18 +1409,65 @@
                                                                                                                                                                                  }
                                                                                                                                                                  }
                                                                                                                                                    }
+                                                                                                                                                  },
+                                                                                                                                                  "order": {
+                                                                                                                                                      "desktop": [
+                                                                                                                                                          "form_6_1"
+                                                                                                                                                      ]
+                                                                                                                                                  }
+                                                                                                                                              }
+                                                                                                                                          }
+                                                                                                                                      }
                                                                                                                                   },
                                                                                                                    "order":  {
-                                                                                                                                 "desktop":  [
-                                                                                                                                                 "form_6_1"
-                                                                                                                                             ]
-                                                                                                                             }
+                                                                                                                       "desktop": [
+                                                                                                                           "form_6_1_frame"
+                                                                                                                       ]
+                                                                                                                   }
                                                                                                                    }
                                                                                                                },
                                                                             "page_crm_qualify_opportunity_details":  {
                                                                                                                         "slot_primary":  {
                                                                                                                          "placements":  {
-                                                                                                                                            "form_6_2":  {
+                                                                                                                                            "form_6_2_frame":  {
+                                                                                                                                                "block": {
+                                                                                                                                                    "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                                                                                    "release_version": "1.3.0"
+                                                                                                                                                },
+                                                                                                                                                "settings": {
+                                                                                                                                                    "direction": {
+                                                                                                                                                        "kind": "choice",
+                                                                                                                                                        "value": "column"
+                                                                                                                                                    },
+                                                                                                                                                    "gap": {
+                                                                                                                                                        "kind": "choice",
+                                                                                                                                                        "value": "medium"
+                                                                                                                                                    },
+                                                                                                                                                    "padding": {
+                                                                                                                                                        "kind": "choice",
+                                                                                                                                                        "value": "medium"
+                                                                                                                                                    },
+                                                                                                                                                    "content_width": {
+                                                                                                                                                        "kind": "choice",
+                                                                                                                                                        "value": "readable"
+                                                                                                                                                    }
+                                                                                                                                                },
+                                                                                                                                                "theme_overrides": {},
+                                                                                                                                                "responsive": {
+                                                                                                                                                    "desktop": {
+                                                                                                                                                        "visible": true,
+                                                                                                                                                        "width": {
+                                                                                                                                                            "kind": "fill"
+                                                                                                                                                        },
+                                                                                                                                                        "height": {
+                                                                                                                                                            "kind": "content"
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                },
+                                                                                                                                                "slots": {
+                                                                                                                                                    "content": {
+                                                                                                                                                        "placements": {
+                                                                                                                                                            "form_6_2": {
                                                                                                                                                              "block":  {
                                                                                                                                                                            "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                                                            "release_version":  "1.0.0"
@@ -1443,18 +1575,65 @@
                                                                                                                                                                                        }
                                                                                                                                                                        }
                                                                                                                                                          }
+                                                                                                                                                        },
+                                                                                                                                                        "order": {
+                                                                                                                                                            "desktop": [
+                                                                                                                                                                "form_6_2"
+                                                                                                                                                            ]
+                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                                }
+                                                                                                                                            }
                                                                                                                                         },
                                                                                                                          "order":  {
-                                                                                                                                       "desktop":  [
-                                                                                                                                                       "form_6_2"
-                                                                                                                                                   ]
-                                                                                                                                   }
+                                                                                                                             "desktop": [
+                                                                                                                                 "form_6_2_frame"
+                                                                                                                             ]
+                                                                                                                         }
                                                                                                                          }
                                                                                                                      },
                                                                             "page_crm_qualify_summary":  {
                                                                                                             "slot_primary":  {
                                                                                                              "placements":  {
-                                                                                                                                "form_6_3":  {
+                                                                                                                                "form_6_3_frame":  {
+                                                                                                                                    "block": {
+                                                                                                                                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                                                                        "release_version": "1.3.0"
+                                                                                                                                    },
+                                                                                                                                    "settings": {
+                                                                                                                                        "direction": {
+                                                                                                                                            "kind": "choice",
+                                                                                                                                            "value": "column"
+                                                                                                                                        },
+                                                                                                                                        "gap": {
+                                                                                                                                            "kind": "choice",
+                                                                                                                                            "value": "medium"
+                                                                                                                                        },
+                                                                                                                                        "padding": {
+                                                                                                                                            "kind": "choice",
+                                                                                                                                            "value": "medium"
+                                                                                                                                        },
+                                                                                                                                        "content_width": {
+                                                                                                                                            "kind": "choice",
+                                                                                                                                            "value": "readable"
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "theme_overrides": {},
+                                                                                                                                    "responsive": {
+                                                                                                                                        "desktop": {
+                                                                                                                                            "visible": true,
+                                                                                                                                            "width": {
+                                                                                                                                                "kind": "fill"
+                                                                                                                                            },
+                                                                                                                                            "height": {
+                                                                                                                                                "kind": "content"
+                                                                                                                                            }
+                                                                                                                                        }
+                                                                                                                                    },
+                                                                                                                                    "slots": {
+                                                                                                                                        "content": {
+                                                                                                                                            "placements": {
+                                                                                                                                                "form_6_3": {
                                                                                                                                                  "block":  {
                                                                                                                                                                "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                                                "release_version":  "1.0.0"
@@ -1638,12 +1817,21 @@
                                                                                                                                                                            }
                                                                                                                                                            }
                                                                                                                                              }
+                                                                                                                                            },
+                                                                                                                                            "order": {
+                                                                                                                                                "desktop": [
+                                                                                                                                                    "form_6_3"
+                                                                                                                                                ]
+                                                                                                                                            }
+                                                                                                                                        }
+                                                                                                                                    }
+                                                                                                                                }
                                                                                                                             },
                                                                                                              "order":  {
-                                                                                                                           "desktop":  [
-                                                                                                                                           "form_6_3"
-                                                                                                                                       ]
-                                                                                                                       }
+                                                                                                                 "desktop": [
+                                                                                                                     "form_6_3_frame"
+                                                                                                                 ]
+                                                                                                             }
                                                                                                              }
                                                                                                          }
                                                                         }
@@ -1763,7 +1951,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_company_create":  {
+                                                                                       "form_crm_company_create_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_company_create": {
                                                                                                                        "block":  {
                                                                                                                                      "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                      "release_version":  "1.0.0"
@@ -1865,12 +2091,21 @@
                                                                                                                                                  }
                                                                                                                                  }
                                                                                                                    }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_company_create"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_company_create"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_company_create_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -1888,7 +2123,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_company_edit":  {
+                                                                                       "form_crm_company_edit_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_company_edit": {
                                                                                                                      "block":  {
                                                                                                                                    "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                    "release_version":  "1.0.0"
@@ -1990,12 +2263,21 @@
                                                                                                                                                }
                                                                                                                                }
                                                                                                                  }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_company_edit"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_company_edit"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_company_edit_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -2013,7 +2295,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_contact_create":  {
+                                                                                       "form_crm_contact_create_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_contact_create": {
                                                                                                                        "block":  {
                                                                                                                                      "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                      "release_version":  "1.0.0"
@@ -2112,12 +2432,21 @@
                                                                                                                                                  }
                                                                                                                                  }
                                                                                                                    }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_contact_create"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_contact_create"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_contact_create_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -2135,7 +2464,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_contact_edit":  {
+                                                                                       "form_crm_contact_edit_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_contact_edit": {
                                                                                                                      "block":  {
                                                                                                                                    "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                    "release_version":  "1.0.0"
@@ -2234,12 +2601,21 @@
                                                                                                                                                }
                                                                                                                                }
                                                                                                                  }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_contact_edit"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_contact_edit"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_contact_edit_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -2257,7 +2633,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_lead_create":  {
+                                                                                       "form_crm_lead_create_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_lead_create": {
                                                                                                                     "block":  {
                                                                                                                                   "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                   "release_version":  "1.0.0"
@@ -2367,12 +2781,21 @@
                                                                                                                                               }
                                                                                                                               }
                                                                                                                 }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_lead_create"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_lead_create"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_lead_create_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -2390,7 +2813,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_lead_edit":  {
+                                                                                       "form_crm_lead_edit_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_lead_edit": {
                                                                                                                   "block":  {
                                                                                                                                 "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                                                                                                                 "release_version":  "1.0.0"
@@ -2500,12 +2961,21 @@
                                                                                                                                             }
                                                                                                                             }
                                                                                                               }
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_lead_edit"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       }
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "form_crm_lead_edit"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "form_crm_lead_edit_frame"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -2523,7 +2993,45 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-                                                                                       "form_crm_company_merge":  {
+                                                                                       "form_crm_company_merge_frame":  {
+                                                                                           "block": {
+                                                                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                                                               "release_version": "1.3.0"
+                                                                                           },
+                                                                                           "settings": {
+                                                                                               "direction": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "column"
+                                                                                               },
+                                                                                               "gap": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "padding": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "medium"
+                                                                                               },
+                                                                                               "content_width": {
+                                                                                                   "kind": "choice",
+                                                                                                   "value": "readable"
+                                                                                               }
+                                                                                           },
+                                                                                           "theme_overrides": {},
+                                                                                           "responsive": {
+                                                                                               "desktop": {
+                                                                                                   "visible": true,
+                                                                                                   "width": {
+                                                                                                       "kind": "fill"
+                                                                                                   },
+                                                                                                   "height": {
+                                                                                                       "kind": "content"
+                                                                                                   }
+                                                                                               }
+                                                                                           },
+                                                                                           "slots": {
+                                                                                               "content": {
+                                                                                                   "placements": {
+                                                                                                       "form_crm_company_merge": {
     "block":  {
         "block_id":  "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
         "release_version":  "1.0.0"
@@ -2643,7 +3151,16 @@
             }
         }
     }
-},
+}
+                                                                                                   },
+                                                                                                   "order": {
+                                                                                                       "desktop": [
+                                                                                                           "form_crm_company_merge"
+                                                                                                       ]
+                                                                                                   }
+                                                                                               }
+                                                                                           }
+                                                                                       },
     "detail_crm_company":  {
                                                                                                                   "block":  {
                                                                                                                                 "block_id":  "e2569df0-2f10-4b20-b41d-177b66cd136c",
@@ -2758,12 +3275,12 @@
         "button_edit_company": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.company.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "detail_crm_company",
-                                                                                                  "form_crm_company_merge",
-            "button_edit_company"
-                                                                                              ]
-                                                                              }
+                                                                        "desktop": [
+                                                                            "detail_crm_company",
+                                                                            "form_crm_company_merge_frame",
+                                                                            "button_edit_company"
+                                                                        ]
+                                                                    }
                                                                     }
                                                                 }
                                                    }
@@ -3384,7 +3901,45 @@
                                    "content": {
                                      "slot_primary": {
                                        "placements": {
-                                         "form_crm_opportunity_edit": {
+                                         "form_crm_opportunity_edit_frame": {
+                                             "block": {
+                                                 "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                                 "release_version": "1.3.0"
+                                             },
+                                             "settings": {
+                                                 "direction": {
+                                                     "kind": "choice",
+                                                     "value": "column"
+                                                 },
+                                                 "gap": {
+                                                     "kind": "choice",
+                                                     "value": "medium"
+                                                 },
+                                                 "padding": {
+                                                     "kind": "choice",
+                                                     "value": "medium"
+                                                 },
+                                                 "content_width": {
+                                                     "kind": "choice",
+                                                     "value": "readable"
+                                                 }
+                                             },
+                                             "theme_overrides": {},
+                                             "responsive": {
+                                                 "desktop": {
+                                                     "visible": true,
+                                                     "width": {
+                                                         "kind": "fill"
+                                                     },
+                                                     "height": {
+                                                         "kind": "content"
+                                                     }
+                                                 }
+                                             },
+                                             "slots": {
+                                                 "content": {
+                                                     "placements": {
+                                                         "form_crm_opportunity_edit": {
                                            "block": {
                                              "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                              "release_version": "1.0.0"
@@ -3578,11 +4133,20 @@
                                              }
                                            }
                                          }
+                                                     },
+                                                     "order": {
+                                                         "desktop": [
+                                                             "form_crm_opportunity_edit"
+                                                         ]
+                                                     }
+                                                 }
+                                             }
+                                         }
                                        },
                                        "order": {
-                                         "desktop": [
-                                           "form_crm_opportunity_edit"
-                                         ]
+                                           "desktop": [
+                                               "form_crm_opportunity_edit_frame"
+                                           ]
                                        }
                                      }
                                    }
@@ -3601,7 +4165,45 @@
                                  "content": {
                                    "slot_primary": {
                                      "placements": {
-                                       "form_crm_opportunity_create": {
+                                       "form_crm_opportunity_create_frame": {
+                                           "block": {
+                                               "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                               "release_version": "1.3.0"
+                                           },
+                                           "settings": {
+                                               "direction": {
+                                                   "kind": "choice",
+                                                   "value": "column"
+                                               },
+                                               "gap": {
+                                                   "kind": "choice",
+                                                   "value": "medium"
+                                               },
+                                               "padding": {
+                                                   "kind": "choice",
+                                                   "value": "medium"
+                                               },
+                                               "content_width": {
+                                                   "kind": "choice",
+                                                   "value": "readable"
+                                               }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                               "desktop": {
+                                                   "visible": true,
+                                                   "width": {
+                                                       "kind": "fill"
+                                                   },
+                                                   "height": {
+                                                       "kind": "content"
+                                                   }
+                                               }
+                                           },
+                                           "slots": {
+                                               "content": {
+                                                   "placements": {
+                                                       "form_crm_opportunity_create": {
                                          "block": {
                                            "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                                            "release_version": "1.0.0"
@@ -3847,11 +4449,20 @@
                                            }
                                          }
                                        }
+                                                   },
+                                                   "order": {
+                                                       "desktop": [
+                                                           "form_crm_opportunity_create"
+                                                       ]
+                                                   }
+                                               }
+                                           }
+                                       }
                                      },
                                      "order": {
-                                       "desktop": [
-                                         "form_crm_opportunity_create"
-                                       ]
+                                         "desktop": [
+                                             "form_crm_opportunity_create_frame"
+                                         ]
                                      }
                                    }
                                  }
@@ -4376,17 +4987,21 @@
                          "shell_root": {
                            "block": {
                              "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                             "release_version": "1.0.0"
+                             "release_version": "1.3.0"
                            },
                            "settings": {
-                             "direction": {
-                               "kind": "choice",
-                               "value": "column"
-                             },
-                             "gap": {
-                               "kind": "choice",
-                               "value": "medium"
-                             }
+                               "direction": {
+                                   "kind": "choice",
+                                   "value": "column"
+                               },
+                               "gap": {
+                                   "kind": "choice",
+                                   "value": "large"
+                               },
+                               "padding": {
+                                   "kind": "choice",
+                                   "value": "medium"
+                               }
                            },
                            "theme_overrides": {},
                            "responsive": {
@@ -4402,63 +5017,114 @@
                            },
                            "slots": {
                              "header": {
-                               "placements": {
-                                 "shell_heading": {
-                                   "block": {
-                                     "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                     "release_version": "1.0.0"
-                                   },
-                                   "settings": {
-                                     "text": {
-                                       "kind": "text",
-                                       "value": "CRM"
-                                     },
-                                     "level": {
-                                       "kind": "choice",
-                                       "value": "one"
+                                 "placements": {
+                                     "shell_header_frame": {
+                                         "block": {
+                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                             "release_version": "1.3.0"
+                                         },
+                                         "settings": {
+                                             "direction": {
+                                                 "kind": "choice",
+                                                 "value": "row"
+                                             },
+                                             "gap": {
+                                                 "kind": "choice",
+                                                 "value": "large"
+                                             },
+                                             "phone_direction": {
+                                                 "kind": "choice",
+                                                 "value": "column"
+                                             }
+                                         },
+                                         "theme_overrides": {},
+                                         "responsive": {
+                                             "desktop": {
+                                                 "visible": true,
+                                                 "width": {
+                                                     "kind": "fill"
+                                                 },
+                                                 "height": {
+                                                     "kind": "content"
+                                                 }
+                                             }
+                                         },
+                                         "slots": {
+                                             "header": {
+                                                 "placements": {
+                                                     "shell_heading": {
+                                                         "block": {
+                                                             "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                                                             "release_version": "1.0.0"
+                                                         },
+                                                         "settings": {
+                                                             "text": {
+                                                                 "kind": "text",
+                                                                 "value": "CRM"
+                                                             },
+                                                             "level": {
+                                                                 "kind": "choice",
+                                                                 "value": "one"
+                                                             }
+                                                         },
+                                                         "theme_overrides": {},
+                                                         "responsive": {
+                                                             "desktop": {
+                                                                 "visible": true,
+                                                                 "width": {
+                                                                     "kind": "fill"
+                                                                 },
+                                                                 "height": {
+                                                                     "kind": "content"
+                                                                 }
+                                                             }
+                                                         },
+                                                         "slots": {}
+                                                     }
+                                                 },
+                                                 "order": {
+                                                     "desktop": [
+                                                         "shell_heading"
+                                                     ]
+                                                 }
+                                             },
+                                             "content": {
+                                                 "placements": {
+                                                     "shell_account": {
+                                                         "block": {
+                                                             "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                                                             "release_version": "1.0.0"
+                                                         },
+                                                         "settings": {},
+                                                         "theme_overrides": {},
+                                                         "responsive": {
+                                                             "desktop": {
+                                                                 "visible": true,
+                                                                 "width": {
+                                                                     "kind": "fill"
+                                                                 },
+                                                                 "height": {
+                                                                     "kind": "content"
+                                                                 }
+                                                             }
+                                                         },
+                                                         "slots": {}
+                                                     }
+                                                 },
+                                                 "order": {
+                                                     "desktop": [
+                                                         "shell_account"
+                                                     ]
+                                                 }
+                                             }
+                                         }
                                      }
-                                   },
-                                   "theme_overrides": {},
-                                   "responsive": {
-                                     "desktop": {
-                                       "visible": true,
-                                       "width": {
-                                         "kind": "fill"
-                                       },
-                                       "height": {
-                                         "kind": "content"
-                                       }
-                                     }
-                                   },
-                                   "slots": {}
                                  },
-                                 "shell_account": {
-                                   "block": {
-                                     "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                                     "release_version": "1.0.0"
-                                   },
-                                   "settings": {},
-                                   "theme_overrides": {},
-                                   "responsive": {
-                                     "desktop": {
-                                       "visible": true,
-                                       "width": {
-                                         "kind": "fill"
-                                       },
-                                       "height": {
-                                         "kind": "content"
-                                       }
-                                     }
-                                   },
-                                   "slots": {}
+                                 "order": {
+                                     "desktop": [
+                                         "shell_header_frame"
+                                     ]
                                  }
-                               },
-                               "order": {
-                                 "desktop": [
-                                   "shell_heading",
-                                   "shell_account"
-                                 ]
-                               }
                              },
                              "content": {
                                "placements": {

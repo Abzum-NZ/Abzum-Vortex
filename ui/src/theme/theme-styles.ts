@@ -19,6 +19,25 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
+/* Only installed application hosts cover the viewport; previews and dialogs remain bounded. */
+[data-vortex-application-surface] {
+  min-height: 100svh;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-vortex-page-feedback] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vortex-space-md);
+  padding: var(--vortex-space-md);
+}
+
+/* The form owns field spacing across its one rendered content slot, including declared grids. */
+.vortex-form-content > [data-vortex-slot-key="content"] {
+  gap: var(--vortex-space-md);
+}
+
 .vortex-field {
   display: flex;
   flex-direction: column;
