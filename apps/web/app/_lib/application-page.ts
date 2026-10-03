@@ -26,6 +26,7 @@ import {
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
   applicationLauncherQueryRowsToListValues,
   type ApplicationLauncherQueryRow,
   type DisplayCellValue,
@@ -93,6 +94,10 @@ import {
   visibleGuidedFormValidation,
 } from "./guided-form-steps";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import {
+  getIdentityAuthorityConfiguration,
+  getIdentityJourneyConfiguration,
+} from "../auth/_lib/authority-configuration";
 import {
   hasReferenceChoiceSource,
   projectedReferenceChoiceForm,
@@ -1241,6 +1246,236 @@ const loadInstalledContext = (
     },
   );
 
+type LocalPageCompositionStage = "INSTALLED_PAGE" | "PROJECTED_PAGE" | "PAGE_MODEL";
+type LocalPageCompositionResult = "AVAILABLE" | "UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE";
+type LocalPageTableState = "NOT_OBSERVED" | "ABSENT" | "READY" | "EMPTY" | "REFUSED" | "ERROR" | "MIXED";
+
+/** Structural observations only: no settings, records, authority decisions or exact counts. */
+const localPageCompositionMetrics = (
+  installed: unknown,
+  shells: readonly ApplicationShellV2[],
+  projected?: unknown,
+  data?: Readonly<Record<string, PageDataState>>,
+) => {
+  const object = (value: unknown): Record<string, unknown> => {
+    if (!isRecord(value)) throw new Error("Diagnostic structure unavailable");
+    return value;
+  };
+  const own = (value: Record<string, unknown>, key: string): unknown => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor))
+      throw new Error("Diagnostic structure unavailable");
+    return descriptor.value;
+  };
+  const keys = (value: Record<string, unknown>): string[] => {
+    const result = Object.keys(value);
+    if (result.length > 4096) throw new Error("Diagnostic traversal bound");
+    return result;
+  };
+  const breakpoints = ["desktop", "tablet", "phone"] as const;
+  type Visibility = Record<(typeof breakpoints)[number], boolean>;
+  type Entry = {
+    id: string;
+    placement: Record<string, unknown>;
+    ancestors: readonly Record<string, unknown>[];
+    visible: Visibility;
+    ordered: boolean;
+  };
+  let visited = 0;
+  const index = (root: unknown) => {
+    const entries = new Map<string, Entry>();
+    const slots = new Set<Record<string, unknown>>();
+    const slotOrder = new Map<Record<string, unknown>, {
+      ancestors: readonly Record<string, unknown>[]; ordered: boolean;
+    }>();
+    const visit = (
+      candidate: unknown,
+      ancestors: readonly Record<string, unknown>[],
+      visible: Visibility,
+      ordered: boolean,
+    ): void => {
+      const slot = object(candidate);
+      if (ancestors.length > 64 || slots.has(slot) || ++visited > 4096)
+        throw new Error("Diagnostic traversal bound");
+      slots.add(slot);
+      const placements = object(own(slot, "placements"));
+      const ids = keys(placements);
+      const order = object(own(slot, "order"));
+      let slotOrdered = true;
+      for (const breakpoint of breakpoints) {
+        const values = own(order, breakpoint);
+        if (!Array.isArray(values) || values.length > 4096)
+          throw new Error("Diagnostic order unavailable");
+        const orderedIds: string[] = [];
+        for (let position = 0; position < values.length; position += 1) {
+          const descriptor = Object.getOwnPropertyDescriptor(values, String(position));
+          if (descriptor === undefined || !("value" in descriptor) || typeof descriptor.value !== "string")
+            throw new Error("Diagnostic order unavailable");
+          orderedIds.push(descriptor.value);
+        }
+        slotOrdered &&= orderedIds.length === ids.length &&
+          new Set(orderedIds).size === ids.length && orderedIds.every((id) => ids.includes(id));
+      }
+      if (!slotOrdered) throw new Error("Diagnostic order unavailable");
+      const lineage = [...ancestors, slot];
+      slotOrder.set(slot, { ancestors: lineage, ordered: ordered && slotOrdered });
+      for (const id of ids) {
+        if (++visited > 4096 || entries.has(id)) throw new Error("Diagnostic traversal bound");
+        const placement = object(own(placements, id));
+        const responsive = object(own(placement, "responsive"));
+        const effective = { ...visible };
+        for (const breakpoint of breakpoints) {
+          const flag = own(object(own(responsive, breakpoint)), "visible");
+          if (typeof flag !== "boolean") throw new Error("Diagnostic visibility unavailable");
+          effective[breakpoint] &&= flag;
+        }
+        // Classification uses permanent platform identity, never authored settings or names.
+        const block = object(own(placement, "block"));
+        if (typeof own(block, "blockId") !== "string" ||
+            typeof own(block, "releaseVersion") !== "string")
+          throw new Error("Diagnostic block unavailable");
+        entries.set(id, { id, placement, ancestors: lineage,
+          visible: effective, ordered: ordered && slotOrdered });
+        const children = object(own(placement, "slots"));
+        for (const key of keys(children)) visit(own(children, key), lineage, effective, ordered && slotOrdered);
+      }
+    };
+    visit(root, [], { desktop: true, tablet: true, phone: true }, true);
+    return { entries, slots, slotOrder };
+  };
+  const composition = object(own(object(installed), "composition"));
+  const shellKind = own(composition, "shellKind");
+  const bodyRoots: Record<string, unknown>[] = [];
+  let tree: ReturnType<typeof index>;
+  if (shellKind === "default") {
+    const main = projected === undefined
+      ? own(composition, "main")
+      : own(object(own(object(projected), "composition")), "main");
+    tree = index(main);
+    bodyRoots.push(object(main));
+  } else if (shellKind === "application") {
+    const shellId = own(composition, "shellId");
+    if (shells.length > 4096) throw new Error("Diagnostic traversal bound");
+    const matches = shells.filter((shell) => shell.shellId === shellId);
+    if (matches.length !== 1 || matches[0] === undefined)
+      throw new Error("Diagnostic shell unavailable");
+    const shell = matches[0];
+    const shellTree = index(shell.layout);
+    const content = object(own(composition, "content"));
+    if (shell.contentSlots.length > 4096 ||
+        new Set(shell.contentSlots.map((binding) => String(binding.slotId))).size !== shell.contentSlots.length ||
+        new Set(shell.contentSlots.map((binding) => `${binding.parentPlacementId}:${binding.parentSlotKey}`)).size !== shell.contentSlots.length ||
+        keys(content).some((key) => !shell.contentSlots.some((binding) => String(binding.slotId) === key)))
+      throw new Error("Diagnostic binding unavailable");
+    tree = projected === undefined ? shellTree
+      : index(own(object(own(object(projected), "composition")), "main"));
+    for (const binding of shell.contentSlots) {
+      const original = shellTree.entries.get(String(binding.parentPlacementId));
+      if (original === undefined) throw new Error("Diagnostic binding unavailable");
+      own(object(own(original.placement, "slots")), binding.parentSlotKey);
+      const supplied = Object.getOwnPropertyDescriptor(content, String(binding.slotId));
+      if (supplied !== undefined && !("value" in supplied))
+        throw new Error("Diagnostic binding unavailable");
+      if (projected === undefined) {
+        if (supplied === undefined) {
+          if (binding.required) throw new Error("Diagnostic binding unavailable");
+          continue;
+        }
+        // Index supplied body with its shell ancestry without modifying either object.
+        const body = index(supplied.value);
+        for (const [id, entry] of body.entries) {
+          if (tree.entries.has(id) || original.ancestors.length + entry.ancestors.length > 64)
+            throw new Error("Diagnostic placement unavailable");
+          tree.entries.set(id, { ...entry, ordered: original.ordered && entry.ordered,
+            visible: { desktop: original.visible.desktop && entry.visible.desktop,
+              tablet: original.visible.tablet && entry.visible.tablet,
+              phone: original.visible.phone && entry.visible.phone } });
+        }
+        for (const slot of body.slots) {
+          if (tree.slots.has(slot)) throw new Error("Diagnostic duplicate slot");
+          tree.slots.add(slot);
+        }
+        for (const [slot, order] of body.slotOrder)
+          tree.slotOrder.set(slot, { ...order, ordered: original.ordered && order.ordered });
+        bodyRoots.push(object(supplied.value));
+      } else {
+        // A removed shell ancestor has no projected body, not evidence of a named Access denial.
+        const parent = tree.entries.get(String(binding.parentPlacementId));
+        if (parent !== undefined)
+          bodyRoots.push(object(own(object(own(parent.placement, "slots")), binding.parentSlotKey)));
+      }
+    }
+  } else throw new Error("Diagnostic composition unavailable");
+  if (tree.entries.size + tree.slots.size > 4096) throw new Error("Diagnostic traversal bound");
+  const body = [...tree.entries.values()].filter((entry) =>
+    entry.ancestors.some((slot) => bodyRoots.includes(slot)));
+  const topLevel = bodyRoots.reduce((count, root) => count + keys(object(own(root, "placements"))).length, 0);
+  const hasBlock = (entry: Entry, id: string): boolean =>
+    sameId(String(own(object(own(entry.placement, "block")), "blockId")), id);
+  const tables = body.filter((entry) => hasBlock(entry, TABLE_BLOCK_RELEASE.blockId));
+  let tableState: LocalPageTableState = "NOT_OBSERVED";
+  if (data !== undefined) {
+    const states = new Set<LocalPageTableState>();
+    for (const table of tables) {
+      const descriptor = Object.getOwnPropertyDescriptor(data, table.id);
+      if (descriptor === undefined) { states.add("NOT_OBSERVED"); continue; }
+      if (!("value" in descriptor)) throw new Error("Diagnostic table state unavailable");
+      const status = own(object(descriptor.value), "status");
+      const state = status === "ready" ? "READY" : status === "empty" ? "EMPTY"
+        : status === "refused" ? "REFUSED" : status === "error" ? "ERROR" : undefined;
+      if (state === undefined) throw new Error("Diagnostic table state unavailable");
+      states.add(state);
+    }
+    tableState = tables.length === 0 ? "ABSENT" : states.size > 1 ? "MIXED"
+      : [...states][0] ?? "NOT_OBSERVED";
+  }
+  return { body: topLevel === 0 ? "NONE" : topLevel === 1 ? "ONE" : "MULTIPLE",
+    table: tables.length > 0, form: body.some((entry) => hasBlock(entry, FORM_CONTAINER_BLOCK_RELEASE.blockId)),
+    ordered: body.every((entry) => entry.ordered) && [...tree.slotOrder.values()]
+      .filter((slot) => slot.ancestors.some((ancestor) => bodyRoots.includes(ancestor)))
+      .every((slot) => slot.ordered),
+    visibleDesktop: body.some((entry) => entry.visible.desktop),
+    visibleTablet: body.some((entry) => entry.visible.tablet),
+    visiblePhone: body.some((entry) => entry.visible.phone), tableState };
+};
+
+const localPageCompositionObserver = (
+  installed: unknown,
+  shells: readonly ApplicationShellV2[],
+) => {
+  try {
+    const attempted = new Set<LocalPageCompositionStage>();
+    return (stage: LocalPageCompositionStage, result: LocalPageCompositionResult,
+      projected?: unknown, data?: Readonly<Record<string, PageDataState>>): void => {
+      try {
+        if (attempted.has(stage) || attempted.size >= 3 ||
+            process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+            process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local") return;
+        const journey = getIdentityJourneyConfiguration();
+        const authority = getIdentityAuthorityConfiguration();
+        if (authority.environment !== "local" ||
+            new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+            new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+            authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+            authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json") return;
+        attempted.add(stage);
+        const metrics = result === "AVAILABLE"
+          ? localPageCompositionMetrics(installed, shells, projected, data)
+          : { body: "UNKNOWN", table: false, form: false, ordered: false,
+              visibleDesktop: false, visibleTablet: false, visiblePhone: false,
+              tableState: "NOT_OBSERVED" };
+        const frame = JSON.stringify({ stage, result, ...metrics, readGate: "UNKNOWN" });
+        const line = "VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC:" + frame;
+        if (Buffer.byteLength(line, "utf8") <= 2048) console.error(line);
+      } catch {
+        // Diagnostics must never change the original result, error or rendering model.
+      }
+    };
+  } catch {
+    return undefined;
+  }
+};
+
 const loadApplicationPageInternal = async (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
@@ -1283,15 +1518,29 @@ const loadApplicationPageInternal = async (
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
+  const observeComposition = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    pageDefinition.type !== "guided_form"
+    ? localPageCompositionObserver(pageDefinition, application.content.shells)
+    : undefined;
+  observeComposition?.("INSTALLED_PAGE", "AVAILABLE");
+
   const pageService = createStoredPageCapabilityService({
     ...dependencies,
     context,
     selection: { pageId: pageDefinition.pageId },
   });
   const projectedPage = await pageService.project(session, selection);
-  if (projectedPage.kind !== "available") return projectedPage;
+  if (projectedPage.kind !== "available") {
+    observeComposition?.("PROJECTED_PAGE", projectedPage.kind === "unavailable"
+      ? "UNAVAILABLE" : "TEMPORARILY_UNAVAILABLE");
+    return projectedPage;
+  }
   // An undefined projection is the page refused for this viewer: never an empty page.
-  if (projectedPage.value === undefined) return { kind: "unavailable" };
+  if (projectedPage.value === undefined) {
+    observeComposition?.("PROJECTED_PAGE", "UNAVAILABLE");
+    return { kind: "unavailable" };
+  }
+  observeComposition?.("PROJECTED_PAGE", "AVAILABLE", projectedPage.value);
   // The page capability projection is authoritative, but its derived choice settings still
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
@@ -2724,6 +2973,7 @@ const loadApplicationPageInternal = async (
   }
 
   const permittedKeys = new Set(address.application.pageKeys);
+  observeComposition?.("PAGE_MODEL", "AVAILABLE", page, data);
   return {
     kind: "available",
     model: {
