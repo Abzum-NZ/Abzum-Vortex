@@ -2,7 +2,7 @@
 
 import { useRef, type ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
-import { Field, FieldLabel } from "../components/field";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { DefinitionRenderError } from "../definition-error";
 import type { SeveralChoicesInputPayload } from "./projected-data";
 import {
@@ -94,11 +94,11 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
       aria-required={required || described["aria-required"] === true}
       aria-invalid={fieldError !== undefined}
     >
-      <fieldset disabled={disabled} className="flex flex-col gap-2">
-        <legend id={ids.label} className="vortex-field-label">
+      <FieldSet disabled={disabled} className="min-w-0">
+        <FieldLegend id={ids.label} className="vortex-field-label">
           <FieldLabelText label={label} required={required} />
-        </legend>
-        <div className="max-h-64 overflow-y-auto">
+        </FieldLegend>
+        <FieldGroup data-slot="checkbox-group" className="min-w-0 max-h-64 overflow-y-auto p-1">
           {options.map((option, index) => {
             const optionId = `${ids.control}-option-${index}`;
             const checked = selectedSet.has(option.key);
@@ -111,12 +111,17 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
                   aria-invalid={fieldError !== undefined}
                   onCheckedChange={(next) => change(option.key, next === true)}
                 />
-                <FieldLabel htmlFor={optionId}>{option.label}</FieldLabel>
+                <FieldLabel
+                  htmlFor={optionId}
+                  className="min-h-[44px] min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
+                >
+                  {option.label}
+                </FieldLabel>
               </Field>
             );
           })}
-        </div>
-      </fieldset>
+        </FieldGroup>
+      </FieldSet>
       <FieldMessages
         ids={ids}
         help={help}
