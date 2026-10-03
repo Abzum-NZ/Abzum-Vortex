@@ -3666,7 +3666,7 @@
                   },
                   "text": {
                     "kind": "text",
-                    "value": "Privileged roles currently active for the current person are not yet available from a protected read model."
+                    "value": "Review privileged role activations available under your current authority. Use a row action to deactivate an activation."
                   }
                 },
                 "theme_overrides": {},
