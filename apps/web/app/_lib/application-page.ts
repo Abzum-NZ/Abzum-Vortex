@@ -35,6 +35,8 @@ import {
   createPageSubjectReader,
   createRecordsTableQueryResolver,
   createQueryNoticeQueryResolver,
+  buildLinkTilesQueryBinding,
+  createLinkTilesQueryResolver,
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
   projectRecordDetailData,
@@ -49,6 +51,7 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
+  LINK_TILES_BLOCK_RELEASE,
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
@@ -1751,6 +1754,7 @@ const loadApplicationPageInternal = async (
   const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const queryNotices = createQueryNoticeQueryResolver(queries);
+  const linkTiles = createLinkTilesQueryResolver(queries);
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -1890,9 +1894,14 @@ const loadApplicationPageInternal = async (
       typeof block.blockId === "string" &&
       sameId(block.blockId, QUERY_NOTICE_BLOCK_RELEASE.blockId) &&
       block.releaseVersion === QUERY_NOTICE_BLOCK_RELEASE.releaseVersion;
+    const isLinkTilesBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, LINK_TILES_BLOCK_RELEASE.blockId) &&
+      block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion;
     if (
       tableContract === undefined && detailContract === undefined &&
-      !isBoardBlock && !isQueryNoticeBlock
+      !isBoardBlock && !isQueryNoticeBlock && !isLinkTilesBlock
     ) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
@@ -1901,7 +1910,9 @@ const loadApplicationPageInternal = async (
         ? detailContract === undefined || pageDefinition.type === "form"
           ? undefined
           : pageSubjectRecordTypeId
-        : resolvedQueryRecordTypeId(context, queryId);
+        : isLinkTilesBlock
+          ? buildLinkTilesQueryBinding(context, queryId, settings, {})?.recordTypeId
+          : resolvedQueryRecordTypeId(context, queryId);
     if (recordTypeId === undefined) continue;
     recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
     addDataPlacement(recordTypeId, placementId);
@@ -2097,11 +2108,22 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, QUERY_NOTICE_BLOCK_RELEASE.blockId);
+    const isLinkTilesBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, LINK_TILES_BLOCK_RELEASE.blockId);
     const isSummaryValuesBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+    if (isLinkTilesBlock && (
+      !isRecord(block) || block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+      projectedUseAvailability(placement) !== "available"
+    )) {
+      data[placementId] = { status: "refused", reason: "not_permitted" };
+      continue;
+    }
     const calendarContract = isCalendarBlock ? readCalendarPlacementContract(settings) : undefined;
     const isBoardBlock = isBoardPlacement(placement);
     const tableContract = readRecordsTableContract(settings);
@@ -2172,6 +2194,7 @@ const loadApplicationPageInternal = async (
       detailContract === undefined &&
       !isCalendarBlock &&
       !isQueryNoticeBlock &&
+      !isLinkTilesBlock &&
       !queryBoundLauncher &&
       !queryBoundSummary &&
       !queryBoundBoard
@@ -2238,6 +2261,28 @@ const loadApplicationPageInternal = async (
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
     const fieldLabels = fieldLabelsOf(bound.module);
+
+    if (isLinkTilesBlock) {
+      const inputValues: Record<string, JsonValue> = {};
+      let invalidInput = false;
+      for (const declared of bound.query.inputs) {
+        const raw = first(parameters[declared.key]);
+        const value = raw === undefined ? undefined : noticeQueryInput(raw, declared.type);
+        if (raw !== undefined && value === undefined) invalidInput = true;
+        if (value !== undefined) inputValues[declared.key] = value;
+      }
+      if (invalidInput) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const result = await linkTiles.resolve(
+        session, selection, context, queryId, settings, inputValues,
+      );
+      data[placementId] = result.status === "ready" && result.values.rows.length === 0
+        ? { status: "empty" }
+        : result;
+      continue;
+    }
 
     if (isQueryNoticeBlock) {
       if (!isRecord(block) || block.releaseVersion !== QUERY_NOTICE_BLOCK_RELEASE.releaseVersion) {
