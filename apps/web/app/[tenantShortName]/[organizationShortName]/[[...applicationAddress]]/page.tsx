@@ -305,27 +305,27 @@ export default async function ApplicationAddressPage({
         ? "The release could not be adopted. The current release is still in use."
         : undefined;
   return (
-      <ApplicationPageView
-        model={page.model}
-        onOpenApplication={openApplication}
-        pageFeedback={adoption === undefined && adoptionOutcome === undefined ? undefined : (
-          <>
-            {adoptionOutcome === undefined ? null : (
-              <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
-                <AlertDescription>{adoptionOutcome}</AlertDescription>
-              </Alert>
-            )}
-            {adoption === undefined ? null : (
-              <Alert role="region" aria-label="Application release">
-                <AlertDescription>
-                  <form action={adoptRelease} data-vortex-release-adoption="offered">
-                    <input type="hidden" name="applicationKey" value={resolved.application.key} />
-                    <input type="hidden" name="pageKey" value={resolved.pageKey} />
-                    <input
-                      type="hidden"
-                      name="targetReleaseRevision"
-                      value={adoption.offeredReleaseRevision}
-                    />
+    <ApplicationPageView
+      model={page.model}
+      onOpenApplication={openApplication}
+      pageFeedback={adoption === undefined && adoptionOutcome === undefined ? undefined : (
+        <>
+          {adoptionOutcome === undefined ? null : (
+            <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
+              <AlertDescription>{adoptionOutcome}</AlertDescription>
+            </Alert>
+          )}
+          {adoption === undefined ? null : (
+            <Alert role="region" aria-label="Application release">
+              <AlertDescription>
+                <form action={adoptRelease} data-vortex-release-adoption="offered">
+                  <input type="hidden" name="applicationKey" value={resolved.application.key} />
+                  <input type="hidden" name="pageKey" value={resolved.pageKey} />
+                  <input
+                    type="hidden"
+                    name="targetReleaseRevision"
+                    value={adoption.offeredReleaseRevision}
+                  />
                     <input
                       type="hidden"
                       name="expectedActiveReleaseRevision"
