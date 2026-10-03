@@ -123,7 +123,7 @@
       },
       {
         "id": "form_submit_landing_zone_remove_tile",
-        "key": "vortex.app.events.vortex_app_landing_zone_remove_tile_confirm",
+        "key": "vortex.app.events.vortex_app_landing_zone_remove_confirm",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -1154,7 +1154,7 @@
             }
           },
           {
-            "id": "return_to_manage_saved_tiles_after_remove",
+            "id": "return_to_saved_tiles_after_remove",
             "type": "interface.navigate",
             "version": "1.0.0",
             "properties": {
