@@ -38,7 +38,8 @@
           "vortex.landing_zone.tile.create",
           "vortex.landing_zone.tile.read",
           "vortex.landing_zone.tile.update",
-          "vortex.landing_zone.tile.delete"
+          "vortex.landing_zone.tile.delete",
+          "vortex.landing_zone.tile.remove"
         ]
       }
     ],
@@ -109,6 +110,20 @@
       {
         "id": "form_submit_landing_zone_favourite_status",
         "key": "vortex.app.events.vortex_app_landing_zone_favourite_status",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_landing_zone_remove_tile",
+        "key": "vortex.app.events.vortex_app_landing_zone_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "form_submit_landing_zone_remove_tile",
+        "key": "vortex.app.events.vortex_app_landing_zone_remove_tile_confirm",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -735,7 +750,8 @@
                     "row_actions": {
                       "kind": "list",
                       "items": [
-                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_edit_favourite" }, "label": { "kind": "text", "value": "Edit favourite" }, "capability": { "kind": "choice", "value": "update" } } }
+                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_edit_favourite" }, "label": { "kind": "text", "value": "Edit favourite" }, "capability": { "kind": "choice", "value": "update" } } },
+                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_remove_tile" }, "label": { "kind": "text", "value": "Remove tile" }, "capability": { "kind": "choice", "value": "delete" } } }
                       ]
                     }
                   },
@@ -792,6 +808,56 @@
                 }
               },
               "order": { "desktop": ["favourite_status_form"] }
+            },
+            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_remove_tile",
+        "key": "remove_tile",
+        "name": "Remove tile",
+        "type": "form",
+        "record_type": "vortex.landing_zone:tile",
+        "permission": "vortex.landing_zone.tile.delete",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "remove_tile_form": {
+                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
+                  "settings": { "title": { "kind": "text", "value": "Remove selected tile" } },
+                  "theme_overrides": {},
+                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "remove_tile_explanation": {
+                          "block": { "block_id": "addfad00-1b11-4674-83fa-913667f87e79", "release_version": "1.1.0" },
+                          "settings": {
+                            "title": { "kind": "text", "value": "Remove this saved tile" },
+                            "text": { "kind": "text", "value": "Removing this private tile leaves the application, page, record or external address it names unchanged. You will be asked to confirm before removal." }
+                          },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        },
+                        "button_landing_remove_tile": {
+                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
+                          "settings": { "label": { "kind": "text", "value": "Remove tile" }, "action_kind": { "kind": "choice", "value": "submit" } },
+                          "theme_overrides": {},
+                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
+                          "slots": {}
+                        }
+                      },
+                      "order": { "desktop": ["remove_tile_explanation", "button_landing_remove_tile"] }
+                    }
+                  }
+                }
+              },
+              "order": { "desktop": ["remove_tile_form"] }
             },
             "slot_rail": { "placements": {}, "order": { "desktop": [] } }
           }
@@ -1019,6 +1085,84 @@
             "value": { "kind": "reference", "reference": { "source": "task_output", "task": "save_favourite_status", "key": "record" } }
           }
         }
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_open_remove_tile",
+        "key": "landing_zone_open_remove_tile",
+        "description": "Opens the protected removal form for one returned private tile record.",
+        "labels": { "name": "Remove tile" },
+        "execution": "interactive",
+        "runAs": { "kind": "initiator" },
+        "inputs": {
+          "record_id": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+        },
+        "variables": {},
+        "tasks": [
+          {
+            "id": "open_remove_tile",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_remove_tile" } },
+              "parameters": { "kind": "map", "entries": { "record_id": "{{ inputs.record_id }}" } }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_remove_tile",
+        "key": "landing_zone_remove_tile",
+        "description": "Confirms removal of the protected private tile subject and returns to saved tile management after the named action succeeds.",
+        "labels": { "name": "Confirm tile removal" },
+        "execution": "interactive",
+        "runAs": { "kind": "initiator" },
+        "inputs": {
+          "record": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+        },
+        "variables": {},
+        "tasks": [
+          {
+            "id": "confirm_remove_tile",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": { "kind": "literal", "literal": { "type": "text", "value": "Remove tile" } },
+              "message": { "kind": "literal", "literal": { "type": "text", "value": "Remove this tile from your saved tiles? Its target will remain unchanged." } }
+            }
+          },
+          {
+            "id": "declined_remove_tile",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": { "op": "reference", "reference": { "source": "task_output", "task": "confirm_remove_tile", "key": "confirmed" } }
+            },
+            "then": [
+              { "id": "stop_remove_tile_declined", "type": "stop", "outcome": "declined" }
+            ]
+          },
+          {
+            "id": "remove_tile",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": { "kind": "literal", "literal": { "type": "text", "value": "vortex.landing_zone.tile.remove" } },
+              "inputs": { "kind": "map", "entries": {} }
+            }
+          },
+          {
+            "id": "return_to_manage_saved_tiles_after_remove",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_manage_saved_tiles" } }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -1058,6 +1202,26 @@
         "inputs": {
           "record": { "kind": "caller", "name": "record" },
           "is_favourite": { "kind": "caller", "name": "is_favourite" }
+        }
+      },
+      {
+        "id": "binding_landing_zone_open_remove_tile",
+        "control": "managed_saved_tiles",
+        "event_id": "row_action_landing_zone_remove_tile",
+        "event": "row_action",
+        "flow": "landing_zone_open_remove_tile",
+        "inputs": {
+          "record_id": { "kind": "caller", "name": "record_id" }
+        }
+      },
+      {
+        "id": "binding_landing_zone_remove_tile",
+        "control": "remove_tile_form",
+        "event_id": "form_submit_landing_zone_remove_tile",
+        "event": "form_submit",
+        "flow": "landing_zone_remove_tile",
+        "inputs": {
+          "record": { "kind": "caller", "name": "record" }
         }
       }
     ]
