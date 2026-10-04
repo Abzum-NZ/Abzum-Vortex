@@ -3034,13 +3034,25 @@
                                                          },
                                                          "field_sd_service_level_response": {
                                                            "block": {
-                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
                                                              "release_version": "1.0.0"
                                                            },
                                                            "settings": {
-                                                             "field": {
-                                                               "kind": "field_reference",
-                                                               "field": "vortex.service_desk.sla:service_level.first_response_minutes"
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "first_response_minutes"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "First response minutes"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "integer": {
+                                                               "kind": "boolean",
+                                                               "value": true
                                                              },
                                                              "min_value": {
                                                                "kind": "number",
@@ -3063,13 +3075,25 @@
                                                          },
                                                          "field_sd_service_level_resolution": {
                                                            "block": {
-                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
                                                              "release_version": "1.0.0"
                                                            },
                                                            "settings": {
-                                                             "field": {
-                                                               "kind": "field_reference",
-                                                               "field": "vortex.service_desk.sla:service_level.resolution_minutes"
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "resolution_minutes"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Resolution minutes"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "integer": {
+                                                               "kind": "boolean",
+                                                               "value": true
                                                              },
                                                              "min_value": {
                                                                "kind": "number",
@@ -3092,13 +3116,21 @@
                                                          },
                                                          "field_sd_service_level_active": {
                                                            "block": {
-                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "block_id": "e9418c36-3234-4806-a05a-0f259482238d",
                                                              "release_version": "1.0.0"
                                                            },
                                                            "settings": {
-                                                             "field": {
-                                                               "kind": "field_reference",
-                                                               "field": "vortex.service_desk.sla:service_level.active"
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "active"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Active"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
                                                              },
                                                              "variant": {
                                                                "kind": "choice",
