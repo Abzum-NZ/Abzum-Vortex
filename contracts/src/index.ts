@@ -62,6 +62,7 @@ export * from "./organization-role-assignment-changes";
 export * from "./organization-role-activation-changes";
 export * from "./organization-role-changes";
 export * from "./organization-setup-receipt";
+export * from "./organization-setup-source-manifest";
 export * from "./organization-stewardship";
 export * from "./permissions";
 export * from "./permission-registry";
