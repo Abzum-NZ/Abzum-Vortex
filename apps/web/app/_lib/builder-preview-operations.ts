@@ -28,9 +28,11 @@ import {
   saveRecordCommandV2Schema,
   saveRecordResultV2Schema,
   sessionContextSchema,
+  type ApplicationRootId,
   type BuilderPreviewOperationLocation,
   type BuilderPreviewOperationRefusal,
   type IdentitySession,
+  type OrganizationId,
   type SelectedOrganizationScope,
   type SessionContext,
 } from "@vortex/contracts";
@@ -209,8 +211,8 @@ const coordinatorRefusal = (
 
 const previewLocation = (
   address: Readonly<{
-    organizationId: string;
-    applicationRootId: string;
+    organizationId: OrganizationId;
+    applicationRootId: ApplicationRootId;
     previewInstallationId: string;
   }>,
 ): BuilderPreviewOperationLocation => ({
@@ -221,8 +223,8 @@ const previewLocation = (
 });
 
 const draftLocation = (request: Readonly<{
-  organizationId: string;
-  applicationRootId: string;
+  organizationId: OrganizationId;
+  applicationRootId: ApplicationRootId;
   expectedDraftRevision: number;
 }>): BuilderPreviewOperationLocation => ({
   kind: "draft",
