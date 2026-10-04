@@ -25,7 +25,7 @@ export const minimumApplicationSource = (
   inputs: MinimumApplicationInputs,
 ): MinimumApplicationSourceResult => {
   const applicationKey = inputs.key.trim();
-  const permissionKey = `${applicationKey}.home.read`;
+  const permissionKey = `${applicationKey}.home.view`;
   const theme = DEFAULT_PLATFORM_THEME_RELEASE_V2;
   const parsed = applicationSourceDocumentV2Schema.safeParse({
     source_contract_version: "2.0.0",
@@ -49,7 +49,8 @@ export const minimumApplicationSource = (
         key: permissionKey,
         label: "View home",
         description: "View the application's home page.",
-        action_kind: "read",
+        action_kind: "named",
+        named_action: "view_home",
         administrative: false,
       }],
       roles: [{

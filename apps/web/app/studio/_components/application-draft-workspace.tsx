@@ -97,7 +97,7 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
       <p className="break-all text-sm">Organization: {organizationId}</p>
       <p>This creates an unpublished draft with one empty home page. It does not publish or install anything.</p></header>
     <form onSubmit={create} className="grid gap-4" aria-busy={isCreating}>
-      {textInput("key", "Application key", 120, "Use lowercase namespaced segments, for example team.workspace. The derived .home.read permission must also fit the 120-character key limit.")}
+      {textInput("key", "Application key", 120, "Use lowercase namespaced segments, for example team.workspace. The derived .home.view permission must also fit the 120-character key limit.")}
       {textInput("name", "Application name", 120)}
       <label className="block space-y-1"><span>Description</span>
         <textarea className={inputClass} required maxLength={1000} value={inputs.description}
