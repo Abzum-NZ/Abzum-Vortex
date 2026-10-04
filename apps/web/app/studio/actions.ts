@@ -3,8 +3,19 @@
 import {
   applicationSourceDocumentV2Schema,
   saveDefinitionDraftCommandSchema,
+  PLATFORM_THEME_RELEASE_2_0_0,
+  PLATFORM_THEME_RELEASE_3_0_0,
+  sourceThemeTokenValueV2Schema,
+  type ApplicationContentV2,
 } from "@vortex/contracts";
-import { validateDefinitionSource } from "@vortex/definition";
+import { materialiseApplicationThemeV2, validateDefinitionSource } from "@vortex/definition";
+import {
+  parseStudioAppearanceRequest,
+  studioAppearanceFailureCodes,
+  type StudioAppearanceFailure,
+  type StudioAppearanceResult,
+  type StudioThemeTokenValue,
+} from "@vortex/studio";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 
@@ -26,4 +37,66 @@ export async function saveStudioApplication(organizationId: string, candidate: u
 
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
   return loadStudioApplicationDraft(organizationId, applicationRootId);
+}
+
+/** Current protected read precedes all theme-specific descriptors and advisory feedback. */
+export async function validateStudioApplicationAppearance(
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioAppearanceResult> {
+  const request = parseStudioAppearanceRequest(candidate);
+  if (request === undefined) return { kind: "refused" };
+  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId);
+  if (loaded.kind !== "available") return loaded;
+  const draft = loaded.draft;
+  if (draft.rootId !== request.rootId) return { kind: "refused" };
+  if (draft.draftRevision !== request.expectedDraftRevision) return { kind: "conflict" };
+  try {
+    const authored = draft.source.body.theme;
+    const pin = authored.base;
+    const release = [PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0].find((item) =>
+      item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version &&
+      item.contentFingerprint === pin.content_fingerprint && item.catalogueFingerprint === pin.catalogue_fingerprint);
+    if (release === undefined) return { kind: "refused" };
+    const inherited = materialiseApplicationThemeV2({ ...authored, token_overrides: {} }, draft.key, release);
+    if (!inherited.valid) return { kind: "refused" };
+    const sourceValue = (value: ApplicationContentV2["theme"]["tokens"][string]): StudioThemeTokenValue => {
+      switch (value.kind) {
+        case "color_pair": return { kind: value.kind, light: value.light, dark: value.dark };
+        case "typography": return { kind: value.kind, family: value.family, size_rem: value.sizeRem,
+          line_height: value.lineHeight, weight: value.weight };
+        case "border": return { kind: value.kind, width_rem: value.widthRem, style: value.style,
+          color_token: value.colorToken };
+        case "focus": return { kind: value.kind, width_rem: value.widthRem, color_token: value.colorToken };
+        case "asset": return { kind: value.kind, asset_id: value.assetId };
+        default: return value;
+      }
+    };
+    const tokens = Object.entries(inherited.theme.tokens).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => ({ key, inherited: sourceThemeTokenValueV2Schema.parse(sourceValue(value)) }));
+    const keys = new Set(tokens.map((token) => token.key));
+    const theme = { ...authored, token_overrides: request.tokenOverrides };
+    const result = materialiseApplicationThemeV2(theme, draft.key, release);
+    const failures: StudioAppearanceFailure[] = [];
+    if (!result.valid) {
+      // The finite registered token set bounds every engine pair and per-token check. Refuse an
+      // impossible output instead of dropping contrast failures or claiming a partial success.
+      if (result.failures.length > 4 * tokens.length ** 2 + 8 * tokens.length + 64)
+        return { kind: "temporarily_unavailable" };
+      for (const failure of result.failures) {
+        const code = studioAppearanceFailureCodes.find((item) => item === failure.code) ?? "VALIDATION_FAILED";
+        const family = failure.family === "broken_reference" || failure.family === "unsafe_content"
+          ? failure.family : "invalid_value";
+        failures.push({ code, ruleCode: "vortex.definition.application_block_settings", family,
+          ...(failure.tokenKey !== undefined && keys.has(failure.tokenKey) ? { tokenKey: failure.tokenKey } : {}) });
+      }
+      if (failures.length === 0) return { kind: "temporarily_unavailable" };
+    }
+    const publicAssetIds = [...new Set(Object.values(release.tokens)
+      .flatMap((token) => token.kind === "asset" ? [String(token.assetId)] : []))].sort();
+    return { kind: "available", rootId: draft.rootId, draftRevision: draft.draftRevision,
+      theme, tokens, publicAssetIds, valid: result.valid, failures };
+  } catch {
+    return { kind: "refused" };
+  }
 }
