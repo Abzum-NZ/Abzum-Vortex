@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
@@ -46,6 +47,11 @@ export function ApplicationCompositionEditor(props: Props) {
   const [breakpoint, setBreakpoint] = useState<StudioCompositionBreakpoint>("desktop");
   const model = useMemo(() => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint]);
+  const moveModel = useMemo(() => describeStudioCompositionDestinations(props.context, props.selection),
+    [props.context, props.selection]);
+  const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
+  const [destinationKey, setDestinationKey] = useState("");
+  const movePending = useRef(false);
   const [inputs, setInputs] = useState<LayoutInputs | null>(() =>
     model.kind === "available" ? inputsFor(model.layout) : null);
   const pending = useRef(false);
@@ -62,6 +68,8 @@ export function ApplicationCompositionEditor(props: Props) {
     formContext.current = props.context;
     formBreakpoint.current = breakpoint;
     pending.current = false;
+    movePending.current = false;
+    setDestinationKey("");
     props.onPendingChange(false);
     setMessage("");
   }, [model, props.context, breakpoint, props.onPendingChange]);
@@ -75,10 +83,11 @@ export function ApplicationCompositionEditor(props: Props) {
 
   const baseline = inputsFor(model.layout);
   const dirty = !sameInputs(inputs, baseline);
+  const moveDirty = destinationKey !== "";
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const update = (next: LayoutInputs) => {
-    if (props.disabled || formContext.current !== props.context || formBreakpoint.current !== breakpoint) return;
+    if (props.disabled || movePending.current || formContext.current !== props.context || formBreakpoint.current !== breakpoint) return;
     const changed = !sameInputs(next, baseline);
     pending.current = changed;
     props.onPendingChange(changed);
@@ -87,6 +96,7 @@ export function ApplicationCompositionEditor(props: Props) {
   };
   const run = (command: StudioCompositionCommand) => {
     if (props.disabled) return;
+    if (command.kind === "move" ? pending.current : movePending.current) return;
     if (formContext.current !== props.context || formBreakpoint.current !== breakpoint) {
       setMessage("The draft context changed. Wait for the current controls before applying.");
       return;
@@ -94,15 +104,17 @@ export function ApplicationCompositionEditor(props: Props) {
     const result = props.onCommand(formContext.current, props.selection, command);
     if (result === "applied") {
       pending.current = false;
+      movePending.current = false;
+      setDestinationKey("");
       props.onPendingChange(false);
       setInputs(baseline);
       setMessage("Composition applied to one local history entry. Save to persist it.");
     } else setMessage(result === "stale" ? "The draft or selection changed. Your inputs are preserved."
       : result === "unsupported" ? "This edit is unsupported by the block release. Your inputs are preserved."
-        : "No change was applied. Use a valid size or a different order.");
+        : "No change was applied. Use a valid size, order or compatible destination.");
   };
   const move = (direction: -1 | 1) => {
-    if (pending.current || !orderEditable || selectedIndex < 0) return;
+    if (pending.current || movePending.current || !orderEditable || selectedIndex < 0) return;
     const nextIndex = selectedIndex + direction;
     if (nextIndex < 0 || nextIndex >= model.order.length) return;
     const next = [...model.order];
@@ -123,20 +135,32 @@ export function ApplicationCompositionEditor(props: Props) {
         ? { kind: "bounded", units: Number(inputs.units) } : { kind: "content" },
     } });
   };
+  const applyDestination = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!movePending.current || pending.current) return;
+    // Option values identify a current closed descriptor, never a source path or
+    // an array index. The pure command resolves it again against its snapshot.
+    const chosen = destinations.find((item) => JSON.stringify(item.destination) === destinationKey);
+    if (chosen === undefined) {
+      setMessage("This destination is no longer available. Your inputs are preserved.");
+      return;
+    }
+    run({ kind: "move", destination: chosen.destination });
+  };
 
   return <section className="space-y-4 rounded border border-border p-4" aria-labelledby={titleId}>
-    <h3 id={titleId} className="font-semibold">Placement order and size</h3>
+    <h3 id={titleId} className="font-semibold">Placement composition</h3>
     <p className="text-sm">Existing placement: {model.placementAlias}. This edits authored layout without running its data or actions.</p>
     <label className="block space-y-1"><span>Breakpoint</span>
-      <select className={fieldClass} value={breakpoint} disabled={props.disabled || dirty}
+      <select className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty}
         onChange={(event) => {
-          if (pending.current || props.disabled) return;
+          if (pending.current || movePending.current || props.disabled) return;
           const value = event.target.value;
           if (value === "desktop" || value === "tablet" || value === "phone") setBreakpoint(value);
         }}>
         <option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="phone">Phone</option>
       </select></label>
-    <fieldset className="space-y-2" disabled={props.disabled || dirty || !orderEditable} aria-describedby={hintId}>
+    <fieldset className="space-y-2" disabled={props.disabled || dirty || moveDirty || !orderEditable} aria-describedby={hintId}>
       <legend className="font-medium">Sibling order</legend>
       <ol className="list-decimal pl-6">{model.order.map((alias) => <li key={alias}
         aria-current={alias === model.placementAlias ? "true" : undefined}>{alias}</li>)}</ol>
@@ -155,7 +179,7 @@ export function ApplicationCompositionEditor(props: Props) {
     <p id={hintId} className="text-sm">Focus an order button and use Alt+Up or Alt+Down, or activate its button. {breakpoint !== "desktop" && !model.responsiveOrder
       ? "The parent release uses one order at every breakpoint." : model.explicitOrder ? "This order is explicitly authored." : "This order inherits from the wider breakpoint."}</p>
     <form className="space-y-3" onSubmit={applySize}>
-      <fieldset className="space-y-3" disabled={props.disabled}>
+      <fieldset className="space-y-3" disabled={props.disabled || moveDirty}>
         <legend className="font-medium">Responsive size</legend>
         <label className="flex items-center gap-2"><input type="checkbox" checked={inputs.visible}
           disabled={!model.capabilities.responsiveVisibility}
@@ -184,11 +208,42 @@ export function ApplicationCompositionEditor(props: Props) {
       </fieldset>
       <p className="text-sm">{model.explicitLayout ? "This layout is explicitly authored." : "This layout inherits from the wider breakpoint."} Applying size records one local history entry; Enter submits this same form.</p>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={buttonClass} disabled={props.disabled || !dirty}>Apply size</button>
-        <button type="button" className={buttonClass} disabled={props.disabled || !dirty} onClick={() => update(baseline)}>Discard size inputs</button>
-        {breakpoint !== "desktop" && <button type="button" className={buttonClass} disabled={props.disabled || dirty || !model.explicitLayout}
+        <button type="submit" className={buttonClass} disabled={props.disabled || moveDirty || !dirty}>Apply size</button>
+        <button type="button" className={buttonClass} disabled={props.disabled || moveDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</button>
+        {breakpoint !== "desktop" && <button type="button" className={buttonClass} disabled={props.disabled || dirty || moveDirty || !model.explicitLayout}
           onClick={() => { if (!pending.current) run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</button>}
       </div>
+    </form>
+    <form className="space-y-3" onSubmit={applyDestination}>
+      <fieldset className="space-y-3" disabled={props.disabled || dirty || destinations.length === 0}>
+        <legend className="font-medium">Move to another slot</legend>
+        <label className="block space-y-1"><span>Existing destination in this page region</span>
+          <select className={fieldClass} required value={destinationKey} onChange={(event) => {
+            if (props.disabled || pending.current || formContext.current !== props.context) return;
+            const key = event.target.value;
+            if (key !== "" && !destinations.some((item) => JSON.stringify(item.destination) === key)) return;
+            movePending.current = key !== "";
+            setDestinationKey(key);
+            props.onPendingChange(movePending.current);
+            setMessage("");
+          }}>
+            <option value="">Choose a destination</option>
+            {destinations.map((item) => <option key={JSON.stringify(item.destination)}
+              value={JSON.stringify(item.destination)}>{item.label}</option>)}
+          </select></label>
+        <button type="submit" className={buttonClass} disabled={!moveDirty}>Move placement</button>
+        <button type="button" className={buttonClass} disabled={!moveDirty} onClick={() => {
+          if (props.disabled || pending.current || formContext.current !== props.context) return;
+          movePending.current = false;
+          setDestinationKey("");
+          props.onPendingChange(false);
+          setMessage("");
+        }}>Discard destination</button>
+      </fieldset>
+      <p className="text-sm">Move the existing placement and its children to the end of an existing compatible slot in this page's main region. Use this select and Enter or the Move button. Required content, nesting limits and slot compatibility are checked before applying.</p>
+      {destinations.length === 0 && <p role="status">{moveModel.kind === "unsupported"
+        ? "Moves are supported only within an ordinary page's main region with known block releases."
+        : "No other compatible existing destination is available for this placement."}</p>}
     </form>
     <p role="status" aria-live="polite">{message}</p>
   </section>;
