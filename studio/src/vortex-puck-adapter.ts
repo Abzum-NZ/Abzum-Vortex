@@ -15,6 +15,8 @@ import {
   type PlatformBlockReleaseV2,
 } from "@vortex/contracts";
 
+export { createVortexAuthoredPuckAdapterV2 } from "./vortex-authored-puck-adapter";
+
 /** Actual Puck Data. Page, shell, and guided-step selection remain Vortex orchestration. */
 export type VortexPuckDataV2 = Data;
 export type VortexPuckContentV2 = Content;
