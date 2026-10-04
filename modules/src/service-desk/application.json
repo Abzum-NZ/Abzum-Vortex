@@ -176,6 +176,24 @@
                                          "action_kind":  "named",
                                          "named_action":  "service_level_manage",
                                          "administrative":  false
+                                     },
+                                     {
+                                       "id": "app_permission_sd_calendar_create",
+                                       "key": "application.service_desk.business_calendar.create",
+                                       "label": "Open business calendar creation",
+                                       "description": "Allows opening the business calendar creation form.",
+                                       "action_kind": "named",
+                                       "named_action": "business_calendar_create",
+                                       "administrative": false
+                                     },
+                                     {
+                                       "id": "app_permission_sd_sla_create",
+                                       "key": "application.service_desk.service_level.create",
+                                       "label": "Open service level creation",
+                                       "description": "Allows opening the service level creation form.",
+                                       "action_kind": "named",
+                                       "named_action": "service_level_create",
+                                       "administrative": false
                                      }
                                  ],
                  "roles":  [
@@ -277,7 +295,9 @@
                                                        "vortex.service_desk.knowledge.article_case.restore",
                                                        "vortex.service_desk.knowledge.article_case.export",
                                                        "vortex.service_desk.knowledge.article.publish",
-                                                       "application.service_desk.article.publish"
+                                                       "application.service_desk.article.publish",
+                                                       "application.service_desk.business_calendar.create",
+                                                       "application.service_desk.service_level.create"
                                                    ]
                                },
                                {
@@ -373,6 +393,20 @@
                                                              "label":  "Service levels",
                                                              "page":  "service_desk_service_levels",
                                                              "permission":  "application.service_desk.service_level.read"
+                                                         },
+                                                         {
+                                                           "id": "nav_sd_new_business_calendar",
+                                                           "type": "page",
+                                                           "label": "New business calendar",
+                                                           "page": "service_desk_new_business_calendar",
+                                                           "permission": "application.service_desk.business_calendar.create"
+                                                         },
+                                                         {
+                                                           "id": "nav_sd_new_service_level",
+                                                           "type": "page",
+                                                           "label": "New service level",
+                                                           "page": "service_desk_new_service_level",
+                                                           "permission": "application.service_desk.service_level.create"
                                                          }
                                                      ]
                                     }
@@ -1631,12 +1665,82 @@
 
                                                                                                                    },
                                                                                                          "query":  "vortex.service_desk.sla:service_desk_service_levels"
-                                                                                                     }
+                                                                                                     },
+                                                                                       "button_sd_new_business_calendar": {
+                                                                                         "block": {
+                                                                                           "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                                                           "release_version": "1.0.0"
+                                                                                         },
+                                                                                         "settings": {
+                                                                                           "label": {
+                                                                                             "kind": "text",
+                                                                                             "value": "New business calendar"
+                                                                                           },
+                                                                                           "action_kind": {
+                                                                                             "kind": "choice",
+                                                                                             "value": "action"
+                                                                                           },
+                                                                                           "variant": {
+                                                                                             "kind": "choice",
+                                                                                             "value": "secondary"
+                                                                                           }
+                                                                                         },
+                                                                                         "theme_overrides": {},
+                                                                                         "responsive": {
+                                                                                           "desktop": {
+                                                                                             "visible": true,
+                                                                                             "width": {
+                                                                                               "kind": "fill"
+                                                                                             },
+                                                                                             "height": {
+                                                                                               "kind": "content"
+                                                                                             }
+                                                                                           }
+                                                                                         },
+                                                                                         "slots": {},
+                                                                                         "view_permission": "application.service_desk.business_calendar.create"
+                                                                                       },
+                                                                                       "button_sd_new_service_level": {
+                                                                                         "block": {
+                                                                                           "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                                                           "release_version": "1.0.0"
+                                                                                         },
+                                                                                         "settings": {
+                                                                                           "label": {
+                                                                                             "kind": "text",
+                                                                                             "value": "New service level"
+                                                                                           },
+                                                                                           "action_kind": {
+                                                                                             "kind": "choice",
+                                                                                             "value": "action"
+                                                                                           },
+                                                                                           "variant": {
+                                                                                             "kind": "choice",
+                                                                                             "value": "secondary"
+                                                                                           }
+                                                                                         },
+                                                                                         "theme_overrides": {},
+                                                                                         "responsive": {
+                                                                                           "desktop": {
+                                                                                             "visible": true,
+                                                                                             "width": {
+                                                                                               "kind": "fill"
+                                                                                             },
+                                                                                             "height": {
+                                                                                               "kind": "content"
+                                                                                             }
+                                                                                           }
+                                                                                         },
+                                                                                         "slots": {},
+                                                                                         "view_permission": "application.service_desk.service_level.create"
+                                                                                       }
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_7"
-                                                                                              ]
+                                                                                    "button_sd_new_business_calendar",
+                                                                                    "button_sd_new_service_level",
+                                                                                    "content_7"
+                                                                                  ]
                                                                               }
                                                                     }
                                                                 }
@@ -2379,6 +2483,707 @@
                                                                     }
                                                                 }
                                                    }
+                               },
+                               {
+                                 "id": "page_sd_new_business_calendar",
+                                 "key": "service_desk_new_business_calendar",
+                                 "name": "New business calendar",
+                                 "type": "form",
+                                 "record_type": "vortex.service_desk.sla:business_calendar",
+                                 "permission": "application.service_desk.business_calendar.create",
+                                 "composition": {
+                                   "shell_kind": "application",
+                                   "shell": "shell_service_desk",
+                                   "content": {
+                                     "slot_primary": {
+                                       "placements": {
+                                         "form_sd_business_calendar_create_frame": {
+                                           "block": {
+                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                             "release_version": "1.3.0"
+                                           },
+                                           "settings": {
+                                             "direction": {
+                                               "kind": "choice",
+                                               "value": "column"
+                                             },
+                                             "gap": {
+                                               "kind": "choice",
+                                               "value": "medium"
+                                             },
+                                             "padding": {
+                                               "kind": "choice",
+                                               "value": "medium"
+                                             },
+                                             "content_width": {
+                                               "kind": "choice",
+                                               "value": "readable"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {
+                                             "content": {
+                                               "placements": {
+                                                 "form_sd_business_calendar_create": {
+                                                   "block": {
+                                                     "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                                                     "release_version": "1.0.0"
+                                                   },
+                                                   "settings": {
+                                                     "title": {
+                                                       "kind": "text",
+                                                       "value": "New business calendar"
+                                                     }
+                                                   },
+                                                   "theme_overrides": {},
+                                                   "responsive": {
+                                                     "desktop": {
+                                                       "visible": true,
+                                                       "width": {
+                                                         "kind": "fill"
+                                                       },
+                                                       "height": {
+                                                         "kind": "content"
+                                                       }
+                                                     }
+                                                   },
+                                                   "slots": {
+                                                     "content": {
+                                                       "placements": {
+                                                         "field_sd_calendar_name": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:business_calendar.name"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_calendar_time_zone": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:business_calendar.time_zone"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_calendar_working_day": {
+                                                           "block": {
+                                                             "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                             "release_version": "1.1.0"
+                                                           },
+                                                           "settings": {
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "working_day"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Working day"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "options": {
+                                                               "kind": "list",
+                                                               "items": [
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "monday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Monday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "tuesday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Tuesday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "wednesday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Wednesday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "thursday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Thursday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "friday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Friday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "saturday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Saturday"
+                                                                     }
+                                                                   }
+                                                                 },
+                                                                 {
+                                                                   "kind": "group",
+                                                                   "properties": {
+                                                                     "key": {
+                                                                       "kind": "text",
+                                                                       "value": "sunday"
+                                                                     },
+                                                                     "label": {
+                                                                       "kind": "text",
+                                                                       "value": "Sunday"
+                                                                     }
+                                                                   }
+                                                                 }
+                                                               ]
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_calendar_starts_at": {
+                                                           "block": {
+                                                             "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "working_starts_at"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Starts at"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "help_text": {
+                                                               "kind": "text",
+                                                               "value": "Enter the start time for this interval using up to five characters."
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_calendar_ends_at": {
+                                                           "block": {
+                                                             "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "working_ends_at"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Ends at"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "help_text": {
+                                                               "kind": "text",
+                                                               "value": "Enter the end time for this interval using up to five characters."
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "button_sd_calendar_submit": {
+                                                           "block": {
+                                                             "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Create business calendar"
+                                                             },
+                                                             "action_kind": {
+                                                               "kind": "choice",
+                                                               "value": "submit"
+                                                             },
+                                                             "variant": {
+                                                               "kind": "choice",
+                                                               "value": "primary"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         }
+                                                       },
+                                                       "order": {
+                                                         "desktop": [
+                                                           "field_sd_calendar_name",
+                                                           "field_sd_calendar_time_zone",
+                                                           "field_sd_calendar_working_day",
+                                                           "field_sd_calendar_starts_at",
+                                                           "field_sd_calendar_ends_at",
+                                                           "button_sd_calendar_submit"
+                                                         ]
+                                                       }
+                                                     }
+                                                   }
+                                                 }
+                                               },
+                                               "order": {
+                                                 "desktop": [
+                                                   "form_sd_business_calendar_create"
+                                                 ]
+                                               }
+                                             }
+                                           }
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "form_sd_business_calendar_create_frame"
+                                         ]
+                                       }
+                                     }
+                                   }
+                                 }
+                               },
+                               {
+                                 "id": "page_sd_new_service_level",
+                                 "key": "service_desk_new_service_level",
+                                 "name": "New service level",
+                                 "type": "form",
+                                 "record_type": "vortex.service_desk.sla:service_level",
+                                 "permission": "application.service_desk.service_level.create",
+                                 "composition": {
+                                   "shell_kind": "application",
+                                   "shell": "shell_service_desk",
+                                   "content": {
+                                     "slot_primary": {
+                                       "placements": {
+                                         "form_sd_service_level_create_frame": {
+                                           "block": {
+                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                                             "release_version": "1.3.0"
+                                           },
+                                           "settings": {
+                                             "direction": {
+                                               "kind": "choice",
+                                               "value": "column"
+                                             },
+                                             "gap": {
+                                               "kind": "choice",
+                                               "value": "medium"
+                                             },
+                                             "padding": {
+                                               "kind": "choice",
+                                               "value": "medium"
+                                             },
+                                             "content_width": {
+                                               "kind": "choice",
+                                               "value": "readable"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {
+                                             "content": {
+                                               "placements": {
+                                                 "form_sd_service_level_create": {
+                                                   "block": {
+                                                     "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                                                     "release_version": "1.0.0"
+                                                   },
+                                                   "settings": {
+                                                     "title": {
+                                                       "kind": "text",
+                                                       "value": "New service level"
+                                                     }
+                                                   },
+                                                   "theme_overrides": {},
+                                                   "responsive": {
+                                                     "desktop": {
+                                                       "visible": true,
+                                                       "width": {
+                                                         "kind": "fill"
+                                                       },
+                                                       "height": {
+                                                         "kind": "content"
+                                                       }
+                                                     }
+                                                   },
+                                                   "slots": {
+                                                     "content": {
+                                                       "placements": {
+                                                         "field_sd_service_level_name": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:service_level.name"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_service_level_calendar": {
+                                                           "block": {
+                                                             "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                             "release_version": "1.1.0"
+                                                           },
+                                                           "settings": {
+                                                             "name": {
+                                                               "kind": "text",
+                                                               "value": "calendar_record"
+                                                             },
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Business calendar"
+                                                             },
+                                                             "required": {
+                                                               "kind": "boolean",
+                                                               "value": true
+                                                             },
+                                                             "help_text": {
+                                                               "kind": "text",
+                                                               "value": "Choose an existing readable business calendar. Create a calendar first if none are available."
+                                                             },
+                                                             "choice_source": {
+                                                               "kind": "group",
+                                                               "properties": {
+                                                                 "query": {
+                                                                   "kind": "query_reference",
+                                                                   "query": "vortex.service_desk.sla:service_desk_business_calendars"
+                                                                 },
+                                                                 "label_field": {
+                                                                   "kind": "field_reference",
+                                                                   "field": "vortex.service_desk.sla:business_calendar.name"
+                                                                 }
+                                                               }
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_service_level_response": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:service_level.first_response_minutes"
+                                                             },
+                                                             "min_value": {
+                                                               "kind": "number",
+                                                               "value": 1
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_service_level_resolution": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:service_level.resolution_minutes"
+                                                             },
+                                                             "min_value": {
+                                                               "kind": "number",
+                                                               "value": 1
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "field_sd_service_level_active": {
+                                                           "block": {
+                                                             "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "field": {
+                                                               "kind": "field_reference",
+                                                               "field": "vortex.service_desk.sla:service_level.active"
+                                                             },
+                                                             "variant": {
+                                                               "kind": "choice",
+                                                               "value": "switch"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         },
+                                                         "button_sd_service_level_submit": {
+                                                           "block": {
+                                                             "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                             "release_version": "1.0.0"
+                                                           },
+                                                           "settings": {
+                                                             "label": {
+                                                               "kind": "text",
+                                                               "value": "Create service level"
+                                                             },
+                                                             "action_kind": {
+                                                               "kind": "choice",
+                                                               "value": "submit"
+                                                             },
+                                                             "variant": {
+                                                               "kind": "choice",
+                                                               "value": "primary"
+                                                             }
+                                                           },
+                                                           "theme_overrides": {},
+                                                           "responsive": {
+                                                             "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                 "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                 "kind": "content"
+                                                               }
+                                                             }
+                                                           },
+                                                           "slots": {}
+                                                         }
+                                                       },
+                                                       "order": {
+                                                         "desktop": [
+                                                           "field_sd_service_level_name",
+                                                           "field_sd_service_level_calendar",
+                                                           "field_sd_service_level_response",
+                                                           "field_sd_service_level_resolution",
+                                                           "field_sd_service_level_active",
+                                                           "button_sd_service_level_submit"
+                                                         ]
+                                                       }
+                                                     }
+                                                   }
+                                                 }
+                                               },
+                                               "order": {
+                                                 "desktop": [
+                                                   "form_sd_service_level_create"
+                                                 ]
+                                               }
+                                             }
+                                           }
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "form_sd_service_level_create_frame"
+                                         ]
+                                       }
+                                     }
+                                   }
+                                 }
                                }
                            ],
                  "pipelines":  [
@@ -2747,7 +3552,35 @@
       "record_type": "vortex.service_desk.cases:case",
       "carries": [],
       "personal_or_sensitive_values_allowed": false
-    }
+    },
+                                {
+                                  "id": "form_submit_sd_business_calendar_create",
+                                  "key": "vortex.app.events.vortex_app_service_desk_form_submit_sd_business_calendar_create",
+                                  "record_type": "vortex.service_desk.sla:business_calendar",
+                                  "carries": [],
+                                  "personal_or_sensitive_values_allowed": false
+                                },
+                                {
+                                  "id": "form_submit_sd_service_level_create",
+                                  "key": "vortex.app.events.vortex_app_service_desk_form_submit_sd_service_level_create",
+                                  "record_type": "vortex.service_desk.sla:service_level",
+                                  "carries": [],
+                                  "personal_or_sensitive_values_allowed": false
+                                },
+                                {
+                                  "id": "event_sd_new_business_calendar",
+                                  "key": "vortex.app.events.vortex_app_service_desk_event_sd_new_business_calendar",
+                                  "record_type": "vortex.service_desk.sla:business_calendar",
+                                  "carries": [],
+                                  "personal_or_sensitive_values_allowed": false
+                                },
+                                {
+                                  "id": "event_sd_new_service_level",
+                                  "key": "vortex.app.events.vortex_app_service_desk_event_sd_new_service_level",
+                                  "record_type": "vortex.service_desk.sla:service_level",
+                                  "carries": [],
+                                  "personal_or_sensitive_values_allowed": false
+                                }
                             ],
                  "public_addresses":  [
                                           {
@@ -3999,7 +4832,425 @@
         }
       ],
       "outputs": {}
-    }
+    },
+                     {
+                       "contractVersion": "1.0.0",
+                       "id": "sd_create_business_calendar",
+                       "key": "sd_create_business_calendar",
+                       "description": "Creates a business calendar with one interval supplied by the initiator.",
+                       "labels": {
+                         "name": "Create business calendar"
+                       },
+                       "execution": "interactive",
+                       "runAs": {
+                         "kind": "initiator"
+                       },
+                       "inputs": {
+                         "name": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "time_zone": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "working_day": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "working_starts_at": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "working_ends_at": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "selected_owner_group_id": {
+                           "type": "text",
+                           "required": true
+                         }
+                       },
+                       "tasks": [
+                         {
+                           "id": "set_calendar_values",
+                           "type": "data.set_variable",
+                           "version": "1.0.0",
+                           "properties": {
+                             "variable": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "calendar_values"
+                               }
+                             },
+                             "value": {
+                               "kind": "map",
+                               "entries": {
+                                 "name": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "name"
+                                   }
+                                 },
+                                 "time_zone": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "time_zone"
+                                   }
+                                 },
+                                 "working_hours": {
+                                   "kind": "array",
+                                   "items": [
+                                     {
+                                       "kind": "map",
+                                       "entries": {
+                                         "day": {
+                                           "kind": "reference",
+                                           "reference": {
+                                             "source": "input",
+                                             "name": "working_day"
+                                           }
+                                         },
+                                         "starts_at": {
+                                           "kind": "reference",
+                                           "reference": {
+                                             "source": "input",
+                                             "name": "working_starts_at"
+                                           }
+                                         },
+                                         "ends_at": {
+                                           "kind": "reference",
+                                           "reference": {
+                                             "source": "input",
+                                             "name": "working_ends_at"
+                                           }
+                                         }
+                                       }
+                                     }
+                                   ]
+                                 }
+                               }
+                             }
+                           }
+                         },
+                         {
+                           "id": "save",
+                           "type": "record.save",
+                           "version": "1.0.0",
+                           "properties": {
+                             "record_type": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "vortex.service_desk.sla:business_calendar"
+                               }
+                             },
+                             "values": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "variable",
+                                 "name": "calendar_values"
+                               }
+                             },
+                             "selected_owner_group_id": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "input",
+                                 "name": "selected_owner_group_id"
+                               }
+                             }
+                           }
+                         }
+                       ],
+                       "outputs": {
+                         "record": {
+                           "type": "record_reference",
+                           "recordTypeIds": [
+                             "vortex.service_desk.sla:business_calendar"
+                           ],
+                           "value": {
+                             "kind": "reference",
+                             "reference": {
+                               "source": "task_output",
+                               "task": "save",
+                               "key": "record"
+                             }
+                           }
+                         }
+                       },
+                       "variables": {
+                         "calendar_values": {
+                           "type": "json"
+                         }
+                       }
+                     },
+                     {
+                       "contractVersion": "1.0.0",
+                       "id": "sd_create_service_level",
+                       "key": "sd_create_service_level",
+                       "description": "Creates a service level after reading the selected business calendar under the initiator's authority.",
+                       "labels": {
+                         "name": "Create service level"
+                       },
+                       "execution": "interactive",
+                       "runAs": {
+                         "kind": "initiator"
+                       },
+                       "inputs": {
+                         "name": {
+                           "type": "text",
+                           "required": true
+                         },
+                         "calendar_record": {
+                           "type": "record_reference",
+                           "recordTypeIds": [
+                             "vortex.service_desk.sla:business_calendar"
+                           ],
+                           "required": true
+                         },
+                         "first_response_minutes": {
+                           "type": "whole_number",
+                           "required": true
+                         },
+                         "resolution_minutes": {
+                           "type": "whole_number",
+                           "required": true
+                         },
+                         "active": {
+                           "type": "yes_no",
+                           "required": true
+                         },
+                         "selected_owner_group_id": {
+                           "type": "text",
+                           "required": true
+                         }
+                       },
+                       "tasks": [
+                         {
+                           "id": "read_calendar",
+                           "type": "record.read_fields",
+                           "version": "1.0.0",
+                           "properties": {
+                             "record_type": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "vortex.service_desk.sla:business_calendar"
+                               }
+                             },
+                             "record": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "input",
+                                 "name": "calendar_record"
+                               }
+                             },
+                             "fields": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "json",
+                                 "value": [
+                                   {
+                                     "alias": "name",
+                                     "field": "vortex.service_desk.sla:business_calendar.name"
+                                   }
+                                 ]
+                               }
+                             }
+                           }
+                         },
+                         {
+                           "id": "calendar_link",
+                           "type": "data.record_link",
+                           "version": "1.0.0",
+                           "properties": {
+                             "record_type": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "vortex.service_desk.sla:business_calendar"
+                               }
+                             },
+                             "record": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "input",
+                                 "name": "calendar_record"
+                               }
+                             }
+                           }
+                         },
+                         {
+                           "id": "set_service_level_values",
+                           "type": "data.set_variable",
+                           "version": "1.0.0",
+                           "properties": {
+                             "variable": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "service_level_values"
+                               }
+                             },
+                             "value": {
+                               "kind": "map",
+                               "entries": {
+                                 "name": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "name"
+                                   }
+                                 },
+                                 "first_response_minutes": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "first_response_minutes"
+                                   }
+                                 },
+                                 "resolution_minutes": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "resolution_minutes"
+                                   }
+                                 },
+                                 "active": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "input",
+                                     "name": "active"
+                                   }
+                                 },
+                                 "calendar": {
+                                   "kind": "reference",
+                                   "reference": {
+                                     "source": "task_output",
+                                     "task": "calendar_link",
+                                     "key": "value"
+                                   }
+                                 }
+                               }
+                             }
+                           }
+                         },
+                         {
+                           "id": "save",
+                           "type": "record.save",
+                           "version": "1.0.0",
+                           "properties": {
+                             "record_type": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "vortex.service_desk.sla:service_level"
+                               }
+                             },
+                             "values": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "variable",
+                                 "name": "service_level_values"
+                               }
+                             },
+                             "selected_owner_group_id": {
+                               "kind": "reference",
+                               "reference": {
+                                 "source": "input",
+                                 "name": "selected_owner_group_id"
+                               }
+                             }
+                           }
+                         }
+                       ],
+                       "outputs": {
+                         "record": {
+                           "type": "record_reference",
+                           "recordTypeIds": [
+                             "vortex.service_desk.sla:service_level"
+                           ],
+                           "value": {
+                             "kind": "reference",
+                             "reference": {
+                               "source": "task_output",
+                               "task": "save",
+                               "key": "record"
+                             }
+                           }
+                         }
+                       },
+                       "variables": {
+                         "service_level_values": {
+                           "type": "json"
+                         }
+                       }
+                     },
+                     {
+                       "contractVersion": "1.0.0",
+                       "id": "navigate_new_business_calendar",
+                       "key": "navigate_new_business_calendar",
+                       "description": "Opens the business calendar creation form.",
+                       "labels": {
+                         "name": "New business calendar"
+                       },
+                       "execution": "interactive",
+                       "runAs": {
+                         "kind": "initiator"
+                       },
+                       "inputs": {},
+                       "tasks": [
+                         {
+                           "id": "open_page",
+                           "type": "interface.navigate",
+                           "version": "1.0.0",
+                           "properties": {
+                             "page": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "service_desk_new_business_calendar"
+                               }
+                             }
+                           }
+                         }
+                       ],
+                       "outputs": {}
+                     },
+                     {
+                       "contractVersion": "1.0.0",
+                       "id": "navigate_new_service_level",
+                       "key": "navigate_new_service_level",
+                       "description": "Opens the service level creation form.",
+                       "labels": {
+                         "name": "New service level"
+                       },
+                       "execution": "interactive",
+                       "runAs": {
+                         "kind": "initiator"
+                       },
+                       "inputs": {},
+                       "tasks": [
+                         {
+                           "id": "open_page",
+                           "type": "interface.navigate",
+                           "version": "1.0.0",
+                           "properties": {
+                             "page": {
+                               "kind": "literal",
+                               "literal": {
+                                 "type": "text",
+                                 "value": "service_desk_new_service_level"
+                               }
+                             }
+                           }
+                         }
+                       ],
+                       "outputs": {}
+                     }
                  ],
                  "flow_bindings":  [
                      {
@@ -4179,7 +5430,89 @@
           "name": "record_id"
         }
       }
-    }
+    },
+                     {
+                       "id": "binding_sd_business_calendar_create",
+                       "control": "form_sd_business_calendar_create",
+                       "event_id": "form_submit_sd_business_calendar_create",
+                       "event": "form_submit",
+                       "flow": "sd_create_business_calendar",
+                       "inputs": {
+                         "name": {
+                           "kind": "caller",
+                           "name": "name"
+                         },
+                         "time_zone": {
+                           "kind": "caller",
+                           "name": "time_zone"
+                         },
+                         "working_day": {
+                           "kind": "caller",
+                           "name": "working_day"
+                         },
+                         "working_starts_at": {
+                           "kind": "caller",
+                           "name": "working_starts_at"
+                         },
+                         "working_ends_at": {
+                           "kind": "caller",
+                           "name": "working_ends_at"
+                         },
+                         "selected_owner_group_id": {
+                           "kind": "caller",
+                           "name": "selected_owner_group_id"
+                         }
+                       }
+                     },
+                     {
+                       "id": "binding_sd_service_level_create",
+                       "control": "form_sd_service_level_create",
+                       "event_id": "form_submit_sd_service_level_create",
+                       "event": "form_submit",
+                       "flow": "sd_create_service_level",
+                       "inputs": {
+                         "name": {
+                           "kind": "caller",
+                           "name": "name"
+                         },
+                         "calendar_record": {
+                           "kind": "caller",
+                           "name": "calendar_record"
+                         },
+                         "first_response_minutes": {
+                           "kind": "caller",
+                           "name": "first_response_minutes"
+                         },
+                         "resolution_minutes": {
+                           "kind": "caller",
+                           "name": "resolution_minutes"
+                         },
+                         "active": {
+                           "kind": "caller",
+                           "name": "active"
+                         },
+                         "selected_owner_group_id": {
+                           "kind": "caller",
+                           "name": "selected_owner_group_id"
+                         }
+                       }
+                     },
+                     {
+                       "id": "binding_sd_new_business_calendar",
+                       "control": "button_sd_new_business_calendar",
+                       "event_id": "event_sd_new_business_calendar",
+                       "event": "action",
+                       "flow": "navigate_new_business_calendar",
+                       "inputs": {}
+                     },
+                     {
+                       "id": "binding_sd_new_service_level",
+                       "control": "button_sd_new_service_level",
+                       "event_id": "event_sd_new_service_level",
+                       "event": "action",
+                       "flow": "navigate_new_service_level",
+                       "inputs": {}
+                     }
                  ]
              }
 }
