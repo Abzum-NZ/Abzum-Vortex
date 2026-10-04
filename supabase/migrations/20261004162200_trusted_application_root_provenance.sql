@@ -1,3 +1,11 @@
+-- Require explicit trusted Application provenance while preserving the existing function owner.
+
+begin;
+
+set local role postgres;
+
+drop function vortex_definition.create_root(text, text, jsonb, text, jsonb);
+
 create or replace function vortex_definition.create_root(
   p_kind text,
   p_key text,
@@ -130,3 +138,7 @@ comment on function vortex_definition.create_root(text, text, jsonb, text, jsonb
   'Creates a Definition root with explicit Application provenance, permanent component identities and initial draft atomically; Modules remain unclassified.';
 
 alter function vortex_definition.create_root(text, text, jsonb, text, jsonb, text) owner to postgres;
+
+reset role;
+
+commit;
