@@ -16,6 +16,9 @@ type SourcePlacement = SourceSlot["placements"][string];
 type SourceShell = ReturnType<typeof sourceApplicationShellV2Schema.parse>;
 type SourceOrder = SourceSlot["order"];
 type Reservations = ReadonlyMap<string, ReadonlySet<string>>;
+type SlotIdentity =
+  | Readonly<{ kind: "root" }>
+  | Readonly<{ kind: "child"; parentAlias: string; slotKey: string }>;
 
 const refuse = (): never => {
   throw new TypeError("Invalid authored Puck composition");
@@ -46,6 +49,12 @@ const clone = <Value>(value: Value): Value => structuredClone(value);
 // Source slot names never collide with Puck's private id/settings/vortex fields.
 const puckSlotKey = (sourceKey: string): string => `slot_${sourceKey}`;
 
+const sameSlot = (left: SlotIdentity, right: SlotIdentity): boolean =>
+  left.kind === "root"
+    ? right.kind === "root"
+    : right.kind === "child" && left.parentAlias === right.parentAlias &&
+      left.slotKey === right.slotKey;
+
 const sameOrder = (left: SourceOrder, right: SourceOrder): boolean =>
   (["desktop", "tablet", "phone"] as const).every((breakpoint) => {
     const a = left[breakpoint];
@@ -68,29 +77,20 @@ const adjustedOrder = (saved: readonly string[], desktop: readonly string[]): st
 
 /**
  * Puck owns desktop position. Order hints retain authored declarations, including
- * omission. Prefer this destination's original hint over a moved child's hint.
- * The explicit baseline also covers empty slots that have no child to carry one.
+ * omission. Only hints proved to come from this destination's original slot are
+ * supplied here. The explicit baseline also covers empty slots and moved children
+ * carrying another slot's declarations. Genuine responsive edits update all of
+ * the destination's hints consistently, retaining their original provenance.
  */
 const sourceOrder = (
   desktop: string[],
   original: SourceOrder | undefined,
   hints: readonly SourceOrder[],
 ): SourceOrder => {
-  const matching = original === undefined
-    ? hints
-    : hints.filter((hint) =>
-        sameOrder({ desktop: hint.desktop }, { desktop: original.desktop }) ||
-        sameOrder({ desktop: hint.desktop }, { desktop }),
-      );
   let saved = original;
-  if (matching.length > 0) {
-    const present = new Set(desktop);
-    const overlap = (hint: SourceOrder): number =>
-      hint.desktop.filter((id) => present.has(id)).length;
-    const best = matching.reduce((maximum, hint) => Math.max(maximum, overlap(hint)), 0);
-    const candidates = matching.filter((hint) => overlap(hint) === best);
-    saved = candidates[0]!;
-    if (candidates.some((hint) => !sameOrder(hint, saved!))) refuse();
+  if (hints.length > 0) {
+    saved = hints[0]!;
+    if (hints.some((hint) => !sameOrder(hint, saved!))) refuse();
   }
   return {
     desktop,
@@ -238,22 +238,28 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       visit(slot);
     };
 
-    const toContent = (slot: SourceSlot): Content =>
+    const toContent = (slot: SourceSlot, identity: SlotIdentity): Content =>
       slot.order.desktop.map((id) => {
         const { settings, slots, ...metadata } = slot.placements[id]!;
         const release = releaseFor(slot.placements[id]!);
         const props: Record<string, unknown> & { id: string } = {
           id,
           settings: clone(settings),
-          vortex: { ...clone(metadata), order: clone(slot.order) },
+          vortex: {
+            ...clone(metadata),
+            slot: clone(identity),
+            baselineOrder: clone(slot.order),
+            order: clone(slot.order),
+          },
         };
-        for (const [key, child] of Object.entries(slots)) props[puckSlotKey(key)] = toContent(child);
+        for (const [key, child] of Object.entries(slots))
+          props[puckSlotKey(key)] = toContent(child, { kind: "child", parentAlias: id, slotKey: key });
         return { type: release.rendererKey, props } satisfies ComponentData;
       });
 
     const dataFor = (slot: SourceSlot, reservations: Reservations): Data => {
       validateTree(slot, reservations);
-      return { root: {}, content: toContent(slot), zones: {} };
+      return { root: {}, content: toContent(slot, { kind: "root" }), zones: {} };
     };
 
     const inverse = (original: SourceSlot, candidate: unknown, reservations: Reservations): SourceSlot => {
@@ -325,7 +331,24 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       };
 
       const seen = new Set<string>();
-      const fromContent = (content: unknown, baseline: SourceSlot | undefined): SourceSlot => {
+      const parseSlotIdentity = (value: unknown): SlotIdentity => {
+        const candidate = object(value);
+        if (candidate.kind === "root") {
+          closed(candidate, ["kind"]);
+          return { kind: "root" };
+        }
+        closed(candidate, ["kind", "parentAlias", "slotKey"]);
+        if (candidate.kind !== "child") return refuse();
+        const parentAlias = text(candidate.parentAlias);
+        const slotKey = text(candidate.slotKey);
+        if (!aliases.has(parentAlias)) refuse();
+        return { kind: "child", parentAlias, slotKey };
+      };
+      const fromContent = (
+        content: unknown,
+        baseline: SourceSlot | undefined,
+        destination: SlotIdentity,
+      ): SourceSlot => {
         if (!Array.isArray(content)) return refuse();
         const placements: SourceSlot["placements"] = {};
         const desktop: string[] = [];
@@ -338,9 +361,12 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
           seen.add(id);
           const metadata = closed(props.vortex, [
             "block", "view_permission", "use_permission", "visibility_condition", "query",
-            "read_model", "theme_overrides", "responsive", "order",
+            "read_model", "theme_overrides", "responsive", "slot", "baselineOrder", "order",
           ]);
-          const { order, ...fields } = metadata;
+          const { order, slot, baselineOrder, ...fields } = metadata;
+          const origin = parseSlotIdentity(slot);
+          const originalOrder = parseOrder(baselineOrder);
+          const editedOrder = order === undefined ? undefined : parseOrder(order);
           const slots: SourcePlacement["slots"] = {};
           // First parse the source fields without accepting any private Puck properties.
           const fieldSlot = sourcePlacementSlotV2Schema.parse({
@@ -361,18 +387,23 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
             const privateKey = puckSlotKey(key);
             const child = Object.hasOwn(props, privateKey) ? props[privateKey] : undefined;
             if (child !== undefined)
-              slots[key] = fromContent(child, baselinePlacements.get(id)?.slots[key]);
+              slots[key] = fromContent(child, baselinePlacements.get(id)?.slots[key], {
+                kind: "child", parentAlias: id, slotKey: key,
+              });
           }
           placements[id] = { ...placement, slots };
           desktop.push(id);
-          if (order !== undefined) hints.push(parseOrder(order));
+          if (
+            editedOrder !== undefined && sameSlot(origin, destination) &&
+            (baseline === undefined || sameOrder(originalOrder, baseline.order))
+          ) hints.push(editedOrder);
         }
         return sourcePlacementSlotV2Schema.parse({
           placements,
           order: sourceOrder(desktop, baseline?.order, hints),
         });
       };
-      const result = fromContent(data.content, original);
+      const result = fromContent(data.content, original, { kind: "root" });
       validateTree(result, reservations);
       return clone(result);
     };
