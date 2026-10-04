@@ -37,6 +37,7 @@ import {
 } from "@vortex/app";
 import {
   createAuthenticatedPageCapabilityService,
+  type AuthenticatedPageCapabilityDependencies,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
 import {
@@ -71,6 +72,8 @@ export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependenc
      * placement is refused while they are not supplied; Page never reads those tables itself.
      */
     protectedReadModelReaders?: ProtectedReadModelReaders;
+    /** Request-local primary projection diagnostic; never used by navigation probes. */
+    observeProjectionDecision?: AuthenticatedPageCapabilityDependencies<undefined>["observeProjectionDecision"];
   }>;
 
 /** Live protected data for one visible read-model placement; never stored or copied. */
@@ -343,7 +346,7 @@ export const createStoredPageCapabilityService = (
   )
     throw new Error("STORED_PAGE_TRUSTED_CONTEXT_UNAVAILABLE");
 
-  const requestDependencies = {
+  const { observeProjectionDecision: _primaryObserver, ...requestDependencies } = {
     ...dependencies,
     correlationId: () => context.correlationId,
   };
@@ -442,20 +445,37 @@ export const createStoredPageCapabilityService = (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     stored: FixedAuthenticatedPageCapability,
+    observeProjectionDecision?: StoredPageCapabilityDependencies["observeProjectionDecision"],
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead: Promise<PageSubjectReadResult> | undefined;
+    type ConditionReason = ReturnType<NonNullable<
+      AuthenticatedPageCapabilityDependencies<undefined>["visibilityConditionReason"]
+    >>;
+    let conditionReason: ConditionReason = "UNKNOWN";
+    const refused = (reason: ConditionReason): false => {
+      conditionReason = reason;
+      return false;
+    };
+    const supported = (allowed: boolean): boolean => {
+      conditionReason = allowed ? "SUPPORTED_TRUE" : "SUPPORTED_FALSE";
+      return allowed;
+    };
     return createAuthenticatedPageCapabilityService({
       ...requestDependencies,
+      // Override the spread dependency so pageOpens cannot inherit the primary observer.
+      ...(observeProjectionDecision === undefined ? {} : { observeProjectionDecision }),
+      visibilityConditionReason: () => conditionReason,
       evaluateVisibilityCondition: async (transaction, scope, page, condition) => {
+        conditionReason = "UNKNOWN";
         if (
           scope.applicationRootId === undefined ||
           !sameId(scope.organizationId, context.organizationId) ||
           !sameId(scope.applicationRootId, applicationRootId)
         )
-          return false;
+          return refused("DECLARATION_UNPROVABLE");
         const parsed = conditionNodeSchema.safeParse(condition);
-        if (!parsed.success) return false;
+        if (!parsed.success) return refused("DECLARATION_UNPROVABLE");
         const fieldIds = new Set<string>();
         let unsupported = false;
         const collect = (node: ConditionNode): void => {
@@ -469,17 +489,17 @@ export const createStoredPageCapabilityService = (
         };
         // Inspect every branch before any read; an unsupported operand cannot short-circuit to true.
         collect(parsed.data);
-        if (unsupported) return false;
+        if (unsupported) return refused("UNSUPPORTED_OPERAND");
         try {
           if (fieldIds.size === 0)
-            return evaluateTypedConditionV2({
+            return supported(evaluateTypedConditionV2({
               condition: parsed.data,
               sourceRecordFields: [],
               declaredFieldIds: [],
               fieldValues: {},
               parameterDeclarations: [],
               parameterValues: {},
-            });
+            }));
 
           // A different destination page cannot borrow the selected page's address subject.
           const recordType =
@@ -492,30 +512,31 @@ export const createStoredPageCapabilityService = (
               ? page.recordType
               : undefined;
           const subjectRecordId = dependencies.selection.subjectRecordId;
-          if (recordType === undefined || subjectRecordId === undefined) return false;
+          if (recordType === undefined || subjectRecordId === undefined)
+            return refused("SUBJECT_UNAVAILABLE");
           const modules = context.releaseSet.modules.filter((module) =>
             sameId(module.rootId, recordType.moduleRootId),
           );
-          if (modules.length !== 1) return false;
+          if (modules.length !== 1) return refused("DECLARATION_UNPROVABLE");
           const records = modules[0]!.content.recordTypes.filter((record) =>
             sameId(record.recordTypeId, recordType.recordTypeId),
           );
-          if (records.length !== 1) return false;
+          if (records.length !== 1) return refused("DECLARATION_UNPROVABLE");
           const fields = records[0]!.fields;
           const fieldsById = new Map(fields.map((field) => [field.fieldId.toLowerCase(), field]));
           if (fieldsById.size !== fields.length || [...fieldIds].some((id) => !fieldsById.has(id)))
-            return false;
+            return refused("FIELD_UNAVAILABLE");
           subjectRead ??= readPageSubjectInTransaction(transaction, {
             recordTypeId: recordType.recordTypeId,
             recordId: subjectRecordId,
           });
           const read = await subjectRead;
-          if (read.kind !== "read") return false;
+          if (read.kind !== "read") return refused("SUBJECT_UNAVAILABLE");
           const values: Record<string, JsonValue> = {};
           for (const id of fieldIds) {
             const matches = Object.entries(read.row.values).filter(([key]) => sameId(key, id));
             // An unreadable/missing field is not a null field; duplicate identity aliases refuse.
-            if (matches.length !== 1) return false;
+            if (matches.length !== 1) return refused("FIELD_UNAVAILABLE");
             values[fieldsById.get(id)!.fieldId] = matches[0]![1];
           }
           type Operand = Extract<ConditionNode, { kind: "comparison" }>["left"];
@@ -534,16 +555,17 @@ export const createStoredPageCapabilityService = (
               return { kind: "not", condition: canonicalCondition(node.condition) };
             return { kind: node.kind, conditions: node.conditions.map(canonicalCondition) };
           };
-          return evaluateTypedConditionV2({
+          return supported(evaluateTypedConditionV2({
             condition: canonicalCondition(parsed.data),
             sourceRecordFields: fields,
             declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),
             fieldValues: values,
             parameterDeclarations: [],
             parameterValues: {},
-          });
+          }));
         } catch (error) {
-          if (error instanceof TypedConditionEvaluationError) return false;
+          if (error instanceof TypedConditionEvaluationError)
+            return refused("DECLARATION_UNPROVABLE");
           throw error;
         }
       },
@@ -564,6 +586,7 @@ export const createStoredPageCapabilityService = (
   const project = async (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
+    observeProjectionDecision?: StoredPageCapabilityDependencies["observeProjectionDecision"],
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     if (
       !sameId(candidate.organizationId, context.organizationId) ||
@@ -583,7 +606,7 @@ export const createStoredPageCapabilityService = (
       return { kind: "temporarily_unavailable" };
     }
     if (fixed === undefined) return { kind: "unavailable" };
-    return projectStored(session, candidate, fixed);
+    return projectStored(session, candidate, fixed, observeProjectionDecision);
   };
 
   /**
@@ -613,7 +636,8 @@ export const createStoredPageCapabilityService = (
       : createProtectedReadModelResolver(dependencies.protectedReadModelReaders);
 
   return Object.freeze({
-    project,
+    project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
+      project(session, candidate, dependencies.observeProjectionDecision),
     /**
      * Reads one read-model placement of the selected page live, at request time. The binding comes
      * only from the exact release; the viewer must be able to see the page and that placement, and

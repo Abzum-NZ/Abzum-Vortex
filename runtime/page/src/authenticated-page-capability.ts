@@ -79,6 +79,23 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         page: PageDefinitionV2,
         condition: ConditionNode,
       ) => Promise<boolean>;
+      /** Diagnostic metadata only, latched by the original serial condition invocation. */
+      visibilityConditionReason?: () =>
+        | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
+        | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE" | "UNKNOWN";
+      /** Optional server-only sink; immutable decisions cannot influence projection authority. */
+      observeProjectionDecision?: (observation: Readonly<{
+        placements: readonly Readonly<{
+          placementId: string;
+          ancestorPlacementIds: readonly string[];
+          viewGate: "ABSENT" | "ALLOWED" | "REFUSED";
+          condition: "ABSENT" | "TRUE" | "NOT_TRUE" | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR";
+          conditionReason: "ABSENT" | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
+            | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE"
+            | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR" | "UNKNOWN";
+          useState: "PLAIN_CONTENT" | "AVAILABLE" | "DISABLED";
+        }>[];
+      }>) => void;
     }>;
 
 type RequiredPlacement = Readonly<{
@@ -168,6 +185,18 @@ export const createAuthenticatedPageCapabilityService = <Command>(
         ]);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         const hiddenPlacements = new Set<string>();
+        // Observation has its own finite custody and never changes the authoritative states.
+        const observed: Array<Parameters<NonNullable<
+          AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"]
+        >>[0]["placements"][number]> = [];
+        let observer: AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"];
+        let observationValid = false;
+        try {
+          observer = dependencies.observeProjectionDecision;
+          observationValid = typeof observer === "function";
+        } catch {
+          // An unavailable sink must not turn a normal projection into a failure.
+        }
         for (const required of requiredPlacements(resolved)) {
           if (states[required.placementId] !== undefined) continue;
           const binding = loaded.placements[required.placementId];
@@ -223,9 +252,35 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? {}
               : { conditionAllowed }),
           };
+          if (observationValid) {
+            try {
+              if (observed.length >= 4096 || required.ancestorPlacementIds.length > 64)
+                observationValid = false;
+              else {
+                const condition = required.visibilityCondition === undefined ? "ABSENT"
+                  : !view.allowed ? "SKIPPED_VIEW" : ancestorHidden ? "SKIPPED_ANCESTOR"
+                  : conditionAllowed === true ? "TRUE" : "NOT_TRUE";
+                observed.push(Object.freeze({
+                  placementId: required.placementId,
+                  ancestorPlacementIds: Object.freeze([...required.ancestorPlacementIds]),
+                  viewGate: required.viewPermissionKey === undefined ? "ABSENT"
+                    : view.allowed ? "ALLOWED" : "REFUSED",
+                  condition,
+                  conditionReason: condition === "ABSENT" || condition === "SKIPPED_VIEW" ||
+                    condition === "SKIPPED_ANCESTOR" ? condition
+                    : dependencies.visibilityConditionReason?.() ?? "UNKNOWN",
+                  useState: required.usePermissionKey === undefined &&
+                    binding.operationRequired !== true && !binding.operationBound ? "PLAIN_CONTENT"
+                    : use.allowed && binding.operationBound ? "AVAILABLE" : "DISABLED",
+                }));
+              }
+            } catch {
+              observationValid = false;
+            }
+          }
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
-        return projectPageCapability(resolved, {
+        const projected = projectPageCapability(resolved, {
           pageAllowed: true,
           placements: states,
           accessVersion: scope.accessVersion,
@@ -233,6 +288,16 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ? {}
             : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
         });
+        if (projected !== undefined && observationValid) {
+          try {
+            observer?.call(dependencies, Object.freeze({
+              placements: Object.freeze(observed),
+            }));
+          } catch {
+            // A diagnostic sink never changes the original return or genuine error.
+          }
+        }
+        return projected;
       }),
   });
 };
