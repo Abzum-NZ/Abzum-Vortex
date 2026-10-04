@@ -306,7 +306,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         <button type="button" className={buttonClass} disabled={state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</button>
       </div>
       <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingComposition
-        ? "Apply or discard size inputs before saving or undoing." : pendingAppearance
+        ? "Apply or discard composition inputs before saving or undoing." : pendingAppearance
         ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
         ? "Apply or discard the inspector text before saving or undoing." : state.isDirty
           ? "Unsaved local changes." : "Local history matches the saved baseline."} {message}</p>
@@ -315,7 +315,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
         <ul><Outline node={outline} selectedKey={selectionKey} choose={(node) => {
           if (reopening.current || ((pendingLabels || appearancePending.current || compositionPending.current) &&
-            !window.confirm("Discard unapplied inspector, appearance and size edits and change selection?"))) return;
+            !window.confirm("Discard unapplied inspector, appearance and composition edits and change selection?"))) return;
           setAppearanceEpoch((value) => value + 1);
           reportAppearancePending(false);
           setCompositionEpoch((value) => value + 1);
@@ -345,8 +345,11 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
               if (result.kind !== "applied") return result.kind;
               // No async boundary: still require the same history source and lifetime at the edit.
               const latest = history.getState();
+              const latestSelection = selection.getSelection();
               if (!active.current || reopening.current || latest.isSaving || latest.source !== current.source ||
                 latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                latestSelection === null ||
+                studioSemanticSelectionKey(latestSelection) !== studioSemanticSelectionKey(expectedSelection) ||
                 lifetime.current !== currentContext.localLifetime) return "stale";
               if (!history.edit(result.source)) return "invalid";
               setMessage("Composition applied to local history. Save to persist it.");

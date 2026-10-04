@@ -31,7 +31,18 @@ export type StudioCompositionContext = Readonly<{
 
 export type StudioCompositionCommand =
   | Readonly<{ kind: "order"; breakpoint: StudioCompositionBreakpoint; order: readonly string[] | null }>
-  | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>;
+  | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>
+  | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>;
+
+export type StudioCompositionDestination =
+  | Readonly<{ kind: "root" }>
+  | Readonly<{ kind: "child"; parentAlias: string; slotKey: string }>;
+
+export type StudioCompositionDestinationModel =
+  | Readonly<{ kind: "available"; destinations: readonly Readonly<{
+      destination: StudioCompositionDestination; label: string;
+    }>[] }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionCommandResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
@@ -53,6 +64,7 @@ export type StudioCompositionEditorModel =
 
 type Region = {
   slot: SourceSlot;
+  ordinaryMain?: boolean;
   shell?: SourceShell;
   parent?: SourcePlacement;
   replace: (slot: SourceSlot, shell?: SourceShell) => void;
@@ -137,7 +149,8 @@ const regions = (source: ApplicationSourceDocumentV2): Region[] => {
       // The discriminated page is used here so guided step content cannot be inferred.
       const ordinary = page.composition;
       if (ordinary.shell_kind === "default")
-        result.push({ slot: ordinary.main, replace: (replacement) => { ordinary.main = replacement; } });
+        result.push({ slot: ordinary.main, ordinaryMain: true,
+          replace: (replacement) => { ordinary.main = replacement; } });
     } else {
       const ordinary = page.composition;
       if (ordinary.shell_kind === "application")
@@ -199,6 +212,106 @@ const resolve = (context: StudioCompositionContext, selection: StudioSemanticSel
   return target === undefined ? undefined : { source, target, alias: selection.placementAlias };
 };
 
+type MoveDestination = {
+  destination: StudioCompositionDestination; label: string; steps: readonly SlotStep[];
+};
+const sameSteps = (left: readonly SlotStep[], right: readonly SlotStep[]): boolean =>
+  left.length === right.length && left.every((step, index) =>
+    step.parentAlias === right[index]?.parentAlias && step.slotKey === right[index]?.slotKey);
+
+/** Only actual non-repeatable slots in this original ordinary region are destinations. */
+const moveDestinations = (target: Target, alias: string): MoveDestination[] => {
+  if (target.region.ordinaryMain !== true) return [];
+  const subtree = new Set<string>([alias]);
+  const descendants = (slot: SourceSlot): void => {
+    for (const [id, placement] of Object.entries(slot.placements)) {
+      subtree.add(id);
+      for (const child of Object.values(placement.slots)) descendants(child);
+    }
+  };
+  for (const child of Object.values(target.placement.slots)) descendants(child);
+  const movedRelease = releaseFor(target.placement) ?? refuse();
+  const result: MoveDestination[] = [];
+  let selectedPathSupported = target.steps.length === 0;
+  const visit = (slot: SourceSlot, steps: readonly SlotStep[]): void => {
+    if (sameSteps(steps, target.steps)) selectedPathSupported = true;
+    for (const [parentAlias, placement] of Object.entries(slot.placements)) {
+      if (subtree.has(parentAlias)) continue;
+      const release = releaseFor(placement) ?? refuse();
+      for (const declaration of release.slots) {
+        if (declaration.repeats !== undefined) continue;
+        const child = placement.slots[declaration.key];
+        if (child === undefined) continue;
+        const childSteps = [...steps, { parentAlias, slotKey: declaration.key }];
+        if (!sameSteps(childSteps, target.steps) &&
+          declaration.allowedChildCategories.includes(movedRelease.paletteGroup))
+          result.push({ destination: { kind: "child", parentAlias, slotKey: declaration.key },
+            label: `${parentAlias} / ${declaration.label}`, steps: childSteps });
+        visit(child, childSteps);
+      }
+    }
+  };
+  if (target.steps.length > 0) result.push({ destination: { kind: "root" },
+    label: "This page's main region", steps: [] });
+  visit(target.region.slot, []);
+  return selectedPathSupported ? result : [];
+};
+
+const closedPlain = (value: unknown, keys: readonly string[]): Record<string, unknown> => {
+  const record = object(value);
+  const prototype = Object.getPrototypeOf(record);
+  const own = Reflect.ownKeys(record);
+  if ((prototype !== Object.prototype && prototype !== null) || own.length !== keys.length ||
+    own.some((key) => typeof key !== "string" || !keys.includes(key)) ||
+    Object.values(Object.getOwnPropertyDescriptors(record)).some((property) =>
+      property.get !== undefined || property.set !== undefined)) return refuse();
+  return record;
+};
+const parseDestination = (value: unknown): StudioCompositionDestination => {
+  const candidate = object(value);
+  // Read the discriminant only after rejecting accessors and non-plain objects.
+  const descriptor = Object.getOwnPropertyDescriptor(candidate, "kind");
+  if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined)
+    return refuse();
+  if (descriptor.value === "root") {
+    closedPlain(candidate, ["kind"]);
+    return { kind: "root" };
+  }
+  const child = closedPlain(candidate, ["kind", "parentAlias", "slotKey"]);
+  if (child.kind !== "child" || typeof child.parentAlias !== "string" || child.parentAlias.length === 0 ||
+    typeof child.slotKey !== "string" || child.slotKey.length === 0) return refuse();
+  return { kind: "child", parentAlias: child.parentAlias, slotKey: child.slotKey };
+};
+const sameDestination = (left: StudioCompositionDestination, right: StudioCompositionDestination): boolean =>
+  left.kind === "root" ? right.kind === "root" : right.kind === "child" &&
+    left.parentAlias === right.parentAlias && left.slotKey === right.slotKey;
+
+const privateContentAt = (root: unknown, steps: readonly SlotStep[]): unknown[] => {
+  let content = root;
+  for (const step of steps) {
+    if (!Array.isArray(content)) return refuse();
+    const matches = content.filter((value: unknown) => object(object(value).props).id === step.parentAlias);
+    if (matches.length !== 1) return refuse();
+    content = object(object(matches[0]).props)[`slot_${step.slotKey}`];
+  }
+  if (!Array.isArray(content)) return refuse();
+  return content;
+};
+
+export const describeStudioCompositionDestinations = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null): StudioCompositionDestinationModel => {
+  try {
+    const resolved = resolve(context, selection);
+    if (resolved === undefined) return { kind: "invalid" };
+    const { target, source, alias } = resolved;
+    if (target.region.ordinaryMain !== true || !manifestMatches(source, target.region.slot))
+      return { kind: "unsupported" };
+    bridge.toPuckData(target.region.slot);
+    return { kind: "available", destinations: moveDestinations(target, alias).map(({ destination, label }) =>
+      ({ destination, label })) };
+  } catch { return { kind: "invalid" }; }
+};
+
 export const describeStudioCompositionEdit = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null, breakpoint: StudioCompositionBreakpoint): StudioCompositionEditorModel => {
   try {
@@ -231,13 +344,36 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
   command: StudioCompositionCommand): StudioCompositionCommandResult => {
   try {
     if (!sameContext(expected, current)) return { kind: "stale" };
-    if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
+    const kind = Object.getOwnPropertyDescriptor(command, "kind");
+    if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;
     if (!manifestMatches(source, target.region.slot) ||
       (target.region.parent !== undefined && !pinnedRelease(source, target.region.parent)))
       return { kind: "unsupported" };
+    if (command.kind === "move") {
+      closedPlain(command, ["kind", "destination"]);
+      if (target.region.ordinaryMain !== true) return { kind: "unsupported" };
+      const destination = parseDestination(command.destination);
+      const resolvedDestination = moveDestinations(target, alias).find((candidate) =>
+        sameDestination(candidate.destination, destination));
+      if (resolvedDestination === undefined) return { kind: "invalid" };
+      const data = bridge.toPuckData(target.region.slot);
+      const from = privateContentAt(data.content, target.steps);
+      const to = privateContentAt(data.content, resolvedDestination.steps);
+      const index = from.findIndex((value: unknown) => object(object(value).props).id === alias);
+      if (index < 0 || from === to) return { kind: "invalid" };
+      // Transfer the whole original private node. Its source-origin order hints
+      // must never be rewritten to impersonate the destination baseline.
+      const moved = from.splice(index, 1)[0];
+      if (moved === undefined) return refuse();
+      to.push(moved);
+      target.region.replace(bridge.fromPuckData(target.region.slot, data));
+      const parsed = applicationSourceDocumentV2Schema.parse(source);
+      return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
+    }
+    if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
     const commandKeys = Reflect.ownKeys(command);
     const allowedKeys = command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];
     if (commandKeys.length !== 3 || commandKeys.some((key) => typeof key !== "string" || !allowedKeys.includes(key)))
