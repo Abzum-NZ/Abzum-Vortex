@@ -127,6 +127,27 @@
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_home_favourites_remove_tile",
+        "key": "vortex.app.events.home_favourites_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_favourites_tiles_remove_tile",
+        "key": "vortex.app.events.favourites_tiles_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_bookmarks_tiles_remove_tile",
+        "key": "vortex.app.events.bookmarks_tiles_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
