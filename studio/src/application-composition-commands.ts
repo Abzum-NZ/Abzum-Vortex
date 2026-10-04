@@ -42,10 +42,18 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
   | Readonly<{ kind: "settings"; settings: StudioCompositionTextSettings }>
+  | Readonly<{ kind: "scalar_settings"; settings: StudioCompositionScalarSettings }>
   | Readonly<{ kind: "add"; blockId: string; releaseVersion: string; alias: string;
       settings: StudioCompositionTextSettings }>;
 
 export type StudioCompositionTextSettings = Readonly<Record<string, Readonly<{ kind: "text"; value: string }>>>;
+export type StudioCompositionScalarSettings = Readonly<Record<string,
+  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }>>>;
+type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" }>;
+export type StudioCompositionScalarSettingsModel =
+  | Readonly<{ kind: "available"; placementAlias: string; properties: readonly ScalarProperty[];
+      settings: StudioCompositionScalarSettings }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
 export type StudioCompositionPaletteChoice = Readonly<{
   id: string; blockId: string; releaseVersion: string; key: string; name: string;
   properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" }>[];
@@ -486,7 +494,8 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
 };
 
 /** Setting changes retain identity, so Flow references and required content do not block them. */
-const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null) => {
+const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
+  eligible: (release: PlatformBlockReleaseV2) => boolean = eligibleAddRelease) => {
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
@@ -497,7 +506,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
     target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
-  if (release === undefined || !eligibleAddRelease(release) || Object.keys(target.placement.slots).length !== 0 ||
+  if (release === undefined || !eligible(release) || Object.keys(target.placement.slots).length !== 0 ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
   for (const step of target.steps) {
@@ -556,6 +565,73 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   if (matches.length !== 1) return { kind: "invalid" };
   object(object(matches[0]).props).settings = structuredClone(settings);
   // Original source-order and breakpoint provenance remain the inverse's baseline.
+  target.region.replace(bridge.fromPuckData(target.region.slot, data));
+  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
+};
+
+const scalarProperty = (property: BlockPropertySchemaV2Contract): property is ScalarProperty =>
+  property.kind === "boolean" || property.kind === "choice";
+const eligibleScalarRelease = (release: PlatformBlockReleaseV2): boolean =>
+  release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
+  release.supportedEvents.every((event) => event === "refresh") && release.properties.some(scalarProperty);
+
+/** The command supplies only editable scalars; omitted keys deliberately stay omitted. */
+const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): StudioCompositionScalarSettings => {
+  const raw = object(value);
+  closedPlain(raw, properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
+  const settings: Record<string, { kind: "boolean"; value: boolean } | { kind: "choice"; value: string }> = {};
+  for (const property of properties) {
+    if (!Object.hasOwn(raw, property.key)) continue;
+    const supplied = closedPlain(raw[property.key], ["kind", "value"]);
+    if (property.kind === "boolean" && supplied.kind === "boolean" && typeof supplied.value === "boolean")
+      settings[property.key] = { kind: "boolean", value: supplied.value };
+    else if (property.kind === "choice" && supplied.kind === "choice" && typeof supplied.value === "string" &&
+      property.options.some((option) => option.key === supplied.value))
+      settings[property.key] = { kind: "choice", value: supplied.value };
+    else return refuse();
+  }
+  return settings;
+};
+
+export const describeStudioCompositionScalarSettings = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null): StudioCompositionScalarSettingsModel => {
+  try {
+    const resolved = resolveSettings(context, selection, eligibleScalarRelease);
+    if (resolved.kind !== "available") return resolved;
+    const properties = resolved.release.properties.filter(scalarProperty);
+    const supplied: Record<string, unknown> = {};
+    for (const property of properties)
+      if (Object.hasOwn(resolved.target.placement.settings, property.key))
+        supplied[property.key] = resolved.target.placement.settings[property.key];
+    if (validateComponentSettings(resolved.target.placement.settings, resolved.release.properties).length > 0)
+      return { kind: "invalid" };
+    return { kind: "available", placementAlias: resolved.alias, properties,
+      settings: scalarSettings(supplied, properties) };
+  } catch { return { kind: "invalid" }; }
+};
+
+const applyScalarSettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
+  command: unknown): StudioCompositionCommandResult => {
+  const input = closedPlain(command, ["kind", "settings"]);
+  if (input.kind !== "scalar_settings") return { kind: "invalid" };
+  const resolved = resolveSettings(current, selection, eligibleScalarRelease);
+  if (resolved.kind !== "available") return resolved;
+  const properties = resolved.release.properties.filter(scalarProperty);
+  const supplied = scalarSettings(input.settings, properties);
+  const settings = { ...resolved.target.placement.settings };
+  for (const property of properties) delete settings[property.key];
+  for (const key of Object.keys(supplied)) {
+    const value = supplied[key];
+    if (value !== undefined) settings[key] = value;
+  }
+  // Validate the complete merge, including untouched structured content and required fields.
+  if (validateComponentSettings(settings, resolved.release.properties).length > 0) return { kind: "invalid" };
+  const { source, target, alias } = resolved;
+  const data = bridge.toPuckData(target.region.slot);
+  const matches = privateContentAt(data.content, target.steps).filter((value) => object(object(value).props).id === alias);
+  if (matches.length !== 1) return { kind: "invalid" };
+  object(object(matches[0]).props).settings = structuredClone(settings);
   target.region.replace(bridge.fromPuckData(target.region.slot, data));
   const parsed = applicationSourceDocumentV2Schema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
@@ -773,6 +849,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     if (command.kind === "add") return applyAdd(current, selection, command);
     if (command.kind === "remove") return applyRemoval(current, selection, command);
     if (command.kind === "settings") return applySettings(current, selection, command);
+    if (command.kind === "scalar_settings") return applyScalarSettings(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;
