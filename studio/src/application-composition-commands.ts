@@ -3,7 +3,6 @@ import {
   applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
   organizationIdSchema,
-  sourceAliasSchema,
   sourcePlacementLayoutV2Schema,
   sourcePlacementSlotV2Schema,
   type ApplicationRootId,
@@ -419,7 +418,8 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "alias", "settings"]);
   if (input.kind !== "add" || typeof input.blockId !== "string" || typeof input.releaseVersion !== "string")
     return { kind: "invalid" };
-  const alias = sourceAliasSchema.parse(input.alias);
+  // The public source document exposes the same portable source-alias schema.
+  const alias = applicationSourceDocumentV2Schema.shape.root_alias.parse(input.alias);
   const target = resolveAdd(current, selection);
   if (target.kind !== "available") return target;
   const release = releases.get(`${input.blockId}:${input.releaseVersion}`);
