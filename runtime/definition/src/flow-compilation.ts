@@ -308,9 +308,9 @@ const resolveProperty = (
       return member((record, alias) => ctx.resolver.relationship(record, alias));
     case "field_values": {
       // A literal set of values names its fields by alias; a reference or formula names none. A
-      // map value is refused: its entries would resolve at run time while its field names stayed
-      // the readable aliases this branch exists to resolve.
-      if (value.kind === "map")
+      // constructed map is refused because its field aliases would remain unresolved; an array
+      // is not a named field map. Neither may bypass the literal identity-resolution branch.
+      if (value.kind === "map" || value.kind === "array")
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
       if (value.kind !== "literal") return value;
       const literal = value.literal.value;
@@ -341,9 +341,9 @@ const resolveProperty = (
     }
     case "record_change_list":
       // A literal change list names record types and fields that have no declared shape to
-      // resolve here, so it is refused rather than kept with readable aliases. A map value is
-      // refused for the same reason: it is an object, never the ordered change list itself.
-      if (value.kind === "literal" || value.kind === "map")
+      // resolve here, so it is refused rather than kept with readable aliases. Constructed maps
+      // and arrays are refused too: neither proves canonical record and field identities.
+      if (value.kind === "literal" || value.kind === "map" || value.kind === "array")
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
       return value;
     default:

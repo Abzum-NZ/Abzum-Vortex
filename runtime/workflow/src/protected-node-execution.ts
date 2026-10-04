@@ -361,13 +361,25 @@ const evaluateValue = (
         now,
         reference: resolveReference,
       });
-    const entries: Record<string, JsonValue> = {};
-    for (const [name, entry] of Object.entries(source.entries)) {
-      const resolved = resolveValue(entry);
-      if (resolved === undefined) return undefined;
-      entries[name] = resolved.value;
+    if (source.kind === "map") {
+      const entries: Record<string, JsonValue> = {};
+      for (const [name, entry] of Object.entries(source.entries)) {
+        const resolved = resolveValue(entry);
+        if (resolved === undefined) return undefined;
+        entries[name] = resolved.value;
+      }
+      return { type: "json", value: entries };
     }
-    return { type: "json", value: entries };
+    if (source.kind === "array") {
+      const items: JsonValue[] = [];
+      for (const item of source.items) {
+        const resolved = resolveValue(item);
+        if (resolved === undefined) return undefined;
+        items.push(resolved.value);
+      }
+      return { type: "json", value: items };
+    }
+    return undefined;
   };
   return resolveValue(value.data)?.value;
 };
