@@ -2575,9 +2575,15 @@ function ApplicationPageViewContent({
       <ApplicationAccountActionsProvider actions={accountActions}>
       <PageLayoutRenderer
         applicationSurface
-        feedback={pageFeedback === undefined && notice === undefined ? undefined : (
+        feedback={pageFeedback === undefined && notice === undefined &&
+          model.bodyContentAvailable !== false ? undefined : (
           <>
             {pageFeedback}
+            {model.bodyContentAvailable !== false ? null : (
+              <Alert role="status" aria-live="polite">
+                <AlertDescription>No page content is available.</AlertDescription>
+              </Alert>
+            )}
             {notice === undefined ? null : (
               <Alert
                 variant={notice.tone === "problem" ? "destructive" : "default"}
