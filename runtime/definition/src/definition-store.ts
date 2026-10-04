@@ -163,6 +163,15 @@ const safeStoreOperation = async <Result>(
   }
 };
 
+export type TrustedApplicationRootOriginKind = "ordinary" | "platform_system_application";
+
+type RootCreationMode =
+  | Readonly<{ kind: "ordinary" }>
+  | Readonly<{
+      kind: "trusted_application";
+      applicationOriginKind: TrustedApplicationRootOriginKind;
+    }>;
+
 /**
  * Every draft change requires `definition_drafts.manage` (and `system_applications.manage` for a
  * system application), decided by the builder authority before anything is stored. The authority
@@ -171,13 +180,29 @@ const safeStoreOperation = async <Result>(
 export const createDefinitionStore = (
   transaction: RequestDatabaseTransaction,
   authority: BuilderAuthority,
-) => ({
-  async createRoot(candidate: CreateDefinitionRootCommand): Promise<StoredDefinitionDraft> {
+) => {
+  const createRoot = async (
+    candidate: CreateDefinitionRootCommand,
+    mode: RootCreationMode,
+  ): Promise<StoredDefinitionDraft> => {
     await requireBuilderAuthority(authority, { kind: "draft_change" });
     return safeStoreOperation("create_root", async () => {
       const command = createDefinitionRootCommandSchema.safeParse(candidate);
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
       const source = validateSource(command.data.source);
+      if (
+        mode.kind === "trusted_application" &&
+        (source.kind !== "application" ||
+          (mode.applicationOriginKind !== "ordinary" &&
+            mode.applicationOriginKind !== "platform_system_application"))
+      )
+        throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      const applicationOriginKind =
+        source.kind === "module"
+          ? null
+          : mode.kind === "trusted_application"
+            ? mode.applicationOriginKind
+            : "ordinary";
       const sourceFingerprint = fingerprintCanonicalValue(source);
       const identityRequirements = extractStoredSourceIdentityRequirements(source);
       const rows = await transaction.query<StoredDraftRow>`
@@ -187,40 +212,53 @@ export const createDefinitionStore = (
           ${source.key},
           ${JSON.stringify(source)}::text::jsonb,
           ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}::text::jsonb
+          ${JSON.stringify(identityRequirements)}::text::jsonb,
+          ${applicationOriginKind}::text
         )
       `;
       if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
       return parseStoredDraft(rows[0]!);
     });
-  },
+  };
 
-  async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
-    const rootId = saveDefinitionDraftCommandSchema.safeParse(candidate);
-    if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
-    await requireBuilderAuthority(authority, { kind: "draft_change", rootId: rootId.data.rootId });
-    return safeStoreOperation("save_draft", async () => {
-      const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
-      if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
-      const source = validateSource(command.data.source);
-      const sourceFingerprint = fingerprintCanonicalValue(source);
-      const identityRequirements = extractStoredSourceIdentityRequirements(source);
-      const rows = await transaction.query<StoredDraftRow>`
-        select *
-        from vortex_definition.save_draft(
-          ${command.data.rootId},
-          ${command.data.expectedDraftRevision},
-          ${JSON.stringify(source)}::text::jsonb,
-          ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}::text::jsonb
-        )
-      `;
-      if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
-      return parseStoredDraft(rows[0]!);
-    });
-  },
-});
+  return {
+    createRoot: (candidate: CreateDefinitionRootCommand): Promise<StoredDefinitionDraft> =>
+      createRoot(candidate, { kind: "ordinary" }),
+
+    /** Trusted server descriptors supply provenance separately from the strict public command. */
+    createTrustedApplicationRoot: (
+      candidate: CreateDefinitionRootCommand,
+      applicationOriginKind: TrustedApplicationRootOriginKind,
+    ): Promise<StoredDefinitionDraft> =>
+      createRoot(candidate, { kind: "trusted_application", applicationOriginKind }),
+
+    async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
+      const rootId = saveDefinitionDraftCommandSchema.safeParse(candidate);
+      if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      await requireBuilderAuthority(authority, { kind: "draft_change", rootId: rootId.data.rootId });
+      return safeStoreOperation("save_draft", async () => {
+        const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
+        if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+        const source = validateSource(command.data.source);
+        const sourceFingerprint = fingerprintCanonicalValue(source);
+        const identityRequirements = extractStoredSourceIdentityRequirements(source);
+        const rows = await transaction.query<StoredDraftRow>`
+          select *
+          from vortex_definition.save_draft(
+            ${command.data.rootId},
+            ${command.data.expectedDraftRevision},
+            ${JSON.stringify(source)}::text::jsonb,
+            ${sourceFingerprint},
+            ${JSON.stringify(identityRequirements)}::text::jsonb
+          )
+        `;
+        if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+        return parseStoredDraft(rows[0]!);
+      });
+    },
+  };
+};
 
 export const createDefinitionRoot = (
   transaction: RequestDatabaseTransaction,

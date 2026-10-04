@@ -19,7 +19,11 @@ import {
 import { createConfiguredTenantAdministrationService } from "@vortex/identity";
 import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createRecordSaveService } from "@vortex/record";
-import { developmentPublicationCatalogue, publishShippedDefinitions } from "./definitions";
+import {
+  developmentPublicationCatalogue,
+  publishShippedDefinitions,
+  verifyRecordedShippedApplicationRoots,
+} from "./definitions";
 import { installApplications, type InstallFacts } from "./install";
 import { grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
@@ -230,6 +234,8 @@ const main = async (): Promise<void> => {
 
   let releases: InstallFacts["releases"];
   if (state.setupCompleted) {
+    // Check existing roots before either completed reuse or marking an upgrade incomplete.
+    await verifyRecordedShippedApplicationRoots(system, manifest.applicationKeys, state);
     const missingApplications = manifest.applicationKeys.filter(
       (key) => state.releases[key] === undefined,
     );
