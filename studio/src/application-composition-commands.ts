@@ -44,9 +44,12 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "settings"; settings: StudioCompositionTextSettings }>
   | Readonly<{ kind: "scalar_settings"; settings: StudioCompositionScalarSettings }>
   | Readonly<{ kind: "add"; blockId: string; releaseVersion: string; alias: string;
-      settings: StudioCompositionTextSettings }>;
+      settings: StudioCompositionAddSettings }>;
 
 export type StudioCompositionTextSettings = Readonly<Record<string, Readonly<{ kind: "text"; value: string }>>>;
+export type StudioCompositionAddSettings = Readonly<Record<string,
+  Readonly<{ kind: "text"; value: string }> | Readonly<{ kind: "boolean"; value: boolean }> |
+  Readonly<{ kind: "choice"; value: string }>>>;
 export type StudioCompositionScalarSettings = Readonly<Record<string,
   Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }>>>;
 type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" }>;
@@ -56,7 +59,8 @@ export type StudioCompositionScalarSettingsModel =
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 export type StudioCompositionPaletteChoice = Readonly<{
   id: string; blockId: string; releaseVersion: string; key: string; name: string;
-  properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" }>[];
+  properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" | "boolean" | "choice" }>[];
+  slots: readonly Readonly<{ key: string; label: string }>[];
 }>;
 export type StudioCompositionPaletteModel =
   | Readonly<{ kind: "available"; choices: readonly StudioCompositionPaletteChoice[] }>
@@ -371,8 +375,18 @@ const eligibleAddRelease = (release: PlatformBlockReleaseV2): boolean =>
   release.capabilities.accessibleName === "optional" && release.supportedStateOperations.length === 0 &&
   release.supportedEvents.every((event) => event === "refresh");
 
+/** Empty fixed slots need no child identity, reference resolution or required seed content. */
+const eligibleLayoutAddRelease = (release: PlatformBlockReleaseV2): boolean =>
+  release.paletteGroup === "layout" && release.slots.length > 0 &&
+  release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
+  release.properties.every((property) => !property.required &&
+    (property.kind === "boolean" || property.kind === "choice")) &&
+  release.capabilities.accessibleName === "not_applicable" &&
+  release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
+
 type AddTarget =
-  | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot; replace: (slot: SourceSlot) => void }
+  | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot;
+      layoutAllowed: boolean; replace: (slot: SourceSlot) => void }
   | { kind: "invalid" | "unsupported" };
 const resolveAdd = (context: StudioCompositionContext, selection: StudioSemanticSelection | null): AddTarget => {
   if (selection?.kind !== "page") return { kind: "invalid" };
@@ -399,18 +413,22 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   const composition = page.composition;
   if (!manifestMatches(source, composition.main)) return { kind: "unsupported" };
   return { kind: "available", source, main: composition.main,
+    layoutAllowed: (page.type === "list" || page.type === "detail" || page.type === "dashboard") &&
+      !source.body.public_addresses.some((address) => address.page === page.id) &&
+      !source.body.experiences?.some((experience) => experience.page === page.key),
     replace: (slot) => { composition.main = slot; } };
 };
 
-const addChoices = (searchText: string, authoredAlias: string): StudioCompositionPaletteChoice[] => {
+const addChoices = (searchText: string, authoredAlias: string, layoutAllowed: boolean): StudioCompositionPaletteChoice[] => {
   // This surface describes an already resolved nonpublic page; it grants no authority.
   const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
   return getStudioContextualPaletteGroups(discovery, { kind: "page" }, searchText)
     .flatMap((group) => group.choices).flatMap((choice) => {
       const release = releases.get(`${choice.blockId}:${choice.releaseVersion}`);
-      if (release === undefined || !eligibleAddRelease(release)) return [];
+      if (release === undefined || (!eligibleAddRelease(release) &&
+        !(layoutAllowed && eligibleLayoutAddRelease(release)))) return [];
       const properties = release.properties.map((property) => {
-        if (property.kind !== "text") return refuse();
+        if (property.kind !== "text" && property.kind !== "boolean" && property.kind !== "choice") return refuse();
         return property;
       });
       // Optional declarations must really accept omission and the native seed.
@@ -418,15 +436,18 @@ const addChoices = (searchText: string, authoredAlias: string): StudioCompositio
       // never a generated placement identity. This detached seed is not persisted.
       bridge.toPuckData(seedSlot(release, authoredAlias, {}));
       return [{ id: choice.id, blockId: release.blockId, releaseVersion: release.releaseVersion,
-        key: release.key, name: release.name, properties }];
+        key: release.key, name: release.name, properties,
+        slots: release.slots.map((slot) => ({ key: slot.key, label: slot.label })) }];
     });
 };
 
 const seedSlot = (release: PlatformBlockReleaseV2, alias: string,
-  settings: StudioCompositionTextSettings): SourceSlot => ({
+  settings: StudioCompositionAddSettings): SourceSlot => ({
   placements: { [alias]: {
     block: { block_id: release.blockId, release_version: release.releaseVersion },
-    settings: structuredClone(settings), theme_overrides: {}, slots: {},
+    settings: structuredClone(settings), theme_overrides: {},
+    slots: Object.fromEntries(release.slots.map((slot) =>
+      [slot.key, { placements: {}, order: { desktop: [] } }])),
     responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
   } }, order: { desktop: [alias] },
 });
@@ -436,7 +457,8 @@ export const describeStudioCompositionPalette = (context: StudioCompositionConte
   try {
     if (selection?.kind !== "page") return { kind: "invalid" };
     const target = resolveAdd(context, selection);
-    return target.kind === "available" ? { kind: "available", choices: addChoices(searchText, selection.pageAlias) } : target;
+    return target.kind === "available"
+      ? { kind: "available", choices: addChoices(searchText, selection.pageAlias, target.layoutAllowed) } : target;
   } catch { return { kind: "invalid" }; }
 };
 
@@ -450,8 +472,10 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   const target = resolveAdd(current, selection);
   if (target.kind !== "available") return target;
   const release = releases.get(`${input.blockId}:${input.releaseVersion}`);
-  if (release === undefined || !eligibleAddRelease(release) ||
-    !addChoices("", alias).some((choice) => choice.blockId === input.blockId && choice.releaseVersion === input.releaseVersion))
+  if (release === undefined || (!eligibleAddRelease(release) &&
+    !(target.layoutAllowed && eligibleLayoutAddRelease(release))) ||
+    !addChoices("", alias, target.layoutAllowed).some((choice) =>
+      choice.blockId === input.blockId && choice.releaseVersion === input.releaseVersion))
     return { kind: "unsupported" };
   const allSlots = regions(target.source).map((region) => region.slot);
   while (allSlots.length > 0) {
@@ -465,12 +489,21 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
     return { kind: "invalid" };
   closedPlain(rawSettings, release.properties.filter((property) => Object.hasOwn(rawSettings, property.key))
     .map((property) => property.key));
-  const settings: Record<string, { kind: "text"; value: string }> = {};
+  const settings: Record<string, { kind: "text"; value: string } | { kind: "boolean"; value: boolean } |
+    { kind: "choice"; value: string }> = {};
   for (const key of Object.getOwnPropertyNames(rawSettings)) {
-    const text = closedPlain(rawSettings[key], ["kind", "value"]);
-    if (text.kind !== "text" || typeof text.value !== "string") return { kind: "invalid" };
-    settings[key] = { kind: "text", value: text.value };
+    const property = release.properties.find((declaration) => declaration.key === key);
+    const value = closedPlain(rawSettings[key], ["kind", "value"]);
+    if (property?.kind === "text" && value.kind === "text" && typeof value.value === "string")
+      settings[key] = { kind: "text", value: value.value };
+    else if (property?.kind === "boolean" && value.kind === "boolean" && typeof value.value === "boolean")
+      settings[key] = { kind: "boolean", value: value.value };
+    else if (property?.kind === "choice" && value.kind === "choice" && typeof value.value === "string" &&
+      property.options.some((option) => option.key === value.value))
+      settings[key] = { kind: "choice", value: value.value };
+    else return { kind: "invalid" };
   }
+  if (validateComponentSettings(settings, release.properties).length > 0) return { kind: "invalid" };
   const seed = bridge.toPuckData(seedSlot(release, alias, settings));
   if (seed.content.length !== 1) return { kind: "invalid" };
   const data = bridge.toPuckData(target.main);
