@@ -149,7 +149,7 @@ const readHumanContext = async (
   session: IdentitySession,
 ): Promise<SessionContext> => {
   const rows = await transaction.query<ContextRow>`
-    select vortex_access.validated_human_request_context() as request_context
+    select vortex_access.validated_human_request_context() - 'channel' as request_context
   `;
   const parsed =
     rows.length === 1 ? sessionContextSchema.safeParse(rows[0]?.request_context) : undefined;
