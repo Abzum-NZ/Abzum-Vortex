@@ -335,6 +335,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
               const current = history.getState();
               const currentSelection = selection.getSelection();
               if (!active.current || reopening.current || current.isSaving || pendingLabels || appearancePending.current ||
+                (command.kind === "remove" && compositionPending.current) ||
                 currentSelection === null || studioSemanticSelectionKey(currentSelection) !== studioSemanticSelectionKey(expectedSelection))
                 return "stale";
               const currentContext: StudioCompositionContext = {
@@ -347,6 +348,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
               const latest = history.getState();
               const latestSelection = selection.getSelection();
               if (!active.current || reopening.current || latest.isSaving || latest.source !== current.source ||
+                (command.kind === "remove" && (pendingLabels || appearancePending.current || compositionPending.current)) ||
                 latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
                 latestSelection === null ||
                 studioSemanticSelectionKey(latestSelection) !== studioSemanticSelectionKey(expectedSelection) ||

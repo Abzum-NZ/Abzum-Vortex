@@ -5,6 +5,7 @@ import {
   describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
   describeStudioCompositionPalette,
+  describeStudioCompositionRemoval,
   studioSemanticSelectionKey,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
@@ -184,6 +185,8 @@ function PlacementCompositionEditor(props: Props) {
     [props.context, props.selection, breakpoint]);
   const moveModel = useMemo(() => describeStudioCompositionDestinations(props.context, props.selection),
     [props.context, props.selection]);
+  const removalModel = useMemo(() => describeStudioCompositionRemoval(props.context, props.selection),
+    [props.context, props.selection]);
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const [destinationKey, setDestinationKey] = useState("");
   const movePending = useRef(false);
@@ -231,12 +234,31 @@ function PlacementCompositionEditor(props: Props) {
   };
   const run = (command: StudioCompositionCommand) => {
     if (props.disabled) return;
+    if (command.kind === "remove" && (pending.current || movePending.current)) return;
     if (command.kind === "move" ? pending.current : movePending.current) return;
     if (formContext.current !== props.context || formBreakpoint.current !== breakpoint) {
       setMessage("The draft context changed. Wait for the current controls before applying.");
       return;
     }
-    const result = props.onCommand(formContext.current, props.selection, command);
+    const expected = formContext.current;
+    const expectedSelection = props.selection;
+    if (command.kind === "remove") {
+      const removal = describeStudioCompositionRemoval(expected, expectedSelection);
+      if (removal.kind !== "available") {
+        setMessage("This placement cannot be removed. Its source and your inputs are preserved.");
+        return;
+      }
+      const confirmed = window.confirm(removal.willRemoveUnusedRelease
+        ? "Remove this presentation placement and its now-unused exact release dependency from local history? Save remains separate."
+        : "Remove this presentation placement from local history? Its release dependency is still used elsewhere. Save remains separate.");
+      if (!confirmed) return;
+      if (props.disabled || pending.current || movePending.current || formContext.current !== expected ||
+        formBreakpoint.current !== breakpoint) {
+        setMessage("The draft or inputs changed. No removal was applied.");
+        return;
+      }
+    }
+    const result = props.onCommand(expected, expectedSelection, command);
     if (result === "applied") {
       pending.current = false;
       movePending.current = false;
@@ -380,6 +402,19 @@ function PlacementCompositionEditor(props: Props) {
         ? "Moves are supported only within an ordinary page's main region with known block releases."
         : "No other compatible existing destination is available for this placement."}</p>}
     </form>
+    <section className="space-y-2" aria-label="Remove presentation placement">
+      <p className="text-sm">Remove only an unreferenced released presentation placement. Flows and other source fields are retained. Save remains separate.</p>
+      <button type="button" className={buttonClass}
+        disabled={props.disabled || dirty || moveDirty || removalModel.kind !== "available"}
+        onClick={() => run({ kind: "remove" })}>Remove placement</button>
+      {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
+        ? "This slot requires its remaining placement."
+        : removalModel.reason === "unresolved_target"
+          ? "A declared placement target cannot be resolved safely. Removal is unavailable."
+          : "A Flow still refers to this placement. Removal is unavailable."}</p>}
+      {(removalModel.kind === "invalid" || removalModel.kind === "unsupported") &&
+        <p role="status">Removal is available only for supported presentation placements in private list, detail or dashboard main regions.</p>}
+    </section>
     <p role="status" aria-live="polite">{message}</p>
   </section>;
 }
