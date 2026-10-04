@@ -8,6 +8,7 @@ import {
   flowMaximumTaskNestingDepth,
   sourcePlacementLayoutV2Schema,
   sourcePlacementSlotV2Schema,
+  validateComponentSettings,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
@@ -40,6 +41,7 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
+  | Readonly<{ kind: "settings"; settings: StudioCompositionTextSettings }>
   | Readonly<{ kind: "add"; blockId: string; releaseVersion: string; alias: string;
       settings: StudioCompositionTextSettings }>;
 
@@ -50,6 +52,12 @@ export type StudioCompositionPaletteChoice = Readonly<{
 }>;
 export type StudioCompositionPaletteModel =
   | Readonly<{ kind: "available"; choices: readonly StudioCompositionPaletteChoice[] }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
+
+export type StudioCompositionSettingsModel =
+  | Readonly<{ kind: "available"; placementAlias: string;
+      properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" }>[];
+      settings: StudioCompositionTextSettings }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionDestination =
@@ -477,6 +485,82 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
+/** Setting changes retain identity, so Flow references and required content do not block them. */
+const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null) => {
+  plainSource(context.source);
+  const resolved = resolve(context, selection);
+  if (resolved === undefined) return { kind: "invalid" } as const;
+  const { source, target } = resolved;
+  const page = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
+    candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
+  if (page === undefined || (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
+    target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
+    source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
+  const release = releaseFor(target.placement);
+  if (release === undefined || !eligibleAddRelease(release) || Object.keys(target.placement.slots).length !== 0 ||
+    !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
+  let slot = target.region.slot;
+  for (const step of target.steps) {
+    const parent = slot.placements[step.parentAlias];
+    const declaration = parent === undefined ? undefined : releaseFor(parent)?.slots.find((item) => item.key === step.slotKey);
+    const child = parent?.slots[step.slotKey];
+    if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
+      return { kind: "unsupported" } as const;
+    slot = child;
+  }
+  bridge.toPuckData(target.region.slot);
+  return { kind: "available", ...resolved, release } as const;
+};
+
+const textSettings = (value: unknown, release: PlatformBlockReleaseV2): StudioCompositionTextSettings => {
+  const raw = object(value);
+  const keys = Reflect.ownKeys(raw);
+  if (keys.some((key) => typeof key !== "string" || !release.properties.some((property) => property.key === key)))
+    return refuse();
+  closedPlain(raw, release.properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
+  const settings: Record<string, { kind: "text"; value: string }> = {};
+  for (const key of Object.getOwnPropertyNames(raw)) {
+    const text = closedPlain(raw[key], ["kind", "value"]);
+    if (text.kind !== "text" || typeof text.value !== "string") return refuse();
+    settings[key] = { kind: "text", value: text.value };
+  }
+  if (validateComponentSettings(settings, release.properties).length > 0) return refuse();
+  return settings;
+};
+
+export const describeStudioCompositionSettings = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null): StudioCompositionSettingsModel => {
+  try {
+    const resolved = resolveSettings(context, selection);
+    if (resolved.kind !== "available") return resolved;
+    const properties = resolved.release.properties.map((property) => {
+      if (property.kind !== "text") return refuse();
+      return property;
+    });
+    return { kind: "available", placementAlias: resolved.alias, properties,
+      settings: textSettings(resolved.target.placement.settings, resolved.release) };
+  } catch { return { kind: "invalid" }; }
+};
+
+const applySettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
+  command: unknown): StudioCompositionCommandResult => {
+  const input = closedPlain(command, ["kind", "settings"]);
+  if (input.kind !== "settings") return { kind: "invalid" };
+  const resolved = resolveSettings(current, selection);
+  if (resolved.kind !== "available") return resolved;
+  const settings = textSettings(input.settings, resolved.release);
+  const { source, target, alias } = resolved;
+  const data = bridge.toPuckData(target.region.slot);
+  const content = privateContentAt(data.content, target.steps);
+  const matches = content.filter((value) => object(object(value).props).id === alias);
+  if (matches.length !== 1) return { kind: "invalid" };
+  object(object(matches[0]).props).settings = structuredClone(settings);
+  // Original source-order and breakpoint provenance remain the inverse's baseline.
+  target.region.replace(bridge.fromPuckData(target.region.slot, data));
+  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
+};
+
 /** Read only declared placement identity positions, never arbitrary literal data. */
 const removalReference = (source: ApplicationSourceDocumentV2, alias: string,
   aliases: ReadonlySet<string>): StudioCompositionRemovalReason | undefined => {
@@ -688,6 +772,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, selection, command);
     if (command.kind === "remove") return applyRemoval(current, selection, command);
+    if (command.kind === "settings") return applySettings(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;
