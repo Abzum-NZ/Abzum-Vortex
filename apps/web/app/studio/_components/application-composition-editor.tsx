@@ -15,6 +15,7 @@ import {
   type StudioCompositionContext,
   type StudioCompositionLayout,
   type StudioCompositionTextSettings,
+  type StudioCompositionAddSettings,
   type StudioCompositionScalarSettings,
   type StudioSemanticSelection,
 } from "@vortex/studio";
@@ -62,7 +63,7 @@ export function ApplicationCompositionEditor(props: Props) {
 }
 
 type AddInputs = Readonly<{
-  search: string; releaseId: string; alias: string; settings: StudioCompositionTextSettings;
+  search: string; releaseId: string; alias: string; settings: StudioCompositionAddSettings;
 }>;
 const emptyAddInputs = (): AddInputs => ({ search: "", releaseId: "", alias: "", settings: {} });
 const addInputsPending = (inputs: AddInputs): boolean => inputs.search !== "" || inputs.releaseId !== "" ||
@@ -130,12 +131,12 @@ function ApplicationCompositionPalette(props: Props) {
       setMessage("Component added to one local history entry. Save to persist it.");
     } else setMessage(result === "stale" ? "The draft or selection changed. Your inputs are preserved."
       : result === "unsupported" ? "This release or region is unsupported. Your inputs are preserved."
-        : "No component was added. Use a unique alias and valid optional text. Your inputs are preserved.");
+        : "No component was added. Use a unique alias and valid declared settings. Your inputs are preserved.");
   };
 
   return <section className="space-y-4 rounded border border-border p-4" aria-labelledby={titleId}>
     <h3 id={titleId} className="font-semibold">Add a component</h3>
-    <p className="text-sm">Add an exact released presentation component to this page's main region. Existing components and responsive orders are retained.</p>
+    <p className="text-sm">Add an exact released presentation or supported layout component to this page's main region. Existing components and responsive orders are retained.</p>
     <form className="space-y-3" onSubmit={submit} aria-describedby={hintId}>
       <fieldset className="space-y-3" disabled={props.disabled}>
         <legend className="font-medium">Released component palette</legend>
@@ -157,6 +158,9 @@ function ApplicationCompositionPalette(props: Props) {
           <input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
             value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
         <p className="text-sm">Enter a unique authored alias beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
+        {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
+          Declared slots start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing placements into them separately.
+        </p>}
         {chosen?.properties.map((property) => {
           const supplied = Object.hasOwn(inputs.settings, property.key) ? inputs.settings[property.key] : undefined;
           return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
@@ -164,15 +168,30 @@ function ApplicationCompositionPalette(props: Props) {
             <label className="flex items-center gap-2"><input type="checkbox" checked={supplied !== undefined}
               onChange={(event) => {
                 const settings = { ...inputs.settings };
-                if (event.target.checked) settings[property.key] = { kind: "text", value: "" };
+                if (event.target.checked) settings[property.key] = property.kind === "boolean"
+                  ? { kind: "boolean", value: false } : property.kind === "choice"
+                    ? { kind: "choice", value: "" } : { kind: "text", value: "" };
                 else delete settings[property.key];
                 update({ ...inputs, settings });
-              }} />Supply this optional text</label>
-            {supplied !== undefined && <label className="block space-y-1"><span>{property.label} text</span>
+              }} />{property.kind === "text" ? "Supply this optional text" : "Supply this optional setting"}</label>
+            {property.kind === "text" && supplied?.kind === "text" && <label className="block space-y-1"><span>{property.label} text</span>
               <textarea className={fieldClass} required={property.minLength > 0}
                 minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
                 onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
                   [property.key]: { kind: "text", value: event.target.value } } })} /></label>}
+            {property.kind === "boolean" && supplied?.kind === "boolean" &&
+              <label className="flex items-center gap-2"><input type="checkbox" checked={supplied.value}
+                onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
+                  [property.key]: { kind: "boolean", value: event.target.checked } } })} />{property.label} value</label>}
+            {property.kind === "choice" && supplied?.kind === "choice" &&
+              <label className="block space-y-1"><span>{property.label} value</span>
+                <select className={fieldClass} required value={supplied.value} onChange={(event) => {
+                  const value = event.target.value;
+                  if (value !== "" && !property.options.some((option) => option.key === value)) return;
+                  update({ ...inputs, settings: { ...inputs.settings, [property.key]: { kind: "choice", value } } });
+                }}><option value="">Choose a declared value</option>
+                  {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                </select></label>}
             {property.help !== undefined && <p className="text-sm">{property.help}</p>}
           </fieldset>;
         })}
@@ -183,7 +202,7 @@ function ApplicationCompositionPalette(props: Props) {
           onClick={() => update(emptyAddInputs())}>Discard add inputs</button>
       </div>
     </form>
-    <p id={hintId} className="text-sm">Optional text remains omitted until supplied. Enter or the Add button applies the same guarded command. Save persists the draft; adding does not run data or actions.</p>
+    <p id={hintId} className="text-sm">Optional settings remain omitted until supplied; declared defaults are not written. Enter or the Add button applies the same guarded command. Save persists the draft; adding does not run data or actions.</p>
     <p role="status" aria-live="polite">{message}</p>
   </section>;
 }
