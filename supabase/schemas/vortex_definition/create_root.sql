@@ -30,9 +30,22 @@ declare
   new_root_id uuid;
   operation_at timestamptz := pg_catalog.statement_timestamp();
   actor_id uuid;
+  human_write boolean;
 begin
-  checked_context := vortex_definition.validated_system_context();
-  actor_id := (checked_context ->> 'systemActorId')::uuid;
+  human_write := vortex_context.current_context() ->> 'callerKind' = 'human';
+  if human_write then
+    checked_context := vortex_definition.validated_builder_draft_write_context_internal(null);
+    if p_kind is distinct from 'application'
+      or p_draft_source ->> 'kind' is distinct from p_kind
+      or p_draft_source ->> 'key' is distinct from p_key then
+      raise exception using errcode = '22023',
+        message = 'Definition draft write source is invalid';
+    end if;
+    actor_id := (checked_context ->> 'organizationAccountId')::uuid;
+  else
+    checked_context := vortex_definition.validated_system_context();
+    actor_id := (checked_context ->> 'systemActorId')::uuid;
+  end if;
 
   loop
     new_root_id := pg_catalog.gen_random_uuid();
@@ -40,14 +53,15 @@ begin
   end loop;
 
   insert into vortex_definition.roots (
-    root_id, organization_id, kind, key, created_at, created_by
+    root_id, organization_id, kind, key, created_at, created_by, application_origin_kind
   ) values (
     new_root_id,
     (checked_context ->> 'organizationId')::uuid,
     p_kind,
     p_key,
     operation_at,
-    actor_id
+    actor_id,
+    case when human_write then 'ordinary' else null end
   );
 
   perform vortex_definition.record_source_identities(
@@ -67,6 +81,10 @@ begin
     operation_at,
     actor_id
   );
+
+  if human_write then
+    perform vortex_definition.validated_builder_draft_write_context_internal(new_root_id);
+  end if;
 
   return query
   select

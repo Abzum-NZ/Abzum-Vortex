@@ -3,6 +3,7 @@ import "server-only";
 import {
   pageDefinitionV2Schema,
   type ApplicationShellV2,
+  type ConditionNode,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
@@ -69,39 +70,56 @@ export interface FixedAuthenticatedPageCapabilityAdapter<Command> {
 
 export type AuthenticatedPageCapabilityDependencies<Command> =
   HumanOrganizationRequestDependencies &
-    Readonly<{ adapter: FixedAuthenticatedPageCapabilityAdapter<Command> }>;
+    Readonly<{
+      adapter: FixedAuthenticatedPageCapabilityAdapter<Command>;
+      /** Server-owned operand resolution, under the same verified transaction as the view gates. */
+      evaluateVisibilityCondition?: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        page: PageDefinitionV2,
+        condition: ConditionNode,
+      ) => Promise<boolean>;
+    }>;
 
 type RequiredPlacement = Readonly<{
   placementId: string;
   viewPermissionKey?: string;
   usePermissionKey?: string;
+  visibilityCondition?: ConditionNode;
+  ancestorPlacementIds: readonly string[];
 }>;
 
-const collectV2Slot = (slot: Record<string, unknown>, result: RequiredPlacement[]): void => {
-  for (const [placementId, candidate] of Object.entries(
-    slot.placements as Record<string, Record<string, unknown>>,
-  )) {
+const collectV2Slot = (
+  slot: ApplicationShellV2["layout"],
+  result: RequiredPlacement[],
+  ancestorPlacementIds: readonly string[] = [],
+): void => {
+  for (const [placementId, candidate] of Object.entries(slot.placements)) {
     result.push({
       placementId,
+      ancestorPlacementIds,
       ...(candidate.viewPermissionKey === undefined
         ? {}
         : { viewPermissionKey: String(candidate.viewPermissionKey) }),
       ...(candidate.usePermissionKey === undefined
         ? {}
         : { usePermissionKey: String(candidate.usePermissionKey) }),
+      ...(candidate.visibilityCondition === undefined
+        ? {}
+        : { visibilityCondition: candidate.visibilityCondition }),
     });
-    for (const child of Object.values(candidate.slots as Record<string, Record<string, unknown>>))
-      collectV2Slot(child, result);
+    for (const child of Object.values(candidate.slots))
+      collectV2Slot(child, result, [...ancestorPlacementIds, placementId]);
   }
 };
 
 const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
   if (resolved.roots.kind === "page")
-    collectV2Slot(resolved.roots.main as unknown as Record<string, unknown>, result);
+    collectV2Slot(resolved.roots.main, result);
   else
     for (const root of Object.values(resolved.roots.stepContent))
-      collectV2Slot(root as unknown as Record<string, unknown>, result);
+      collectV2Slot(root, result);
   return result;
 };
 
@@ -149,6 +167,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             : [loaded.sourceCorrelationId.toLowerCase()]),
         ]);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
+        const hiddenPlacements = new Set<string>();
         for (const required of requiredPlacements(resolved)) {
           if (states[required.placementId] !== undefined) continue;
           const binding = loaded.placements[required.placementId];
@@ -171,6 +190,28 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
           correlations.add(view.correlationId.toLowerCase());
           correlations.add(use.correlationId.toLowerCase());
+          const ancestorHidden = required.ancestorPlacementIds.some((id) =>
+            hiddenPlacements.has(id),
+          );
+          const conditionAllowed =
+            required.visibilityCondition === undefined
+              ? binding.visibilityConditionAllowed
+              : !view.allowed || ancestorHidden
+                ? false
+                : dependencies.evaluateVisibilityCondition === undefined
+                  ? binding.visibilityConditionAllowed
+                  : await dependencies.evaluateVisibilityCondition(
+                      transaction,
+                      scope,
+                      page,
+                      required.visibilityCondition,
+                    );
+          if (
+            ancestorHidden ||
+            !view.allowed ||
+            (required.visibilityCondition !== undefined && conditionAllowed !== true)
+          )
+            hiddenPlacements.add(required.placementId);
           states[required.placementId] = {
             viewAllowed: view.allowed,
             useAllowed: use.allowed,
@@ -178,9 +219,9 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? {}
               : { operationRequired: binding.operationRequired }),
             operationBound: binding.operationBound,
-            ...(binding.visibilityConditionAllowed === undefined
+            ...(conditionAllowed === undefined
               ? {}
-              : { conditionAllowed: binding.visibilityConditionAllowed }),
+              : { conditionAllowed }),
           };
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");

@@ -31,8 +31,18 @@ declare
   root_organization_id uuid;
   saved_revision bigint;
   operation_at timestamptz := pg_catalog.statement_timestamp();
+  actor_id uuid;
+  human_write boolean;
+  root_key text;
 begin
-  checked_context := vortex_definition.validated_system_context();
+  human_write := vortex_context.current_context() ->> 'callerKind' = 'human';
+  if human_write then
+    checked_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
+    actor_id := (checked_context ->> 'organizationAccountId')::uuid;
+  else
+    checked_context := vortex_definition.validated_system_context();
+    actor_id := (checked_context ->> 'systemActorId')::uuid;
+  end if;
   expected_organization_id := (checked_context ->> 'organizationId')::uuid;
 
   if p_root_id is null
@@ -59,6 +69,17 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
+  if human_write then
+    select root.key into strict root_key
+    from vortex_definition.roots as root
+    where root.root_id = p_root_id;
+    if p_draft_source ->> 'kind' is distinct from 'application'
+      or p_draft_source ->> 'key' is distinct from root_key then
+      raise exception using errcode = '22023',
+        message = 'Definition draft write source is invalid';
+    end if;
+  end if;
+
   update vortex_definition.drafts as draft
   set
     draft_revision = draft.draft_revision + 1,
@@ -72,7 +93,7 @@ begin
     restored_at = null,
     restore_correlation_id = null,
     updated_at = operation_at,
-    updated_by = (checked_context ->> 'systemActorId')::uuid
+    updated_by = actor_id
   where draft.root_id = p_root_id
     and draft.draft_revision = p_expected_revision
   returning draft.draft_revision into saved_revision;
@@ -84,9 +105,13 @@ begin
   perform vortex_definition.record_source_identities(
     p_root_id,
     p_identity_requirements,
-    (checked_context ->> 'systemActorId')::uuid,
+    actor_id,
     operation_at
   );
+
+  if human_write then
+    perform vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
+  end if;
 
   return query
   select

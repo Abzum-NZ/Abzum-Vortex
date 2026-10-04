@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   sameId,
+  conditionNodeSchema,
   applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
@@ -19,7 +20,10 @@ import {
   type FlowDefinition,
   type FlowTask,
   type ProtectedReadModelKey,
+  type ConditionNode,
+  type JsonValue,
 } from "@vortex/contracts";
+import { evaluateTypedConditionV2, TypedConditionEvaluationError } from "@vortex/rule";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import {
   createHumanOrganizationRequestService,
@@ -41,14 +45,17 @@ import {
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
+import { readPageSubjectInTransaction, type PageSubjectReadResult } from "./page-subject-read";
 import {
   createProtectedReadModelResolver,
   type ProtectedReadModelReaders,
 } from "./protected-read-model-resolution";
 
-/** The browser address may select only a page; organisation, installation and release come from context. */
+/** Address candidates select a page and its subject; organisation, installation and release come from context. */
 export type StoredPageCapabilitySelection = Readonly<{
   pageId: string;
+  /** Untrusted address candidate, used only with this page's exact declared protected subject. */
+  subjectRecordId?: string;
 }>;
 
 export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
@@ -435,9 +442,111 @@ export const createStoredPageCapabilityService = (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     stored: FixedAuthenticatedPageCapability,
-  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
-    createAuthenticatedPageCapabilityService({
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    // This cache belongs to one projection transaction, never another page, actor or release.
+    let subjectRead: Promise<PageSubjectReadResult> | undefined;
+    return createAuthenticatedPageCapabilityService({
       ...requestDependencies,
+      evaluateVisibilityCondition: async (transaction, scope, page, condition) => {
+        if (
+          scope.applicationRootId === undefined ||
+          !sameId(scope.organizationId, context.organizationId) ||
+          !sameId(scope.applicationRootId, applicationRootId)
+        )
+          return false;
+        const parsed = conditionNodeSchema.safeParse(condition);
+        if (!parsed.success) return false;
+        const fieldIds = new Set<string>();
+        let unsupported = false;
+        const collect = (node: ConditionNode): void => {
+          if (node.kind === "comparison") {
+            for (const operand of [node.left, node.right]) {
+              if (operand?.source === "parameter") unsupported = true;
+              if (operand?.source === "field") fieldIds.add(operand.fieldId.toLowerCase());
+            }
+          } else if (node.kind === "not") collect(node.condition);
+          else node.conditions.forEach(collect);
+        };
+        // Inspect every branch before any read; an unsupported operand cannot short-circuit to true.
+        collect(parsed.data);
+        if (unsupported) return false;
+        try {
+          if (fieldIds.size === 0)
+            return evaluateTypedConditionV2({
+              condition: parsed.data,
+              sourceRecordFields: [],
+              declaredFieldIds: [],
+              fieldValues: {},
+              parameterDeclarations: [],
+              parameterValues: {},
+            });
+
+          // A different destination page cannot borrow the selected page's address subject.
+          const recordType =
+            sameId(page.pageId, selectedPageId) &&
+            (page.type === "detail" ||
+              page.type === "public" ||
+              page.type === "form" ||
+              page.type === "guided_form") &&
+            page.recordType?.state === "resolved"
+              ? page.recordType
+              : undefined;
+          const subjectRecordId = dependencies.selection.subjectRecordId;
+          if (recordType === undefined || subjectRecordId === undefined) return false;
+          const modules = context.releaseSet.modules.filter((module) =>
+            sameId(module.rootId, recordType.moduleRootId),
+          );
+          if (modules.length !== 1) return false;
+          const records = modules[0]!.content.recordTypes.filter((record) =>
+            sameId(record.recordTypeId, recordType.recordTypeId),
+          );
+          if (records.length !== 1) return false;
+          const fields = records[0]!.fields;
+          const fieldsById = new Map(fields.map((field) => [field.fieldId.toLowerCase(), field]));
+          if (fieldsById.size !== fields.length || [...fieldIds].some((id) => !fieldsById.has(id)))
+            return false;
+          subjectRead ??= readPageSubjectInTransaction(transaction, {
+            recordTypeId: recordType.recordTypeId,
+            recordId: subjectRecordId,
+          });
+          const read = await subjectRead;
+          if (read.kind !== "read") return false;
+          const values: Record<string, JsonValue> = {};
+          for (const id of fieldIds) {
+            const matches = Object.entries(read.row.values).filter(([key]) => sameId(key, id));
+            // An unreadable/missing field is not a null field; duplicate identity aliases refuse.
+            if (matches.length !== 1) return false;
+            values[fieldsById.get(id)!.fieldId] = matches[0]![1];
+          }
+          type Operand = Extract<ConditionNode, { kind: "comparison" }>["left"];
+          const canonicalOperand = (operand: Operand): Operand =>
+            operand.source === "field"
+              ? { source: "field", fieldId: fieldsById.get(operand.fieldId.toLowerCase())!.fieldId }
+              : operand;
+          const canonicalCondition = (node: ConditionNode): ConditionNode => {
+            if (node.kind === "comparison")
+              return {
+                ...node,
+                left: canonicalOperand(node.left),
+                ...(node.right === undefined ? {} : { right: canonicalOperand(node.right) }),
+              };
+            if (node.kind === "not")
+              return { kind: "not", condition: canonicalCondition(node.condition) };
+            return { kind: node.kind, conditions: node.conditions.map(canonicalCondition) };
+          };
+          return evaluateTypedConditionV2({
+            condition: canonicalCondition(parsed.data),
+            sourceRecordFields: fields,
+            declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),
+            fieldValues: values,
+            parameterDeclarations: [],
+            parameterValues: {},
+          });
+        } catch (error) {
+          if (error instanceof TypedConditionEvaluationError) return false;
+          throw error;
+        }
+      },
       adapter: {
         load: async (_transaction, scope) => {
           if (
@@ -450,6 +559,7 @@ export const createStoredPageCapabilityService = (
         },
       },
     }).project(session, candidate, undefined);
+  };
 
   const project = async (
     session: IdentitySession,
