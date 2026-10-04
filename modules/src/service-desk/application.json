@@ -3555,28 +3555,28 @@
     },
                                 {
                                   "id": "form_submit_sd_business_calendar_create",
-                                  "key": "vortex.app.events.vortex_app_service_desk_form_submit_sd_business_calendar_create",
+                                  "key": "vortex.app.events.service_desk_calendar_submit",
                                   "record_type": "vortex.service_desk.sla:business_calendar",
                                   "carries": [],
                                   "personal_or_sensitive_values_allowed": false
                                 },
                                 {
                                   "id": "form_submit_sd_service_level_create",
-                                  "key": "vortex.app.events.vortex_app_service_desk_form_submit_sd_service_level_create",
+                                  "key": "vortex.app.events.service_desk_service_level_submit",
                                   "record_type": "vortex.service_desk.sla:service_level",
                                   "carries": [],
                                   "personal_or_sensitive_values_allowed": false
                                 },
                                 {
                                   "id": "event_sd_new_business_calendar",
-                                  "key": "vortex.app.events.vortex_app_service_desk_event_sd_new_business_calendar",
+                                  "key": "vortex.app.events.service_desk_new_calendar",
                                   "record_type": "vortex.service_desk.sla:business_calendar",
                                   "carries": [],
                                   "personal_or_sensitive_values_allowed": false
                                 },
                                 {
                                   "id": "event_sd_new_service_level",
-                                  "key": "vortex.app.events.vortex_app_service_desk_event_sd_new_service_level",
+                                  "key": "vortex.app.events.service_desk_new_service_level",
                                   "record_type": "vortex.service_desk.sla:service_level",
                                   "carries": [],
                                   "personal_or_sensitive_values_allowed": false
