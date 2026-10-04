@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { applicationSourceDocumentV2Schema } from "@vortex/contracts";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@vortex/studio";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication } from "../actions";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
+import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 
 type WorkspaceProps =
   | Readonly<{ mode: "new"; organizationId: string }>
@@ -165,6 +166,13 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [pendingAppearance, setPendingAppearance] = useState(false);
+  const appearancePending = useRef(false);
+  const reportAppearancePending = useCallback((pending: boolean) => {
+    appearancePending.current = pending;
+    setPendingAppearance(pending);
+  }, []);
+  const [appearanceEpoch, setAppearanceEpoch] = useState(0);
 
   useEffect(() => {
     active.current = true;
@@ -197,7 +205,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
 
   const applyLabels = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editable || reopening.current) return;
+    if (!editable || reopening.current || appearancePending.current) return;
     const candidate = applicationSourceDocumentV2Schema.parse(structuredClone(state.source));
     if (selected?.kind === "application") {
       candidate.body.name = label.trim();
@@ -217,7 +225,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   };
 
   const save = async () => {
-    if (reopening.current || pendingLabels) return;
+    if (reopening.current || pendingLabels || appearancePending.current) return;
     const requestLifetime = lifetime.current;
     const result = await history.save();
     if (!active.current || requestLifetime !== lifetime.current) return;
@@ -230,7 +238,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
 
   const reopen = async () => {
     if (reopening.current || history.getState().isSaving) return;
-    if ((history.getState().isDirty || pendingLabels) &&
+    if ((history.getState().isDirty || pendingLabels || appearancePending.current) &&
       !window.confirm("Discard unsaved changes and reopen the saved draft?")) return;
     const requestLifetime = lifetime.current;
     reopening.current = true;
@@ -268,24 +276,27 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         <div><dt className="inline font-medium">Draft revision: </dt><dd className="inline">{state.draftRevision}</dd></div></dl>
       <p>Draft editing workspace. Publishing, installing and assigning roles remain separate.</p>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={buttonClass} disabled={!state.canUndo || isReopening || pendingLabels} onClick={() => {
-          if (!reopening.current && !pendingLabels) history.undo();
+        <button type="button" className={buttonClass} disabled={!state.canUndo || isReopening || pendingLabels || pendingAppearance} onClick={() => {
+          if (!reopening.current && !pendingLabels && !appearancePending.current) history.undo();
         }}>Undo</button>
-        <button type="button" className={buttonClass} disabled={!state.canRedo || isReopening || pendingLabels} onClick={() => {
-          if (!reopening.current && !pendingLabels) history.redo();
+        <button type="button" className={buttonClass} disabled={!state.canRedo || isReopening || pendingLabels || pendingAppearance} onClick={() => {
+          if (!reopening.current && !pendingLabels && !appearancePending.current) history.redo();
         }}>Redo</button>
-        <button type="button" className={buttonClass} disabled={!state.isDirty || state.isSaving || isReopening || pendingLabels} onClick={save}>Save draft</button>
+        <button type="button" className={buttonClass} disabled={!state.isDirty || state.isSaving || isReopening || pendingLabels || pendingAppearance} onClick={save}>Save draft</button>
         <button type="button" className={buttonClass} disabled={state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</button>
       </div>
-      <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingLabels
+      <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingAppearance
+        ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
         ? "Apply or discard the inspector text before saving or undoing." : state.isDirty
           ? "Unsaved local changes." : "Local history matches the saved baseline."} {message}</p>
     </header>
     <div className="grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]">
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
         <ul><Outline node={outline} selectedKey={selectionKey} choose={(node) => {
-          if (reopening.current || (pendingLabels &&
-            !window.confirm("Discard unapplied inspector text and change selection?"))) return;
+          if (reopening.current || ((pendingLabels || appearancePending.current) &&
+            !window.confirm("Discard unapplied inspector and appearance edits and change selection?"))) return;
+          setAppearanceEpoch((value) => value + 1);
+          reportAppearancePending(false);
           setLabel(currentLabel);
           setDescription(source.body.description);
           selection.select(node.selection);
@@ -305,12 +316,25 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
           {selected?.kind === "application" && <label className="block space-y-1"><span>Application description</span>
             <textarea className={inputClass} required maxLength={1000} disabled={isReopening}
               value={description} onChange={(event) => setDescription(event.target.value)} /></label>}
-          <button className={buttonClass} disabled={isReopening} type="submit">Apply labels</button>
+          <button className={buttonClass} disabled={isReopening || pendingAppearance} type="submit">Apply labels</button>
           <button className={buttonClass} disabled={isReopening || !pendingLabels} type="button" onClick={() => {
             setLabel(currentLabel); setDescription(source.body.description);
           }}>Discard inspector text</button>
           <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
         </form> : <p>This item is read-only in the minimum host.</p>}
+        {selected?.kind === "application" && inspector.status === "resolved" && !isReopening &&
+          <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
+            rootId={state.rootId} draftRevision={state.draftRevision} source={source}
+            disabled={state.isSaving || pendingLabels} onPendingChange={reportAppearancePending}
+            onApply={(expected, next) => {
+              const current = history.getState();
+              if (reopening.current || current.isSaving || pendingLabels || current.rootId !== state.rootId ||
+                  current.draftRevision !== state.draftRevision || current.source !== state.source ||
+                  expected !== source) return false;
+              const applied = history.edit(next);
+              if (applied) setMessage("Appearance applied to local history. Save to persist it.");
+              return applied;
+            }} />}
       </aside>
     </div>
   </main>;

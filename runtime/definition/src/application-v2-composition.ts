@@ -21,8 +21,10 @@ import {
   type BlockPropertyValueV2Contract,
   type ComponentSettingFailure,
   type DefinitionValidationLocation,
+  type DefinitionRuleFailure,
   type FieldInputControlKey,
   type PlatformBlockReleaseV2,
+  type PlatformThemeReleaseV2,
   type PlatformId,
   type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
@@ -177,16 +179,6 @@ const validateTheme = (
   );
 };
 
-/** Refuses publication with a theme selection failure, located where the Theme engine put it. */
-const rejectThemeFailure = (first: ThemeValidationFailure | undefined): never =>
-  reject(
-    first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
-      ? first.ruleCode
-      : "vortex.definition.application_block_settings",
-    first?.family ?? "invalid_value",
-    first?.location,
-  );
-
 /** Colour roles are declared by the platform theme release; overrides inherit them. */
 const inheritColorRole = (
   inherited: Record<string, unknown> | undefined,
@@ -195,6 +187,77 @@ const inheritColorRole = (
   inherited?.kind === "color_pair" && inherited.role !== undefined
     ? { ...override, role: inherited.role }
     : override;
+
+export type ApplicationThemeMaterialisationV2 =
+  | Readonly<{ valid: true; theme: CanonicalTheme; options: ThemeResolutionOptions }>
+  | Readonly<{ valid: false; failures: readonly ThemeValidationFailure[]; refusal: DefinitionRuleFailure }>;
+
+/** The same pure theme producer serves publication and authorized draft feedback. */
+export const materialiseApplicationThemeV2 = (
+  authored: ApplicationSourceDocumentV2["body"]["theme"],
+  documentKey: string,
+  release: PlatformThemeReleaseV2,
+): ApplicationThemeMaterialisationV2 => {
+  if (canonicalJson(canonicalThemeDependency(authored.base)) !== canonicalJson({
+    kind: "platform_theme", catalogueThemeId: release.catalogueThemeId,
+    releaseVersion: release.releaseVersion, contentFingerprint: release.contentFingerprint,
+    catalogueFingerprint: release.catalogueFingerprint,
+  })) reject("vortex.definition.application_dependency_manifest");
+  const overrides: Record<string, ThemeTokenValueV2> = {};
+  for (const [key, value] of Object.entries(authored.token_overrides))
+    overrides[key] = canonicalThemeValue(value as unknown as Record<string, unknown>) as ThemeTokenValueV2;
+  const selection = resolveThemeSelection({
+    base: release, baseTokens: release.tokens,
+    ...(authored.selection === undefined ? {}
+      : { selection: canonicalApplicationThemeSelectionV2(authored.selection) }),
+    overrides, options: { documentKey },
+  });
+  if (!selection.valid) {
+    const first = selection.failures[0];
+    return { valid: false, failures: selection.failures, refusal: {
+      ruleCode: first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
+        ? first.ruleCode : "vortex.definition.application_block_settings",
+      family: first?.family ?? "invalid_value",
+      ...(first?.location === undefined ? {} : { location: first.location }),
+    } };
+  }
+  const theme = applicationThemeV2Schema.parse({
+    base: canonicalThemeDependency(authored.base),
+    ...(selection.resolved.selection === undefined ? {} : { selection: selection.resolved.selection }),
+    tokens: selection.resolved.tokens,
+  });
+  const assetIds = new Set<PlatformId>();
+  for (const token of Object.values(release.tokens))
+    if (token.kind === "asset") assetIds.add(token.assetId);
+  const options: ThemeResolutionOptions = { approvedAssetIds: assetIds, publicAssetIds: assetIds };
+  // Keep the original reference-first publication refusal, while locating every bad reference
+  // for the feedback consumer. No engine error message crosses the browser boundary.
+  try {
+    validateThemeTokenReferences(theme.tokens);
+  } catch (error) {
+    if (!(error instanceof DefinitionCompilationError)) throw error;
+    const failures: ThemeValidationFailure[] = [];
+    for (const [key, token] of Object.entries(theme.tokens))
+      if ((token.kind === "border" || token.kind === "focus") &&
+          theme.tokens[token.colorToken]?.kind !== "color_pair")
+        failures.push({ code: "BROKEN_TOKEN_REFERENCE", ruleCode: error.ruleCode,
+          family: error.family, message: "A colour token reference cannot be resolved.",
+          tokenKey: key, location: createThemeLocation(documentKey, key) });
+    return { valid: false, failures, refusal: {
+      ruleCode: error.ruleCode, family: error.family,
+      ...(error.location === undefined ? {} : { location: error.location }),
+    } };
+  }
+  const validation = validateApplicationTheme(theme, { ...options, documentKey });
+  const first = validation.failures[0];
+  if (!validation.valid && first !== undefined)
+    return { valid: false, failures: validation.failures, refusal: {
+      ruleCode: isDefinitionCompilerRefusalCode(first.ruleCode)
+        ? first.ruleCode : "vortex.definition.application_block_settings",
+      family: first.family, location: createThemeLocation(documentKey, first.tokenKey),
+    } };
+  return { valid: true, theme, options };
+};
 
 const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): void => {
   const first = failures[0];
@@ -614,43 +677,13 @@ export const materialiseApplicationCompositionV2 = (
   )
     reject("vortex.definition.application_dependency_manifest");
 
-  const canonicalOverrides: Record<string, ThemeTokenValueV2> = {};
-  for (const [key, authored] of Object.entries(source.body.theme.token_overrides)) {
-    canonicalOverrides[key] = canonicalThemeValue(
-      authored as unknown as Record<string, unknown>,
-    ) as ThemeTokenValueV2;
+  const materialisedTheme = materialiseApplicationThemeV2(source.body.theme, source.key, snapshot.platformTheme);
+  if (!materialisedTheme.valid) {
+    const first = materialisedTheme.refusal;
+    reject(isDefinitionCompilerRefusalCode(first.ruleCode)
+      ? first.ruleCode : "vortex.definition.application_block_settings", first.family, first.location);
   }
-  const selectionResolution = resolveThemeSelection({
-    base: snapshot.platformTheme,
-    baseTokens: snapshot.platformTheme.tokens,
-    ...(source.body.theme.selection === undefined
-      ? {}
-      : { selection: canonicalApplicationThemeSelectionV2(source.body.theme.selection) }),
-    overrides: canonicalOverrides,
-    options: { documentKey: source.key },
-  });
-  const resolvedTheme = selectionResolution.valid
-    ? selectionResolution.resolved
-    : rejectThemeFailure(selectionResolution.failures[0]);
-  const theme = applicationThemeV2Schema.parse({
-    base: canonicalThemeDependency(source.body.theme.base),
-    // A theme on the catalogue's base release always records its effective selection, including
-    // the platform default when the authored theme named none, so a consumer reads the exact
-    // style and dimensions. A theme on an earlier release records none and keeps its tokens.
-    ...(resolvedTheme.selection === undefined ? {} : { selection: resolvedTheme.selection }),
-    tokens: resolvedTheme.tokens,
-  });
-
-  // The exact pinned platform theme release is the trusted catalogue of approved,
-  // public theme assets. An application may use only the assets that release ships.
-  const catalogueAssetIds = new Set<PlatformId>();
-  for (const token of Object.values(snapshot.platformTheme.tokens))
-    if (token.kind === "asset") catalogueAssetIds.add(token.assetId);
-  const themeValidationOptions: ThemeResolutionOptions = {
-    approvedAssetIds: catalogueAssetIds,
-    publicAssetIds: catalogueAssetIds,
-  };
-  validateTheme(theme, source.key, themeValidationOptions);
+  const { theme, options: themeValidationOptions } = materialisedTheme;
 
   const releaseByIdentity = new Map(
     snapshot.platformBlocks.releases.map((release) => [
