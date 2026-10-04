@@ -625,6 +625,9 @@ importers:
       '@vortex/query':
         specifier: workspace:*
         version: link:../query
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       '@vortex/theme':
         specifier: workspace:*
         version: link:../theme
