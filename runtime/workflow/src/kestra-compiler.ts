@@ -503,6 +503,8 @@ const referencesInValue = (value: FlowValue, into: FlowReference[] = []): FlowRe
   else if (value.kind === "formula") referencesInFormula(value.formula, into);
   else if (value.kind === "map")
     for (const child of Object.values(value.entries)) referencesInValue(child, into);
+  else if (value.kind === "array")
+    for (const item of value.items) referencesInValue(item, into);
   return into;
 };
 
@@ -648,9 +650,11 @@ const kestraInputType = (vortexType: string): string => {
   }
 };
 
-/** The declared type of a wait-for-person answer: the literal's own type, else text. */
+/** The literal's own type or a constructed array's JSON type; other answers retain text. */
 const valueInputType = (value: FlowValue): string =>
-  value.kind === "literal" ? kestraInputType(value.literal.type) : "STRING";
+  value.kind === "literal"
+    ? kestraInputType(value.literal.type)
+    : value.kind === "array" ? "JSON" : "STRING";
 
 // ─── Control tasks ───────────────────────────────────────────────────────────────────────────
 
