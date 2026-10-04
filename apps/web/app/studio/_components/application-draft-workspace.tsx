@@ -154,6 +154,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const previewGeneration = useRef(0);
   const savedPreviewDraft = useRef(draft);
   const provisionalSaveDraft = useRef<StudioStoredApplicationDraft | null>(null);
+  const readProvisionalSaveDraft = (): StudioStoredApplicationDraft | null => provisionalSaveDraft.current;
   const labelsPending = useRef(false);
   const [workspaceLifetime, setWorkspaceLifetime] = useState(0);
   const [history] = useState(() => createStudioApplicationDraftHistoryController(draft, {
@@ -273,7 +274,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     provisionalSaveDraft.current = null;
     const result = await history.save();
     if (!active.current || requestLifetime !== lifetime.current) return;
-    const returned = provisionalSaveDraft.current;
+    const returned = readProvisionalSaveDraft();
     const current = history.getState();
     // The writer response is evidence only after the unchanged history controller accepts it.
     if (result.kind === "saved" && returned !== null && !current.isDirty &&
