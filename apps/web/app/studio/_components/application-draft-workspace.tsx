@@ -328,7 +328,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         <h2 className="font-semibold">{inspector.status === "resolved" ? inspector.descriptor.label : "Select an item"}</h2>
         {selectedPage?.type === "dashboard" && <p>This dashboard's authored composition is preserved. This minimum host edits labels; it does not render or execute application data, events or actions.</p>}
         {selected?.kind === "application" && <p>{source.body.description}</p>}
-        {selected?.kind === "placement" && inspector.status === "resolved" &&
+        {(selected?.kind === "placement" || selected?.kind === "page") && inspector.status === "resolved" &&
           <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
             selection={selected} disabled={isReopening || state.isSaving || pendingLabels || pendingAppearance || workspaceLifetime === 0}
             onPendingChange={reportCompositionPending} onCommand={(expected, expectedSelection, command) => {
