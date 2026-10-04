@@ -18,6 +18,7 @@ import { createStudioApplication, reopenStudioApplication, saveStudioApplication
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
+import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
 
 type WorkspaceProps =
   | Readonly<{ mode: "new"; organizationId: string }>
@@ -150,6 +151,11 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const active = useRef(false);
   const lifetime = useRef(0);
   const reopening = useRef(false);
+  const previewGeneration = useRef(0);
+  const savedPreviewDraft = useRef(draft);
+  const provisionalSaveDraft = useRef<StudioStoredApplicationDraft | null>(null);
+  const readProvisionalSaveDraft = (): StudioStoredApplicationDraft | null => provisionalSaveDraft.current;
+  const labelsPending = useRef(false);
   const [workspaceLifetime, setWorkspaceLifetime] = useState(0);
   const [history] = useState(() => createStudioApplicationDraftHistoryController(draft, {
     saveDraft: async (command) => {
@@ -157,7 +163,10 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
       const result = await saveStudioApplication(organizationId, command);
       if (!active.current || requestLifetime !== lifetime.current)
         throw new StudioSaveError("STUDIO_WORKSPACE_CLOSED");
-      if (result.kind === "available") return result.draft;
+      if (result.kind === "available") {
+        provisionalSaveDraft.current = result.draft;
+        return result.draft;
+      }
       throw new StudioSaveError(result.kind === "conflict"
         ? "DEFINITION_DRAFT_STALE_OR_MISSING"
         : result.kind === "refused" ? "DEFINITION_CONTEXT_REFUSED" : "STUDIO_SAVE_FAILED");
@@ -173,6 +182,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const [pendingAppearance, setPendingAppearance] = useState(false);
   const appearancePending = useRef(false);
   const reportAppearancePending = useCallback((pending: boolean) => {
+    if (appearancePending.current !== pending) previewGeneration.current += 1;
     appearancePending.current = pending;
     setPendingAppearance(pending);
   }, []);
@@ -181,6 +191,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const [pendingComposition, setPendingComposition] = useState(false);
   const compositionPending = useRef(false);
   const reportCompositionPending = useCallback((pending: boolean) => {
+    if (compositionPending.current !== pending) previewGeneration.current += 1;
     compositionPending.current = pending;
     setPendingComposition(pending);
   }, []);
@@ -191,6 +202,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     lifetime.current += 1;
     setWorkspaceLifetime(lifetime.current);
     const unsubscribeHistory = history.subscribe((next) => {
+      previewGeneration.current += 1;
       selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentV2Schema.parse(next.source) });
       setState(next);
     });
@@ -219,6 +231,21 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     [selectionKey, currentLabel, source.body.description]);
   const pendingLabels = editable && (label !== currentLabel ||
     (selected?.kind === "application" && description !== source.body.description));
+  labelsPending.current = pendingLabels;
+
+  const readPreviewContext = useCallback((): SavedHomepagePreviewContext | null => {
+    const current = history.getState();
+    const saved = savedPreviewDraft.current;
+    if (!active.current || reopening.current || current.isSaving || current.isDirty ||
+      labelsPending.current || appearancePending.current || compositionPending.current ||
+      saved.organizationId !== organizationId || saved.rootId !== current.rootId ||
+      saved.key !== draft.key || saved.draftRevision !== current.draftRevision) return null;
+    return {
+      organizationId, rootId: current.rootId, key: saved.key, draftRevision: current.draftRevision,
+      sourceFingerprint: saved.sourceFingerprint, source: current.source,
+      localLifetime: lifetime.current, generation: previewGeneration.current,
+    };
+  }, [organizationId, draft.key, history]);
 
   const applyLabels = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -242,10 +269,22 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   };
 
   const save = async () => {
-    if (reopening.current || pendingLabels || appearancePending.current || compositionPending.current) return;
+    if (reopening.current || history.getState().isSaving || pendingLabels || appearancePending.current || compositionPending.current) return;
     const requestLifetime = lifetime.current;
+    provisionalSaveDraft.current = null;
     const result = await history.save();
     if (!active.current || requestLifetime !== lifetime.current) return;
+    const returned = readProvisionalSaveDraft();
+    const current = history.getState();
+    // The writer response is evidence only after the unchanged history controller accepts it.
+    if (result.kind === "saved" && returned !== null && !current.isDirty &&
+      returned.organizationId === organizationId && returned.rootId === current.rootId &&
+      returned.key === draft.key && returned.draftRevision === result.draftRevision &&
+      current.draftRevision === result.draftRevision) {
+      savedPreviewDraft.current = returned;
+      previewGeneration.current += 1;
+    }
+    provisionalSaveDraft.current = null;
     setMessage(result.kind === "saved" ? `Saved revision ${result.draftRevision}.`
       : result.kind === "conflict" ? "The saved draft changed. Local edits are preserved. Reopen explicitly to use the current saved draft."
         : result.kind === "refused" ? "The current draft permission or source was refused. Local edits are preserved."
@@ -259,6 +298,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
       !window.confirm("Discard unsaved changes and reopen the saved draft?")) return;
     const requestLifetime = lifetime.current;
     reopening.current = true;
+    previewGeneration.current += 1;
     setAppearanceValidationEpoch((value) => value + 1);
     setReopening(true);
     setMessage("Reading the saved draft with current permissions…");
@@ -269,6 +309,8 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         setMessage("The saved draft could not be reopened. Local edits are preserved.");
         return;
       }
+      savedPreviewDraft.current = result.draft;
+      previewGeneration.current += 1;
       const reopenedSelection = selection.getSelection();
       const reopenedPageAlias = reopenedSelection?.kind === "page" ? reopenedSelection.pageAlias : undefined;
       setLabel(reopenedSelection?.kind === "application" ? result.draft.source.body.name
@@ -364,10 +406,18 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         {editable ? <form className="space-y-3" onSubmit={applyLabels}>
           <label className="block space-y-1"><span>Selected item name</span>
             <input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
-              disabled={isReopening || pendingComposition} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+              disabled={isReopening || pendingComposition} value={label} onChange={(event) => {
+                labelsPending.current = true;
+                previewGeneration.current += 1;
+                setLabel(event.target.value);
+              }} /></label>
           {selected?.kind === "application" && <label className="block space-y-1"><span>Application description</span>
             <textarea className={inputClass} required maxLength={1000} disabled={isReopening || pendingComposition}
-              value={description} onChange={(event) => setDescription(event.target.value)} /></label>}
+              value={description} onChange={(event) => {
+                labelsPending.current = true;
+                previewGeneration.current += 1;
+                setDescription(event.target.value);
+              }} /></label>}
           <button className={buttonClass} disabled={isReopening || pendingAppearance || pendingComposition} type="submit">Apply labels</button>
           <button className={buttonClass} disabled={isReopening || !pendingLabels} type="button" onClick={() => {
             setLabel(currentLabel); setDescription(source.body.description);
@@ -390,5 +440,6 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
             }} />}
       </aside>
     </div>
+    <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext} />
   </main>;
 }
