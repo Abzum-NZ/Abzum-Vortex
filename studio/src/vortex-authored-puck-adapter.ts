@@ -284,7 +284,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       let count = 0;
       while (pending.length > 0) {
         const { value, depth, exit } = pending.pop()!;
-        if (!Array.isArray(value)) refuse();
+        if (!Array.isArray(value)) return refuse();
         if (exit) {
           ancestors.delete(value);
           continue;
