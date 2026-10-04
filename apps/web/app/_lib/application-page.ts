@@ -43,6 +43,7 @@ import {
   type PageSubjectReadResult,
   type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
+  type StoredPageCapabilityDependencies,
 } from "@vortex/page";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
@@ -1328,12 +1329,22 @@ type LocalPageCompositionStage = "INSTALLED_PAGE" | "PROJECTED_PAGE" | "PAGE_MOD
 type LocalPageCompositionResult = "AVAILABLE" | "UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE";
 type LocalPageTableState = "NOT_OBSERVED" | "ABSENT" | "READY" | "EMPTY" | "REFUSED" | "ERROR" | "MIXED";
 
+type LocalProjectionObservation = Parameters<NonNullable<
+  StoredPageCapabilityDependencies["observeProjectionDecision"]
+>>[0];
+type LocalCompositionSnapshot = Readonly<{
+  body: readonly Readonly<{ id: string; table: boolean; visible: boolean }>[];
+  placementIds: readonly string[];
+}>;
+
 /** Structural observations only: no settings, records, authority decisions or exact counts. */
 const localPageCompositionMetrics = (
   installed: unknown,
   shells: readonly ApplicationShellV2[],
   projected?: unknown,
   data?: Readonly<Record<string, PageDataState>>,
+  capture?: (snapshot: LocalCompositionSnapshot) => void,
+  traversalBudget?: { visited: number },
 ) => {
   const object = (value: unknown): Record<string, unknown> => {
     if (!isRecord(value)) throw new Error("Diagnostic structure unavailable");
@@ -1359,7 +1370,7 @@ const localPageCompositionMetrics = (
     visible: Visibility;
     ordered: boolean;
   };
-  let visited = 0;
+  let visited = traversalBudget?.visited ?? 0;
   const index = (root: unknown) => {
     const entries = new Map<string, Entry>();
     const slots = new Set<Record<string, unknown>>();
@@ -1507,6 +1518,15 @@ const localPageCompositionMetrics = (
     tableState = tables.length === 0 ? "ABSENT" : states.size > 1 ? "MIXED"
       : [...states][0] ?? "NOT_OBSERVED";
   }
+  if (traversalBudget !== undefined) traversalBudget.visited = visited;
+  capture?.(Object.freeze({
+    placementIds: Object.freeze([...tree.entries.keys()]),
+    body: Object.freeze(body.map((entry) => Object.freeze({
+      id: entry.id,
+      table: hasBlock(entry, TABLE_BLOCK_RELEASE.blockId),
+      visible: entry.visible.desktop || entry.visible.tablet || entry.visible.phone,
+    }))),
+  }));
   return { body: topLevel === 0 ? "NONE" : topLevel === 1 ? "ONE" : "MULTIPLE",
     table: tables.length > 0, form: body.some((entry) => hasBlock(entry, FORM_CONTAINER_BLOCK_RELEASE.blockId)),
     ordered: body.every((entry) => entry.ordered) && [...tree.slotOrder.values()]
@@ -1548,6 +1568,120 @@ const localPageCompositionObserver = (
       } catch {
         // Diagnostics must never change the original result, error or rendering model.
       }
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+/** One primary invocation only; internal placement identities never enter the fixed frame. */
+const localPageProjectionDecisionObserver = (
+  installed: unknown,
+  shells: readonly ApplicationShellV2[],
+) => {
+  try {
+    if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local")
+      return undefined;
+    const journey = getIdentityJourneyConfiguration();
+    const authority = getIdentityAuthorityConfiguration();
+    if (authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
+      return undefined;
+    let observation: LocalProjectionObservation | undefined;
+    let captured = false;
+    let attempted = false;
+    return {
+      capture: (value: LocalProjectionObservation): void => {
+        // Duplicate captures are ambiguous, never a later replacement for the first request.
+        observation = captured ? undefined : value;
+        captured = true;
+      },
+      emit: (projected: unknown): void => {
+        if (attempted) return;
+        attempted = true;
+        try {
+          const decisions = observation;
+          observation = undefined;
+          if (decisions === undefined || decisions.placements.length > 4096) return;
+          const budget = { visited: decisions.placements.length };
+          const snapshots: { before?: LocalCompositionSnapshot; after?: LocalCompositionSnapshot } = {};
+          const original = localPageCompositionMetrics(installed, shells, undefined, undefined,
+            (snapshot) => { snapshots.before = snapshot; }, budget);
+          const final = localPageCompositionMetrics(installed, shells, projected, undefined,
+            (snapshot) => { snapshots.after = snapshot; }, budget);
+          const { before, after } = snapshots;
+          if (before === undefined || after === undefined) return;
+          const originalIds = new Set(before.placementIds);
+          if (after.placementIds.some((id) => !originalIds.has(id))) return;
+          const retained = new Set(after.placementIds);
+          const trace = new Map(decisions.placements.map((entry) => [entry.placementId, entry]));
+          if (trace.size !== decisions.placements.length ||
+              new Set([...trace.keys()].map((id) => id.toLowerCase())).size !== trace.size ||
+              before.placementIds.some((id) => !trace.has(id))) return;
+          const target = before.body.find((entry) => entry.table && !retained.has(entry.id)) ??
+            before.body.find((entry) => entry.visible && !retained.has(entry.id));
+          const decision = target === undefined ? undefined : trace.get(target.id);
+          if (target !== undefined && decision === undefined) return;
+          const removedAncestors = decision?.ancestorPlacementIds
+            .filter((id) => !retained.has(id)) ?? [];
+          if (removedAncestors.length > 64) return;
+          const ancestors = removedAncestors.map((id) => trace.get(id));
+          if (ancestors.some((entry) => entry === undefined)) return;
+          // The nearest removed ancestor can itself inherit removal. Its original lineage
+          // retains every actual view/condition cause, rather than guessing a table read refusal.
+          const viewRefused = ancestors.some((entry) => entry?.viewGate === "REFUSED");
+          const conditionRefused = ancestors.some((entry) => entry?.condition === "NOT_TRUE");
+          const ancestor = removedAncestors.length === 0 ? "NONE"
+            : viewRefused && conditionRefused ? "MIXED" : viewRefused ? "VIEW_REFUSED"
+            : conditionRefused ? "CONDITION_NOT_TRUE" : "UNPROVABLE";
+          const projection = target === undefined
+            ? before.placementIds.every((id) => retained.has(id)) ? "RETAINED" : "UNPROVABLE"
+            : removedAncestors.length > 0 ? "ANCESTOR_PRUNED"
+            : decision?.viewGate === "REFUSED" ? "DIRECT_VIEW_PRUNED"
+            : decision?.condition === "NOT_TRUE" ? "DIRECT_CONDITION_PRUNED" : "UNPROVABLE";
+          const frame = {
+            schema: "page_projection_decision_v1", stage: "PROJECTED_PAGE", result: "AVAILABLE",
+            bodyBefore: original.body, bodyAfter: final.body,
+            tableBefore: original.table, tableAfter: final.table,
+            target: target === undefined ? "NONE" : target.table ? "TABLE" : "VISIBLE_BODY",
+            viewGate: decision?.viewGate ?? "UNPROVABLE",
+            condition: decision?.condition ?? "UNPROVABLE",
+            conditionReason: decision?.conditionReason ?? "UNKNOWN",
+            ancestor, projection, useState: decision?.useState ?? "UNPROVABLE",
+            targetRead: target?.table === true && !retained.has(target.id)
+              ? "TARGET_NOT_REACHED" : "NOT_OBSERVED",
+            visibleAfter: after.body.some((entry) => entry.visible) ? "SOME" : "NONE",
+          };
+          const allowed: Readonly<Record<string, readonly (string | boolean)[]>> = {
+            schema: ["page_projection_decision_v1"], stage: ["PROJECTED_PAGE"], result: ["AVAILABLE"],
+            bodyBefore: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
+            bodyAfter: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
+            tableBefore: [true, false], tableAfter: [true, false],
+            target: ["TABLE", "VISIBLE_BODY", "NONE", "UNPROVABLE"],
+            viewGate: ["ABSENT", "ALLOWED", "REFUSED", "UNPROVABLE"],
+            condition: ["ABSENT", "TRUE", "NOT_TRUE", "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNPROVABLE"],
+            conditionReason: ["ABSENT", "SUPPORTED_TRUE", "SUPPORTED_FALSE", "UNSUPPORTED_OPERAND",
+              "SUBJECT_UNAVAILABLE", "FIELD_UNAVAILABLE", "DECLARATION_UNPROVABLE",
+              "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNKNOWN"],
+            ancestor: ["NONE", "VIEW_REFUSED", "CONDITION_NOT_TRUE", "MIXED", "UNPROVABLE"],
+            projection: ["RETAINED", "DIRECT_VIEW_PRUNED", "DIRECT_CONDITION_PRUNED",
+              "ANCESTOR_PRUNED", "UNPROVABLE"],
+            useState: ["PLAIN_CONTENT", "AVAILABLE", "DISABLED", "UNPROVABLE"],
+            targetRead: ["TARGET_NOT_REACHED", "NOT_OBSERVED"],
+            visibleAfter: ["SOME", "NONE", "UNPROVABLE"],
+          };
+          if (Object.keys(frame).length !== 16 || Object.entries(frame)
+            .some(([key, value]) => !allowed[key]?.includes(value))) return;
+          const line = "VORTEX_LOCAL_PAGE_PROJECTION_DECISION:" + JSON.stringify(frame);
+          if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
+        } catch {
+          // Oversized, ambiguous or throwing observations are dropped without touching the page.
+        }
+      },
     };
   } catch {
     return undefined;
@@ -1601,11 +1735,17 @@ const loadApplicationPageInternal = async (
     ? localPageCompositionObserver(pageDefinition, application.content.shells)
     : undefined;
   observeComposition?.("INSTALLED_PAGE", "AVAILABLE");
+  const observeProjectionDecision = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    pageDefinition.type !== "guided_form"
+    ? localPageProjectionDecisionObserver(pageDefinition, application.content.shells)
+    : undefined;
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
   const pageService = createStoredPageCapabilityService({
     ...dependencies,
     context,
+    ...(observeProjectionDecision === undefined ? {}
+      : { observeProjectionDecision: observeProjectionDecision.capture }),
     selection: {
       pageId: pageDefinition.pageId,
       ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
@@ -1623,6 +1763,7 @@ const loadApplicationPageInternal = async (
     return { kind: "unavailable" };
   }
   observeComposition?.("PROJECTED_PAGE", "AVAILABLE", projectedPage.value);
+  observeProjectionDecision?.emit(projectedPage.value);
   // The page capability projection is authoritative, but its derived choice settings still
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
