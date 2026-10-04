@@ -121,7 +121,7 @@ const refuseRecordedApplicationRoot = (): never => {
   );
 };
 
-const recordedRootId = (record: unknown): string => {
+const recordedRootId = (record: unknown) => {
   if (record === null || typeof record !== "object" || !("rootId" in record))
     return refuseRecordedApplicationRoot();
   const parsed = platformIdSchema.safeParse(record.rootId);
