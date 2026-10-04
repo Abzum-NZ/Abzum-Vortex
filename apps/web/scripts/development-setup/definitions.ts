@@ -7,11 +7,13 @@ import {
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
   DefinitionStoreError,
   type ImmutableDefinitionPublicationCatalogueDefinition,
+  type TrustedApplicationRootOriginKind,
 } from "@vortex/definition";
 import {
   crmApplication,
@@ -83,21 +85,90 @@ const moduleSources = [
   ...hrModuleSources,
 ] as readonly StoredDefinitionSource[];
 
-const applicationSources = [
-  iamApplication,
-  tenantAdministrationApplication,
-  organisationAdministrationApplication,
-  operationsApplication,
-  crmApplication,
-  serviceDeskApplication,
-  landingZoneApplication,
-] as readonly StoredDefinitionSource[];
+type TrustedApplicationDescriptor = Readonly<{
+  source: Extract<StoredDefinitionSource, { kind: "application" }>;
+  applicationOriginKind: TrustedApplicationRootOriginKind;
+}>;
+
+const applicationDescriptors: readonly TrustedApplicationDescriptor[] = [
+  { source: iamApplication, applicationOriginKind: "platform_system_application" },
+  { source: tenantAdministrationApplication, applicationOriginKind: "platform_system_application" },
+  {
+    source: organisationAdministrationApplication,
+    applicationOriginKind: "platform_system_application",
+  },
+  { source: operationsApplication, applicationOriginKind: "ordinary" },
+  { source: crmApplication, applicationOriginKind: "ordinary" },
+  { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
+  { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
+];
+
+const shippedApplicationDescriptor = (key: string): TrustedApplicationDescriptor => {
+  const descriptor = applicationDescriptors.find((candidate) => candidate.source.key === key);
+  if (descriptor === undefined || descriptor.source.kind !== "application")
+    throw new Error(`Application ${key} is not a shipped application`);
+  return descriptor;
+};
 
 /** The shipped application source for a manifest key, or a refusal for anything unshipped. */
 export const shippedApplicationSource = (key: string): StoredDefinitionSource => {
-  const source = applicationSources.find((candidate) => candidate.key === key);
-  if (source === undefined) throw new Error(`Application ${key} is not a shipped application`);
-  return source;
+  return shippedApplicationDescriptor(key).source;
+};
+
+const refuseRecordedApplicationRoot = (): never => {
+  throw new Error(
+    "Recorded Application root identity or provenance is unavailable or mismatched. Use a fresh disposable local database (pnpm db:reset) and run setup again; existing roots will not be relabelled.",
+  );
+};
+
+const recordedRootId = (record: unknown) => {
+  if (record === null || typeof record !== "object" || !("rootId" in record))
+    return refuseRecordedApplicationRoot();
+  const parsed = platformIdSchema.safeParse(record.rootId);
+  if (!parsed.success) return refuseRecordedApplicationRoot();
+  return parsed.data;
+};
+
+/** Both protected reads run in the same validated System transaction as the owning operation. */
+const verifyApplicationRoot = async (
+  transaction: RequestDatabaseTransaction,
+  descriptor: TrustedApplicationDescriptor,
+  rootId: string,
+): Promise<void> => {
+  const rows = await transaction.query<
+    DatabaseRow & { outcome: unknown; application_origin_kind: unknown; definition_key: unknown }
+  >`
+    select classification.outcome, classification.application_origin_kind,
+      vortex_definition.read_builder_application_root_key(${rootId}::uuid) as definition_key
+    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
+      as classification
+  `;
+  if (
+    rows.length !== 1 ||
+    rows[0]!.outcome !== "available" ||
+    rows[0]!.application_origin_kind !== descriptor.applicationOriginKind ||
+    rows[0]!.definition_key !== descriptor.source.key
+  )
+    refuseRecordedApplicationRoot();
+};
+
+/** Verify only selected Applications, including interrupted upgrades, without changing setup state. */
+export const verifyRecordedShippedApplicationRoots = async (
+  facts: SystemContextFacts,
+  applicationKeys: readonly string[],
+  state: SetupState,
+): Promise<void> => {
+  const descriptors = applicationKeys.map(shippedApplicationDescriptor);
+  await inSystemTransaction(mintSystemContext(facts), async (transaction) => {
+    for (const descriptor of descriptors) {
+      const release = state.releases[descriptor.source.key];
+      const draft = state.drafts[descriptor.source.key];
+      if (release !== undefined)
+        await verifyApplicationRoot(transaction, descriptor, recordedRootId(release));
+      if (draft !== undefined)
+        await verifyApplicationRoot(transaction, descriptor, recordedRootId(draft));
+    }
+  });
 };
 
 type ModuleBody = Readonly<{ dependencies?: readonly Readonly<{ module: string }>[] }>;
@@ -147,63 +218,83 @@ const publishOne = async (
   source: StoredDefinitionSource,
   state: SetupState,
   log: (message: string) => void,
+  descriptor?: TrustedApplicationDescriptor,
 ): Promise<PublishedRelease> => {
+  if (source.kind === "application" && (descriptor === undefined || descriptor.source !== source))
+    throw new Error("Application publication requires its trusted shipped descriptor");
   const recorded = state.releases[source.key];
-  if (recorded !== undefined) return recorded;
+  if (recorded !== undefined) {
+    if (descriptor !== undefined)
+      await inSystemTransaction(mintSystemContext(facts), (transaction) =>
+        verifyApplicationRoot(transaction, descriptor, recordedRootId(recorded)),
+      );
+    return recorded;
+  }
 
   log(`publishing ${source.key}`);
   const authority = developmentBuilderAuthority(facts.organizationId);
   const context: SessionContext = mintSystemContext(facts);
   let draft = state.drafts[source.key];
   if (draft === undefined) {
-    const created = await inSystemTransaction(context, (transaction) =>
-      createDefinitionStore(transaction, authority)
-        .createRoot({ source })
-        .catch((error: unknown) => {
-          if (
-            error instanceof DefinitionStoreError &&
-            error.code === "DEFINITION_ROOT_ALREADY_EXISTS"
-          )
-            throw new Error(
-              `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
-            );
-          throw error;
-        }),
-    );
+    const created = await inSystemTransaction(context, async (transaction) => {
+      const store = createDefinitionStore(transaction, authority);
+      const creation =
+        descriptor === undefined
+          ? store.createRoot({ source })
+          : store.createTrustedApplicationRoot({ source }, descriptor.applicationOriginKind);
+      const created = await creation.catch((error: unknown) => {
+        if (
+          error instanceof DefinitionStoreError &&
+          error.code === "DEFINITION_ROOT_ALREADY_EXISTS"
+        )
+          throw new Error(
+            `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
+          );
+        throw error;
+      });
+      if (descriptor !== undefined)
+        await verifyApplicationRoot(transaction, descriptor, created.rootId);
+      return created;
+    });
     draft = { rootId: created.rootId, draftRevision: created.draftRevision };
     state.drafts[source.key] = draft;
     state.save();
   } else {
     // A resumed run authors the current shipped source over the unpublished draft.
-    const saved = await inSystemTransaction(context, (transaction) =>
-      createDefinitionStore(transaction, authority).saveDraft({
-        rootId: platformIdSchema.parse(draft!.rootId),
+    const saved = await inSystemTransaction(context, async (transaction) => {
+      const rootId =
+        descriptor === undefined ? platformIdSchema.parse(draft!.rootId) : recordedRootId(draft);
+      if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+      return createDefinitionStore(transaction, authority).saveDraft({
+        rootId,
         expectedDraftRevision: draft!.draftRevision,
         source,
-      }),
-    );
+      });
+    });
     draft = { rootId: saved.rootId, draftRevision: saved.draftRevision };
     state.drafts[source.key] = draft;
     state.save();
   }
   const { rootId, draftRevision } = draft;
-  const prepared = await inSystemTransaction(context, (transaction) =>
-    createDatabaseDefinitionPublicationService(
+  const prepared = await inSystemTransaction(context, async (transaction) => {
+    if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+    return createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
-    ).prepare(context, { rootId, expectedDraftRevision: draftRevision }),
-  );
-  const published = await inSystemTransaction(context, (transaction) =>
-    createDatabaseDefinitionPublicationService(
+    ).prepare(context, { rootId, expectedDraftRevision: draftRevision });
+  });
+  const published = await inSystemTransaction(context, async (transaction) => {
+    if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+    return createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
     ).publish(context, {
       confirmation: prepared.confirmation,
       releaseNote: "Shipped release published by the local development setup",
-    }),
-  );
+    });
+  });
   const release: PublishedRelease = {
     rootId: published.rootId,
     releaseRevision: published.releaseRevision,
@@ -222,10 +313,14 @@ export const publishShippedDefinitions = async (
   state: SetupState,
   log: (message: string) => void,
 ): Promise<ReadonlyMap<string, PublishedRelease>> => {
+  // Refuse every recorded selected Application before any Module or Application state changes.
+  await verifyRecordedShippedApplicationRoots(facts, applicationKeys, state);
   const published = new Map<string, PublishedRelease>();
   for (const module of modulesInDependencyOrder(applicationKeys))
     published.set(module.key, await publishOne(facts, module, state, log));
-  for (const key of applicationKeys)
-    published.set(key, await publishOne(facts, shippedApplicationSource(key), state, log));
+  for (const key of applicationKeys) {
+    const descriptor = shippedApplicationDescriptor(key);
+    published.set(key, await publishOne(facts, descriptor.source, state, log, descriptor));
+  }
   return published;
 };
