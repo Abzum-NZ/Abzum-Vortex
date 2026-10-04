@@ -10,3 +10,4 @@ export * from "./selection-inspector";
 export * from "./condition-controls";
 export * from "./module-page-generator";
 export * from "./application-appearance";
+export * from "./application-composition-commands";
