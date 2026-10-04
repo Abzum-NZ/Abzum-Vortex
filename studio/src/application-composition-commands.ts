@@ -8,7 +8,10 @@ import {
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
+  type BlockPropertySchemaV2Contract,
 } from "@vortex/contracts";
+import { createStudioDiscoveryAdapter } from "./discovery-adapter";
+import { getStudioContextualPaletteGroups } from "./contextual-palette";
 import { createVortexAuthoredPuckAdapterV2 } from "./vortex-authored-puck-adapter";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
@@ -32,7 +35,18 @@ export type StudioCompositionContext = Readonly<{
 export type StudioCompositionCommand =
   | Readonly<{ kind: "order"; breakpoint: StudioCompositionBreakpoint; order: readonly string[] | null }>
   | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>
-  | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>;
+  | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
+  | Readonly<{ kind: "add"; blockId: string; releaseVersion: string; alias: string;
+      settings: StudioCompositionTextSettings }>;
+
+export type StudioCompositionTextSettings = Readonly<Record<string, Readonly<{ kind: "text"; value: string }>>>;
+export type StudioCompositionPaletteChoice = Readonly<{
+  id: string; blockId: string; releaseVersion: string; key: string; name: string;
+  properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" }>[];
+}>;
+export type StudioCompositionPaletteModel =
+  | Readonly<{ kind: "available"; choices: readonly StudioCompositionPaletteChoice[] }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionDestination =
   | Readonly<{ kind: "root" }>
@@ -298,6 +312,160 @@ const privateContentAt = (root: unknown, steps: readonly SlotStep[]): unknown[] 
   return content;
 };
 
+/** Refuse cycles and accessors before recursive schemas read an authored snapshot. */
+const plainSource = (source: unknown): void => {
+  const pending = [{ value: source, exit: false }];
+  const ancestors = new Set<object>();
+  while (pending.length > 0) {
+    const entry = pending.pop()!;
+    const value = entry.value;
+    if (value === null || typeof value !== "object") {
+      if (value !== undefined && typeof value !== "string" && typeof value !== "number" &&
+        typeof value !== "boolean") return refuse();
+      continue;
+    }
+    if (entry.exit) { ancestors.delete(value); continue; }
+    const prototype = Object.getPrototypeOf(value);
+    if ((Array.isArray(value) ? prototype !== Array.prototype :
+      prototype !== Object.prototype && prototype !== null) || ancestors.has(value)) return refuse();
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Reflect.ownKeys(value).some((key) => typeof key !== "string") ||
+      Object.values(descriptors).some((descriptor) => descriptor.get !== undefined || descriptor.set !== undefined))
+      return refuse();
+    ancestors.add(value);
+    pending.push({ value, exit: true });
+    for (const descriptor of Object.values(descriptors)) pending.push({ value: descriptor.value, exit: false });
+  }
+};
+
+const eligibleAddRelease = (release: PlatformBlockReleaseV2): boolean =>
+  release.paletteGroup === "content" && release.slots.length === 0 &&
+  release.properties.every((property) => property.kind === "text" && !property.required) &&
+  release.capabilities.accessibleName === "optional" && release.supportedStateOperations.length === 0 &&
+  release.supportedEvents.every((event) => event === "refresh");
+
+type AddTarget =
+  | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot; replace: (slot: SourceSlot) => void }
+  | { kind: "invalid" | "unsupported" };
+const resolveAdd = (context: StudioCompositionContext, selection: StudioSemanticSelection | null): AddTarget => {
+  if (selection?.kind !== "page") return { kind: "invalid" };
+  plainSource(context.source);
+  if (!validContext(context)) return { kind: "invalid" };
+  // Bound and validate the actual selected raw region before the recursive whole-source schema.
+  const rawPages = object(object(context.source).body).pages;
+  if (!Array.isArray(rawPages)) return { kind: "invalid" };
+  const rawMatches = rawPages.filter((page: unknown) => object(page).id === selection.pageAlias);
+  if (rawMatches.length !== 1) return { kind: "invalid" };
+  const rawPage = object(rawMatches[0]);
+  const rawComposition = object(rawPage.composition);
+  if (rawPage.type === "public" || rawPage.type === "guided_form" || rawComposition.shell_kind !== "default")
+    return { kind: "unsupported" };
+  bridge.toPuckData(rawComposition.main);
+  const source = applicationSourceDocumentV2Schema.parse(context.source);
+  if (resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !== "resolved")
+    return { kind: "invalid" };
+  const pages = source.body.pages.filter((page) => page.id === selection.pageAlias);
+  const page = pages.length === 1 ? pages[0] : undefined;
+  if (page === undefined) return { kind: "invalid" };
+  if (page.type === "public" || page.type === "guided_form" || page.composition.shell_kind !== "default")
+    return { kind: "unsupported" };
+  const composition = page.composition;
+  if (!manifestMatches(source, composition.main)) return { kind: "unsupported" };
+  return { kind: "available", source, main: composition.main,
+    replace: (slot) => { composition.main = slot; } };
+};
+
+const addChoices = (searchText: string, authoredAlias: string): StudioCompositionPaletteChoice[] => {
+  // This surface describes an already resolved nonpublic page; it grants no authority.
+  const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
+  return getStudioContextualPaletteGroups(discovery, { kind: "page" }, searchText)
+    .flatMap((group) => group.choices).flatMap((choice) => {
+      const release = releases.get(`${choice.blockId}:${choice.releaseVersion}`);
+      if (release === undefined || !eligibleAddRelease(release)) return [];
+      const properties = release.properties.map((property) => {
+        if (property.kind !== "text") return refuse();
+        return property;
+      });
+      // Optional declarations must really accept omission and the native seed.
+      // Validation uses an existing authored alias or the user's proposed alias,
+      // never a generated placement identity. This detached seed is not persisted.
+      bridge.toPuckData(seedSlot(release, authoredAlias, {}));
+      return [{ id: choice.id, blockId: release.blockId, releaseVersion: release.releaseVersion,
+        key: release.key, name: release.name, properties }];
+    });
+};
+
+const seedSlot = (release: PlatformBlockReleaseV2, alias: string,
+  settings: StudioCompositionTextSettings): SourceSlot => ({
+  placements: { [alias]: {
+    block: { block_id: release.blockId, release_version: release.releaseVersion },
+    settings: structuredClone(settings), theme_overrides: {}, slots: {},
+    responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
+  } }, order: { desktop: [alias] },
+});
+
+export const describeStudioCompositionPalette = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null, searchText = ""): StudioCompositionPaletteModel => {
+  try {
+    if (selection?.kind !== "page") return { kind: "invalid" };
+    const target = resolveAdd(context, selection);
+    return target.kind === "available" ? { kind: "available", choices: addChoices(searchText, selection.pageAlias) } : target;
+  } catch { return { kind: "invalid" }; }
+};
+
+const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
+  command: unknown): StudioCompositionCommandResult => {
+  const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "alias", "settings"]);
+  if (input.kind !== "add" || typeof input.blockId !== "string" || typeof input.releaseVersion !== "string")
+    return { kind: "invalid" };
+  // The public source document exposes the same portable source-alias schema.
+  const alias = applicationSourceDocumentV2Schema.shape.root_alias.parse(input.alias);
+  const target = resolveAdd(current, selection);
+  if (target.kind !== "available") return target;
+  const release = releases.get(`${input.blockId}:${input.releaseVersion}`);
+  if (release === undefined || !eligibleAddRelease(release) ||
+    !addChoices("", alias).some((choice) => choice.blockId === input.blockId && choice.releaseVersion === input.releaseVersion))
+    return { kind: "unsupported" };
+  const allSlots = regions(target.source).map((region) => region.slot);
+  while (allSlots.length > 0) {
+    const slot = allSlots.pop()!;
+    if (Object.hasOwn(slot.placements, alias)) return { kind: "invalid" };
+    for (const placement of Object.values(slot.placements)) allSlots.push(...Object.values(placement.slots));
+  }
+  const rawSettings = object(input.settings);
+  const settingKeys = Reflect.ownKeys(rawSettings);
+  if (settingKeys.some((key) => typeof key !== "string" || !release.properties.some((property) => property.key === key)))
+    return { kind: "invalid" };
+  closedPlain(rawSettings, release.properties.filter((property) => Object.hasOwn(rawSettings, property.key))
+    .map((property) => property.key));
+  const settings: Record<string, { kind: "text"; value: string }> = {};
+  for (const key of Object.getOwnPropertyNames(rawSettings)) {
+    const text = closedPlain(rawSettings[key], ["kind", "value"]);
+    if (text.kind !== "text" || typeof text.value !== "string") return { kind: "invalid" };
+    settings[key] = { kind: "text", value: text.value };
+  }
+  const seed = bridge.toPuckData(seedSlot(release, alias, settings));
+  if (seed.content.length !== 1) return { kind: "invalid" };
+  const data = bridge.toPuckData(target.main);
+  data.content.push(...seed.content);
+  // Always use the real original destination. A new node's source hints cannot replace it.
+  target.replace(bridge.fromPuckData(target.main, data));
+  const dependencies = target.source.body.platform_block_dependencies;
+  const existing = dependencies.find((dependency) => dependency.block_id === release.blockId &&
+    dependency.release_version === release.releaseVersion);
+  if (existing !== undefined) {
+    if (existing.content_fingerprint !== release.contentFingerprint ||
+      existing.catalogue_fingerprint !== release.catalogueFingerprint) return { kind: "invalid" };
+  } else {
+    dependencies.push({ kind: "platform_block", block_id: release.blockId, release_version: release.releaseVersion,
+      content_fingerprint: release.contentFingerprint, catalogue_fingerprint: release.catalogueFingerprint });
+    dependencies.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
+      : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
+  }
+  const source = applicationSourceDocumentV2Schema.parse(target.source);
+  return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
+};
+
 export const describeStudioCompositionDestinations = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null): StudioCompositionDestinationModel => {
   try {
@@ -346,6 +514,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     if (!sameContext(expected, current)) return { kind: "stale" };
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
+    if (command.kind === "add") return applyAdd(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;

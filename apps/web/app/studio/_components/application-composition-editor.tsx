@@ -4,11 +4,14 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "rea
 import {
   describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
+  describeStudioCompositionPalette,
+  studioSemanticSelectionKey,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
   type StudioCompositionCommandResult,
   type StudioCompositionContext,
   type StudioCompositionLayout,
+  type StudioCompositionTextSettings,
   type StudioSemanticSelection,
 } from "@vortex/studio";
 
@@ -44,6 +47,138 @@ const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-
 
 /** Controls edit the native source through the same command for pointer and keyboard. */
 export function ApplicationCompositionEditor(props: Props) {
+  return props.selection.kind === "page" ? <ApplicationCompositionPalette {...props} />
+    : <PlacementCompositionEditor {...props} />;
+}
+
+type AddInputs = Readonly<{
+  search: string; releaseId: string; alias: string; settings: StudioCompositionTextSettings;
+}>;
+const emptyAddInputs = (): AddInputs => ({ search: "", releaseId: "", alias: "", settings: {} });
+const addInputsPending = (inputs: AddInputs): boolean => inputs.search !== "" || inputs.releaseId !== "" ||
+  inputs.alias !== "" || Object.keys(inputs.settings).length > 0;
+
+function ApplicationCompositionPalette(props: Props) {
+  const [inputs, setInputs] = useState<AddInputs>(emptyAddInputs);
+  const [message, setMessage] = useState("");
+  const selectionKey = studioSemanticSelectionKey(props.selection);
+  const model = useMemo(() => describeStudioCompositionPalette(props.context, props.selection),
+    [props.context, props.selection]);
+  const filtered = useMemo(() => describeStudioCompositionPalette(props.context, props.selection, inputs.search),
+    [props.context, props.selection, inputs.search]);
+  const formContext = useRef(props.context);
+  const formSelection = useRef(selectionKey);
+  const pending = useRef(false);
+  const titleId = useId();
+  const hintId = useId();
+
+  // Disabling during Save/Reopen or filtering the palette cannot discard inputs.
+  // Only an accepted source, lifetime or semantic selection change resets them.
+  useEffect(() => {
+    setInputs(emptyAddInputs());
+    formContext.current = props.context;
+    formSelection.current = selectionKey;
+    pending.current = false;
+    props.onPendingChange(false);
+    setMessage("");
+  }, [props.context, selectionKey, props.onPendingChange]);
+
+  if (model.kind !== "available") return <section className="space-y-2 rounded border border-border p-4">
+    <h3 className="font-semibold">Add a component</h3>
+    <p role="status">{model.kind === "unsupported"
+      ? "Adding is supported only in an ordinary private page's main region with known block releases. Its source is preserved."
+      : "This page is not available in the current draft. Its source is preserved."}</p>
+  </section>;
+
+  const choices = filtered.kind === "available" ? filtered.choices : [];
+  const chosen = model.choices.find((choice) => choice.id === inputs.releaseId);
+  // Filtering never silently changes a selected exact release or its text inputs.
+  const options = chosen !== undefined && !choices.some((choice) => choice.id === chosen.id)
+    ? [...choices, chosen] : choices;
+  const update = (next: AddInputs) => {
+    if (props.disabled || formContext.current !== props.context || formSelection.current !== selectionKey) return;
+    pending.current = addInputsPending(next);
+    props.onPendingChange(pending.current);
+    setInputs(next);
+    setMessage("");
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (props.disabled || !pending.current || chosen === undefined) return;
+    if (formContext.current !== props.context || formSelection.current !== selectionKey) {
+      setMessage("The draft or selection changed. Your inputs are preserved.");
+      return;
+    }
+    const result = props.onCommand(formContext.current, props.selection, {
+      kind: "add", blockId: chosen.blockId, releaseVersion: chosen.releaseVersion,
+      alias: inputs.alias, settings: inputs.settings,
+    });
+    if (result === "applied") {
+      pending.current = false;
+      props.onPendingChange(false);
+      setInputs(emptyAddInputs());
+      setMessage("Component added to one local history entry. Save to persist it.");
+    } else setMessage(result === "stale" ? "The draft or selection changed. Your inputs are preserved."
+      : result === "unsupported" ? "This release or region is unsupported. Your inputs are preserved."
+        : "No component was added. Use a unique alias and valid optional text. Your inputs are preserved.");
+  };
+
+  return <section className="space-y-4 rounded border border-border p-4" aria-labelledby={titleId}>
+    <h3 id={titleId} className="font-semibold">Add a component</h3>
+    <p className="text-sm">Add an exact released presentation component to this page's main region. Existing components and responsive orders are retained.</p>
+    <form className="space-y-3" onSubmit={submit} aria-describedby={hintId}>
+      <fieldset className="space-y-3" disabled={props.disabled}>
+        <legend className="font-medium">Released component palette</legend>
+        <label className="block space-y-1"><span>Search components</span>
+          <input className={fieldClass} type="search" value={inputs.search}
+            onChange={(event) => update({ ...inputs, search: event.target.value })} /></label>
+        <label className="block space-y-1"><span>Exact component release</span>
+          <select className={fieldClass} required value={inputs.releaseId} onChange={(event) => {
+            const releaseId = event.target.value;
+            if (releaseId !== "" && !model.choices.some((choice) => choice.id === releaseId)) return;
+            update({ ...inputs, releaseId, settings: {} });
+          }}><option value="">Choose a release</option>
+            {options.map((choice) => <option key={choice.id} value={choice.id}>
+              {choice.name} ({choice.key}, {choice.releaseVersion})
+            </option>)}
+          </select></label>
+        {choices.length === 0 && <p role="status">No supported releases match this search. Any selected release and its inputs are preserved.</p>}
+        <label className="block space-y-1"><span>Placement alias</span>
+          <input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
+            value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
+        <p className="text-sm">Enter a unique authored alias beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
+        {chosen?.properties.map((property) => {
+          const supplied = Object.hasOwn(inputs.settings, property.key) ? inputs.settings[property.key] : undefined;
+          return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
+            <legend>{property.label}</legend>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={supplied !== undefined}
+              onChange={(event) => {
+                const settings = { ...inputs.settings };
+                if (event.target.checked) settings[property.key] = { kind: "text", value: "" };
+                else delete settings[property.key];
+                update({ ...inputs, settings });
+              }} />Supply this optional text</label>
+            {supplied !== undefined && <label className="block space-y-1"><span>{property.label} text</span>
+              <textarea className={fieldClass} required={property.minLength > 0}
+                minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
+                onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
+                  [property.key]: { kind: "text", value: event.target.value } } })} /></label>}
+            {property.help !== undefined && <p className="text-sm">{property.help}</p>}
+          </fieldset>;
+        })}
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={buttonClass} disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</button>
+        <button type="button" className={buttonClass} disabled={props.disabled || !addInputsPending(inputs)}
+          onClick={() => update(emptyAddInputs())}>Discard add inputs</button>
+      </div>
+    </form>
+    <p id={hintId} className="text-sm">Optional text remains omitted until supplied. Enter or the Add button applies the same guarded command. Save persists the draft; adding does not run data or actions.</p>
+    <p role="status" aria-live="polite">{message}</p>
+  </section>;
+}
+
+function PlacementCompositionEditor(props: Props) {
   const [breakpoint, setBreakpoint] = useState<StudioCompositionBreakpoint>("desktop");
   const model = useMemo(() => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint]);
