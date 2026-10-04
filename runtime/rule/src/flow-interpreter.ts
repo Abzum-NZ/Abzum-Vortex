@@ -470,13 +470,18 @@ const evaluateValue = (
   else if (value.kind === "reference")
     result = scope.reference(value.reference as FlowReference);
   else if (value.kind === "formula") result = evaluateFlowFormula(value.formula, scope);
-  // A map value resolves entry by entry, under exactly the same rules as a top-level value, so a
+  // Constructed values resolve under exactly the same rules as a top-level value, so a
   // nested reference reads the same input, variable or task output it would read on its own.
-  else {
+  else if (value.kind === "map") {
     const entries: Record<string, JsonValue> = {};
     for (const [name, entry] of Object.entries(value.entries))
       entries[name] = evaluateValue(entry, state, activation, flow, taskId).value;
     result = typed("json", entries);
+  } else if (value.kind === "array") {
+    const items = value.items.map((item) =>
+      evaluateValue(item, state, activation, flow, taskId).value,
+    );
+    result = typed("json", items);
   }
   return result ?? failed("value_unresolved", "failed", taskId);
 };

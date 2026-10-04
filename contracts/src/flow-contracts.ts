@@ -518,46 +518,57 @@ export const flowFormulaSchema: z.ZodType<FlowFormula> = flowFormulaTreeSchema.s
   },
 );
 
-// ─── Values: literal, closed reference, formula or a map of values ───────────────────────────
+// ─── Values: literal, closed reference, formula, map or array ────────────────────────────────
 
-/** Closed bounds for one map value: how many entries it holds and how deeply maps may nest. */
+/** Closed constructor bounds; map and array nesting share the same five-level budget. */
 export const flowMaximumMapEntries = 100;
 export const flowMaximumMapDepth = 5;
+export const flowMaximumArrayItems = 100;
 
 /**
- * A map of named values. It is the one value kind that carries other values, so a task property
+ * A map of named values. Like an array, it carries other values, so a task property
  * declared as an input map can fill its entries from the flow's own inputs, variables and task
  * outputs instead of only from a fixed literal. A plain JSON object literal is still exactly a
- * literal: only this kind is ever resolved entry by entry, and an entry is a flow value of its own.
+ * literal: a constructed map is resolved entry by entry, and each entry is a flow value of its own.
  */
 export type FlowMapValue = Readonly<{
   kind: "map";
   entries: Readonly<Record<string, FlowValue>>;
 }>;
 
+/** An ordered JSON array whose members are independently resolved flow values. */
+export type FlowArrayValue = Readonly<{
+  kind: "array";
+  items: readonly FlowValue[];
+}>;
+
 export type FlowValueObject =
   | Readonly<{ kind: "literal"; literal: FlowLiteral }>
   | Readonly<{ kind: "reference"; reference: FlowReference }>
   | Readonly<{ kind: "formula"; formula: FlowFormula }>
-  | FlowMapValue;
+  | FlowMapValue
+  | FlowArrayValue;
 
-/** Every value a task property, input map or binding may hold. */
+/** Every value a task property, flow output or named input map entry may hold. */
 export type FlowValue = FlowValueObject;
 
-/** True while every nested map under `entries` is still within the closed nesting bound. */
-const flowMapEntriesWithinDepth = (
-  entries: Readonly<Record<string, FlowValue>>,
+/** Count every enclosing map or array once, including the root constructor. */
+const flowCompositeValuesWithinDepth = (
+  values: readonly FlowValue[],
   depth: number,
 ): boolean =>
   depth <= flowMaximumMapDepth &&
-  Object.values(entries).every(
-    (entry) => entry.kind !== "map" || flowMapEntriesWithinDepth(entry.entries, depth + 1),
+  values.every(
+    (entry) =>
+      entry.kind === "map"
+        ? flowCompositeValuesWithinDepth(Object.values(entry.entries), depth + 1)
+        : entry.kind !== "array" || flowCompositeValuesWithinDepth(entry.items, depth + 1),
   );
 
 /**
  * The entries of one map value: at most `flowMaximumMapEntries` named entries, and nesting no
- * deeper than `flowMaximumMapDepth` maps. Both bounds are checked on the parsed entries, so a map
- * that is deeper is refused wherever it is authored rather than at run time.
+ * deeper than `flowMaximumMapDepth` combined maps and arrays. Both bounds are checked on parsed
+ * entries, so alternating constructors cannot evade the nesting limit.
  */
 const flowMapEntriesSchema = (): z.ZodType<Record<string, FlowValue>> =>
   z
@@ -565,8 +576,16 @@ const flowMapEntriesSchema = (): z.ZodType<Record<string, FlowValue>> =>
     .refine((entries) => Object.keys(entries).length <= flowMaximumMapEntries, {
       message: `A map value holds at most ${flowMaximumMapEntries} entries`,
     })
-    .refine((entries) => flowMapEntriesWithinDepth(entries, 1), {
-      message: `A map value nests no deeper than ${flowMaximumMapDepth} maps`,
+    .refine((entries) => flowCompositeValuesWithinDepth(Object.values(entries), 1), {
+      message: `A constructed value nests no deeper than ${flowMaximumMapDepth} maps and arrays`,
+    });
+
+const flowArrayItemsSchema = (): z.ZodType<FlowValue[]> =>
+  z
+    .array(flowValueSchema)
+    .max(flowMaximumArrayItems)
+    .refine((items) => flowCompositeValuesWithinDepth(items, 1), {
+      message: `A constructed value nests no deeper than ${flowMaximumMapDepth} maps and arrays`,
     });
 
 const flowLiteralValueSchema = z
@@ -587,11 +606,16 @@ const flowMapValueSchema = z
   })
   .strict();
 
+const flowArrayValueSchema = z
+  .object({ kind: z.literal("array"), items: z.lazy(flowArrayItemsSchema) })
+  .strict();
+
 export const flowValueObjectSchema = z.discriminatedUnion("kind", [
   flowLiteralValueSchema,
   flowReferenceValueSchema,
   flowFormulaValueSchema,
   flowMapValueSchema,
+  flowArrayValueSchema,
 ]);
 
 const shorthandReferenceValueSchema = z.string().transform((text, context) => {
@@ -609,8 +633,8 @@ const shorthandReferenceValueSchema = z.string().transform((text, context) => {
 
 /**
  * A value in a task property or input map. A bare string is only accepted as one whole closed
- * reference, so an untyped or malformed reference is refused rather than kept as text. Its four
- * object kinds are exactly the declared `FlowValue`, whose map entries recurse through this schema.
+ * reference, so an untyped or malformed reference is refused rather than kept as text. Its five
+ * object kinds are exactly `FlowValue`; map entries and array items recurse through this schema.
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
 
@@ -1242,11 +1266,13 @@ const taskFormulas = (task: FlowTask): FlowFormula[] => {
   return formulas;
 };
 
-/** Every formula one value holds, including the formulas inside a map value's entries. */
+/** Every formula one value holds, including nested map entries and array items. */
 const collectValueFormulas = (value: FlowValue, into: FlowFormula[]): void => {
   if (value.kind === "formula") into.push(value.formula);
   else if (value.kind === "map")
     for (const entry of Object.values(value.entries)) collectValueFormulas(entry, into);
+  else if (value.kind === "array")
+    for (const item of value.items) collectValueFormulas(item, into);
 };
 
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
@@ -1423,9 +1449,9 @@ export const flowBindingCallerValueSchema = z
   .strict();
 
 /**
- * A binding's own input value. It is every value kind a task property may hold except a map: the
- * invoking surface fills a binding input from what it already has, so it never resolves a map, and
- * a binding that declared one would be refused by every surface that can start a flow.
+ * A binding's own input value excludes constructed maps and arrays: the invoking surface fills
+ * an input from what it already has and never resolves nested flow values. Both constructors are
+ * refused by every surface that can start a flow.
  */
 export const flowBindingInputSchema = z.union([
   shorthandReferenceValueSchema,
