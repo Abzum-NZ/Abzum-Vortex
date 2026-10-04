@@ -680,7 +680,7 @@ export const materialiseApplicationCompositionV2 = (
   const materialisedTheme = materialiseApplicationThemeV2(source.body.theme, source.key, snapshot.platformTheme);
   if (!materialisedTheme.valid) {
     const first = materialisedTheme.refusal;
-    reject(isDefinitionCompilerRefusalCode(first.ruleCode)
+    return reject(isDefinitionCompilerRefusalCode(first.ruleCode)
       ? first.ruleCode : "vortex.definition.application_block_settings", first.family, first.location);
   }
   const { theme, options: themeValidationOptions } = materialisedTheme;
