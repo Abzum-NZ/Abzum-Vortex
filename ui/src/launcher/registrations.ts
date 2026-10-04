@@ -1,6 +1,9 @@
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
+  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  projectedRecordPinTilesSchema,
+  mountedRecordPinFrameSchema,
   VIEW_FILTER_BLOCK_RELEASE,
 } from "@vortex/contracts";
 import {
@@ -12,6 +15,7 @@ import {
   type PlatformComponentRegistry,
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
+import { DefinitionRenderError } from "../definition-error";
 import {
   parseDisplayData,
   parseDisplayEventHandlers,
@@ -43,6 +47,32 @@ const LIST_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
   events: (value, location) => parseDisplayEventHandlers(value, location),
 });
 
+const RECORD_PIN_PAYLOAD_INPUTS = createPayloadParser({
+  data: (value, location) => parseDisplayData(value, (values) => {
+    const parsed = projectedRecordPinTilesSchema.safeParse(values);
+    if (!parsed.success) throw new DefinitionRenderError("INVALID_COMPOSITION", "Invalid protected tile projection", location);
+    return parsed.data;
+  }, location),
+  events: (value, location) => parseDisplayEventHandlers(value, location),
+  open_tile: (value, location) => {
+    if (typeof value !== "function") throw new DefinitionRenderError("INVALID_COMPOSITION", "A tile activation must be a callback", location);
+    return async (sourceRecordId: string, sourceRevision: number): Promise<void> => {
+      await value(sourceRecordId, sourceRevision);
+    };
+  },
+  pin_frame: (value, location) => {
+    const parsed = mountedRecordPinFrameSchema.safeParse(value);
+    if (!parsed.success) throw new DefinitionRenderError("INVALID_COMPOSITION", "Invalid tile invocation frame", location);
+    return parsed.data;
+  },
+});
+
+// Component-specific inputs keep the original list renderer's data type and parser intact.
+const RECORD_PIN_PAYLOAD_PARSER: PlatformComponentPayloadParser = (value, location) => {
+  const parsed = RECORD_PIN_PAYLOAD_INPUTS(value, location);
+  return Object.freeze({ pinData: parsed.data, events: parsed.events, openTile: parsed.open_tile, pinFrame: parsed.pin_frame });
+};
+
 /** Exact registrations pairing each launcher block release with its React renderer. */
 export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
@@ -55,6 +85,11 @@ export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistr
       metadata: LINK_TILES_BLOCK_RELEASE,
       render: LinkTiles,
       parsePayload: LIST_PAYLOAD_PARSER,
+    }),
+    Object.freeze({
+      metadata: RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+      render: LinkTiles,
+      parsePayload: RECORD_PIN_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: VIEW_FILTER_BLOCK_RELEASE,

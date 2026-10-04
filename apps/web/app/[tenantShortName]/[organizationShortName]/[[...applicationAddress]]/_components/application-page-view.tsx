@@ -44,6 +44,8 @@ import {
 } from "@vortex/ui";
 import {
   boardColumnContinuationRequestSchema,
+  projectedRecordPinTilesSchema,
+  mountedRecordPinFrameSchema,
   type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
@@ -1126,6 +1128,9 @@ function ApplicationPageViewContent({
         : model.data,
     [model.data, navigationKey, refreshedPlacementData],
   );
+  const currentTileDataRef = useRef(currentData);
+  currentTileDataRef.current = currentData;
+  const pinActivationInFlightRef = useRef(false);
   const currentEditFormBaselines = useMemo(() => {
     const baselines = { ...model.editFormBaselines };
     if (refreshedPlacementData?.navigationKey === navigationKey)
@@ -2510,6 +2515,11 @@ function ApplicationPageViewContent({
       }
       const held = selection[placementId];
       const ready = data as { status?: string; values?: Record<string, unknown> };
+      const pins = ready.status === "ready" ? projectedRecordPinTilesSchema.safeParse(ready.values) : undefined;
+      const pinFrame = mountedRecordPinFrameSchema.safeParse({
+        pageId: model.pageId, installationRevision: application.installationRevision,
+        releaseKey: application.releaseKey,
+      });
       inputs[placementId] = {
         data:
           activeChoicePages[placementId] !== undefined
@@ -2518,6 +2528,35 @@ function ApplicationPageViewContent({
               ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
               : data,
         events,
+        ...(pins?.success !== true || !pinFrame.success ? {} : {
+          pin_frame: pinFrame.data,
+          open_tile: async (sourceRecordId: string, sourceRevision: number): Promise<void> => {
+            if (busy || pinActivationInFlightRef.current || placementRequestsRef.current.key !== navigationKey ||
+                currentTileDataRef.current[placementId] !== data) return;
+            const rows = pins.data.rows.filter((row) => row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+              row.sourceRevision === sourceRevision);
+            const row = rows[0];
+            if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable") return;
+            const target = row.target;
+            const href = target.kind === "record"
+              ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+              : target.address;
+            const address = new URL(href, window.location.origin);
+            if ((target.kind === "record" && address.origin !== window.location.origin) ||
+                (target.kind === "external" && address.protocol !== "https:")) return;
+            pinActivationInFlightRef.current = true;
+            try {
+              if (target.openBehaviour === "replace" && unsavedWork.hasUnsavedWork() &&
+                  !(await unsavedWork.confirmDiscardUnsavedWork())) return;
+              // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
+              if (placementRequestsRef.current.key !== navigationKey ||
+                  currentTileDataRef.current[placementId] !== data) return;
+              if (target.openBehaviour === "new_page") window.open(address.href, "_blank", "noopener,noreferrer");
+              else if (target.kind === "record") router.push(`${address.pathname}${address.search}`);
+              else window.location.assign(address.href);
+            } finally { pinActivationInFlightRef.current = false; }
+          },
+        }),
         ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
@@ -2535,6 +2574,9 @@ function ApplicationPageViewContent({
     activeChoicePages,
     model.referenceChoiceInputs,
     currentData,
+    application,
+    navigationKey,
+    model.pageId,
     currentEditFormBaselines,
     guidedActivePlacementIds,
     guidedActiveFormIds,
