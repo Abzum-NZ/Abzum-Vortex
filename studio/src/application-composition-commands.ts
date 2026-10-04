@@ -3,6 +3,9 @@ import {
   applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
   organizationIdSchema,
+  flowTaskRegistry,
+  flowMaximumTaskCount,
+  flowMaximumTaskNestingDepth,
   sourcePlacementLayoutV2Schema,
   sourcePlacementSlotV2Schema,
   type ApplicationRootId,
@@ -36,6 +39,7 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "order"; breakpoint: StudioCompositionBreakpoint; order: readonly string[] | null }>
   | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
+  | Readonly<{ kind: "remove" }>
   | Readonly<{ kind: "add"; blockId: string; releaseVersion: string; alias: string;
       settings: StudioCompositionTextSettings }>;
 
@@ -61,6 +65,13 @@ export type StudioCompositionDestinationModel =
 export type StudioCompositionCommandResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
   | Readonly<{ kind: "invalid" | "stale" | "unsupported" }>;
+
+export type StudioCompositionRemovalReason =
+  "flow_control" | "flow_form" | "flow_component" | "flow_panel" | "required_slot" | "unresolved_target";
+export type StudioCompositionRemovalModel =
+  | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
+  | Readonly<{ kind: "blocked"; reason: StudioCompositionRemovalReason }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionEditorModel =
   | Readonly<{
@@ -466,6 +477,167 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
+/** Read only declared placement identity positions, never arbitrary literal data. */
+const removalReference = (source: ApplicationSourceDocumentV2, alias: string,
+  aliases: ReadonlySet<string>): StudioCompositionRemovalReason | undefined => {
+  if (source.body.flow_bindings.some((binding) => binding.control === alias)) return "flow_control";
+  const target = (value: unknown, qualified: boolean,
+    reason: StudioCompositionRemovalReason): StudioCompositionRemovalReason | undefined => {
+    if (typeof value !== "string") return "unresolved_target";
+    const separator = value.indexOf(":");
+    if (separator !== -1 && (!qualified || separator < 1 || value.slice(0, separator) !== source.key))
+      return "unresolved_target";
+    const local = value.slice(separator + 1);
+    if (!applicationSourceDocumentV2Schema.shape.root_alias.safeParse(local).success || !aliases.has(local))
+      return "unresolved_target";
+    return local === alias ? reason : undefined;
+  };
+  const literalTarget = (value: unknown, qualified: boolean,
+    reason: StudioCompositionRemovalReason): StudioCompositionRemovalReason | undefined => {
+    if (!isObject(value) || value.kind !== "literal" || !isObject(value.literal) ||
+      value.literal.type !== "text") return "unresolved_target";
+    return target(value.literal.value, qualified, reason);
+  };
+  const list = (value: unknown): readonly unknown[] => {
+    if (!Array.isArray(value)) return refuse();
+    return value;
+  };
+  const definitions = Object.values(flowTaskRegistry);
+  for (const flow of source.body.flows) {
+    // These are authored SourceFlow lists, not the compiled Flow body's shape.
+    const pending = [...flow.tasks, ...flow.errors, ...flow.finally]
+      .map((task) => ({ task: object(task), depth: 1 }));
+    let count = 0;
+    while (pending.length > 0) {
+      const entry = pending.pop()!;
+      if (++count > flowMaximumTaskCount || entry.depth > flowMaximumTaskNestingDepth)
+        return "unresolved_target";
+      const task = entry.task;
+      const definition = definitions.find((candidate) => candidate.type === task.type);
+      if (definition === undefined) return "unresolved_target";
+      const children: (readonly unknown[])[] = [];
+      if (definition.category === "control") {
+        switch (task.type) {
+          case "if":
+            children.push(list(task.then));
+            if (task.else !== undefined) children.push(list(task.else));
+            break;
+          case "switch":
+            for (const branch of list(task.cases)) children.push(list(object(branch).tasks));
+            if (task.default !== undefined) children.push(list(task.default));
+            break;
+          case "for_each": case "sequential": children.push(list(task.tasks)); break;
+          case "parallel":
+            for (const branch of list(task.branches)) children.push(list(branch));
+            break;
+          case "wait_for_person": {
+            const blocked = target(task.formId, true, "flow_form");
+            if (blocked !== undefined) return blocked;
+            break;
+          }
+          case "run_flow": case "stop": case "wait_until": break;
+          default: return "unresolved_target";
+        }
+      } else {
+        if (task.version !== definition.version || !isObject(task.properties)) return "unresolved_target";
+        for (const [key, declaration] of Object.entries(definition.properties)) {
+          const reason = declaration.type === "form_id" ? "flow_form"
+            : (task.type === "interface.refresh" || task.type === "interface.set_filter") && key === "component"
+              ? "flow_component" : task.type === "interface.set_panel" && key === "panel" ? "flow_panel" : undefined;
+          if (reason === undefined) continue;
+          const value = task.properties[key];
+          if (value === undefined && !declaration.required) continue;
+          const blocked = literalTarget(value, declaration.type === "form_id", reason);
+          if (blocked !== undefined) return blocked;
+        }
+      }
+      for (const child of children) for (const nested of child)
+        pending.push({ task: object(nested), depth: entry.depth + 1 });
+    }
+  }
+  return undefined;
+};
+
+type Removal = {
+  source: ApplicationSourceDocumentV2; target: Target; alias: string;
+  willRemoveUnusedRelease: boolean;
+};
+type ResolvedRemoval = { kind: "available"; removal: Removal }
+  | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
+const resolveRemoval = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null): ResolvedRemoval => {
+  plainSource(context.source);
+  const resolved = resolve(context, selection);
+  if (resolved === undefined) return { kind: "invalid" };
+  const { source, target, alias } = resolved;
+  const page = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
+    candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
+  if (page === undefined || (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
+    target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
+    source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" };
+  const release = releaseFor(target.placement);
+  if (release === undefined || !eligibleAddRelease(release) || Object.keys(target.placement.slots).length !== 0 ||
+    !manifestMatches(source, target.region.slot)) return { kind: "unsupported" };
+  bridge.toPuckData(target.region.slot);
+  let slot = target.region.slot;
+  for (const step of target.steps) {
+    const parent = slot.placements[step.parentAlias];
+    const declaration = parent === undefined ? undefined : releaseFor(parent)?.slots.find((item) => item.key === step.slotKey);
+    const child = parent?.slots[step.slotKey];
+    if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
+      return { kind: "unsupported" };
+    if (child === target.slot && declaration.required && Object.keys(child.placements).length === 1)
+      return { kind: "blocked", reason: "required_slot" };
+    slot = child;
+  }
+  const aliases = new Set<string>();
+  let releaseUses = 0;
+  const slots = regions(source).map((region) => region.slot);
+  while (slots.length > 0) {
+    const current = slots.pop()!;
+    for (const [id, placement] of Object.entries(current.placements)) {
+      if (aliases.has(id)) return { kind: "invalid" };
+      aliases.add(id);
+      if (placement.block.block_id === release.blockId && placement.block.release_version === release.releaseVersion)
+        releaseUses += 1;
+      slots.push(...Object.values(placement.slots));
+    }
+  }
+  const reason = removalReference(source, alias, aliases);
+  return reason === undefined ? { kind: "available", removal: {
+    source, target, alias, willRemoveUnusedRelease: releaseUses === 1,
+  } } : { kind: "blocked", reason };
+};
+
+export const describeStudioCompositionRemoval = (context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null): StudioCompositionRemovalModel => {
+  try {
+    const resolved = resolveRemoval(context, selection);
+    return resolved.kind === "available" ? { kind: "available", placementAlias: resolved.removal.alias,
+      willRemoveUnusedRelease: resolved.removal.willRemoveUnusedRelease } : resolved;
+  } catch { return { kind: "invalid" }; }
+};
+
+const applyRemoval = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
+  command: unknown): StudioCompositionCommandResult => {
+  closedPlain(command, ["kind"]);
+  const resolved = resolveRemoval(current, selection);
+  if (resolved.kind !== "available") return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
+  const { source, target, alias, willRemoveUnusedRelease } = resolved.removal;
+  const data = bridge.toPuckData(target.region.slot);
+  const content = privateContentAt(data.content, target.steps);
+  const index = content.findIndex((value) => object(object(value).props).id === alias);
+  if (index < 0) return { kind: "invalid" };
+  content.splice(index, 1);
+  // The original destination supplies order/provenance, including explicit empty breakpoints.
+  target.region.replace(bridge.fromPuckData(target.region.slot, data));
+  if (willRemoveUnusedRelease) source.body.platform_block_dependencies = source.body.platform_block_dependencies
+    .filter((dependency) => dependency.block_id !== target.placement.block.block_id ||
+      dependency.release_version !== target.placement.block.release_version);
+  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
+};
+
 export const describeStudioCompositionDestinations = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null): StudioCompositionDestinationModel => {
   try {
@@ -515,6 +687,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, selection, command);
+    if (command.kind === "remove") return applyRemoval(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;
