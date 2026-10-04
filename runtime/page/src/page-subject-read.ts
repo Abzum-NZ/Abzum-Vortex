@@ -13,7 +13,7 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
-import type { DatabaseRow } from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
@@ -45,6 +45,44 @@ const readableSubjectSchema = z
   })
   .passthrough();
 
+/** Reuses the fixed subject read only inside an already verified human request transaction. */
+export const readPageSubjectInTransaction = async (
+  transaction: RequestDatabaseTransaction,
+  subject: Readonly<{ recordTypeId: string; recordId: string }>,
+): Promise<PageSubjectReadResult> => {
+  const recordTypeId = recordTypeIdSchema.safeParse(subject.recordTypeId);
+  const recordId = recordIdSchema.safeParse(subject.recordId);
+  if (!recordTypeId.success || !recordId.success) return { kind: "refused" };
+  try {
+    const rows = await transaction.query<SubjectRow>`
+      select
+        vortex_record.read_record(${recordTypeId.data}::uuid, ${recordId.data}::uuid) as result,
+        vortex_record.read_record_capabilities(
+          ${recordTypeId.data}::uuid, ${recordId.data}::uuid
+        ) as capabilities
+    `;
+    const stored = rows[0];
+    const readable = readableSubjectSchema.safeParse(stored?.result);
+    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(stored?.capabilities);
+    // The same record must answer both reads; anything else is one neutral refusal.
+    if (
+      !readable.success ||
+      !capabilities.success ||
+      readable.data.recordId.toLowerCase() !== recordId.data.toLowerCase()
+    )
+      return { kind: "refused" };
+    const row = protectedQueryRowSchema.safeParse({
+      recordId: readable.data.recordId,
+      values: readable.data.values,
+      revision: readable.data.concurrencyNumber,
+      capabilities: capabilities.data,
+    });
+    return row.success ? { kind: "read", row: row.data } : { kind: "refused" };
+  } catch {
+    return { kind: "temporarily_unavailable" };
+  }
+};
+
 export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
   return Object.freeze({
@@ -53,40 +91,14 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
       selection: OrganizationSelectionCandidate,
       subject: Readonly<{ recordTypeId: string; recordId: string }>,
     ): Promise<PageSubjectReadResult> {
-      const recordTypeId = recordTypeIdSchema.safeParse(subject.recordTypeId);
-      const recordId = recordIdSchema.safeParse(subject.recordId);
-      if (!recordTypeId.success || !recordId.success) return { kind: "refused" };
-
+      if (
+        !recordTypeIdSchema.safeParse(subject.recordTypeId).success ||
+        !recordIdSchema.safeParse(subject.recordId).success
+      )
+        return { kind: "refused" };
       try {
-        const result = await requests.run(
-          session,
-          selection,
-          async (transaction): Promise<PageSubjectReadResult> => {
-            const rows = await transaction.query<SubjectRow>`
-              select
-                vortex_record.read_record(${recordTypeId.data}::uuid, ${recordId.data}::uuid) as result,
-                vortex_record.read_record_capabilities(
-                  ${recordTypeId.data}::uuid, ${recordId.data}::uuid
-                ) as capabilities
-            `;
-            const stored = rows[0];
-            const readable = readableSubjectSchema.safeParse(stored?.result);
-            const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(stored?.capabilities);
-            // The same record must answer both reads; anything else is one neutral refusal.
-            if (
-              !readable.success ||
-              !capabilities.success ||
-              readable.data.recordId.toLowerCase() !== recordId.data.toLowerCase()
-            )
-              return { kind: "refused" };
-            const row = protectedQueryRowSchema.safeParse({
-              recordId: readable.data.recordId,
-              values: readable.data.values,
-              revision: readable.data.concurrencyNumber,
-              capabilities: capabilities.data,
-            });
-            return row.success ? { kind: "read", row: row.data } : { kind: "refused" };
-          },
+        const result = await requests.run(session, selection, (transaction) =>
+          readPageSubjectInTransaction(transaction, subject),
         );
         if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
         return result.kind === "available" ? result.value : { kind: "refused" };
