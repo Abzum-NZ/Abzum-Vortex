@@ -73,6 +73,7 @@ import {
   type JsonValue,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  type PageDefinitionV2,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
@@ -143,6 +144,8 @@ export type ApplicationPageModel = Readonly<{
   shells: readonly ApplicationShellV2[];
   theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
   navigation: ProjectedNavigation;
+  /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
+  bodyContentAvailable?: boolean;
   /** Ready display data per data placement, by stable placement identity. */
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
@@ -247,6 +250,52 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+
+/** Reads only the projected body; shell chrome and permission reasons do not count as content. */
+const projectedBodyContentAvailable = (
+  definition: Exclude<PageDefinitionV2, { type: "guided_form" }>,
+  shells: readonly ApplicationShellV2[],
+  projected: Readonly<Record<string, unknown>>,
+): boolean => {
+  type Slot = ApplicationShellV2["layout"];
+  const breakpoints = ["desktop", "tablet", "phone"] as const;
+  type Visibility = Record<(typeof breakpoints)[number], boolean>;
+  // The stored Page service has already parsed and projected this canonical composition.
+  const main = (projected.composition as { main: Slot }).main;
+  const visibleContent = (slot: Slot, ancestors: Visibility): boolean =>
+    Object.values(slot.placements).some((placement) =>
+      breakpoints.some((breakpoint) =>
+        ancestors[breakpoint] && placement.responsive[breakpoint].visible,
+      ),
+    );
+  const visible: Visibility = { desktop: true, tablet: true, phone: true };
+  const composition = definition.composition;
+  if (composition.shellKind === "default") return visibleContent(main, visible);
+
+  const shell = shells.find((candidate) => candidate.shellId === composition.shellId);
+  if (shell === undefined) throw new Error("Page body composition unavailable");
+  const targets = new Map<string, Set<string>>();
+  for (const binding of shell.contentSlots) {
+    if (!Object.hasOwn(composition.content, String(binding.slotId))) continue;
+    const id = String(binding.parentPlacementId).toLowerCase();
+    const slots = targets.get(id) ?? new Set<string>();
+    slots.add(binding.parentSlotKey);
+    targets.set(id, slots);
+  }
+  const visit = (slot: Slot, ancestors: Visibility): boolean =>
+    Object.entries(slot.placements).some(([placementId, placement]) => {
+      const effective: Visibility = {
+        desktop: ancestors.desktop && placement.responsive.desktop.visible,
+        tablet: ancestors.tablet && placement.responsive.tablet.visible,
+        phone: ancestors.phone && placement.responsive.phone.visible,
+      };
+      return Object.entries(placement.slots).some(([slotKey, child]) =>
+        (targets.get(placementId.toLowerCase())?.has(slotKey) === true &&
+          visibleContent(child, effective)) || visit(child, effective),
+      );
+    });
+  return visit(main, visible);
+};
 
 const isBoardPlacement = (placement: unknown): boolean => {
   if (!isRecord(placement) || !isRecord(placement.block)) return false;
@@ -1573,6 +1622,9 @@ const loadApplicationPageInternal = async (
   // The page capability projection is authoritative, but its derived choice settings still
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
+  const bodyContentAvailable = pageDefinition.type === "guided_form"
+    ? undefined
+    : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
   const allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
@@ -3069,6 +3121,7 @@ const loadApplicationPageInternal = async (
       shells: application.content.shells,
       theme: application.content.theme,
       navigation: navigation.value,
+      ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
       data,
       bindings,
       refreshPlacementsByBinding,
