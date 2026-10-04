@@ -1602,10 +1602,14 @@ const loadApplicationPageInternal = async (
     : undefined;
   observeComposition?.("INSTALLED_PAGE", "AVAILABLE");
 
+  const conditionSubjectId = first(parameters[pageSubjectParameter]);
   const pageService = createStoredPageCapabilityService({
     ...dependencies,
     context,
-    selection: { pageId: pageDefinition.pageId },
+    selection: {
+      pageId: pageDefinition.pageId,
+      ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
+    },
   });
   const projectedPage = await pageService.project(session, selection);
   if (projectedPage.kind !== "available") {

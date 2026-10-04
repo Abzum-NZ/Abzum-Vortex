@@ -72,6 +72,24 @@ not a presentation-only change. These references preserve configuration; they do
 not grant permission to read records or implement the richer runtime bindings in
 [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250).
 
+Stored authenticated Page projection evaluates literal operands and fields of the
+exact declared Page subject through the existing typed-condition engine. The
+address supplies only a candidate record identity; the existing protected record
+read supplies readable values under the same verified transaction as the Page and
+placement view checks. A denied ancestor suppresses descendant condition reads.
+An absent condition stays ungated, while false, missing, unreadable or unprovable
+operands prune the placement and its subtree without exposing values or reasons.
+Use and operation checks remain separate and cannot be granted by a condition.
+
+This bounded producer accepts no condition parameters, related-record context,
+query rows or current-row context. Fields must belong to the declared Page subject;
+an absent subject or field is not a null value and cannot fall back to another
+record. The complete condition is checked, including operands in branches that
+could otherwise short-circuit. Broader explicit binding and typed-parameter
+support below remains a separate qualification; no implicit actor parameter or
+browser claim supplies authority. Callers without a subject address can evaluate
+literal-only conditions and refuse subject-dependent conditions.
+
 Validation rejects duplicate IDs, cycles, unreachable placements, undefined or multiply assigned slots, disallowed children, excessive depth/size and incompatible block versions. Slot declarations define required/optional content and allowed child categories. Unknown or orphan content produces a repairable error; it is never silently appended elsewhere or discarded. Shell locking is enforced on the server against the permitted draft editing scope.
 
 ## Registry and property values
