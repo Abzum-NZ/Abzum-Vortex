@@ -680,6 +680,11 @@ export function validateFlow(
         for (const [key, entry] of Object.entries(value.entries))
           checkValue(entry, undefined, where, [...path, "entries", key]);
         return "json";
+      case "array":
+        value.items.forEach((item, index) =>
+          checkValue(item, undefined, where, [...path, "items", index]),
+        );
+        return "json";
     }
   };
 
@@ -692,15 +697,15 @@ export function validateFlow(
   ) => {
     const actual = valueType(value, where, path);
     if (accepted === undefined) return;
-    // A map is a set of named values, never one scalar, so it fills only a use that accepts JSON;
+    // A constructed map or array is never one scalar, so it fills only a use that accepts JSON;
     // its static `json` type would otherwise pass every typed use and fail only at run time.
-    if (value.kind === "map") {
+    if (value.kind === "map" || value.kind === "array") {
       if (!accepted.includes("json"))
         add(
           path,
           "vortex.definition.source_type_compatibility",
           "invalid_value",
-          `Expected ${describe(accepted)}, found a map of values`,
+          `Expected ${describe(accepted)}, found a ${value.kind} of values`,
         );
       return;
     }
@@ -798,6 +803,16 @@ export function validateFlow(
             "Run background flow starts only a background or durable flow",
           );
       }
+      return;
+    }
+    if (declared.type === "input_map" && value.kind === "array") {
+      valueType(value, where, path);
+      add(
+        path,
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        `${name} needs named inputs, never an array of values`,
+      );
       return;
     }
     checkValue(value, acceptedTypes(declared.type), where, path);
@@ -903,8 +918,8 @@ export function validateFlow(
       case "switch": {
         const node = task as Extract<FlowTask, { type: "switch" }>;
         const type = valueType(node.value, where, [...path, "value"]);
-        if (node.value.kind === "map")
-          add([...path, "value"], "vortex.definition.source_type_compatibility", "invalid_value", "A switch compares one value, never a map of values");
+        if (node.value.kind === "map" || node.value.kind === "array")
+          add([...path, "value"], "vortex.definition.source_type_compatibility", "invalid_value", `A switch compares one value, never a ${node.value.kind} of values`);
         node.cases.forEach((entry, index) => {
           if (
             type !== undefined &&
