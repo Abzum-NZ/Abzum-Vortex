@@ -870,98 +870,345 @@
         "id": "landing_zone_bookmark_create",
         "key": "landing_zone_bookmark_create",
         "description": "Creates a bookmark tile from the submitted values and opens the Bookmarks page.",
-        "labels": { "name": "Add bookmark" },
+        "labels": {
+          "name": "Add bookmark"
+        },
         "execution": "interactive",
-        "runAs": { "kind": "initiator" },
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
-          "target_kind": { "type": "choice", "required": true },
-          "application_key": { "type": "text", "required": false },
-          "page_key": { "type": "text", "required": false },
-          "record_type": { "type": "text", "required": false },
-          "record_id": { "type": "text", "required": false },
-          "external_address": { "type": "text", "required": false },
-          "label": { "type": "text", "required": false },
-          "description": { "type": "text", "required": false }
+          "target_kind": {
+            "type": "choice",
+            "required": true
+          },
+          "application_key": {
+            "type": "text",
+            "required": false
+          },
+          "page_key": {
+            "type": "text",
+            "required": false
+          },
+          "record_type": {
+            "type": "text",
+            "required": false
+          },
+          "record_id": {
+            "type": "text",
+            "required": false
+          },
+          "external_address": {
+            "type": "text",
+            "required": false
+          },
+          "label": {
+            "type": "text",
+            "required": false
+          },
+          "description": {
+            "type": "text",
+            "required": false
+          }
         },
         "variables": {
-          "bookmark_values": { "type": "json", "default": {} }
+          "bookmark_values": {
+            "type": "json",
+            "default": {}
+          }
         },
         "tasks": [
           {
-            "id": "prepare_values",
-            "type": "data.set_variable",
-            "version": "1.0.0",
-            "properties": {
-              "variable": {
-                "kind": "literal",
-                "literal": { "type": "text", "value": "bookmark_values" }
+            "id": "record_target",
+            "type": "if",
+            "condition": {
+              "op": "eq",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "target_kind"
+                }
               },
-              "value": {
-                "kind": "map",
-                "entries": {
-                  "target_kind": {
-                    "kind": "reference",
-                    "reference": { "source": "input", "name": "target_kind" }
-                  },
+              "right": {
+                "op": "literal",
+                "type": "choice",
+                "value": "record"
+              }
+            },
+            "then": [
+              {
+                "id": "acquire_pin",
+                "type": "record.pin_identity",
+                "version": "1.0.0",
+                "properties": {
                   "application_key": {
                     "kind": "reference",
-                    "reference": { "source": "input", "name": "application_key" }
+                    "reference": {
+                      "source": "input",
+                      "name": "application_key"
+                    }
                   },
-                  "page_key": {
+                  "record_type_key": {
                     "kind": "reference",
-                    "reference": { "source": "input", "name": "page_key" }
-                  },
-                  "record_type": {
-                    "kind": "reference",
-                    "reference": { "source": "input", "name": "record_type" }
+                    "reference": {
+                      "source": "input",
+                      "name": "record_type"
+                    }
                   },
                   "record_id": {
-                    "kind": "formula",
-                    "formula": {
-                      "op": "if",
-                      "condition": {
-                        "op": "is_empty",
-                        "arg": {
-                          "op": "reference",
-                          "reference": { "source": "input", "name": "record_id" }
-                        }
-                      },
-                      "then": { "op": "literal", "type": "json", "value": null },
-                      "else": {
-                        "op": "reference",
-                        "reference": { "source": "input", "name": "record_id" }
-                      }
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "record_id"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "prepare_pin_values",
+                "type": "data.set_variable",
+                "version": "1.0.0",
+                "properties": {
+                  "variable": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "bookmark_values"
                     }
                   },
-                  "external_address": {
-                    "kind": "formula",
-                    "formula": {
-                      "op": "if",
-                      "condition": {
-                        "op": "is_empty",
-                        "arg": {
-                          "op": "reference",
-                          "reference": { "source": "input", "name": "external_address" }
+                  "value": {
+                    "kind": "map",
+                    "entries": {
+                      "target_organization_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "organization_id"
                         }
                       },
-                      "then": { "op": "literal", "type": "json", "value": null },
-                      "else": {
-                        "op": "reference",
-                        "reference": { "source": "input", "name": "external_address" }
+                      "target_application_root_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "application_root_id"
+                        }
+                      },
+                      "target_module_root_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "module_root_id"
+                        }
+                      },
+                      "target_module_release_revision": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "module_release_revision"
+                        }
+                      },
+                      "target_record_type_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "record_type_id"
+                        }
+                      },
+                      "target_storage_contract_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "storage_contract_id"
+                        }
+                      },
+                      "record_id": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "acquire_pin",
+                          "key": "record_id"
+                        }
+                      },
+                      "application_key": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "page_key": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "record_type": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "external_address": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "description": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": null
+                        }
+                      },
+                      "target_kind": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "target_kind"
+                        }
                       }
                     }
-                  },
-                  "label": {
-                    "kind": "reference",
-                    "reference": { "source": "input", "name": "label" }
-                  },
-                  "description": {
-                    "kind": "reference",
-                    "reference": { "source": "input", "name": "description" }
                   }
                 }
               }
-            }
+            ],
+            "else": [
+              {
+                "id": "prepare_values",
+                "type": "data.set_variable",
+                "version": "1.0.0",
+                "properties": {
+                  "variable": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "bookmark_values"
+                    }
+                  },
+                  "value": {
+                    "kind": "map",
+                    "entries": {
+                      "target_kind": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "target_kind"
+                        }
+                      },
+                      "application_key": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "application_key"
+                        }
+                      },
+                      "page_key": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "page_key"
+                        }
+                      },
+                      "record_type": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "record_type"
+                        }
+                      },
+                      "record_id": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "if",
+                          "condition": {
+                            "op": "is_empty",
+                            "arg": {
+                              "op": "reference",
+                              "reference": {
+                                "source": "input",
+                                "name": "record_id"
+                              }
+                            }
+                          },
+                          "then": {
+                            "op": "literal",
+                            "type": "json",
+                            "value": null
+                          },
+                          "else": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "record_id"
+                            }
+                          }
+                        }
+                      },
+                      "external_address": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "if",
+                          "condition": {
+                            "op": "is_empty",
+                            "arg": {
+                              "op": "reference",
+                              "reference": {
+                                "source": "input",
+                                "name": "external_address"
+                              }
+                            }
+                          },
+                          "then": {
+                            "op": "literal",
+                            "type": "json",
+                            "value": null
+                          },
+                          "else": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "external_address"
+                            }
+                          }
+                        }
+                      },
+                      "label": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "label"
+                        }
+                      },
+                      "description": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "input",
+                          "name": "description"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           },
           {
             "id": "save",
@@ -970,11 +1217,17 @@
             "properties": {
               "record_type": {
                 "kind": "literal",
-                "literal": { "type": "text", "value": "vortex.landing_zone:tile" }
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.landing_zone:tile"
+                }
               },
               "values": {
                 "kind": "reference",
-                "reference": { "source": "variable", "name": "bookmark_values" }
+                "reference": {
+                  "source": "variable",
+                  "name": "bookmark_values"
+                }
               }
             }
           },
@@ -985,7 +1238,10 @@
             "properties": {
               "page": {
                 "kind": "literal",
-                "literal": { "type": "text", "value": "page_landing_bookmarks" }
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_bookmarks"
+                }
               }
             }
           }
@@ -993,10 +1249,16 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.landing_zone:tile"],
+            "recordTypeIds": [
+              "vortex.landing_zone:tile"
+            ],
             "value": {
               "kind": "reference",
-              "reference": { "source": "task_output", "task": "save", "key": "record" }
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
             }
           }
         }

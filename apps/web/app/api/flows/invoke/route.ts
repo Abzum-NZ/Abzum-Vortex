@@ -10,6 +10,8 @@ import {
   createFormContinuationService,
   createProtectedOperationExecutor,
   createHumanInstalledRuntimeContextLoader,
+  createViewerSafeRecordLinkService,
+  readPermittedApplicationsAtAddress,
   type FlowNamedAction,
   type FlowRecordType,
   type FlowRelease,
@@ -544,6 +546,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       continuationKey: getQueryContinuationKey(),
     });
     const selectedRecordReader = createViewerSafeRecordLinkReadService();
+    const recordPinService = createViewerSafeRecordLinkService({
+      ...humanOrganizationRequestDependencies(authorityId),
+      createInstalledContextLoader: (transaction, scope) => {
+        if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
+        return createHumanInstalledRuntimeContextLoader({
+          activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+          releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+            installedReleaseCatalogue, transaction,
+          ),
+          scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        });
+      },
+      resolveTargetApplication: async (session, sourceSelection, applicationKey) => {
+        if (
+          canonicalJson(session) !== canonicalJson(identity.session) ||
+          !sameId(sourceSelection.organizationId, address.read.organizationId) ||
+          sourceSelection.applicationRootId === undefined ||
+          !sameId(sourceSelection.applicationRootId, address.application.applicationRootId)
+        ) return undefined;
+        const permitted = await readPermittedApplicationsAtAddress(
+          session, body.tenantShortName, body.organizationShortName, authorityId, applicationKey,
+        );
+        if (
+          permitted.kind !== "available" ||
+          !sameId(permitted.organizationId, sourceSelection.organizationId)
+        ) return undefined;
+        const targets = permitted.applications.filter((target) => target.key === applicationKey);
+        const target = targets[0];
+        return targets.length === 1 && target !== undefined
+          ? { organizationId: permitted.organizationId, applicationRootId: target.applicationRootId }
+          : undefined;
+      },
+    });
     const executor = createProtectedOperationExecutor({
       accessAdministration: createOrganizationAccessAdministrationService({
         identityAuthorityId: authorityId,
@@ -653,6 +688,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             (await subjectReader.read(session, selection, subject)).kind,
         },
         selectedRecordReads: selectedRecordReadsFor(installation),
+        recordPins: {
+          acquireIdentity: async (session, selection, selector) => {
+            if (
+              canonicalJson(session) !== canonicalJson(identity.session) ||
+              !sameId(selection.organizationId, installation.organizationId) ||
+              selection.applicationRootId === undefined ||
+              !sameId(selection.applicationRootId, installation.applicationRootId) ||
+              release.releaseKey !== installation.releaseKey ||
+              release.flows !== installation.flows || installation.modules === undefined
+            ) return { outcome: "unavailable" };
+            const capturedModules = installation.modules;
+            const checked = await requests.run(session, selection, async (transaction, scope) => {
+              if (
+                !sameId(scope.organizationId, installation.organizationId) ||
+                scope.applicationRootId === undefined ||
+                !sameId(scope.applicationRootId, installation.applicationRootId)
+              ) return false;
+              const current = await createHumanInstalledRuntimeContextLoader({
+                activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+                releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
+                  installedReleaseCatalogue, transaction,
+                ),
+                scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+              }).load();
+              const application = current.releaseSet.application;
+              const modules = installedModuleClosure(application, current.releaseSet.modules);
+              return sameId(current.organizationId, installation.organizationId) &&
+                sameId(current.applicationRootId, installation.applicationRootId) &&
+                current.applicationReleaseRevision === installation.installationRevision &&
+                [application.releaseVersion, application.contentFingerprint, application.resolutionFingerprint]
+                  .join(":") === installation.releaseKey &&
+                modules !== undefined && modules.size === capturedModules.length &&
+                capturedModules.every((captured) => {
+                  const bound = modules.get(captured.rootId.toLowerCase());
+                  return bound !== undefined && bound.definitionKey === captured.definitionKey &&
+                    bound.validationContractVersion === captured.validationContractVersion &&
+                    bound.releaseRevision === captured.releaseRevision &&
+                    bound.releaseVersion === captured.releaseVersion &&
+                    bound.contentFingerprint === captured.contentFingerprint &&
+                    bound.resolutionFingerprint === captured.resolutionFingerprint;
+                });
+            });
+            return checked.kind === "available" && checked.value
+              ? recordPinService.acquireIdentity(session, selection, selector)
+              : { outcome: "unavailable" };
+          },
+        },
         authorizeInvocation: async (session, selection, flow) => {
           try {
             // Only this request's verified person and captured installed release may ask for a

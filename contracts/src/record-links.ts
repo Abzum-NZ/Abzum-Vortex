@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonValueSchema } from "./common";
+import { sourceQualifiedRecordTypeSchema } from "./definition-source-common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -26,6 +27,21 @@ export const viewerSafeRecordLinkIdentitySchema = z
     recordId: recordIdSchema,
   })
   .strict();
+
+/** Candidate keys select a current permitted target; they never supply its installed identity. */
+export const viewerSafeRecordPinSelectorSchema = z
+  .object({
+    applicationKey: namespacedKeySchema,
+    recordTypeKey: sourceQualifiedRecordTypeSchema,
+    recordId: recordIdSchema,
+  })
+  .strict();
+
+/** Acquisition returns only the exact identity, without the protected record's display values. */
+export const viewerSafeRecordPinAcquisitionResultSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("available"), identity: viewerSafeRecordLinkIdentitySchema }).strict(),
+  z.object({ outcome: z.literal("unavailable") }).strict(),
+]);
 
 /** A configured title value suitable for a compact record link. */
 export const viewerSafeRecordLinkTitleSchema = jsonValueSchema.refine(
@@ -57,6 +73,10 @@ export const viewerSafeRecordLinkResultSchema = z.discriminatedUnion("outcome", 
 ]);
 
 export type ViewerSafeRecordLinkIdentity = z.infer<typeof viewerSafeRecordLinkIdentitySchema>;
+export type ViewerSafeRecordPinSelector = z.infer<typeof viewerSafeRecordPinSelectorSchema>;
+export type ViewerSafeRecordPinAcquisitionResult = z.infer<
+  typeof viewerSafeRecordPinAcquisitionResultSchema
+>;
 export type ViewerSafeRecordLinkTitle = z.infer<typeof viewerSafeRecordLinkTitleSchema>;
 export type ViewerSafeRecordLinkDetailAddress = z.infer<
   typeof viewerSafeRecordLinkDetailAddressSchema

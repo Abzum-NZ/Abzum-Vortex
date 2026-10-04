@@ -80,6 +80,102 @@
             "type": "text",
             "settings": { "max_length": 200 }
           },
+            {
+              "id": "fld_landing_zone_tile_target_organization_id",
+              "key": "target_organization_id",
+              "label": "Target organization id",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "text",
+              "settings": {
+                "max_length": 36,
+                "format": "uuid"
+              }
+            },
+            {
+              "id": "fld_landing_zone_tile_target_application_root_id",
+              "key": "target_application_root_id",
+              "label": "Target application root id",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "text",
+              "settings": {
+                "max_length": 36,
+                "format": "uuid"
+              }
+            },
+            {
+              "id": "fld_landing_zone_tile_target_module_root_id",
+              "key": "target_module_root_id",
+              "label": "Target module root id",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "text",
+              "settings": {
+                "max_length": 36,
+                "format": "uuid"
+              }
+            },
+            {
+              "id": "fld_landing_zone_tile_target_module_release_revision",
+              "key": "target_module_release_revision",
+              "label": "Target module release revision",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "whole_number",
+              "settings": {
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            {
+              "id": "fld_landing_zone_tile_target_record_type_id",
+              "key": "target_record_type_id",
+              "label": "Target record type id",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "text",
+              "settings": {
+                "max_length": 36,
+                "format": "uuid"
+              }
+            },
+            {
+              "id": "fld_landing_zone_tile_target_storage_contract_id",
+              "key": "target_storage_contract_id",
+              "label": "Target storage contract id",
+              "required": false,
+              "unique": false,
+              "filterable": false,
+              "sortable": false,
+              "personal_data": "none",
+              "public_display": "refused",
+              "type": "text",
+              "settings": {
+                "max_length": 36,
+                "format": "uuid"
+              }
+            },
           {
             "id": "fld_landing_zone_tile_record_id",
             "key": "record_id",
@@ -284,8 +380,8 @@
         "administrative": false,
         "record_scope": { "routes": [{ "kind": "ownership" }] },
         "field_policy": {
-          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
-          "changeable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"]
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"],
+          "changeable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"]
         }
       },
       {
@@ -298,7 +394,7 @@
         "administrative": false,
         "record_scope": { "routes": [{ "kind": "ownership" }] },
         "field_policy": {
-          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"],
           "changeable_fields": []
         }
       },
@@ -312,7 +408,7 @@
         "administrative": false,
         "record_scope": { "routes": [{ "kind": "ownership" }] },
         "field_policy": {
-          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+          "readable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"],
           "changeable_fields": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"]
         }
       },
@@ -379,7 +475,1023 @@
       }
     ],
     "events": [],
-    "flows": [],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_tile_pin_create",
+        "key": "tile_pin_create",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "tile",
+            "operations": [
+              {
+                "kind": "create"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "record_target",
+            "type": "if",
+            "condition": {
+              "op": "eq",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "target_kind"
+                }
+              },
+              "right": {
+                "op": "literal",
+                "type": "choice",
+                "value": "record"
+              }
+            },
+            "then": [
+              {
+                "id": "require_target_organization_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_organization_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_application_root_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_application_root_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_module_root_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_module_root_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_module_release_revision",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_module_release_revision"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_record_type_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_record_type_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_storage_contract_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_storage_contract_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_record_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.record_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "display_values_present",
+                "type": "if",
+                "condition": {
+                  "op": "or",
+                  "args": [
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "application_key"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "page_key"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "record_type"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "external_address"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "label"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "description"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "id": "refuse_display_values",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "record_pin_display_values"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "A record pin stores only its exact identity, not labels or addresses."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "id": "unexpected_target_fields",
+                "type": "if",
+                "condition": {
+                  "op": "or",
+                  "args": [
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_organization_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_application_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_release_revision"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_record_type_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_storage_contract_id"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "id": "refuse_unexpected_fields",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "record_pin_fields"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Only record pins carry a target identity."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_tile_pin_update",
+        "key": "tile_pin_update",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "tile",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "record_kind_changed",
+            "type": "if",
+            "condition": {
+              "op": "or",
+              "args": [
+                {
+                  "op": "and",
+                  "args": [
+                    {
+                      "op": "eq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_kind"
+                        }
+                      },
+                      "right": {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "record"
+                      }
+                    },
+                    {
+                      "op": "not",
+                      "arg": {
+                        "op": "eq",
+                        "left": {
+                          "op": "reference",
+                          "reference": {
+                            "source": "trigger_record",
+                            "field": "target_kind"
+                          }
+                        },
+                        "right": {
+                          "op": "literal",
+                          "type": "choice",
+                          "value": "record"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "and",
+                  "args": [
+                    {
+                      "op": "not",
+                      "arg": {
+                        "op": "eq",
+                        "left": {
+                          "op": "reference",
+                          "reference": {
+                            "source": "trigger_previous",
+                            "field": "target_kind"
+                          }
+                        },
+                        "right": {
+                          "op": "literal",
+                          "type": "choice",
+                          "value": "record"
+                        }
+                      }
+                    },
+                    {
+                      "op": "eq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_kind"
+                        }
+                      },
+                      "right": {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "record"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_record_kind_change",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "record_pin_immutable"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Remove a record pin and create another to change its target."
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "record_target",
+            "type": "if",
+            "condition": {
+              "op": "eq",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "target_kind"
+                }
+              },
+              "right": {
+                "op": "literal",
+                "type": "choice",
+                "value": "record"
+              }
+            },
+            "then": [
+              {
+                "id": "require_target_organization_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_organization_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_application_root_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_application_root_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_module_root_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_module_root_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_module_release_revision",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_module_release_revision"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_record_type_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_record_type_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_target_storage_contract_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.target_storage_contract_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "require_record_id",
+                "type": "rule.require",
+                "version": "1.0.0",
+                "properties": {
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "tile.record_id"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A record pin requires its complete installed identity."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "display_values_present",
+                "type": "if",
+                "condition": {
+                  "op": "or",
+                  "args": [
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "application_key"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "page_key"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "record_type"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "external_address"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "label"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "description"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "id": "refuse_display_values",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "record_pin_display_values"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "A record pin stores only its exact identity, not labels or addresses."
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "identity_changed",
+                "type": "if",
+                "condition": {
+                  "op": "or",
+                  "args": [
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_organization_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_organization_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_application_root_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_application_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_root_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_module_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_release_revision"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_module_release_revision"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_record_type_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_record_type_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_storage_contract_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "target_storage_contract_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "neq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "record_id"
+                        }
+                      },
+                      "right": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_previous",
+                          "field": "record_id"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "id": "refuse_identity_change",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "record_pin_immutable"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "A saved record pin keeps its exact target identity."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "id": "unexpected_target_fields",
+                "type": "if",
+                "condition": {
+                  "op": "or",
+                  "args": [
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_organization_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_application_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_root_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_module_release_revision"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_record_type_id"
+                        }
+                      }
+                    },
+                    {
+                      "op": "is_not_empty",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "trigger_record",
+                          "field": "target_storage_contract_id"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "id": "refuse_unexpected_fields",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "record_pin_fields"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Only record pins carry a target identity."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
     "extension_points": [],
     "sharing_conditions": [],
     "queries": [
@@ -388,7 +1500,7 @@
         "key": "landing_zone_tiles",
         "record_type": "tile",
         "inputs": [],
-        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"],
         "filter": null,
         "group_by": [],
         "aggregates": [],
@@ -404,7 +1516,7 @@
         "key": "landing_zone_favourites",
         "record_type": "tile",
         "inputs": [],
-        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order"],
+        "select": ["target_kind", "application_key", "page_key", "record_type", "record_id", "external_address", "label", "description", "open_behaviour", "is_favourite", "favourite_order", "target_organization_id", "target_application_root_id", "target_module_root_id", "target_module_release_revision", "target_record_type_id", "target_storage_contract_id"],
         "filter": { "field": "is_favourite", "operator": "equals", "value": true },
         "group_by": [],
         "aggregates": [],
