@@ -127,9 +127,9 @@ const uniquePermissions = (
  * by the database from trusted context. The first refusal is returned; any doubt throws.
  *
  * The transaction must be the authenticated human's own request transaction, still open when a
- * builder operation runs. Definition storage runs over a separate system-bound transaction; an
- * authority built over that one cannot evaluate a human decision and throws, so a wrong
- * composition fails closed rather than allowing the operation.
+ * builder operation runs. Human Application draft storage shares this exact transaction; existing
+ * System lifecycle compositions keep their validated System storage path. A human authority cannot
+ * evaluate a decision over a System-bound transaction, so a wrong composition fails closed.
  */
 export const createBuilderAuthority = (
   dependencies: BuilderAuthorityDependencies,
