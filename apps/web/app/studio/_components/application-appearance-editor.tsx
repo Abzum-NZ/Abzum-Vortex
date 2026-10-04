@@ -14,7 +14,7 @@ import { validateStudioApplicationAppearance } from "../actions";
 type AvailableAppearance = Extract<StudioAppearanceResult, { kind: "available" }>;
 type Props = Readonly<{
   organizationId: string; rootId: string; draftRevision: number;
-  source: ApplicationSourceDocumentV2; disabled: boolean;
+  source: ApplicationSourceDocumentV2; disabled: boolean; validationEpoch: number;
   onPendingChange: (pending: boolean) => void;
   onApply: (expected: ApplicationSourceDocumentV2, next: ApplicationSourceDocumentV2) => boolean;
 }>;
@@ -90,6 +90,10 @@ export function ApplicationAppearanceEditor(props: Props) {
   const id = useId();
   const active = useRef(false);
   const generation = useRef(0);
+  const validationEpoch = useRef(props.validationEpoch);
+  const cancelledEpoch = useRef(props.validationEpoch);
+  const feedbackEpoch = useRef(props.validationEpoch);
+  validationEpoch.current = props.validationEpoch;
   const valuesRef = useRef(props.source.body.theme.token_overrides);
   const [values, setValues] = useState(() => structuredClone(props.source.body.theme.token_overrides));
   const [descriptors, setDescriptors] = useState<AvailableAppearance>();
@@ -100,9 +104,22 @@ export function ApplicationAppearanceEditor(props: Props) {
   const baselineKey = studioAppearanceValueKey(props.source.body.theme.token_overrides);
   const changed = valueKey !== baselineKey;
 
+  // Reopen cancels feedback, not local values. Only a successful source replacement
+  // runs the source-reset effect below; a refused read keeps this editor instance.
+  useEffect(() => {
+    if (cancelledEpoch.current === props.validationEpoch) return;
+    cancelledEpoch.current = props.validationEpoch;
+    generation.current += 1;
+    setFeedback(undefined);
+    setBusy(false);
+    props.onPendingChange(studioAppearanceValueKey(valuesRef.current) !== baselineKey);
+    setMessage("Appearance edits are preserved. Validate again after the saved-draft read finishes.");
+  }, [props.validationEpoch, props.onPendingChange, baselineKey]);
+
   useEffect(() => {
     active.current = true;
     const ticket = ++generation.current;
+    const epoch = validationEpoch.current;
     const initial = structuredClone(props.source.body.theme.token_overrides);
     valuesRef.current = initial;
     setValues(initial);
@@ -113,21 +130,22 @@ export function ApplicationAppearanceEditor(props: Props) {
     setMessage("Reading the pinned theme with current draft permissions…");
     const request = { rootId: props.rootId, expectedDraftRevision: props.draftRevision, tokenOverrides: initial };
     void validateStudioApplicationAppearance(props.organizationId, request).then((result) => {
-      if (!active.current || ticket !== generation.current) return;
+      if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current) return;
       if (result.kind === "available" && result.rootId === request.rootId &&
           result.draftRevision === request.expectedDraftRevision &&
           studioAppearanceValueKey(result.theme) === studioAppearanceValueKey(props.source.body.theme)) {
         setDescriptors(result);
+        feedbackEpoch.current = epoch;
         setFeedback(result);
         setMessage(result.valid ? "Edit an override, then validate it before applying." : "The server found theme validation failures.");
       } else setMessage(result.kind === "conflict"
         ? "The saved revision changed. Reopen explicitly; local edits are preserved."
         : "Appearance is unavailable for the current draft, permission or pinned theme.");
     }).catch(() => {
-      if (active.current && ticket === generation.current)
+      if (active.current && ticket === generation.current && epoch === validationEpoch.current)
         setMessage("Appearance could not be verified. Local edits are preserved.");
     }).finally(() => {
-      if (active.current && ticket === generation.current) {
+      if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
         setBusy(false);
         props.onPendingChange(false);
       }
@@ -139,6 +157,7 @@ export function ApplicationAppearanceEditor(props: Props) {
   useEffect(() => () => props.onPendingChange(false), [props.onPendingChange]);
 
   const update = (next: Record<string, StudioThemeTokenValue>) => {
+    if (props.disabled) return;
     generation.current += 1;
     valuesRef.current = next;
     setValues(next);
@@ -148,24 +167,27 @@ export function ApplicationAppearanceEditor(props: Props) {
     setMessage("Unapplied appearance edits. Validate before applying, or discard them.");
   };
   const validate = async () => {
-    if (props.disabled || busy || descriptors === undefined) return;
+    if (props.disabled || busy) return;
     const request = parseStudioAppearanceRequest({ rootId: props.rootId,
       expectedDraftRevision: props.draftRevision, tokenOverrides: values });
     if (request === undefined) { setFeedback(undefined); setMessage("Enter valid values for every edited token."); return; }
     const ticket = ++generation.current;
+    const epoch = validationEpoch.current;
     setBusy(true);
     props.onPendingChange(true);
     setFeedback(undefined);
     setMessage("Validating contrast, focus, references and public assets…");
     try {
       const result = await validateStudioApplicationAppearance(props.organizationId, request);
-      if (!active.current || ticket !== generation.current ||
+      if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current ||
           studioAppearanceValueKey(valuesRef.current) !== studioAppearanceValueKey(request.tokenOverrides)) return;
       if (result.kind === "available" && result.rootId === request.rootId &&
           result.draftRevision === request.expectedDraftRevision &&
           studioAppearanceValueKey(result.theme.base) === studioAppearanceValueKey(props.source.body.theme.base) &&
           studioAppearanceValueKey(result.theme.selection) === studioAppearanceValueKey(props.source.body.theme.selection) &&
           studioAppearanceValueKey(result.theme.token_overrides) === studioAppearanceValueKey(request.tokenOverrides)) {
+        setDescriptors(result);
+        feedbackEpoch.current = epoch;
         setFeedback(result);
         setMessage(result.valid ? "Server validation passed. Apply records one local history entry."
           : "The server found theme validation failures. No changes were applied.");
@@ -173,17 +195,17 @@ export function ApplicationAppearanceEditor(props: Props) {
         ? "The saved revision changed. Local edits are preserved; reopen explicitly."
         : "The current draft, permission or theme was refused. No changes were applied.");
     } catch {
-      if (active.current && ticket === generation.current)
+      if (active.current && ticket === generation.current && epoch === validationEpoch.current)
         setMessage("Validation could not be verified. Local edits are preserved.");
     } finally {
-      if (active.current && ticket === generation.current) {
+      if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
         setBusy(false);
         props.onPendingChange(studioAppearanceValueKey(valuesRef.current) !== baselineKey);
       }
     }
   };
   const apply = () => {
-    if (props.disabled || busy || feedback === undefined) return;
+    if (props.disabled || busy || feedback === undefined || feedbackEpoch.current !== props.validationEpoch) return;
     const request = parseStudioAppearanceRequest({ rootId: props.rootId,
       expectedDraftRevision: props.draftRevision, tokenOverrides: values });
     const next = request === undefined ? undefined
@@ -233,9 +255,9 @@ export function ApplicationAppearanceEditor(props: Props) {
       </fieldset>;
     })}
     <div className="flex flex-wrap gap-2">
-      <button className={buttonClass} type="button" disabled={props.disabled || busy || descriptors === undefined}
+      <button className={buttonClass} type="button" disabled={props.disabled || busy}
         onClick={validate}>Validate appearance</button>
-      <button className={buttonClass} type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true}
+      <button className={buttonClass} type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
         onClick={apply}>Apply appearance</button>
       <button className={buttonClass} type="button" disabled={props.disabled || (!changed && !busy)}
         onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard appearance edits</button>

@@ -173,6 +173,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     setPendingAppearance(pending);
   }, []);
   const [appearanceEpoch, setAppearanceEpoch] = useState(0);
+  const [appearanceValidationEpoch, setAppearanceValidationEpoch] = useState(0);
 
   useEffect(() => {
     active.current = true;
@@ -242,6 +243,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
       !window.confirm("Discard unsaved changes and reopen the saved draft?")) return;
     const requestLifetime = lifetime.current;
     reopening.current = true;
+    setAppearanceValidationEpoch((value) => value + 1);
     setReopening(true);
     setMessage("Reading the saved draft with current permissions…");
     try {
@@ -322,10 +324,11 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
           }}>Discard inspector text</button>
           <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
         </form> : <p>This item is read-only in the minimum host.</p>}
-        {selected?.kind === "application" && inspector.status === "resolved" && !isReopening &&
+        {selected?.kind === "application" && inspector.status === "resolved" &&
           <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
             rootId={state.rootId} draftRevision={state.draftRevision} source={source}
-            disabled={state.isSaving || pendingLabels} onPendingChange={reportAppearancePending}
+            validationEpoch={appearanceValidationEpoch}
+            disabled={isReopening || state.isSaving || pendingLabels} onPendingChange={reportAppearancePending}
             onApply={(expected, next) => {
               const current = history.getState();
               if (reopening.current || current.isSaving || pendingLabels || current.rootId !== state.rootId ||
