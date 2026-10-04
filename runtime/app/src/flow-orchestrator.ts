@@ -31,8 +31,11 @@ import {
   revisionSchema,
   ruleIdSchema,
   saveRecordCommandV2Schema,
+  sameId,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
+  viewerSafeRecordPinSelectorSchema,
+  viewerSafeRecordPinAcquisitionResultSchema,
   type ExecutionAuthorityContext,
   type ExecuteNamedActionCommandV2,
   type FlowDefinition,
@@ -48,6 +51,8 @@ import {
   type SaveRecordCommandV2,
   type SaveRecordResultV2,
   type FlowTriggerOrigin,
+  type ViewerSafeRecordPinSelector,
+  type ViewerSafeRecordPinAcquisitionResult,
 } from "@vortex/contracts";
 import {
   readFlowRunAsPrincipalForRun,
@@ -335,6 +340,14 @@ export type FlowOrchestratorDependencies = Readonly<{
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
   selectedRecordReads?: FlowSelectedRecordReadPort;
+  /** Acquires a current installed identity for a human; no display values or replayed read results. */
+  recordPins?: Readonly<{
+    acquireIdentity(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      selector: ViewerSafeRecordPinSelector,
+    ): Promise<ViewerSafeRecordPinAcquisitionResult>;
+  }>;
   continuations: FlowContinuationStore;
   ledger: FlowEffectLedger;
   /**
@@ -841,6 +854,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     sensitive: string[];
     /** This segment cannot persist interpreter state after any selected values enter it. */
     selectedRecordReadSeen: boolean;
+    /** A pin-derived save must resolve its exact command receipt on an effect-ledger replay. */
+    recordPinReadSeen?: boolean;
   };
 
   const elapsedMilliseconds = (run: Run): number =>
@@ -1237,6 +1252,54 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (call.taskType === "record.read_fields")
       return runSelectedRecordRead(run, state, call);
 
+    // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple
+    // selects a later read; it contains no title/address and does not confer target authority.
+    if (call.taskType === "record.pin_identity") {
+      if (run.authority.kind !== "person" || dependencies.recordPins === undefined)
+        return notAvailable(run, call, "a trusted human record-pin acquisition port");
+      if (
+        call.taskVersion !== "1.0.0" || Object.keys(call.properties).length !== 3 ||
+        call.properties.application_key?.type !== "text" ||
+        call.properties.record_type_key?.type !== "text" ||
+        call.properties.record_id?.type !== "text"
+      ) return { outcome: "validation" };
+      const selector = viewerSafeRecordPinSelectorSchema.safeParse({
+        applicationKey: call.properties.application_key.value,
+        recordTypeKey: call.properties.record_type_key.value,
+        recordId: call.properties.record_id.value,
+      });
+      if (!selector.success || carriesSensitive(selector.data, run.sensitive))
+        return { outcome: "validation" };
+      try {
+        const result = viewerSafeRecordPinAcquisitionResultSchema.safeParse(
+          await dependencies.recordPins.acquireIdentity(
+            run.authority.session, run.authority.selection, selector.data,
+          ),
+        );
+        if (!result.success || result.data.outcome !== "available") return { outcome: "refused" };
+        const identity = result.data.identity;
+        if (
+          !sameId(identity.organizationId, run.authority.selection.organizationId) ||
+          !sameId(identity.recordId, selector.data.recordId)
+        ) return { outcome: "refused" };
+        run.recordPinReadSeen = true;
+        return {
+          outcome: "completed",
+          outputs: {
+            organization_id: identity.organizationId,
+            application_root_id: identity.applicationRootId,
+            module_root_id: identity.moduleRootId,
+            module_release_revision: identity.moduleReleaseRevision,
+            record_type_id: identity.recordTypeId,
+            storage_contract_id: identity.storageContractId,
+            record_id: identity.recordId,
+          },
+        };
+      } catch {
+        return { outcome: "refused" };
+      }
+    }
+
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
         ? { kind: "person", id: run.authority.session.identityId }
@@ -1272,7 +1335,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return { outcome: "failed" };
     }
     if (claim.kind === "completed") {
-      if (run.selectedRecordReadSeen) {
+      if (run.selectedRecordReadSeen || run.recordPinReadSeen === true) {
         // Never trust or expose an effect-ledger replay for a read-derived save. Validate its
         // minimal stored shape, then ask the Record service to resolve the command receipt under
         // the current initiator and permissions. The receipt also rejects changed command fields.

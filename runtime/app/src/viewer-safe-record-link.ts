@@ -2,8 +2,11 @@ import "server-only";
 
 import {
   sameId,
+  organizationSelectionCandidateSchema,
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
+  viewerSafeRecordPinSelectorSchema,
+  viewerSafeRecordPinAcquisitionResultSchema,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
@@ -11,6 +14,7 @@ import {
   type PermissionDeclaration,
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkResult,
+  type ViewerSafeRecordPinAcquisitionResult,
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
@@ -38,9 +42,16 @@ export type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDe
   Readonly<{
     /** Compose the existing human installed-context loader for this request transaction and scope. */
     createInstalledContextLoader: ViewerSafeRecordLinkInstalledContextLoaderFactory;
+    /** Server-composed addressed target lookup; absence never permits a guessed target root. */
+    resolveTargetApplication?: (
+      session: IdentitySession,
+      sourceSelection: OrganizationSelectionCandidate,
+      applicationKey: string,
+    ) => Promise<OrganizationSelectionCandidate | undefined>;
   }>;
 
 const unavailable: ViewerSafeRecordLinkResult = { outcome: "unavailable" };
+const pinUnavailable: ViewerSafeRecordPinAcquisitionResult = { outcome: "unavailable" };
 
 const matchingRecordType = (
   context: InstalledRuntimeContext,
@@ -173,6 +184,86 @@ export const createViewerSafeRecordLinkService = (
   const records = createViewerSafeRecordLinkReadService();
 
   return Object.freeze({
+    async acquireIdentity(
+      session: IdentitySession,
+      sourceSelectionCandidate: unknown,
+      selectorCandidate: unknown,
+    ): Promise<ViewerSafeRecordPinAcquisitionResult> {
+      const source = organizationSelectionCandidateSchema.safeParse(sourceSelectionCandidate);
+      const selector = viewerSafeRecordPinSelectorSchema.safeParse(selectorCandidate);
+      if (
+        !source.success || source.data.applicationRootId === undefined || !selector.success ||
+        dependencies.resolveTargetApplication === undefined
+      ) return pinUnavailable;
+      const sourceRoot = source.data.applicationRootId;
+
+      try {
+        // Verify the source human request before resolving a target in that same organisation.
+        const verifiedSource = await requests.run(session, source.data, async (_transaction, scope) =>
+          sameId(scope.organizationId, source.data.organizationId) &&
+          scope.applicationRootId !== undefined &&
+          sameId(scope.applicationRootId, sourceRoot)
+        );
+        if (verifiedSource.kind !== "available" || !verifiedSource.value) return pinUnavailable;
+        const target = organizationSelectionCandidateSchema.safeParse(
+          await dependencies.resolveTargetApplication(session, source.data, selector.data.applicationKey),
+        );
+        if (
+          !target.success || target.data.applicationRootId === undefined ||
+          !sameId(target.data.organizationId, source.data.organizationId)
+        ) return pinUnavailable;
+        const targetRoot = target.data.applicationRootId;
+        const [moduleKey, recordTypeKey] = selector.data.recordTypeKey.split(":");
+        const request = await requests.run(
+          session,
+          target.data,
+          async (transaction, scope): Promise<ViewerSafeRecordPinAcquisitionResult> => {
+            if (
+              !sameId(scope.organizationId, source.data.organizationId) ||
+              scope.applicationRootId === undefined || !sameId(scope.applicationRootId, targetRoot)
+            ) return pinUnavailable;
+            const context = requireInstalledRuntimeContext(
+              await dependencies.createInstalledContextLoader(transaction, scope).load(),
+            );
+            if (context.releaseSet.application.definitionKey !== selector.data.applicationKey)
+              return pinUnavailable;
+            const modules = context.releaseSet.modules.filter((module) => module.definitionKey === moduleKey);
+            const module = modules[0];
+            if (modules.length !== 1 || module === undefined) return pinUnavailable;
+            const recordTypes = module.content.recordTypes.filter((record) => record.key === recordTypeKey);
+            const recordType = recordTypes[0];
+            if (recordTypes.length !== 1 || recordType === undefined) return pinUnavailable;
+            const identity = viewerSafeRecordLinkIdentitySchema.parse({
+              organizationId: scope.organizationId,
+              applicationRootId: targetRoot,
+              moduleRootId: module.rootId,
+              moduleReleaseRevision: module.releaseRevision,
+              recordTypeId: recordType.recordTypeId,
+              storageContractId: recordType.storageContractId,
+              recordId: selector.data.recordId,
+            });
+            if (!currentContextMatches(context, identity)) return pinUnavailable;
+            const page = matchingDetailPage(context, identity);
+            if (page === undefined || !(await canOpenDetailPage(transaction, scope, context, page)))
+              return pinUnavailable;
+            const titleRead = await records.read(transaction, scope, {
+              identity,
+              applicationReleaseRevision: context.applicationReleaseRevision,
+              titleFieldId: recordType.titleFieldId,
+            });
+            // The protected read proves the record is available. Its display value never leaves here.
+            return titleRead.outcome === "read"
+              ? viewerSafeRecordPinAcquisitionResultSchema.parse({ outcome: "available", identity })
+              : pinUnavailable;
+          },
+        );
+        return request.kind === "available"
+          ? viewerSafeRecordPinAcquisitionResultSchema.parse(request.value)
+          : pinUnavailable;
+      } catch {
+        return pinUnavailable;
+      }
+    },
     async read(
       session: IdentitySession,
       identityCandidate: unknown,
