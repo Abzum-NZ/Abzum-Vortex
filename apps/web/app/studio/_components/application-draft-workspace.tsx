@@ -8,10 +8,12 @@ import {
   applyStudioFlowTextCommand,
   applyStudioFlowPresentationCommand,
   applyStudioFlowPresentationMoveCommand,
+  applyStudioFlowPresentationRemovalCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
   projectStudioSemanticOutline,
   projectStudioFlowPresentationMoves,
+  projectStudioFlowPresentationRemoval,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
@@ -501,6 +503,32 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
               if (!stillAdjacent) return "stale";
               if (!history.edit(result.source)) return "invalid";
               setMessage("Presentation task order applied to local history. Save to persist it.");
+              return "applied";
+            }} onRemove={(expected, expectedSelection, command, isCurrentTarget) => {
+              const current = history.getState();
+              const currentSelection = selection.getSelection();
+              if (!active.current || reopening.current || current.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowTextPending.current ||
+                flowAppendPending.current || !isCurrentTarget()) return "stale";
+              const currentContext: StudioFlowTextContext = {
+                organizationId, rootId: current.rootId, key: draft.key,
+                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+              };
+              const result = applyStudioFlowPresentationRemovalCommand(currentContext, expected,
+                currentSelection, expectedSelection, command);
+              if (result.kind !== "applied") return result.kind;
+              const latest = history.getState();
+              const latestSelection = selection.getSelection();
+              if (!active.current || reopening.current || latest.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowTextPending.current ||
+                flowAppendPending.current || !isCurrentTarget() || latest.source !== current.source ||
+                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
+                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+              if (!projectStudioFlowPresentationRemoval(currentContext, expectedSelection,
+                command.taskId, command.taskPath)) return "stale";
+              if (!history.edit(result.source)) return "invalid";
+              setMessage("Show message task removed from local history. Save to persist it.");
               return "applied";
             }} />}
         <p className="text-sm">The outline and inspector select the same authored alias. Other definition content is retained without alteration.</p>
