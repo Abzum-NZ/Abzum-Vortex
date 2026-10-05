@@ -7,6 +7,7 @@ import {
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
   organizationIdSchema,
+  parseFlowReference,
   sourceFlowTaskSchema,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
@@ -77,6 +78,12 @@ export type StudioFlowPresentationMoveOption = Readonly<{
 }>;
 export type StudioFlowPresentationMoveCommand = StudioFlowPresentationMoveOption &
   Readonly<{ kind: "move_presentation" }>;
+
+export type StudioFlowPresentationRemovalCommand = Readonly<{
+  kind: "remove_presentation";
+  taskId: string;
+  taskPath: readonly (string | number)[];
+}>;
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
 type TaskEntry = Readonly<{ task: SourceFlowTask; path: readonly (string | number)[] }>;
@@ -380,6 +387,100 @@ export const applyStudioFlowPresentationMoveCommand = (
       return { kind: "stale" };
     detached.flow.tasks[index] = neighbor;
     detached.flow.tasks[neighborIndex] = moved;
+    outline({ ...current, source: candidate }, expectedSelection);
+    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    return { kind: "applied", source: candidate };
+  } catch { return { kind: "invalid" }; }
+};
+
+const removableMessageTask = (task: SourceFlowTask): boolean => {
+  if (task.type !== "interface.show_message" || !("version" in task) ||
+    !("properties" in task) || task.version !== "1.0.0" ||
+    Object.keys(task).some((key) => !["id", "type", "version", "properties", "description"].includes(key)))
+    return false;
+  const definition = Object.values(flowTaskRegistry).find((entry) => entry.type === task.type);
+  if (definition === undefined || definition.version !== task.version ||
+    definition.effect !== "interface" || !definition.runLocations.includes("browser") ||
+    definition.outputs.length !== 0 || definition.properties.message?.type !== "message_text" ||
+    !definition.properties.message.required || Object.keys(task.properties).length !== 1 ||
+    !Object.hasOwn(task.properties, "message")) return false;
+  const message = task.properties.message;
+  return message?.kind === "literal" && message.literal.type === "text" &&
+    validPresentationText(message.literal.value);
+};
+
+/** Refuse retained references; never turn deletion into an implicit reference repair. */
+const hasRetainedTaskReference = (source: Readonly<ApplicationSourceDocumentV2>, taskId: string): boolean => {
+  // The whole source has already passed its shared node, depth and cycle bounds in outline.
+  const pending: unknown[] = [source];
+  const seen = new WeakSet<object>();
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === "string") {
+      const reference = parseFlowReference(value);
+      if (reference?.source === "task_output" && reference.task === taskId) return true;
+    } else if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      if (("source" in value && value.source === "task_output" && "task" in value && value.task === taskId) ||
+        ("kind" in value && value.kind === "flow_node" && "key" in value && value.key === taskId)) return true;
+      // Includes formulas, maps, arrays, output values and every nested/control/error/finally list.
+      // A same-key reference in another Flow is conservatively refused rather than guessed at.
+      pending.push(...Object.values(value));
+    }
+  }
+  return false;
+};
+
+const presentationRemoval = (context: StudioFlowTextContext, selection: FlowSelection,
+  taskId: string, taskPath: readonly (string | number)[]): boolean => {
+  const { flow } = outline(context, selection);
+  const index = directTaskIndex(taskPath);
+  if (flow.execution !== "interactive" || flow.runAs.kind !== "initiator" ||
+    flow.tasks.length <= 1 || index === undefined) return false;
+  const task = flow.tasks[index];
+  return task !== undefined && task.id === taskId && removableMessageTask(task) &&
+    !hasRetainedTaskReference(context.source, taskId);
+};
+
+/** Only one direct, unreferenced literal Show message can be removed through this inspector. */
+export const projectStudioFlowPresentationRemoval = (
+  context: StudioFlowTextContext,
+  selection: FlowSelection,
+  taskId: string,
+  taskPath: readonly (string | number)[],
+): boolean => {
+  try { return presentationRemoval(context, selection, taskId, taskPath); }
+  catch { return false; }
+};
+
+export const applyStudioFlowPresentationRemovalCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowPresentationRemovalCommand,
+): StudioFlowTextResult => {
+  if (current.organizationId !== expected.organizationId || current.rootId !== expected.rootId ||
+    current.key !== expected.key || current.draftRevision !== expected.draftRevision ||
+    current.localLifetime !== expected.localLifetime || current.source !== expected.source ||
+    selection?.kind !== "flow" || selection.flowAlias !== expectedSelection.flowAlias)
+    return { kind: "stale" };
+  try {
+    if (command.kind !== "remove_presentation" ||
+      Object.keys(command).some((key) => !["kind", "taskId", "taskPath"].includes(key)) ||
+      !builderKeySchema.safeParse(command.taskId).success) return { kind: "invalid" };
+    const original = outline(current, expectedSelection);
+    const index = directTaskIndex(command.taskPath);
+    if (index === undefined) return { kind: "unsupported" };
+    const task = original.flow.tasks[index];
+    if (task === undefined || task.id !== command.taskId) return { kind: "stale" };
+    if (!presentationRemoval(current, expectedSelection, command.taskId, command.taskPath))
+      return { kind: "unsupported" };
+    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const detached = outline({ ...current, source: candidate }, expectedSelection);
+    if (detached.flow.tasks[index]?.id !== command.taskId) return { kind: "stale" };
+    detached.flow.tasks.splice(index, 1);
     outline({ ...current, source: candidate }, expectedSelection);
     if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };

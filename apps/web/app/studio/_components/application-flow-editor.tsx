@@ -6,6 +6,7 @@ import {
   projectStudioFlowTextEditor,
   projectStudioFlowPresentationPalette,
   projectStudioFlowPresentationMoves,
+  projectStudioFlowPresentationRemoval,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
   type StudioFlowTextCommand,
@@ -15,6 +16,7 @@ import {
   type StudioFlowPresentationTaskType,
   type StudioFlowPresentationMoveCommand,
   type StudioFlowPresentationMoveOption,
+  type StudioFlowPresentationRemovalCommand,
 } from "@vortex/studio";
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
@@ -53,6 +55,8 @@ type Props = Readonly<{
     command: StudioFlowPresentationCommand) => StudioFlowTextResult["kind"];
   onMove: (expected: StudioFlowTextContext, selection: FlowSelection,
     command: StudioFlowPresentationMoveCommand, isCurrentTarget: () => boolean) => StudioFlowTextResult["kind"];
+  onRemove: (expected: StudioFlowTextContext, selection: FlowSelection,
+    command: StudioFlowPresentationRemovalCommand, isCurrentTarget: () => boolean) => StudioFlowTextResult["kind"];
 }>;
 
 const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -96,12 +100,12 @@ const findTask = (lists: readonly StudioFlowTaskListOutline[], target: Target | 
 
 /** A consumed task list, not an alternate execution graph or a free source editor. */
 export function ApplicationFlowEditor({ context, selection, disabled, onPendingChange,
-  onAppendPendingChange, onCommand, onAppend, onMove }: Props) {
+  onAppendPendingChange, onCommand, onAppend, onMove, onRemove }: Props) {
   const projection = useMemo(() => projectStudioFlowTextEditor(context, selection), [context, selection]);
   const palette = useMemo(() => projectStudioFlowPresentationPalette(context, selection), [context, selection]);
   const [target, setTarget] = useState<Target | null>(null);
   const currentTarget = useRef<Target | null>(null);
-  const selectTarget = (next: Target) => { currentTarget.current = next; setTarget(next); };
+  const selectTarget = (next: Target | null) => { currentTarget.current = next; setTarget(next); };
   const [buffer, setBuffer] = useState<Buffer | null>(null);
   const currentBuffer = useRef<Buffer | null>(null);
   const [insertInputs, setInsertInputs] = useState(emptyInsertInputs);
@@ -119,6 +123,8 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
   const pending = buffer !== null && buffer.text !== buffer.initial;
   const moves = useMemo(() => target === null ? []
     : projectStudioFlowPresentationMoves(context, selection, target.id, target.path), [context, selection, target]);
+  const canRemove = useMemo(() => target !== null &&
+    projectStudioFlowPresentationRemoval(context, selection, target.id, target.path), [context, selection, target]);
 
   const discard = () => {
     currentBuffer.current = null;
@@ -227,8 +233,30 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
           : "This task move could not be validated. No source was changed.");
   };
 
+  const remove = () => {
+    const expectedTarget = target;
+    if (expectedTarget === null || !canRemove) return;
+    const isCurrentTarget = (): boolean => {
+      const actual = currentTarget.current;
+      return active.current && !disabled && currentBuffer.current === null && currentInsert.current === null &&
+        actual !== null && actual.id === expectedTarget.id && actual.property === expectedTarget.property &&
+        pathKey(actual.path) === pathKey(expectedTarget.path);
+    };
+    if (!isCurrentTarget() || !window.confirm("Remove this Show message task from the draft?")) return;
+    if (!isCurrentTarget()) return;
+    const result = onRemove(context, selection, {
+      kind: "remove_presentation", taskId: expectedTarget.id, taskPath: expectedTarget.path,
+    }, isCurrentTarget);
+    if (result === "applied") {
+      selectTarget(null);
+      setMessage("Show message task removed from local history. Save draft to persist it.");
+    } else setMessage(result === "stale"
+      ? "The selected task or draft changed. Select the current task to continue. Your inputs are preserved."
+      : "This task cannot be removed here. No source was changed.");
+  };
+
   return <section className="space-y-4" aria-label="Flow task editor">
-    <p className="text-sm">Inspect authored tasks and branches. Edit supported presentation text, append a registered task, or move adjacent compatible presentation tasks.</p>
+    <p className="text-sm">Inspect authored tasks and branches. Edit supported presentation text, append a registered task, move adjacent compatible presentation tasks, or remove an unreferenced Show message task.</p>
     {palette.length > 0 ? <form className="space-y-3 rounded border border-border p-3" onSubmit={submitAppend}>
       <h3 className="font-semibold">Add presentation task</h3>
       <fieldset className="space-y-3" disabled={disabled || pending}>
@@ -276,6 +304,9 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
           {option.direction === "up" ? "Move up" : "Move down"}
         </button>)}
       </div> : <p className="text-sm">Move is available only across an adjacent compatible literal presentation task in Tasks.</p>}
+      {canRemove ? <button type="button" className={buttonClass}
+        disabled={disabled || pending || pendingInsert} onClick={remove}>Remove task</button>
+        : <p className="text-sm">Remove is available only for an unreferenced literal Show message in Tasks, with another task remaining.</p>}
       {task.properties.length === 0 ? <p>This task's configuration is read-only in this editor.</p>
         : <form onSubmit={submit} className="space-y-3">
           <label className="block space-y-1"><span>Presentation property</span>
