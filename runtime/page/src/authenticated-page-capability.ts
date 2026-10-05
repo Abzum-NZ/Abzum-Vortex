@@ -27,6 +27,10 @@ import {
   type ResolvedPageComposition,
 } from "./page-composition-resolution";
 
+type ObservedViewReason = "ABSENT" | "ALLOWED" | "access_refused" | "authentication_required"
+  | "target_policy_unavailable" | "caller_unsupported" | "UNKNOWN";
+type ObservedTargetKind = "ABSENT" | "ORGANIZATION" | "APPLICATION" | "UNPROVABLE";
+
 type PermissionBinding = Readonly<{
   permissionKey: string;
   declaration: OrganizationAccessDeclaration;
@@ -85,10 +89,14 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE" | "UNKNOWN";
       /** Optional server-only sink; immutable decisions cannot influence projection authority. */
       observeProjectionDecision?: (observation: Readonly<{
+        /** Only supplied after the original target/request and single-correlation checks. */
+        requestBound: true;
         placements: readonly Readonly<{
           placementId: string;
           ancestorPlacementIds: readonly string[];
           viewGate: "ABSENT" | "ALLOWED" | "REFUSED";
+          viewReason: ObservedViewReason;
+          targetKind: ObservedTargetKind;
           condition: "ABSENT" | "TRUE" | "NOT_TRUE" | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR";
           conditionReason: "ABSENT" | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
             | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE"
@@ -144,16 +152,37 @@ const evaluate = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   binding: PermissionBinding,
-): Promise<Readonly<{ allowed: boolean; correlationId: string }>> => {
+): Promise<Readonly<{
+  allowed: boolean;
+  correlationId: string;
+  viewReason: ObservedViewReason;
+  targetKind: ObservedTargetKind;
+}>> => {
   const result = await runOrganizationAccessOperation(
     transaction,
     scope,
     binding.declaration,
     async (decision) => decision.correlationId,
   );
-  return result.outcome === "completed"
+  const evaluated = result.outcome === "completed"
     ? { allowed: true, correlationId: result.value }
     : { allowed: false, correlationId: result.correlationId };
+  // These diagnostic labels retain only the existing safe result, never private decision evidence.
+  let viewReason: ObservedViewReason = "UNKNOWN";
+  let targetKind: ObservedTargetKind = "UNPROVABLE";
+  try {
+    if (result.outcome === "completed") viewReason = "ALLOWED";
+    else if (result.reasonCode === "access_refused" ||
+      result.reasonCode === "authentication_required" ||
+      result.reasonCode === "target_policy_unavailable" ||
+      result.reasonCode === "caller_unsupported") viewReason = result.reasonCode;
+    const kind = binding.declaration.target.kind;
+    targetKind = kind === "organization" ? "ORGANIZATION"
+      : kind === "application" ? "APPLICATION" : "UNPROVABLE";
+  } catch {
+    // Optional metadata cannot replace the original evaluated outcome or its genuine errors.
+  }
+  return { ...evaluated, viewReason, targetKind };
 };
 
 const sameKey = (left: string, right: string): boolean => left === right;
@@ -203,7 +232,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
           const view =
             required.viewPermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId }
+              ? { allowed: true, correlationId: pageAccess.correlationId,
+                  viewReason: "ABSENT" as const, targetKind: "ABSENT" as const }
               : binding.viewPermission !== undefined &&
                   sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
                 ? await evaluate(transaction, scope, binding.viewPermission)
@@ -265,6 +295,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
                   ancestorPlacementIds: Object.freeze([...required.ancestorPlacementIds]),
                   viewGate: required.viewPermissionKey === undefined ? "ABSENT"
                     : view.allowed ? "ALLOWED" : "REFUSED",
+                  viewReason: view.viewReason,
+                  targetKind: view.targetKind,
                   condition,
                   conditionReason: condition === "ABSENT" || condition === "SKIPPED_VIEW" ||
                     condition === "SKIPPED_ANCESTOR" ? condition
@@ -291,6 +323,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
         if (projected !== undefined && observationValid) {
           try {
             observer?.call(dependencies, Object.freeze({
+              requestBound: true,
               placements: Object.freeze(observed),
             }));
           } catch {
