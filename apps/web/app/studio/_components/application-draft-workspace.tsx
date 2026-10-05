@@ -9,6 +9,7 @@ import {
   applyStudioFlowPresentationCommand,
   applyStudioFlowPresentationMoveCommand,
   applyStudioFlowPresentationRemovalCommand,
+  applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
   projectStudioSemanticOutline,
@@ -204,6 +205,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     setPendingComposition(pending);
   }, []);
   const [compositionEpoch, setCompositionEpoch] = useState(0);
+  // Text and Calculate share this synchronous guard; either blocks other workspace edits.
   const [pendingFlowText, setPendingFlowText] = useState(false);
   const flowTextPending = useRef(false);
   const reportFlowTextPending = useCallback((pending: boolean) => {
@@ -374,7 +376,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         <button type="button" className={buttonClass} disabled={state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</button>
       </div>
       <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingFlowText
-        ? "Apply or discard Flow text before saving or undoing." : pendingFlowAppend
+        ? "Apply or discard Flow text or Calculate inputs before saving or undoing." : pendingFlowAppend
         ? "Apply or discard Flow insertion inputs before saving or undoing." : pendingComposition
         ? "Apply or discard composition inputs before saving or undoing." : pendingAppearance
         ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
@@ -476,6 +478,28 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
               if (!history.edit(result.source)) return "invalid";
               setMessage("Presentation task appended to local history. Save to persist it.");
               return "applied";
+            }} onCalculate={(expected, expectedSelection, command, isCurrentTarget) => {
+              const current = history.getState();
+              const currentSelection = selection.getSelection();
+              if (!active.current || reopening.current || current.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowAppendPending.current ||
+                !isCurrentTarget()) return "stale";
+              const currentContext: StudioFlowTextContext = {
+                organizationId, rootId: current.rootId, key: draft.key,
+                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+              };
+              const result = applyStudioFlowCalculateCommand(currentContext, expected, currentSelection, expectedSelection, command);
+              if (result.kind !== "applied") return result.kind;
+              const latest = history.getState();
+              const latestSelection = selection.getSelection();
+              if (!active.current || reopening.current || latest.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowAppendPending.current ||
+                !isCurrentTarget() || latest.source !== current.source || latest.rootId !== current.rootId ||
+                latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+                latestSelection?.kind !== "flow" || latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+              if (!history.edit(result.source)) return "invalid";
+              setMessage("Calculate applied to local history. Save to persist it.");
+              return "applied";
             }} onMove={(expected, expectedSelection, command, isCurrentTarget) => {
               const current = history.getState();
               const currentSelection = selection.getSelection();
@@ -556,7 +580,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
           }}>Discard inspector text</button>
           <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
         </form> : <p>{selected?.kind === "flow"
-          ? "Select a task in the Flow outline to inspect its supported presentation text."
+          ? "Select a task in the Flow outline to inspect supported presentation text or arithmetic."
           : "This item is read-only in the minimum host."}</p>}
         {selected?.kind === "application" && inspector.status === "resolved" &&
           <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}

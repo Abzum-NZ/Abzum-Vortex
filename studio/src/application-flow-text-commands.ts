@@ -3,6 +3,8 @@ import {
   applicationSourceDocumentV2Schema,
   builderKeySchema,
   flowLiteralSchema,
+  flowFormulaSchema,
+  flowRoundingModeSchema,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
@@ -11,6 +13,8 @@ import {
   sourceFlowTaskSchema,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
+  type FlowFormula,
+  type FlowRoundingMode,
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/contracts";
@@ -84,6 +88,33 @@ export type StudioFlowPresentationRemovalCommand = Readonly<{
   taskId: string;
   taskPath: readonly (string | number)[];
 }>;
+
+export type StudioFlowCalculateOperand =
+  | Readonly<{ kind: "literal"; literal:
+      | Readonly<{ type: "whole_number"; value: number }>
+      | Readonly<{ type: "decimal_number"; value: string }> }>
+  | Readonly<{ kind: "input" | "variable"; name: string }>;
+export type StudioFlowCalculateSettings = Readonly<{
+  operator: "add" | "subtract" | "multiply" | "divide";
+  left: StudioFlowCalculateOperand;
+  right: StudioFlowCalculateOperand;
+  scale: number;
+  rounding: FlowRoundingMode;
+}>;
+export type StudioFlowCalculateCommand = StudioFlowCalculateSettings & (
+  | Readonly<{ kind: "append_calculate"; taskId: string }>
+  | Readonly<{ kind: "edit_calculate"; taskId: string; taskPath: readonly (string | number)[] }>
+);
+export type StudioFlowCalculateProjection =
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{
+      kind: "available";
+      canAppend: boolean;
+      references: readonly Readonly<{ kind: "input" | "variable"; name: string;
+        type: "whole_number" | "decimal_number" }>[];
+      selected: (StudioFlowCalculateSettings & Readonly<{ taskId: string;
+        taskPath: readonly (string | number)[] }>) | null;
+    }>;
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
 type TaskEntry = Readonly<{ task: SourceFlowTask; path: readonly (string | number)[] }>;
@@ -319,6 +350,177 @@ const movablePresentationTask = (task: SourceFlowTask): boolean => {
 const directTaskIndex = (path: readonly (string | number)[]): number | undefined =>
   path.length === 2 && path[0] === "tasks" && typeof path[1] === "number" &&
     Number.isSafeInteger(path[1]) && path[1] >= 0 ? path[1] : undefined;
+
+const onlyKeys = (value: object, keys: readonly string[]): boolean =>
+  Object.keys(value).every((key) => keys.includes(key));
+
+const calculateRegistryAvailable = (flow: SourceFlow): boolean => {
+  const definition = flowTaskRegistry["data.calculate"];
+  const location = flow.execution === "interactive" ? "browser" : "transaction";
+  return (flow.execution === "interactive" || flow.execution === "transaction") &&
+    flow.runAs.kind === "initiator" && definition.type === "data.calculate" &&
+    definition.version === "1.0.0" && definition.effect === "pure" &&
+    definition.runLocations.includes(location) &&
+    Object.keys(definition.properties).length === 1 &&
+    definition.properties.formula?.type === "formula" && definition.properties.formula.required &&
+    definition.outputs.length === 1 && definition.outputs[0]?.key === "value" &&
+    definition.outputs[0].type === "json";
+};
+
+const calculateReferences = (flow: SourceFlow):
+  Extract<StudioFlowCalculateProjection, { kind: "available" }>["references"] => {
+  const references: { kind: "input" | "variable"; name: string;
+    type: "whole_number" | "decimal_number" }[] = [];
+  for (const [name, declaration] of Object.entries(flow.inputs)) {
+    if ((declaration.type === "whole_number" || declaration.type === "decimal_number") &&
+      (declaration.required || (Object.hasOwn(declaration, "default") &&
+        flowLiteralSchema.safeParse({ type: declaration.type, value: declaration.default }).success)))
+      references.push({ kind: "input", name, type: declaration.type });
+  }
+  for (const [name, declaration] of Object.entries(flow.variables)) {
+    if ((declaration.type === "whole_number" || declaration.type === "decimal_number") &&
+      Object.hasOwn(declaration, "default") &&
+      flowLiteralSchema.safeParse({ type: declaration.type, value: declaration.default }).success)
+      references.push({ kind: "variable", name, type: declaration.type });
+  }
+  return references;
+};
+
+const calculateOperandFormula = (flow: SourceFlow, operand: StudioFlowCalculateOperand):
+  FlowFormula | undefined => {
+  if (operand.kind === "literal") {
+    if (!onlyKeys(operand, ["kind", "literal"]) ||
+      !onlyKeys(operand.literal, ["type", "value"]) ||
+      (operand.literal.type === "whole_number" ? typeof operand.literal.value !== "number"
+        : operand.literal.type !== "decimal_number" || typeof operand.literal.value !== "string") ||
+      !flowLiteralSchema.safeParse(operand.literal).success) return undefined;
+    return { op: "literal", type: operand.literal.type, value: operand.literal.value };
+  }
+  if ((operand.kind !== "input" && operand.kind !== "variable") ||
+    !onlyKeys(operand, ["kind", "name"]) ||
+    !calculateReferences(flow).some((entry) => entry.kind === operand.kind && entry.name === operand.name))
+    return undefined;
+  return { op: "reference", reference: { source: operand.kind, name: operand.name } };
+};
+
+const calculateFormulaOperand = (flow: SourceFlow, formula: FlowFormula):
+  StudioFlowCalculateOperand | undefined => {
+  if (formula.op === "literal" && onlyKeys(formula, ["op", "type", "value"])) {
+    const operand: StudioFlowCalculateOperand | undefined =
+      formula.type === "whole_number" && typeof formula.value === "number"
+        ? { kind: "literal", literal: { type: "whole_number", value: formula.value } }
+        : formula.type === "decimal_number" && typeof formula.value === "string"
+          ? { kind: "literal", literal: { type: "decimal_number", value: formula.value } }
+          : undefined;
+    return operand !== undefined && calculateOperandFormula(flow, operand) !== undefined ? operand : undefined;
+  }
+  if (formula.op === "reference" && onlyKeys(formula, ["op", "reference"]) &&
+    typeof formula.reference === "object" && formula.reference !== null &&
+    (formula.reference.source === "input" || formula.reference.source === "variable") &&
+    onlyKeys(formula.reference, ["source", "name"])) {
+    const operand: StudioFlowCalculateOperand = { kind: formula.reference.source, name: formula.reference.name };
+    return calculateOperandFormula(flow, operand) === undefined ? undefined : operand;
+  }
+  return undefined;
+};
+
+const calculateSettings = (flow: SourceFlow, task: SourceFlowTask): StudioFlowCalculateSettings | undefined => {
+  if (task.type !== "data.calculate" || !("version" in task) || task.version !== "1.0.0" ||
+    !("properties" in task) || !onlyKeys(task, ["id", "type", "version", "properties", "description"]) ||
+    Object.keys(task.properties).length !== 1) return undefined;
+  const value = task.properties.formula;
+  if (value?.kind !== "formula" || !onlyKeys(value, ["kind", "formula"]) ||
+    !flowFormulaSchema.safeParse(value.formula).success) return undefined;
+  const formula = value.formula;
+  if ((formula.op !== "add" && formula.op !== "subtract" && formula.op !== "multiply" && formula.op !== "divide") ||
+    !onlyKeys(formula, ["op", "args", "scale", "rounding"]) || formula.args.length !== 2)
+    return undefined;
+  const left = calculateFormulaOperand(flow, formula.args[0]!);
+  const right = calculateFormulaOperand(flow, formula.args[1]!);
+  return left === undefined || right === undefined ? undefined
+    : { operator: formula.op, left, right, scale: formula.scale, rounding: formula.rounding };
+};
+
+/** Projects only real declared numeric operands and the closed, registered arithmetic participant. */
+export const projectStudioFlowCalculateEditor = (
+  context: StudioFlowTextContext,
+  selection: FlowSelection,
+  taskId?: string,
+  taskPath?: readonly (string | number)[],
+): StudioFlowCalculateProjection => {
+  try {
+    const current = outline(context, selection);
+    if (!calculateRegistryAvailable(current.flow)) return { kind: "unavailable" };
+    const index = taskPath === undefined ? undefined : directTaskIndex(taskPath);
+    const task = index === undefined ? undefined : current.flow.tasks[index];
+    const settings = task !== undefined && task.id === taskId ? calculateSettings(current.flow, task) : undefined;
+    return { kind: "available", canAppend: current.entries.length < flowMaximumTaskCount,
+      references: calculateReferences(current.flow), selected: settings === undefined || task === undefined || taskPath === undefined
+        ? null : { ...settings, taskId: task.id, taskPath: [...taskPath] } };
+  } catch { return { kind: "unavailable" }; }
+};
+
+/** Adds or edits one Calculate formula on detached authored source; it grants no execution authority. */
+export const applyStudioFlowCalculateCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowCalculateCommand,
+): StudioFlowTextResult => {
+  if (current.organizationId !== expected.organizationId || current.rootId !== expected.rootId ||
+    current.key !== expected.key || current.draftRevision !== expected.draftRevision ||
+    current.localLifetime !== expected.localLifetime || current.source !== expected.source ||
+    selection?.kind !== "flow" || selection.flowAlias !== expectedSelection.flowAlias)
+    return { kind: "stale" };
+  try {
+    const original = outline(current, expectedSelection);
+    if (!calculateRegistryAvailable(original.flow)) return { kind: "unsupported" };
+    if ((command.kind !== "append_calculate" && command.kind !== "edit_calculate") ||
+      !onlyKeys(command, ["kind", "taskId", "operator", "left", "right", "scale", "rounding",
+        ...(command.kind === "edit_calculate" ? ["taskPath"] : [])]) ||
+      !builderKeySchema.safeParse(command.taskId).success ||
+      (command.operator !== "add" && command.operator !== "subtract" && command.operator !== "multiply" && command.operator !== "divide") ||
+      !Number.isInteger(command.scale) || command.scale < 0 || command.scale > 18 ||
+      !flowRoundingModeSchema.safeParse(command.rounding).success) return { kind: "invalid" };
+    const left = calculateOperandFormula(original.flow, command.left);
+    const right = calculateOperandFormula(original.flow, command.right);
+    if (left === undefined || right === undefined) return { kind: "invalid" };
+    const formula: FlowFormula = {
+      op: command.operator, args: [left, right], scale: command.scale, rounding: command.rounding,
+    };
+    if (!flowFormulaSchema.safeParse(formula).success) return { kind: "invalid" };
+    const index = command.kind === "edit_calculate" ? directTaskIndex(command.taskPath) : undefined;
+    if (command.kind === "edit_calculate") {
+      const task = index === undefined ? undefined : original.flow.tasks[index];
+      if (task === undefined || task.id !== command.taskId) return { kind: "stale" };
+      const settings = calculateSettings(original.flow, task);
+      if (settings === undefined) return { kind: "unsupported" };
+      const normalized = { operator: command.operator,
+        left: calculateFormulaOperand(original.flow, left), right: calculateFormulaOperand(original.flow, right),
+        scale: command.scale, rounding: command.rounding };
+      if (JSON.stringify(settings) === JSON.stringify(normalized)) return { kind: "no_change" };
+    } else if (original.entries.length >= flowMaximumTaskCount ||
+      original.entries.some(({ task }) => task.id === command.taskId)) return { kind: "invalid" };
+    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const detached = outline({ ...current, source: candidate }, expectedSelection);
+    if (command.kind === "append_calculate") {
+      const task: Extract<SourceFlowTask, { properties: unknown }> = {
+        id: command.taskId, type: "data.calculate", version: "1.0.0",
+        properties: { formula: { kind: "formula", formula } },
+      };
+      if (!sourceFlowTaskSchema.safeParse(task).success) return { kind: "invalid" };
+      detached.flow.tasks.push(task);
+    } else {
+      const task = index === undefined ? undefined : detached.flow.tasks[index];
+      if (task === undefined || task.id !== command.taskId || !("properties" in task)) return { kind: "stale" };
+      task.properties.formula = { kind: "formula", formula };
+    }
+    outline({ ...current, source: candidate }, expectedSelection);
+    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    return { kind: "applied", source: candidate };
+  } catch { return { kind: "invalid" }; }
+};
 
 const presentationMoves = (flow: SourceFlow, taskId: string,
   taskPath: readonly (string | number)[]): readonly StudioFlowPresentationMoveOption[] => {
