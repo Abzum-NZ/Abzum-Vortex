@@ -11,3 +11,4 @@ export * from "./condition-controls";
 export * from "./module-page-generator";
 export * from "./application-appearance";
 export * from "./application-composition-commands";
+export * from "./application-flow-text-commands";
