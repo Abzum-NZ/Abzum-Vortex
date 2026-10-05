@@ -7,9 +7,11 @@ import {
   applyStudioCompositionCommand,
   applyStudioFlowTextCommand,
   applyStudioFlowPresentationCommand,
+  applyStudioFlowPresentationMoveCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
   projectStudioSemanticOutline,
+  projectStudioFlowPresentationMoves,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
@@ -471,6 +473,34 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
                 latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
               if (!history.edit(result.source)) return "invalid";
               setMessage("Presentation task appended to local history. Save to persist it.");
+              return "applied";
+            }} onMove={(expected, expectedSelection, command, isCurrentTarget) => {
+              const current = history.getState();
+              const currentSelection = selection.getSelection();
+              if (!active.current || reopening.current || current.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowTextPending.current ||
+                flowAppendPending.current || !isCurrentTarget()) return "stale";
+              const currentContext: StudioFlowTextContext = {
+                organizationId, rootId: current.rootId, key: draft.key,
+                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+              };
+              const result = applyStudioFlowPresentationMoveCommand(currentContext, expected, currentSelection, expectedSelection, command);
+              if (result.kind !== "applied") return result.kind;
+              const latest = history.getState();
+              const latestSelection = selection.getSelection();
+              if (!active.current || reopening.current || latest.isSaving || labelsPending.current ||
+                appearancePending.current || compositionPending.current || flowTextPending.current ||
+                flowAppendPending.current || !isCurrentTarget() || latest.source !== current.source ||
+                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
+                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+              // Resolve both identities and adjacency again on the same source immediately at the edit.
+              const stillAdjacent = projectStudioFlowPresentationMoves(currentContext, expectedSelection, command.taskId, command.taskPath)
+                .some((option) => option.direction === command.direction && option.neighborId === command.neighborId &&
+                  JSON.stringify(option.neighborPath) === JSON.stringify(command.neighborPath));
+              if (!stillAdjacent) return "stale";
+              if (!history.edit(result.source)) return "invalid";
+              setMessage("Presentation task order applied to local history. Save to persist it.");
               return "applied";
             }} />}
         <p className="text-sm">The outline and inspector select the same authored alias. Other definition content is retained without alteration.</p>
