@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Icon, resolveVortexIconName } from "../icons";
 import { Card, CardFooter, CardHeader, CardTitle } from "../components/card";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
@@ -69,13 +70,18 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                   {rows.map((row) => {
                     const name = cellText(row.cells, nameKey) || "untitled application";
                     const icon = cellText(row.cells, iconKey);
+                    const iconName = resolveVortexIconName(icon);
                     return (
                       <li key={row.recordId} data-vortex-record-id={row.recordId} className="flex">
                         <Card size="sm" className="w-full">
                           <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                               {icon === "" ? null : (
-                                <span data-vortex-icon={icon} aria-hidden="true" />
+                                <Icon name={iconName ?? "circle"} width={20} height={20}
+                                  className="size-5 shrink-0"
+                                  data-vortex-icon={iconName ?? "circle"}
+                                  data-vortex-icon-fallback={iconName === undefined ? "neutral" : undefined}
+                                  aria-hidden="true" />
                               )}
                               <span>{name}</span>
                             </CardTitle>

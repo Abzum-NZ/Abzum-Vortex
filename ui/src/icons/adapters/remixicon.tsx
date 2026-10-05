@@ -1,4 +1,10 @@
 import {
+  RiGridLine,
+  RiContactsBookLine,
+  RiGroupLine,
+  RiEqualizerLine,
+  RiLifebuoyLine,
+  RiBuilding2Line,
   RiAddLine,
   RiArrowDownLine,
   RiArrowDownSLine,
@@ -50,4 +56,10 @@ export const icons: VortexIconAdapter = {
   "panel-left": remixIcon(RiSideBarLine),
   plus: remixIcon(RiAddLine),
   search: remixIcon(RiSearchLine),
+  "grid": remixIcon(RiGridLine),
+  "contact-round": remixIcon(RiContactsBookLine),
+  "users": remixIcon(RiGroupLine),
+  "sliders-horizontal": remixIcon(RiEqualizerLine),
+  "life-buoy": remixIcon(RiLifebuoyLine),
+  "building-2": remixIcon(RiBuilding2Line),
 };

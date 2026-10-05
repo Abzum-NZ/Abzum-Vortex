@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Icon, resolveVortexIconName } from "../icons";
 import {
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
@@ -179,6 +180,8 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
         </p> : <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((row) => {
             const target = row.target;
+            const iconName = target.kind === "application" || target.kind === "page"
+              ? resolveVortexIconName(target.icon) : undefined;
             const label = target.kind === "record" ? titleText(target.title)
               : target.kind !== "unavailable" ? target.label
               : values.kind === "application_page_link_tiles" ? "Unavailable link" : "Unavailable record";
@@ -201,7 +204,11 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
               <Card size="sm" className="w-full">
                 <CardHeader><CardTitle>
                   {target.kind === "application" || target.kind === "page"
-                    ? <span data-vortex-icon={target.icon} aria-hidden="true" /> : null}
+                    ? <Icon name={iconName ?? "circle"} width={20} height={20}
+                        className="mr-2 inline-block size-5 shrink-0 align-middle"
+                        data-vortex-icon={iconName ?? "circle"}
+                        data-vortex-icon-fallback={iconName === undefined ? "neutral" : undefined}
+                        aria-hidden="true" /> : null}
                   {label}</CardTitle>
                   {target.kind === "external" && target.description ?
                     <CardDescription>{target.description}</CardDescription> : null}
