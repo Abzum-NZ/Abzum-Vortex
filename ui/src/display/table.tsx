@@ -220,7 +220,12 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   if (state.status === "loading")
     return <RecordsLoadingState accessibleName={accessibleName} />;
   if (state.status === "empty")
-    return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
+    return (
+      <>
+        <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
+        <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
+      </>
+    );
 
   return (
     <DisplayStateContainer
