@@ -18,6 +18,21 @@ import {
 } from "@vortex/studio";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
+import { resolveIdentitySession } from "../auth/_lib/session-server";
+import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
+import type { StudioApplicationConditionContextResult } from "@vortex/studio";
+
+/** Metadata is resolved only from the server's active human session and exact saved draft. */
+export async function resolveStudioApplicationConditionContext(
+  organizationId: string, candidate: unknown,
+): Promise<StudioApplicationConditionContextResult> {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    return await readSavedStudioApplicationConditionContext(resolved.session, organizationId, candidate);
+  } catch { return { kind: "temporarily_unavailable" }; }
+}
 
 /** A browser document is authored input, never authority or evidence of an installed Module. */
 export async function createStudioApplication(organizationId: string, candidate: unknown) {

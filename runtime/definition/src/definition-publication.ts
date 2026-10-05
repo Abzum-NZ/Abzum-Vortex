@@ -52,6 +52,7 @@ import {
   type ProtectedOperationReference,
   type Revision,
   type SemanticVersion,
+  type ModuleFieldV3,
 } from "@vortex/contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { compare, satisfies } from "semver";
@@ -268,9 +269,80 @@ export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult;
 /** One current Application draft compiled at its exact revision, for exact-draft preview. */
 export type ApplicationDraftCompilation = Readonly<{
   compilation: ApplicationCompilationOutputV2;
+  conditionContexts: readonly ApplicationDraftConditionContext[];
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
 }>;
+
+/** Authoring metadata from the very same verified dependency resolution as compilation. */
+export type ApplicationDraftConditionContext = Readonly<{
+  sourceFingerprint: Fingerprint;
+  bindingsSignature: string;
+  pageAlias: string;
+  recordReference: string;
+  recordTypeId: string;
+  module: Readonly<Pick<ResolvableModuleRelease, "organizationId" | "key" | "rootId" |
+    "releaseRevision" | "releaseVersion" | "contentFingerprint" | "resolutionFingerprint">>;
+  fields: readonly Readonly<{ field: ModuleFieldV3; aliases: readonly string[];
+    preferredAlias: string; componentOwner: string }>[];
+}>;
+
+const conditionFieldTypes = new Set(["text", "long_text", "whole_number", "yes_no", "date", "date_time"]);
+
+const projectDraftConditionContexts = (
+  source: ApplicationSourceDocumentV2,
+  sourceFingerprint: Fingerprint,
+  dependencies: ResolvedDependencies,
+  resolution: DefinitionResolution,
+): ApplicationDraftConditionContext[] => {
+  const contexts: ApplicationDraftConditionContext[] = [];
+  for (const page of source.body.pages) {
+    if (page.type !== "detail") continue;
+    const split = page.record_type.lastIndexOf(":");
+    const moduleKey = page.record_type.slice(0, split);
+    const recordAlias = page.record_type.slice(split + 1);
+    const releases = dependencies.modules.filter((release) => release.key === moduleKey);
+    const identities = resolution.identities.filter((identity) => identity.definitionKey === moduleKey);
+    const records = identities.filter((identity) => identity.kind === "record_type" &&
+      identity.scope === "content" && identity.alias === recordAlias);
+    const release = releases[0];
+    const recordIdentity = records[0];
+    if (releases.length !== 1 || records.length !== 1 || release === undefined || recordIdentity === undefined)
+      continue;
+    const canonicalRecords = release.compilationOutput.canonical.content.recordTypes.filter(
+      (record) => record.recordTypeId === recordIdentity.identifier,
+    );
+    const record = canonicalRecords[0];
+    if (canonicalRecords.length !== 1 || record === undefined) continue;
+    const fields: ApplicationDraftConditionContext["fields"][number][] = [];
+    let valid = true;
+    for (const field of record.fields) {
+      if (!conditionFieldTypes.has(field.type)) continue;
+      const group = identities.filter((identity) => identity.kind === "field" &&
+        identity.scope === `record:${recordAlias}` && identity.identifier === field.fieldId);
+      const owners = new Set(group.map((identity) => identity.componentOwner));
+      const aliases = group.map((identity) => identity.alias);
+      if (owners.size !== 1 || aliases.length === 0 || new Set(aliases).size !== aliases.length ||
+        !aliases.includes(field.key) || group.some((entry) => identities.some((other) =>
+          other.kind === "field" && other.scope === entry.scope && other.alias === entry.alias &&
+          (other.identifier !== entry.identifier || other.componentOwner !== entry.componentOwner))) ||
+        group.some((entry) => identities.some((other) => other.kind === "field" && other.scope === entry.scope &&
+          other.componentOwner === entry.componentOwner && other.identifier !== entry.identifier))) {
+        valid = false;
+        break;
+      }
+      fields.push({ field, aliases, preferredAlias: field.key, componentOwner: group[0]!.componentOwner });
+    }
+    if (!valid) continue;
+    contexts.push({ sourceFingerprint, bindingsSignature: JSON.stringify(source.body.module_bindings),
+      pageAlias: page.id, recordReference: page.record_type,
+      recordTypeId: record.recordTypeId, module: { organizationId: release.organizationId,
+        key: release.key, rootId: release.rootId, releaseRevision: release.releaseRevision,
+        releaseVersion: release.releaseVersion, contentFingerprint: release.contentFingerprint,
+        resolutionFingerprint: release.resolutionFingerprint }, fields });
+  }
+  return contexts;
+};
 
 type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 
@@ -1548,10 +1620,11 @@ export const createDefinitionPublicationService = (
         await assertNoCycle(reader, candidate, dependencies.modules);
         const currentVersion =
           candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
+        const resolution = buildResolution(candidate, dependencies, currentVersion);
         const compilation = compileCandidate(
           candidate,
           dependencies,
-          buildResolution(candidate, dependencies, currentVersion),
+          resolution,
           false,
         );
         if (
@@ -1561,6 +1634,8 @@ export const createDefinitionPublicationService = (
           return refuse("DEFINITION_COMPILATION_REFUSED");
         return {
           compilation,
+          conditionContexts: projectDraftConditionContexts(candidate.draft.source,
+            candidate.draft.sourceFingerprint, dependencies, resolution),
           currentReleaseRevision: candidate.draft.publishedRevision ?? null,
         };
       }),
