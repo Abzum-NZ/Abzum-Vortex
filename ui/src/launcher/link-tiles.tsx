@@ -3,6 +3,8 @@
 import type { ReactElement } from "react";
 import {
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+  type ProjectedApplicationPageLinkTiles,
   mountedRecordPinElementProperty,
   type ProjectedRecordPinTiles,
   type JsonValue,
@@ -133,8 +135,8 @@ function ExternalLinkTiles(props: LauncherRenderProps): ReactElement {
 }
 
 type RecordPinRenderProps = LauncherRenderProps & Readonly<{
-  pinData?: DisplayDataState<ProjectedRecordPinTiles>;
-  openTile?: (sourceRecordId: string, sourceRevision: number) => Promise<void>;
+  pinData?: DisplayDataState<ProjectedRecordPinTiles | ProjectedApplicationPageLinkTiles>;
+  openTile?: (sourceRecordId: string, sourceRevision: number, isVisible?: () => boolean) => Promise<void>;
   pinFrame?: MountedRecordPinFrame;
 }>;
 
@@ -144,7 +146,8 @@ const titleText = (value: JsonValue): string =>
 /** The same registered renderer keeps old releases in their original external-only component. */
 export function LinkTiles(props: RecordPinRenderProps): ReactElement {
   return props.metadata.blockId === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.blockId &&
-    props.metadata.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion
+    (props.metadata.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+      props.metadata.releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion)
     ? <RecordPinTiles {...props} /> : <ExternalLinkTiles {...props} />;
 }
 
@@ -157,7 +160,8 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
   const values = props.availability === "available" && state.status === "ready" ? state.values : undefined;
   const rows = values?.rows.filter((row) => {
     const label = row.target.kind === "record" ? titleText(row.target.title)
-      : row.target.kind === "external" ? row.target.label : "Unavailable record";
+      : row.target.kind !== "unavailable" ? row.target.label
+      : values?.kind === "application_page_link_tiles" ? "Unavailable link" : "Unavailable record";
     return filter?.matches({ recordId: row.sourceRecordId,
       cells: { [labelKey]: { kind: "text", text: label } } }, labelKey) ?? true;
   }) ?? [];
@@ -176,7 +180,8 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
           {rows.map((row) => {
             const target = row.target;
             const label = target.kind === "record" ? titleText(target.title)
-              : target.kind === "external" ? target.label : "Unavailable record";
+              : target.kind !== "unavailable" ? target.label
+              : values.kind === "application_page_link_tiles" ? "Unavailable link" : "Unavailable record";
             return <li key={row.sourceRecordId} data-vortex-record-id={row.sourceRecordId} className="flex"
               ref={(element) => {
                 if (element === null) return;
@@ -194,12 +199,20 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
                 });
               }}>
               <Card size="sm" className="w-full">
-                <CardHeader><CardTitle>{label}</CardTitle>
+                <CardHeader><CardTitle>
+                  {target.kind === "application" || target.kind === "page"
+                    ? <span data-vortex-icon={target.icon} aria-hidden="true" /> : null}
+                  {label}</CardTitle>
                   {target.kind === "external" && target.description ?
                     <CardDescription>{target.description}</CardDescription> : null}
                 </CardHeader>
                 {target.kind === "unavailable" || props.openTile === undefined ? null : <CardContent>
-                  <Button variant="link" onClick={() => { void props.openTile?.(row.sourceRecordId, row.sourceRevision); }}>
+                  <Button variant="link" onClick={(event) => {
+                    const element = event.currentTarget;
+                    void props.openTile?.(row.sourceRecordId, row.sourceRevision, () =>
+                      element.isConnected && element.getClientRects().length !== 0 &&
+                      getComputedStyle(element).visibility === "visible");
+                  }}>
                     Open<span className="sr-only"> {label}{target.openBehaviour === "new_page" ? " (opens in a new page)" : ""}</span>
                   </Button>
                 </CardContent>}

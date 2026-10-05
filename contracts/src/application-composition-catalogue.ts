@@ -346,6 +346,7 @@ export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockReleaseV2 = releas
 /** Exact immutable metadata release for the link tiles block. */
 export const LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.LINK_TILES_BLOCK_RELEASE);
 export const RECORD_PIN_LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.RECORD_PIN_LINK_TILES_BLOCK_RELEASE);
+export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the view filter block. */
 export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VIEW_FILTER_BLOCK_RELEASE);
@@ -402,6 +403,7 @@ export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
