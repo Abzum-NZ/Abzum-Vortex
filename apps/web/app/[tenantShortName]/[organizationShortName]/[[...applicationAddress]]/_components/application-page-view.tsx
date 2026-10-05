@@ -79,6 +79,10 @@ import {
 import { containedComponentIdSchema, recordIdSchema } from "@vortex/contracts";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
 import { signOut } from "../../../../auth/actions";
+import {
+  createMountedRecordPinWatchClient,
+  readMountedRecordPinMemberships,
+} from "../../../../_lib/mounted-record-pin-watch-client";
 
 type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 import type {
@@ -859,9 +863,11 @@ function ApplicationPageViewContent({
     [model.page],
   );
   const serverDataRef = useRef(model.data);
+  const serverModelRef = useRef(model);
   const serverDataGenerationRef = useRef(0);
-  if (serverDataRef.current !== model.data) {
+  if (serverDataRef.current !== model.data || serverModelRef.current !== model) {
     serverDataRef.current = model.data;
+    serverModelRef.current = model;
     serverDataGenerationRef.current += 1;
   }
   const navigationBase = JSON.stringify([
@@ -1130,6 +1136,41 @@ function ApplicationPageViewContent({
   );
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
+  const compositionRootRef = useRef<HTMLDivElement>(null);
+  const pinWatchClientRef = useRef<ReturnType<typeof createMountedRecordPinWatchClient> | undefined>(undefined);
+  const pinRefreshRef = useRef(refreshPlacements);
+  pinRefreshRef.current = refreshPlacements;
+  useEffect(() => {
+    const root = compositionRootRef.current;
+    const frame = mountedRecordPinFrameSchema.safeParse({
+      pageId: model.pageId,
+      installationRevision: model.invocation.installationRevision,
+      releaseKey: model.invocation.releaseKey,
+    });
+    if (root === null || !frame.success) return;
+    let active = true;
+    const isCurrent = (): boolean => active && placementRequestsRef.current.key === navigationKey;
+    const client = createMountedRecordPinWatchClient({
+      root,
+      selectors: {
+        tenantShortName: model.invocation.tenantShortName,
+        organizationShortName: model.invocation.organizationShortName,
+        applicationKey: model.invocation.applicationKey,
+        pageKey: model.invocation.pageKey,
+      },
+      isCurrent,
+      readMemberships: () => !isCurrent() || model.bodyContentAvailable === false ? []
+        : readMountedRecordPinMemberships(root, frame.data, currentTileDataRef.current),
+      refreshPlacements: async (ids) => { if (isCurrent()) await pinRefreshRef.current(ids); },
+    });
+    pinWatchClientRef.current = client;
+    return () => {
+      active = false;
+      if (pinWatchClientRef.current === client) pinWatchClientRef.current = undefined;
+      client.dispose();
+    };
+  }, [model, navigationKey]);
+  useEffect(() => { pinWatchClientRef.current?.reconcile(); }, [currentData]);
   const pinActivationInFlightRef = useRef(false);
   const currentEditFormBaselines = useMemo(() => {
     const baselines = { ...model.editFormBaselines };
@@ -2615,6 +2656,7 @@ function ApplicationPageViewContent({
   return (
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
+      <div ref={compositionRootRef} className="contents">
       <PageLayoutRenderer
         applicationSurface
         feedback={pageFeedback === undefined && notice === undefined &&
@@ -2666,6 +2708,7 @@ function ApplicationPageViewContent({
               },
             })}
       />
+      </div>
       </ApplicationAccountActionsProvider>
       {intentHostElement}
       <Dialog
