@@ -31,6 +31,7 @@ import {
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage } from "../../../_lib/application-page";
+import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 import {
   abandonGuidedFormDraftAction,
@@ -324,6 +325,13 @@ export default async function ApplicationAddressPage({
         ),
       );
 
+    const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
+    const studioCreateHref =
+      studioCreateAccess.kind === "available" &&
+      studioCreateAccess.organizationId === resolved.read.organizationId
+        ? `/studio/${studioCreateAccess.organizationId}/new`
+        : undefined;
+
     const projection = parsePermittedApplicationsLauncherProjection(resolved.read);
     const launcherValues =
       projection.kind === "available" ? permittedApplicationsToListValues(projection) : undefined;
@@ -352,6 +360,13 @@ export default async function ApplicationAddressPage({
               events={{ row_action: openApplication }}
             />
           </div>
+        )}
+        {studioCreateHref === undefined ? null : (
+          <p>
+            <Link className="font-medium underline underline-offset-4" href={studioCreateHref}>
+              Create application in Studio
+            </Link>
+          </p>
         )}
         <Link href="/signed-in">Choose another organisation</Link>
       </AuthShell>
