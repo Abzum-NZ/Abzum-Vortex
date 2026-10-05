@@ -240,9 +240,17 @@ export function locateStudioVisibilityIssue(path: readonly (string | number)[],
 
 const inverseCondition = (condition: ConditionNode, original: SourceQualifiedCondition | undefined,
   metadata: StudioApplicationConditionContext): SourceQualifiedCondition => {
-  const originals: { source: SourceQualifiedCondition; canonical: ConditionNode }[] = [];
+  const subtree = (source: SourceQualifiedCondition): SourceQualifiedCondition[] => {
+    if ("all" in source) return [source, ...source.all.flatMap(subtree)];
+    if ("any" in source) return [source, ...source.any.flatMap(subtree)];
+    if ("not" in source) return [source, ...subtree(source.not)];
+    return [source];
+  };
+  const originals: { source: SourceQualifiedCondition; canonical: ConditionNode;
+    provenance: readonly SourceQualifiedCondition[] }[] = [];
   const collect = (source: SourceQualifiedCondition) => {
-    originals.push({ source, canonical: projectStudioVisibilityCondition(source, metadata)! });
+    originals.push({ source, canonical: projectStudioVisibilityCondition(source, metadata)!,
+      provenance: subtree(source) });
     if ("all" in source) source.all.forEach(collect);
     else if ("any" in source) source.any.forEach(collect);
     else if ("not" in source) collect(source.not);
@@ -256,20 +264,44 @@ const inverseCondition = (condition: ConditionNode, original: SourceQualifiedCon
     if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
     return { source: "field", field: `${metadata.fieldRecordReference}.${matches[0]!.preferredAlias}` };
   };
-  const convert = (node: ConditionNode): SourceQualifiedCondition => {
-    const retained = originals.find((entry) => !used.has(entry.source) && sameStudioVisibilityCondition(entry.canonical, node));
+  const childrenOf = (source: SourceQualifiedCondition | undefined) => source === undefined ? undefined :
+    "all" in source ? source.all : "any" in source ? source.any : undefined;
+  // Reserve unchanged positions before an edited earlier node can consume their authored form.
+  const reservations = new Map<SourceQualifiedCondition, string>();
+  const reserve = (node: ConditionNode, preferred: SourceQualifiedCondition | undefined, path: string) => {
+    const retained = originals.find((entry) => entry.source === preferred && sameStudioVisibilityCondition(entry.canonical, node));
     if (retained !== undefined) {
-      used.add(retained.source);
+      retained.provenance.forEach((source) => reservations.set(source, path));
+      return;
+    }
+    const children = childrenOf(preferred);
+    if (node.kind === "all" || node.kind === "any") {
+      node.conditions.forEach((child, index) => reserve(child, children?.[index], `${path}/${index}`));
+    } else if (node.kind === "not") {
+      reserve(node.condition, preferred !== undefined && "not" in preferred ? preferred.not : undefined, `${path}/not`);
+    }
+  };
+  reserve(condition, original, "");
+  const convert = (node: ConditionNode, preferred: SourceQualifiedCondition | undefined, path: string): SourceQualifiedCondition => {
+    const matches = (entry: typeof originals[number]) =>
+      entry.provenance.every((source) => !used.has(source) &&
+        (!reservations.has(source) || reservations.get(source) === path)) && sameStudioVisibilityCondition(entry.canonical, node);
+    // Keep an untouched sibling's own authored form before considering an equivalent node elsewhere.
+    const retained = originals.find((entry) => entry.source === preferred && matches(entry)) ?? originals.find(matches);
+    if (retained !== undefined) {
+      retained.provenance.forEach((source) => used.add(source));
       return structuredClone(retained.source);
     }
-    if (node.kind === "all") return { all: node.conditions.map(convert) };
-    if (node.kind === "any") return { any: node.conditions.map(convert) };
-    if (node.kind === "not") return { not: convert(node.condition) };
+    const children = childrenOf(preferred);
+    if (node.kind === "all") return { all: node.conditions.map((child, index) => convert(child, children?.[index], `${path}/${index}`)) };
+    if (node.kind === "any") return { any: node.conditions.map((child, index) => convert(child, children?.[index], `${path}/${index}`)) };
+    if (node.kind === "not") return { not: convert(node.condition,
+      preferred !== undefined && "not" in preferred ? preferred.not : undefined, `${path}/not`) };
     if (node.kind !== "comparison") throw new TypeError("Invalid visibility condition");
     return { operator: node.operator, left: operand(node.left),
       ...(node.right === undefined ? {} : { right: operand(node.right) }) } as SourceQualifiedCondition;
   };
-  return convert(condition);
+  return convert(condition, original, "");
 };
 
 /** Locate a local draft against the authored shape it would produce, without changing source. */
