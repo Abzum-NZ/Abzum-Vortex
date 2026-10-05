@@ -5,6 +5,7 @@ import type { StudioSemanticSelection } from "@vortex/studio";
 import {
   projectStudioFlowTextEditor,
   projectStudioFlowPresentationPalette,
+  projectStudioFlowPresentationMoves,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
   type StudioFlowTextCommand,
@@ -12,6 +13,8 @@ import {
   type StudioFlowTextResult,
   type StudioFlowPresentationCommand,
   type StudioFlowPresentationTaskType,
+  type StudioFlowPresentationMoveCommand,
+  type StudioFlowPresentationMoveOption,
 } from "@vortex/studio";
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
@@ -48,6 +51,8 @@ type Props = Readonly<{
     command: StudioFlowTextCommand) => StudioFlowTextResult["kind"];
   onAppend: (expected: StudioFlowTextContext, selection: FlowSelection,
     command: StudioFlowPresentationCommand) => StudioFlowTextResult["kind"];
+  onMove: (expected: StudioFlowTextContext, selection: FlowSelection,
+    command: StudioFlowPresentationMoveCommand, isCurrentTarget: () => boolean) => StudioFlowTextResult["kind"];
 }>;
 
 const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -91,10 +96,12 @@ const findTask = (lists: readonly StudioFlowTaskListOutline[], target: Target | 
 
 /** A consumed task list, not an alternate execution graph or a free source editor. */
 export function ApplicationFlowEditor({ context, selection, disabled, onPendingChange,
-  onAppendPendingChange, onCommand, onAppend }: Props) {
+  onAppendPendingChange, onCommand, onAppend, onMove }: Props) {
   const projection = useMemo(() => projectStudioFlowTextEditor(context, selection), [context, selection]);
   const palette = useMemo(() => projectStudioFlowPresentationPalette(context, selection), [context, selection]);
   const [target, setTarget] = useState<Target | null>(null);
+  const currentTarget = useRef<Target | null>(null);
+  const selectTarget = (next: Target) => { currentTarget.current = next; setTarget(next); };
   const [buffer, setBuffer] = useState<Buffer | null>(null);
   const currentBuffer = useRef<Buffer | null>(null);
   const [insertInputs, setInsertInputs] = useState(emptyInsertInputs);
@@ -110,6 +117,8 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
   const task = findTask(lists, target);
   const property = task?.properties.find((item) => item.key === target?.property);
   const pending = buffer !== null && buffer.text !== buffer.initial;
+  const moves = useMemo(() => target === null ? []
+    : projectStudioFlowPresentationMoves(context, selection, target.id, target.path), [context, selection, target]);
 
   const discard = () => {
     currentBuffer.current = null;
@@ -131,7 +140,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     if (!canChangeTarget()) return;
     discard();
     discardInsert();
-    setTarget({ id: next.id, path: next.path, property: next.properties[0]?.key ?? "" });
+    selectTarget({ id: next.id, path: next.path, property: next.properties[0]?.key ?? "" });
   };
   const changeText = (text: string) => {
     if (!active.current || disabled || currentInsert.current !== null || target === null || property === undefined) return;
@@ -196,9 +205,30 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
         : "Use a unique lowercase task key of at most 40 characters and non-empty text of at most 2000 characters without template delimiters. The Flow must remain within its task limits. Your inputs are preserved.");
   };
   const submitAppend = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); append(); };
+  const move = (option: StudioFlowPresentationMoveOption) => {
+    const expectedTarget = target;
+    if (expectedTarget === null) return;
+    const isCurrentTarget = (): boolean => {
+      const actual = currentTarget.current;
+      return active.current && !disabled && currentBuffer.current === null && currentInsert.current === null &&
+        actual !== null && actual.id === expectedTarget.id && actual.property === expectedTarget.property &&
+        pathKey(actual.path) === pathKey(expectedTarget.path) && actual.id === option.taskId &&
+        pathKey(actual.path) === pathKey(option.taskPath);
+    };
+    if (!isCurrentTarget()) return;
+    const result = onMove(context, selection, { kind: "move_presentation", ...option }, isCurrentTarget);
+    if (result === "applied") {
+      selectTarget({ ...expectedTarget, path: option.neighborPath });
+      setMessage("Presentation task moved in local history. Save draft to persist it.");
+    } else setMessage(result === "stale"
+      ? "The selected task, adjacent task or draft changed. Select the current task to continue. Your inputs are preserved."
+      : result === "unsupported" ? "These tasks cannot be moved across each other here. No source was changed."
+        : result === "no_change" ? "This task is already at that boundary. No history entry was added."
+          : "This task move could not be validated. No source was changed.");
+  };
 
   return <section className="space-y-4" aria-label="Flow task editor">
-    <p className="text-sm">Tasks retain their authored order and branches. Edit supported presentation text or append a registered presentation task to the main task list.</p>
+    <p className="text-sm">Inspect authored tasks and branches. Edit supported presentation text, append a registered task, or move adjacent compatible presentation tasks.</p>
     {palette.length > 0 ? <form className="space-y-3 rounded border border-border p-3" onSubmit={submitAppend}>
       <h3 className="font-semibold">Add presentation task</h3>
       <fieldset className="space-y-3" disabled={disabled || pending}>
@@ -240,6 +270,12 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
         disabled={disabled} choose={chooseTask} />)}
     {task !== undefined && <section className="space-y-3 rounded border border-border p-3" aria-label="Task text inspector">
       <h3 className="font-semibold">{task.title}</h3>
+      {moves.length > 0 ? <div className="flex gap-2" aria-label="Presentation task order">
+        {moves.map((option) => <button key={option.direction} type="button" className={buttonClass}
+          disabled={disabled || pending || pendingInsert} onClick={() => move(option)}>
+          {option.direction === "up" ? "Move up" : "Move down"}
+        </button>)}
+      </div> : <p className="text-sm">Move is available only across an adjacent compatible literal presentation task in Tasks.</p>}
       {task.properties.length === 0 ? <p>This task's configuration is read-only in this editor.</p>
         : <form onSubmit={submit} className="space-y-3">
           <label className="block space-y-1"><span>Presentation property</span>
@@ -249,7 +285,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
                 if (next === undefined || !canChangeTarget()) return;
                 discard();
                 discardInsert();
-                setTarget({ id: task.id, path: task.path, property: next.key });
+                selectTarget({ id: task.id, path: task.path, property: next.key });
               }}>
               {task.properties.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select></label>

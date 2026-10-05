@@ -68,6 +68,16 @@ export type StudioFlowPresentationCommand = Readonly<{
   | Readonly<{ taskType: "interface.confirm"; title?: string }>
 );
 
+export type StudioFlowPresentationMoveOption = Readonly<{
+  direction: "up" | "down";
+  taskId: string;
+  taskPath: readonly (string | number)[];
+  neighborId: string;
+  neighborPath: readonly (string | number)[];
+}>;
+export type StudioFlowPresentationMoveCommand = StudioFlowPresentationMoveOption &
+  Readonly<{ kind: "move_presentation" }>;
+
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
 type TaskEntry = Readonly<{ task: SourceFlowTask; path: readonly (string | number)[] }>;
 
@@ -280,6 +290,96 @@ export const applyStudioFlowPresentationCommand = (
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     detached.flow.tasks.push(task);
     // Recheck shared bounds and full source shape without adopting parsed defaults or transforms.
+    outline({ ...current, source: candidate }, expectedSelection);
+    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    return { kind: "applied", source: candidate };
+  } catch { return { kind: "invalid" }; }
+};
+
+const movablePresentationTask = (task: SourceFlowTask): boolean => {
+  if (!("version" in task) || !("properties" in task) ||
+    Object.keys(task).some((key) => !["id", "type", "version", "properties", "description"].includes(key)))
+    return false;
+  const definition = presentationPalette().find((entry) => entry.type === task.type && entry.version === task.version);
+  if (definition === undefined) return false;
+  const allowed = task.type === "interface.confirm" ? ["message", "title"] : ["message"];
+  if (!Object.hasOwn(task.properties, "message") ||
+    Object.keys(task.properties).some((key) => !allowed.includes(key))) return false;
+  return Object.values(task.properties).every((value) => value.kind === "literal" &&
+    value.literal.type === "text" && validPresentationText(value.literal.value));
+};
+
+const directTaskIndex = (path: readonly (string | number)[]): number | undefined =>
+  path.length === 2 && path[0] === "tasks" && typeof path[1] === "number" &&
+    Number.isSafeInteger(path[1]) && path[1] >= 0 ? path[1] : undefined;
+
+const presentationMoves = (flow: SourceFlow, taskId: string,
+  taskPath: readonly (string | number)[]): readonly StudioFlowPresentationMoveOption[] => {
+  const index = directTaskIndex(taskPath);
+  if (flow.execution !== "interactive" || flow.runAs.kind !== "initiator" || index === undefined) return [];
+  const task = flow.tasks[index];
+  if (task === undefined || task.id !== taskId || !movablePresentationTask(task)) return [];
+  const directions: readonly ("up" | "down")[] = ["up", "down"];
+  return directions.flatMap((direction): StudioFlowPresentationMoveOption[] => {
+    const neighborIndex = index + (direction === "up" ? -1 : 1);
+    const neighbor = flow.tasks[neighborIndex];
+    return neighbor === undefined || !movablePresentationTask(neighbor) ? [] : [{
+      direction, taskId, taskPath: ["tasks", index], neighborId: neighbor.id,
+      neighborPath: ["tasks", neighborIndex],
+    }];
+  });
+};
+
+/** Adjacent literal-only participants cannot read each other's outputs or cross another task. */
+export const projectStudioFlowPresentationMoves = (
+  context: StudioFlowTextContext,
+  selection: FlowSelection,
+  taskId: string,
+  taskPath: readonly (string | number)[],
+): readonly StudioFlowPresentationMoveOption[] => {
+  try { return presentationMoves(outline(context, selection).flow, taskId, taskPath); }
+  catch { return []; }
+};
+
+/** Exchanges two complete existing tasks, preserving every named identity and source omission. */
+export const applyStudioFlowPresentationMoveCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowPresentationMoveCommand,
+): StudioFlowTextResult => {
+  if (current.organizationId !== expected.organizationId || current.rootId !== expected.rootId ||
+    current.key !== expected.key || current.draftRevision !== expected.draftRevision ||
+    current.localLifetime !== expected.localLifetime || current.source !== expected.source ||
+    selection?.kind !== "flow" || selection.flowAlias !== expectedSelection.flowAlias)
+    return { kind: "stale" };
+  try {
+    if (command.kind !== "move_presentation" || (command.direction !== "up" && command.direction !== "down") ||
+      Object.keys(command).some((key) => !["kind", "direction", "taskId", "taskPath", "neighborId", "neighborPath"].includes(key)))
+      return { kind: "invalid" };
+    const original = outline(current, expectedSelection);
+    const index = directTaskIndex(command.taskPath);
+    if (index === undefined || original.flow.execution !== "interactive" || original.flow.runAs.kind !== "initiator")
+      return { kind: "unsupported" };
+    const target = original.flow.tasks[index];
+    if (target === undefined || target.id !== command.taskId) return { kind: "stale" };
+    if (!movablePresentationTask(target)) return { kind: "unsupported" };
+    const neighborIndex = index + (command.direction === "up" ? -1 : 1);
+    if (neighborIndex < 0 || neighborIndex >= original.flow.tasks.length) return { kind: "no_change" };
+    const option = presentationMoves(original.flow, command.taskId, command.taskPath)
+      .find((entry) => entry.direction === command.direction);
+    if (option === undefined) return { kind: "unsupported" };
+    if (option.neighborId !== command.neighborId || !samePath(option.neighborPath, command.neighborPath))
+      return { kind: "stale" };
+    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const detached = outline({ ...current, source: candidate }, expectedSelection);
+    const moved = detached.flow.tasks[index];
+    const neighbor = detached.flow.tasks[neighborIndex];
+    if (moved === undefined || neighbor === undefined || moved.id !== command.taskId || neighbor.id !== command.neighborId)
+      return { kind: "stale" };
+    detached.flow.tasks[index] = neighbor;
+    detached.flow.tasks[neighborIndex] = moved;
     outline({ ...current, source: candidate }, expectedSelection);
     if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
