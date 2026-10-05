@@ -280,6 +280,7 @@ export type ApplicationDraftConditionContext = Readonly<{
   bindingsSignature: string;
   pageAlias: string;
   recordReference: string;
+  fieldRecordReference: string;
   recordTypeId: string;
   module: Readonly<Pick<ResolvableModuleRelease, "organizationId" | "key" | "rootId" |
     "releaseRevision" | "releaseVersion" | "contentFingerprint" | "resolutionFingerprint">>;
@@ -314,12 +315,16 @@ const projectDraftConditionContexts = (
     );
     const record = canonicalRecords[0];
     if (canonicalRecords.length !== 1 || record === undefined) continue;
+    const recordAliases = identities.filter((identity) => identity.kind === "record_type" &&
+      identity.scope === "content" && identity.identifier === record.recordTypeId);
+    if (!recordAliases.some((identity) => identity.alias === record.key) ||
+      recordAliases.some((identity) => identity.componentOwner !== recordIdentity.componentOwner)) continue;
     const fields: ApplicationDraftConditionContext["fields"][number][] = [];
     let valid = true;
     for (const field of record.fields) {
       if (!conditionFieldTypes.has(field.type)) continue;
       const group = identities.filter((identity) => identity.kind === "field" &&
-        identity.scope === `record:${recordAlias}` && identity.identifier === field.fieldId);
+        identity.scope === `record:${record.key}` && identity.identifier === field.fieldId);
       const owners = new Set(group.map((identity) => identity.componentOwner));
       const aliases = group.map((identity) => identity.alias);
       if (owners.size !== 1 || aliases.length === 0 || new Set(aliases).size !== aliases.length ||
@@ -336,6 +341,7 @@ const projectDraftConditionContexts = (
     if (!valid) continue;
     contexts.push({ sourceFingerprint, bindingsSignature: JSON.stringify(source.body.module_bindings),
       pageAlias: page.id, recordReference: page.record_type,
+      fieldRecordReference: `${moduleKey}:${record.key}`,
       recordTypeId: record.recordTypeId, module: { organizationId: release.organizationId,
         key: release.key, rootId: release.rootId, releaseRevision: release.releaseRevision,
         releaseVersion: release.releaseVersion, contentFingerprint: release.contentFingerprint,

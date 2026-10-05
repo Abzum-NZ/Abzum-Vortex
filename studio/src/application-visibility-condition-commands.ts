@@ -18,7 +18,7 @@ export type StudioApplicationConditionContext = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
   sourceFingerprint: string; publishedRevision: number | null; createdAt: string; updatedAt: string;
   bindingsSignature: string; resolutionFingerprint: string; pageAlias: string;
-  recordReference: string; recordTypeId: string;
+  recordReference: string; fieldRecordReference: string; recordTypeId: string;
   module: Readonly<{ organizationId: string; key: string; rootId: string; releaseRevision: number;
     releaseVersion: string; contentFingerprint: string; resolutionFingerprint: string }>;
   fields: readonly Readonly<{ field: ModuleFieldV3; aliases: readonly string[];
@@ -42,7 +42,7 @@ const qualifiedFieldValid = (field: unknown): boolean =>
 export function parseStudioApplicationConditionContext(value: unknown): StudioApplicationConditionContext | undefined {
   if (!object(value) || !exactKeys(value, ["organizationId", "rootId", "key", "draftRevision",
     "sourceFingerprint", "publishedRevision", "createdAt", "updatedAt", "bindingsSignature",
-    "resolutionFingerprint", "pageAlias", "recordReference", "recordTypeId", "module", "fields"]) ||
+    "resolutionFingerprint", "pageAlias", "recordReference", "fieldRecordReference", "recordTypeId", "module", "fields"]) ||
     !organizationIdSchema.safeParse(value.organizationId).success ||
     !applicationRootIdSchema.safeParse(value.rootId).success || !namespacedKeySchema.safeParse(value.key).success ||
     !revisionSchema.safeParse(value.draftRevision).success || !fingerprintSchema.safeParse(value.sourceFingerprint).success ||
@@ -51,6 +51,7 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
     typeof value.bindingsSignature !== "string" || value.bindingsSignature.length > 100_000 ||
     !fingerprintSchema.safeParse(value.resolutionFingerprint).success || !sourceAliasValid(value.pageAlias) ||
     typeof value.recordReference !== "string" || !qualifiedFieldValid(`${value.recordReference}.field`) ||
+    typeof value.fieldRecordReference !== "string" || !qualifiedFieldValid(`${value.fieldRecordReference}.field`) ||
     !recordTypeIdSchema.safeParse(value.recordTypeId).success || !object(value.module) ||
     !Array.isArray(value.fields) || value.fields.length > 500) return undefined;
   const module = value.module;
@@ -59,7 +60,8 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
     !namespacedKeySchema.safeParse(module.key).success || !moduleRootIdSchema.safeParse(module.rootId).success ||
     !revisionSchema.safeParse(module.releaseRevision).success || !semanticVersionSchema.safeParse(module.releaseVersion).success ||
     !fingerprintSchema.safeParse(module.contentFingerprint).success || !fingerprintSchema.safeParse(module.resolutionFingerprint).success ||
-    !(value.recordReference as string).startsWith(`${module.key}:`)) return undefined;
+    !(value.recordReference as string).startsWith(`${module.key}:`) ||
+    !(value.fieldRecordReference as string).startsWith(`${module.key}:`)) return undefined;
   const aliases = new Set<string>();
   const identifiers = new Set<string>();
   const owners = new Set<string>();
@@ -76,7 +78,7 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
     owners.add(item.componentOwner as string);
     for (const alias of item.aliases) {
       if (!sourceAliasValid(alias) || aliases.has(alias) ||
-        !qualifiedFieldValid(`${value.recordReference}.${alias}`)) return undefined;
+        !qualifiedFieldValid(`${value.fieldRecordReference}.${alias}`)) return undefined;
       aliases.add(alias);
     }
   }
@@ -197,7 +199,7 @@ const projectOperand = (operand: { source: string; field?: string; value?: unkno
   if (operand.source === "value") return { source: "value", value: operand.value as Extract<Operand, { source: "value" }>["value"] };
   if (operand.source !== "field") throw new TypeError("Unsupported visibility operand");
   const matches = metadata.fields.filter((item) => item.aliases.some((alias) =>
-    `${metadata.recordReference}.${alias}` === operand.field));
+    `${metadata.fieldRecordReference}.${alias}` === operand.field));
   if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
   return { source: "field", fieldId: matches[0]!.field.fieldId };
 };
@@ -252,7 +254,7 @@ const inverseCondition = (condition: ConditionNode, original: SourceQualifiedCon
     if (value.source !== "field") throw new TypeError("Unsupported visibility operand");
     const matches = metadata.fields.filter(({ field }) => field.fieldId === value.fieldId);
     if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
-    return { source: "field", field: `${metadata.recordReference}.${matches[0]!.preferredAlias}` };
+    return { source: "field", field: `${metadata.fieldRecordReference}.${matches[0]!.preferredAlias}` };
   };
   const convert = (node: ConditionNode): SourceQualifiedCondition => {
     const retained = originals.find((entry) => !used.has(entry.source) && sameStudioVisibilityCondition(entry.canonical, node));
