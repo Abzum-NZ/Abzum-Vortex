@@ -4,6 +4,8 @@ import {
   mountedRecordPinElementProperty,
   mountedRecordPinFrameSchema,
   projectedRecordPinTilesSchema,
+  projectedApplicationPageLinkTilesSchema,
+  type ProjectedApplicationPageLinkTiles,
   recordIdSchema,
   revisionSchema,
   type MountedRecordPinFrame,
@@ -40,13 +42,16 @@ export const readMountedRecordPinMemberships = (
   if (!root.isConnected) return [];
   const placements = new Map<string, Readonly<{
     placementId: string;
-    rows: ReturnType<typeof projectedRecordPinTilesSchema.parse>["rows"];
+    rows: ReturnType<typeof projectedRecordPinTilesSchema.parse>["rows"] | ProjectedApplicationPageLinkTiles["rows"];
   }>>();
   for (const [placementId, state] of Object.entries(data)) {
     if (state.status !== "ready" || typeof state.values !== "object" || state.values === null ||
-        !("kind" in state.values) || state.values.kind !== "record_pin_tiles") continue;
+        !("kind" in state.values) || (state.values.kind !== "record_pin_tiles" &&
+          state.values.kind !== "application_page_link_tiles")) continue;
     const id = containedComponentIdSchema.safeParse(placementId);
-    const parsed = projectedRecordPinTilesSchema.safeParse(state.values);
+    const parsed = state.values.kind === "application_page_link_tiles"
+      ? projectedApplicationPageLinkTilesSchema.safeParse(state.values)
+      : projectedRecordPinTilesSchema.safeParse(state.values);
     if (!id.success || !parsed.success || placements.has(id.data.toLowerCase())) return [];
     placements.set(id.data.toLowerCase(), { placementId: id.data, rows: parsed.data.rows });
   }

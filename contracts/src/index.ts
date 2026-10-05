@@ -1,5 +1,6 @@
 export * from "./application-contracts";
 export * from "./application-page-links";
+export * from "./application-page-link-tiles";
 export { inspectApplicationPageReplacements } from "./application-page-replacement";
 export * from "./application-contract-versions";
 export * from "./application-composition-v2";

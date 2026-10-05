@@ -1,4 +1,10 @@
 import {
+  GridFourIcon,
+  AddressBookIcon,
+  UsersIcon,
+  SlidersHorizontalIcon,
+  LifebuoyIcon,
+  BuildingsIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarBlankIcon,
@@ -50,4 +56,10 @@ export const icons: VortexIconAdapter = {
   "panel-left": phosphorIcon(SidebarIcon),
   plus: phosphorIcon(PlusIcon),
   search: phosphorIcon(MagnifyingGlassIcon),
+  "grid": phosphorIcon(GridFourIcon),
+  "contact-round": phosphorIcon(AddressBookIcon),
+  "users": phosphorIcon(UsersIcon),
+  "sliders-horizontal": phosphorIcon(SlidersHorizontalIcon),
+  "life-buoy": phosphorIcon(LifebuoyIcon),
+  "building-2": phosphorIcon(BuildingsIcon),
 };

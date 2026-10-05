@@ -25,9 +25,19 @@ export const VORTEX_ICON_NAMES = [
   "panel-left",
   "plus",
   "search",
+  "grid",
+  "contact-round",
+  "users",
+  "sliders-horizontal",
+  "life-buoy",
+  "building-2",
 ] as const;
 
 export type VortexIconName = (typeof VORTEX_ICON_NAMES)[number];
+
+/** Resolve only declared semantic names; unknown source text has no exact glyph mapping. */
+export const resolveVortexIconName = (value: string): VortexIconName | undefined =>
+  VORTEX_ICON_NAMES.find((name) => name === value);
 
 /** The SVG attributes a caller may pass to an icon: classes, data and ARIA attributes, and styling. */
 export type VortexIconProps = Omit<ComponentProps<"svg">, "ref" | "children">;

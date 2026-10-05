@@ -1,4 +1,10 @@
 import {
+  IconLayoutGrid,
+  IconAddressBook,
+  IconUsers,
+  IconAdjustmentsHorizontal,
+  IconLifebuoy,
+  IconBuilding,
   IconArrowDown,
   IconArrowUp,
   IconCalendar,
@@ -50,4 +56,10 @@ export const icons: VortexIconAdapter = {
   "panel-left": tablerIcon(IconLayoutSidebar),
   plus: tablerIcon(IconPlus),
   search: tablerIcon(IconSearch),
+  "grid": tablerIcon(IconLayoutGrid),
+  "contact-round": tablerIcon(IconAddressBook),
+  "users": tablerIcon(IconUsers),
+  "sliders-horizontal": tablerIcon(IconAdjustmentsHorizontal),
+  "life-buoy": tablerIcon(IconLifebuoy),
+  "building-2": tablerIcon(IconBuilding),
 };

@@ -1,4 +1,10 @@
 import {
+  Grid2x2Icon,
+  Contact01Icon,
+  UserGroupIcon,
+  SlidersHorizontalIcon,
+  LifebuoyIcon,
+  Building02Icon,
   ArrowDown01Icon,
   ArrowDown02Icon,
   ArrowLeft01Icon,
@@ -54,4 +60,10 @@ export const icons: VortexIconAdapter = {
   "panel-left": hugeicon(SidebarLeftIcon),
   plus: hugeicon(PlusSignIcon),
   search: hugeicon(Search01Icon),
+  "grid": hugeicon(Grid2x2Icon),
+  "contact-round": hugeicon(Contact01Icon),
+  "users": hugeicon(UserGroupIcon),
+  "sliders-horizontal": hugeicon(SlidersHorizontalIcon),
+  "life-buoy": hugeicon(LifebuoyIcon),
+  "building-2": hugeicon(Building02Icon),
 };

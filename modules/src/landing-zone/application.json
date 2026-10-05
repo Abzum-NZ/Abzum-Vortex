@@ -403,7 +403,7 @@
                     "content": {
                       "placements": {
                         "home_favourites": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
                           "query": "vortex.landing_zone:landing_zone_favourites",
                           "settings": {
                             "title": { "kind": "text", "value": "Favourites" },
@@ -411,6 +411,8 @@
                             "address_key": { "kind": "text", "value": "external_address" },
                             "description_key": { "kind": "text", "value": "description" },
                             "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "application_key_key": { "kind": "text", "value": "application_key" },
+                            "page_key_key": { "kind": "text", "value": "page_key" },
                             "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
                             "organization_id_key": { "kind": "text", "value": "target_organization_id" },
                             "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
@@ -497,7 +499,7 @@
                     "content": {
                       "placements": {
                         "favourites_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
                           "query": "vortex.landing_zone:landing_zone_favourites",
                           "settings": {
                             "title": { "kind": "text", "value": "Favourites" },
@@ -505,6 +507,8 @@
                             "address_key": { "kind": "text", "value": "external_address" },
                             "description_key": { "kind": "text", "value": "description" },
                             "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "application_key_key": { "kind": "text", "value": "application_key" },
+                            "page_key_key": { "kind": "text", "value": "page_key" },
                             "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
                             "organization_id_key": { "kind": "text", "value": "target_organization_id" },
                             "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
@@ -559,7 +563,7 @@
                     "content": {
                       "placements": {
                         "bookmarks_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
                           "query": "vortex.landing_zone:landing_zone_tiles",
                           "settings": {
                             "title": { "kind": "text", "value": "Bookmarks" },
@@ -567,6 +571,8 @@
                             "address_key": { "kind": "text", "value": "external_address" },
                             "description_key": { "kind": "text", "value": "description" },
                             "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "application_key_key": { "kind": "text", "value": "application_key" },
+                            "page_key_key": { "kind": "text", "value": "page_key" },
                             "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
                             "organization_id_key": { "kind": "text", "value": "target_organization_id" },
                             "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },

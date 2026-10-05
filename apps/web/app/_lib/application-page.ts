@@ -55,6 +55,7 @@ import {
   QUERY_NOTICE_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
@@ -82,6 +83,7 @@ import {
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
+import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
 import { projectBoardPlacement } from "./board-placement";
@@ -1964,7 +1966,12 @@ const loadApplicationPageInternal = async (
       });
     },
   });
-  const linkTiles = createLinkTilesQueryResolver(queries, (viewer, identity) => recordLinks.read(viewer, identity));
+  const applicationPageLinks = createApplicationPageLinkReader({
+    tenantShortName: address.tenantShortName, organizationShortName: address.organizationShortName,
+  });
+  const linkTiles = createLinkTilesQueryResolver(queries,
+    (viewer, identity) => recordLinks.read(viewer, identity),
+    (viewer, selector) => applicationPageLinks.read(viewer, selector));
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -2109,7 +2116,8 @@ const loadApplicationPageInternal = async (
       typeof block.blockId === "string" &&
       sameId(block.blockId, LINK_TILES_BLOCK_RELEASE.blockId) &&
       (block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-        block.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion);
+        block.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+        block.releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion);
     if (
       tableContract === undefined && detailContract === undefined &&
       !isBoardBlock && !isQueryNoticeBlock && !isLinkTilesBlock
@@ -2331,7 +2339,8 @@ const loadApplicationPageInternal = async (
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     if (isLinkTilesBlock && (
       !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
-        block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
+        block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
       projectedUseAvailability(placement) !== "available"
     )) {
       data[placementId] = { status: "refused", reason: "not_permitted" };

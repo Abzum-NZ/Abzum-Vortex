@@ -1,4 +1,10 @@
 import {
+  Grid2x2Icon,
+  ContactRoundIcon,
+  UsersIcon,
+  SlidersHorizontalIcon,
+  LifeBuoyIcon,
+  Building2Icon,
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarIcon,
@@ -41,4 +47,10 @@ export const icons: VortexIconAdapter = {
   "panel-left": PanelLeftIcon,
   plus: PlusIcon,
   search: SearchIcon,
+  "grid": Grid2x2Icon,
+  "contact-round": ContactRoundIcon,
+  "users": UsersIcon,
+  "sliders-horizontal": SlidersHorizontalIcon,
+  "life-buoy": LifeBuoyIcon,
+  "building-2": Building2Icon,
 };

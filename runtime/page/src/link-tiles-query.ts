@@ -4,6 +4,14 @@ import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@v
 import {
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+  applicationPageLinkResultSchema,
+  applicationPageLinkSelectorSchema,
+  projectedApplicationPageLinkTilesSchema,
+  type ApplicationPageLinkSelector,
+  type ApplicationPageLinkResult,
+  type ApplicationPageLinkTileTarget,
+  type ProjectedApplicationPageLinkTiles,
   projectedRecordPinTilesSchema,
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
@@ -16,7 +24,6 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
   type ProjectedRecordPinTiles,
-  type ProjectedRecordPinTarget,
   type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
 } from "@vortex/contracts";
@@ -44,7 +51,7 @@ export type ProjectedLinkTilesValues = Readonly<{
   rows: readonly LinkRow[];
 }>;
 export type LinkTilesQueryResolution =
-  | Readonly<{ status: "ready"; values: ProjectedLinkTilesValues | ProjectedRecordPinTiles }>
+  | Readonly<{ status: "ready"; values: ProjectedLinkTilesValues | ProjectedRecordPinTiles | ProjectedApplicationPageLinkTiles }>
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
   | Readonly<{ status: "error" }>;
 export type LinkTilesQueryBinding = Readonly<{
@@ -57,6 +64,7 @@ export type LinkTilesQueryBinding = Readonly<{
     description?: Readonly<{ key: string; fieldId: string }>;
   }>;
   pinFields?: Readonly<Record<PinField, string>>;
+  applicationFields?: Readonly<{ application_key: string; page_key: string }>;
 }>;
 
 const pinFields = ["target_kind", "open_behaviour", "organization_id", "application_root_id",
@@ -65,6 +73,10 @@ type PinField = (typeof pinFields)[number];
 type ProtectedRecordLinkReader = (
   session: IdentitySession, identity: ViewerSafeRecordLinkIdentity,
 ) => Promise<ViewerSafeRecordLinkResult>;
+
+type ProtectedApplicationPageLinkReader = (
+  session: IdentitySession, selector: ApplicationPageLinkSelector,
+) => Promise<ApplicationPageLinkResult>;
 
 const REFUSED = Object.freeze({ status: "refused", reason: "not_permitted" } as const);
 const ERROR = Object.freeze({ status: "error" } as const);
@@ -86,8 +98,9 @@ export const buildLinkTilesQueryBinding = (
   inputValues: Readonly<Record<string, JsonValue>>,
   releaseVersion: string = LINK_TILES_BLOCK_RELEASE.releaseVersion,
 ): LinkTilesQueryBinding | undefined => {
-  if (releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion)
-    return buildRecordPinBinding(candidateContext, queryId, settings, inputValues);
+  if (releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+      releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion)
+    return buildRecordPinBinding(candidateContext, queryId, settings, inputValues, releaseVersion);
   if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return undefined;
   let context: InstalledRuntimeContext;
   try {
@@ -171,6 +184,7 @@ export const buildLinkTilesQueryBinding = (
 /** Completes a bounded read through current human Query authority; never returns partial rows. */
 export const createLinkTilesQueryResolver = (
   runner: RecordsTableQueryRunner, readRecordLink?: ProtectedRecordLinkReader,
+  readApplicationPageLink?: ProtectedApplicationPageLinkReader,
 ) => ({
   async resolve(
     session: IdentitySession,
@@ -181,9 +195,10 @@ export const createLinkTilesQueryResolver = (
     inputValues: Readonly<Record<string, JsonValue>>,
     releaseVersion: string = LINK_TILES_BLOCK_RELEASE.releaseVersion,
   ): Promise<LinkTilesQueryResolution> {
-    if (releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion)
+    if (releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+        releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion)
       return resolveRecordPins(runner, readRecordLink, session, selection, candidateContext,
-        queryId, settings, inputValues);
+        queryId, settings, inputValues, releaseVersion, readApplicationPageLink);
     if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return REFUSED;
     let context: InstalledRuntimeContext;
     try {
@@ -291,10 +306,14 @@ export const createLinkTilesQueryResolver = (
 function buildRecordPinBinding(
   candidateContext: InstalledRuntimeContext, queryId: string, settings: Settings,
   inputValues: Readonly<Record<string, JsonValue>>,
+  releaseVersion: string = RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion,
 ): LinkTilesQueryBinding | undefined {
   let context: InstalledRuntimeContext;
   try { context = requireInstalledRuntimeContext(candidateContext); } catch { return undefined; }
-  if (validateComponentSettings(settings, RECORD_PIN_LINK_TILES_BLOCK_RELEASE.properties).length !== 0)
+  const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
+  if (!appPage && releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion) return undefined;
+  const release = appPage ? APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE : RECORD_PIN_LINK_TILES_BLOCK_RELEASE;
+  if (validateComponentSettings(settings, release.properties).length !== 0)
     return undefined;
   const externalSettings = Object.fromEntries(Object.entries(settings).filter(([key]) =>
     LINK_TILES_BLOCK_RELEASE.properties.some((property) => property.key === key),
@@ -321,7 +340,9 @@ function buildRecordPinBinding(
     if (field === undefined || !selected.has(field.fieldId.toLowerCase())) return undefined;
     if (name === "target_kind" || name === "open_behaviour") {
       if (field.type !== "choice") return undefined;
-      const required = name === "target_kind" ? ["record", "external"] : ["replace", "new_page"];
+      const required = name === "target_kind"
+        ? appPage ? ["record", "external", "application", "page"] : ["record", "external"]
+        : ["replace", "new_page"];
       if (required.some((value) => !field.settings.options.some((option) => option.value === value)))
         return undefined;
     } else if (name === "module_release_revision") {
@@ -336,10 +357,28 @@ function buildRecordPinBinding(
       record_type_id === undefined || storage_contract_id === undefined || record_id === undefined) return undefined;
   const completed: Record<PinField, string> = { target_kind, open_behaviour, organization_id,
     application_root_id, module_root_id, module_release_revision, record_type_id, storage_contract_id, record_id };
-  const fieldIds = [...base.command.requestedFieldIds, ...Object.values(completed)];
+  let applicationFields: LinkTilesQueryBinding["applicationFields"];
+  if (appPage) {
+    const mapped: Partial<Record<"application_key" | "page_key", string>> = {};
+    for (const name of ["application_key", "page_key"] as const) {
+      const setting = settings[`${name}_key`];
+      const key = setting?.kind === "text" ? builderKeySchema.safeParse(setting.value) : undefined;
+      if (key?.success !== true) return undefined;
+      const field = record.fields.find((candidate) => candidate.key === key.data);
+      if (field === undefined || field.type !== "text" || !selected.has(field.fieldId.toLowerCase()))
+        return undefined;
+      mapped[name] = field.fieldId;
+    }
+    if (mapped.application_key === undefined || mapped.page_key === undefined) return undefined;
+    applicationFields = { application_key: mapped.application_key, page_key: mapped.page_key };
+  }
+  const fieldIds = [...base.command.requestedFieldIds, ...Object.values(completed),
+    ...Object.values(applicationFields ?? {})];
   if (new Set(fieldIds.map((id) => id.toLowerCase())).size !== fieldIds.length) return undefined;
   const command = protectedQueryCommandSchema.safeParse({ ...base.command, requestedFieldIds: fieldIds });
-  return command.success ? Object.freeze({ ...base, command: command.data, pinFields: Object.freeze(completed) }) : undefined;
+  return command.success ? Object.freeze({ ...base, command: command.data, pinFields: Object.freeze(completed),
+    ...(applicationFields === undefined ? {} : { applicationFields: Object.freeze(applicationFields) }),
+  }) : undefined;
 }
 
 /** Finish the source Query before any target read, so a refused continuation cannot leak partial targets. */
@@ -348,13 +387,16 @@ async function resolveRecordPins(
   session: IdentitySession, selection: OrganizationSelectionCandidate,
   candidateContext: InstalledRuntimeContext, queryId: string, settings: Settings,
   inputValues: Readonly<Record<string, JsonValue>>,
+  releaseVersion: string = RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion,
+  readApplicationPageLink?: ProtectedApplicationPageLinkReader,
 ): Promise<LinkTilesQueryResolution> {
   try {
     const context = requireInstalledRuntimeContext(candidateContext);
     if (!sameId(selection.organizationId, context.organizationId) ||
         selection.applicationRootId === undefined || !sameId(selection.applicationRootId, context.applicationRootId))
       return REFUSED;
-    const binding = buildRecordPinBinding(context, queryId, settings, inputValues);
+    const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
+    const binding = buildRecordPinBinding(context, queryId, settings, inputValues, releaseVersion);
     if (binding === undefined || binding.pinFields === undefined || readRecordLink === undefined) return REFUSED;
     const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
     const records = new Set<string>();
@@ -389,7 +431,7 @@ async function resolveRecordPins(
       command = continuation.data;
     }
     if (!complete) return REFUSED;
-    const rows: ProjectedRecordPinTiles["rows"] = [];
+    const rows: ProjectedApplicationPageLinkTiles["rows"] = [];
     const reads = new Map<string, ViewerSafeRecordLinkResult>();
     for (const source of sourceRows) {
       const value = (id: string | undefined): JsonValue | undefined => id === undefined ? undefined :
@@ -397,9 +439,10 @@ async function resolveRecordPins(
       const fields = binding.pinFields;
       const kind = value(fields.target_kind);
       // Other declared target kinds retain their prior unrendered residual outcome.
-      if (kind !== "record" && kind !== "external") continue;
+      if (kind !== "record" && kind !== "external" &&
+          (!appPage || (kind !== "application" && kind !== "page"))) continue;
       const behaviour = value(fields.open_behaviour);
-      let target: ProjectedRecordPinTarget = { kind: "unavailable" };
+      let target: ApplicationPageLinkTileTarget = { kind: "unavailable" };
       if (behaviour === "replace" || behaviour === "new_page") {
         if (kind === "external") {
           const address = safeHttpsUrlSchema.safeParse(value(binding.mapping.address.fieldId));
@@ -410,6 +453,27 @@ async function resolveRecordPins(
             target = { kind: "external", address: address.data,
               label: typeof label === "string" && label.trim() !== "" ? label : address.data,
               ...(typeof description === "string" ? { description } : {}), openBehaviour: behaviour };
+        } else if (kind === "application" || kind === "page") {
+          const mapped = binding.applicationFields;
+          const pageKey = value(mapped?.page_key);
+          // An Application selector may not silently discard a stored Page selector.
+          const selector = applicationPageLinkSelectorSchema.safeParse({
+            kind, applicationKey: value(mapped?.application_key),
+            ...(kind === "page" ? { pageKey } : pageKey === null || pageKey === undefined || pageKey === ""
+              ? {} : { pageKey }),
+          });
+          if (selector.success && readApplicationPageLink !== undefined) {
+            try {
+              const read = applicationPageLinkResultSchema.safeParse(
+                await readApplicationPageLink(session, selector.data),
+              );
+              if (read.success && read.data.availability === "available" &&
+                  read.data.kind === kind && read.data.applicationKey === selector.data.applicationKey &&
+                  sameId(read.data.organizationId, context.organizationId) &&
+                  (selector.data.kind !== "page" || read.data.pageKey === selector.data.pageKey))
+                target = { ...read.data, openBehaviour: behaviour };
+            } catch { /* Every refused or failed target remains the same neutral row. */ }
+          }
         } else {
           const identity = viewerSafeRecordLinkIdentitySchema.safeParse({
             organizationId: value(fields.organization_id), applicationRootId: value(fields.application_root_id),
@@ -441,7 +505,9 @@ async function resolveRecordPins(
       }
       rows.push({ sourceRecordId: source.recordId, sourceRevision: source.revision, target });
     }
-    const payload = projectedRecordPinTilesSchema.safeParse({ kind: "record_pin_tiles", rows });
+    const payload = appPage
+      ? projectedApplicationPageLinkTilesSchema.safeParse({ kind: "application_page_link_tiles", rows })
+      : projectedRecordPinTilesSchema.safeParse({ kind: "record_pin_tiles", rows });
     return payload.success ? { status: "ready", values: payload.data } : REFUSED;
   } catch { return ERROR; }
 }
