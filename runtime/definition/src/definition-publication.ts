@@ -19,6 +19,8 @@ import {
   storedDefinitionDraftSchema,
   storedModuleCompilationOutputV3Schema,
   sourceIdentityKindV2Schema,
+  recordTypeIdSchema,
+  fieldIdSchema,
   type DefinitionCompilationOutput,
   type ApplicationCompilationOutputV2,
   type DefinitionPublicationConfirmation,
@@ -310,21 +312,26 @@ const projectDraftConditionContexts = (
     const recordIdentity = records[0];
     if (releases.length !== 1 || records.length !== 1 || release === undefined || recordIdentity === undefined)
       continue;
+    const recordIdentifier = recordTypeIdSchema.safeParse(recordIdentity.identifier);
+    if (!recordIdentifier.success) continue;
     const canonicalRecords = release.compilationOutput.canonical.content.recordTypes.filter(
-      (record) => record.recordTypeId === recordIdentity.identifier,
+      (record) => record.recordTypeId === recordIdentifier.data,
     );
     const record = canonicalRecords[0];
     if (canonicalRecords.length !== 1 || record === undefined) continue;
     const recordAliases = identities.filter((identity) => identity.kind === "record_type" &&
-      identity.scope === "content" && identity.identifier === record.recordTypeId);
+      identity.scope === "content" && identity.identifier === recordIdentity.identifier);
     if (!recordAliases.some((identity) => identity.alias === record.key) ||
       recordAliases.some((identity) => identity.componentOwner !== recordIdentity.componentOwner)) continue;
     const fields: ApplicationDraftConditionContext["fields"][number][] = [];
     let valid = true;
     for (const field of record.fields) {
       if (!conditionFieldTypes.has(field.type)) continue;
-      const group = identities.filter((identity) => identity.kind === "field" &&
-        identity.scope === `record:${record.key}` && identity.identifier === field.fieldId);
+      const group = identities.filter((identity) => {
+        if (identity.kind !== "field" || identity.scope !== `record:${record.key}`) return false;
+        const identifier = fieldIdSchema.safeParse(identity.identifier);
+        return identifier.success && identifier.data === field.fieldId;
+      });
       const owners = new Set(group.map((identity) => identity.componentOwner));
       const aliases = group.map((identity) => identity.alias);
       if (owners.size !== 1 || aliases.length === 0 || new Set(aliases).size !== aliases.length ||

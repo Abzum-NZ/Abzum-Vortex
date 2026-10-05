@@ -11,8 +11,7 @@ import { validateStudioCondition, type StudioConditionControlsContext,
 import type { StudioCompositionContext } from "./application-composition-commands";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
-type SourceQualifiedCondition = NonNullable<ApplicationSourceDocumentV2["body"]["shells"][number]["layout"]
-  ["placements"][string]["visibility_condition"]>;
+type SourceQualifiedCondition = NonNullable<SourceSlot["placements"][string]["visibility_condition"]>;
 
 export type StudioApplicationConditionContext = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
