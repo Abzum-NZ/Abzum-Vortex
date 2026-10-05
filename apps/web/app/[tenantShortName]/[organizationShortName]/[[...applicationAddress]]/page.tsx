@@ -30,7 +30,10 @@ import {
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadApplicationPage } from "../../../_lib/application-page";
+import {
+  loadApplicationPage,
+  takeLocalPageProjectionResponseEvidence,
+} from "../../../_lib/application-page";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 import {
@@ -408,6 +411,7 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
   if (page.kind === "unavailable") return unavailableFallback;
+  const projectionResponseEvidence = takeLocalPageProjectionResponseEvidence(page.model);
   const adoption = page.model.adoption;
   // The outcome notice is display only: it never selects a release, and the page below always
   // renders whatever installation the server resolved for this request.
@@ -423,8 +427,16 @@ export default async function ApplicationAddressPage({
     <ApplicationPageView
       model={page.model}
       onOpenApplication={openApplication}
-      pageFeedback={adoption === undefined && adoptionOutcome === undefined ? undefined : (
+      pageFeedback={adoption === undefined && adoptionOutcome === undefined &&
+        projectionResponseEvidence === undefined ? undefined : (
         <>
+          {projectionResponseEvidence === undefined ? null : (
+            <span
+              hidden
+              aria-hidden="true"
+              data-vortex-local-projection-response={JSON.stringify(projectionResponseEvidence)}
+            />
+          )}
           {adoptionOutcome === undefined ? null : (
             <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
               <AlertDescription>{adoptionOutcome}</AlertDescription>

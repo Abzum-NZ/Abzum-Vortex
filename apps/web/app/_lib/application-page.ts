@@ -1336,6 +1336,70 @@ type LocalPageTableState = "NOT_OBSERVED" | "ABSENT" | "READY" | "EMPTY" | "REFU
 type LocalProjectionObservation = Parameters<NonNullable<
   StoredPageCapabilityDependencies["observeProjectionDecision"]
 >>[0];
+
+// Distinct response protocol: the historical 16-field projection logger stays unchanged.
+const localProjectionResponseValues = {
+  schema: ["page_projection_response_v2"], stage: ["PROJECTED_PAGE"], result: ["AVAILABLE"],
+  bodyBefore: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
+  bodyAfter: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
+  tableBefore: [true, false], tableAfter: [true, false],
+  target: ["TABLE", "VISIBLE_BODY", "NONE", "UNPROVABLE"],
+  viewGate: ["ABSENT", "ALLOWED", "REFUSED", "UNPROVABLE"],
+  condition: ["ABSENT", "TRUE", "NOT_TRUE", "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNPROVABLE"],
+  conditionReason: ["ABSENT", "SUPPORTED_TRUE", "SUPPORTED_FALSE", "UNSUPPORTED_OPERAND",
+    "SUBJECT_UNAVAILABLE", "FIELD_UNAVAILABLE", "DECLARATION_UNPROVABLE",
+    "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNKNOWN"],
+  ancestor: ["NONE", "VIEW_REFUSED", "CONDITION_NOT_TRUE", "MIXED", "UNPROVABLE"],
+  projection: ["RETAINED", "DIRECT_VIEW_PRUNED", "DIRECT_CONDITION_PRUNED",
+    "ANCESTOR_PRUNED", "UNPROVABLE"],
+  useState: ["PLAIN_CONTENT", "AVAILABLE", "DISABLED", "UNPROVABLE"],
+  targetRead: ["TARGET_NOT_REACHED", "NOT_OBSERVED"],
+  visibleAfter: ["SOME", "NONE", "UNPROVABLE"],
+  viewReason: ["ABSENT", "ALLOWED", "access_refused", "authentication_required",
+    "target_policy_unavailable", "caller_unsupported", "UNKNOWN"],
+  targetKind: ["ABSENT", "ORGANIZATION", "APPLICATION", "UNPROVABLE"],
+  requestBound: [true, false], responseBound: [true, false],
+} as const;
+type LocalProjectionResponseFrame = Readonly<{
+  [Field in keyof typeof localProjectionResponseValues]:
+    (typeof localProjectionResponseValues)[Field][number];
+}>;
+const isLocalProjectionResponseFrame = (
+  candidate: unknown,
+): candidate is LocalProjectionResponseFrame => {
+  if (!isRecord(candidate) || Object.keys(candidate).length !== 20) return false;
+  const allowed: Readonly<Record<string, readonly (string | boolean)[]>> = localProjectionResponseValues;
+  return Object.keys(candidate).every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(candidate, key);
+    if (descriptor === undefined || !("value" in descriptor)) return false;
+    const value: unknown = descriptor.value;
+    return (typeof value === "string" || typeof value === "boolean") &&
+      Object.hasOwn(allowed, key) && allowed[key]?.includes(value) === true;
+  });
+};
+// Object identity binds metadata to one final available server model, without serializing identity.
+const localProjectionResponseEvidence = new WeakMap<ApplicationPageModel, LocalProjectionResponseFrame>();
+
+/** Called once by the route rendering this exact model. This is not browser-applied evidence. */
+export const takeLocalPageProjectionResponseEvidence = (
+  model: ApplicationPageModel,
+): LocalProjectionResponseFrame | undefined => {
+  try {
+    const frame = localProjectionResponseEvidence.get(model);
+    localProjectionResponseEvidence.delete(model);
+    if (frame === undefined) return undefined;
+    const response = { ...frame, responseBound: true };
+    if (!isLocalProjectionResponseFrame(response) || response.requestBound !== true) return undefined;
+    const line = "VORTEX_LOCAL_PAGE_PROJECTION_RESPONSE:" + JSON.stringify(response);
+    if (Buffer.byteLength(line, "utf8") > 2048) return undefined;
+    console.info(line);
+    return Object.freeze(response);
+  } catch {
+    // A failed observer, serializer or logger never changes page rendering or genuine errors.
+    return undefined;
+  }
+};
+
 type LocalCompositionSnapshot = Readonly<{
   body: readonly Readonly<{ id: string; table: boolean; visible: boolean }>[];
   placementIds: readonly string[];
@@ -1596,12 +1660,14 @@ const localPageProjectionDecisionObserver = (
         authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
       return undefined;
     let observation: LocalProjectionObservation | undefined;
+    let responseFrame: LocalProjectionResponseFrame | undefined;
     let captured = false;
     let attempted = false;
     return {
       capture: (value: LocalProjectionObservation): void => {
         // Duplicate captures are ambiguous, never a later replacement for the first request.
         observation = captured ? undefined : value;
+        responseFrame = undefined;
         captured = true;
       },
       emit: (projected: unknown): void => {
@@ -1682,8 +1748,28 @@ const localPageProjectionDecisionObserver = (
             .some(([key, value]) => !allowed[key]?.includes(value))) return;
           const line = "VORTEX_LOCAL_PAGE_PROJECTION_DECISION:" + JSON.stringify(frame);
           if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
+          const response = {
+            ...frame, schema: "page_projection_response_v2",
+            viewReason: decision?.viewReason ?? "UNKNOWN",
+            targetKind: decision?.targetKind ?? "UNPROVABLE",
+            requestBound: decisions.requestBound, responseBound: false,
+          };
+          if (isLocalProjectionResponseFrame(response) && response.requestBound === true &&
+              Buffer.byteLength("VORTEX_LOCAL_PAGE_PROJECTION_RESPONSE:" + JSON.stringify(response), "utf8") <= 2048)
+            responseFrame = Object.freeze(response);
         } catch {
+          responseFrame = undefined;
           // Oversized, ambiguous or throwing observations are dropped without touching the page.
+        }
+      },
+      bind: (model: ApplicationPageModel): void => {
+        const frame = responseFrame;
+        responseFrame = undefined;
+        try {
+          if (frame !== undefined && isLocalProjectionResponseFrame(frame))
+            localProjectionResponseEvidence.set(model, frame);
+        } catch {
+          // Optional metadata cannot change the completed model or its authority.
         }
       },
     };
@@ -3284,9 +3370,7 @@ const loadApplicationPageInternal = async (
 
   const permittedKeys = new Set(address.application.pageKeys);
   observeComposition?.("PAGE_MODEL", "AVAILABLE", page, data);
-  return {
-    kind: "available",
-    model: {
+  const model: ApplicationPageModel = {
       page,
       pageId: pageDefinition.pageId,
       shells: application.content.shells,
@@ -3325,8 +3409,9 @@ const loadApplicationPageInternal = async (
           application.resolutionFingerprint,
         ].join(":"),
       },
-    },
   };
+  observeProjectionDecision?.bind(model);
+  return { kind: "available", model };
 };
 
 export const loadApplicationPage = (
