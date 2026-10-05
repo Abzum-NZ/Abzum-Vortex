@@ -539,14 +539,18 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
     target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
-  if (release === undefined || !eligible(release) || Object.keys(target.placement.slots).length !== 0 ||
+  if (release === undefined || !eligible(release)) return { kind: "unsupported" } as const;
+  const layoutSettings = eligibleLayoutAddRelease(release);
+  if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
   for (const step of target.steps) {
     const parent = slot.placements[step.parentAlias];
     const declaration = parent === undefined ? undefined : releaseFor(parent)?.slots.find((item) => item.key === step.slotKey);
     const child = parent?.slots[step.slotKey];
-    if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
+    // Layout settings keep their existing children but cannot edit through required ancestor slots.
+    if (declaration === undefined || declaration.repeats !== undefined || child === undefined ||
+      (layoutSettings && declaration.required))
       return { kind: "unsupported" } as const;
     slot = child;
   }
@@ -606,8 +610,9 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
 const scalarProperty = (property: BlockPropertySchemaV2Contract): property is ScalarProperty =>
   property.kind === "boolean" || property.kind === "choice";
 const eligibleScalarRelease = (release: PlatformBlockReleaseV2): boolean =>
-  release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
-  release.supportedEvents.every((event) => event === "refresh") && release.properties.some(scalarProperty);
+  release.properties.some(scalarProperty) &&
+  ((release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
+    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutAddRelease(release));
 
 /** The command supplies only editable scalars; omitted keys deliberately stay omitted. */
 const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): StudioCompositionScalarSettings => {
