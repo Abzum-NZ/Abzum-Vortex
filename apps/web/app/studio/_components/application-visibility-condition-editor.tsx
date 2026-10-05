@@ -169,7 +169,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
           validation: { condition: current === null ? model.condition : current.value,
             issues: current?.validation.issues ?? [], isValid: false } }));
       }}>
-        <StudioConditionControls key={controlsEpoch} value={value} context={model.controls}
+        <StudioConditionControls key={controlsEpoch} {...(value === undefined ? {} : { value })} context={model.controls}
           label="Placement visibility controls" onChange={update} />
         <button type="button" className={buttonClass} disabled={value === undefined}
           onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove condition</button>
