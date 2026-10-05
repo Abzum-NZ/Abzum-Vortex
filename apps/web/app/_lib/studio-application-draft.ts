@@ -8,11 +8,24 @@ import {
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
-import { readApplicationDefinitionDraft, requireBuilderAuthority } from "@vortex/definition";
+import {
+  BuilderAuthorityError,
+  readApplicationDefinitionDraft,
+  requireBuilderAuthority,
+} from "@vortex/definition";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 
 type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
+
+type StudioAuthorityResult<Value> =
+  | Readonly<{ kind: "available"; value: Value }>
+  | Readonly<{ kind: "refused" }>;
+
+const isExpectedBuilderRefusal = (error: unknown): boolean =>
+  error instanceof BuilderAuthorityError &&
+  (error.code === "BUILDER_PERMISSION_REFUSED" ||
+    error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED");
 
 export type StudioApplicationLoadResult =
   | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft }>
@@ -54,14 +67,24 @@ export const loadStudioCreateAccess = async (
       return resolved.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" } : { kind: "refused" };
     const result = await humanOrganizationRequests().run(
-      resolved.session, { organizationId: organization.data }, async (transaction, scope) => {
+      resolved.session, { organizationId: organization.data }, async (
+        transaction,
+        scope,
+      ): Promise<StudioAuthorityResult<OrganizationId>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts });
-        await requireBuilderAuthority(authority, { kind: "draft_change" });
-        return scope.organizationId;
+        try {
+          await requireBuilderAuthority(authority, { kind: "draft_change" });
+        } catch (error) {
+          if (isExpectedBuilderRefusal(error)) return { kind: "refused" };
+          throw error;
+        }
+        return { kind: "available", value: scope.organizationId };
       },
     );
     return result.kind === "available"
-      ? { kind: "available", organizationId: result.value }
+      ? result.value.kind === "available"
+        ? { kind: "available", organizationId: result.value.value }
+        : { kind: "refused" }
       : result.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" } : { kind: "refused" };
   } catch {
@@ -83,15 +106,28 @@ export const loadStudioApplicationDraft = async (
       return resolved.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" } : { kind: "refused" };
     const result = await humanOrganizationRequests().run(
-      resolved.session, { organizationId: organization.data }, async (transaction, scope) => {
+      resolved.session, { organizationId: organization.data }, async (
+        transaction,
+        scope,
+      ): Promise<StudioAuthorityResult<Readonly<{
+        organizationId: OrganizationId;
+        draft: StoredApplicationDefinitionDraft;
+      }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts });
-        await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
+        try {
+          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
+        } catch (error) {
+          if (isExpectedBuilderRefusal(error)) return { kind: "refused" };
+          throw error;
+        }
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
-        return { organizationId: scope.organizationId, draft };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft } };
       },
     );
     return result.kind === "available"
-      ? { kind: "available", ...result.value }
+      ? result.value.kind === "available"
+        ? { kind: "available", ...result.value.value }
+        : { kind: "refused" }
       : result.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" } : { kind: "refused" };
   } catch {
