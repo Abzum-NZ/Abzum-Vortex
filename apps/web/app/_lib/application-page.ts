@@ -8,6 +8,7 @@ import {
 } from "@vortex/access";
 import {
   createHumanInstalledRuntimeContextLoader,
+  createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
@@ -53,6 +54,7 @@ import {
   CALENDAR_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
+  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
@@ -1951,7 +1953,18 @@ const loadApplicationPageInternal = async (
   const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
   const tables = createRecordsTableQueryResolver(queries);
   const queryNotices = createQueryNoticeQueryResolver(queries);
-  const linkTiles = createLinkTilesQueryResolver(queries);
+  const recordLinks = createViewerSafeRecordLinkService({
+    ...dependencies,
+    createInstalledContextLoader(transaction, scope) {
+      if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
+      return createHumanInstalledRuntimeContextLoader({
+        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
+        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+      });
+    },
+  });
+  const linkTiles = createLinkTilesQueryResolver(queries, (viewer, identity) => recordLinks.read(viewer, identity));
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -2095,7 +2108,8 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, LINK_TILES_BLOCK_RELEASE.blockId) &&
-      block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion;
+      (block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+        block.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion);
     if (
       tableContract === undefined && detailContract === undefined &&
       !isBoardBlock && !isQueryNoticeBlock && !isLinkTilesBlock
@@ -2108,7 +2122,8 @@ const loadApplicationPageInternal = async (
           ? undefined
           : pageSubjectRecordTypeId
         : isLinkTilesBlock
-          ? buildLinkTilesQueryBinding(context, queryId, settings, {})?.recordTypeId
+          ? buildLinkTilesQueryBinding(context, queryId, settings, {},
+              isRecord(block) && typeof block.releaseVersion === "string" ? block.releaseVersion : "")?.recordTypeId
           : resolvedQueryRecordTypeId(context, queryId);
     if (recordTypeId === undefined) continue;
     recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
@@ -2315,7 +2330,8 @@ const loadApplicationPageInternal = async (
       sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
     if (isLinkTilesBlock && (
-      !isRecord(block) || block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion ||
+      !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
       projectedUseAvailability(placement) !== "available"
     )) {
       data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -2474,6 +2490,7 @@ const loadApplicationPageInternal = async (
       }
       const result = await linkTiles.resolve(
         session, selection, context, queryId, settings, inputValues,
+        isRecord(block) && typeof block.releaseVersion === "string" ? block.releaseVersion : "",
       );
       data[placementId] = result.status === "ready" && result.values.rows.length === 0
         ? { status: "empty" }

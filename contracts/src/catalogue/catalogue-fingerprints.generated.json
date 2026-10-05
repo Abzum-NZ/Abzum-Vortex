@@ -160,6 +160,10 @@
       "contentFingerprint": "sha256:004acb0bfb792a33c51722b8da3d079f047bf6f1c7e098b5be326fabfacaf8b2",
       "catalogueFingerprint": "sha256:6ca9f0b784b4345e3e5598e30ea2f23f6c16113a714c1ca4f8800f5785029a06"
     },
+    "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47:1.1.0": {
+      "contentFingerprint": "sha256:3ed3d5a7a8fc253b350ade81792f1ee38874d4eb7d4176780ca8677be739294c",
+      "catalogueFingerprint": "sha256:44f1e2284a5e42ddbabdba645bcb8f7ff94c0fc42679a3c27e1be4727c8d79d6"
+    },
     "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b:1.0.0": {
       "contentFingerprint": "sha256:e0c7038c22f41833299abde924616a4a35d3f3054491fa0629d765e641fc2a04",
       "catalogueFingerprint": "sha256:f764f32aff25db3e0ec18d99d203f6c8b73371a17f79a379132790121a749573"

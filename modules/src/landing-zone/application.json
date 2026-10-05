@@ -127,6 +127,27 @@
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_home_favourites_remove_tile",
+        "key": "vortex.app.events.home_favourites_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_favourites_tiles_remove_tile",
+        "key": "vortex.app.events.favourites_tiles_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_bookmarks_tiles_remove_tile",
+        "key": "vortex.app.events.bookmarks_tiles_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -382,13 +403,23 @@
                     "content": {
                       "placements": {
                         "home_favourites": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
                           "query": "vortex.landing_zone:landing_zone_favourites",
                           "settings": {
                             "title": { "kind": "text", "value": "Favourites" },
                             "label_key": { "kind": "text", "value": "label" },
                             "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" }
+                            "description_key": { "kind": "text", "value": "description" },
+                            "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
+                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
+                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
+                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
+                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
+                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
+                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
+                            "record_id_key": { "kind": "text", "value": "record_id" },
+                            "row_action_label": { "kind": "text", "value": "Remove" }
                           },
                           "theme_overrides": {},
                           "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
@@ -466,13 +497,23 @@
                     "content": {
                       "placements": {
                         "favourites_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
                           "query": "vortex.landing_zone:landing_zone_favourites",
                           "settings": {
                             "title": { "kind": "text", "value": "Favourites" },
                             "label_key": { "kind": "text", "value": "label" },
                             "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" }
+                            "description_key": { "kind": "text", "value": "description" },
+                            "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
+                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
+                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
+                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
+                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
+                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
+                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
+                            "record_id_key": { "kind": "text", "value": "record_id" },
+                            "row_action_label": { "kind": "text", "value": "Remove" }
                           },
                           "theme_overrides": {},
                           "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
@@ -518,13 +559,23 @@
                     "content": {
                       "placements": {
                         "bookmarks_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.0.0" },
+                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.1.0" },
                           "query": "vortex.landing_zone:landing_zone_tiles",
                           "settings": {
                             "title": { "kind": "text", "value": "Bookmarks" },
                             "label_key": { "kind": "text", "value": "label" },
                             "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" }
+                            "description_key": { "kind": "text", "value": "description" },
+                            "target_kind_key": { "kind": "text", "value": "target_kind" },
+                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
+                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
+                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
+                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
+                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
+                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
+                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
+                            "record_id_key": { "kind": "text", "value": "record_id" },
+                            "row_action_label": { "kind": "text", "value": "Remove" }
                           },
                           "theme_overrides": {},
                           "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
@@ -1465,6 +1516,30 @@
           "record": { "kind": "caller", "name": "record" },
           "is_favourite": { "kind": "caller", "name": "is_favourite" }
         }
+      },
+      {
+        "id": "binding_home_favourites_remove_tile",
+        "control": "home_favourites",
+        "event_id": "row_action_home_favourites_remove_tile",
+        "event": "row_action",
+        "flow": "landing_zone_open_remove_tile",
+        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
+      },
+      {
+        "id": "binding_favourites_tiles_remove_tile",
+        "control": "favourites_tiles",
+        "event_id": "row_action_favourites_tiles_remove_tile",
+        "event": "row_action",
+        "flow": "landing_zone_open_remove_tile",
+        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
+      },
+      {
+        "id": "binding_bookmarks_tiles_remove_tile",
+        "control": "bookmarks_tiles",
+        "event_id": "row_action_bookmarks_tiles_remove_tile",
+        "event": "row_action",
+        "flow": "landing_zone_open_remove_tile",
+        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
       },
       {
         "id": "binding_landing_zone_open_remove_tile",
