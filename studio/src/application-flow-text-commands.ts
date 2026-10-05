@@ -1,11 +1,13 @@
 import {
   applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
+  builderKeySchema,
   flowLiteralSchema,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
   organizationIdSchema,
+  sourceFlowTaskSchema,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
   type SourceFlow,
@@ -49,6 +51,22 @@ export type StudioFlowTextCommand = Readonly<{
 export type StudioFlowTextResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
   | Readonly<{ kind: "stale" | "unsupported" | "invalid" | "no_change" }>;
+
+export type StudioFlowPresentationTaskType = "interface.show_message" | "interface.confirm";
+export type StudioFlowPresentationPaletteEntry = Readonly<{
+  type: StudioFlowPresentationTaskType;
+  version: "1.0.0";
+  title: string;
+  optionalTitle: boolean;
+}>;
+export type StudioFlowPresentationCommand = Readonly<{
+  kind: "append_presentation";
+  taskId: string;
+  message: string;
+}> & (
+  | Readonly<{ taskType: "interface.show_message"; title?: never }>
+  | Readonly<{ taskType: "interface.confirm"; title?: string }>
+);
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
 type TaskEntry = Readonly<{ task: SourceFlowTask; path: readonly (string | number)[] }>;
@@ -190,6 +208,80 @@ export const applyStudioFlowTextCommand = (
     value.literal.value = command.text;
     if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
     // The schema validates; its parsed defaults/transforms must not rewrite untouched source.
+    return { kind: "applied", source: candidate };
+  } catch { return { kind: "invalid" }; }
+};
+
+const presentationTypes: readonly StudioFlowPresentationTaskType[] = [
+  "interface.show_message", "interface.confirm",
+];
+
+const presentationPalette = (): readonly StudioFlowPresentationPaletteEntry[] =>
+  presentationTypes.flatMap((type): StudioFlowPresentationPaletteEntry[] => {
+    const definition = Object.values(flowTaskRegistry).find((entry) => entry.type === type);
+    if (definition === undefined || definition.version !== "1.0.0" ||
+      definition.effect !== "interface" || !definition.runLocations.includes("browser") ||
+      definition.properties.message?.type !== "message_text" || !definition.properties.message.required)
+      return [];
+    if (type === "interface.confirm" && (definition.properties.title?.type !== "message_text" ||
+      definition.properties.title.required)) return [];
+    return [{ type, version: "1.0.0", title: definition.title, optionalTitle: type === "interface.confirm" }];
+  });
+
+/** A closed registry-backed palette; it cannot construct a protected or unknown task. */
+export const projectStudioFlowPresentationPalette = (
+  context: StudioFlowTextContext,
+  selection: FlowSelection,
+): readonly StudioFlowPresentationPaletteEntry[] => {
+  try {
+    const current = outline(context, selection);
+    return current.flow.execution === "interactive" && current.flow.runAs.kind === "initiator" &&
+      current.entries.length < flowMaximumTaskCount ? presentationPalette() : [];
+  } catch { return []; }
+};
+
+const validPresentationText = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 1 && value.length <= 2_000 &&
+  flowLiteralSchema.safeParse({ type: "text", value }).success;
+
+/** Appends one minimally authored presentation task; no other source or authority is rewritten. */
+export const applyStudioFlowPresentationCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowPresentationCommand,
+): StudioFlowTextResult => {
+  if (current.organizationId !== expected.organizationId || current.rootId !== expected.rootId ||
+    current.key !== expected.key || current.draftRevision !== expected.draftRevision ||
+    current.localLifetime !== expected.localLifetime || current.source !== expected.source ||
+    selection?.kind !== "flow" || selection.flowAlias !== expectedSelection.flowAlias)
+    return { kind: "stale" };
+  try {
+    const original = outline(current, expectedSelection);
+    const definition = presentationPalette().find((entry) => entry.type === command.taskType);
+    if (original.flow.execution !== "interactive" || original.flow.runAs.kind !== "initiator" ||
+      definition === undefined || command.kind !== "append_presentation") return { kind: "unsupported" };
+    const hasTitle = Object.hasOwn(command, "title");
+    if (Object.keys(command).some((key) => !["kind", "taskType", "taskId", "message", "title"].includes(key)) ||
+      (hasTitle && command.taskType !== "interface.confirm") ||
+      !builderKeySchema.safeParse(command.taskId).success || !validPresentationText(command.message) ||
+      (hasTitle && !validPresentationText(command.title)) ||
+      original.entries.length >= flowMaximumTaskCount || original.entries.some(({ task }) => task.id === command.taskId))
+      return { kind: "invalid" };
+    const task: Extract<SourceFlowTask, { properties: unknown }> = {
+      id: command.taskId, type: definition.type, version: definition.version,
+      properties: { message: { kind: "literal", literal: { type: "text", value: command.message } } },
+    };
+    if (hasTitle && command.taskType === "interface.confirm" && typeof command.title === "string")
+      task.properties.title = { kind: "literal", literal: { type: "text", value: command.title } };
+    if (!sourceFlowTaskSchema.safeParse(task).success) return { kind: "invalid" };
+    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const detached = outline({ ...current, source: candidate }, expectedSelection);
+    detached.flow.tasks.push(task);
+    // Recheck shared bounds and full source shape without adopting parsed defaults or transforms.
+    outline({ ...current, source: candidate }, expectedSelection);
+    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
 };
