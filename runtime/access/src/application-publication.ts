@@ -32,6 +32,14 @@ export type HumanApplicationPublisherDependencies = Readonly<{
 }>;
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 class PublicationContextRefused extends Error {}
+/** Trusted refusal code consumed by the owning request after its transaction rolls back. */
+class ExpectedBuilderPublicationRefusal extends Error {
+  readonly code = "42501";
+  constructor() {
+    super("Application publication authority refused");
+    this.name = "ExpectedBuilderPublicationRefusal";
+  }
+}
 
 /** Existing roots never acquire a default classification or a System fallback. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -228,6 +236,10 @@ export const createHumanApplicationPublisher = (dependencies: HumanApplicationPu
         return value;
       } catch (error) {
         failure = safeFailure(error);
+        if (error instanceof BuilderAuthorityError &&
+          (error.code === "BUILDER_PERMISSION_REFUSED" ||
+            error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"))
+          throw new ExpectedBuilderPublicationRefusal();
         // Throw through runChange: even a post-append result mismatch must roll back.
         throw error;
       }
