@@ -30,6 +30,7 @@ import {
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { loadCurrentOrganizationAccount } from "../../../_lib/current-organization-account";
 import {
   loadApplicationPage,
   takeLocalPageProjectionResponseEvidence,
@@ -328,6 +329,10 @@ export default async function ApplicationAddressPage({
         ),
       );
 
+    const currentOrganizationAccount = await loadCurrentOrganizationAccount(
+      identity.session,
+      resolved.read.organizationId,
+    );
     const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
     const studioCreateHref =
       studioCreateAccess.kind === "available" &&
@@ -364,6 +369,25 @@ export default async function ApplicationAddressPage({
             />
           </div>
         )}
+        <details>
+          <summary>Current signed-in account details</summary>
+          <p>
+            When available, these read-only identifiers describe the account read for this request.
+            They do not select a recipient or authorize a grant.
+          </p>
+          {currentOrganizationAccount.kind === "available" ? (
+            <dl>
+              <dt>Organization ID</dt>
+              <dd>{currentOrganizationAccount.value.organizationId}</dd>
+              <dt>Organization account ID</dt>
+              <dd>{currentOrganizationAccount.value.organizationAccountId}</dd>
+              <dt>Profile revision</dt>
+              <dd>{currentOrganizationAccount.value.revision}</dd>
+            </dl>
+          ) : (
+            <p>Current signed-in account details are unavailable right now.</p>
+          )}
+        </details>
         {studioCreateHref === undefined ? null : (
           <p>
             <Link className="font-medium underline underline-offset-4" href={studioCreateHref}>
@@ -423,13 +447,35 @@ export default async function ApplicationAddressPage({
         : parameters.adoption === "refused"
           ? "The release could not be adopted. The current release is still in use."
           : undefined;
+  const currentOrganizationAccount = await loadCurrentOrganizationAccount(
+    identity.session,
+    resolved.read.organizationId,
+  );
   return (
     <ApplicationPageView
       model={page.model}
       onOpenApplication={openApplication}
-      pageFeedback={adoption === undefined && adoptionOutcome === undefined &&
-        projectionResponseEvidence === undefined ? undefined : (
+      pageFeedback={
         <>
+          <details>
+            <summary>Current signed-in account details</summary>
+            <p>
+              When available, these read-only identifiers describe the account read for this
+              request. They do not select a recipient or authorize a grant.
+            </p>
+            {currentOrganizationAccount.kind === "available" ? (
+              <dl>
+                <dt>Organization ID</dt>
+                <dd>{currentOrganizationAccount.value.organizationId}</dd>
+                <dt>Organization account ID</dt>
+                <dd>{currentOrganizationAccount.value.organizationAccountId}</dd>
+                <dt>Profile revision</dt>
+                <dd>{currentOrganizationAccount.value.revision}</dd>
+              </dl>
+            ) : (
+              <p>Current signed-in account details are unavailable right now.</p>
+            )}
+          </details>
           {projectionResponseEvidence === undefined ? null : (
             <span
               hidden
@@ -463,8 +509,8 @@ export default async function ApplicationAddressPage({
                 </AlertDescription>
               </Alert>
             )}
-          </>
-        )}
+        </>
+      }
         guidedFormActions={{
           advance: advanceGuidedFormStepAction,
           confirm: confirmGuidedFormAction,
