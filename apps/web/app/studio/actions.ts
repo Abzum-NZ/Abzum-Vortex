@@ -2,13 +2,15 @@
 
 import {
   applicationSourceDocumentV2Schema,
+  canonicalJson,
+  sameId,
   saveDefinitionDraftCommandSchema,
   PLATFORM_THEME_RELEASE_2_0_0,
   PLATFORM_THEME_RELEASE_3_0_0,
   sourceThemeTokenValueV2Schema,
   type ApplicationContentV2,
 } from "@vortex/contracts";
-import { materialiseApplicationThemeV2, validateDefinitionSource } from "@vortex/definition";
+import { fingerprintCanonicalValue, materialiseApplicationThemeV2, validateDefinitionSource } from "@vortex/definition";
 import {
   parseStudioAppearanceRequest,
   studioAppearanceFailureCodes,
@@ -22,6 +24,40 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/studio";
 import { prepareHumanApplicationPublication, publishHumanApplication } from "../_lib/definition-publication";
+import {
+  maximumApplicationSourceImportBytes,
+  studioApplicationSourceReviewRequestSchema,
+  studioApplicationSourceReviewResultSchema,
+  type StudioApplicationSourceReviewResult,
+} from "./_lib/application-source-import";
+
+/** Advisory source review only: the existing Save resolves all write authority afresh. */
+export async function reviewStudioApplicationSource(
+  organizationId: string, candidate: unknown,
+): Promise<StudioApplicationSourceReviewResult> {
+  try {
+    const request = studioApplicationSourceReviewRequestSchema.safeParse(candidate);
+    if (!request.success) return { kind: "invalid" };
+    const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
+    if (loaded.kind !== "available") return loaded;
+    const draft = loaded.draft;
+    if (!sameId(draft.rootId, request.data.rootId) || !sameId(loaded.organizationId, organizationId))
+      return { kind: "refused" };
+    if (draft.draftRevision !== request.data.expectedDraftRevision ||
+      draft.sourceFingerprint !== request.data.expectedSavedSourceFingerprint)
+      return { kind: "conflict" };
+    const source = request.data.source;
+    if (source.key !== draft.key || source.root_alias !== draft.source.root_alias ||
+      new TextEncoder().encode(canonicalJson(source)).byteLength > maximumApplicationSourceImportBytes ||
+      !validateDefinitionSource(source).valid) return { kind: "invalid" };
+    return studioApplicationSourceReviewResultSchema.parse({
+      kind: "available", organizationId: draft.organizationId, rootId: draft.rootId,
+      key: draft.key, rootAlias: draft.source.root_alias, draftRevision: draft.draftRevision,
+      savedSourceFingerprint: draft.sourceFingerprint,
+      candidateSourceFingerprint: fingerprintCanonicalValue(source), source,
+    });
+  } catch { return { kind: "temporarily_unavailable" }; }
+}
 
 /** Separate explicit requests: preparation never installs or publishes a release. */
 export async function prepareStudioApplicationPublication(organizationId: string, candidate: unknown) {
