@@ -448,6 +448,19 @@ export const prepareOrganizationAdministrationRoleChangeCommandSchema = z
       });
   });
 
+/**
+ * The only caller-supplied facts for accepting a pending revision of an existing Application
+ * role. The protected reader resolves the role's source and configuration from its current row.
+ */
+export const prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema = z
+  .object({
+    operation: z.literal("accept_application_role_revision"),
+    roleId: roleIdSchema,
+    expectedRoleRevision: revisionSchema,
+    acceptBroadenedAuthority: z.enum(["accept", "decline"]),
+  })
+  .strict();
+
 export const changeOrganizationAdministrationRoleResultSchema = z
   .object({
     role: organizationAdministrationRoleSummarySchema,
@@ -984,6 +997,9 @@ export type OrganizationAdministrationRoleChangePreparationOperation = z.infer<
 >;
 export type PrepareOrganizationAdministrationRoleChangeCommand = z.infer<
   typeof prepareOrganizationAdministrationRoleChangeCommandSchema
+>;
+export type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand = z.infer<
+  typeof prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema
 >;
 export type OrganizationAdministrationApplicationRoleTemplateReference = z.infer<
   typeof organizationAdministrationApplicationRoleTemplateReferenceSchema

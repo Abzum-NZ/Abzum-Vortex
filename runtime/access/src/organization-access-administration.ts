@@ -1,10 +1,12 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   databaseRevision,
   sameId,
   activityIdSchema,
+  affectedRoleAssignmentSchema,
   addOrganizationAdministrationMembershipCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationMembershipResultSchema,
@@ -51,6 +53,8 @@ import {
   readOrganizationAdministrationRoleAssignmentCommandSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
+  prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
+  organizationRoleChangeCandidateSchema,
   roleIdSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -65,6 +69,7 @@ import {
   organizationStewardshipAppointmentResultSchema,
   type AddOrganizationAdministrationMembershipCommand,
   type AssignOrganizationAdministrationRoleAssignmentCommand,
+  type AffectedRoleAssignment,
   type ChangeOrganizationAdministrationGroupResult,
   type ChangeOrganizationAdministrationMembershipResult,
   type ChangeOrganizationAdministrationRoleAuthorityCommand,
@@ -104,6 +109,7 @@ import {
   type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
   type PrepareOrganizationAdministrationRoleChangeCommand,
+  type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -518,9 +524,13 @@ const sealPreparedRoleChangeTemplates = (core: unknown): PreparedApplicationRole
  */
 const sealPreparedRoleChange = (
   candidate: OrganizationRoleChangeCandidate,
+  affectedAssignments?: AffectedRoleAssignment[],
 ): PreparedOrganizationRoleChange => {
   try {
-    return prepareOrganizationRoleChangeEvidence({ candidate });
+    return prepareOrganizationRoleChangeEvidence({
+      candidate,
+      ...(affectedAssignments === undefined ? {} : { affectedAssignments }),
+    });
   } catch {
     throw preparationUnavailable();
   }
@@ -1107,6 +1117,105 @@ export const createOrganizationAccessAdministrationService = (
           permissions,
         };
         return sealPreparedRoleChange(templateCandidate);
+      });
+    },
+
+    prepareApplicationRoleRevisionAcceptance: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand,
+    ): Promise<HumanOrganizationRequestResult<PreparedOrganizationRoleChange>> => {
+      const command =
+        prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema.safeParse(
+          commandCandidate,
+        );
+      if (!command.success || command.data.acceptBroadenedAuthority !== "accept")
+        return { kind: "unavailable" };
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const preparation = {
+          operation: command.data.operation,
+          roleId: command.data.roleId,
+          expectedRoleRevision: command.data.expectedRoleRevision,
+          acceptBroadenedAuthority: command.data.acceptBroadenedAuthority,
+        };
+        const row = requireOne(
+          await transaction.query<RoleChangePreparationRow>`
+            select vortex_access.read_organization_role_change_evidence_for_administration(
+              ${JSON.stringify(preparation)}::text::jsonb
+            ) as preparation
+          `,
+        );
+        const read = row.preparation as
+          | Readonly<{
+              outcome?: unknown;
+              organizationId?: unknown;
+              roleConfiguration?: unknown;
+              permissions?: unknown;
+              templateContinuityRevision?: unknown;
+              preparedTemplatesCore?: unknown;
+              manifestRequired?: unknown;
+              affectedAssignments?: unknown;
+            }>
+          | undefined;
+        if (
+          read === undefined ||
+          read.outcome !== "available" ||
+          typeof read.organizationId !== "string" ||
+          !sameId(read.organizationId, scope.organizationId) ||
+          typeof read.roleConfiguration !== "object" ||
+          read.roleConfiguration === null ||
+          Array.isArray(read.roleConfiguration) ||
+          !Array.isArray(read.permissions)
+        )
+          throw preparationUnavailable();
+
+        const roleConfiguration = read.roleConfiguration as Record<string, unknown>;
+        const configuredRoleId = roleIdSchema.safeParse(roleConfiguration.roleId);
+        const configuredRoleRevision = databaseRevision(roleConfiguration.expectedRoleRevision);
+        const templateContinuityRevision = databaseRevision(read.templateContinuityRevision);
+        if (
+          !configuredRoleId.success ||
+          !sameId(configuredRoleId.data, command.data.roleId) ||
+          configuredRoleRevision !== command.data.expectedRoleRevision ||
+          typeof templateContinuityRevision !== "number"
+        )
+          throw preparationUnavailable();
+        const candidateValue = organizationRoleChangeCandidateSchema.safeParse({
+          operation: command.data.operation,
+          organizationId: scope.organizationId,
+          roleId: command.data.roleId,
+          expectedRoleRevision: command.data.expectedRoleRevision,
+          key: roleConfiguration.key,
+          label: roleConfiguration.label,
+          description: roleConfiguration.description,
+          privilegeClassification: roleConfiguration.privilegeClassification,
+          assignmentPolicy: roleConfiguration.assignmentPolicy,
+          sourceRoleId: roleConfiguration.sourceRoleId,
+          templateContinuityRevision,
+          preparedTemplates: sealPreparedRoleChangeTemplates(read.preparedTemplatesCore),
+          permissions: read.permissions,
+        });
+        if (
+          !candidateValue.success ||
+          candidateValue.data.operation !== command.data.operation ||
+          !sameId(candidateValue.data.roleId, command.data.roleId) ||
+          candidateValue.data.expectedRoleRevision !== command.data.expectedRoleRevision
+        )
+          throw preparationUnavailable();
+        let affectedAssignments: AffectedRoleAssignment[] | undefined;
+        if (read.manifestRequired === true) {
+          const parsedAssignments = z
+            .array(affectedRoleAssignmentSchema)
+            .safeParse(read.affectedAssignments);
+          if (!parsedAssignments.success) throw preparationUnavailable();
+          affectedAssignments = parsedAssignments.data;
+        } else if (
+          read.manifestRequired !== false ||
+          (read.affectedAssignments !== undefined && read.affectedAssignments !== null)
+        ) {
+          throw preparationUnavailable();
+        }
+        return sealPreparedRoleChange(candidateValue.data, affectedAssignments);
       });
     },
 

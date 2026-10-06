@@ -18,6 +18,7 @@ import {
   organizationSelectionCandidateSchema,
   organizationStewardshipAppointmentCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
+  prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
   reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -210,6 +211,7 @@ type ProtectedOperationServices = Readonly<{
     | "reviseRoleMetadata"
     | "retireRole"
     | "prepareRoleChange"
+    | "prepareApplicationRoleRevisionAcceptance"
     | "createCustomRole"
     | "createCustomRoleFromTemplate"
     | "acceptApplicationRoleTemplate"
@@ -673,6 +675,38 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           command,
         ),
         (evidence) => ({ evidence: evidence as unknown as JsonValue }),
+      ),
+  }),
+  prepare_application_role_revision_acceptance: operation({
+    schema: prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
+    command: (inputs) => ({
+      operation: "accept_application_role_revision",
+      roleId: inputs.role_id,
+      expectedRoleRevision: inputs.expected_role_revision,
+      acceptBroadenedAuthority: inputs.accept_broadened_authority,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.prepareApplicationRoleRevisionAcceptance(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (evidence) => {
+          const candidate = evidence.candidate;
+          if (candidate.operation !== "accept_application_role_revision")
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return {
+            evidence: evidence as unknown as JsonValue,
+            role_id: candidate.roleId,
+            expected_role_revision: candidate.expectedRoleRevision,
+            role_label: candidate.label,
+            source_role_id: candidate.sourceRoleId,
+            permission_count: candidate.permissions.length,
+            affected_assignment_count:
+              evidence.affectedAssignmentManifest?.assignments.length ?? 0,
+          };
+        },
       ),
   }),
   create_custom_role: operation({

@@ -448,6 +448,13 @@
         "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_accept_application_role_revision",
+        "key": "vortex.app.iam.accept_application_role_revision",
+        "record_type": "vortex.system_directory:role",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -1401,6 +1408,19 @@
                           "label": {
                             "kind": "text",
                             "value": "Assign role"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "event_id": {
+                            "kind": "text",
+                            "value": "event_accept_application_role_revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Accept pending Application revision"
                           }
                         }
                       }
@@ -7075,6 +7095,322 @@
       },
       {
         "contractVersion": "1.0.0",
+        "id": "flow_accept_application_role_revision",
+        "key": "accept_application_role_revision",
+        "labels": {
+          "name": "Accept pending Application revision"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "role_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.system_directory:role"
+            ]
+          },
+          "expected_role_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm_selected_revision",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Review pending Application role revision"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Read the current registered permissions for role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "role_id"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " at its current revision "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "input",
+                        "name": "expected_role_revision"
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "? This read makes no change. A second confirmation will be required before the existing protected writer can accept the revision."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "selected_revision_declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm_selected_revision",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_selected_revision_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_application_role_revision_acceptance"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "role_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "role_id"
+                    }
+                  },
+                  "expected_role_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_role_revision"
+                    }
+                  },
+                  "accept_broadened_authority": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "choice",
+                      "value": "accept"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "confirm_prepared_revision",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Confirm prepared Application role revision"
+                }
+              },
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "Accept the prepared current permissions for "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "role_label"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " (role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "role_id"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", revision "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "expected_role_revision"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ") from source role "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "source_role_id"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": ", containing "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "permission_count"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " permissions across "
+                    },
+                    {
+                      "op": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "prepare",
+                        "key": "result",
+                        "path": [
+                          "affected_assignment_count"
+                        ]
+                      }
+                    },
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": " current affected assignments? Confirm only if you accept this current registered projection. No change is made if you decline."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "prepared_revision_declined",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm_prepared_revision",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_prepared_revision_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "commit",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.accept_application_role_revision"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "evidence": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "prepare",
+                      "key": "result",
+                      "path": [
+                        "evidence"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
         "id": "iam_open_access_request",
         "key": "iam_open_access_request",
         "description": "Opens the clicked access request's own detail page with the record identity the clicked row carries.",
@@ -7447,6 +7783,23 @@
               "type": "choice",
               "value": "accept"
             }
+          }
+        }
+      },
+      {
+        "id": "binding_accept_application_role_revision",
+        "control": "iam_roles_region",
+        "event_id": "event_accept_application_role_revision",
+        "event": "row_action",
+        "flow": "flow_accept_application_role_revision",
+        "inputs": {
+          "role_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_role_revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       },
