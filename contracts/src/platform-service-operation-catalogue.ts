@@ -60,12 +60,12 @@ const entry = (definition: {
  * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
  *
  * Access and Identity operations are registered here, including the grant-side assign-role and
- * add-membership operations and the create-custom-role and accept-application-role template
- * operations. Registration never grants authority: each operation re-checks the current actor's
- * authority in its owning service transaction. A flow cannot expand access through registration.
- * The role-creation and template-acceptance operations carry already-prepared role-change
- * evidence. The owning service re-verifies it before the database re-applies the
- * affected-assignment review, explicit acceptance evidence and permanent-steward safeguard.
+ * add-membership operations, role creation, template acceptance and preparation of an existing
+ * Application role revision. Registration never grants authority: each operation re-checks the
+ * current actor's authority in its owning service transaction. A flow cannot expand access through
+ * registration. Authority-changing operations carry prepared role-change evidence. The owning
+ * service re-verifies it before the database re-applies the affected-assignment review, explicit
+ * acceptance evidence and permanent-steward safeguard.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
@@ -77,6 +77,9 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   revise_role_metadata: entry(sources.revise_role_metadata),
   retire_role: entry(sources.retire_role),
   prepare_role_change_evidence: entry(sources.prepare_role_change_evidence),
+  prepare_application_role_revision_acceptance: entry(
+    sources.prepare_application_role_revision_acceptance,
+  ),
   create_custom_role: entry(sources.create_custom_role),
   create_custom_role_from_template: entry(sources.create_custom_role_from_template),
   accept_application_role_template: entry(sources.accept_application_role_template),
