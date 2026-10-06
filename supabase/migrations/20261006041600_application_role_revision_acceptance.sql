@@ -141,7 +141,9 @@ begin
     where revision.organization_id = context_organization_id
       and revision.role_id = target_role_id
       and revision.revision = expected_role_revision;
-    if not found or current_revision.lifecycle <> 'acceptance_required' then
+    if not found
+      or current_revision.lifecycle is null
+      or current_revision.lifecycle not in ('active', 'acceptance_required') then
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
 
@@ -486,9 +488,10 @@ begin
       )
     ) into authority_broadened;
 
-    -- The candidate preserves the current assignment policy and moves only from
-    -- acceptance_required to active. This is the writer's manifest predicate, so the only
-    -- additional true term for this operation is a broadened permission projection.
+    -- The candidate preserves the current assignment policy and either moves from
+    -- acceptance_required to active or keeps an active revision active. This is the writer's
+    -- manifest predicate, so the only additional true term for this operation is a broadened
+    -- permission projection.
     manifest_required :=
       current_revision.assignment_policy is distinct from
         (role_configuration #>> '{assignmentPolicy,kind}')
