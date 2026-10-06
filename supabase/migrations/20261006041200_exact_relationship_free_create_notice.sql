@@ -1,3 +1,13 @@
+-- #2022: publish an exact advisory notice for a relationship-free live create.
+-- Other Record mutation owners retain their existing invalidation behavior.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.create_record_internal(
   p_record_type_id uuid,
   p_final_values jsonb,
@@ -328,3 +338,10 @@ revoke all on function vortex_record.create_record_internal(uuid, jsonb, uuid[],
 
 comment on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid) is
   'Private fixed create primitive: derives scope, definition and human ownership, generates references, writes typed values and relationships, and decides create authority over the proposed record in one rollback-safe transaction.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
