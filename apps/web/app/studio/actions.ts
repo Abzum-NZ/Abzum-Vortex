@@ -21,6 +21,16 @@ import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/studio";
+import { prepareHumanApplicationPublication, publishHumanApplication } from "../_lib/definition-publication";
+
+/** Separate explicit requests: preparation never installs or publishes a release. */
+export async function prepareStudioApplicationPublication(organizationId: string, candidate: unknown) {
+  return prepareHumanApplicationPublication(organizationId, candidate);
+}
+
+export async function publishStudioApplication(organizationId: string, candidate: unknown) {
+  return publishHumanApplication(organizationId, candidate);
+}
 
 /** Metadata is resolved only from the server's active human session and exact saved draft. */
 export async function resolveStudioApplicationConditionContext(

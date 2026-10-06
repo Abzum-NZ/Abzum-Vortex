@@ -300,3 +300,10 @@ export const AccessService = Object.freeze({
   key: "access",
   boundary: "@vortex/access",
 });
+
+export {
+  createHumanApplicationPublisher,
+  type HumanApplicationPublicationPreparationResult,
+  type HumanApplicationPublicationResult,
+  type HumanApplicationPublisherDependencies,
+} from "./application-publication";
