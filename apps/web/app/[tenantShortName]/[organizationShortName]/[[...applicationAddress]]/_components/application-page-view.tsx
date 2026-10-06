@@ -47,6 +47,7 @@ import {
   projectedRecordPinTilesSchema,
   projectedApplicationPageLinkTilesSchema,
   mountedRecordPinFrameSchema,
+  responsivePlacementV2Schema,
   type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
@@ -362,6 +363,28 @@ const formSurfaceComposition = (
   )
     return undefined;
 
+  const sourceResponsive = match.responsive;
+  if (!isRecord(sourceResponsive)) return undefined;
+  const desktop = sourceResponsive.desktop;
+  const tablet = sourceResponsive.tablet;
+  const phone = sourceResponsive.phone;
+  const responsive = responsivePlacementV2Schema.safeParse(sourceResponsive);
+  if (
+    !responsive.success ||
+    !isRecord(desktop) ||
+    !isRecord(tablet) ||
+    !isRecord(phone)
+  )
+    return undefined;
+  const modalRoot: Record<string, unknown> = {
+    ...match,
+    responsive: {
+      desktop: { ...desktop, visible: true },
+      tablet: { ...tablet, visible: true },
+      phone: { ...phone, visible: true },
+    },
+  };
+
   const placementIds = new Set<string>();
   const placements: Record<string, Record<string, unknown>> = {};
   const collect = (placementId: string, placement: Record<string, unknown>): void => {
@@ -374,9 +397,9 @@ const formSurfaceComposition = (
         if (isRecord(child)) collect(childId, child);
     }
   };
-  collect(matchId, match);
+  collect(matchId, modalRoot);
   const rootSlot = {
-    placements: { [matchId]: match },
+    placements: { [matchId]: modalRoot },
     order: { desktop: [matchId], tablet: [matchId], phone: [matchId] },
   };
   return {
