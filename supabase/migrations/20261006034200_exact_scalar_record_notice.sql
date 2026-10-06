@@ -1,3 +1,13 @@
+-- #2022: publish one exact advisory notice for an ordinary live scalar update.
+-- Other Record mutation owners retain their existing invalidation behavior.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -1521,3 +1531,10 @@ comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
   'The one protected Record-change operation: claims one live or preview-local receipt and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
