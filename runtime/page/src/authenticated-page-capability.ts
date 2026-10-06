@@ -6,6 +6,7 @@ import {
   type ConditionNode,
   type IdentitySession,
   type OrganizationAccessDeclaration,
+  type OrganizationRecordAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PageDefinitionV2,
   type SelectedOrganizationScope,
@@ -13,6 +14,7 @@ import {
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import {
   createHumanOrganizationRequestService,
+  evaluateOrganizationRecordPermissionAvailability,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
@@ -36,6 +38,14 @@ type PermissionBinding = Readonly<{
   declaration: OrganizationAccessDeclaration;
 }>;
 
+type PlacementPermissionBinding =
+  | (PermissionBinding & Readonly<{ kind: "permission" }>)
+  | Readonly<{
+      kind: "record";
+      permissionKey: string;
+      declaration: OrganizationRecordAccessDeclaration;
+    }>;
+
 export type FixedAuthenticatedPageCapability = Readonly<{
   page: PageDefinitionV2;
   applicationShells?: readonly ApplicationShellV2[];
@@ -50,8 +60,8 @@ export type FixedAuthenticatedPageCapability = Readonly<{
     Record<
       string,
       Readonly<{
-        viewPermission?: PermissionBinding;
-        usePermission?: PermissionBinding;
+        viewPermission?: PlacementPermissionBinding;
+        usePermission?: PlacementPermissionBinding;
         /**
          * The placement's bindings reach an operation or cannot be proved, so even without a use
          * gate it is available only when `operationBound`. Omitted means it binds no operation.
@@ -148,30 +158,39 @@ const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacemen
   return result;
 };
 
+const isRecordPlacementBinding = (
+  binding: PermissionBinding | PlacementPermissionBinding,
+): binding is Extract<PlacementPermissionBinding, Readonly<{ kind: "record" }>> =>
+  "kind" in binding && binding.kind === "record";
+
 const evaluate = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
-  binding: PermissionBinding,
+  binding: PermissionBinding | PlacementPermissionBinding,
 ): Promise<Readonly<{
   allowed: boolean;
   correlationId: string;
   viewReason: ObservedViewReason;
   targetKind: ObservedTargetKind;
 }>> => {
-  const result = await runOrganizationAccessOperation(
-    transaction,
-    scope,
-    binding.declaration,
-    async (decision) => decision.correlationId,
-  );
+  // Record placement availability carries no row decision and invokes no operation callback.
+  // Page-level and non-record gates still use their original generic permission operation.
+  const result = isRecordPlacementBinding(binding)
+    ? await evaluateOrganizationRecordPermissionAvailability(transaction, scope, binding.declaration)
+    : await runOrganizationAccessOperation(
+        transaction,
+        scope,
+        binding.declaration,
+        async (decision) => decision.correlationId,
+      );
   const evaluated = result.outcome === "completed"
     ? { allowed: true, correlationId: result.value }
-    : { allowed: false, correlationId: result.correlationId };
+    : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
   // These diagnostic labels retain only the existing safe result, never private decision evidence.
   let viewReason: ObservedViewReason = "UNKNOWN";
   let targetKind: ObservedTargetKind = "UNPROVABLE";
   try {
-    if (result.outcome === "completed") viewReason = "ALLOWED";
+    if (result.outcome === "completed" || result.outcome === "eligible") viewReason = "ALLOWED";
     else if (result.reasonCode === "access_refused" ||
       result.reasonCode === "authentication_required" ||
       result.reasonCode === "target_policy_unavailable" ||
