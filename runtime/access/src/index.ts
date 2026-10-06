@@ -291,6 +291,11 @@ export {
   type VerifiedDurableActorRequestContext,
 } from "./durable-actor-request";
 
+export {
+  evaluateOrganizationRecordPermissionAvailability,
+  type OrganizationRecordPermissionAvailability,
+} from "./organization-record-permission-availability";
+
 export const AccessService = Object.freeze({
   key: "access",
   boundary: "@vortex/access",
