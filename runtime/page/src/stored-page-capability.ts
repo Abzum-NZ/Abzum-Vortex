@@ -4,6 +4,7 @@ import {
   sameId,
   conditionNodeSchema,
   applicationRootIdSchema,
+  organizationRecordAccessDeclarationSchema,
   pageIdSchema,
   revisionSchema,
   safeHttpsUrlSchema,
@@ -147,6 +148,65 @@ const declaration = (
         recentAuthentication: { kind: "none" },
         authority: { kind: "permission" },
       };
+
+/** Exact installed descriptor selection, never a browser-supplied type or storage binding. */
+const placementPermission = (
+  context: InstalledRuntimeContext,
+  operationKey: string,
+  applicationRootId: ApplicationRootId,
+  permissionKey: string,
+  binding: PagePermissionBinding,
+): NonNullable<FixedAuthenticatedPageCapability["placements"][string]["viewPermission"]> => {
+  if (binding.kind === "platform" || binding.entry.permission.recordTypeId === undefined)
+    return {
+      kind: "permission",
+      permissionKey,
+      declaration: declaration(operationKey, applicationRootId, binding),
+    };
+
+  const entry = binding.entry;
+  const recordTypeId = entry.permission.recordTypeId;
+  const matches = context.releaseSet.modules.flatMap((module) =>
+    module.content.recordTypes
+      .filter((record) => sameId(record.recordTypeId, recordTypeId))
+      .map((record) => ({ module, record })),
+  );
+  const match = matches[0];
+  if (
+    !sameId(entry.applicationRootId, applicationRootId) ||
+    matches.length !== 1 || match === undefined ||
+    (entry.ownerKind === "module" && !sameId(entry.ownerId, match.module.rootId))
+  ) throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+
+  return {
+    kind: "record",
+    permissionKey,
+    declaration: organizationRecordAccessDeclarationSchema.parse({
+      operationKey,
+      action: {
+        actionKind: entry.permission.actionKind,
+        ...(entry.permission.namedAction === undefined
+          ? {}
+          : { namedAction: entry.permission.namedAction }),
+      },
+      target: { kind: "application", applicationRootId },
+      requiredPermissions: [{
+        applicationRootId: entry.applicationRootId,
+        ownerKind: entry.ownerKind,
+        ownerId: entry.ownerId,
+        permissionId: entry.permission.permissionId,
+      }],
+      recordBinding: {
+        moduleRootId: match.module.rootId,
+        recordTypeId: match.record.recordTypeId,
+        storageContractId: match.record.storageContractId,
+        storageScope: match.record.storageScope,
+      },
+      recentAuthentication: { kind: "none" },
+      authority: { kind: "permission" },
+    }),
+  };
+};
 
 /** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
 type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
@@ -410,26 +470,18 @@ export const createStoredPageCapabilityService = (
               ...(viewBinding === undefined || viewPermissionKey === undefined
                 ? {}
                 : {
-                    viewPermission: {
-                      permissionKey: viewPermissionKey,
-                      declaration: declaration(
-                        "application.page.placement.view",
-                        applicationRootId,
-                        viewBinding,
-                      ),
-                    },
+                    viewPermission: placementPermission(
+                      context, "application.page.placement.view", applicationRootId,
+                      viewPermissionKey, viewBinding,
+                    ),
                   }),
               ...(useBinding === undefined || usePermissionKey === undefined
                 ? {}
                 : {
-                    usePermission: {
-                      permissionKey: usePermissionKey,
-                      declaration: declaration(
-                        "application.page.placement.use",
-                        applicationRootId,
-                        useBinding,
-                      ),
-                    },
+                    usePermission: placementPermission(
+                      context, "application.page.placement.use", applicationRootId,
+                      usePermissionKey, useBinding,
+                    ),
                   }),
               operationRequired: operation?.required === true,
               operationBound: operation?.bound === true,
