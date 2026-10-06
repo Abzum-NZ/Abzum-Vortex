@@ -211,6 +211,7 @@ type ProtectedOperationServices = Readonly<{
     | "reviseRoleMetadata"
     | "retireRole"
     | "prepareRoleChange"
+    | "prepareApplicationRoleRevisionAcceptance"
     | "createCustomRole"
     | "createCustomRoleFromTemplate"
     | "acceptApplicationRoleTemplate"
