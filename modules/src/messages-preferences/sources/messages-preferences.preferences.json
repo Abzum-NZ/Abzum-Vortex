@@ -1,0 +1,218 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "mod_messages_preferences",
+  "key": "vortex.messages.preferences",
+  "kind": "module",
+  "body": {
+    "name": "Messages Preferences",
+    "description": "Reusable account-owned channel preferences for bound Applications.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_messages_channel_preference",
+        "key": "channel_preference",
+        "name": "Channel preference",
+        "plural_name": "Channel preferences",
+        "title_field": "channel",
+        "storage_contract_id": "srt_messages_channel_preference",
+        "storage_scope": "application_contained",
+        "ownership_mode": "organisation_account",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_messages_channel_preference_channel",
+            "key": "channel",
+            "label": "Channel",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "choice",
+            "settings": {
+              "options": [
+                {
+                  "value": "inbox",
+                  "label": "Inbox"
+                },
+                {
+                  "value": "email",
+                  "label": "Email"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_messages_channel_preference_enabled",
+            "key": "enabled",
+            "label": "Enabled",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "yes_no",
+            "settings": {},
+            "default": false
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "permissions": [
+      {
+        "id": "perm_messages_channel_preference_create",
+        "key": "vortex.messages.preferences.channel_preference.create",
+        "label": "Create channel preference",
+        "description": "Allows creating channel preferences owned by the current organisation account.",
+        "record_type": "channel_preference",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "channel",
+            "enabled"
+          ],
+          "changeable_fields": [
+            "channel",
+            "enabled"
+          ]
+        }
+      },
+      {
+        "id": "perm_messages_channel_preference_read",
+        "key": "vortex.messages.preferences.channel_preference.read",
+        "label": "Read channel preference",
+        "description": "Allows reading channel preferences owned by the current organisation account.",
+        "record_type": "channel_preference",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "channel",
+            "enabled"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_messages_channel_preference_update",
+        "key": "vortex.messages.preferences.channel_preference.update",
+        "label": "Update channel preference",
+        "description": "Allows updating channel preferences owned by the current organisation account.",
+        "record_type": "channel_preference",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "channel",
+            "enabled"
+          ],
+          "changeable_fields": [
+            "channel",
+            "enabled"
+          ]
+        }
+      },
+      {
+        "id": "perm_messages_channel_preference_delete",
+        "key": "vortex.messages.preferences.channel_preference.delete",
+        "label": "Delete channel preference",
+        "description": "Allows soft-deleting channel preferences owned by the current organisation account.",
+        "record_type": "channel_preference",
+        "action_kind": "delete",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_messages_channel_preference_restore",
+        "key": "vortex.messages.preferences.channel_preference.restore",
+        "label": "Restore channel preference",
+        "description": "Allows restoring channel preferences owned by the current organisation account.",
+        "record_type": "channel_preference",
+        "action_kind": "restore",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      }
+    ],
+    "actions": [],
+    "events": [],
+    "flows": [],
+    "extension_points": [],
+    "sharing_conditions": [],
+    "queries": [
+      {
+        "id": "qry_messages_channel_preferences",
+        "key": "channel_preferences",
+        "record_type": "channel_preference",
+        "inputs": [],
+        "select": [
+          "channel",
+          "enabled"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "channel",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ],
+    "contributions": []
+  }
+}
