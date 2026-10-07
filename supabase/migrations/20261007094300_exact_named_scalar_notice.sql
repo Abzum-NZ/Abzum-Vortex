@@ -226,10 +226,10 @@ begin
   end if;
 
   if loaded #>> '{actionContext,storageScope}' = 'application_contained' then
-    notice_sequence := pg_catalog.nextval(
-      'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-    );
     begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
       perform vortex_invalidation.publish_change_notice(
         (context_value ->> 'organizationId')::uuid,
         (context_value ->> 'applicationRootId')::uuid,
