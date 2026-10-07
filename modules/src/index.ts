@@ -7,4 +7,5 @@ export * from "./operations";
 export * from "./system-directory";
 export * from "./landing-zone";
 export * from "./hr";
+export * from "./messages-preferences";
 export * from "./platform-permissions";
