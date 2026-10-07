@@ -235,10 +235,10 @@ begin
     vortex_record.read_current_preview_installation_internal();
   if preview_installation is null
     and meta ->> 'storageScope' = 'application_contained' then
-    notice_sequence := pg_catalog.nextval(
-      'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-    );
     begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
       perform vortex_invalidation.publish_change_notice(
         (context_value ->> 'organizationId')::uuid,
         application_scope, p_record_type_id,
