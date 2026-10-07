@@ -1,3 +1,11 @@
+-- #2081: publish exact notices for the protected retained-to-active Record write.
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 -- Private Record-adapter routine; migrations install the complete canonical body
 -- under its owner with schema CREATE granted only for that migration transaction.
 create or replace function vortex_record.restore_record_internal(
@@ -283,3 +291,10 @@ revoke all on function vortex_record.restore_record_internal(uuid, uuid, bigint)
 
 comment on function vortex_record.restore_record_internal(uuid, uuid, bigint) is
   'Private revision-checked restore primitive over retained facts, current Access, current definition, required relationships and every non-null Person link with required application access; it locks record or protected projection targets through the canonical relationship lock and enforces no recovery window.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
