@@ -176,14 +176,8 @@ begin
     and loaded ->> 'installationState' = 'active'
     and storage_scope_value = 'application_contained';
   if exact_notice then
-    -- Keep sequence allocation at the old bump position, outside publication's
-    -- advisory catch. Only the final exact notice replaces that broad signal.
-    notice_sequence := pg_catalog.nextval(
-      'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-    );
-    if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
-      raise exception using errcode='22023',message='Invalidation notice command is invalid';
-    end if;
+    -- Defer the exact notice until the protected transfer is complete.
+    null;
   else
     perform vortex_record.bump_record_data_version_internal(
       organization_id_value, (type_fact ->> 'storageContractId')::uuid,
@@ -218,13 +212,19 @@ begin
   );
   if exact_notice then
     begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
+        raise exception using errcode='22023',message='Invalidation notice command is invalid';
+      end if;
       perform vortex_invalidation.publish_change_notice(
         updated_organization_id, updated_application_root_id, p_record_type_id,
         updated_record_id, updated_concurrency, 'changed',
         notice_sequence, notice_sequence, correlation_id_value
       );
     exception when others then
-      -- Only publication is advisory after the protected transfer is complete.
+      -- Notice allocation and publication are advisory after the protected transfer is complete.
       null;
     end;
   end if;
