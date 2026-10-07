@@ -98,19 +98,15 @@ begin
         or pg_catalog.jsonb_typeof(saved_target -> 'recordId') is distinct from 'string'
         or not coalesce(pg_catalog.pg_input_is_valid(saved_target ->> 'recordId', 'uuid'), false)
         or pg_catalog.jsonb_typeof(saved_target -> 'concurrencyNumber') is distinct from 'number'
-        or not coalesce(pg_catalog.pg_input_is_valid(saved_target ->> 'concurrencyNumber', 'bigint'), false)
-        or pg_catalog.jsonb_typeof(saved_target -> 'noticeSequence') is distinct from 'number'
-        or not coalesce(pg_catalog.pg_input_is_valid(saved_target ->> 'noticeSequence', 'bigint'), false) then
+        or not coalesce(pg_catalog.pg_input_is_valid(saved_target ->> 'concurrencyNumber', 'bigint'), false) then
         raise exception using errcode = '55000',
           message = 'Relationship copy saved identity is unavailable';
       end if;
       saved_record_id := (saved_target ->> 'recordId')::uuid;
       saved_concurrency := (saved_target ->> 'concurrencyNumber')::bigint;
-      notice_sequence := (saved_target ->> 'noticeSequence')::bigint;
       if saved_record_id is distinct from target_row.record_id
         or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
-        or saved_concurrency not between 1 and 9007199254740991
-        or notice_sequence not between 1 and 9007199254740991 then
+        or saved_concurrency not between 1 and 9007199254740991 then
         raise exception using errcode = '55000',
           message = 'Relationship copy saved identity is unavailable';
       end if;
@@ -138,6 +134,9 @@ begin
     end if;
     if exact_copy_notice then
       begin
+        notice_sequence := pg_catalog.nextval(
+          'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+        );
         perform vortex_invalidation.publish_change_notice(
           (meta -> 'context' ->> 'organizationId')::uuid,
           (meta -> 'context' ->> 'applicationRootId')::uuid,

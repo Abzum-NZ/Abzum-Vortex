@@ -20,7 +20,6 @@ declare
   relationship_value jsonb;
   new_concurrency bigint;
   saved_record_id uuid;
-  notice_sequence bigint;
   exact_copy_notice boolean := false;
   preview_installation jsonb;
   refusal_reason text := 'relationship_change_refused';
@@ -79,11 +78,6 @@ begin
     exact_copy_notice := preview_installation is null
       and meta ->> 'storageScope' = 'application_contained';
     if exact_copy_notice then
-      -- The copy plan holds source and linked-row locks. Reserve the nonblocking
-      -- sequence before edges; the grouped copy owner publishes the final tuple.
-      notice_sequence := pg_catalog.nextval(
-        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-      );
       perform vortex_record.write_relationship_value_internal(
         p_record_type_id, p_record_id, p_relationship_id, p_target_value, false
       );
@@ -104,8 +98,7 @@ begin
       if saved_record_id is distinct from p_record_id
         or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
         or new_concurrency is null
-        or new_concurrency not between 1 and 9007199254740991
-        or notice_sequence not between 1 and 9007199254740991 then
+        or new_concurrency not between 1 and 9007199254740991 then
         raise exception using errcode = '55000',
           message = 'Relationship copy saved identity is unavailable';
       end if;
@@ -123,9 +116,7 @@ begin
       'outcome', 'completed', 'recordId', case when exact_copy_notice
         then saved_record_id else p_record_id end,
       'concurrencyNumber', new_concurrency
-    ) || case when exact_copy_notice then pg_catalog.jsonb_build_object(
-      'noticeSequence', notice_sequence
-    ) else '{}'::jsonb end;
+    );
   exception
     when sqlstate 'P4020' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', refusal_reason);
@@ -147,4 +138,4 @@ revoke all on function vortex_record.change_record_relationship_internal(uuid, u
     vortex_record_owner, vortex_module_owner;
 
 comment on function vortex_record.change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb) is
-  'Private revision-checked relationship primitive: decides source update and target eligibility, changes the edge atomically, and returns the actual saved identity, revision and reserved sequence for the live application-contained copy owner to publish.';
+  'Private revision-checked relationship primitive: decides source update and target eligibility, changes the edge atomically, and returns the actual saved identity, revision for the live application-contained copy owner to publish.';
