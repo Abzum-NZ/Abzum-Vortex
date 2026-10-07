@@ -243,10 +243,10 @@ begin
       vortex_record.read_current_preview_installation_internal();
     if preview_installation is null
       and meta ->> 'storageScope' = 'application_contained' then
-      notice_sequence := pg_catalog.nextval(
-        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-      );
       begin
+        notice_sequence := pg_catalog.nextval(
+          'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+        );
         perform vortex_invalidation.publish_change_notice(
           (context_value ->> 'organizationId')::uuid,
           (context_value ->> 'applicationRootId')::uuid,
@@ -259,7 +259,7 @@ begin
           (context_value ->> 'correlationId')::uuid
         );
       exception when others then
-        -- Only publication is advisory; the guarded write and sequence are not.
+        -- Allocation and publication are advisory; the guarded write is not.
         null;
       end;
     else
