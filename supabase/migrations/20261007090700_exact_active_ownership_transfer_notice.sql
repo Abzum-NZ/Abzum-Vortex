@@ -1,3 +1,12 @@
+-- #2072: publish the exact saved tuple after ordinary active ownership transfer.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.apply_lifecycle_record_changes_internal(
   p_operation text,
   p_command_id uuid,
@@ -433,3 +442,10 @@ comment on function vortex_record.apply_lifecycle_record_changes_internal(
   text, uuid, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
   'The terminal delete, restore and ownership-transfer record-change writes, applied inside the one protected operation: each keeps its own receipt kind, fingerprint, Activity and Event, and completes the preflight its protected preflight (delete and restore) or itself (ownership transfer) claimed.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
