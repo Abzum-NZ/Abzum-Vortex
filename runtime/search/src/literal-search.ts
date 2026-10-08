@@ -33,9 +33,10 @@ export const literalSearchRefusalReasonCodes = Object.freeze([
 export type LiteralSearchRefusalReasonCode =
   (typeof literalSearchRefusalReasonCodes)[number];
 
-/** One bounded literal expression evaluated over current permitted candidates. */
+/** One bounded local expression evaluated over current permitted candidates. */
 export type LiteralSearchInput = Readonly<{
   expression: string;
+  expressionMode?: "literal" | "or";
   search: PermittedSearchInput;
 }>;
 
@@ -71,7 +72,11 @@ type LiteralSearchTerm = Readonly<{
 }>;
 
 type ParseExpressionResult =
-  | Readonly<{ success: true; terms: readonly LiteralSearchTerm[] }>
+  | Readonly<{
+      success: true;
+      terms: readonly LiteralSearchTerm[];
+      groups: readonly (readonly number[])[];
+    }>
   | Readonly<{ success: false; reasonCode: LiteralSearchRefusalReasonCode }>;
 
 type TokenMatcherNode = {
@@ -90,8 +95,11 @@ const hasOnlyKeys = (
 
 const isLiteralSearchInput = (value: unknown): value is LiteralSearchInput =>
   isRecord(value) &&
-  hasOnlyKeys(value, ["expression", "search"]) &&
+  hasOnlyKeys(value, ["expression", "expressionMode", "search"]) &&
   typeof value.expression === "string" &&
+  (value.expressionMode === undefined ||
+    value.expressionMode === "literal" ||
+    value.expressionMode === "or") &&
   isRecord(value.search) &&
   hasOnlyKeys(value.search, ["access", "request", "candidates", "shared"]);
 
@@ -109,10 +117,16 @@ const isWhitespace = (value: string): boolean => /[\s\p{White_Space}]/u.test(val
 
 /**
  * Parses bare whitespace-delimited tokens and whole-token quoted phrases.
+ * In or mode, exact uppercase unquoted OR tokens separate nonempty AND groups.
  * Quotes have no escape syntax and are only valid at token boundaries.
  */
-const parseExpression = (expression: string): ParseExpressionResult => {
+const parseExpression = (
+  expression: string,
+  expressionMode: "literal" | "or",
+): ParseExpressionResult => {
   const terms: LiteralSearchTerm[] = [];
+  const groups: number[][] = [];
+  let group: number[] = [];
   let offset = 0;
 
   while (offset < expression.length) {
@@ -142,17 +156,31 @@ const parseExpression = (expression: string): ParseExpressionResult => {
         offset += 1;
       }
 
-      const tokens = whitespaceTokens(expression.slice(termStart, offset));
+      const rawTerm = expression.slice(termStart, offset);
+      if (expressionMode === "or" && rawTerm === "OR") {
+        if (group.length === 0) return { success: false, reasonCode: "invalid_expression" };
+        groups.push(group);
+        group = [];
+        continue;
+      }
+
+      const tokens = whitespaceTokens(rawTerm);
       if (tokens.length !== 1) return { success: false, reasonCode: "invalid_expression" };
       terms.push(Object.freeze({ tokens }));
     }
 
     if (terms.length > literalSearchLimits.terms)
       return { success: false, reasonCode: "too_many_terms" };
+    group.push(terms.length - 1);
   }
 
-  if (terms.length === 0) return { success: false, reasonCode: "invalid_expression" };
-  return Object.freeze({ success: true, terms: Object.freeze(terms) });
+  if (group.length === 0) return { success: false, reasonCode: "invalid_expression" };
+  groups.push(group);
+  return Object.freeze({
+    success: true,
+    terms: Object.freeze(terms),
+    groups: Object.freeze(groups.map((termIndices) => Object.freeze(termIndices))),
+  });
 };
 
 /** Builds a token-level Aho-Corasick matcher for all bounded terms. */
@@ -199,6 +227,7 @@ const createTokenMatcher = (terms: readonly LiteralSearchTerm[]): readonly Token
 const matchCandidate = (
   candidate: PermittedSearchCandidate,
   terms: readonly LiteralSearchTerm[],
+  groups: readonly (readonly number[])[],
   matcher: readonly TokenMatcherNode[],
 ): LiteralSearchMatch | undefined => {
   const matchedTermIndices = new Set<number>();
@@ -232,13 +261,14 @@ const matchCandidate = (
     }
   }
 
-  if (matchedTermIndices.size !== terms.length) return undefined;
+  if (!groups.some((group) => group.every((termIndex) => matchedTermIndices.has(termIndex))))
+    return undefined;
   return Object.freeze({ candidate, matchedFields: Object.freeze(matchedFields) });
 };
 
 /**
- * Matches a strict literal AND expression over only the current readable local
- * candidates returned by `permittedSearchCandidates`.
+ * Matches an expression requiring one complete AND group over only the current
+ * readable local candidates returned by `permittedSearchCandidates`.
  */
 export const matchLiteralSearch = async (
   input: LiteralSearchInput,
@@ -251,7 +281,7 @@ export const matchLiteralSearch = async (
   if (input.expression.length > literalSearchLimits.expressionLength)
     return refusal("expression_too_long");
 
-  const parsed = parseExpression(input.expression);
+  const parsed = parseExpression(input.expression, input.expressionMode ?? "literal");
   if (!parsed.success) return refusal(parsed.reasonCode);
 
   // Validate only the bounded expression above; filter before reading candidate text.
@@ -261,7 +291,7 @@ export const matchLiteralSearch = async (
   const matcher = createTokenMatcher(parsed.terms);
   const matches: LiteralSearchMatch[] = [];
   for (const candidate of permitted.candidates) {
-    const match = matchCandidate(candidate, parsed.terms, matcher);
+    const match = matchCandidate(candidate, parsed.terms, parsed.groups, matcher);
     if (match !== undefined) matches.push(match);
   }
 
