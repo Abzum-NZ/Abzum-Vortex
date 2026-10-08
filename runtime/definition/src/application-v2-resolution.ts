@@ -2,6 +2,7 @@ import {
   definitionResolutionSnapshotV2Schema,
   type ConditionNode,
   type DefinitionResolutionSnapshotV2,
+  type ModuleFieldV3,
   type sourceQualifiedConditionSchema,
 } from "@vortex/contracts";
 import type { z } from "zod";
@@ -66,6 +67,46 @@ export type FieldInputSourceField = Readonly<{
     recordTypeId: string;
   }>[];
 }>;
+
+/** Publication can select only existing indexable fields, including safe derived inputs. */
+export const applicationSearchFieldIsSelectable = (
+  fields: readonly ModuleFieldV3[], fieldId: string,
+): boolean => {
+  const indexable = new Set(["text", "long_text", "formatted_text", "whole_number", "decimal_number",
+    "money", "date", "date_time", "choice", "several_choices", "reference_number", "email_address",
+    "phone_number", "web_address", "table", "calculation", "total"]);
+  const byId = new Map(fields.map((field) => [String(field.fieldId).toLowerCase(), field]));
+  if (byId.size !== fields.length) return false;
+  const visiting = new Set<string>();
+  const decided = new Map<string, boolean>();
+  const safe = (id: string): boolean => {
+    id = id.toLowerCase();
+    const cached = decided.get(id);
+    if (cached !== undefined) return cached;
+    const field = byId.get(id);
+    if (field === undefined || visiting.has(id) || (field.personalData !== "none" && field.personalData !== "personal")) return false;
+    visiting.add(id);
+    const inputs = new Set<string>();
+    const collect = (value: unknown): void => {
+      if (Array.isArray(value)) { value.forEach(collect); return; }
+      if (value === null || typeof value !== "object") return;
+      for (const [key, item] of Object.entries(value)) {
+        if ((key === "fieldId" || key.endsWith("FieldId")) && typeof item === "string") inputs.add(item);
+        else if (key.endsWith("FieldIds") && Array.isArray(item))
+          item.forEach((entry) => { if (typeof entry === "string") inputs.add(entry); });
+        else collect(item);
+      }
+    };
+    if (field.type === "calculation" || field.type === "total") collect(field.settings);
+    const allowed = [...inputs].every(safe);
+    visiting.delete(id);
+    decided.set(id, allowed);
+    return allowed;
+  };
+  const field = byId.get(fieldId.toLowerCase());
+  return field !== undefined && (field.searchPriority === "first" || field.searchPriority === "normal" || field.searchPriority === "last") &&
+    indexable.has(field.type) && safe(fieldId);
+};
 
 type ResolutionEvidenceV2 = Pick<DefinitionResolutionSnapshotV2, "definitions" | "identities">;
 

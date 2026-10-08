@@ -86,6 +86,7 @@ import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { deriveFormCommitActionKeys } from "./form-commit";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { tableQueryParameterFailures } from "./table-query-parameters";
+import { applicationSearchFieldIsSelectable } from "./application-v2-resolution";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -3127,6 +3128,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
+    const searchRecordOwners = new Map(boundModules.flatMap((module) =>
+      array(object(object(module.canonical).content).recordTypes).map((record) =>
+        [String(record.recordTypeId), String(object(object(module.canonical).envelope).rootId)] as const)));
+    for (const entry of output.kind === "application" ? output.canonical.content.search?.recordTypes ?? [] : []) {
+      const record = entry.recordType.state === "resolved" ? records.get(String(entry.recordType.recordTypeId)) : undefined;
+      const fields = record === undefined ? [] : array(record.fields) as unknown as ModuleFieldV3[];
+      if (record === undefined || entry.recordType.state !== "resolved" || searchRecordOwners.get(String(entry.recordType.recordTypeId)) !== entry.recordType.moduleRootId ||
+          [...entry.fields.map((field) => String(field.fieldId)), String(entry.titleFieldId),
+          ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)])]
+          .some((fieldId) => !applicationSearchFieldIsSelectable(fields, fieldId)))
+        failures.push(failure(output, "vortex.definition.application_page_query", "broken_reference"));
+    }
     const boundRecordTypeIds = new Set(recordTypes.map((record) => String(record.recordTypeId)));
     const allFields = new Map(
       recordTypes.flatMap((record) =>
