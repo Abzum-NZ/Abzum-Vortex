@@ -10,7 +10,7 @@ import {
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
 } from "@vortex/contracts";
-import { evaluateFlowFormula, evaluateTypedConditionV2 } from "@vortex/rule";
+import { evaluateFlowFormula, evaluateTypedConditionV2, type FlowFormulaScope } from "@vortex/rule";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationField = Extract<ModuleFieldV3, { type: "calculation" }>;
@@ -149,11 +149,10 @@ const literal = (type: string, value: JsonValue): FlowFormula =>
 const fieldFormula = (
   fieldId: string,
   fields: ReadonlyMap<string, ModuleFieldV3>,
-  values: ReadonlyMap<string, JsonValue>,
 ): FlowFormula | undefined => {
   const field = fields.get(fieldId);
   if (field === undefined) return undefined;
-  return literal(formulaTypeOf(field), values.get(fieldId) ?? null);
+  return { op: "reference", reference: { source: "module_field", fieldId: field.fieldId } };
 };
 
 const numericOperation = (
@@ -185,11 +184,10 @@ const numericOperation = (
 const numberFormula = (
   operand: CalculationNumberValue,
   fields: ReadonlyMap<string, ModuleFieldV3>,
-  values: ReadonlyMap<string, JsonValue>,
 ): FlowFormula | undefined => {
   if (operand.source === "literal") return literal("decimal_number", operand.value);
-  if (operand.source === "field") return fieldFormula(operand.fieldId, fields, values);
-  const children = operand.operands.map((child) => numberFormula(child, fields, values));
+  if (operand.source === "field") return fieldFormula(operand.fieldId, fields);
+  const children = operand.operands.map((child) => numberFormula(child, fields));
   if (children.some((child) => child === undefined)) return undefined;
   return numericOperation(operand.operation, children as FlowFormula[]);
 };
@@ -217,12 +215,11 @@ const dateAmountFormula = (
 const deadlineFormula = (
   field: CalculationField,
   fields: ReadonlyMap<string, ModuleFieldV3>,
-  values: ReadonlyMap<string, JsonValue>,
 ): FlowFormula | undefined => {
   const expression = field.settings.expression;
   if (expression.kind !== "deadline_passed") return undefined;
   const dueField = fields.get(expression.dueFieldId);
-  const due = fieldFormula(expression.dueFieldId, fields, values);
+  const due = fieldFormula(expression.dueFieldId, fields);
   if (!dueField || !due) return undefined;
   const dueType = formulaTypeOf(dueField);
   const passed =
@@ -240,7 +237,7 @@ const deadlineFormula = (
       : { op: "lte" as const, left: due, right: { op: "now" as const } };
   if (!expression.statusFieldId || expression.terminalStatusValues.length === 0) return passed;
   const statusField = fields.get(expression.statusFieldId);
-  const status = fieldFormula(expression.statusFieldId, fields, values);
+  const status = fieldFormula(expression.statusFieldId, fields);
   if (!statusField || !status) return undefined;
   const statusType = formulaTypeOf(statusField);
   const terminal = {
@@ -263,7 +260,7 @@ const calculationFormula = (
 ): FlowFormula | undefined => {
   const expression = field.settings.expression;
   if (expression.kind === "join_text") {
-    const parts = expression.fieldIds.map((fieldId) => fieldFormula(fieldId, fields, values));
+    const parts = expression.fieldIds.map((fieldId) => fieldFormula(fieldId, fields));
     if (parts.some((part) => part === undefined)) return undefined;
     return {
       op: "join",
@@ -272,19 +269,19 @@ const calculationFormula = (
     };
   }
   if (expression.kind === "numeric") {
-    const operands = expression.operands.map((operand) => numberFormula(operand, fields, values));
+    const operands = expression.operands.map((operand) => numberFormula(operand, fields));
     if (operands.some((operand) => operand === undefined)) return undefined;
     const precision =
       field.settings.resultType === "whole_number" ? 18 : field.settings.decimalPlaces ?? 12;
     return numericOperation(expression.operation, operands as FlowFormula[], precision);
   }
   if (expression.kind === "date_offset") {
-    const date = fieldFormula(expression.dateFieldId, fields, values);
+    const date = fieldFormula(expression.dateFieldId, fields);
     const amount = dateAmountFormula(expression.amount, fields, values);
     if (!date || !amount) return undefined;
     return { op: "date_add", date, amount, unit: expression.unit };
   }
-  if (expression.kind === "deadline_passed") return deadlineFormula(field, fields, values);
+  if (expression.kind === "deadline_passed") return deadlineFormula(field, fields);
   return undefined;
 };
 
@@ -310,13 +307,9 @@ const zeroValue = (candidate: JsonValue): boolean => {
 
 const formulaFailure = (
   formula: FlowFormula,
-  input: EvaluateRecordCalculationsInput,
+  scope: FlowFormulaScope,
 ): RecordCalculationIssueCode | undefined => {
-  const evaluate = (candidate: FlowFormula) =>
-    evaluateFlowFormula(candidate, {
-      now: input.clock.instant,
-      reference: () => undefined,
-    });
+  const evaluate = (candidate: FlowFormula) => evaluateFlowFormula(candidate, scope);
   if (
     formula.op === "add" ||
     formula.op === "subtract" ||
@@ -342,10 +335,10 @@ const formulaFailure = (
         return "division_by_zero";
     }
     for (const child of formula.args) {
-      const failure = formulaFailure(child, input);
+      const failure = formulaFailure(child, scope);
       if (failure !== undefined) return failure;
     }
-  } else if (formula.op === "round") return formulaFailure(formula.arg, input);
+  } else if (formula.op === "round") return formulaFailure(formula.arg, scope);
   else if (formula.op === "date_add") {
     const amount = evaluate(formula.amount);
     if (amount?.type === "money") return "money_dimension_mismatch";
@@ -505,9 +498,22 @@ export const evaluateRecordCalculations = (
           dueField !== undefined && formulaTypeOf(dueField) === "date"
             ? input.clock.organizationLocalDate + "T00:00:00.000Z"
             : input.clock.instant;
-        const scope = {
+        const declaredDependencies = new Set(field.settings.dependencyFieldIds);
+        const scope: FlowFormulaScope = {
           now,
-          reference: () => undefined,
+          reference: (reference) => {
+            if (
+              reference.source !== "module_field" ||
+              !declaredDependencies.has(reference.fieldId)
+            )
+              return undefined;
+            const dependency = fields.get(reference.fieldId);
+            if (dependency === undefined) return undefined;
+            return {
+              type: formulaTypeOf(dependency),
+              value: values.get(reference.fieldId) ?? null,
+            };
+          },
         };
         const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
         const exactWhole =
@@ -540,7 +546,7 @@ export const evaluateRecordCalculations = (
           } else calculated = evaluated.value;
         } else if (calculationInputsPresent(field, values)) {
           evaluationIssue =
-            formulaFailure(formula, { ...input, clock: { ...input.clock, instant: now } }) ??
+            formulaFailure(formula, scope) ??
             "invalid_result";
         }
       }
