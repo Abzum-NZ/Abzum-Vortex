@@ -1209,14 +1209,14 @@ begin
       and creation_count = 0
       and pg_catalog.jsonb_typeof(action_parents) = 'array'
       and pg_catalog.jsonb_array_length(action_parents) = 0
-      and case
+      and (case
         when copy_plan is null then true
         when pg_catalog.jsonb_typeof(copy_plan) = 'object'
           and copy_plan ->> 'outcome' = 'planned'
           and pg_catalog.jsonb_typeof(copy_plan -> 'copies') = 'array'
           then pg_catalog.jsonb_array_length(copy_plan -> 'copies') = 0
         else false
-      end
+      end)
       and not exists (
         select 1
         from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks') task(value)
