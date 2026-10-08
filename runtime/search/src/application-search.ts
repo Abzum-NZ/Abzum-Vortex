@@ -1,6 +1,6 @@
 import "server-only";
 
-import { applicationSearchSchema, sameId, type ApplicationSearch, type JsonValue, type SelectedOrganizationScope } from "@vortex/contracts";
+import { applicationSearchSchema, moduleFieldValueV2Schemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocumentV2, type SelectedOrganizationScope } from "@vortex/contracts";
 import { matchLiteralSearch } from "./literal-search";
 import { searchPriorityWeights, type SearchDocument } from "./document-store";
 import type { PermittedSearchCurrentReadRequest } from "./permitted-search";
@@ -23,21 +23,52 @@ export type ApplicationSearchResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "available"; matches: readonly ApplicationSearchMatch[] }>;
 
-/** Display current protected values, never cached index text or hidden field counts. */
+const boundedDisplayText = (value: string): string | undefined => {
+  const text = value.replace(/\p{Cs}/gu, "").normalize("NFC").replace(/[\s\p{Cc}]+/gu, " ").trim();
+  const cut = text.slice(0, 240);
+  const last = cut.charCodeAt(cut.length - 1);
+  return (last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd() || undefined;
+};
+
+type RichTextChildren = Extract<RecordRichTextDocumentV2["blocks"][number], { kind: "paragraph" }>["children"];
+
+/** The existing strict value parser bounds nesting; only visible inline words are projected. */
+const richInlineText = (children: RichTextChildren): string => children.map((inline) =>
+  inline.kind === "text" ? inline.text : richInlineText(inline.children)).join("");
+
+const scalarDisplayText = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
+  if (typeof value === "boolean") return String(value);
+  const money = moduleFieldValueV2Schemas.money.safeParse(value);
+  return money.success ? `${money.data.amount} ${money.data.currency}` : undefined;
+};
+
+/** Display current typed protected values, never cached text, links, files or hidden counts. */
 const displayValue = (value: JsonValue | undefined): string | undefined => {
-  if (typeof value === "string") return value.trim().slice(0, 240) || undefined;
-  if (typeof value === "number") return String(value);
+  const scalar = scalarDisplayText(value);
+  if (scalar !== undefined) return boundedDisplayText(scalar);
   if (Array.isArray(value)) {
-    const text = value.map(displayValue).filter(Boolean).join(", ");
-    return text.slice(0, 240) || undefined;
+    const choices = moduleFieldValueV2Schemas.several_choices.safeParse(value);
+    if (choices.success) return boundedDisplayText(choices.data.join(", "));
+    const table = moduleFieldValueV2Schemas.table.safeParse(value);
+    if (!table.success) return undefined;
+    // Table cells have the existing closed scalar grammar, not identity-bearing nested values.
+    return boundedDisplayText(table.data.map((row) => Object.keys(row).sort()
+      .map((key) => scalarDisplayText(row[key])).filter((text) => text !== undefined).join(", ")).join("; "));
   }
-  if (value !== null && typeof value === "object") {
-    if (typeof value.amount === "string" && typeof value.currency === "string") return `${value.amount} ${value.currency}`.slice(0, 240);
-    if (typeof value.text === "string") return value.text.trim().slice(0, 240) || undefined;
-    // Rich text exposes its readable text nodes, never link targets or attachment identifiers.
-    if (Array.isArray(value.content)) return displayValue(value.content);
+  const document = moduleFieldValueV2Schemas.formatted_text.safeParse(value);
+  if (!document.success) return undefined;
+  const text: string[] = [];
+  for (const block of document.data.blocks) {
+    if (block.kind === "file") continue;
+    if (block.kind === "table") {
+      for (const row of block.rows) text.push(row.cells.map((cell) => richInlineText(cell.children)).join(" "));
+    } else if ("items" in block) {
+      text.push(...block.items.map(richInlineText));
+    } else text.push(richInlineText(block.children));
   }
-  return undefined;
+  return boundedDisplayText(text.join(" "));
 };
 
 /**
