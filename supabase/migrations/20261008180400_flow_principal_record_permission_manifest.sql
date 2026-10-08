@@ -463,11 +463,11 @@ begin
         or (intent_entry #>> '{expectedRegistration,source,resolutionFingerprint}') !~ '^sha256:[a-f0-9]{64}$'
         or pg_catalog.jsonb_typeof(intent_entry #> '{operation,owner,kind}') is distinct from 'string'
         or intent_entry #>> '{operation,owner,kind}' not in ('application', 'module')
-        or (intent_entry #> '{operation,owner}') - case
+        or (intent_entry #> '{operation,owner}') - (case
           when intent_entry #>> '{operation,owner,kind}' = 'application'
             then array['kind', 'applicationRootId']::text[]
           else array['kind', 'moduleRootId']::text[]
-        end <> '{}'::jsonb
+        end) <> '{}'::jsonb
         or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(
           intent_entry #> '{operation,owner}')) <> 2
         or not vortex_context.is_non_nil_uuid(case
@@ -475,11 +475,11 @@ begin
             then intent_entry #>> '{operation,owner,applicationRootId}'
           else intent_entry #>> '{operation,owner,moduleRootId}'
         end)
-        or case
+        or (case
           when intent_entry #>> '{operation,owner,kind}' = 'application'
             then intent_entry #>> '{operation,owner,applicationRootId}'
           else intent_entry #>> '{operation,owner,moduleRootId}'
-        end <> pg_catalog.lower(case
+        end) <> pg_catalog.lower(case
           when intent_entry #>> '{operation,owner,kind}' = 'application'
             then intent_entry #>> '{operation,owner,applicationRootId}'
           else intent_entry #>> '{operation,owner,moduleRootId}'
@@ -1028,10 +1028,10 @@ begin
         )
       ) as decision;
       if permission_decision.outcome is distinct from 'eligible'
-        or permission_decision.operation_key is distinct from case p_mode
+        or permission_decision.operation_key is distinct from (case p_mode
           when 'register' then 'platform.organization.flow_run_as_principals.record_permissions.register'
           else 'platform.organization.flow_run_as_principals.record_permissions.revoke'
-        end
+        end)
         or permission_decision.target_kind is distinct from 'organization'
         or permission_decision.target_application_root_id is not null
         or permission_decision.organization_id is distinct from scope_organization_id
