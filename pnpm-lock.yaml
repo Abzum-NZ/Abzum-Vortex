@@ -298,6 +298,9 @@ importers:
       '@vortex/record':
         specifier: workspace:*
         version: link:../../runtime/record
+      '@vortex/search':
+        specifier: workspace:*
+        version: link:../../runtime/search
       '@vortex/studio':
         specifier: workspace:*
         version: link:../../studio
