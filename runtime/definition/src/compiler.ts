@@ -62,6 +62,7 @@ import {
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
+  type ModuleFieldV3,
 } from "@vortex/contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { isPlatformPermissionKey } from "@vortex/modules";
@@ -78,6 +79,7 @@ import {
   extractApplicationSourceIdentityRequirementsV2,
   extractSourceIdentityRequirements,
   extractModuleSourceIdentityRequirementsV3,
+  applicationSearchSourceReferences,
 } from "./source-identities";
 import { deriveFormCommitActionKeys } from "./form-commit";
 import { compileRuleGraph } from "./rule-graph-compilation";
@@ -89,6 +91,7 @@ import type {
   ApplicationCompositionResolutionV2,
   FieldInputSourceField,
 } from "./application-v2-resolution";
+import { applicationSearchFieldIsSelectable } from "./application-v2-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import {
@@ -432,6 +435,24 @@ function sourceToCanonicalPath(
   )
     mapped[mapped.length - 1] = "fieldId";
   return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
+}
+
+function applicationSearchTargets(
+  source: JsonObject,
+  canonical: unknown,
+  sourcePath: Path,
+): Path[] | undefined {
+  if (source.kind === "application" && sourcePath[0] === "body" && sourcePath[1] === "search" &&
+      sourcePath[2] === "record_types" && typeof sourcePath[3] === "number") {
+    const base: Path = ["content", "search", "recordTypes", sourcePath[3]];
+    if (sourcePath[4] === "record_type") return leafPaths(valueAtPath(canonical, [...base, "recordType"]), [...base, "recordType"]);
+    if (sourcePath[4] === "fields" && typeof sourcePath[5] === "number")
+      return [[...base, "fields", sourcePath[5], sourcePath[6] === "field" ? "fieldId" : "priority"]];
+    const properties: Readonly<Record<string, string>> = { title_field: "titleFieldId", subtitle_field: "subtitleFieldId", target_page: "targetPageId" };
+    const property = properties[String(sourcePath[4])];
+    if (property !== undefined) return [[...base, property]];
+  }
+  return undefined;
 }
 
 function applicationRolePermissionTargets(
@@ -778,6 +799,8 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  const searchTargets = applicationSearchTargets(source, canonical, sourcePath);
+  if (searchTargets !== undefined) return searchTargets;
   if (isInterfaceOperationFlowTargetPath(source, sourcePath))
     return [["content", ...sourcePath.slice(1, -1), "flowId"]];
   const fieldPolicyTargets = permissionFieldPolicyTargets(
@@ -1386,6 +1409,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
   return (
     path === "root_alias" ||
     path === "body/pages/#/replaces_page" ||
+    /^body\/search\/record_types\/#\/(?:title_field|subtitle_field|target_page)$/.test(path) ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
     /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
@@ -3957,6 +3981,27 @@ function compileApplication(
   });
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
   const pages = compileApplicationPagesV2(source, resolution, compositionV2, valueIndex.query);
+  const searchSource = (source as unknown as ApplicationSourceDocumentV2).body.search;
+  const searchReferences = applicationSearchSourceReferences(source as unknown as ApplicationSourceDocumentV2);
+  const search = searchSource === undefined ? undefined : {
+    enabled: searchSource.enabled,
+    recordTypes: searchSource.record_types.map((entry, index) => {
+      const references = searchReferences[index]!;
+      const recordType = resolution.recordType(references.recordType);
+      const record = valueIndex.record(references.recordType)?.record;
+      const fields = record?.fields as ModuleFieldV3[] | undefined;
+      if (fields === undefined || references.fields.some((reference) =>
+        !applicationSearchFieldIsSelectable(fields, qualifiedField(resolution, reference))))
+        fail("vortex.definition.application_page_query", "broken_reference");
+      return {
+        recordType,
+        fields: entry.fields.map((field) => ({ fieldId: qualifiedField(resolution, field.field), priority: field.priority })),
+        titleFieldId: qualifiedField(resolution, entry.title_field),
+        ...(entry.subtitle_field === undefined ? {} : { subtitleFieldId: qualifiedField(resolution, entry.subtitle_field) }),
+        targetPageId: pageId(references.page),
+      };
+    }),
+  };
   // An application never owns a query: the Query engine runs only the queries a Module exposes, so
   // every page and placement binds a dependency-qualified Module query instead.
   const ownedQuery = (body.queries as JsonObject[])[0];
@@ -4316,6 +4361,7 @@ function compileApplication(
       })),
       theme: compositionV2.theme,
       homePageId: pageId(String(body.home_page)),
+      ...(search === undefined ? {} : { search }),
       flows,
       flowBindings: compileApplicationFlowBindings(source, resolution, flows),
     },
