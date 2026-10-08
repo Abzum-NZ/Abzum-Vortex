@@ -12,7 +12,8 @@ create or replace function vortex_access.register_flow_run_as_principal(
   p_actor_system_actor_id uuid,
   p_expires_at timestamptz,
   p_expected_revision bigint,
-  p_activity_id uuid
+  p_activity_id uuid,
+  p_record_permissions jsonb
 )
 returns table (
   outcome text,
@@ -27,6 +28,8 @@ set search_path = ''
 as $function$
 declare
   authority record;
+  context_value jsonb;
+  locked_access_version bigint;
   command_fingerprint text;
   receipt vortex_identity.accepted_administration_receipts%rowtype;
   current_principal vortex_access.flow_run_as_principals%rowtype;
@@ -35,6 +38,10 @@ declare
   receipt_id uuid := pg_catalog.gen_random_uuid();
   next_revision bigint;
   activity_result text;
+  record_permission_manifest jsonb;
+  before_record_permissions jsonb := '[]'::jsonb;
+  had_current_principal boolean := false;
+  record_permission_scope jsonb;
 begin
   if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
     or p_actor_organization_account_id is null
@@ -55,8 +62,38 @@ begin
       or p_actor_account_id is not null))
     or (p_expected_revision is not null and p_expected_revision not between 1 and 9007199254740991)
     or (p_expires_at is not null and p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))
-    or p_activity_id is null or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or p_activity_id is null or not vortex_context.is_non_nil_uuid(p_activity_id::text)
+    or p_record_permissions is null
+    or pg_catalog.jsonb_typeof(p_record_permissions) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_record_permissions) > 128
+    or (p_actor_kind = 'specified_account'
+      and pg_catalog.jsonb_array_length(p_record_permissions) <> 0) then
     raise exception using errcode = '22023', message = 'Flow run-as principal command is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if (context_value ->> 'identityId')::uuid is distinct from p_actor_identity_id
+    or (context_value ->> 'organizationAccountId')::uuid is distinct from p_actor_organization_account_id
+    or (context_value ->> 'organizationId')::uuid is distinct from p_organization_id then
+    raise exception using errcode = '42501',
+      message = 'Flow run-as principal administration is unavailable';
+  end if;
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Flow run-as principal scope is unavailable';
+  end if;
+  if locked_access_version is distinct from (context_value ->> 'accessVersion')::bigint then
+    raise exception using errcode = '40001',
+      message = 'Flow run-as principal access authority changed';
   end if;
 
   select granted.* into strict authority
@@ -76,7 +113,8 @@ begin
       coalesce(p_actor_account_id::text, ''),
       coalesce(p_actor_system_actor_id::text, ''),
       coalesce(vortex_context.format_timestamp_utc(p_expires_at), ''),
-      coalesce(p_expected_revision::text, '')
+      coalesce(p_expected_revision::text, ''),
+      p_record_permissions::text
     ), 'UTF8'),
     'sha256'), 'hex');
 
@@ -102,6 +140,24 @@ begin
     if not found then
       raise exception using errcode = '42501', message = 'Flow run-as principal replay is unavailable';
     end if;
+    record_permission_scope := pg_catalog.jsonb_build_object(
+      'executionBindingId', stored_principal.execution_binding_id,
+      'organizationId', stored_principal.organization_id,
+      'applicationRootId', stored_principal.application_root_id,
+      'releaseVersion', stored_principal.release_version,
+      'flowId', stored_principal.flow_id,
+      'actorKind', stored_principal.actor_kind,
+      'actorId', coalesce(stored_principal.actor_system_actor_id,
+        stored_principal.actor_organization_account_id),
+      'organizationAccountId', p_actor_organization_account_id,
+      'accessVersion', authority.access_version,
+      'correlationId', authority.correlation_id,
+      'replay', true
+    );
+    perform vortex_access.system_record_permission_registration_authority_internal(
+      'register', record_permission_scope, stored_principal.record_permissions,
+      p_record_permissions
+    );
     return query select 'replayed'::text,
       vortex_access.flow_run_as_principal_to_json_internal(stored_principal),
       receipt.receipt_id,
@@ -134,6 +190,8 @@ begin
   for update;
 
   if found then
+    had_current_principal := true;
+    before_record_permissions := current_principal.record_permissions;
     if current_principal.organization_id is distinct from p_organization_id then
       raise exception using errcode = '42501', message = 'Flow run-as principal scope is unavailable';
     end if;
@@ -156,12 +214,28 @@ begin
     end if;
     next_revision := current_principal.revision + 1;
   else
+    had_current_principal := false;
     if p_expected_revision is not null then
       raise exception using errcode = 'V3102', message = 'Flow run-as principal is unavailable';
     end if;
     next_revision := 1;
   end if;
 
+  record_permission_scope := pg_catalog.jsonb_build_object(
+    'executionBindingId', p_execution_binding_id,
+    'organizationId', p_organization_id,
+    'applicationRootId', p_application_root_id,
+    'releaseVersion', p_release_version,
+    'flowId', p_flow_id,
+    'actorKind', p_actor_kind,
+    'actorId', coalesce(p_actor_system_actor_id, p_actor_account_id),
+    'organizationAccountId', p_actor_organization_account_id,
+    'accessVersion', authority.access_version,
+    'correlationId', authority.correlation_id
+  );
+  record_permission_manifest := vortex_access.system_record_permission_registration_authority_internal(
+    'register', record_permission_scope, before_record_permissions, p_record_permissions
+  );
   operation_at := pg_catalog.clock_timestamp();
   if p_expires_at is not null and p_expires_at <= operation_at then
     raise exception using errcode = '22023', message = 'Flow run-as principal expiry must be in the future';
@@ -178,14 +252,30 @@ begin
     execution_binding_id, revision, is_current,
     organization_id, application_root_id, release_version, flow_id,
     actor_kind, actor_organization_account_id, actor_system_actor_id,
-    expires_at, state, recorded_at, recorded_by_actor_id, recorded_correlation_id, revoked_at
+    expires_at, state, recorded_at, recorded_by_actor_id, recorded_correlation_id, revoked_at,
+    record_permissions
   ) values (
     p_execution_binding_id, next_revision, true,
     p_organization_id, p_application_root_id, p_release_version, p_flow_id,
     p_actor_kind, p_actor_account_id, p_actor_system_actor_id,
     p_expires_at, 'active', operation_at, p_actor_organization_account_id,
-    authority.correlation_id, null
+    authority.correlation_id, null, record_permission_manifest
   ) returning * into stored_principal;
+
+  if had_current_principal and current_principal.actor_kind = 'system' then
+    perform vortex_access.refresh_system_record_execution_grant_internal(
+      p_organization_id, p_application_root_id, p_flow_id,
+      current_principal.actor_system_actor_id
+    );
+  end if;
+  if p_actor_kind = 'system'
+    and (not had_current_principal
+      or current_principal.actor_kind <> 'system'
+      or current_principal.actor_system_actor_id is distinct from p_actor_system_actor_id) then
+    perform vortex_access.refresh_system_record_execution_grant_internal(
+      p_organization_id, p_application_root_id, p_flow_id, p_actor_system_actor_id
+    );
+  end if;
 
   perform 1 from vortex_access.increment_organization_access_version(
     p_organization_id, p_actor_organization_account_id, authority.correlation_id,
@@ -229,15 +319,15 @@ end
 $function$;
 
 revoke all on function vortex_access.register_flow_run_as_principal(
-  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid
+  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_record_adapter, vortex_module_owner;
 
 grant execute on function vortex_access.register_flow_run_as_principal(
-  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid
+  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid, jsonb
 ) to vortex_request;
 
 comment on function vortex_access.register_flow_run_as_principal(
-  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid
+  uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid, jsonb
 ) is
-  'Registers or replaces one exact compiled flow run-as principal under the existing execution-binding administration authority.';
+  'Registers or replaces one exact compiled flow run-as principal and its current published System-flow Record permission manifest under both existing management authorities.';

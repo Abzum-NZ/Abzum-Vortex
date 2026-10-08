@@ -21,6 +21,7 @@ as $function$
     end,
     'state', p_principal.state,
     'revision', p_principal.revision,
+    'recordPermissions', p_principal.record_permissions,
     'recordedAt', vortex_context.format_timestamp_utc(p_principal.recorded_at)
   )
   || case when p_principal.expires_at is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
@@ -37,4 +38,4 @@ revoke all on function vortex_access.flow_run_as_principal_to_json_internal(
 comment on function vortex_access.flow_run_as_principal_to_json_internal(
   vortex_access.flow_run_as_principals
 ) is
-  'Projects one stored flow run-as principal revision into its canonical JSON form.';
+  'Projects one stored flow run-as principal revision and its exact Record permission manifest into canonical JSON.';

@@ -17,6 +17,8 @@ as $function$
 declare
   current_principal vortex_access.flow_run_as_principals%rowtype;
   actor_state text;
+  locked_access_version bigint;
+  validated_record_permissions jsonb;
 begin
   if p_execution_binding_id is null or not vortex_context.is_non_nil_uuid(p_execution_binding_id::text)
     or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
@@ -27,8 +29,24 @@ begin
     raise exception using errcode = '22023', message = 'Flow run-as principal read command is invalid';
   end if;
 
-  -- Share-lock the exact current revision. A concurrent replace or revoke either commits first
-  -- and becomes the row this statement sees, or waits until this run has established its actor.
+  -- Lock the organisation epoch before the principal or any Module/source row so Access and
+  -- installation mutations settle before this exact current snapshot proceeds.
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for share of version;
+  if not found then
+    return query select 'unavailable'::text, null::jsonb;
+    return;
+  end if;
+
+  -- Share-lock the exact current revision after the Access epoch. A concurrent replace or revoke
+  -- either commits first and becomes the row this statement sees, or waits for this transaction.
   for attempt in 1..2 loop
     select principal.* into current_principal
     from vortex_access.flow_run_as_principals as principal
@@ -46,16 +64,6 @@ begin
     or current_principal.state <> 'active'
     or (current_principal.expires_at is not null
       and current_principal.expires_at <= pg_catalog.clock_timestamp()) then
-    return query select 'unavailable'::text, null::jsonb;
-    return;
-  end if;
-
-  -- Keep lifecycle changes ordered with a concurrent account suspension or closure.
-  perform 1
-  from vortex_access.organization_access_versions as version
-  where version.organization_id = current_principal.organization_id
-  for share of version;
-  if not found then
     return query select 'unavailable'::text, null::jsonb;
     return;
   end if;
@@ -101,6 +109,40 @@ begin
     return;
   end if;
 
+  if current_principal.actor_kind = 'system'
+    and pg_catalog.jsonb_array_length(current_principal.record_permissions) > 0 then
+    validated_record_permissions :=
+      vortex_access.system_record_permission_registration_authority_internal(
+        'observe',
+        pg_catalog.jsonb_build_object(
+          'executionBindingId', current_principal.execution_binding_id,
+          'organizationId', current_principal.organization_id,
+          'applicationRootId', current_principal.application_root_id,
+          'releaseVersion', current_principal.release_version,
+          'flowId', current_principal.flow_id,
+          'actorKind', current_principal.actor_kind,
+          'actorId', current_principal.actor_system_actor_id,
+          'organizationAccountId', null,
+          'accessVersion', locked_access_version,
+          'correlationId', current_principal.recorded_correlation_id,
+          'principalRevision', current_principal.revision
+        ),
+        current_principal.record_permissions,
+        null
+      );
+    if validated_record_permissions is null
+      or validated_record_permissions is distinct from current_principal.record_permissions then
+      return query select 'unavailable'::text, null::jsonb;
+      return;
+    end if;
+  end if;
+
+  if current_principal.expires_at is not null
+    and current_principal.expires_at <= pg_catalog.clock_timestamp() then
+    return query select 'unavailable'::text, null::jsonb;
+    return;
+  end if;
+
   return query select 'available'::text,
     vortex_access.flow_run_as_principal_to_json_internal(current_principal);
 end
@@ -118,4 +160,4 @@ grant execute on function vortex_access.read_flow_run_as_principal_for_run(
 comment on function vortex_access.read_flow_run_as_principal_for_run(
   uuid, uuid, uuid, text, uuid
 ) is
-  'Runtime-only, exact-scope read of an active flow run-as principal; revoked, expired, inactive or unregistered actors return unavailable.';
+  'Runtime-only exact-scope read of an active flow run-as principal after the Access epoch; stale source-bound Record permission manifests return unavailable.';
