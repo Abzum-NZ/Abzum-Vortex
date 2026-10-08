@@ -4,10 +4,12 @@ import {
   isRecord,
   applicationRootIdSchema,
   fingerprintSchema,
+  flowSchema,
   organizationIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
+  workflowIdSchema,
   type ApplicationRootId,
   type OrganizationId,
   type SemanticVersion,
@@ -19,6 +21,43 @@ import {
   type KestraFlowCompilerEnvironment,
   type KestraFlowIdentity,
 } from "./kestra-compiler";
+import { z } from "zod";
+
+/** Exact stored registration and immutable publication evidence, not a candidate body. */
+export const protectedRunRegisteredReleaseSchema = z
+  .object({
+    environment: z.enum(kestraFlowCompilerEnvironments),
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationVersion: stableDefinitionReleaseVersionSchema,
+    installationRevision: revisionSchema,
+    compilerWorkflowRevision: revisionSchema,
+    namespace: z.string().min(1).max(150),
+    providerFlowId: z.string().min(1).max(100),
+    candidateFingerprint: fingerprintSchema,
+    permanentFlowId: workflowIdSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
+    definition: flowSchema,
+  })
+  .strict()
+  .superRefine((release, context) => {
+    const expectedNamespace = [
+      "vortex", "application", release.environment,
+      release.organizationId.toLowerCase(), release.applicationRootId.toLowerCase(),
+      `i${release.installationRevision}`,
+    ].join(".");
+    const expectedFlowId = `w_${release.permanentFlowId.toLowerCase()}_${release.applicationVersion.replaceAll(".", "-")}_r${release.compilerWorkflowRevision}`;
+    if (
+      release.namespace !== expectedNamespace ||
+      release.providerFlowId !== expectedFlowId ||
+      release.definition.id.toLowerCase() !== release.permanentFlowId.toLowerCase() ||
+      release.definition.execution !== "durable"
+    )
+      context.addIssue({ code: "custom", message: "Registered Flow publication identity mismatch" });
+  });
+
+export type ProtectedRunRegisteredRelease = z.infer<typeof protectedRunRegisteredReleaseSchema>;
 
 /**
  * #947: storage-bound repository for inactive workflow flow registrations.
