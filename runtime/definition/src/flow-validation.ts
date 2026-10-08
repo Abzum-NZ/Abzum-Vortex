@@ -282,6 +282,14 @@ export function validateFlow(
 
   const resolveReference = (reference: FlowReference, where: Where, path: Path): StaticType => {
     switch (reference.source) {
+      case "module_field":
+        add(
+          path,
+          "vortex.definition.workflow_node_references",
+          "invalid_value",
+          "Permanent Module field references are allowed only in Record calculations, not in flows",
+        );
+        return undefined;
       case "input":
         if (!inputTypes.has(reference.name)) {
           add(
