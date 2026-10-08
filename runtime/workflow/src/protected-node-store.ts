@@ -5,7 +5,9 @@ import { withRuntimeTransaction, type DatabaseRow } from "@vortex/db";
 import { z } from "zod";
 import {
   protectedNodeRunRecordSchema,
+  protectedNodeRegisteredRunSchema,
   type ProtectedNodeRunRecord,
+  type ProtectedNodeRegisteredRun,
   type ProtectedNodeRunStore,
   type ProtectedNodeEffectLedger,
 } from "./protected-node-execution";
@@ -59,19 +61,23 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
       return row?.success === true && row.data.written;
     },
 
-    async read(runId: string): Promise<unknown | undefined> {
+    async read(runId: string): Promise<ProtectedNodeRegisteredRun | undefined> {
       const parsedRunId = workflowRunIdSchema.safeParse(runId);
       if (!parsedRunId.success) return undefined;
       const rows = await withRuntimeTransaction((transaction) =>
         transaction.query<RunRecordRow>`
-          select vortex_workflow.read_protected_workflow_run(
+          select vortex_workflow.read_protected_workflow_run_registration(
             ${parsedRunId.data}::uuid
           ) as run_record
         `,
       );
       if (rows.length !== 1) return undefined;
       const row = rows[0];
-      return row?.run_record === null ? undefined : row?.run_record;
+      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(row?.run_record);
+      return registeredRun.success &&
+        registeredRun.data.runRecord.authority.runId.toLowerCase() === parsedRunId.data.toLowerCase()
+        ? registeredRun.data
+        : undefined;
     },
 
     async refreshLastKnownState(
