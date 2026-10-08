@@ -475,6 +475,36 @@ const sourceInterfaceOperationSchema = z
           message: `A ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
         });
   });
+/** Application search selects fields the bound published Module already indexes. */
+export const sourceApplicationSearchSchema = z
+  .object({
+    enabled: sourceProvenanceUnchanged(z.boolean()),
+    record_types: sourceProvenanceUnchanged(
+      z.array(z.object({
+        record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["search/recordTypes/#/recordType/**"]),
+        fields: sourceProvenanceUnchanged(z.array(z.object({
+          field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["search/recordTypes/#/fields/#/fieldId"]),
+          priority: sourceProvenanceUnchanged(z.enum(["first", "normal", "last"])),
+        }).strict()).min(1).max(100)),
+        title_field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["search/recordTypes/#/titleFieldId"]),
+        subtitle_field: sourceProvenanceTarget(sourceQualifiedFieldSchema.optional(), ["search/recordTypes/#/subtitleFieldId"]),
+        target_page: sourceProvenanceTarget(builderKeySchema, ["search/recordTypes/#/targetPageId"]),
+      }).strict()).min(1).max(20),
+    ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.record_types.map((entry) => entry.record_type)).size !== value.record_types.length)
+      context.addIssue({ code: "custom", path: ["record_types"], message: "Search record types must be unique" });
+    for (const [index, entry] of value.record_types.entries()) {
+      if (new Set(entry.fields.map((field) => field.field)).size !== entry.fields.length)
+        context.addIssue({ code: "custom", path: ["record_types", index, "fields"], message: "Search fields must be unique" });
+      for (const field of [...entry.fields.map((item) => item.field), entry.title_field, entry.subtitle_field].filter((item) => item !== undefined))
+        if (field.slice(0, field.lastIndexOf(":")) !== entry.record_type.slice(0, entry.record_type.lastIndexOf(":")))
+          context.addIssue({ code: "custom", path: ["record_types", index], message: "Search fields must belong to the selected Module" });
+    }
+  });
+
 export const sourceApplicationBodyV2Schema = z
   .object({
     name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
@@ -487,6 +517,7 @@ export const sourceApplicationBodyV2Schema = z
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     ),
     home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
+    search: sourceProvenanceUnchanged(sourceApplicationSearchSchema.optional()),
     module_bindings: sourceProvenanceUnchanged(
       z
         .array(
