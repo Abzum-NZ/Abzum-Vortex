@@ -38,11 +38,12 @@ export const loadApplicationSearch = async (
     const applicationRootId = target.application.applicationRootId;
     const searched = await humanOrganizationRequestsFor(dependencies).run(session,
       { organizationId: read.organizationId, applicationRootId }, async (transaction, scope) => {
-        if (scope.applicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
+        const scopedApplicationRootId = scope.applicationRootId;
+        if (scopedApplicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
         const context = requireInstalledRuntimeContext(await createHumanInstalledRuntimeContextLoader({
           activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
           releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
-          scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+          scope: { organizationId: scope.organizationId, applicationRootId: scopedApplicationRootId },
         }).load());
         const application = context.releaseSet.application;
         if (application.definitionKey !== address.applicationKey || !sameId(context.applicationRootId, applicationRootId))
@@ -59,7 +60,7 @@ export const loadApplicationSearch = async (
             select record_id, source_record_version, document_schema_version, entries, content_fingerprint
             from vortex_search.documents
             where organization_id = ${scope.organizationId}::uuid
-              and application_root_id = ${scope.applicationRootId}::uuid
+              and application_root_id = ${scopedApplicationRootId}::uuid
               and record_type_id = ${entry.recordType.recordTypeId}::uuid and not deleted
             order by record_id limit ${1_001 - candidates.length}
           `;
@@ -67,7 +68,7 @@ export const loadApplicationSearch = async (
           for (const row of rows) {
             if (Number(row.document_schema_version) !== searchDocumentSchemaVersion) throw new Error("SEARCH_DOCUMENT_UNAVAILABLE");
             candidates.push({ kind: "document", schemaVersion: searchDocumentSchemaVersion,
-            organisationId: scope.organizationId, applicationRootId: scope.applicationRootId,
+            organisationId: scope.organizationId, applicationRootId: scopedApplicationRootId,
             recordTypeId: entry.recordType.recordTypeId, recordId: String(row.record_id),
             sourceRecordVersion: Number(row.source_record_version), entries: row.entries as SearchDocument["entries"],
             contentFingerprint: String(row.content_fingerprint) });
@@ -76,7 +77,7 @@ export const loadApplicationSearch = async (
         const result = await searchConfiguredApplication({ scope, configuration, expression, candidates,
           readCurrentRecord: async (request): Promise<ApplicationSearchRecord | undefined> => {
             const entry = configuration.recordTypes.find((entry) => entry.recordType.state === "resolved" && sameId(entry.recordType.recordTypeId, request.recordTypeId));
-            if (entry?.recordType.state !== "resolved" || !sameId(request.organizationId, scope.organizationId) || !sameId(request.applicationRootId, scope.applicationRootId!)) return undefined;
+            if (entry?.recordType.state !== "resolved" || !sameId(request.organizationId, scope.organizationId) || !sameId(request.applicationRootId, scopedApplicationRootId)) return undefined;
             const recordType = entry.recordType;
             const module = context.releaseSet.modules.find((module) => sameId(module.rootId, recordType.moduleRootId));
             if (module === undefined || !module.content.recordTypes.some((record) => sameId(record.recordTypeId, request.recordTypeId))) return undefined;
@@ -88,7 +89,7 @@ export const loadApplicationSearch = async (
               ), verified_installation as materialized (
                 select value from active_installation
                 where pg_catalog.lower(value ->> 'organizationId') = pg_catalog.lower(${scope.organizationId}::text)
-                  and pg_catalog.lower(value ->> 'applicationRootId') = pg_catalog.lower(${scope.applicationRootId}::text)
+                  and pg_catalog.lower(value ->> 'applicationRootId') = pg_catalog.lower(${scopedApplicationRootId}::text)
                   and (value ->> 'applicationReleaseRevision')::bigint = ${context.applicationReleaseRevision}::bigint
                   and exists (select 1 from pg_catalog.jsonb_array_elements(value -> 'moduleBindings') as binding(value)
                     where pg_catalog.lower(binding.value ->> 'moduleRootId') = pg_catalog.lower(${module.rootId}::text)
@@ -106,7 +107,7 @@ export const loadApplicationSearch = async (
             const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(rows[0]?.capabilities);
             if (!installation.success || !record.success || !capabilities.success || !sameId(record.data.recordId, request.recordId) ||
                 installation.data.applicationReleaseRevision !== context.applicationReleaseRevision || !sameId(installation.data.organizationId, scope.organizationId) ||
-                !sameId(installation.data.applicationRootId, scope.applicationRootId!)) return undefined;
+                !sameId(installation.data.applicationRootId, scopedApplicationRootId)) return undefined;
             const allowedFields = new Set([...entry.fields.map((field) => String(field.fieldId)), String(entry.titleFieldId),
               ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)])].map((fieldId) => fieldId.toLowerCase()));
             return { concurrencyNumber: record.data.concurrencyNumber,
