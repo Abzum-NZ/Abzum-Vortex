@@ -1,3 +1,10 @@
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.named_action_creation_plan_internal(
   p_action_owner_kind text,
   p_action_owner_id uuid,
@@ -254,3 +261,10 @@ comment on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
 ) is
   'Private named-action step: resolves every record.create task of the installed action against the exact active installation, refuses an unsupported creation shape, and returns the creation plan the command must supply back verbatim.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;

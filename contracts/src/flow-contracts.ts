@@ -16,6 +16,7 @@ import {
   actionIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
+  fieldIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -107,7 +108,8 @@ const boundedRecord = <Value extends z.ZodType>(value: Value, maximum: number) =
 // ─── Closed reference syntax ────────────────────────────────────────────────────────────────
 
 /**
- * A reference resolved to its typed form. Names are declared builder keys; nothing here is ever
+ * A reference resolved to its typed form. Names are declared builder keys; Module calculation
+ * fields use permanent identities and are refused in ordinary Flow contexts. Nothing is ever
  * evaluated as text. `{{ outputs.task.outcome }}` is a task output whose key is `outcome`; a
  * bounded suffix such as `{{ outputs.form.values.label }}` selects named fields from a JSON output.
  */
@@ -116,6 +118,7 @@ export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("variable"), name: builderKeySchema }).strict(),
   z.object({ source: z.literal("trigger_record"), field: builderKeySchema }).strict(),
   z.object({ source: z.literal("trigger_previous"), field: builderKeySchema }).strict(),
+  z.object({ source: z.literal("module_field"), fieldId: fieldIdSchema }).strict(),
   z
     .object({
       source: z.literal("task_output"),
@@ -135,6 +138,7 @@ const referencePatterns = {
   variable: new RegExp(`^\\{\\{\\s*vars\\.${referenceName}\\s*\\}\\}$`),
   triggerRecord: new RegExp(`^\\{\\{\\s*trigger\\.record\\.${referenceName}\\s*\\}\\}$`),
   triggerPrevious: new RegExp(`^\\{\\{\\s*trigger\\.previous\\.${referenceName}\\s*\\}\\}$`),
+  moduleField: /^\{\{\s*module\.fields\.([0-9a-fA-F-]+)\s*\}\}$/,
   taskOutput: new RegExp(
     `^\\{\\{\\s*outputs\\.${referenceName}\\.${referenceName}((?:\\.${referenceName})*)\\s*\\}\\}$`,
   ),
@@ -156,7 +160,10 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
     reference = { source: "trigger_record", field: match[1]! };
   else if ((match = referencePatterns.triggerPrevious.exec(text)))
     reference = { source: "trigger_previous", field: match[1]! };
-  else if ((match = referencePatterns.taskOutput.exec(text))) {
+  else if ((match = referencePatterns.moduleField.exec(text))) {
+    const fieldId = fieldIdSchema.safeParse(match[1]);
+    if (fieldId.success) reference = { source: "module_field", fieldId: fieldId.data };
+  } else if ((match = referencePatterns.taskOutput.exec(text))) {
     const path = match[3] === "" ? undefined : match[3]!.slice(1).split(".");
     reference = {
       source: "task_output",
@@ -183,6 +190,8 @@ export const formatFlowReference = (reference: FlowReference): string => {
       return `{{ trigger.record.${reference.field} }}`;
     case "trigger_previous":
       return `{{ trigger.previous.${reference.field} }}`;
+    case "module_field":
+      return `{{ module.fields.${reference.fieldId} }}`;
     case "task_output":
       return `{{ outputs.${reference.task}.${reference.key}${
         reference.path === undefined ? "" : `.${reference.path.join(".")}`
@@ -200,7 +209,7 @@ const referenceTextSchema = z.string().transform((text, context) => {
     context.addIssue({
       code: "custom",
       message:
-        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }} or {{ execution.now }}; text is never evaluated",
+        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }} or {{ execution.now }}; Module calculations may use {{ module.fields.<permanent fieldId> }}; text is never evaluated",
     });
     return z.NEVER;
   }

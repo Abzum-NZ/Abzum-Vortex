@@ -4,6 +4,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ApplicationInstallationCoordinatorError } from "@vortex/app";
+import { recordIdSchema } from "@vortex/contracts";
 import {
   ALL_UI_STYLES_CSS,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -15,6 +16,8 @@ import {
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
+import { ApplicationSearch } from "./_components/application-search";
+import { loadApplicationSearch } from "../../../_lib/application-search";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { AuthShell } from "../../../auth/_components/auth-shell";
@@ -435,6 +438,10 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
   if (page.kind === "unavailable") return unavailableFallback;
+  const search = await loadApplicationSearch(identity.session, {
+    tenantShortName, organizationShortName, applicationKey: resolved.application.key,
+  }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
+  const searchPageSubject = recordIdSchema.safeParse(parameters.record_id);
   const projectionResponseEvidence = takeLocalPageProjectionResponseEvidence(page.model);
   const adoption = page.model.adoption;
   // The outcome notice is display only: it never selects a release, and the page below always
@@ -457,6 +464,7 @@ export default async function ApplicationAddressPage({
       onOpenApplication={openApplication}
       pageFeedback={
         <>
+          <ApplicationSearch view={search} pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined} />
           <details>
             <summary>Current signed-in account details</summary>
             <p>

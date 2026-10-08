@@ -886,11 +886,33 @@ export const pipelineSchema = z
         });
   });
 
-/**
- * The definition-wide fields every Application release carries beside its shells, pages,
- * platform-block dependencies and theme. It is the current contract's own base, not a
- * separately decodable representation: only applicationContentV2Schema is ever parsed.
- */
+/** An installed Application selects existing published index fields and one record Page. */
+export const applicationSearchSchema = z.object({
+  enabled: z.boolean(),
+  recordTypes: z.array(z.object({
+    recordType: recordTypeReferenceSchema,
+    fields: z.array(z.object({ fieldId: fieldIdSchema, priority: z.enum(["first", "normal", "last"]) }).strict()).min(1).max(100),
+    titleFieldId: fieldIdSchema,
+    subtitleFieldId: fieldIdSchema.optional(),
+    targetPageId: pageIdSchema,
+  }).strict()).min(1).max(20),
+}).strict().superRefine((value, context) => {
+  const types = new Set<string>();
+  for (const [index, entry] of value.recordTypes.entries()) {
+    const reference = entry.recordType;
+    if (reference.state !== "resolved") {
+      context.addIssue({ code: "custom", path: ["recordTypes", index], message: "Search requires a resolved record type" });
+      continue;
+    }
+    const identity = `${reference.moduleRootId}:${reference.recordTypeId}`.toLowerCase();
+    if (types.has(identity) || new Set(entry.fields.map((field) => String(field.fieldId).toLowerCase())).size !== entry.fields.length)
+      context.addIssue({ code: "custom", path: ["recordTypes", index], message: "Search record types and fields must be unique" });
+    types.add(identity);
+  }
+});
+export type ApplicationSearch = z.infer<typeof applicationSearchSchema>;
+
+/** The definition-wide fields carried by the current Application contract. */
 const applicationSharedContentSchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -913,6 +935,7 @@ const applicationSharedContentSchema = z
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),
     homePageId: pageIdSchema,
+    search: applicationSearchSchema.optional(),
     /** Every flow this Application owns (architecture decision 1); each has one owner. */
     flows: z.array(flowSchema).max(100),
     flowBindings: z.array(componentFlowBindingSchema),
@@ -928,6 +951,15 @@ export const applicationContentV2Schema = applicationSharedContentSchema
   })
   .strict()
   .superRefine((value, context) => {
+    for (const [index, entry] of (value.search?.recordTypes ?? []).entries()) {
+      const reference = entry.recordType;
+      if (reference.state !== "resolved") continue;
+      const page = value.pages.find((candidate) => candidate.pageId === entry.targetPageId);
+      if (page === undefined || !("recordType" in page) || page.recordType?.state !== "resolved" ||
+          page.recordType.moduleRootId !== reference.moduleRootId || page.recordType.recordTypeId !== reference.recordTypeId ||
+          page.type !== "detail")
+        context.addIssue({ code: "custom", path: ["search", "recordTypes", index, "targetPageId"], message: "Search must open a compatible record page" });
+    }
     const experiences = value.experiences ?? [];
     for (const issue of inspectApplicationPageReplacements(
       value.pages.map((page) => ({
