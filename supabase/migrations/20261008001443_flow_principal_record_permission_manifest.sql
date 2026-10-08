@@ -774,6 +774,74 @@ begin
         exit;
       end if;
 
+      -- Bind the catalogue witness to the immutable release that is actually installed.
+      -- The witness comparison above remains the stale-intent check; it is not authority.
+      if permission_entry.source_kind = 'application' then
+        if permission_entry.source_root_id is distinct from scope_application_root_id
+          or permission_entry.source_definition_key is distinct from (
+            select application_root.key
+            from vortex_definition.roots as application_root
+            where application_root.root_id = scope_application_root_id
+              and application_root.organization_id = scope_organization_id
+              and application_root.kind = 'application'
+          )
+          or permission_entry.source_version is distinct from selected_release.release_version
+          or permission_entry.source_revision is distinct from selected_release.release_revision
+          or permission_entry.source_validation_contract_version is distinct from
+            selected_release.validation_contract_version
+          or permission_entry.source_content_fingerprint is distinct from
+            selected_release.content_fingerprint
+          or permission_entry.source_resolution_fingerprint is distinct from
+            selected_release.resolution_fingerprint then
+          if p_mode = 'register' then
+            raise exception using errcode = '40001',
+              message = 'System Record permission source is stale';
+          end if;
+          invalid_manifest := true;
+          exit;
+        end if;
+      elsif permission_entry.source_kind = 'module' then
+        if not exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(installed_bindings) as binding(value)
+          join vortex_definition.roots as module_root
+            on module_root.root_id = (binding.value ->> 'moduleRootId')::uuid
+          join vortex_definition.releases as module_release
+            on module_release.root_id = module_root.root_id
+            and module_release.release_revision =
+              (binding.value ->> 'moduleReleaseRevision')::bigint
+          where binding.value ->> 'state' = 'active'
+            and (binding.value ->> 'organizationId')::uuid = scope_organization_id
+            and (binding.value ->> 'applicationRootId')::uuid = scope_application_root_id
+            and (binding.value ->> 'applicationReleaseRevision')::bigint =
+              selected_application_release_revision
+            and module_root.kind = 'module'
+            and module_root.root_id = permission_entry.source_root_id
+            and module_root.key = permission_entry.source_definition_key
+            and module_release.release_version = permission_entry.source_version
+            and module_release.release_revision = permission_entry.source_revision
+            and module_release.validation_contract_version =
+              permission_entry.source_validation_contract_version
+            and module_release.content_fingerprint =
+              permission_entry.source_content_fingerprint
+            and module_release.resolution_fingerprint =
+              permission_entry.source_resolution_fingerprint
+        ) then
+          if p_mode = 'register' then
+            raise exception using errcode = '40001',
+              message = 'System Record permission source is stale';
+          end if;
+          invalid_manifest := true;
+          exit;
+        end if;
+      else
+        if p_mode = 'register' then
+          raise exception using errcode = '40001',
+            message = 'System Record permission source is stale';
+        end if;
+        invalid_manifest := true;
+        exit;
+      end if;
       if permission_entry.field_policy is null then
         if pg_catalog.jsonb_array_length(
           intent_entry #> '{requestedFieldPolicy,readableFieldIds}'
