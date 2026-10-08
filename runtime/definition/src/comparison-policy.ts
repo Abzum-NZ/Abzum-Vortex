@@ -1298,6 +1298,7 @@ const compareApplicationSharedContent = (
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
+  pushChange(reasons, previous.search, candidate.search, "major", "presentation_changed", "application", "configuration");
   for (const key of ["name", "description", "icon"])
     pushChange(
       reasons,
