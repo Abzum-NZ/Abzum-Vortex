@@ -112,7 +112,7 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
         { sourcePath: [...prefix, "settings", "max_length"], location: maxLengthLocation },
         { sourcePath: [...prefix, "default"], location: settingLocation(baseline, record.key, authoredField.key, "default") },
       ],
-    }));
+    });
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
