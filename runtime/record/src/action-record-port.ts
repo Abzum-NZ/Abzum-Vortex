@@ -7,6 +7,7 @@ import {
   eventOccurrenceIdSchema,
   executeNamedActionCommandV2Schema,
   executeNamedActionResultV2Schema,
+  jsonValueSchema,
   moduleValidationContractVersionV3,
   preparedNamedActionQueryValueSchema,
   recordTypeDefinitionV3Schema,
@@ -102,6 +103,22 @@ const safeRefusal = (
     outcome: "refused",
     error: { code, messageKey: `errors.${code}`, correlationId },
   });
+
+const parseJsonValueRecord = (candidate: unknown): Readonly<Record<string, JsonValue>> | undefined => {
+  if (
+    typeof candidate !== "object" ||
+    candidate === null ||
+    Array.isArray(candidate)
+  )
+    return undefined;
+  const prototype = Object.getPrototypeOf(candidate);
+  if (prototype !== Object.prototype && prototype !== null) return undefined;
+  const parsed = jsonValueSchema.safeParse(candidate);
+  return parsed.success && typeof parsed.data === "object" && parsed.data !== null &&
+    !Array.isArray(parsed.data)
+    ? parsed.data
+    : undefined;
+};
 
 const completedResult = (candidate: Record<string, unknown>) => {
   const parsedRevision = revision(candidate.concurrencyNumber);
@@ -655,7 +672,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
             }
 
-            let finalValues: Record<string, unknown> = {};
+            let finalValues: Record<string, JsonValue | null> = {};
             let parentMutations: readonly RelationshipTotalParentMutation[] = [];
             let creations: readonly Readonly<{
               ordinal: number;
@@ -719,6 +736,16 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 (totalPreparation.outcome === "prepared" && root === undefined)
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
+              const parsedFinalValues = parseJsonValueRecord(
+                "sourceFinalValues" in calculated
+                  ? calculated.sourceFinalValues
+                  : calculated.setValues,
+              );
+              if (parsedFinalValues === undefined)
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              finalValues = { ...parsedFinalValues };
+              if ("clearFieldIds" in calculated)
+                for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
               if (calculated.pendingChecks.some((check) =>
                 !isSupportedPersonReferenceCheck(
                   check, prepared, command.data, composition.submittedValues, finalValues,
@@ -732,12 +759,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 )
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
-              finalValues =
-                "sourceFinalValues" in calculated
-                  ? { ...calculated.sourceFinalValues }
-                  : { ...calculated.setValues };
-              if ("clearFieldIds" in calculated)
-                for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
               if ("parentMutations" in calculated) parentMutations = calculated.parentMutations;
               // The merged closure recomputes every derived subject field. An
               // action with no record.set_fields task may therefore still carry a
