@@ -27,6 +27,7 @@ import {
   parseExactDecimal,
   platformOperationKey,
   recordIdSchema,
+  recordRecoverySubjectSchema,
   recordTypeIdSchema,
   revisionSchema,
   ruleIdSchema,
@@ -283,6 +284,25 @@ export type RecordSaveTaskPort = Readonly<{
   ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
 }>;
 
+/** Restores one deleted Record through the existing protected lifecycle transaction. */
+export type RecordRestoreTaskPort = Readonly<{
+  restore(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: Readonly<{
+      commandId: string;
+      recordTypeId: string;
+      recordId: string;
+      expectedConcurrencyNumber: number;
+    }>,
+  ): Promise<HumanOrganizationRequestResult<Readonly<{
+    outcome: "restored" | "conflict" | "refused";
+    recordId?: string;
+    concurrencyNumber?: number;
+    replayed?: boolean;
+  }>>>;
+}>;
+
 /** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
 export type FlowSubjectReadPort = Readonly<{
   read(
@@ -336,6 +356,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   actionRecords?: NamedActionRecordPort;
   /** Runs Save record tasks; without it a Save record task is unavailable. */
   records?: RecordSaveTaskPort;
+  /** Runs the HUMAN record.restore task with its current receipt and File checks. */
+  restores?: RecordRestoreTaskPort;
   /** Verifies the viewer's read access to a claimed page subject before a protected change. */
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
@@ -405,6 +427,8 @@ const startRequestSchema = z
       .strict(),
     /** The page record and revision the surface showed; it remains evidence across pauses. */
     subject: subjectSchema.optional(),
+    /** Server-projected deleted-record evidence, distinct from the ordinary page subject. */
+    recoverySubject: recordRecoverySubjectSchema.optional(),
   })
   .strict();
 
@@ -523,7 +547,7 @@ const requestOutcome = (kind: "unavailable" | "temporarily_unavailable"): FlowTa
 /** Tasks the platform cannot run on the server yet, and what each waits for. */
 const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
   // A named action's record tasks run in its transaction flow through the record port; an
-  // interactive flow runs only Save record, through the record save port.
+  // interactive flow runs Save record and Restore record through their protected record ports.
   "record.save": "the interactive record task port",
   "record.create": "the interactive record task port",
   "record.set_fields": "the interactive record task port",
@@ -920,6 +944,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   type TaskPlan =
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
     | Readonly<{ kind: "save"; command: SaveRecordCommandV2 }>
+    | Readonly<{
+        kind: "restore";
+        command: Readonly<{
+          commandId: string;
+          recordTypeId: string;
+          recordId: string;
+          expectedConcurrencyNumber: number;
+        }>;
+      }>
     | Readonly<{ kind: "action"; command: ExecuteNamedActionCommandV2 }>;
 
   type TaskResult = {
@@ -950,6 +983,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const isEmptyEffectOutput = (value: unknown): boolean =>
     isRecord(value) && Object.keys(value).length === 0;
+
+  const isRestoredRecordEffectOutput = (
+    value: unknown,
+  ): value is Readonly<{ record: string; concurrencyNumber: number; replayed: boolean }> =>
+    isRecord(value) &&
+    Object.keys(value).length === 3 &&
+    recordIdSchema.safeParse(value.record).success &&
+    revisionSchema.max(Number.MAX_SAFE_INTEGER).safeParse(value.concurrencyNumber).success &&
+    typeof value.replayed === "boolean";
 
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
   const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
@@ -1048,6 +1090,54 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return command.success
         ? { plan: { kind: "save", command: command.data } }
         : { outcome: "validation" };
+    }
+
+    if (call.taskType === "record.restore") {
+      if (dependencies.restores === undefined)
+        return notAvailable(run, call, "the interactive record restore task port");
+      if (
+        call.taskVersion !== "1.0.0" ||
+        Object.keys(call.properties).length !== 3 ||
+        call.properties.record_type?.type !== "record_type_id" ||
+        call.properties.record?.type !== "record_reference" ||
+        call.properties.expected_revision?.type !== "whole_number"
+      )
+        return { outcome: "validation" };
+      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type.value);
+      const recordId = recordIdSchema.safeParse(call.properties.record.value);
+      const expectedConcurrencyNumber = call.properties.expected_revision.value;
+      const recordType = recordTypeId.success
+        ? run.release.recordTypes?.get(recordTypeId.data.toLowerCase())
+        : undefined;
+      const recoverySubject = state.recoverySubject;
+      if (
+        !recordTypeId.success ||
+        recordType === undefined ||
+        !recordId.success ||
+        typeof expectedConcurrencyNumber !== "number" ||
+        !Number.isSafeInteger(expectedConcurrencyNumber) ||
+        expectedConcurrencyNumber <= 0 ||
+        expectedConcurrencyNumber >= Number.MAX_SAFE_INTEGER
+      )
+        return { outcome: "validation" };
+      if (
+        recoverySubject === undefined ||
+        !sameId(recoverySubject.recordTypeId, recordTypeId.data) ||
+        !sameId(recoverySubject.recordId, recordId.data) ||
+        recoverySubject.revision !== expectedConcurrencyNumber
+      )
+        return notAvailable(run, call, "the protected recovery selection shown to the person");
+      return {
+        plan: {
+          kind: "restore",
+          command: {
+            commandId,
+            recordTypeId: recordTypeId.data,
+            recordId: recordId.data,
+            expectedConcurrencyNumber,
+          },
+        },
+      };
     }
 
     if (call.taskType !== "operation.call")
@@ -1184,6 +1274,33 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return { result: { outcome }, stored: {} };
     }
 
+    if (plan.kind === "restore") {
+      const restored = await dependencies.restores!.restore(session, selection, plan.command);
+      if (restored.kind !== "available")
+        return { result: { outcome: requestOutcome(restored.kind) }, stored: {} };
+      const value = restored.value;
+      if (value.outcome === "restored") {
+        const recordId = recordIdSchema.safeParse(value.recordId);
+        const concurrencyNumber = revisionSchema.max(Number.MAX_SAFE_INTEGER).safeParse(
+          value.concurrencyNumber,
+        );
+        if (!recordId.success || !concurrencyNumber.success)
+          return { result: { outcome: "refused" }, stored: {} };
+        return {
+          result: { outcome: "committed", outputs: { record: recordId.data } },
+          stored: {
+            record: recordId.data,
+            concurrencyNumber: concurrencyNumber.data,
+            replayed: value.replayed === true,
+          },
+        };
+      }
+      return {
+        result: { outcome: value.outcome === "conflict" ? "conflict" : "refused" },
+        stored: {},
+      };
+    }
+
     if (plan.kind === "action") {
       const executed = await runNamedAction(session, selection, plan.command);
       if (executed.kind !== "available")
@@ -1248,6 +1365,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     // Selected-record values are intentionally fresh and transient: never claim or complete a
     // replayable effect-ledger entry for this task.
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
+      return { outcome: "refused" };
+    if (state.recoverySubject !== undefined && call.taskType !== "record.restore")
       return { outcome: "refused" };
     if (call.taskType === "record.read_fields")
       return runSelectedRecordRead(run, state, call);
@@ -1335,28 +1454,48 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return { outcome: "failed" };
     }
     if (claim.kind === "completed") {
-      if (run.selectedRecordReadSeen || run.recordPinReadSeen === true) {
+      if (run.selectedRecordReadSeen || run.recordPinReadSeen === true || state.recoverySubject !== undefined) {
         // Never trust or expose an effect-ledger replay for a read-derived save. Validate its
         // minimal stored shape, then ask the Record service to resolve the command receipt under
         // the current initiator and permissions. The receipt also rejects changed command fields.
         if (
-          planned.plan.kind !== "save" ||
+          (planned.plan.kind !== "save" && planned.plan.kind !== "restore") ||
           !flowTaskOutcomes.has(claim.outcome as FlowTaskOutcome)
         )
           return { outcome: "refused" };
         if (claim.outcome === "committed") {
           const ledgerOutputs = claim.outputs;
-          if (!isSavedRecordEffectOutput(ledgerOutputs))
+          const restoredOutput = planned.plan.kind === "restore" &&
+            isRestoredRecordEffectOutput(ledgerOutputs);
+          if (
+            planned.plan.kind === "restore"
+              ? !restoredOutput
+              : !isSavedRecordEffectOutput(ledgerOutputs)
+          )
             return { outcome: "refused" };
           try {
             const replayed = await runPlan(run, state, call, planned.plan);
             if (replayed.result.outcome === "committed") {
               const replayedOutputs = replayed.result.outputs;
-              if (
+              if (planned.plan.kind === "restore") {
+                const privateReplay = isRestoredRecordEffectOutput(replayed.stored)
+                  ? replayed.stored
+                  : undefined;
+                if (
+                  !isSavedRecordEffectOutput(replayedOutputs) ||
+                  !isRestoredRecordEffectOutput(ledgerOutputs) ||
+                  privateReplay === undefined ||
+                  !privateReplay.replayed ||
+                  replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase() ||
+                  privateReplay.record.toLowerCase() !== ledgerOutputs.record.toLowerCase() ||
+                  privateReplay.concurrencyNumber !== ledgerOutputs.concurrencyNumber
+                )
+                  return { outcome: "refused" };
+              } else if (
                 !isSavedRecordEffectOutput(replayedOutputs) ||
+                !isSavedRecordEffectOutput(ledgerOutputs) ||
                 replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase()
-              )
-                return { outcome: "refused" };
+              ) return { outcome: "refused" };
             }
             return replayed.result;
           } catch {
@@ -1584,7 +1723,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       try {
         const parsed = startRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.binding.inputs)) return refused;
-        const { session, selection, binding, subject } = parsed.data;
+        const { session, selection, binding, subject, recoverySubject } = parsed.data;
         const prepared = await prepare(session, selection, binding.flowId);
         if (prepared === undefined) return refused;
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
@@ -1611,6 +1750,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             now: now().toISOString(),
             ...(actor === undefined ? {} : { actor }),
             ...(subject === undefined ? {} : { subject }),
+            ...(recoverySubject === undefined ? {} : { recoverySubject }),
           },
           run.library,
         );
@@ -1778,6 +1918,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         // The stored run must be the run the row is bound to; anything else is never resumed.
         if (!isRecord(state) || state.runId !== stored.runId) return refused;
         if (!subjectSchema.optional().safeParse(state.subject).success) return refused;
+        if (!recordRecoverySubjectSchema.optional().safeParse(state.recoverySubject).success) return refused;
         if (expectation !== undefined) {
           const paused = state.awaiting;
           if (

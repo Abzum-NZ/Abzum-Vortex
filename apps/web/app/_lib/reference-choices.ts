@@ -5,7 +5,9 @@ import {
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   FORM_CONTAINER_BLOCK_RELEASE,
   builderKeySchema,
+  type FieldId,
   jsonValueSchema,
+  recordIdSchema,
   referenceChoiceSelectionEvidenceMapSchema,
   type ApplicationContentV2,
   type BlockPropertyValueV2Contract,
@@ -13,6 +15,8 @@ import {
   type ModuleDefinitionConsumerReadResultV3,
   type ReferenceChoiceSelectionEvidence,
   type ReferenceChoiceSelectionEvidenceMap,
+  flowTaskChildLists,
+  type FlowTask,
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
@@ -21,6 +25,7 @@ import {
   recordReferenceChoiceCommandSchema,
   resolveReferenceChoiceSelection,
   type RecordReferenceChoiceCommand,
+  type OrganizationAccountReferenceChoiceCommand,
   type ReferenceChoiceOption,
 } from "@vortex/query";
 
@@ -29,18 +34,40 @@ const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
-type ChoicePlacementSettings = Readonly<{
+type QueryChoicePlacementSettings = Readonly<{
+  sourceKind: "query";
   fieldKey: string;
   queryId: string;
   labelFieldId: string;
-  releaseVersion: "1.1.0" | "1.2.0";
+  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
+type PersonChoicePlacementSettings = Readonly<{
+  sourceKind: "person";
+  fieldKey: string;
+  fieldId: FieldId;
+  releaseVersion: "1.3.0";
+}>;
+type ChoicePlacementSettings = QueryChoicePlacementSettings | PersonChoicePlacementSettings;
+
+type PersonPurposeContext = Readonly<{
+  application: ApplicationContentV2;
+  pageId: string;
+  pageRecordTypeId: string;
+  installationRevision: number;
+  releaseKey: string;
+  subject: Readonly<{ recordId: string; concurrencyNumber: number }>;
+}>;
+
+type ReferenceChoiceCommand = RecordReferenceChoiceCommand | OrganizationAccountReferenceChoiceCommand;
+
 export type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
-  command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0";
+  command: ReferenceChoiceCommand;
+  sourceKind: "query" | "person";
+  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  personFieldId?: string;
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
@@ -63,18 +90,20 @@ const settingsOf = (
   return placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
 };
 
-/** True only for the immutable choice-input release that declares a query source. */
+/** True only for a supported immutable Choice release with a server-backed source. */
 export const hasReferenceChoiceSource = (placement: unknown): boolean => {
   const block = blockOf(placement);
   const settings = settingsOf(placement);
+  const releaseVersion = block?.releaseVersion;
   return (
     block !== undefined &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId) &&
-    (block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion) &&
+    (releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
+      releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion ||
+      releaseVersion === "1.3.0") &&
     settings !== undefined &&
-    Object.hasOwn(settings, "choice_source")
+    (Object.hasOwn(settings, "choice_source") || Object.hasOwn(settings, "person_choice_source"))
   );
 };
 
@@ -82,18 +111,31 @@ const placementSettings = (placement: unknown): ChoicePlacementSettings | undefi
   if (!hasReferenceChoiceSource(placement)) return undefined;
   const settings = settingsOf(placement);
   const name = settings?.name;
-  const source = settings?.choice_source;
-  if (
-    name?.kind !== "text" ||
-    source?.kind !== "group" ||
-    source.properties.query?.kind !== "query_reference" ||
-    source.properties.label_field?.kind !== "field_reference"
-  )
-    return undefined;
+  if (name?.kind !== "text") return undefined;
   const fieldKey = builderKeySchema.safeParse(name.value);
-  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0";
-  let dependency: ChoicePlacementSettings["dependency"];
-  if (releaseVersion === "1.2.0" && source.properties.input !== undefined) {
+  if (!fieldKey.success) return undefined;
+  const releaseVersion = blockOf(placement)?.releaseVersion;
+  if (Object.hasOwn(settings ?? {}, "person_choice_source")) {
+    const source = settings?.person_choice_source;
+    if (releaseVersion !== "1.3.0" || Object.hasOwn(settings ?? {}, "choice_source") ||
+        source?.kind !== "group" || source.properties.field?.kind !== "field_reference")
+      return undefined;
+    return {
+      sourceKind: "person",
+      fieldKey: fieldKey.data,
+      fieldId: source.properties.field.fieldId,
+      releaseVersion: "1.3.0",
+    };
+  }
+  const source = settings?.choice_source;
+  if (source?.kind !== "group" ||
+      source.properties.query?.kind !== "query_reference" ||
+      source.properties.label_field?.kind !== "field_reference") return undefined;
+  if (releaseVersion !== "1.1.0" && releaseVersion !== "1.2.0" && releaseVersion !== "1.3.0")
+    return undefined;
+  let dependency: QueryChoicePlacementSettings["dependency"];
+  if ((releaseVersion === "1.2.0" || releaseVersion === "1.3.0") &&
+      source.properties.input !== undefined) {
     const input = source.properties.input;
     if (input.kind !== "group" || Object.keys(input.properties).length !== 2 ||
         input.properties.key?.kind !== "text" || input.properties.from_field?.kind !== "text")
@@ -103,19 +145,18 @@ const placementSettings = (placement: unknown): ChoicePlacementSettings | undefi
     if (!key.success || !from.success) return undefined;
     dependency = { key: key.data, fromField: from.data };
   }
-  return fieldKey.success
-    ? {
-        fieldKey: fieldKey.data,
-        queryId: source.properties.query.queryId,
-        labelFieldId: source.properties.label_field.fieldId,
-        releaseVersion,
-        ...(dependency === undefined ? {} : { dependency }),
-      }
-    : undefined;
+  return {
+    sourceKind: "query",
+    fieldKey: fieldKey.data,
+    queryId: source.properties.query.queryId,
+    labelFieldId: source.properties.label_field.fieldId,
+    releaseVersion,
+    ...(dependency === undefined ? {} : { dependency }),
+  };
 };
 
 const queryCommand = (
-  settings: ChoicePlacementSettings,
+  settings: QueryChoicePlacementSettings,
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
 ): RecordReferenceChoiceCommand | undefined => {
   const matches = modules.flatMap((module) =>
@@ -129,24 +170,147 @@ const queryCommand = (
   const parsed = recordReferenceChoiceCommandSchema.safeParse({
     kind: "record_reference",
     allowedRecordTypes: [query.recordType],
-    source: {
-      moduleRootId: module.rootId,
-      moduleReleaseVersion: module.releaseVersion,
-      query,
-    },
+    source: { moduleRootId: module.rootId, moduleReleaseVersion: module.releaseVersion, query },
     labelFieldId: settings.labelFieldId,
     pageSize: 50,
   });
   return parsed.success ? parsed.data : undefined;
 };
 
-/** Resolves one trusted placement's source against the exact installed Module releases. */
+const nestedFlowTasks = (tasks: readonly FlowTask[]): readonly FlowTask[] =>
+  tasks.flatMap((task) => [task, ...flowTaskChildLists(task).flatMap((child) => nestedFlowTasks(child.tasks))]);
+
+const personPurpose = (
+  settings: PersonChoicePlacementSettings,
+  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  placementId: string,
+  formId: string,
+  context: PersonPurposeContext | undefined,
+): OrganizationAccountReferenceChoiceCommand["purpose"] | undefined => {
+  if (context === undefined) return undefined;
+  const pageMatches = context.application.pages.filter((page) =>
+    sameId(String(page.pageId), context.pageId),
+  );
+  const page = pageMatches[0];
+  const subjectRecordId = recordIdSchema.safeParse(context.subject.recordId);
+  if (
+    pageMatches.length !== 1 ||
+    page === undefined ||
+    (page.type !== "detail" && page.type !== "form") ||
+    page.recordType.state !== "resolved" ||
+    !sameId(String(page.recordType.recordTypeId), context.pageRecordTypeId) ||
+    !subjectRecordId.success ||
+    !Number.isSafeInteger(context.subject.concurrencyNumber) ||
+    context.subject.concurrencyNumber < 1 ||
+    context.subject.concurrencyNumber >= Number.MAX_SAFE_INTEGER
+  ) return undefined;
+  const fieldMatches = modules.flatMap((module) => module.content.recordTypes
+    .filter((recordType) => sameId(String(recordType.recordTypeId), context.pageRecordTypeId))
+    .flatMap((recordType) => recordType.fields
+      .filter((field) => sameId(String(field.fieldId), settings.fieldId) && field.type === "link_to_person")
+      .map((field) => ({ module, recordType, field }))));
+  if (fieldMatches.length !== 1) return undefined;
+  const { field } = fieldMatches[0]!;
+  if (field.type !== "link_to_person") return undefined;
+  if (field.settings.audience !== "application_accounts" || field.settings.applicationRootIdRequired !== true)
+    return undefined;
+
+  const bindings = context.application.flowBindings.filter((binding) =>
+    sameId(String(binding.controlId), formId) && binding.event === "form_submit");
+  if (bindings.length !== 1) return undefined;
+  const binding = bindings[0]!;
+  const flowMatches = context.application.flows.filter((flow) =>
+    sameId(String(flow.id), String(binding.flow.flowId)));
+  if (flowMatches.length !== 1) return undefined;
+  const flow = flowMatches[0]!;
+  const boundInput = binding.flow.inputs[settings.fieldKey];
+  const declaration = flow.inputs[settings.fieldKey];
+  if (boundInput?.kind !== "caller" || boundInput.name !== settings.fieldKey ||
+      declaration?.type !== "organization_account_reference" || declaration.required !== true)
+    return undefined;
+
+  const operationCalls = nestedFlowTasks(flow.tasks)
+    .filter((task) => task.type === "operation.call");
+  const otherOperationCalls = nestedFlowTasks([...flow.errors, ...flow.finally])
+    .some((task) => task.type === "operation.call");
+  if (operationCalls.length !== 1 || otherOperationCalls) return undefined;
+  const call = operationCalls[0]!;
+  if (call.type !== "operation.call") return undefined;
+  const operation = call.properties.operation;
+  const callInputs = call.properties.inputs;
+  if (operation?.kind !== "literal" || operation.literal.type !== "text" ||
+      typeof operation.literal.value !== "string") return undefined;
+  if (callInputs !== undefined) {
+    if (callInputs.kind !== "map") return undefined;
+    const callInput = callInputs.entries[settings.fieldKey];
+    if (callInput?.kind !== "reference" || callInput.reference.source !== "input" ||
+        callInput.reference.name !== settings.fieldKey)
+      return undefined;
+  }
+
+  const actionMatches = modules.flatMap((module) => module.content.actions
+    .filter((action) => action.key === operation.literal.value &&
+      sameId(String(action.subjectRecordTypeId), context.pageRecordTypeId))
+    .map((action) => ({ module, action })));
+  if (actionMatches.length !== 1) return undefined;
+  const { module, action } = actionMatches[0]!;
+  const actionInputs = action.inputs.filter((input) => input.key === settings.fieldKey &&
+    input.type === "organization_account_reference");
+  if (actionInputs.length !== 1) return undefined;
+  const fieldWrites = action.tasks.flatMap((task) => {
+    if (task.type !== "record.set_fields") return [];
+    const value = task.properties.values[settings.fieldId];
+    return value === undefined ? [] : [value];
+  });
+  const fieldWrite = fieldWrites[0];
+  if (fieldWrites.length !== 1 || fieldWrite?.kind !== "reference" ||
+      fieldWrite.reference.source !== "input" || fieldWrite.reference.name !== settings.fieldKey)
+    return undefined;
+
+  return {
+    kind: "named_action_person_field",
+    ownerKind: "module",
+    ownerId: String(module.rootId),
+    releaseRevision: module.releaseRevision,
+    actionId: String(action.actionId),
+    recordTypeId: page.recordType.recordTypeId,
+    recordId: subjectRecordId.data,
+    expectedConcurrencyNumber: context.subject.concurrencyNumber,
+    inputKey: settings.fieldKey,
+    fieldId: settings.fieldId,
+    installationRevision: context.installationRevision,
+    releaseKey: context.releaseKey,
+    pageId: context.pageId,
+    formId,
+    placementId,
+  };
+};
+
+/** Resolves one trusted placement against exact installed Modules and its optional current action. */
 export const referenceChoiceFieldForPlacement = (
   placement: unknown,
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  placementId = "",
+  formId = "",
+  purposeContext?: PersonPurposeContext,
 ): ReferenceChoiceFormField | undefined => {
   const settings = placementSettings(placement);
   if (settings === undefined) return undefined;
+  if (settings.sourceKind === "person") {
+    const purpose = personPurpose(settings, modules, placementId, formId, purposeContext);
+    const base = {
+      kind: "organization_account_reference" as const,
+      pageSize: 50,
+      ...(purpose === undefined ? {} : { purpose }),
+    };
+    return {
+      fieldKey: settings.fieldKey,
+      command: base,
+      sourceKind: "person",
+      personFieldId: settings.fieldId,
+      releaseVersion: settings.releaseVersion,
+    };
+  }
   const command = queryCommand(settings, modules);
   if (command === undefined) return undefined;
   if (settings.dependency !== undefined) {
@@ -157,6 +321,7 @@ export const referenceChoiceFieldForPlacement = (
   return {
     fieldKey: settings.fieldKey,
     command,
+    sourceKind: "query",
     releaseVersion: settings.releaseVersion,
     ...(settings.dependency === undefined ? {} : { dependency: settings.dependency }),
   };
@@ -167,7 +332,8 @@ const validDependencies = (fields: ReferenceChoiceFormFieldIndex): boolean => {
   for (const field of fields.values()) {
     if (field.dependency === undefined) continue;
     const parent = fields.get(field.dependency.fromField);
-    if (parent === undefined || parent === field || parent.dependency !== undefined ||
+    if (parent === undefined || parent === field || parent.sourceKind !== "query" ||
+        parent.dependency !== undefined || parent.command.kind !== "record_reference" ||
         parent.command.source.query.inputs.length !== 0) return false;
   }
   return true;
@@ -180,7 +346,8 @@ export const bindReferenceChoiceField = (
   parentChoice: ReferenceChoiceOption,
 ): ReferenceChoiceFormField | undefined => {
   const dependency = field.dependency;
-  if (dependency === undefined || !validDependencies(fields) ||
+  if (dependency === undefined || field.sourceKind !== "query" ||
+      field.command.kind !== "record_reference" || !validDependencies(fields) ||
       !fields.has(dependency.fromField) || !("recordId" in parentChoice.value)) return undefined;
   return {
     ...field,
@@ -207,7 +374,7 @@ const formPlacementsOnPage = (
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
       const owner = isForm ? placementId : formId;
       if (owner !== undefined && sameId(owner, targetFormId) && hasReferenceChoiceSource(placement)) {
-        const field = referenceChoiceFieldForPlacement(placement, modules);
+        const field = referenceChoiceFieldForPlacement(placement, modules, placementId, targetFormId);
         if (field === undefined) invalid = true;
         else found.push(field);
       }
@@ -291,6 +458,7 @@ export const projectedReferenceChoiceForm = (
   page: unknown,
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
   formId: string,
+  purposeContext?: PersonPurposeContext,
 ): ProjectedReferenceChoiceForm | undefined => {
   if (!isRecord(page) || !isRecord(page.composition)) return undefined;
   let matches = 0;
@@ -330,7 +498,9 @@ export const projectedReferenceChoiceForm = (
       const currentlyUsable = usable && placement.availability === undefined;
       if (!currentlyUsable) continue;
       if (hasReferenceChoiceSource(placement)) {
-        const field = referenceChoiceFieldForPlacement(placement, modules);
+        const field = referenceChoiceFieldForPlacement(
+          placement, modules, placementId, formId, purposeContext,
+        );
         if (field === undefined || fields.has(field.fieldKey)) invalid = true;
         else {
           fields.set(field.fieldKey, field);
@@ -385,6 +555,12 @@ export const resolveReferenceChoiceFormValues = async (args: Readonly<{
   const fields = args.projectedFields;
   for (const fieldKey of Object.keys(args.values))
     if (authoredFields.has(fieldKey) && !fields.has(fieldKey)) return undefined;
+  for (const [fieldKey, field] of fields)
+    if (
+      field.sourceKind === "person" &&
+      Object.hasOwn(args.values, fieldKey) &&
+      (field.command.kind !== "organization_account_reference" || field.command.purpose === undefined)
+    ) return undefined;
   const parsedEvidence =
     args.evidence === undefined
       ? { success: true as const, data: {} as ReferenceChoiceSelectionEvidenceMap }
@@ -429,7 +605,18 @@ export const resolveReferenceChoiceFormValues = async (args: Readonly<{
     const selected = choices.find((choice) => choice.key === submitted);
     if (selected === undefined) return undefined;
     if (field.dependency === undefined) parents.set(fieldKey, selected);
-    resolved[fieldKey] = value;
+    if (field.sourceKind === "person") {
+      if (
+        field.command.kind !== "organization_account_reference" ||
+        field.command.purpose === undefined ||
+        !("organizationAccountId" in value) ||
+        Object.keys(value).length !== 1 ||
+        typeof value.organizationAccountId !== "string"
+      ) return undefined;
+      resolved[fieldKey] = value.organizationAccountId;
+    } else {
+      resolved[fieldKey] = value;
+    }
   }
   const parsedValues = jsonValueSchema.safeParse(resolved);
   if (!parsedValues.success || !isRecord(parsedValues.data)) return undefined;

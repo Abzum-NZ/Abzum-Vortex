@@ -5,9 +5,10 @@ create or replace function vortex_record.write_relationship_value_internal(
   p_source_record_id uuid,
   p_relationship_id uuid,
   p_target_value jsonb,
-  p_increment_source_revision boolean
+  p_increment_source_revision boolean,
+  p_defer_change_notice boolean
 )
-returns void
+returns jsonb
 language plpgsql
 volatile
 security invoker
@@ -34,15 +35,43 @@ declare
   existing_other boolean;
   update_sql text;
   changed_rows integer;
+  saved_record_id uuid;
+  saved_concurrency_number bigint;
+  notice_eligible boolean := false;
+  preview_installation jsonb;
 begin
   if p_source_record_type_id is null or p_source_record_id is null
-    or p_relationship_id is null or p_increment_source_revision is null then
+    or p_relationship_id is null or p_increment_source_revision is null
+    or p_defer_change_notice is null then
     raise exception using errcode = '22023', message = 'Relationship change is invalid';
+  end if;
+  if p_defer_change_notice and (
+    p_target_value is distinct from 'null'::jsonb or not p_increment_source_revision
+  ) then
+    raise exception using errcode = '22023', message = 'Relationship notice deferral is invalid';
   end if;
   source_meta := vortex_record.resolve_record_action_context_internal(
     p_source_record_type_id, 'read'
   );
   source_context := source_meta -> 'context';
+  source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
+    then (source_context ->> 'applicationRootId')::uuid else null end;
+  if p_defer_change_notice then
+    if source_meta ->> 'storageScope' = 'application_contained'
+      and (
+        source_application_root_id is null
+        or not coalesce(vortex_context.is_non_nil_uuid(source_application_root_id::text), false)
+      ) then
+      raise exception using errcode = '55000',
+        message = 'Relationship source scope is unavailable';
+    end if;
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    notice_eligible := coalesce(
+      preview_installation is null
+        and source_meta ->> 'storageScope' = 'application_contained',
+      false
+    );
+  end if;
   source_type := source_meta -> 'recordType';
   select item.value into relationship_value
   from pg_catalog.jsonb_array_elements(source_type -> 'relationships') as item(value)
@@ -73,12 +102,17 @@ begin
     raise exception using errcode = '55000',
       message = 'Relationship storage disagrees with the active definition';
   end if;
+  if p_defer_change_notice
+    and mapping_row.on_parent_delete is distinct from 'empty_optional' then
+    raise exception using errcode = '22023',
+      message = 'Relationship notice deferral is invalid';
+  end if;
 
   if pg_catalog.jsonb_typeof(p_target_value) = 'null' then
     if (field_value ->> 'required')::boolean then
       raise exception using errcode = '23514', message = 'Required relationship cannot be empty';
     end if;
-    if p_increment_source_revision then
+    if p_increment_source_revision and not notice_eligible then
       perform vortex_record.bump_record_data_version_internal(
         (source_context ->> 'organizationId')::uuid,
         (source_meta ->> 'storageContractId')::uuid,
@@ -99,17 +133,20 @@ begin
       and edge.from_record_id = p_source_record_id;
     update_sql := pg_catalog.format(
       'update record_data.%I as stored set %I = null%s
-       where stored.organisation_id = $1 and stored.record_id = $2',
+       where stored.organisation_id = $1 and stored.record_id = $2
+       returning stored.record_id, stored.concurrency_number',
       source_meta ->> 'table', field_column ->> 'token',
       case when p_increment_source_revision then
         ', concurrency_number = concurrency_number + 1, updated_at = pg_catalog.statement_timestamp(), updated_by = $3'
       else '' end
     );
     if p_increment_source_revision then
-      execute update_sql using (source_context ->> 'organizationId')::uuid,
+      execute update_sql into saved_record_id, saved_concurrency_number using
+        (source_context ->> 'organizationId')::uuid,
         p_source_record_id, (source_context ->> 'organizationAccountId')::uuid;
     else
-      execute update_sql using (source_context ->> 'organizationId')::uuid,
+      execute update_sql into saved_record_id, saved_concurrency_number using
+        (source_context ->> 'organizationId')::uuid,
         p_source_record_id;
     end if;
     get diagnostics changed_rows = row_count;
@@ -117,7 +154,22 @@ begin
       raise exception using errcode = '40001',
         message = 'Relationship source record changed';
     end if;
-    return;
+    if not vortex_context.is_non_nil_uuid(saved_record_id::text)
+      or saved_record_id is distinct from p_source_record_id
+      or saved_concurrency_number is null
+      or saved_concurrency_number not between 1 and 9007199254740991 then
+      raise exception using errcode = '55000',
+        message = 'Relationship source tuple is unavailable';
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'organizationId', (source_context ->> 'organizationId')::uuid,
+      'applicationRootId', source_application_root_id,
+      'recordTypeId', p_source_record_type_id,
+      'storageContractId', (source_meta ->> 'storageContractId')::uuid,
+      'recordId', saved_record_id,
+      'concurrencyNumber', saved_concurrency_number,
+      'noticeEligible', notice_eligible
+    );
   end if;
 
   if pg_catalog.jsonb_typeof(p_target_value) <> 'object'
@@ -195,7 +247,7 @@ begin
 
   -- The target row is share-locked and eligible. The source data version is
   -- taken next, then the shared edge identities last.
-  if p_increment_source_revision then
+  if p_increment_source_revision and not notice_eligible then
     perform vortex_record.bump_record_data_version_internal(
       (source_context ->> 'organizationId')::uuid,
       (source_meta ->> 'storageContractId')::uuid,
@@ -243,32 +295,51 @@ begin
 
   update_sql := pg_catalog.format(
     'update record_data.%I as stored set %I = $3::jsonb%s
-     where stored.organisation_id = $1 and stored.record_id = $2',
+     where stored.organisation_id = $1 and stored.record_id = $2
+     returning stored.record_id, stored.concurrency_number',
     source_meta ->> 'table', field_column ->> 'token',
     case when p_increment_source_revision then
       ', concurrency_number = concurrency_number + 1, updated_at = pg_catalog.statement_timestamp(), updated_by = $4'
     else '' end
   );
   if p_increment_source_revision then
-    execute update_sql using (source_context ->> 'organizationId')::uuid,
+    execute update_sql into saved_record_id, saved_concurrency_number using
+      (source_context ->> 'organizationId')::uuid,
       p_source_record_id, p_target_value,
       (source_context ->> 'organizationAccountId')::uuid;
   else
-    execute update_sql using (source_context ->> 'organizationId')::uuid,
+    execute update_sql into saved_record_id, saved_concurrency_number using
+      (source_context ->> 'organizationId')::uuid,
       p_source_record_id, p_target_value;
   end if;
   get diagnostics changed_rows = row_count;
   if changed_rows <> 1 then
     raise exception using errcode = '40001', message = 'Relationship source record changed';
   end if;
+  if not vortex_context.is_non_nil_uuid(saved_record_id::text)
+    or saved_record_id is distinct from p_source_record_id
+    or saved_concurrency_number is null
+    or saved_concurrency_number not between 1 and 9007199254740991 then
+    raise exception using errcode = '55000',
+      message = 'Relationship source tuple is unavailable';
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'organizationId', (source_context ->> 'organizationId')::uuid,
+    'applicationRootId', source_application_root_id,
+    'recordTypeId', p_source_record_type_id,
+    'storageContractId', (source_meta ->> 'storageContractId')::uuid,
+    'recordId', saved_record_id,
+    'concurrencyNumber', saved_concurrency_number,
+    'noticeEligible', notice_eligible
+  );
 end
 $function$;
 
-alter function vortex_record.write_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean) owner to vortex_record_adapter;
+alter function vortex_record.write_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean,boolean) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean)
+revoke all on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_module_owner;
 
-comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
+comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, boolean) is
+  'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and shared edge identities before replacing the source link edge and typed value atomically. Returns the actual saved source tuple; only a protected recursive optional clear may defer its exact notice. Owner-only.';

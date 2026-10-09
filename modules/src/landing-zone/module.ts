@@ -8,3 +8,8 @@ import tilesSource from "./sources/landing-zone.tiles.json";
 export const landingZoneModuleSources: readonly ModuleSourceDocument[] = Object.freeze(
   [tilesSource].map((source) => moduleSourceDocumentSchema.parse(source)),
 );
+
+/** Explicit immutable publication input; adoption still requires publication and installation. */
+export const shippedDefinitionReleaseVersions: Readonly<Record<string, string>> = Object.freeze({
+  "vortex.landing_zone": "1.0.1",
+});

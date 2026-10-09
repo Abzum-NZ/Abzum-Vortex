@@ -52,7 +52,7 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
-    ...(["1.1.0", "1.2.0"].includes(props.metadata.releaseVersion)
+    ...(["1.1.0", "1.2.0", "1.3.0"].includes(props.metadata.releaseVersion)
       ? ["choices_requested" as const] : []),
   ]);
   const settings = readControlSettings(props, context.location);
@@ -64,9 +64,10 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const required = settings.boolean("required");
   const variant = settings.choice<"select" | "radio">("variant", "select");
   const draftFeedback = useFieldFeedback(fieldKey);
+  const supportsDependencies = ["1.2.0", "1.3.0"].includes(props.metadata.releaseVersion);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true ||
-    (props.metadata.releaseVersion === "1.2.0" && context.values?.dependencyKey === null);
+    (supportsDependencies && context.values?.dependencyKey === null);
   const options = context.values?.options ?? settings.options("options");
   const error = context.values?.error;
   const note = inactiveNote(context);
@@ -93,7 +94,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const [previousDependency, setPreviousDependency] = useState(context.values?.dependencyKey);
   const [previouslyOffered, setPreviouslyOffered] = useState(options.length > 0);
   const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
-  if (props.metadata.releaseVersion === "1.2.0" &&
+  if (supportsDependencies &&
       (context.values?.dependencyKey !== previousDependency ||
         (context.inactive && !previouslyInactive) ||
         (context.values?.dependencyKey !== undefined && previouslyOffered && options.length === 0))) {
@@ -106,9 +107,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     setRemoteLoading(false);
     choiceRequestGeneration.current += 1;
   }
-  if (props.metadata.releaseVersion === "1.2.0" && previouslyOffered !== (options.length > 0))
+  if (supportsDependencies && previouslyOffered !== (options.length > 0))
     setPreviouslyOffered(options.length > 0);
-  if (props.metadata.releaseVersion === "1.2.0" && previouslyInactive !== context.inactive)
+  if (supportsDependencies && previouslyInactive !== context.inactive)
     setPreviouslyInactive(context.inactive);
 
   // Only a currently offered option may be registered in the form or submitted.
@@ -132,7 +133,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   );
   requestChoices.current = (search, continuationToken) => {
     const handler = choicesRequested.current;
-    if (handler === undefined || (props.metadata.releaseVersion === "1.2.0" && disabled)) return;
+    if (handler === undefined || (["1.2.0", "1.3.0"].includes(props.metadata.releaseVersion) && disabled)) return;
     const boundedSearch = search.trim().slice(0, 100);
     const selectedEvidence =
       permittedSelected === null
@@ -152,19 +153,19 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     const request = ++choiceRequestGeneration.current;
     setRemoteLoading(true);
     void Promise.resolve(handler(event)).finally(() => {
-      if (props.metadata.releaseVersion !== "1.2.0" || choiceRequestGeneration.current === request)
+      if (!["1.2.0", "1.3.0"].includes(props.metadata.releaseVersion) || choiceRequestGeneration.current === request)
         setRemoteLoading(false);
     });
   };
   useEffect(() => {
     if (!referenceChoices || !comboboxOpen || choicesRequested.current === undefined) return;
     const search = searchTerm.trim();
-    if (search === "" && lastRequestedSearch.current === undefined) return;
+    if (search === "" && lastRequestedSearch.current === undefined && props.metadata.releaseVersion !== "1.3.0") return;
     if (search === lastRequestedSearch.current) return;
     lastRequestedSearch.current = search;
     const timeout = setTimeout(() => requestChoices.current(search), 200);
     return () => clearTimeout(timeout);
-  }, [comboboxOpen, referenceChoices, searchTerm]);
+  }, [comboboxOpen, props.metadata.releaseVersion, referenceChoices, searchTerm]);
   const loadMoreChoices = (): void => {
     const continuationToken = context.values?.nextContinuationToken;
     if (continuationToken !== undefined && !remoteLoading)

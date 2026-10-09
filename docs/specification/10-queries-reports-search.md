@@ -63,8 +63,16 @@ including empty text or `false`, in the existing `completed`/`value`/`valueCount
 envelope. Absent, null and withheld field values do not contribute; an empty
 minimum or maximum returns `null` with `valueCount` zero. The same semantics
 apply to readable in-memory arrangements, protected summaries and board metrics.
-Sum and average still require whole numbers, decimal numbers or money; calculation
-and total aggregate sources and complex grouping remain unsupported.
+Sum and average still require whole numbers, decimal numbers or money for ordinary
+fields. Installed Summary and Board placements accept a same-record calculation
+only when its expression is numeric, its evaluation is explicitly stored, and
+its result type is `whole_number` or `decimal_number`; they use the matching
+whole-number or decimal aggregate rules. Board metrics apply those rules to
+global, column and unassigned results. When an aggregate source is derived, all
+candidates go through `read_record`, so a hidden calculation operand or
+related-total dependency contributes no value. Total sources, money calculations,
+omitted or read-time calculations, nonnumeric calculations, and complex derived
+grouping remain unsupported. The field-less `count` descriptor is unchanged.
 
 These requirements belong to [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
 and its real storage path, not to a browser-only correction after rows are paged.

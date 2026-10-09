@@ -254,6 +254,14 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      ...sourcePageV2Base,
+      type: sourceProvenanceUnchanged(z.literal("recovery")),
+      record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+      permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
+    })
+    .strict(),
+  z
+    .object({
       ...sourcePageV2Common,
       type: sourceProvenanceUnchanged(z.literal("guided_form")),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),

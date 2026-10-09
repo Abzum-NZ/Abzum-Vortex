@@ -98,3 +98,5 @@ comment on function vortex_identity.list_organization_account_choices_internal(
 
 alter function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) owner to vortex_identity_owner;
 grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;
+
+grant execute on function vortex_identity.list_organization_account_choices_internal(uuid,uuid,text,integer,text,uuid) to vortex_record_adapter;

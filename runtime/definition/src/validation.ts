@@ -15,6 +15,8 @@ import {
   moduleDraftV3Schema,
   moduleSourceDocumentSchema,
   moduleQueryDefinitionV3Schema,
+  namedActionQueryValueSchema,
+  sourceNamedActionQueryValueSchema,
   moduleCompilationRequestV3Schema,
   savedSharingConditionV3Schema,
   connectionTypeSchema,
@@ -1058,7 +1060,8 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         const properties = object(task.properties);
         if (String(task.type) === "record.set_fields") {
           for (const [fieldKey, candidate] of Object.entries(object(properties.values)))
-            if (!sourceValueCompatible(candidate, subjectFields.get(fieldKey))) valid = false;
+            if (!sourceValueCompatible(candidate, subjectFields.get(fieldKey)) ||
+              !actionQueryReductionValid(candidate, fieldKey, action, records.get(String(action.record_type)), array(body.queries), "source")) valid = false;
         }
         if (String(task.type) === "record.create") {
           const qualified = String(properties.record_type);
@@ -1068,6 +1071,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
             if (
               Object.entries(object(properties.values)).some(
                 ([fieldKey, candidate]) =>
+                  object(candidate).kind === "protected_query_decimal_max_plus_quantum" ||
                   !sourceValueCompatible(candidate, targetFields.get(fieldKey)),
               )
             )
@@ -1331,6 +1335,17 @@ function fieldDeclaredResultType(field: JsonObject | undefined): string | undefi
     return typeof resultType === "string" ? resultType : undefined;
   }
   return String(field.type);
+}
+
+function storedNumericSummaryResultType(field: JsonObject | undefined): string | undefined {
+  if (!field || field.type !== "calculation") return undefined;
+  const settings = object(field.settings);
+  if (object(settings.expression).kind !== "numeric" || settings.evaluation !== "stored")
+    return undefined;
+  const resultType = fieldDeclaredResultType(field);
+  return resultType === "whole_number" || resultType === "decimal_number"
+    ? resultType
+    : undefined;
 }
 
 function fieldValueType(field: JsonObject | undefined): string | undefined {
@@ -1855,6 +1870,31 @@ function actionValueTypeV2(
   return undefined;
 }
 
+/** A complete protected Query value has one owning subject, one destination and no other effects. */
+function actionQueryReductionValid(
+  value: unknown, destination: string, action: JsonObject, record: JsonObject | undefined,
+  queries: readonly JsonObject[], dialect: "source" | "canonical",
+): boolean {
+  const node = object(value);
+  if (node.kind !== "protected_query_decimal_max_plus_quantum") return true;
+  const source = dialect === "source";
+  const tasks = array(action.tasks);
+  const values = object(object(tasks[0]?.properties).values);
+  const query = queries.find((item) => String(source ? item.key : item.queryId) === String(source ? node.query : node.queryId));
+  const field = record && array(record.fields).find((item) => String(source ? item.key : item.fieldId) === destination);
+  const settings = object(field?.settings);
+  return record !== undefined && record[source ? "system_projection" : "systemProjection"] === undefined &&
+    tasks.length === 1 && tasks[0]?.type === "record.set_fields" && Object.keys(values).length === 1 &&
+    (source ? action.shareable === false : action.sharing === "refused") &&
+    array(action.inputs).length === 0 && field?.type === "decimal_number" &&
+    settings[source ? "decimal_places" : "decimalPlaces"] === 12 &&
+    String(source ? node.field : node.fieldId) === destination && query !== undefined &&
+    (source ? query.record_type === action.record_type : object(query.recordType).recordTypeId === action.subjectRecordTypeId) &&
+    array(query.inputs).length === 0 && array(query[source ? "group_by" : "groupByFieldIds"]).length === 0 &&
+    array(query.aggregates).length === 0 && query[source ? "relationship_hops" : "relationshipHops"] === 0 &&
+    (query[source ? "select" : "selectedFieldIds"] as unknown[]).includes(destination);
+}
+
 function actionValueCompatibleV2(
   value: unknown,
   targetField: JsonObject | undefined,
@@ -1864,6 +1904,9 @@ function actionValueCompatibleV2(
   dialect: ModuleV2ValueDialect = "canonical",
 ): boolean {
   const entry = object(value);
+  if (entry.kind === "protected_query_decimal_max_plus_quantum")
+    return targetField?.type === "decimal_number" &&
+      (dialect === "source" ? sourceNamedActionQueryValueSchema : namedActionQueryValueSchema).safeParse(value).success;
   const expectedType = ["formatted_text", "table", "attachment"].includes(String(targetField?.type))
     ? String(targetField!.type)
     : fieldValueTypeV2(targetField);
@@ -1908,6 +1951,7 @@ function applicationActionValueCompatible(
 ): boolean {
   if (!target) return false;
   const entry = object(value);
+  if (entry.kind === "protected_query_decimal_max_plus_quantum") return false;
   if (entry.kind === "literal")
     return fieldValueMatchesV2(actionValueLiteral(value), target.field, "canonical");
   const reference = actionValueReference(value);
@@ -2694,6 +2738,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           for (const [id, value] of Object.entries(object(properties.values)))
             if (
               !fields.has(id) ||
+              !actionQueryReductionValid(value, id, action, subject, array(content.queries), "canonical") ||
               !actionValueCompatibleV2(
                 value,
                 fieldMap.get(id),
@@ -2727,6 +2772,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             !target ||
             Object.entries(object(properties.values)).some(
               ([id, value]) =>
+                object(value).kind === "protected_query_decimal_max_plus_quantum" ||
                 !targetFields.has(id) ||
                 !actionValueCompatibleV2(
                   value,
@@ -2978,8 +3024,12 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         if (aggregate.fieldId === undefined) continue;
         const field = fieldMap.get(String(aggregate.fieldId));
         if (!field || aggregate.operation === "count") continue;
-        const fieldType = String(field.type);
-        if (fieldType === "calculation" || fieldType === "total")
+        const storedNumericResultType = storedNumericSummaryResultType(field);
+        const fieldType = storedNumericResultType ?? String(field.type);
+        if (
+          field.type === "total" ||
+          (field.type === "calculation" && storedNumericResultType === undefined)
+        )
           refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
         else if (
           (aggregate.operation === "sum" || aggregate.operation === "average") &&
@@ -3300,6 +3350,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         if (String(task.type) === "record.set_fields") {
           for (const [fieldId, value] of Object.entries(object(properties.values))) {
             if (!subjectFieldIds.has(fieldId)) safe = false;
+            if (object(value).kind === "protected_query_decimal_max_plus_quantum") safe = false;
             inspectSubjectReferences(value);
           }
         }
@@ -4547,7 +4598,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       { standardActionKeysByRecordAction, executableActionKeys },
     );
     for (const page of pages.values()) {
-      if (page.type !== "form" && page.type !== "guided_form") continue;
+      if (page.type !== "form" && page.type !== "guided_form" && page.type !== "recovery") continue;
       const recordTypeId = page.recordType
         ? String(object(page.recordType).recordTypeId)
         : undefined;
@@ -5025,7 +5076,8 @@ function applicationControlBindingRule(
         blockKey === formContainerBlockKey
           ? (containsSubmitButton(placement) ||
               pageType === "form" ||
-              pageType === "guided_form") &&
+              pageType === "guided_form" ||
+              pageType === "recovery") &&
             !bound.has("form_submit")
           : blockKey === actionButtonBlockKey &&
             sourceButtonActionKind(placement) !== "submit" &&
