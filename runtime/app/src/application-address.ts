@@ -570,15 +570,17 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     applicationKeyCandidate,
   );
   if (addressedIdentity === undefined) return unavailable();
+  const organizationId = organizationIdSchema.safeParse(addressedIdentity.organizationId);
+  if (!organizationId.success) return unavailable();
 
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
   });
   try {
-    const contextResult = await requests.run(
+    const contextResult = await requests.run<InstalledRuntimeContext | undefined>(
       session.data,
       {
-        organizationId: addressedIdentity.organizationId,
+        organizationId: organizationId.data,
         applicationRootId: addressedIdentity.identity.applicationRootId,
       },
       async (transaction, scope) => {
@@ -612,7 +614,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     const permitted = await permittedApplication(
       requests,
       session.data,
-      addressedIdentity.organizationId,
+      organizationId.data,
       candidate,
       context,
     );
@@ -620,7 +622,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     if (permitted === null) return unavailable();
     const read = permittedApplicationsReadSchema.parse({
       kind: "available",
-      organizationId: addressedIdentity.organizationId,
+      organizationId: organizationId.data,
       tenantShortName: addressedIdentity.tenantShortName,
       organizationShortName: addressedIdentity.organizationShortName,
       defaultApplicationRootId: null,

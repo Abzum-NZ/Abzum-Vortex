@@ -330,9 +330,10 @@ export const matchesInstalledPageBundleIdentity = (
     const context = requireInstalledRuntimeContext(contextCandidate);
     const expected = installedPageBundleIdentities.get(context);
     const parsed = activeInstallationBundleStateSchema.safeParse(stateCandidate);
-    if (expected === undefined || !parsed.success || parsed.data.repairNeeded ||
-      parsed.data.bundleIndex === null) return false;
+    if (expected === undefined || !parsed.success) return false;
     const state = parsed.data;
+    const bundleIndex = state.bundleIndex;
+    if (state.repairNeeded || bundleIndex === null) return false;
     const application = context.releaseSet.application;
     if (
       state.identity.organizationId !== expected.organizationId ||
@@ -343,8 +344,8 @@ export const matchesInstalledPageBundleIdentity = (
       (expectedOrganizationAccountId !== undefined &&
         state.identity.organizationAccountId !== expectedOrganizationAccountId) ||
       state.identity.pinFingerprint !== expected.pinFingerprint ||
-      state.bundleIndex.pinFingerprint !== expected.pinFingerprint ||
-      canonicalJson(state.bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||
+      bundleIndex.pinFingerprint !== expected.pinFingerprint ||
+      canonicalJson(bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||
       application.organizationId !== state.identity.organizationId ||
       application.rootId !== state.identity.applicationRootId ||
       application.releaseRevision !== state.identity.applicationReleaseRevision ||
