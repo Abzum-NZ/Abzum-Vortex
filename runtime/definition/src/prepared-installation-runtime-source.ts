@@ -4,6 +4,7 @@ import {
   applicationRootIdSchema,
   canonicalJson,
   correlationIdSchema,
+  fieldIdSchema,
   fingerprintSchema,
   jsonValueSchema,
   installationPreparedRecordAccessPlanSchema,
@@ -107,8 +108,11 @@ const requirePreparedPlanMatchesReleaseSet = (
       if (
         expectedColumnIds.length !== actualColumnIds.length ||
         expectedColumnIds.some((fieldId, index) => fieldId !== actualColumnIds[index]) ||
-        recordType.fields.some((field) =>
-          planned.columns[field.fieldId.toLowerCase()]?.type !== field.type)
+        recordType.fields.some((field) => {
+          const parsedFieldId = fieldIdSchema.safeParse(field.fieldId.toLowerCase());
+          if (!parsedFieldId.success) invalid();
+          return planned.columns[parsedFieldId.data]?.type !== field.type;
+        })
       ) invalid();
 
       for (const relationship of recordType.relationships) {
