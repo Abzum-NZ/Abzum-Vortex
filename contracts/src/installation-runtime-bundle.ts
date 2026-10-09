@@ -1,6 +1,12 @@
 import { z } from "zod";
+import { applicationContentV2Schema } from "./application-contracts";
+import { placementSlotV2Schema } from "./application-composition-v2";
 import { jsonValueSchema } from "./common";
-import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import {
+  applicationDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
+  type SystemApplicationBoundReleaseSetResult,
+} from "./definition-consumer-read";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -10,6 +16,7 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
+  pageIdSchema,
   permissionIdSchema,
   recordTypeIdSchema,
   revisionSchema,
@@ -81,6 +88,114 @@ const immutableRuntimeReleaseIdentitySchema = z.object({
 const immutableRuntimeModuleIdentitySchema = immutableRuntimeReleaseIdentitySchema.extend({
   rootId: moduleRootIdSchema,
 }).strict();
+
+const applicationConsumerResultFields = applicationDefinitionConsumerReadResultV2Schema.shape;
+const moduleConsumerResultFields = moduleDefinitionConsumerReadResultV3Schema.shape;
+const applicationContentFields = z.object(applicationContentV2Schema.shape).strict();
+
+// Release metadata is immutable; consumer correlation IDs are request-specific and are injected
+// again when a HUMAN release set is reconstructed from the stored sections.
+const installationRuntimeBundleApplicationSourceHeaderSchema = z
+  .object(applicationConsumerResultFields)
+  .omit({ content: true, toolBundle: true, correlationId: true })
+  .strict();
+
+const installationRuntimeBundleModuleSourceHeaderSchema = z
+  .object(moduleConsumerResultFields)
+  .omit({ content: true, correlationId: true })
+  .strict();
+
+const installationRuntimeBundleApplicationPageContentSchema = applicationContentFields
+  .omit({
+    navigation: true,
+    flows: true,
+    flowBindings: true,
+    theme: true,
+    platformBlockDependencies: true,
+    pages: true,
+    shells: true,
+  })
+  .strict();
+
+const installationRuntimeBundleResolvedRootsSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("page"), main: placementSlotV2Schema }).strict(),
+  z
+    .object({
+      kind: z.literal("guided"),
+      stepContent: z.record(z.string(), placementSlotV2Schema),
+    })
+    .strict(),
+]);
+
+export const installationRuntimeBundlePagesSectionSchema = z
+  .object({
+    application: z
+      .object({
+        identity: installationRuntimeBundleApplicationSourceHeaderSchema,
+        content: installationRuntimeBundleApplicationPageContentSchema,
+        shells: applicationContentFields.shape.shells,
+        pages: applicationContentFields.shape.pages,
+      })
+      .strict(),
+    modules: z
+      .array(
+        z
+          .object({
+            identity: installationRuntimeBundleModuleSourceHeaderSchema,
+            content: moduleConsumerResultFields.content,
+          })
+          .strict(),
+      )
+      .max(10_000)
+      .superRefine((modules, context) => {
+        const roots = modules.map((module) => module.identity.rootId.toLowerCase());
+        if (new Set(roots).size !== roots.length)
+          context.addIssue({
+            code: "custom",
+            message: "A runtime page section must contain one release per Module root",
+          });
+        if (roots.some((root, index) => index > 0 && roots[index - 1]! >= root))
+          context.addIssue({
+            code: "custom",
+            message: "Runtime page Module releases must use strict root order",
+          });
+      }),
+    resolvedCompositions: z.array(
+      z
+        .object({
+          pageId: pageIdSchema,
+          roots: installationRuntimeBundleResolvedRootsSchema,
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const pageIds = value.application.pages.map((page) => page.pageId);
+    const compositionPageIds = value.resolvedCompositions.map(
+      (composition) => composition.pageId,
+    );
+    if (
+      pageIds.length !== compositionPageIds.length ||
+      pageIds.some((pageId, index) => compositionPageIds[index] !== pageId)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["resolvedCompositions"],
+        message: "Runtime page compositions must match the exact source page order",
+      });
+    if (
+      value.modules.some(
+        (module) =>
+          module.identity.organizationId !== value.application.identity.organizationId,
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "Runtime page Module releases must belong to the exact Application organization",
+      });
+  });
 
 const runtimePlanFieldTypeSchema = z.enum([
   "text",
@@ -334,7 +449,7 @@ export const installationRuntimeBundleWriteCommandSchema = z
     pinFingerprint: fingerprintSchema,
     sections: z
       .object({
-        pages: jsonValueSchema,
+        pages: installationRuntimeBundlePagesSectionSchema,
         navigation: jsonValueSchema,
         flows: jsonValueSchema,
         trigger_index: jsonValueSchema,

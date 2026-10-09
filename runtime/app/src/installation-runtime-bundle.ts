@@ -3,6 +3,7 @@ import "server-only";
 import {
   canonicalJson,
   installationRuntimeBundleFormatVersion,
+  installationRuntimeBundlePagesSectionSchema,
   installationRuntimeBundleSections,
   installationRuntimeBundleSourceManifestSchema,
   installationRuntimeBundleWriteCommandSchema,
@@ -97,6 +98,8 @@ export const buildInstallationRuntimeBundleWriteCommand = (
     .sort((left, right) => compareCanonical(left.rootId, right.rootId))
     .map((module) => ({
       identity: {
+        kind: module.kind,
+        organizationId: module.organizationId,
         rootId: module.rootId,
         definitionKey: module.definitionKey,
         releaseRevision: module.releaseRevision,
@@ -104,31 +107,39 @@ export const buildInstallationRuntimeBundleWriteCommand = (
         validationContractVersion: module.validationContractVersion,
         contentFingerprint: module.contentFingerprint,
         resolutionFingerprint: module.resolutionFingerprint,
+        dependencyManifest: module.dependencyManifest,
       },
       content: module.content,
     }));
-  const sections = {
-    pages: {
-      application: {
-        identity: {
-          rootId: application.rootId,
-          definitionKey: application.definitionKey,
-          releaseRevision: application.releaseRevision,
-          releaseVersion: application.releaseVersion,
-          validationContractVersion: application.validationContractVersion,
-          contentFingerprint: application.contentFingerprint,
-          resolutionFingerprint: application.resolutionFingerprint,
-        },
-        content: pageContent,
-        shells,
-        pages,
+  const pageSource = installationRuntimeBundlePagesSectionSchema.parse({
+    application: {
+      identity: {
+        kind: application.kind,
+        organizationId: application.organizationId,
+        rootId: application.rootId,
+        definitionKey: application.definitionKey,
+        releaseRevision: application.releaseRevision,
+        releaseVersion: application.releaseVersion,
+        validationContractVersion: application.validationContractVersion,
+        contentFingerprint: application.contentFingerprint,
+        resolutionFingerprint: application.resolutionFingerprint,
+        dependencyManifest: application.dependencyManifest,
+        ...(application.platformCompatibilityVersion === undefined
+          ? {}
+          : { platformCompatibilityVersion: application.platformCompatibilityVersion }),
       },
-      modules,
-      resolvedCompositions: pages.map((page) => ({
-        pageId: page.pageId,
-        roots: resolvePageComposition(page, shells).roots,
-      })),
+      content: pageContent,
+      shells,
+      pages,
     },
+    modules,
+    resolvedCompositions: pages.map((page) => ({
+      pageId: page.pageId,
+      roots: resolvePageComposition(page, shells).roots,
+    })),
+  });
+  const sections = {
+    pages: pageSource,
     navigation,
     flows: { flows, flowBindings },
     trigger_index: flows
