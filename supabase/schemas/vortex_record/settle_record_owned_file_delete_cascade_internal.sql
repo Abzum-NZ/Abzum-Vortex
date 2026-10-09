@@ -16,12 +16,31 @@ declare
   settlement_count integer;
   effect_count integer;
   changed_rows integer;
+  request_deadline_at timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or pg_catalog.jsonb_typeof(p_settlements) is distinct from 'array' then
     raise exception using errcode = '22023',
       message = 'Record File cascade settlement is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File settlement request is unavailable';
   end if;
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -44,15 +63,20 @@ begin
   end if;
 
   select pg_catalog.count(*) into effect_count
-  from vortex_record.record_lifecycle_command_effects as effect
-  where effect.organization_id = receipt.organization_id
-    and effect.application_root_id = receipt.application_root_id
-    and effect.actor_organization_account_id = receipt.actor_organization_account_id
-    and effect.command_id = receipt.command_id
-    and effect.effect_kind = 'soft_deleted';
+  from (
+    select 1
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = receipt.organization_id
+      and effect.application_root_id = receipt.application_root_id
+      and effect.actor_organization_account_id = receipt.actor_organization_account_id
+      and effect.command_id = receipt.command_id
+      and effect.effect_kind = 'soft_deleted'
+    limit 101
+  ) as bounded_effects;
   select pg_catalog.count(*) into settlement_count
   from pg_catalog.jsonb_array_elements(p_settlements) as item(value);
-  if effect_count < 1 or settlement_count <> effect_count
+  if effect_count < 1 or effect_count > 100 or settlement_count > 100
+    or settlement_count <> effect_count
     or exists (
       select 1
       from pg_catalog.jsonb_array_elements(p_settlements) as item(value)
@@ -82,6 +106,10 @@ begin
     order by effect.effect_sequence
     for update
   loop
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File settlement request deadline expired';
+    end if;
     select item.value into strict settlement
     from pg_catalog.jsonb_array_elements(p_settlements) as item(value)
     where (item.value ->> 'effectSequence')::integer = effect_row.effect_sequence;
@@ -121,6 +149,10 @@ begin
   ) then
     raise exception using errcode = '55000',
       message = 'Record File cascade settlement is incomplete';
+  end if;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File settlement request deadline expired';
   end if;
 end
 $function$;

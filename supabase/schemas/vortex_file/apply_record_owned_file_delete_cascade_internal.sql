@@ -9,10 +9,11 @@ set search_path = ''
 as $function$
 declare
   membership_result jsonb;
+  revalidated_authority jsonb;
   effect_item jsonb;
+  revalidated_item jsonb;
   membership_item jsonb;
   candidate_file_ids uuid[] := array[]::uuid[];
-  candidate_file_text text[] := array[]::text[];
   candidate_file_text_value text;
   file_row vortex_file.file_records%rowtype;
   owner_effect jsonb;
@@ -28,11 +29,32 @@ declare
   expected_count integer := 0;
   effect_sequence integer;
   effect_cas jsonb;
+  request_deadline_at timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
+  minimum_permission_deadline timestamptz;
+  locked_file_count integer := 0;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'File cascade command is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'File cascade request is unavailable';
   end if;
   membership_result := vortex_record.read_record_file_lifecycle_membership_internal(
     p_command_id
@@ -57,9 +79,6 @@ begin
         select file.value
         from pg_catalog.jsonb_array_elements_text(membership_item -> 'fileIds') as file(value)
       loop
-        candidate_file_text := pg_catalog.array_append(
-          candidate_file_text, candidate_file_text_value
-        );
         candidate_file_ids := pg_catalog.array_append(
           candidate_file_ids, candidate_file_text_value::uuid
         );
@@ -70,11 +89,72 @@ begin
   select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
   into candidate_file_ids
   from (select distinct file_id from pg_catalog.unnest(candidate_file_ids) as source(file_id)) as item;
-  select coalesce(pg_catalog.array_agg(item.file_id::text order by item.file_id), array[]::text[])
-  into candidate_file_text
-  from pg_catalog.unnest(candidate_file_ids) as item(file_id);
   expected_count := pg_catalog.cardinality(candidate_file_ids);
 
+  -- Lock every candidate File row before re-reading HUMAN Record authority.
+  -- No metadata CAS is allowed until the current actor, field bounds, and
+  -- permission deadlines have been checked after these potentially blocking
+  -- row locks.
+  perform stored.file_id
+  from vortex_file.file_records as stored
+  where stored.organization_id =
+    ((membership_result -> 'effects' -> 0) ->> 'organizationId')::uuid
+    and stored.file_id = any (candidate_file_ids)
+  order by stored.file_id
+  for update;
+  get diagnostics locked_file_count = row_count;
+  if locked_file_count <> expected_count
+    or request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '40001',
+      message = 'File attachment membership changed';
+  end if;
+  revalidated_authority := vortex_record.read_record_owned_file_lifecycle_authority_internal(
+    p_command_id
+  );
+  if revalidated_authority ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') < 1
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') > 100
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') <>
+      pg_catalog.jsonb_array_length(membership_result -> 'effects') then
+    raise exception using errcode = '42501',
+      message = 'File attachment authority changed';
+  end if;
+  for effect_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(membership_result -> 'effects') as item(value)
+    order by (item.value ->> 'effectSequence')::integer
+  loop
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = effect_item ->> 'effectSequence';
+    if (effect_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) is distinct from
+       (revalidated_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) then
+      raise exception using errcode = '40001',
+        message = 'File attachment authority changed';
+    end if;
+    minimum_permission_deadline := least(
+      nullif(effect_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
+    end if;
+  end loop;
+
+  file_count := 0;
   for file_row in
     select stored.*
     from vortex_file.file_records as stored
@@ -82,7 +162,6 @@ begin
       ((membership_result -> 'effects' -> 0) ->> 'organizationId')::uuid
       and stored.file_id = any (candidate_file_ids)
     order by stored.file_id
-    for update
   loop
     file_count := file_count + 1;
     select membership.value into strict membership_item
@@ -132,6 +211,24 @@ begin
     if record_deleted_at is null or due_at <= record_deleted_at then
       raise exception using errcode = '23514',
         message = 'File recovery deadline is invalid';
+    end if;
+
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = owner_effect ->> 'effectSequence';
+    minimum_permission_deadline := least(
+      nullif(owner_effect ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(owner_effect ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(owner_effect ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
     end if;
 
     update vortex_file.file_records as stored
@@ -194,6 +291,52 @@ begin
     raise exception using errcode = '40001',
       message = 'File attachment membership changed';
   end if;
+
+  revalidated_authority := vortex_record.read_record_owned_file_lifecycle_authority_internal(
+    p_command_id
+  );
+  if revalidated_authority ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') < 1
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') > 100
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') <>
+      pg_catalog.jsonb_array_length(membership_result -> 'effects') then
+    raise exception using errcode = '42501',
+      message = 'File attachment authority changed';
+  end if;
+  for effect_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(membership_result -> 'effects') as item(value)
+    order by (item.value ->> 'effectSequence')::integer
+  loop
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = effect_item ->> 'effectSequence';
+    if (effect_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil', 'fileCascadeProof'
+        ]) is distinct from
+       (revalidated_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) then
+      raise exception using errcode = '40001',
+        message = 'File attachment authority changed';
+    end if;
+    minimum_permission_deadline := least(
+      nullif(effect_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
+    end if;
+  end loop;
 
   for effect_item in
     select item.value

@@ -21,6 +21,7 @@ declare
   root_snapshot jsonb;
   deletion_result jsonb;
   current_revision bigint;
+  effect_count integer;
 begin
   if p_command_id is null or p_command_id = nil_uuid
     or p_record_type_id is null or p_record_type_id = nil_uuid
@@ -105,6 +106,21 @@ begin
       'reasonCode', coalesce(deletion_result ->> 'reasonCode', 'record_unavailable'),
       'correlationId', correlation_value
     );
+  end if;
+  select pg_catalog.count(*) into effect_count
+  from (
+    select 1
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id =
+        (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    limit 101
+  ) as bounded_effects;
+  if effect_count > 100 then
+    raise exception using errcode = '57014',
+      message = 'Protected record delete effect limit exceeded';
   end if;
   if root_snapshot is null then
     raise exception using errcode = '55000',

@@ -11,7 +11,7 @@ declare
   context_value jsonb;
   receipt vortex_record.record_lifecycle_command_receipts%rowtype;
   effect_row vortex_record.record_lifecycle_command_effects%rowtype;
-  deleted_identities text[];
+  target_identity text;
   delete_meta jsonb;
   read_meta jsonb;
   update_meta jsonb;
@@ -32,11 +32,19 @@ declare
   attachment_file_ids uuid[];
   attachment_file_id uuid;
   attachment_file_text text;
+  attachment_field_count integer;
+  total_attachment_file_count integer := 0;
   has_attachments boolean;
   attachment_policy jsonb;
   proof_value jsonb;
   proof_digest text;
   deleted_at_value timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
+  request_deadline_at timestamptz;
+  delete_permission_valid_until timestamptz;
+  read_permission_valid_until timestamptz;
+  update_permission_valid_until timestamptz;
   effect_values jsonb := '[]'::jsonb;
   effect_count integer := 0;
 begin
@@ -44,6 +52,22 @@ begin
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'Record File cascade command is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File cascade request is unavailable';
   end if;
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -65,31 +89,34 @@ begin
       message = 'Record File cascade receipt is unavailable';
   end if;
 
-  select coalesce(pg_catalog.array_agg(
-    pg_catalog.lower(effect.storage_contract_id::text) || ':' ||
-      pg_catalog.lower(effect.record_id::text)
-    order by effect.storage_contract_id, effect.record_id
-  ), array[]::text[])
-  into deleted_identities
-  from vortex_record.record_lifecycle_command_effects as effect
-  where effect.organization_id = receipt.organization_id
-    and effect.application_root_id = receipt.application_root_id
-    and effect.actor_organization_account_id = receipt.actor_organization_account_id
-    and effect.command_id = receipt.command_id
-    and effect.effect_kind = 'soft_deleted';
-
   for effect_row in
-    select effect.*
-    from vortex_record.record_lifecycle_command_effects as effect
-    where effect.organization_id = receipt.organization_id
-      and effect.application_root_id = receipt.application_root_id
-      and effect.actor_organization_account_id = receipt.actor_organization_account_id
-      and effect.command_id = receipt.command_id
-      and effect.effect_kind = 'soft_deleted'
-    order by effect.effect_sequence
-    for update
+    select bounded.*
+    from (
+      select effect.*
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+        and effect.effect_kind = 'soft_deleted'
+      order by effect.effect_sequence
+      limit 101
+      for update
+    ) as bounded
   loop
     effect_count := effect_count + 1;
+    if effect_count > 100 then
+      raise exception using errcode = '57014',
+        message = 'Record File cascade effect limit exceeded';
+    end if;
+    target_identity := pg_catalog.lower(effect_row.storage_contract_id::text) || ':' ||
+      pg_catalog.lower(effect_row.record_id::text);
+    read_permission_valid_until := null;
+    update_permission_valid_until := null;
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File cascade request deadline expired';
+    end if;
     if effect_row.file_cascade_settled
       or effect_row.file_cascade_proof_digest is null
       or effect_row.file_cascade_proof_digest !~ '^[0-9a-f]{64}$' then
@@ -136,7 +163,7 @@ begin
       case when (
         pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
         pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-      ) = any (deleted_identities)
+      ) = target_identity
         then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
         else item.value end
       order by item.ordinality
@@ -151,22 +178,28 @@ begin
         'binding', delete_meta -> 'declaration' -> 'recordBinding'
       )
     );
+    delete_permission_valid_until := nullif(decision ->> 'validUntil', '')::timestamptz;
     if decision ->> 'outcome' is distinct from 'allowed'
-      or nullif(decision ->> 'validUntil', '')::timestamptz is null
-      or nullif(decision ->> 'validUntil', '')::timestamptz
-        <= pg_catalog.statement_timestamp() then
+      or delete_permission_valid_until is null
+      or delete_permission_valid_until <= pg_catalog.clock_timestamp() then
       raise exception using errcode = '42501',
         message = 'Record File cascade authority is unavailable';
     end if;
 
     attachment_fields := '[]'::jsonb;
     has_attachments := false;
+    attachment_field_count := 0;
     for attachment_field in
       select declared.value
       from pg_catalog.jsonb_array_elements(delete_meta -> 'recordType' -> 'fields') as declared(value)
       where declared.value ->> 'type' = 'attachment'
       order by pg_catalog.lower(declared.value ->> 'fieldId') collate "C"
     loop
+      attachment_field_count := attachment_field_count + 1;
+      if attachment_field_count > 500 then
+        raise exception using errcode = '57014',
+          message = 'Record File attachment field limit exceeded';
+      end if;
       attachment_file_ids := array[]::uuid[];
       attachment_value := delete_loaded -> 'fieldValues' -> pg_catalog.lower(
         attachment_field ->> 'fieldId'
@@ -181,6 +214,11 @@ begin
           select item.value
           from pg_catalog.jsonb_array_elements_text(attachment_value) as item(value)
         loop
+          if pg_catalog.cardinality(attachment_file_ids) >= 100
+            or total_attachment_file_count >= 1000 then
+            raise exception using errcode = '57014',
+              message = 'Record File attachment value limit exceeded';
+          end if;
           begin
             attachment_file_id := attachment_file_text::uuid;
           exception when invalid_text_representation then
@@ -195,6 +233,7 @@ begin
           attachment_file_ids := pg_catalog.array_append(
             attachment_file_ids, attachment_file_id
           );
+          total_attachment_file_count := total_attachment_file_count + 1;
         end loop;
       end if;
       select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
@@ -254,11 +293,20 @@ begin
         raise exception using errcode = '40001',
           message = 'File attachment revision is stale';
       end if;
+      select item.value into record_fact
+      from pg_catalog.jsonb_array_elements(read_loaded -> 'facts' -> 'records') as item(value)
+      where (item.value -> 'recordScope' ->> 'storageContractId')::uuid =
+          effect_row.storage_contract_id
+        and (item.value -> 'recordScope' ->> 'recordId')::uuid = effect_row.record_id;
+      if record_fact ->> 'lifecycleState' is distinct from 'soft_deleted' then
+        raise exception using errcode = '40001',
+          message = 'File attachment owner is stale';
+      end if;
       select coalesce(pg_catalog.jsonb_agg(
         case when (
           pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
           pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-        ) = any (deleted_identities)
+          ) = target_identity
           then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
           else item.value end
         order by item.ordinality
@@ -275,11 +323,20 @@ begin
           'binding', read_meta -> 'declaration' -> 'recordBinding'
         )
       );
+      select item.value into record_fact
+      from pg_catalog.jsonb_array_elements(update_loaded -> 'facts' -> 'records') as item(value)
+      where (item.value -> 'recordScope' ->> 'storageContractId')::uuid =
+          effect_row.storage_contract_id
+        and (item.value -> 'recordScope' ->> 'recordId')::uuid = effect_row.record_id;
+      if record_fact ->> 'lifecycleState' is distinct from 'soft_deleted' then
+        raise exception using errcode = '40001',
+          message = 'File attachment owner is stale';
+      end if;
       select coalesce(pg_catalog.jsonb_agg(
         case when (
           pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
           pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-        ) = any (deleted_identities)
+          ) = target_identity
           then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
           else item.value end
         order by item.ordinality
@@ -296,14 +353,14 @@ begin
           'binding', update_meta -> 'declaration' -> 'recordBinding'
         )
       );
+      read_permission_valid_until := nullif(read_decision ->> 'validUntil', '')::timestamptz;
+      update_permission_valid_until := nullif(update_decision ->> 'validUntil', '')::timestamptz;
       if read_decision ->> 'outcome' is distinct from 'allowed'
         or update_decision ->> 'outcome' is distinct from 'allowed'
-        or nullif(read_decision ->> 'validUntil', '')::timestamptz is null
-        or nullif(update_decision ->> 'validUntil', '')::timestamptz is null
-        or nullif(read_decision ->> 'validUntil', '')::timestamptz
-          <= pg_catalog.statement_timestamp()
-        or nullif(update_decision ->> 'validUntil', '')::timestamptz
-          <= pg_catalog.statement_timestamp() then
+        or read_permission_valid_until is null
+        or update_permission_valid_until is null
+        or read_permission_valid_until <= pg_catalog.clock_timestamp()
+        or update_permission_valid_until <= pg_catalog.clock_timestamp() then
         raise exception using errcode = '42501',
           message = 'File attachment authority is unavailable';
       end if;
@@ -399,6 +456,13 @@ begin
         'postConcurrencyNumber', effect_row.post_concurrency_number,
         'recordProofDigest', effect_row.file_cascade_proof_digest,
         'recordDeletedAt', vortex_context.format_timestamp_utc(deleted_at_value),
+        'deletePermissionValidUntil', vortex_context.format_timestamp_utc(
+          delete_permission_valid_until
+        ),
+        'readPermissionValidUntil', case when read_permission_valid_until is not null
+          then vortex_context.format_timestamp_utc(read_permission_valid_until) else null end,
+        'updatePermissionValidUntil', case when update_permission_valid_until is not null
+          then vortex_context.format_timestamp_utc(update_permission_valid_until) else null end,
         'attachmentFields', attachment_fields
       ) || case when attachment_policy is not null
         then pg_catalog.jsonb_build_object(
@@ -424,6 +488,10 @@ begin
     ) then
     raise exception using errcode = '55000',
       message = 'Record File cascade effects are incomplete';
+  end if;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File cascade request deadline expired';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared', 'effects', effect_values

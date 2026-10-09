@@ -733,6 +733,7 @@ declare
   root_snapshot jsonb;
   deletion_result jsonb;
   current_revision bigint;
+  effect_count integer;
 begin
   if p_command_id is null or p_command_id = nil_uuid
     or p_record_type_id is null or p_record_type_id = nil_uuid
@@ -818,6 +819,21 @@ begin
       'correlationId', correlation_value
     );
   end if;
+  select pg_catalog.count(*) into effect_count
+  from (
+    select 1
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id =
+        (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    limit 101
+  ) as bounded_effects;
+  if effect_count > 100 then
+    raise exception using errcode = '57014',
+      message = 'Protected record delete effect limit exceeded';
+  end if;
   if root_snapshot is null then
     raise exception using errcode = '55000',
       message = 'Protected record delete root is not installed';
@@ -861,7 +877,7 @@ declare
   context_value jsonb;
   receipt vortex_record.record_lifecycle_command_receipts%rowtype;
   effect_row vortex_record.record_lifecycle_command_effects%rowtype;
-  deleted_identities text[];
+  target_identity text;
   delete_meta jsonb;
   read_meta jsonb;
   update_meta jsonb;
@@ -882,11 +898,19 @@ declare
   attachment_file_ids uuid[];
   attachment_file_id uuid;
   attachment_file_text text;
+  attachment_field_count integer;
+  total_attachment_file_count integer := 0;
   has_attachments boolean;
   attachment_policy jsonb;
   proof_value jsonb;
   proof_digest text;
   deleted_at_value timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
+  request_deadline_at timestamptz;
+  delete_permission_valid_until timestamptz;
+  read_permission_valid_until timestamptz;
+  update_permission_valid_until timestamptz;
   effect_values jsonb := '[]'::jsonb;
   effect_count integer := 0;
 begin
@@ -894,6 +918,22 @@ begin
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'Record File cascade command is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File cascade request is unavailable';
   end if;
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -915,31 +955,34 @@ begin
       message = 'Record File cascade receipt is unavailable';
   end if;
 
-  select coalesce(pg_catalog.array_agg(
-    pg_catalog.lower(effect.storage_contract_id::text) || ':' ||
-      pg_catalog.lower(effect.record_id::text)
-    order by effect.storage_contract_id, effect.record_id
-  ), array[]::text[])
-  into deleted_identities
-  from vortex_record.record_lifecycle_command_effects as effect
-  where effect.organization_id = receipt.organization_id
-    and effect.application_root_id = receipt.application_root_id
-    and effect.actor_organization_account_id = receipt.actor_organization_account_id
-    and effect.command_id = receipt.command_id
-    and effect.effect_kind = 'soft_deleted';
-
   for effect_row in
-    select effect.*
-    from vortex_record.record_lifecycle_command_effects as effect
-    where effect.organization_id = receipt.organization_id
-      and effect.application_root_id = receipt.application_root_id
-      and effect.actor_organization_account_id = receipt.actor_organization_account_id
-      and effect.command_id = receipt.command_id
-      and effect.effect_kind = 'soft_deleted'
-    order by effect.effect_sequence
-    for update
+    select bounded.*
+    from (
+      select effect.*
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+        and effect.effect_kind = 'soft_deleted'
+      order by effect.effect_sequence
+      limit 101
+      for update
+    ) as bounded
   loop
     effect_count := effect_count + 1;
+    if effect_count > 100 then
+      raise exception using errcode = '57014',
+        message = 'Record File cascade effect limit exceeded';
+    end if;
+    target_identity := pg_catalog.lower(effect_row.storage_contract_id::text) || ':' ||
+      pg_catalog.lower(effect_row.record_id::text);
+    read_permission_valid_until := null;
+    update_permission_valid_until := null;
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File cascade request deadline expired';
+    end if;
     if effect_row.file_cascade_settled
       or effect_row.file_cascade_proof_digest is null
       or effect_row.file_cascade_proof_digest !~ '^[0-9a-f]{64}$' then
@@ -986,7 +1029,7 @@ begin
       case when (
         pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
         pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-      ) = any (deleted_identities)
+      ) = target_identity
         then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
         else item.value end
       order by item.ordinality
@@ -1001,22 +1044,28 @@ begin
         'binding', delete_meta -> 'declaration' -> 'recordBinding'
       )
     );
+    delete_permission_valid_until := nullif(decision ->> 'validUntil', '')::timestamptz;
     if decision ->> 'outcome' is distinct from 'allowed'
-      or nullif(decision ->> 'validUntil', '')::timestamptz is null
-      or nullif(decision ->> 'validUntil', '')::timestamptz
-        <= pg_catalog.statement_timestamp() then
+      or delete_permission_valid_until is null
+      or delete_permission_valid_until <= pg_catalog.clock_timestamp() then
       raise exception using errcode = '42501',
         message = 'Record File cascade authority is unavailable';
     end if;
 
     attachment_fields := '[]'::jsonb;
     has_attachments := false;
+    attachment_field_count := 0;
     for attachment_field in
       select declared.value
       from pg_catalog.jsonb_array_elements(delete_meta -> 'recordType' -> 'fields') as declared(value)
       where declared.value ->> 'type' = 'attachment'
       order by pg_catalog.lower(declared.value ->> 'fieldId') collate "C"
     loop
+      attachment_field_count := attachment_field_count + 1;
+      if attachment_field_count > 500 then
+        raise exception using errcode = '57014',
+          message = 'Record File attachment field limit exceeded';
+      end if;
       attachment_file_ids := array[]::uuid[];
       attachment_value := delete_loaded -> 'fieldValues' -> pg_catalog.lower(
         attachment_field ->> 'fieldId'
@@ -1031,6 +1080,11 @@ begin
           select item.value
           from pg_catalog.jsonb_array_elements_text(attachment_value) as item(value)
         loop
+          if pg_catalog.cardinality(attachment_file_ids) >= 100
+            or total_attachment_file_count >= 1000 then
+            raise exception using errcode = '57014',
+              message = 'Record File attachment value limit exceeded';
+          end if;
           begin
             attachment_file_id := attachment_file_text::uuid;
           exception when invalid_text_representation then
@@ -1045,6 +1099,7 @@ begin
           attachment_file_ids := pg_catalog.array_append(
             attachment_file_ids, attachment_file_id
           );
+          total_attachment_file_count := total_attachment_file_count + 1;
         end loop;
       end if;
       select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
@@ -1104,11 +1159,20 @@ begin
         raise exception using errcode = '40001',
           message = 'File attachment revision is stale';
       end if;
+      select item.value into record_fact
+      from pg_catalog.jsonb_array_elements(read_loaded -> 'facts' -> 'records') as item(value)
+      where (item.value -> 'recordScope' ->> 'storageContractId')::uuid =
+          effect_row.storage_contract_id
+        and (item.value -> 'recordScope' ->> 'recordId')::uuid = effect_row.record_id;
+      if record_fact ->> 'lifecycleState' is distinct from 'soft_deleted' then
+        raise exception using errcode = '40001',
+          message = 'File attachment owner is stale';
+      end if;
       select coalesce(pg_catalog.jsonb_agg(
         case when (
           pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
           pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-        ) = any (deleted_identities)
+          ) = target_identity
           then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
           else item.value end
         order by item.ordinality
@@ -1125,11 +1189,20 @@ begin
           'binding', read_meta -> 'declaration' -> 'recordBinding'
         )
       );
+      select item.value into record_fact
+      from pg_catalog.jsonb_array_elements(update_loaded -> 'facts' -> 'records') as item(value)
+      where (item.value -> 'recordScope' ->> 'storageContractId')::uuid =
+          effect_row.storage_contract_id
+        and (item.value -> 'recordScope' ->> 'recordId')::uuid = effect_row.record_id;
+      if record_fact ->> 'lifecycleState' is distinct from 'soft_deleted' then
+        raise exception using errcode = '40001',
+          message = 'File attachment owner is stale';
+      end if;
       select coalesce(pg_catalog.jsonb_agg(
         case when (
           pg_catalog.lower(item.value -> 'recordScope' ->> 'storageContractId') || ':' ||
           pg_catalog.lower(item.value -> 'recordScope' ->> 'recordId')
-        ) = any (deleted_identities)
+          ) = target_identity
           then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active')
           else item.value end
         order by item.ordinality
@@ -1146,14 +1219,14 @@ begin
           'binding', update_meta -> 'declaration' -> 'recordBinding'
         )
       );
+      read_permission_valid_until := nullif(read_decision ->> 'validUntil', '')::timestamptz;
+      update_permission_valid_until := nullif(update_decision ->> 'validUntil', '')::timestamptz;
       if read_decision ->> 'outcome' is distinct from 'allowed'
         or update_decision ->> 'outcome' is distinct from 'allowed'
-        or nullif(read_decision ->> 'validUntil', '')::timestamptz is null
-        or nullif(update_decision ->> 'validUntil', '')::timestamptz is null
-        or nullif(read_decision ->> 'validUntil', '')::timestamptz
-          <= pg_catalog.statement_timestamp()
-        or nullif(update_decision ->> 'validUntil', '')::timestamptz
-          <= pg_catalog.statement_timestamp() then
+        or read_permission_valid_until is null
+        or update_permission_valid_until is null
+        or read_permission_valid_until <= pg_catalog.clock_timestamp()
+        or update_permission_valid_until <= pg_catalog.clock_timestamp() then
         raise exception using errcode = '42501',
           message = 'File attachment authority is unavailable';
       end if;
@@ -1249,6 +1322,13 @@ begin
         'postConcurrencyNumber', effect_row.post_concurrency_number,
         'recordProofDigest', effect_row.file_cascade_proof_digest,
         'recordDeletedAt', vortex_context.format_timestamp_utc(deleted_at_value),
+        'deletePermissionValidUntil', vortex_context.format_timestamp_utc(
+          delete_permission_valid_until
+        ),
+        'readPermissionValidUntil', case when read_permission_valid_until is not null
+          then vortex_context.format_timestamp_utc(read_permission_valid_until) else null end,
+        'updatePermissionValidUntil', case when update_permission_valid_until is not null
+          then vortex_context.format_timestamp_utc(update_permission_valid_until) else null end,
         'attachmentFields', attachment_fields
       ) || case when attachment_policy is not null
         then pg_catalog.jsonb_build_object(
@@ -1274,6 +1354,10 @@ begin
     ) then
     raise exception using errcode = '55000',
       message = 'Record File cascade effects are incomplete';
+  end if;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File cascade request deadline expired';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared', 'effects', effect_values
@@ -1309,12 +1393,31 @@ declare
   settlement_count integer;
   effect_count integer;
   changed_rows integer;
+  request_deadline_at timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or pg_catalog.jsonb_typeof(p_settlements) is distinct from 'array' then
     raise exception using errcode = '22023',
       message = 'Record File cascade settlement is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File settlement request is unavailable';
   end if;
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -1337,15 +1440,20 @@ begin
   end if;
 
   select pg_catalog.count(*) into effect_count
-  from vortex_record.record_lifecycle_command_effects as effect
-  where effect.organization_id = receipt.organization_id
-    and effect.application_root_id = receipt.application_root_id
-    and effect.actor_organization_account_id = receipt.actor_organization_account_id
-    and effect.command_id = receipt.command_id
-    and effect.effect_kind = 'soft_deleted';
+  from (
+    select 1
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = receipt.organization_id
+      and effect.application_root_id = receipt.application_root_id
+      and effect.actor_organization_account_id = receipt.actor_organization_account_id
+      and effect.command_id = receipt.command_id
+      and effect.effect_kind = 'soft_deleted'
+    limit 101
+  ) as bounded_effects;
   select pg_catalog.count(*) into settlement_count
   from pg_catalog.jsonb_array_elements(p_settlements) as item(value);
-  if effect_count < 1 or settlement_count <> effect_count
+  if effect_count < 1 or effect_count > 100 or settlement_count > 100
+    or settlement_count <> effect_count
     or exists (
       select 1
       from pg_catalog.jsonb_array_elements(p_settlements) as item(value)
@@ -1375,6 +1483,10 @@ begin
     order by effect.effect_sequence
     for update
   loop
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File settlement request deadline expired';
+    end if;
     select item.value into strict settlement
     from pg_catalog.jsonb_array_elements(p_settlements) as item(value)
     where (item.value ->> 'effectSequence')::integer = effect_row.effect_sequence;
@@ -1414,6 +1526,10 @@ begin
   ) then
     raise exception using errcode = '55000',
       message = 'Record File cascade settlement is incomplete';
+  end if;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File settlement request deadline expired';
   end if;
 end
 $function$;
@@ -1484,6 +1600,10 @@ declare
   previous_target_module_root_id uuid;
   target_module_binding_count integer;
   origin_application_is_consumer boolean;
+  request_deadline_at timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
+  effect_count integer;
 begin
   -- The terminal delete, restore and ownership-transfer writes now run inside the
   -- one protected apply_record_changes operation. Each branch is the exact body
@@ -1493,6 +1613,22 @@ begin
   -- already claimed and, for a delete, already soft-deleted behind; the transfer
   -- branch owns and claims its own record_save receipt as before.
   if p_operation = 'delete' then
+    begin
+      request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+      request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+    exception when invalid_text_representation then
+      request_timeout := interval '0';
+      request_lock_timeout := interval '0';
+    end;
+    request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+    if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+      or request_lock_timeout <= interval '0'
+      or request_lock_timeout > interval '5 seconds'
+      or request_deadline_at <= pg_catalog.clock_timestamp()
+      or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+      raise exception using errcode = '57014',
+        message = 'Protected record delete request deadline expired';
+    end if;
     context_value := vortex_access.validated_human_request_context();
     receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
     if receipt.command_id is null
@@ -1503,6 +1639,21 @@ begin
       or receipt.expected_concurrency_number is distinct from p_expected_concurrency_number then
       raise exception using errcode = '55000',
         message = 'Protected record delete is not prepared';
+    end if;
+
+    select pg_catalog.count(*) into effect_count
+    from (
+      select 1
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+      limit 101
+    ) as bounded_effects;
+    if effect_count < 1 or effect_count > 100 then
+      raise exception using errcode = '57014',
+        message = 'Protected record delete effect limit exceeded';
     end if;
 
     if not exists (
@@ -1594,6 +1745,11 @@ begin
     perform vortex_record.append_record_lifecycle_activity_internal(
       receipt.activity_id, 'delete', subject_ids
     );
+
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Protected record delete request deadline expired';
+    end if;
 
     perform vortex_record.complete_command_receipt_internal(
       'record_lifecycle', p_command_id, null, p_expected_concurrency_number + 1,
@@ -2128,15 +2284,41 @@ declare
   storage_row vortex_record.storage_catalogue%rowtype;
   relation_oid oid;
   owner_role_oid oid := 'vortex_record_owner'::regrole::oid;
+  adapter_role_oid oid := 'vortex_record_adapter'::regrole::oid;
   contract_id_value uuid;
   token_value text;
+  reader_schema_value text;
+  reader_function_value text;
+  reader_function_oid oid;
+  request_timeout interval;
+  request_lock_timeout interval;
+  request_deadline_at timestamptz;
+  storage_count integer := 0;
   relation_count integer := 0;
+  has_attachment_candidates boolean;
+  attachment_mapping_count integer;
   attachment_mappings jsonb := '[]'::jsonb;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'Record File inventory command is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File inventory request is unavailable';
   end if;
   authority := vortex_record.read_record_owned_file_lifecycle_authority_internal(
     p_command_id
@@ -2146,12 +2328,35 @@ begin
     raise exception using errcode = '42501',
       message = 'Record File inventory authority is unavailable';
   end if;
+  select exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(authority -> 'effects') as effect(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      effect.value -> 'attachmentFields'
+    ) as field(value)
+    cross join lateral pg_catalog.jsonb_array_elements_text(
+      field.value -> 'fileIds'
+    ) as file(value)
+  ) into has_attachment_candidates;
+  if not has_attachment_candidates then
+    if request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File inventory request deadline expired';
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'locked', 'relationCount', 0, 'attachmentMappings', '[]'::jsonb
+    );
+  end if;
 
   -- Freeze catalogue membership before enumerating tables, then take SHARE
   -- locks in one bytewise order so no concurrent Record writer can add or
   -- redirect an attachment reference during the organization-wide scan.
   lock table vortex_record.storage_catalogue,
     vortex_record.field_storage_mappings in share mode;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File inventory request deadline expired';
+  end if;
 
   if exists (
     select 1
@@ -2165,11 +2370,20 @@ begin
   end if;
 
   for storage_row in
-    select stored.*
-    from vortex_record.storage_catalogue as stored
-    where stored.physical_schema_token in ('record_data', 'system_projection')
-    order by stored.physical_table_token collate "C", stored.storage_contract_id
+    select bounded.*
+    from (
+      select stored.*
+      from vortex_record.storage_catalogue as stored
+      where stored.physical_schema_token in ('record_data', 'system_projection')
+      order by stored.physical_table_token collate "C", stored.storage_contract_id
+      limit 513
+    ) as bounded
   loop
+    storage_count := storage_count + 1;
+    if storage_count > 512 or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File inventory storage limit exceeded';
+    end if;
     if storage_row.physical_table_token !~ '^rt_[0-9a-f]{32}$'
       or storage_row.physical_table_token <> 'rt_' ||
         pg_catalog.replace(pg_catalog.lower(storage_row.storage_contract_id::text), '-', '') then
@@ -2179,19 +2393,140 @@ begin
     relation_oid := pg_catalog.to_regclass(pg_catalog.format(
       '%I.%I', 'record_data', storage_row.physical_table_token
     ))::oid;
-    if relation_oid is null
-      or not exists (
-        select 1 from pg_catalog.pg_class as relation
-        where relation.oid = relation_oid
-          and relation.relkind = 'r'
-          and relation.relpersistence = 'p'
-          and not relation.relispartition
-          and relation.relowner = owner_role_oid
-          and relation.relrowsecurity
-          and relation.relforcerowsecurity
+    if storage_row.physical_schema_token = 'record_data' then
+      if relation_oid is null
+        or not exists (
+          select 1 from pg_catalog.pg_class as relation
+          where relation.oid = relation_oid
+            and relation.relkind = 'r'
+            and relation.relpersistence = 'p'
+            and not relation.relispartition
+            and relation.relowner = owner_role_oid
+            and relation.relrowsecurity
+            and relation.relforcerowsecurity
+        ) then
+        raise exception using errcode = '55000',
+          message = 'Record File inventory storage is unavailable';
+      end if;
+    else
+      select registered.reader_schema, registered.reader_function
+      into reader_schema_value, reader_function_value
+      from vortex_record.protected_read_model_views as registered
+      where registered.protected_read_model_key = storage_row.protected_read_model_key;
+      reader_function_oid := case when reader_schema_value is not null
+        then pg_catalog.to_regprocedure(pg_catalog.format(
+          '%I.%I(uuid,integer)', reader_schema_value, reader_function_value
+        ))::oid else null end;
+      if relation_oid is null
+        or reader_function_oid is null
+        or not exists (
+          select 1 from pg_catalog.pg_class as relation
+          where relation.oid = relation_oid
+            and relation.relkind = 'v'
+            and relation.relpersistence = 'p'
+            and relation.relowner = owner_role_oid
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_proc as reader
+          where reader.oid = reader_function_oid and reader.prosecdef
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_rewrite as rule
+          join pg_catalog.pg_depend as dependency
+            on dependency.classid = 'pg_rewrite'::regclass
+            and dependency.objid = rule.oid
+            and dependency.refclassid = 'pg_proc'::regclass
+            and dependency.refobjid = reader_function_oid
+          where rule.ev_class = relation_oid and rule.rulename = '_RETURN'
+        )
+        or exists (
+          select 1 from pg_catalog.pg_trigger as trigger
+          where trigger.tgrelid = relation_oid and not trigger.tgisinternal
+        )
+        or exists (
+          select 1 from pg_catalog.pg_rewrite as rule
+          where rule.ev_class = relation_oid and rule.rulename <> '_RETURN'
+        )
+        or exists (
+          select 1
+          from pg_catalog.pg_rewrite as rule
+          join pg_catalog.pg_depend as dependency
+            on dependency.classid = 'pg_rewrite'::regclass
+            and dependency.objid = rule.oid
+            and dependency.refclassid = 'pg_class'::regclass
+          where rule.ev_class = relation_oid and rule.rulename = '_RETURN'
+            and dependency.refobjid <> relation_oid
+        )
+        or (
+          select pg_catalog.count(*)
+          from pg_catalog.pg_rewrite as rule
+          where rule.ev_class = relation_oid and rule.rulename = '_RETURN'
+        ) <> 1
+        or not exists (
+          select 1
+          from pg_catalog.pg_class as relation
+          cross join lateral pg_catalog.aclexplode(coalesce(
+            relation.relacl, pg_catalog.acldefault('r', relation.relowner)
+          )) as privilege
+          where relation.oid = relation_oid
+            and privilege.grantee = adapter_role_oid
+            and privilege.privilege_type = 'SELECT'
+            and not privilege.is_grantable
+        )
+        or exists (
+          select 1
+          from pg_catalog.pg_class as relation
+          cross join lateral pg_catalog.aclexplode(coalesce(
+            relation.relacl, pg_catalog.acldefault('r', relation.relowner)
+          )) as privilege
+          where relation.oid = relation_oid
+            and (privilege.grantee not in (owner_role_oid, adapter_role_oid)
+              or (privilege.grantee = adapter_role_oid
+                and (privilege.privilege_type <> 'SELECT' or privilege.is_grantable)))
+        )
+        or exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid and attribute.attacl is not null
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid and attribute.attname = 'record_id'
+            and attribute.attnum > 0 and not attribute.attisdropped
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid and attribute.attname = 'organisation_id'
+            and attribute.attnum > 0 and not attribute.attisdropped
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid and attribute.attname = 'application_root_id'
+            and attribute.attnum > 0 and not attribute.attisdropped
+        )
+        or not exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid and attribute.attname = 'lifecycle_state'
+            and attribute.attnum > 0 and not attribute.attisdropped
+        ) then
+        raise exception using errcode = '55000',
+          message = 'Record File protected projection is unavailable';
+      end if;
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(storage_row.record_type_definition -> 'fields')
+          as item(value)
+        where not exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = relation_oid
+            and attribute.attname = 'f_' || pg_catalog.replace(
+              pg_catalog.lower(item.value ->> 'fieldId'), '-', ''
+            )
+            and attribute.attnum > 0 and not attribute.attisdropped
+        )
       ) then
-      raise exception using errcode = '55000',
-        message = 'Record File inventory storage is unavailable';
+        raise exception using errcode = '55000',
+          message = 'Record File protected projection fields are incomplete';
+      end if;
     end if;
   end loop;
 
@@ -2199,18 +2534,27 @@ begin
   -- Missing or unexpected inventory fails closed instead of becoming an empty
   -- owner set. All rows are scanned only by the current-organisation role.
   for relation_row in
-    select relation.oid, relation.relname
-    from pg_catalog.pg_class as relation
-    join pg_catalog.pg_namespace as namespace
-      on namespace.oid = relation.relnamespace
-    where namespace.nspname = 'record_data'
-      and relation.relkind = 'r'
-      and relation.relpersistence = 'p'
-      and not relation.relispartition
-      and (relation.relname ~ '^rt_[0-9a-f]{32}$'
-        or relation.relname ~ '^cp_[0-9a-f]{32}$')
-    order by relation.relname collate "C", relation.oid
+    select bounded.oid, bounded.relname
+    from (
+      select relation.oid, relation.relname
+      from pg_catalog.pg_class as relation
+      join pg_catalog.pg_namespace as namespace
+        on namespace.oid = relation.relnamespace
+      where namespace.nspname = 'record_data'
+        and relation.relkind = 'r'
+        and relation.relpersistence = 'p'
+        and not relation.relispartition
+        and (relation.relname ~ '^rt_[0-9a-f]{32}$'
+          or relation.relname ~ '^cp_[0-9a-f]{32}$')
+      order by relation.relname collate "C", relation.oid
+      limit 1025
+    ) as bounded
   loop
+    relation_count := relation_count + 1;
+    if relation_count > 1024 or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Record File inventory relation limit exceeded';
+    end if;
     if not exists (
       select 1 from pg_catalog.pg_class as relation
       where relation.oid = relation_row.oid
@@ -2257,19 +2601,24 @@ begin
     execute pg_catalog.format(
       'lock table record_data.%I in share mode', relation_row.relname
     );
-    relation_count := relation_count + 1;
   end loop;
 
   if relation_count = 0 then
     raise exception using errcode = '55000',
       message = 'Record File inventory is unavailable';
   end if;
-  select coalesce(pg_catalog.jsonb_agg(
-    pg_catalog.jsonb_build_object(
+  select coalesce(pg_catalog.jsonb_agg(mapping.value order by
+    (mapping.value ->> 'storage_contract_id')::uuid,
+    (mapping.value ->> 'field_id')::uuid
+  ), '[]'::jsonb)
+  into attachment_mappings
+  from (
+    select pg_catalog.jsonb_build_object(
       'storage_contract_id', catalogue.storage_contract_id,
       'module_root_id', catalogue.module_root_id,
       'record_type_id', catalogue.record_type_id,
       'storage_scope', catalogue.storage_scope,
+      'physical_schema_token', catalogue.physical_schema_token,
       'base_table_token', catalogue.physical_table_token,
       'table_token', case
         when mapping.introduced_by_module_root_id = catalogue.module_root_id
@@ -2281,15 +2630,22 @@ begin
       'column_token', mapping.physical_column_token,
       'database_value_type', mapping.database_value_type,
       'introduced_by_module_root_id', mapping.introduced_by_module_root_id
-    ) order by catalogue.storage_contract_id, mapping.field_id
-  ), '[]'::jsonb)
-  into attachment_mappings
-  from vortex_record.storage_catalogue as catalogue
-  join vortex_record.field_storage_mappings as mapping
-    on mapping.storage_contract_id = catalogue.storage_contract_id
-  where mapping.state in ('active', 'retired')
-    and mapping.field_definition ->> 'type' = 'attachment'
-    and catalogue.physical_schema_token in ('record_data', 'system_projection');
+    ) as value
+    from vortex_record.storage_catalogue as catalogue
+    join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = catalogue.storage_contract_id
+    where mapping.state in ('active', 'retired')
+      and mapping.field_definition ->> 'type' = 'attachment'
+      and catalogue.physical_schema_token in ('record_data', 'system_projection')
+    order by catalogue.storage_contract_id, mapping.field_id
+    limit 4097
+  ) as mapping;
+  attachment_mapping_count := pg_catalog.jsonb_array_length(attachment_mappings);
+  if attachment_mapping_count > 4096
+    or request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File inventory field limit exceeded';
+  end if;
 
   if exists (
     select 1
@@ -2312,10 +2668,19 @@ begin
         and attribute.attnum > 0
         and not attribute.attisdropped
         and attribute.atttypid = 'jsonb'::regtype
+        and item.value ->> 'physical_schema_token' in ('record_data', 'system_projection')
+        and not (
+          item.value ->> 'physical_schema_token' = 'system_projection'
+          and item.value ->> 'table_token' = item.value ->> 'base_table_token'
+        )
     )
   ) then
     raise exception using errcode = '55000',
       message = 'Record File attachment catalogue is incomplete';
+  end if;
+  if request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '57014',
+      message = 'Record File inventory request deadline expired';
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'locked', 'relationCount', relation_count,
@@ -2882,16 +3247,38 @@ declare
   match_row record;
   organization_id_value uuid;
   candidate_file_ids uuid[] := array[]::uuid[];
-  candidate_file_text text[] := array[]::text[];
   candidate_file_text_value text;
   matching_count integer;
   invalid_values boolean;
+  row_count integer;
+  total_scope_rows integer := 0;
+  total_owner_rows integer := 0;
+  request_timeout interval;
+  request_lock_timeout interval;
+  request_deadline_at timestamptz;
   base_table_token text;
   physical_table_token text;
+  physical_schema_token text;
   relation_oid oid;
   membership_values jsonb := '[]'::jsonb;
   expected boolean;
 begin
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'Record File membership request is unavailable';
+  end if;
   lock_result := vortex_record.lock_record_file_lifecycle_inventory_internal(
     p_command_id
   );
@@ -2926,18 +3313,20 @@ begin
         from pg_catalog.jsonb_array_elements_text(field_item -> 'fileIds') as item(value)
         order by item.value collate "C"
       loop
+        if pg_catalog.cardinality(candidate_file_ids) >= 1000
+          or request_deadline_at <= pg_catalog.clock_timestamp() then
+          raise exception using errcode = '57014',
+            message = 'Record File candidate limit exceeded';
+        end if;
         candidate_file_ids := pg_catalog.array_append(
           candidate_file_ids, candidate_file_text_value::uuid
-        );
-        candidate_file_text := pg_catalog.array_append(
-          candidate_file_text, candidate_file_text_value
         );
       end loop;
     end loop;
   end loop;
   if pg_catalog.cardinality(candidate_file_ids) > (
     select pg_catalog.count(distinct item.value)
-    from pg_catalog.unnest(candidate_file_text) as item(value)
+    from pg_catalog.unnest(candidate_file_ids) as item(value)
   ) then
     raise exception using errcode = '23514',
       message = 'File attachment has multiple Record owners';
@@ -2947,7 +3336,7 @@ begin
     for mapping_row in
       select mapping.storage_contract_id, mapping.module_root_id,
         mapping.record_type_id, mapping.storage_scope,
-        mapping.base_table_token, mapping.table_token,
+        mapping.physical_schema_token, mapping.base_table_token, mapping.table_token,
         mapping.field_id, mapping.column_token,
         mapping.introduced_by_module_root_id, mapping.database_value_type
       from pg_catalog.jsonb_to_recordset(lock_result -> 'attachmentMappings') as mapping(
@@ -2955,6 +3344,7 @@ begin
         module_root_id uuid,
         record_type_id uuid,
         storage_scope text,
+        physical_schema_token text,
         base_table_token text,
         table_token text,
         field_id uuid,
@@ -2964,8 +3354,14 @@ begin
       )
       order by mapping.storage_contract_id, mapping.field_id
     loop
+      physical_schema_token := mapping_row.physical_schema_token;
       base_table_token := mapping_row.base_table_token;
       physical_table_token := mapping_row.table_token;
+      if physical_schema_token = 'system_projection'
+        and physical_table_token = base_table_token then
+        raise exception using errcode = '55000',
+          message = 'Record File projection attachment source is unavailable';
+      end if;
       relation_oid := pg_catalog.to_regclass(pg_catalog.format(
         '%I.%I', 'record_data', physical_table_token
       ))::oid;
@@ -2983,18 +3379,100 @@ begin
           message = 'Record File attachment mapping is unavailable';
       end if;
 
-      if physical_table_token = base_table_token then
+      if physical_schema_token = 'system_projection' then
+        execute pg_catalog.format(
+          'select pg_catalog.count(*) from (
+             select 1 from record_data.%I as companion
+             where companion.organisation_id = $1
+             limit 10001
+           ) as bounded_rows',
+          physical_table_token
+        ) into row_count using organization_id_value;
+      elsif physical_table_token = base_table_token then
+        execute pg_catalog.format(
+          'select pg_catalog.count(*) from (
+             select 1 from record_data.%I as stored
+             where stored.organisation_id = $1
+               and stored.lifecycle_state <> ''removed''
+             limit 10001
+           ) as bounded_rows',
+          physical_table_token
+        ) into row_count using organization_id_value;
+      else
+        execute pg_catalog.format(
+          'select pg_catalog.count(*) from (
+             select 1
+             from record_data.%I as companion
+             join record_data.%I as stored
+               on stored.organisation_id = companion.organisation_id
+               and stored.record_id = companion.record_id
+             where companion.organisation_id = $1
+               and stored.lifecycle_state <> ''removed''
+             limit 10001
+           ) as bounded_rows',
+          physical_table_token, base_table_token
+        ) into row_count using organization_id_value;
+      end if;
+      if row_count > 10000 or total_scope_rows + row_count > 50000
+        or request_deadline_at <= pg_catalog.clock_timestamp() then
+        raise exception using errcode = '57014',
+          message = 'Record File owner scan limit exceeded';
+      end if;
+      total_scope_rows := total_scope_rows + row_count;
+
+      if physical_schema_token = 'system_projection' then
+        execute pg_catalog.format(
+          'select exists (
+             select 1 from record_data.%I as companion
+             where companion.organisation_id = $1
+               and case
+                 when companion.%I is null
+                   or pg_catalog.jsonb_typeof(companion.%I) = ''null'' then false
+                 when pg_catalog.jsonb_typeof(companion.%I) <> ''array'' then true
+                 when pg_catalog.jsonb_array_length(companion.%I) > 100 then true
+                 else exists (
+                   select 1 from pg_catalog.jsonb_array_elements_text(companion.%I) as item(value)
+                   where item.value !~* ''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''
+                     or item.value = ''00000000-0000-0000-0000-000000000000''
+                 ) or (
+                   select pg_catalog.count(*) <> pg_catalog.count(distinct item.value)
+                   from pg_catalog.jsonb_array_elements_text(companion.%I) as item(value)
+                 )
+               end
+           )',
+          physical_table_token,
+          mapping_row.column_token, mapping_row.column_token,
+          mapping_row.column_token, mapping_row.column_token,
+          mapping_row.column_token, mapping_row.column_token
+        ) into invalid_values using organization_id_value;
+      elsif physical_table_token = base_table_token then
         execute pg_catalog.format(
           'select exists (
              select 1 from record_data.%I as stored
              where stored.organisation_id = $1
-               and stored.lifecycle_state not in (''active'', ''soft_deleted'', ''removed'')
-               and pg_catalog.to_jsonb(stored.%I) is not null
-               and pg_catalog.jsonb_typeof(pg_catalog.to_jsonb(stored.%I))
-                 not in (''array'', ''null'')
+               and (
+                 stored.lifecycle_state not in (''active'', ''soft_deleted'', ''removal_pending'', ''removed'')
+                 or (stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+                   and case
+                     when stored.%I is null
+                       or pg_catalog.jsonb_typeof(stored.%I) = ''null'' then false
+                     when pg_catalog.jsonb_typeof(stored.%I) <> ''array'' then true
+                     when pg_catalog.jsonb_array_length(stored.%I) > 100 then true
+                     else exists (
+                       select 1 from pg_catalog.jsonb_array_elements_text(stored.%I) as item(value)
+                       where item.value !~* ''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''
+                         or item.value = ''00000000-0000-0000-0000-000000000000''
+                     ) or (
+                       select pg_catalog.count(*) <> pg_catalog.count(distinct item.value)
+                       from pg_catalog.jsonb_array_elements_text(stored.%I) as item(value)
+                     )
+                   end)
+               )
            )',
-          physical_table_token, mapping_row.column_token,
-          mapping_row.column_token
+          physical_table_token,
+          mapping_row.column_token, mapping_row.column_token,
+          mapping_row.column_token, mapping_row.column_token,
+          mapping_row.column_token, mapping_row.column_token
         ) into invalid_values using organization_id_value;
       else
         execute pg_catalog.format(
@@ -3005,12 +3483,28 @@ begin
                on stored.organisation_id = companion.organisation_id
                and stored.record_id = companion.record_id
              where companion.organisation_id = $1
-               and stored.lifecycle_state not in (''active'', ''soft_deleted'', ''removed'')
-               and pg_catalog.to_jsonb(companion.%I) is not null
-               and pg_catalog.jsonb_typeof(pg_catalog.to_jsonb(companion.%I))
-                 not in (''array'', ''null'')
+               and (
+                 stored.lifecycle_state not in (''active'', ''soft_deleted'', ''removal_pending'', ''removed'')
+                 or (stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+                   and case
+                     when companion.%I is null
+                       or pg_catalog.jsonb_typeof(companion.%I) = ''null'' then false
+                     when pg_catalog.jsonb_typeof(companion.%I) <> ''array'' then true
+                     when pg_catalog.jsonb_array_length(companion.%I) > 100 then true
+                     else exists (
+                       select 1 from pg_catalog.jsonb_array_elements_text(companion.%I) as item(value)
+                       where item.value !~* ''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''
+                         or item.value = ''00000000-0000-0000-0000-000000000000''
+                     ) or (
+                       select pg_catalog.count(*) <> pg_catalog.count(distinct item.value)
+                       from pg_catalog.jsonb_array_elements_text(companion.%I) as item(value)
+                     )
+                   end)
+               )
            )',
           physical_table_token, base_table_token,
+          mapping_row.column_token, mapping_row.column_token,
+          mapping_row.column_token, mapping_row.column_token,
           mapping_row.column_token, mapping_row.column_token
         ) into invalid_values using organization_id_value;
       end if;
@@ -3018,20 +3512,37 @@ begin
         raise exception using errcode = '23514',
           message = 'Record File attachment value is invalid';
       end if;
+      if request_deadline_at <= pg_catalog.clock_timestamp() then
+        raise exception using errcode = '57014',
+          message = 'Record File owner scan deadline expired';
+      end if;
 
-      if physical_table_token = base_table_token then
+      if physical_schema_token = 'system_projection' then
+        -- The registered projection view is validated by the inventory locker.
+        -- Its current source contract cannot declare base attachment fields;
+        -- contributed attachment values live in this organization-scoped cp_
+        -- table. Count every retained cp_ reference directly. If the protected
+        -- source no longer emits a row, keeping its persisted reference as an
+        -- owner is conservative; it must never become an empty-owner result.
         for match_row in execute pg_catalog.format(
-          'select stored.record_id, stored.application_root_id, item.value as file_id
-           from record_data.%I as stored
+          'select companion.record_id, null::uuid as application_root_id,
+             item.value::uuid as file_id
+           from record_data.%I as companion
            cross join lateral pg_catalog.jsonb_array_elements_text(
-             pg_catalog.to_jsonb(stored.%I)
+             pg_catalog.to_jsonb(companion.%I)
            ) as item(value)
-           where stored.organisation_id = $1
-             and stored.lifecycle_state in (''active'', ''soft_deleted'')
-             and item.value = any ($2::text[])',
-          physical_table_token, mapping_row.column_token
-        ) using organization_id_value, candidate_file_text
+           where companion.organisation_id = $1
+             and pg_catalog.jsonb_typeof(companion.%I) = ''array''
+             and item.value::uuid = any ($2::uuid[])',
+          physical_table_token, mapping_row.column_token, mapping_row.column_token
+        ) using organization_id_value, candidate_file_ids
         loop
+          total_owner_rows := total_owner_rows + 1;
+          if total_owner_rows > 50000
+            or request_deadline_at <= pg_catalog.clock_timestamp() then
+            raise exception using errcode = '57014',
+              message = 'Record File owner result limit exceeded';
+          end if;
           expected := exists (
             select 1
             from pg_catalog.jsonb_array_elements(authority -> 'effects') as effect(value)
@@ -3043,7 +3554,56 @@ begin
               and (effect.value ->> 'recordId')::uuid = match_row.record_id
               and (effect.value ->> 'recordTypeId')::uuid = mapping_row.record_type_id
               and (field.value ->> 'fieldId')::uuid = mapping_row.field_id
-              and field.value -> 'fileIds' ? match_row.file_id
+              and field.value -> 'fileIds' ? (match_row.file_id::text)
+          );
+          if not expected then
+            raise exception using errcode = '23514',
+              message = 'File attachment has another Record owner';
+          end if;
+          membership_values := membership_values || pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'fileId', match_row.file_id::uuid,
+              'storageContractId', mapping_row.storage_contract_id,
+              'recordTypeId', mapping_row.record_type_id,
+              'recordId', match_row.record_id,
+              'fieldId', mapping_row.field_id,
+              'applicationRootId', null
+            )
+          );
+        end loop;
+      elsif physical_table_token = base_table_token then
+        for match_row in execute pg_catalog.format(
+          'select stored.record_id, stored.application_root_id,
+             item.value::uuid as file_id
+           from record_data.%I as stored
+           cross join lateral pg_catalog.jsonb_array_elements_text(
+             pg_catalog.to_jsonb(stored.%I)
+           ) as item(value)
+           where stored.organisation_id = $1
+             and stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+             and pg_catalog.jsonb_typeof(stored.%I) = ''array''
+             and item.value::uuid = any ($2::uuid[])',
+          physical_table_token, mapping_row.column_token, mapping_row.column_token
+        ) using organization_id_value, candidate_file_ids
+        loop
+          total_owner_rows := total_owner_rows + 1;
+          if total_owner_rows > 50000
+            or request_deadline_at <= pg_catalog.clock_timestamp() then
+            raise exception using errcode = '57014',
+              message = 'Record File owner result limit exceeded';
+          end if;
+          expected := exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(authority -> 'effects') as effect(value)
+            cross join lateral pg_catalog.jsonb_array_elements(
+              effect.value -> 'attachmentFields'
+            ) as field(value)
+            where (effect.value ->> 'storageContractId')::uuid =
+                mapping_row.storage_contract_id
+              and (effect.value ->> 'recordId')::uuid = match_row.record_id
+              and (effect.value ->> 'recordTypeId')::uuid = mapping_row.record_type_id
+              and (field.value ->> 'fieldId')::uuid = mapping_row.field_id
+              and field.value -> 'fileIds' ? (match_row.file_id::text)
           );
           if not expected then
             raise exception using errcode = '23514',
@@ -3062,7 +3622,8 @@ begin
         end loop;
       else
         for match_row in execute pg_catalog.format(
-          'select stored.record_id, stored.application_root_id, item.value as file_id
+          'select stored.record_id, stored.application_root_id,
+             item.value::uuid as file_id
            from record_data.%I as companion
            join record_data.%I as stored
              on stored.organisation_id = companion.organisation_id
@@ -3071,11 +3632,19 @@ begin
              pg_catalog.to_jsonb(companion.%I)
            ) as item(value)
            where companion.organisation_id = $1
-             and stored.lifecycle_state in (''active'', ''soft_deleted'')
-             and item.value = any ($2::text[])',
-          physical_table_token, base_table_token, mapping_row.column_token
-        ) using organization_id_value, candidate_file_text
+             and stored.lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')
+             and pg_catalog.jsonb_typeof(companion.%I) = ''array''
+             and item.value::uuid = any ($2::uuid[])',
+          physical_table_token, base_table_token,
+          mapping_row.column_token, mapping_row.column_token
+        ) using organization_id_value, candidate_file_ids
         loop
+          total_owner_rows := total_owner_rows + 1;
+          if total_owner_rows > 50000
+            or request_deadline_at <= pg_catalog.clock_timestamp() then
+            raise exception using errcode = '57014',
+              message = 'Record File owner result limit exceeded';
+          end if;
           expected := exists (
             select 1
             from pg_catalog.jsonb_array_elements(authority -> 'effects') as effect(value)
@@ -3087,7 +3656,7 @@ begin
               and (effect.value ->> 'recordId')::uuid = match_row.record_id
               and (effect.value ->> 'recordTypeId')::uuid = mapping_row.record_type_id
               and (field.value ->> 'fieldId')::uuid = mapping_row.field_id
-              and field.value -> 'fileIds' ? match_row.file_id
+              and field.value -> 'fileIds' ? (match_row.file_id::text)
           );
           if not expected then
             raise exception using errcode = '23514',
@@ -3109,7 +3678,8 @@ begin
   end if;
 
   for candidate_file_text_value in
-    select distinct item.value from pg_catalog.unnest(candidate_file_text) as item(value)
+    select distinct item.value::text
+    from pg_catalog.unnest(candidate_file_ids) as item(value)
   loop
     select pg_catalog.count(*) into matching_count
     from pg_catalog.jsonb_array_elements(membership_values) as membership(value)
@@ -3119,6 +3689,12 @@ begin
         message = 'File attachment ownership is incomplete';
     end if;
   end loop;
+
+  if request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.jsonb_array_length(membership_values) > 50000 then
+    raise exception using errcode = '57014',
+      message = 'Record File owner scan is incomplete';
+  end if;
 
   return pg_catalog.jsonb_build_object(
     'outcome', 'complete',
@@ -3157,10 +3733,11 @@ set search_path = ''
 as $function$
 declare
   membership_result jsonb;
+  revalidated_authority jsonb;
   effect_item jsonb;
+  revalidated_item jsonb;
   membership_item jsonb;
   candidate_file_ids uuid[] := array[]::uuid[];
-  candidate_file_text text[] := array[]::text[];
   candidate_file_text_value text;
   file_row vortex_file.file_records%rowtype;
   owner_effect jsonb;
@@ -3176,11 +3753,32 @@ declare
   expected_count integer := 0;
   effect_sequence integer;
   effect_cas jsonb;
+  request_deadline_at timestamptz;
+  request_timeout interval;
+  request_lock_timeout interval;
+  minimum_permission_deadline timestamptz;
+  locked_file_count integer := 0;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'File cascade command is invalid';
+  end if;
+  begin
+    request_timeout := pg_catalog.current_setting('statement_timeout')::interval;
+    request_lock_timeout := pg_catalog.current_setting('lock_timeout')::interval;
+  exception when invalid_text_representation then
+    request_timeout := interval '0';
+    request_lock_timeout := interval '0';
+  end;
+  request_deadline_at := pg_catalog.statement_timestamp() + request_timeout;
+  if request_timeout <= interval '0' or request_timeout > interval '30 seconds'
+    or request_lock_timeout <= interval '0'
+    or request_lock_timeout > interval '5 seconds'
+    or request_deadline_at <= pg_catalog.clock_timestamp()
+    or pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+    raise exception using errcode = '57014',
+      message = 'File cascade request is unavailable';
   end if;
   membership_result := vortex_record.read_record_file_lifecycle_membership_internal(
     p_command_id
@@ -3205,9 +3803,6 @@ begin
         select file.value
         from pg_catalog.jsonb_array_elements_text(membership_item -> 'fileIds') as file(value)
       loop
-        candidate_file_text := pg_catalog.array_append(
-          candidate_file_text, candidate_file_text_value
-        );
         candidate_file_ids := pg_catalog.array_append(
           candidate_file_ids, candidate_file_text_value::uuid
         );
@@ -3218,11 +3813,72 @@ begin
   select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
   into candidate_file_ids
   from (select distinct file_id from pg_catalog.unnest(candidate_file_ids) as source(file_id)) as item;
-  select coalesce(pg_catalog.array_agg(item.file_id::text order by item.file_id), array[]::text[])
-  into candidate_file_text
-  from pg_catalog.unnest(candidate_file_ids) as item(file_id);
   expected_count := pg_catalog.cardinality(candidate_file_ids);
 
+  -- Lock every candidate File row before re-reading HUMAN Record authority.
+  -- No metadata CAS is allowed until the current actor, field bounds, and
+  -- permission deadlines have been checked after these potentially blocking
+  -- row locks.
+  perform stored.file_id
+  from vortex_file.file_records as stored
+  where stored.organization_id =
+    ((membership_result -> 'effects' -> 0) ->> 'organizationId')::uuid
+    and stored.file_id = any (candidate_file_ids)
+  order by stored.file_id
+  for update;
+  get diagnostics locked_file_count = row_count;
+  if locked_file_count <> expected_count
+    or request_deadline_at <= pg_catalog.clock_timestamp() then
+    raise exception using errcode = '40001',
+      message = 'File attachment membership changed';
+  end if;
+  revalidated_authority := vortex_record.read_record_owned_file_lifecycle_authority_internal(
+    p_command_id
+  );
+  if revalidated_authority ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') < 1
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') > 100
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') <>
+      pg_catalog.jsonb_array_length(membership_result -> 'effects') then
+    raise exception using errcode = '42501',
+      message = 'File attachment authority changed';
+  end if;
+  for effect_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(membership_result -> 'effects') as item(value)
+    order by (item.value ->> 'effectSequence')::integer
+  loop
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = effect_item ->> 'effectSequence';
+    if (effect_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) is distinct from
+       (revalidated_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) then
+      raise exception using errcode = '40001',
+        message = 'File attachment authority changed';
+    end if;
+    minimum_permission_deadline := least(
+      nullif(effect_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
+    end if;
+  end loop;
+
+  file_count := 0;
   for file_row in
     select stored.*
     from vortex_file.file_records as stored
@@ -3230,7 +3886,6 @@ begin
       ((membership_result -> 'effects' -> 0) ->> 'organizationId')::uuid
       and stored.file_id = any (candidate_file_ids)
     order by stored.file_id
-    for update
   loop
     file_count := file_count + 1;
     select membership.value into strict membership_item
@@ -3280,6 +3935,24 @@ begin
     if record_deleted_at is null or due_at <= record_deleted_at then
       raise exception using errcode = '23514',
         message = 'File recovery deadline is invalid';
+    end if;
+
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = owner_effect ->> 'effectSequence';
+    minimum_permission_deadline := least(
+      nullif(owner_effect ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(owner_effect ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(owner_effect ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
     end if;
 
     update vortex_file.file_records as stored
@@ -3342,6 +4015,52 @@ begin
     raise exception using errcode = '40001',
       message = 'File attachment membership changed';
   end if;
+
+  revalidated_authority := vortex_record.read_record_owned_file_lifecycle_authority_internal(
+    p_command_id
+  );
+  if revalidated_authority ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') < 1
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') > 100
+    or pg_catalog.jsonb_array_length(revalidated_authority -> 'effects') <>
+      pg_catalog.jsonb_array_length(membership_result -> 'effects') then
+    raise exception using errcode = '42501',
+      message = 'File attachment authority changed';
+  end if;
+  for effect_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(membership_result -> 'effects') as item(value)
+    order by (item.value ->> 'effectSequence')::integer
+  loop
+    select item.value into strict revalidated_item
+    from pg_catalog.jsonb_array_elements(revalidated_authority -> 'effects') as item(value)
+    where item.value ->> 'effectSequence' = effect_item ->> 'effectSequence';
+    if (effect_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil', 'fileCascadeProof'
+        ]) is distinct from
+       (revalidated_item - array[
+          'deletePermissionValidUntil', 'readPermissionValidUntil',
+          'updatePermissionValidUntil'
+        ]) then
+      raise exception using errcode = '40001',
+        message = 'File attachment authority changed';
+    end if;
+    minimum_permission_deadline := least(
+      nullif(effect_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(effect_item ->> 'updatePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'deletePermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'readPermissionValidUntil', '')::timestamptz,
+      nullif(revalidated_item ->> 'updatePermissionValidUntil', '')::timestamptz
+    );
+    if minimum_permission_deadline is null
+      or minimum_permission_deadline <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority expired';
+    end if;
+  end loop;
 
   for effect_item in
     select item.value

@@ -35,6 +35,9 @@ import {
 } from "./save-record";
 import { operationClock } from "./field-candidate";
 
+const recordDeleteStatementTimeout = "30000ms";
+const recordDeleteLockTimeout = "5000ms";
+
 type Row = DatabaseRow & { readonly result: unknown };
 
 /**
@@ -457,6 +460,12 @@ export const performProtectedRecordDelete = async (
 ): Promise<RecordDeleteResult> => {
   const { activityId, occurrenceId } = command;
   await transaction.query`set local role vortex_runtime`;
+  await transaction.query`
+    select set_config('statement_timeout', ${recordDeleteStatementTimeout}, true)
+  `;
+  await transaction.query`
+    select set_config('lock_timeout', ${recordDeleteLockTimeout}, true)
+  `;
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`
