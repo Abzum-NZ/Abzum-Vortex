@@ -2147,9 +2147,15 @@ function actionTaskValue(
   value: unknown,
   targetField: JsonObject | undefined,
   valueContext: ModuleValueContext | undefined,
+  protectedQuery?: (query: string, field: string) => Readonly<{ queryId: string; fieldId: string }>,
 ): unknown {
-  if (valueContext === undefined) return value;
   const entry = asObject(value);
+  if (entry.kind === "protected_query_decimal_max_plus_quantum") {
+    if (protectedQuery === undefined)
+      fail("vortex.definition.module_action_references", "unsupported_choice");
+    return { kind: entry.kind, ...protectedQuery(String(entry.query), String(entry.field)), quantum: entry.quantum };
+  }
+  if (valueContext === undefined) return value;
   if (entry.kind !== "literal") return value;
   const literal = asObject(entry.literal);
   if (literal.type !== "json") return value;
@@ -3446,7 +3452,12 @@ function compileModule(
                     const fieldId = localField(key);
                     return [
                       fieldId,
-                      actionTaskValue(value, fieldsById.get(fieldId), valueContext),
+                      actionTaskValue(value, fieldsById.get(fieldId), valueContext, (queryKey, fieldKey) => {
+                        const query = (body.queries as JsonObject[]).find((item) => item.key === queryKey);
+                        if (query === undefined)
+                          fail("vortex.definition.module_action_references", "broken_reference");
+                        return { queryId: resolution.id(definitionKey, "query", String(query.id), "content"), fieldId: localField(fieldKey) };
+                      }),
                     ];
                   }),
                 ),
@@ -3871,6 +3882,12 @@ function compileApplicationPagesV2(
       return {
         ...base,
         type: "form",
+        recordType: resolution.recordType(String(page.record_type)),
+      };
+    if (page.type === "recovery")
+      return {
+        ...base,
+        type: "recovery",
         recordType: resolution.recordType(String(page.record_type)),
       };
     if (page.type === "guided_form")

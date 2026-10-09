@@ -16,6 +16,7 @@ import {
   safeFlowResultDescriptors,
   recordIdSchema,
   recordTypeIdSchema,
+  revisionSchema,
   type ComponentFlowBinding,
   type FormContinuationOutcome,
   type FormContinuationReceipt,
@@ -136,7 +137,13 @@ export type FlowBindingEndpointDependencies = Readonly<{
     callerInputs: Readonly<Record<string, unknown>>,
     subject: FlowSubject | undefined,
     installation: InstalledFlowBindings,
-  ) => Promise<Readonly<Record<string, unknown>> | undefined>;
+  ) => Promise<
+    | Readonly<{
+        callerInputs: Readonly<Record<string, unknown>>;
+        recoverySubject?: Readonly<{ recordTypeId: string; recordId: string; revision: number }>;
+      }>
+    | undefined
+  >;
   /**
    * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
    * the web-independent form continuation interface (#544), which compares them with trusted state.
@@ -776,6 +783,9 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const binding = matchingBindings[0]!;
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
+        let recoverySubject:
+          | Readonly<{ recordTypeId: string; recordId: string; revision: number }>
+          | undefined;
         if (binding.event === "form_submit") {
           const adapted = await dependencies.adaptFormSubmit?.(
             binding,
@@ -783,8 +793,26 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             request.subject,
             installation,
           );
-          if (adapted === undefined || !isRecord(adapted)) return refused;
-          callerInputs = adapted;
+          if (adapted === undefined || !isRecord(adapted.callerInputs)) return refused;
+          callerInputs = adapted.callerInputs;
+          if (adapted.recoverySubject !== undefined) {
+            const parsedRecoverySubject = z
+              .object({
+                recordTypeId: recordTypeIdSchema,
+                recordId: recordIdSchema,
+                revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),
+              })
+              .strict()
+              .safeParse(adapted.recoverySubject);
+            if (
+              !parsedRecoverySubject.success ||
+              request.subject === undefined ||
+              !sameId(parsedRecoverySubject.data.recordId, request.subject.recordId) ||
+              parsedRecoverySubject.data.revision !== request.subject.revision
+            )
+              return refused;
+            recoverySubject = parsedRecoverySubject.data;
+          }
         }
         const selectedRecordReadInputs =
           installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??
@@ -804,6 +832,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           selection: selection.data,
           binding: { flowId: binding.flow.flowId, inputs },
           ...(request.subject === undefined ? {} : { subject: request.subject }),
+          ...(recoverySubject === undefined ? {} : { recoverySubject }),
         });
         return toResult(response, {
           applicationRootId: installation.applicationRootId,

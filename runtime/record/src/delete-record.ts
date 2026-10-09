@@ -20,6 +20,10 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
+import {
+  applyRecordOwnedFileDeleteCascade,
+  applyRecordOwnedFileRestoreCascade,
+} from "@vortex/file";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   calculateLockedRelationshipTotalSave,
@@ -33,6 +37,9 @@ import {
   revision,
 } from "./save-record";
 import { operationClock } from "./field-candidate";
+
+const recordDeleteStatementTimeout = "30000ms";
+const recordDeleteLockTimeout = "5000ms";
 
 type Row = DatabaseRow & { readonly result: unknown };
 
@@ -456,6 +463,12 @@ export const performProtectedRecordDelete = async (
 ): Promise<RecordDeleteResult> => {
   const { activityId, occurrenceId } = command;
   await transaction.query`set local role vortex_runtime`;
+  await transaction.query`
+    select set_config('statement_timeout', ${recordDeleteStatementTimeout}, true)
+  `;
+  await transaction.query`
+    select set_config('lock_timeout', ${recordDeleteLockTimeout}, true)
+  `;
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`
@@ -488,6 +501,12 @@ export const performProtectedRecordDelete = async (
       return refuseCalculation(command.recordId, preparation.correlationId);
     parentMutations = calculated.parentMutations;
   }
+
+  // The File writer re-derives the pending HUMAN receipt and exact deleted
+  // owner set in this same request transaction. It runs after relationship
+  // calculation succeeds and before the terminal writer can complete the
+  // receipt or append Events and Activity.
+  await applyRecordOwnedFileDeleteCascade(transaction, command.commandId);
 
   const finalized = parseDatabaseOutcome(
     one(
@@ -625,17 +644,22 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
       const { preparation } = prepared;
       const settings = await readOrganizationRuntimeSettings(transaction);
       const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
-      // Retained links were revalidated by the restore primitive; any other
-      // pending check would need a value the restore does not supply.
+      // Retained links are revalidated by the Record restore primitive. File
+      // references are resolved by the protected, receipt-bound File cascade
+      // below; no value or owner list from the request is accepted here.
       if (
         calculated === undefined ||
-        calculated.pendingChecks.some((check) => check.kind !== "record_reference")
+        calculated.pendingChecks.some(
+          (check) => check.kind !== "record_reference" && check.kind !== "file_reference",
+        )
       )
         return refuseCalculation(command.recordId, preparation.correlationId);
       const mutations = [
         restoredRootMutation(preparation, calculated.sourceFinalValues),
         ...calculated.parentMutations,
       ];
+
+      await applyRecordOwnedFileRestoreCascade(transaction, command.commandId);
 
       const finalized = parseDatabaseOutcome(
         one(

@@ -26,6 +26,7 @@ declare
   action_id_value uuid;
   action_inputs jsonb;
   action_context jsonb;
+  original_context_value jsonb;
   action_final_values jsonb := '{}'::jsonb;
   action_creations jsonb := '[]'::jsonb;
   action_creation_occurrence_ids jsonb := '[]'::jsonb;
@@ -61,7 +62,16 @@ declare
   contributes_to_total boolean := false;
   creation jsonb;
   created_records jsonb := '{}'::jsonb;
+  public_created_records jsonb := '{}'::jsonb;
+  created_record_tuples jsonb := '[]'::jsonb;
+  first_created_record_tuples jsonb := '[]'::jsonb;
   inserted_value jsonb;
+  final_created_tuple jsonb;
+  saved_tuple jsonb;
+  seen_created_ordinals integer[] := array[]::integer[];
+  seen_created_ids uuid[] := array[]::uuid[];
+  created_ordinal integer;
+  created_concurrency_number bigint;
   submitted_field_ids uuid[];
   edge_plan jsonb;
   edge_entry jsonb;
@@ -78,6 +88,8 @@ declare
   correlation_id_value uuid;
   command_fingerprint_value text;
   receipt_claim jsonb;
+  action_query_values jsonb;
+  action_query_value jsonb;
   meta jsonb;
   loaded jsonb;
   decision jsonb;
@@ -108,6 +120,8 @@ declare
   saved_concurrency_number bigint;
   notice_sequence bigint;
   named_relationship_subject_saved boolean := false;
+  named_action_receipt_pending boolean := false;
+  named_action_receipt_subject_write boolean := false;
   changed_rows integer;
   changed_field_ids uuid[];
   activity_time timestamptz := pg_catalog.statement_timestamp();
@@ -390,6 +404,12 @@ begin
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
   actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
   correlation_id_value := (context_value ->> 'correlationId')::uuid;
+  original_context_value := pg_catalog.jsonb_build_object(
+    'organizationId', organization_id_value,
+    'applicationRootId', application_root_id_value,
+    'organizationAccountId', actor_id_value,
+    'correlationId', correlation_id_value
+  );
 
   creation_count := pg_catalog.jsonb_array_length(action_creations);
 
@@ -697,15 +717,39 @@ begin
       action_context -> 'eventDescriptors', action_declared_occurrence_ids,
       loaded -> 'fieldValues'
     );
-    if pg_catalog.jsonb_array_length(event_result) <>
+    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array' then
+      raise exception using errcode = '55000',
+        message = 'Named action declared Event append failed';
+    end if;
+    if pg_catalog.jsonb_array_length(event_result) is distinct from
       pg_catalog.jsonb_array_length(action_declared_occurrence_ids) then
       raise exception using errcode = '55000',
         message = 'Named action declared Event append failed';
     end if;
-    perform vortex_record.complete_command_receipt_internal(
-      'named_action', effective_command_id, null, p_expected_concurrency_number,
-      'Named action receipt is stale'
-    );
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(event_result) with ordinality appended(value, ordinal)
+      join pg_catalog.jsonb_array_elements(action_declared_occurrence_ids)
+        with ordinality expected(value, ordinal) using (ordinal)
+      where pg_catalog.jsonb_typeof(appended.value) is distinct from 'object'
+        or pg_catalog.jsonb_typeof(appended.value -> 'occurrenceId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(
+          appended.value ->> 'occurrenceId', 'uuid'
+        ), true)
+        or (appended.value ->> 'occurrenceId')::uuid is distinct from
+          (expected.value #>> '{}')::uuid
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Named action declared Event append failed';
+    end if;
+    if creation_count = 0 then
+      perform vortex_record.complete_command_receipt_internal(
+        'named_action', effective_command_id, null, p_expected_concurrency_number,
+        'Named action receipt is stale'
+      );
+    else
+      named_action_receipt_pending := true;
+    end if;
     result_value := vortex_record.project_named_action_record_internal(
       action_owner_kind, action_owner_id, action_release_revision,
       action_id_value, p_record_type_id, p_record_id
@@ -786,6 +830,22 @@ begin
 
   if action_mode then
     meta := action_context;
+    -- This lies after claim/replay and before any subject mutation. Never trust runtime derivation.
+    action_query_values := vortex_record.derive_named_action_query_values_internal(
+      action_owner_kind, action_owner_id, action_release_revision, action_id_value,
+      p_record_type_id, p_record_id, p_expected_concurrency_number
+    );
+    if action_query_values <> '[]'::jsonb and action_inputs <> '{}'::jsonb then
+      raise exception using errcode = '55000', message = 'Named action Query value is unavailable';
+    end if;
+    for action_query_value in select item.value
+      from pg_catalog.jsonb_array_elements(action_query_values) item(value)
+    loop
+      if p_submitted_values -> (action_query_value ->> 'fieldId') is distinct from action_query_value -> 'value'
+        or action_final_values -> (action_query_value ->> 'fieldId') is distinct from action_query_value -> 'value' then
+        raise exception using errcode = '55000', message = 'Named action Query value is unavailable';
+      end if;
+    end loop;
   else
     meta := vortex_record.resolve_record_action_context_internal(
       p_record_type_id, p_operation
@@ -1324,15 +1384,23 @@ begin
         'payload', event_payload
       ))
     );
-    if pg_catalog.jsonb_array_length(event_result) <> 1 then
+    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array' then
+      raise exception using errcode = '55000', message = 'Record save Event append failed';
+    end if;
+    if pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
       raise exception using errcode = '55000', message = 'Record save Event append failed';
     end if;
   end if;
 
-  perform vortex_record.complete_command_receipt_internal(
-    receipt_kind, effective_command_id, saved_record_id, saved_concurrency_number,
-    'Record save receipt is stale'
-  );
+  if action_mode and creation_count > 0 then
+    named_action_receipt_pending := true;
+    named_action_receipt_subject_write := true;
+  else
+    perform vortex_record.complete_command_receipt_internal(
+      receipt_kind, effective_command_id, saved_record_id, saved_concurrency_number,
+      'Record save receipt is stale'
+    );
+  end if;
 
   if action_mode then
     projection := vortex_record.project_named_action_record_internal(
@@ -1407,8 +1475,28 @@ begin
       action_context -> 'eventDescriptors', action_declared_occurrence_ids,
       event_loaded -> 'fieldValues'
     );
-    if pg_catalog.jsonb_array_length(event_result) <>
+    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array' then
+      raise exception using errcode = '55000',
+        message = 'Named action declared Event append failed';
+    end if;
+    if pg_catalog.jsonb_array_length(event_result) is distinct from
       pg_catalog.jsonb_array_length(action_declared_occurrence_ids) then
+      raise exception using errcode = '55000',
+        message = 'Named action declared Event append failed';
+    end if;
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(event_result) with ordinality appended(value, ordinal)
+      join pg_catalog.jsonb_array_elements(action_declared_occurrence_ids)
+        with ordinality expected(value, ordinal) using (ordinal)
+      where pg_catalog.jsonb_typeof(appended.value) is distinct from 'object'
+        or pg_catalog.jsonb_typeof(appended.value -> 'occurrenceId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(
+          appended.value ->> 'occurrenceId', 'uuid'
+        ), true)
+        or (appended.value ->> 'occurrenceId')::uuid is distinct from
+          (expected.value #>> '{}')::uuid
+    ) then
       raise exception using errcode = '55000',
         message = 'Named action declared Event append failed';
     end if;
@@ -1492,9 +1580,23 @@ begin
       );
     end loop;
 
-    -- The exact create decision only exists now, with the derived owner and the
-    -- complete new graph in place. A denial raises, rolling the whole command
-    -- back with no post-rollback refusal Activity.
+    -- Reauthorize the complete new graph before any created-row Activity or
+    -- Event is visible. This barrier is intentionally whole-command, not per row.
+    first_created_record_tuples :=
+      vortex_record.authorize_created_records_for_command_internal(
+        action_creations, created_records, original_context_value
+      );
+    if pg_catalog.jsonb_typeof(first_created_record_tuples) is distinct from 'array' then
+      raise exception using errcode = '55000',
+        message = 'Named action creation authority result is incomplete';
+    end if;
+    if pg_catalog.jsonb_array_length(first_created_record_tuples) is distinct from creation_count then
+      raise exception using errcode = '55000',
+        message = 'Named action creation authority result is incomplete';
+    end if;
+
+    -- Append each created-row Activity and its standard Event only after the
+    -- complete set passed ordinary CREATE authorization.
     for creation in
       select item.value
       from pg_catalog.jsonb_array_elements(action_creations) with ordinality item(value, ordinality)
@@ -1502,12 +1604,6 @@ begin
     loop
       inserted_value := created_records -> (creation ->> 'ordinal');
       created_record_id := (inserted_value ->> 'recordId')::uuid;
-      select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
-      into submitted_field_ids
-      from pg_catalog.jsonb_object_keys(creation -> 'values') as key;
-      perform vortex_record.authorize_named_action_created_record_internal(
-        (creation ->> 'recordTypeId')::uuid, created_record_id, submitted_field_ids
-      );
       select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
       into changed_field_ids
       from pg_catalog.jsonb_object_keys(inserted_value -> 'values') as key;
@@ -1537,7 +1633,16 @@ begin
           'payload', pg_catalog.jsonb_build_object('kind', 'created')
         ))
       );
-      if pg_catalog.jsonb_array_length(event_result) <> 1 then
+      if pg_catalog.jsonb_typeof(event_result) is distinct from 'array' then
+        raise exception using errcode = '55000',
+          message = 'Named action creation Event append failed';
+      end if;
+      if pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
+        raise exception using errcode = '55000',
+          message = 'Named action creation Event append failed';
+      end if;
+      if pg_catalog.jsonb_typeof(event_result -> 0) is distinct from 'object'
+        or event_result -> 0 ->> 'occurrenceId' is distinct from occurrence_id_value::text then
         raise exception using errcode = '55000',
           message = 'Named action creation Event append failed';
       end if;
@@ -1569,6 +1674,170 @@ begin
       reduced_final_values
     );
   end loop;
+
+  if creation_count > 0 then
+    -- Re-load and reauthorize the entire graph after every mandatory created-row,
+    -- copy and parent effect. These actual final target tuples drive both receipt
+    -- completion and the narrow advisory created-notice attempts below.
+    created_record_tuples := vortex_record.authorize_created_records_for_command_internal(
+      action_creations, created_records, original_context_value
+    );
+    if pg_catalog.jsonb_typeof(created_record_tuples) is distinct from 'array' then
+      raise exception using errcode = '55000',
+        message = 'Named action final creation authority is incomplete';
+    end if;
+    if pg_catalog.jsonb_array_length(created_record_tuples) is distinct from creation_count then
+      raise exception using errcode = '55000',
+        message = 'Named action final creation authority is incomplete';
+    end if;
+    for final_created_tuple in
+      select item.value
+      from pg_catalog.jsonb_array_elements(created_record_tuples) with ordinality item(value, ordinality)
+      order by item.ordinality
+    loop
+      if pg_catalog.jsonb_typeof(final_created_tuple) is distinct from 'object'
+        or not (final_created_tuple ?& array[
+          'ordinal', 'recordId', 'concurrencyNumber', 'organizationId', 'applicationRootId',
+          'moduleRootId', 'recordTypeId', 'storageContractId', 'moduleReleaseRevision',
+          'storageScope', 'correlationId', 'eligible'
+        ])
+        or final_created_tuple - array[
+          'ordinal', 'recordId', 'concurrencyNumber', 'organizationId', 'applicationRootId',
+          'moduleRootId', 'recordTypeId', 'storageContractId', 'moduleReleaseRevision',
+          'storageScope', 'correlationId', 'eligible'
+        ]::text[] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'ordinal') is distinct from 'number'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'ordinal', 'integer'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'recordId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'recordId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'concurrencyNumber') is distinct from 'number'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'concurrencyNumber', 'bigint'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'organizationId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'organizationId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'applicationRootId') not in ('string', 'null')
+        or (pg_catalog.jsonb_typeof(final_created_tuple -> 'applicationRootId') = 'string'
+          and coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'applicationRootId', 'uuid'), true))
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'moduleRootId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'moduleRootId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'recordTypeId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'recordTypeId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'storageContractId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'storageContractId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'moduleReleaseRevision') is distinct from 'number'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'moduleReleaseRevision', 'bigint'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'storageScope') is distinct from 'string'
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'correlationId') is distinct from 'string'
+        or coalesce(not pg_catalog.pg_input_is_valid(final_created_tuple ->> 'correlationId', 'uuid'), true)
+        or pg_catalog.jsonb_typeof(final_created_tuple -> 'eligible') is distinct from 'boolean' then
+        raise exception using errcode = '55000',
+          message = 'Named action final creation tuple is malformed';
+      end if;
+      created_ordinal := (final_created_tuple ->> 'ordinal')::integer;
+      created_record_id := (final_created_tuple ->> 'recordId')::uuid;
+      created_concurrency_number := (final_created_tuple ->> 'concurrencyNumber')::bigint;
+      if created_ordinal < 1
+        or created_ordinal = any (seen_created_ordinals)
+        or created_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+        or created_record_id = any (seen_created_ids)
+        or created_concurrency_number not between 1 and 9007199254740991
+        or (final_created_tuple ->> 'moduleReleaseRevision')::bigint not between 1 and 9007199254740991
+        or (final_created_tuple ->> 'organizationId')::uuid is distinct from organization_id_value
+        or (final_created_tuple ->> 'correlationId')::uuid is distinct from correlation_id_value
+        or (final_created_tuple ->> 'storageScope') not in ('application_contained', 'organization_shared')
+        or ((final_created_tuple ->> 'storageScope') = 'application_contained'
+          and (final_created_tuple ->> 'applicationRootId')::uuid is distinct from application_root_id_value)
+        or ((final_created_tuple ->> 'storageScope') = 'organization_shared'
+          and final_created_tuple -> 'applicationRootId' is distinct from 'null'::jsonb)
+        or (final_created_tuple ->> 'eligible')::boolean is distinct from
+          ((final_created_tuple ->> 'storageScope') = 'application_contained') then
+        raise exception using errcode = '55000',
+          message = 'Named action final creation tuple is invalid';
+      end if;
+      inserted_value := created_records -> created_ordinal::text;
+      saved_tuple := inserted_value -> '_savedTuple';
+      if inserted_value is null
+        or final_created_tuple -> 'recordId' is distinct from inserted_value -> 'recordId'
+        or final_created_tuple -> 'organizationId' is distinct from saved_tuple -> 'organizationId'
+        or final_created_tuple -> 'applicationRootId' is distinct from saved_tuple -> 'applicationRootId'
+        or final_created_tuple -> 'moduleRootId' is distinct from saved_tuple -> 'moduleRootId'
+        or final_created_tuple -> 'recordTypeId' is distinct from saved_tuple -> 'recordTypeId'
+        or final_created_tuple -> 'storageContractId' is distinct from saved_tuple -> 'storageContractId'
+        or final_created_tuple -> 'moduleReleaseRevision' is distinct from saved_tuple -> 'moduleReleaseRevision'
+        or final_created_tuple -> 'storageScope' is distinct from saved_tuple -> 'storageScope'
+        or final_created_tuple -> 'correlationId' is distinct from saved_tuple -> 'correlationId'
+        or final_created_tuple -> 'eligible' is distinct from saved_tuple -> 'eligible' then
+        raise exception using errcode = '55000',
+          message = 'Named action final creation tuple changed';
+      end if;
+      seen_created_ordinals := pg_catalog.array_append(seen_created_ordinals, created_ordinal);
+      seen_created_ids := pg_catalog.array_append(seen_created_ids, created_record_id);
+      public_created_records := public_created_records || pg_catalog.jsonb_build_object(
+        created_ordinal::text, pg_catalog.jsonb_build_object(
+          'recordId', inserted_value -> 'recordId',
+          'storageContractId', inserted_value -> 'storageContractId',
+          'values', inserted_value -> 'values'
+        )
+      );
+    end loop;
+    if pg_catalog.cardinality(seen_created_ordinals) <> creation_count
+      or pg_catalog.cardinality(seen_created_ids) <> creation_count then
+      raise exception using errcode = '55000',
+        message = 'Named action final creation set is incomplete';
+    end if;
+
+    if not named_action_receipt_pending then
+      raise exception using errcode = '55000',
+        message = 'Named action receipt completion is unavailable';
+    end if;
+    if named_action_receipt_subject_write then
+      if saved_record_id is null
+        or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+        or saved_concurrency_number is null
+        or saved_concurrency_number not between 1 and 9007199254740991 then
+        raise exception using errcode = '55000',
+          message = 'Named action receipt completion tuple is unavailable';
+      end if;
+      perform vortex_record.complete_command_receipt_internal(
+        'named_action', effective_command_id, saved_record_id, saved_concurrency_number,
+        'Record save receipt is stale'
+      );
+    else
+      perform vortex_record.complete_command_receipt_internal(
+        'named_action', effective_command_id, null, p_expected_concurrency_number,
+        'Named action receipt is stale'
+      );
+    end if;
+    named_action_receipt_pending := false;
+  end if;
+
+  -- Only the new created-row notice attempt is advisory. All tuple and context
+  -- validation above is outside this per-tuple catch; allocation, safe sequence
+  -- validation and exact publication share one narrow failure boundary.
+  for final_created_tuple in
+    select item.value from pg_catalog.jsonb_array_elements(created_record_tuples) item(value)
+  loop
+    if (final_created_tuple ->> 'eligible')::boolean then
+      created_record_id := (final_created_tuple ->> 'recordId')::uuid;
+      created_concurrency_number := (final_created_tuple ->> 'concurrencyNumber')::bigint;
+      begin
+        notice_sequence := pg_catalog.nextval(
+          'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+        );
+        if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
+          raise exception using errcode = '22003',
+            message = 'Created Record notice sequence is unavailable';
+        end if;
+        perform vortex_invalidation.publish_change_notice(
+          organization_id_value, application_root_id_value,
+          (final_created_tuple ->> 'recordTypeId')::uuid,
+          created_record_id, created_concurrency_number, 'created',
+          notice_sequence, notice_sequence, correlation_id_value
+        );
+      exception when others then
+        null;
+      end;
+    end if;
+  end loop;
   if named_relationship_subject_saved then
     begin
       notice_sequence := pg_catalog.nextval(
@@ -1584,7 +1853,7 @@ begin
       null;
     end;
   end if;
-  return result_value || pg_catalog.jsonb_build_object('createdRecords', created_records);
+  return result_value || pg_catalog.jsonb_build_object('createdRecords', public_created_records);
 end
 $function$;
 

@@ -149,6 +149,8 @@ export type FlowRunState = Readonly<{
   actor?: string;
   /** The page record and revision the person saw; protected tasks still recheck access and revision. */
   subject?: FlowSubject;
+  /** Server-projected deleted Record identity and revision selected on a recovery surface. */
+  recoverySubject?: Readonly<{ recordTypeId: string; recordId: string; revision: number }>;
   /**
    * The record a run acts on, keyed by field key, for `trigger.record.<field>` reads. It is set only
    * by a host that runs a flow for one record (a named action's subject) and never comes from a flow.
@@ -228,6 +230,8 @@ export type FlowRunStart = Readonly<{
   actor?: string;
   /** Page record evidence retained with the run across form and confirmation pauses. */
   subject?: FlowSubject;
+  /** Server-projected recovery target; never supplied as trusted input by the flow itself. */
+  recoverySubject?: Readonly<{ recordTypeId: string; recordId: string; revision: number }>;
   /**
    * The execution kinds the host may start; interactive by default. A named action starts as a
    * `transaction` flow through its binding, driven by the host that owns the transaction.
@@ -1098,6 +1102,7 @@ export const startFlowRun = (
     now: start.now,
     ...(start.actor === undefined ? {} : { actor: start.actor }),
     ...(start.subject === undefined ? {} : { subject: start.subject }),
+    ...(start.recoverySubject === undefined ? {} : { recoverySubject: start.recoverySubject }),
     activations: [],
     protectedOperations: 0,
     committedEffects: 0,

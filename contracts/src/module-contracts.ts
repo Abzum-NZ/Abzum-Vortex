@@ -14,6 +14,7 @@ import {
 } from "./identifiers";
 import { recordTypeReferenceSchema, versionRequirementSchema } from "./definitions";
 import { flowValueSchema } from "./flow-contracts";
+import { namedActionQueryValueSchema } from "./named-action-query-values";
 
 const parentDeleteSchema = z.enum(["refuse", "empty_optional", "soft_delete_dependent"]);
 
@@ -143,13 +144,15 @@ export const conditionNodeSchema: z.ZodType<ConditionNode> = conditionNodeTreeSc
  * are the flow task registry's, and each property value uses the flow value grammar
  * (`flowValueSchema`): the `values` map is keyed by the permanent field identity and each entry is
  * a flow value, exactly as the flow compiler resolves an authored flow's `field_values` map.
+ * Only set-fields may additionally carry the closed protected Query reducer; it is collected as
+ * literal task metadata and resolved by Record, never evaluated as a generic Flow value.
  */
 export const actionTaskSchema = z.discriminatedUnion("type", [
   z
     .object({
       id: builderKeySchema,
       type: z.literal("record.set_fields"),
-      properties: z.object({ values: z.record(fieldIdSchema, flowValueSchema) }).strict(),
+      properties: z.object({ values: z.record(fieldIdSchema, z.union([flowValueSchema, namedActionQueryValueSchema])) }).strict(),
     })
     .strict(),
   z

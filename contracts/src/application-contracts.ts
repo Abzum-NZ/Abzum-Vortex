@@ -715,6 +715,13 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      ...pageV2Base,
+      type: z.literal("recovery"),
+      recordType: recordTypeReferenceSchema,
+    })
+    .strict(),
+  z
+    .object({
       ...pageV2Common,
       type: z.literal("guided_form"),
       recordType: recordTypeReferenceSchema,

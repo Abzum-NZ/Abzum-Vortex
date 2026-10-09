@@ -677,12 +677,18 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/file':
+        specifier: workspace:*
+        version: link:../file
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       vitest:
         specifier: 'catalog:'
