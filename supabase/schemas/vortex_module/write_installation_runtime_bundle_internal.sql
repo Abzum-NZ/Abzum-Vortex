@@ -220,13 +220,16 @@ begin
   end if;
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'identity', pg_catalog.jsonb_build_object(
+        'kind', module.value -> 'kind',
+        'organizationId', module.value -> 'organizationId',
         'rootId', module.value -> 'rootId',
         'definitionKey', module.value -> 'key',
         'releaseRevision', module.value -> 'releaseRevision',
         'releaseVersion', module.value -> 'releaseVersion',
         'validationContractVersion', module.value -> 'validationContractVersion',
         'contentFingerprint', module.value -> 'contentFingerprint',
-        'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        'resolutionFingerprint', module.value -> 'resolutionFingerprint',
+        'dependencyManifest', module.value -> 'dependencyManifest'
       ),
       'content', module.value #> '{compilationOutput,canonical,content}'
     ) order by (module.value ->> 'rootId') collate "C"), '[]'::jsonb)
@@ -261,14 +264,27 @@ begin
     or section_payloads -> 'component_registry' is distinct from application_content -> 'platformBlockDependencies'
     or section_payloads -> 'tool_bundle' is distinct from prepared_source #> '{application,compilationOutput,toolBundle}'
     or section_payloads -> 'access_plan' is distinct from expected_access_plan
-    or section_payloads #> '{pages,application,identity}' is distinct from pg_catalog.jsonb_build_object(
-      'rootId', prepared_source #> '{application,rootId}',
-      'definitionKey', prepared_source #> '{application,key}',
-      'releaseRevision', prepared_source #> '{application,releaseRevision}',
-      'releaseVersion', prepared_source #> '{application,releaseVersion}',
-      'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
-      'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
-      'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}'
+    or section_payloads #> '{pages,application,identity}' is distinct from (
+      pg_catalog.jsonb_build_object(
+        'kind', prepared_source #> '{application,kind}',
+        'organizationId', prepared_source #> '{application,organizationId}',
+        'rootId', prepared_source #> '{application,rootId}',
+        'definitionKey', prepared_source #> '{application,key}',
+        'releaseRevision', prepared_source #> '{application,releaseRevision}',
+        'releaseVersion', prepared_source #> '{application,releaseVersion}',
+        'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+        'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+        'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}',
+        'dependencyManifest', prepared_source #> '{application,dependencyManifest}'
+      )
+      || case
+        when prepared_source #> '{application,compilationOutput,platformCompatibilityVersion}' is null
+          then '{}'::jsonb
+        else pg_catalog.jsonb_build_object(
+          'platformCompatibilityVersion',
+          prepared_source #> '{application,compilationOutput,platformCompatibilityVersion}'
+        )
+      end
     )
     or section_payloads #> '{pages,application,content}' is distinct from
       application_content - array[
