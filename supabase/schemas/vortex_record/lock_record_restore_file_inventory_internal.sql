@@ -12,13 +12,11 @@ set search_path = ''
 as $function$
 declare
   authority jsonb;
-  selected_record jsonb;
   selected_after jsonb;
-  restored_authority jsonb;
+  command_evidence jsonb;
   target_effect jsonb;
   inventory_value jsonb;
   context_value jsonb;
-  receipt vortex_record.record_lifecycle_command_receipts%rowtype;
   restored_authority_after jsonb;
   relation_row record;
   storage_row vortex_record.storage_catalogue%rowtype;
@@ -72,93 +70,40 @@ begin
     raise exception using errcode = '42501',
       message = 'Record restore inventory requires an Application context';
   end if;
-  select stored.* into receipt
-  from vortex_record.record_lifecycle_command_receipts as stored
-  where stored.organization_id = (context_value ->> 'organizationId')::uuid
-    and stored.application_root_id = (context_value ->> 'applicationRootId')::uuid
-    and stored.actor_organization_account_id =
-      (context_value ->> 'organizationAccountId')::uuid
-    and stored.command_id = p_command_id
-  for update;
-  if not found
-    or receipt.state is distinct from 'pending'
-    or receipt.operation is distinct from 'restore'
-    or receipt.record_type_id is distinct from p_record_type_id
-    or receipt.record_id is distinct from p_record_id
-    or receipt.expected_concurrency_number is distinct from p_expected_concurrency_number then
-    raise exception using errcode = '42501',
-      message = 'Record restore inventory receipt is unavailable';
+  command_evidence := vortex_record.read_record_restore_inventory_command_internal(
+    p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+  );
+  if command_evidence ->> 'outcome' is distinct from 'available'
+    or pg_catalog.jsonb_typeof(command_evidence -> 'inventory') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(command_evidence -> 'authority') is distinct from 'object' then
+    raise exception using errcode = '55000',
+      message = 'Record restore inventory evidence is incomplete';
   end if;
-  select pg_catalog.count(*) into restored_effect_count
-  from (
-    select 1
-    from vortex_record.record_lifecycle_command_effects as effect
-    where effect.organization_id = receipt.organization_id
-      and effect.application_root_id = receipt.application_root_id
-      and effect.actor_organization_account_id = receipt.actor_organization_account_id
-      and effect.command_id = receipt.command_id
-    limit 2
-  ) as bounded_effects;
-  if restored_effect_count = 0 then
-    selected_record := vortex_record.read_recoverable_record_for_restore(
-      p_record_type_id, p_record_id, p_expected_concurrency_number
-    );
-    if selected_record ->> 'outcome' is distinct from 'available'
-      or (selected_record #>> '{record,recordId}')::uuid is distinct from p_record_id
-      or (selected_record #>> '{record,revision}')::bigint
-        is distinct from p_expected_concurrency_number
-      or pg_catalog.jsonb_typeof(selected_record -> 'inventory') is distinct from 'object' then
-      raise exception using errcode = '42501',
-        message = 'Record restore inventory authority is unavailable';
-    end if;
-    inventory_value := selected_record -> 'inventory';
-    authority := pg_catalog.jsonb_build_object(
-      'outcome', 'prepared',
-      'effects', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'storageContractId', inventory_value -> 'storageContractId',
-        'moduleRootId', inventory_value -> 'moduleRootId',
-        'moduleReleaseRevision', inventory_value -> 'moduleReleaseRevision',
-        'storageScope', inventory_value -> 'storageScope',
-        'recordTypeId', p_record_type_id,
-        'recordId', p_record_id,
-        'preConcurrencyNumber', p_expected_concurrency_number,
-        'postConcurrencyNumber', p_expected_concurrency_number + 1,
-        'attachmentFields', inventory_value -> 'attachmentFields'
-      ))
-    );
-  elsif restored_effect_count = 1 then
-    restored_authority := vortex_record.read_record_owned_file_restore_authority_internal(
-      p_command_id
-    );
-    if restored_authority ->> 'outcome' is distinct from 'prepared'
-      or pg_catalog.jsonb_array_length(restored_authority -> 'effects') <> 1 then
-      raise exception using errcode = '42501',
-        message = 'Record restore inventory proof is unavailable';
-    end if;
-    select item.value into strict target_effect
-    from pg_catalog.jsonb_array_elements(restored_authority -> 'effects') as item(value)
-    limit 1;
-    if (target_effect ->> 'recordTypeId')::uuid is distinct from p_record_type_id
-      or (target_effect ->> 'recordId')::uuid is distinct from p_record_id
-      or (target_effect ->> 'preConcurrencyNumber')::bigint
-        is distinct from p_expected_concurrency_number then
-      raise exception using errcode = '42501',
-        message = 'Record restore inventory proof is unavailable';
-    end if;
-    inventory_value := pg_catalog.jsonb_build_object(
-      'storageContractId', target_effect -> 'storageContractId',
-      'moduleRootId', target_effect -> 'moduleRootId',
-      'moduleReleaseRevision', target_effect -> 'moduleReleaseRevision',
-      'storageScope', target_effect -> 'storageScope',
-      'originalDeletedAt', target_effect -> 'originalDeletedAt',
-      'recoveryPolicyRevision', target_effect -> 'recoveryPolicyRevision',
-      'recoveryWindowDays', target_effect -> 'recoveryWindowDays',
-      'attachmentFields', target_effect -> 'attachmentFields'
-    );
-    authority := restored_authority;
+  if command_evidence ->> 'phase' = 'before_restore' then
+    restored_effect_count := 0;
+  elsif command_evidence ->> 'phase' = 'after_restore' then
+    restored_effect_count := 1;
   else
     raise exception using errcode = '55000',
-      message = 'Record restore inventory effects are incomplete';
+      message = 'Record restore inventory phase is unavailable';
+  end if;
+  inventory_value := command_evidence -> 'inventory';
+  authority := command_evidence -> 'authority';
+  if authority ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_typeof(authority -> 'effects') is distinct from 'array'
+    or pg_catalog.jsonb_array_length(authority -> 'effects') <> 1 then
+    raise exception using errcode = '42501',
+      message = 'Record restore inventory authority is unavailable';
+  end if;
+  select item.value into strict target_effect
+  from pg_catalog.jsonb_array_elements(authority -> 'effects') as item(value)
+  limit 1;
+  if (target_effect ->> 'recordTypeId')::uuid is distinct from p_record_type_id
+    or (target_effect ->> 'recordId')::uuid is distinct from p_record_id
+    or (target_effect ->> 'preConcurrencyNumber')::bigint
+      is distinct from p_expected_concurrency_number then
+    raise exception using errcode = '42501',
+      message = 'Record restore inventory authority is unavailable';
   end if;
   if pg_catalog.jsonb_typeof(authority -> 'effects') is distinct from 'array'
     or pg_catalog.jsonb_array_length(authority -> 'effects') <> 1
@@ -187,9 +132,15 @@ begin
           message = 'Record restore inventory selection became stale';
       end if;
     else
-      restored_authority_after :=
-        vortex_record.read_record_owned_file_restore_authority_internal(p_command_id);
-      if restored_authority_after ->> 'outcome' is distinct from 'prepared'
+      command_evidence := vortex_record.read_record_restore_inventory_command_internal(
+        p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+      );
+      restored_authority_after := command_evidence -> 'authority';
+      if command_evidence ->> 'outcome' is distinct from 'available'
+        or command_evidence ->> 'phase' is distinct from 'after_restore'
+        or command_evidence -> 'inventory' is distinct from inventory_value
+        or restored_authority_after ->> 'outcome' is distinct from 'prepared'
+        or pg_catalog.jsonb_array_length(restored_authority_after -> 'effects') <> 1
         or (restored_authority_after #>> '{effects,0,recordProofDigest}') is distinct from
           (authority #>> '{effects,0,recordProofDigest}')
         or restored_authority_after #> '{effects,0,attachmentFields}' is distinct from
@@ -236,9 +187,15 @@ begin
         message = 'Record restore inventory selection became stale';
     end if;
   else
-    restored_authority_after :=
-      vortex_record.read_record_owned_file_restore_authority_internal(p_command_id);
-    if restored_authority_after ->> 'outcome' is distinct from 'prepared'
+    command_evidence := vortex_record.read_record_restore_inventory_command_internal(
+      p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+    );
+    restored_authority_after := command_evidence -> 'authority';
+    if command_evidence ->> 'outcome' is distinct from 'available'
+      or command_evidence ->> 'phase' is distinct from 'after_restore'
+      or command_evidence -> 'inventory' is distinct from inventory_value
+      or restored_authority_after ->> 'outcome' is distinct from 'prepared'
+      or pg_catalog.jsonb_array_length(restored_authority_after -> 'effects') <> 1
       or (restored_authority_after #>> '{effects,0,recordProofDigest}') is distinct from
         (authority #>> '{effects,0,recordProofDigest}')
       or restored_authority_after #> '{effects,0,attachmentFields}' is distinct from
