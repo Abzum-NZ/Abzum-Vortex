@@ -40,13 +40,17 @@ import {
   createLinkTilesQueryResolver,
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
+  projectReadOnlyAttachmentList,
   projectRecordDetailData,
+  readPageSubjectInTransaction,
   type PageSubjectReadResult,
   type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
+  type ReadOnlyAttachmentFileEvidence,
   type StoredPageCapabilityDependencies,
 } from "@vortex/page";
 import {
+  ATTACHMENT_LIST_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   BOARD_BLOCK_RELEASE,
@@ -62,6 +66,7 @@ import {
   exactDecimalTextV2Schema,
   jsonValueSchema,
   readRecordDetailContract,
+  fileIdSchema,
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
@@ -81,6 +86,7 @@ import {
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
+import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
@@ -2179,6 +2185,22 @@ const loadApplicationPageInternal = async (
   for (const { placementId, placement } of allPlacements) {
     if (placement.readModel !== undefined) continue;
     const block = placement.block;
+    const isAttachmentListBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, ATTACHMENT_LIST_BLOCK_RELEASE.blockId) &&
+      block.releaseVersion === ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion;
+    if (isAttachmentListBlock) {
+      if (
+        pageDefinition.type === "detail" &&
+        placement.queryId === undefined &&
+        pageSubjectRecordTypeId !== undefined
+      ) {
+        recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+        addDataPlacement(pageSubjectRecordTypeId, placementId);
+      }
+      continue;
+    }
     if (
       pageSubjectRecordTypeId !== undefined &&
       isRecord(block) &&
@@ -2406,6 +2428,10 @@ const loadApplicationPageInternal = async (
     }
 
     const block = placement.block;
+    const isAttachmentListBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, ATTACHMENT_LIST_BLOCK_RELEASE.blockId);
     const isCalendarBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -2486,6 +2512,140 @@ const loadApplicationPageInternal = async (
     if (placement.readModel !== undefined) {
       logPlacementFailure(address, placementId, "read_model_not_served");
       data[placementId] = { status: "error" };
+      continue;
+    }
+    if (isAttachmentListBlock) {
+      if (
+        !isRecord(block) ||
+        block.releaseVersion !== ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion ||
+        placement.queryId !== undefined ||
+        pageDefinition.type !== "detail" ||
+        subjectType?.state !== "resolved" ||
+        pageSubjectRecordTypeId === undefined
+      ) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const fieldSetting = settings.field;
+      const fieldId = fieldSetting?.kind === "field_reference" ? fieldSetting.fieldId : undefined;
+      const subjectModuleRootId = String(subjectType.moduleRootId);
+      const subjectModuleMatches = context.releaseSet.modules.filter((module) =>
+        sameId(String(module.rootId), subjectModuleRootId),
+      );
+      const subjectModule = subjectModuleMatches.length === 1 ? subjectModuleMatches[0] : undefined;
+      const subjectRecordTypes = subjectModule?.content.recordTypes.filter((recordType) =>
+        sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
+      ) ?? [];
+      const subjectRecordType = subjectRecordTypes.length === 1 ? subjectRecordTypes[0] : undefined;
+      const matchingFields =
+        fieldId === undefined
+          ? []
+          : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
+      const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
+      if (fieldId === undefined || attachmentField?.type !== "attachment") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const maximumFiles = attachmentField.settings.multiple
+        ? attachmentField.settings.maxFiles
+        : 1;
+      const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+      if (maximumFiles === undefined || !subjectId.success) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const currentAttachments = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        async (transaction, scope) => {
+          if (
+            scope.accessVersion !== page.accessVersion ||
+            !sameId(String(scope.organizationId), String(context.organizationId)) ||
+            scope.applicationRootId === undefined ||
+            !sameId(String(scope.applicationRootId), String(context.applicationRootId))
+          )
+            return { kind: "stale" as const };
+          const currentSubject = await readPageSubjectInTransaction(transaction, {
+            recordTypeId: pageSubjectRecordTypeId,
+            recordId: subjectId.data,
+          });
+          if (currentSubject.kind !== "read")
+            return { kind: "subject" as const, subject: currentSubject };
+          const repository = createSqlFileReadRepository(transaction);
+          const projection = await projectReadOnlyAttachmentList({
+            owner: {
+              organizationId: String(context.organizationId),
+              applicationRootId: String(context.applicationRootId),
+              recordTypeId: pageSubjectRecordTypeId,
+              recordId: subjectId.data,
+              fieldId,
+            },
+            subjectValues: currentSubject.row.values,
+            maximumFiles,
+            readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
+              const parsedFileId = fileIdSchema.safeParse(candidateFileId);
+              if (!parsedFileId.success) return { kind: "refused" };
+              try {
+                const decision = await decideFileRead(transaction, parsedFileId.data);
+                if (decision.outcome !== "allowed") return { kind: "refused" };
+                const file = await repository.readFile(parsedFileId.data);
+                if (file === null) return { kind: "refused" };
+                return {
+                  kind: "read",
+                  decision,
+                  metadata: {
+                    fileId: String(file.fileId),
+                    organizationId: String(file.organizationId),
+                    ...(file.applicationRootId === undefined
+                      ? {}
+                      : { applicationRootId: String(file.applicationRootId) }),
+                    ...(file.ownerRecordTypeId === undefined
+                      ? {}
+                      : { ownerRecordTypeId: String(file.ownerRecordTypeId) }),
+                    ...(file.ownerRecordId === undefined
+                      ? {}
+                      : { ownerRecordId: String(file.ownerRecordId) }),
+                    ...(file.ownerFieldId === undefined
+                      ? {}
+                      : { ownerFieldId: String(file.ownerFieldId) }),
+                    lifecycleState: file.lifecycleState,
+                    scannerResult: file.scannerResult,
+                    originalSafeDisplayName: file.originalSafeDisplayName,
+                    detectedMediaType: file.detectedMediaType,
+                    sizeBytes: file.sizeBytes,
+                  },
+                };
+              } catch {
+                return { kind: "unavailable" };
+              }
+            },
+          });
+          return { kind: "projected" as const, subject: currentSubject, projection };
+        },
+      );
+      if (currentAttachments.kind === "temporarily_unavailable") {
+        data[placementId] = { status: "error" };
+      } else if (currentAttachments.kind === "unavailable") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else if (currentAttachments.value.kind === "stale") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else if (currentAttachments.value.subject.kind === "temporarily_unavailable") {
+        data[placementId] = { status: "error" };
+      } else if (currentAttachments.value.kind === "subject") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else {
+        subjectRead ??= Promise.resolve(currentAttachments.value.subject);
+        const projection = currentAttachments.value.projection;
+        data[placementId] =
+          projection.kind === "ready"
+            ? { status: "ready", values: projection.values }
+            : projection.kind === "empty"
+              ? { status: "empty" }
+              : projection.kind === "unavailable"
+                ? { status: "error" }
+                : { status: "refused", reason: "not_permitted" };
+      }
       continue;
     }
     if (isCalendarBlock && calendarContract === undefined) {
