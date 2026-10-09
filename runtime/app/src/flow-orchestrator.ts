@@ -1100,7 +1100,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         Object.keys(call.properties).length !== 3 ||
         call.properties.record_type?.type !== "record_type_id" ||
         call.properties.record?.type !== "record_reference" ||
-        call.properties.expected_revision?.type !== "number"
+        call.properties.expected_revision?.type !== "whole_number"
       )
         return { outcome: "validation" };
       const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type.value);

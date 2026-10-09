@@ -5071,7 +5071,10 @@
                               },
                                 {
                                     "id": "form_submit_crm_company_recovery",
-                                    "key": "vortex.app.events.vortex_app_crm_form_submit_company_recovery"
+                                    "key": "vortex.app.events.vortex_app_crm_company_restore",
+                                    "record_type": "vortex.crm.organisations:company",
+                                    "carries": [],
+                                    "personal_or_sensitive_values_allowed": false
                                 }
                             ],
                  "public_addresses":  [
@@ -6827,7 +6830,7 @@
                                  "required": true
                              },
                              "expected_revision": {
-                                 "type": "number",
+                                 "type": "whole_number",
                                  "required": true
                              }
                          },
