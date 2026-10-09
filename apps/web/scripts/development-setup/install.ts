@@ -15,6 +15,7 @@ import {
 } from "@vortex/contracts";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
+  createDatabasePreparedInstallationRuntimeSourceService,
   resolveModuleContributions,
 } from "@vortex/definition";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
@@ -66,6 +67,11 @@ const coordinatorDependencies = (
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
+  preparedRuntimeSource: (transaction, input) =>
+    createDatabasePreparedInstallationRuntimeSourceService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read(input),
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {
@@ -75,8 +81,9 @@ const release = (facts: InstallFacts, key: string): PublishedRelease => {
 };
 
 /**
- * Prepares one exact release and stores the initial record-type lifecycle policies the activation
- * gate requires. A release that is already active is left alone.
+ * Prepares one exact release, stores its source-bound runtime bundle, and then stores the initial
+ * record-type lifecycle policies the activation gate requires. A release that is already active is
+ * left alone.
  */
 const prepareRelease = async (
   facts: InstallFacts,
@@ -155,3 +162,4 @@ export const installApplications = async (
   facts.state.setupCompleted = true;
   facts.state.save();
 };
+
