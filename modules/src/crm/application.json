@@ -421,6 +421,13 @@
                                                              "label":  "Leads",
                                                              "page":  "crm_leads",
                                                              "permission":  "application.crm.lead.read"
+                                                         },
+                                                         {
+                                                             "id": "nav_crm_company_recovery",
+                                                             "type": "page",
+                                                             "label": "Recover companies",
+                                                             "page": "crm_company_recovery",
+                                                             "permission": "application.crm.company.read"
                                                          }
                                                      ]
                                     },
@@ -3562,6 +3569,11 @@
                 "release_version": "1.0.0"
             },
             "view_permission": "application.crm.opportunity.mark_won",
+            "visibility_condition": {
+                "field": "vortex.crm.opportunities:opportunity.stage",
+                "operator": "equals",
+                "value": "negotiation"
+            },
             "settings": {
                 "label": {
                     "kind": "text",
@@ -4467,7 +4479,94 @@
                                    }
                                  }
                                }
-                             }
+                             },
+                               {
+                                   "id": "page_crm_company_recovery",
+                                   "key": "crm_company_recovery",
+                                   "type": "recovery",
+                                   "record_type": "vortex.crm.organisations:company",
+                                   "permission": "application.crm.company.read",
+                                   "name": "Recover company",
+                                   "composition": {
+                                       "shell_kind": "application",
+                                       "shell": "shell_crm",
+                                       "content": {
+                                           "slot_primary": {
+                                               "placements": {
+                                                   "form_crm_company_recovery": {
+                                                       "block": {
+                                                           "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                                                           "release_version": "1.0.0"
+                                                       },
+                                                       "settings": {
+                                                           "title": {
+                                                               "kind": "text",
+                                                               "value": "Restore company"
+                                                           }
+                                                       },
+                                                       "theme_overrides": {},
+                                                       "responsive": {
+                                                           "desktop": {
+                                                               "visible": true,
+                                                               "width": {
+                                                                   "kind": "fill"
+                                                               },
+                                                               "height": {
+                                                                   "kind": "content"
+                                                               }
+                                                           }
+                                                       },
+                                                       "slots": {
+                                                           "content": {
+                                                               "placements": {
+                                                                   "submit_crm_company_recovery": {
+                                                                       "block": {
+                                                                           "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                                                           "release_version": "1.0.0"
+                                                                       },
+                                                                       "settings": {
+                                                                           "label": {
+                                                                               "kind": "text",
+                                                                               "value": "Restore selected company"
+                                                                           },
+                                                                           "action_kind": {
+                                                                               "kind": "choice",
+                                                                               "value": "submit"
+                                                                           }
+                                                                       },
+                                                                       "theme_overrides": {},
+                                                                       "responsive": {
+                                                                           "desktop": {
+                                                                               "visible": true,
+                                                                               "width": {
+                                                                                   "kind": "fill"
+                                                                               },
+                                                                               "height": {
+                                                                                   "kind": "content"
+                                                                               }
+                                                                           }
+                                                                       },
+                                                                       "slots": {}
+                                                                   }
+                                                               },
+                                                               "order": {
+                                                                   "desktop": [
+                                                                       "submit_crm_company_recovery"
+                                                                   ]
+                                                               }
+                                                           }
+                                                       }
+                                                   }
+                                               },
+                                               "order": {
+                                                   "desktop": [
+                                                       "form_crm_company_recovery"
+                                                   ]
+                                               }
+                                           }
+                                       }
+                                   }
+                               }
                            ],
                  "pipelines":  [
                                    {
@@ -4969,7 +5068,11 @@
                                 "record_type": "vortex.crm.opportunities:opportunity",
                                 "carries": [],
                                 "personal_or_sensitive_values_allowed": false
-                              }
+                              },
+                                {
+                                    "id": "form_submit_crm_company_recovery",
+                                    "key": "vortex.app.events.vortex_app_crm_form_submit_company_recovery"
+                                }
                             ],
                  "public_addresses":  [
 
@@ -6702,7 +6805,127 @@
                        }
                      ],
                      "outputs": {}
-                   }
+                   },
+                     {
+                         "contractVersion": "1.0.0",
+                         "id": "crm_restore_company",
+                         "key": "crm_restore_company",
+                         "description": "Restore the selected company after a current confirmation.",
+                         "labels": {
+                             "name": "Restore company"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.organisations:company"
+                                 ],
+                                 "required": true
+                             },
+                             "expected_revision": {
+                                 "type": "number",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "confirm_restore",
+                                 "type": "interface.confirm",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "title": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "Restore company"
+                                         }
+                                     },
+                                     "message": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "Restore the selected company and its eligible retained attachments?"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "stop_if_declined",
+                                 "type": "if",
+                                 "condition": {
+                                     "op": "not",
+                                     "arg": {
+                                         "op": "reference",
+                                         "reference": {
+                                             "source": "task_output",
+                                             "task": "confirm_restore",
+                                             "key": "confirmed"
+                                         }
+                                     }
+                                 },
+                                 "then": [
+                                     {
+                                         "id": "stop_declined",
+                                         "type": "stop",
+                                         "outcome": "cancelled"
+                                     }
+                                 ]
+                             },
+                             {
+                                 "id": "restore",
+                                 "type": "record.restore",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.organisations:company"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "expected_revision": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "expected_revision"
+                                         }
+                                     }
+                                 }
+                             },
+                             {
+                                 "id": "return_to_company",
+                                 "type": "interface.navigate",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "page": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "crm_company_detail"
+                                         }
+                                     },
+                                     "parameters": {
+                                         "kind": "map",
+                                         "entries": {
+                                             "record_id": "{{ inputs.record }}"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {}
+                     }
                  ],
                  "flow_bindings":  [
                      {
@@ -7055,7 +7278,24 @@
                      "event": "action",
                      "flow": "navigate_new_opportunity",
                      "inputs": {}
-                   }
+                   },
+                     {
+                         "id": "form_binding_crm_company_recovery",
+                         "control": "form_crm_company_recovery",
+                         "event_id": "form_submit_crm_company_recovery",
+                         "event": "form_submit",
+                         "flow": "crm_restore_company",
+                         "inputs": {
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record"
+                             },
+                             "expected_revision": {
+                                 "kind": "caller",
+                                 "name": "expected_revision"
+                             }
+                         }
+                     }
                  ]
              }
 }

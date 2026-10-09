@@ -73,6 +73,7 @@ import type {
   PageDataState,
   PlacementFlowBinding,
 } from "../../../../_lib/application-page";
+import { ApplicationRecoveryView } from "./application-recovery-view";
 import {
   isCurrentComponentRequestGeneration,
   nextComponentRequestGeneration,
@@ -1558,6 +1559,12 @@ function ApplicationPageViewContent({
    * which is returned exactly as the server issued it.
    */
   const flowClient = useMemo<FlowInvokeClient>(() => {
+    const flowSubject = subject ?? (model.recovery?.selected === undefined
+      ? undefined
+      : {
+          recordId: model.recovery.selected.recordId,
+          revision: model.recovery.selected.revision,
+        });
     const client = createFlowInvokeClient({
       address: {
         tenantShortName: application.tenantShortName,
@@ -1569,7 +1576,7 @@ function ApplicationPageViewContent({
         installationRevision: application.installationRevision,
         releaseKey: application.releaseKey,
       },
-      ...(subject === undefined ? {} : { subject }),
+      ...(flowSubject === undefined ? {} : { subject: flowSubject }),
     });
     const recordResponse = (
       response: ServerFlowResponse,
@@ -1607,7 +1614,7 @@ function ApplicationPageViewContent({
         return response;
       },
     };
-  }, [application, subject, unsavedWorkRegistry]);
+  }, [application, model.recovery, subject, unsavedWorkRegistry]);
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
@@ -2351,6 +2358,10 @@ function ApplicationPageViewContent({
       const data =
         guidedFormCompleted && guidedActiveFormIds.includes(placementId)
           ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
+          : model.recovery !== undefined &&
+              model.recovery.selected === undefined &&
+              formOwners[placementId] === placementId
+            ? ({ status: "disabled", reason: "Select a record to continue." } as const)
           : currentData[placementId];
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
@@ -2753,6 +2764,9 @@ function ApplicationPageViewContent({
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
       <div ref={compositionRootRef} className="contents">
+      {model.recovery === undefined ? null : (
+        <ApplicationRecoveryView recovery={model.recovery} />
+      )}
       <PageLayoutRenderer
         applicationSurface
         feedback={pageFeedback === undefined && notice === undefined &&

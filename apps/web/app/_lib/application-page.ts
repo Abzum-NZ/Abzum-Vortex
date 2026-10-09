@@ -88,6 +88,7 @@ import {
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { createRecordRecoveryService } from "@vortex/record";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
@@ -181,6 +182,12 @@ export type ApplicationPageModel = Readonly<{
     computedStepId: string;
     values: Readonly<Record<string, JsonValue>>;
     validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
+  }>;
+  /** Protected, content-free candidates for a typed recovery page. */
+  recovery?: Readonly<{
+    recordTypeId: string;
+    records: readonly Readonly<{ recordId: string; revision: number }>[];
+    selected?: Readonly<{ recordId: string; revision: number }>;
   }>;
   /** Permitted pages of this application, so a menu or navigate intent can be turned into an address. */
   pages: readonly Readonly<{ pageId: string; key: string }>[];
@@ -1855,7 +1862,9 @@ const loadApplicationPageInternal = async (
       : { observeProjectionDecision: observeProjectionDecision.capture }),
     selection: {
       pageId: pageDefinition.pageId,
-      ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
+      ...(pageDefinition.type === "recovery" || conditionSubjectId === undefined
+        ? {}
+        : { subjectRecordId: conditionSubjectId }),
     },
   });
   const projectedPage = await pageService.project(session, selection);
@@ -2087,6 +2096,7 @@ const loadApplicationPageInternal = async (
   let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
   const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
   const subjects = createPageSubjectReader(dependencies);
+  const recordRecovery = createRecordRecoveryService(dependencies);
 
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
@@ -2100,6 +2110,40 @@ const loadApplicationPageInternal = async (
       ? pageDefinition.recordType
       : undefined;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  const recoveryRecordType =
+    pageDefinition.type === "recovery" && pageDefinition.recordType?.state === "resolved"
+      ? pageDefinition.recordType
+      : undefined;
+  const recoveryRecordId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+  let recovery: ApplicationPageModel["recovery"];
+  if (pageDefinition.type === "recovery") {
+    if (recoveryRecordType === undefined || (first(parameters[pageSubjectParameter]) !== undefined && !recoveryRecordId.success))
+      return { kind: "unavailable" };
+    const listed = await recordRecovery.listRecoverableRecords(
+      session,
+      selection,
+      String(recoveryRecordType.recordTypeId),
+    );
+    if (listed.kind !== "available") return listed;
+    if (listed.value.outcome !== "available") return { kind: "unavailable" };
+    const selectedCandidate = recoveryRecordId.success
+      ? listed.value.records.find((candidate) => sameId(candidate.recordId, recoveryRecordId.data))
+      : undefined;
+    let selected: Readonly<{ recordId: string; revision: number }> | undefined;
+    if (selectedCandidate !== undefined) {
+      const checked = await recordRecovery.readRecoverableRecord(session, selection, {
+        recordTypeId: String(recoveryRecordType.recordTypeId),
+        ...selectedCandidate,
+      });
+      if (checked.kind !== "available") return checked;
+      if (checked.value.outcome === "available") selected = checked.value.record;
+    }
+    recovery = {
+      recordTypeId: String(recoveryRecordType.recordTypeId),
+      records: listed.value.records,
+      ...(selected === undefined ? {} : { selected }),
+    };
+  }
   if (
     pageDefinition.type === "guided_form" &&
     first(parameters[pageSubjectParameter]) !== undefined &&
@@ -3490,7 +3534,7 @@ const loadApplicationPageInternal = async (
         subjectType !== undefined &&
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
-  if (pageDefinition.type !== "guided_form") {
+  if (pageDefinition.type !== "guided_form" && pageDefinition.type !== "recovery") {
     for (const { placementId, placement } of placements) {
       if (!editFormPlacementIds.has(placementId)) continue;
       const block = placement.block;
@@ -3554,6 +3598,7 @@ const loadApplicationPageInternal = async (
       editFormBaselines,
       referenceChoiceInputs,
       ...(guidedForm === undefined ? {} : { guidedForm }),
+      ...(recovery === undefined ? {} : { recovery }),
       pages: application.content.pages
         .filter((candidate) => permittedKeys.has(candidate.key))
         .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),

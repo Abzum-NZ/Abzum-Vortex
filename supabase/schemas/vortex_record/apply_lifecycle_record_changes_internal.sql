@@ -31,6 +31,7 @@ declare
   actor_id_value uuid;
   command_fingerprint_value text;
   receipt_claim jsonb;
+  restore_authority jsonb;
   installation jsonb;
   loaded jsonb;
   decision jsonb;
@@ -229,6 +230,47 @@ begin
         message = 'Protected record restore is not prepared';
     end if;
 
+    select effect.* into strict effect_row
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = receipt.organization_id
+      and effect.application_root_id = receipt.application_root_id
+      and effect.actor_organization_account_id = receipt.actor_organization_account_id
+      and effect.command_id = receipt.command_id
+      and effect.effect_kind = 'restored'
+      and effect.record_type_id = p_record_type_id
+      and effect.record_id = p_record_id
+      and effect.pre_concurrency_number = p_expected_concurrency_number
+    for update;
+    if (
+      select pg_catalog.count(*)
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+    ) <> 1
+      or effect_row.restore_original_deleted_at is null
+      or effect_row.restore_policy_revision is null
+      or effect_row.restore_recovery_window_days is null
+      or effect_row.restore_request_deadline_at is null
+      or effect_row.restore_request_deadline_at <= pg_catalog.clock_timestamp()
+      or not effect_row.file_cascade_settled
+      or effect_row.file_cascade_proof_digest is null
+      or effect_row.file_cascade_proof_digest !~ '^[0-9a-f]{64}$' then
+      raise exception using errcode = '55000',
+        message = 'Protected record restore proof is unavailable';
+    end if;
+    restore_authority := vortex_record.read_record_owned_file_restore_authority_internal(
+      p_command_id
+    );
+    if restore_authority ->> 'outcome' is distinct from 'prepared'
+      or (restore_authority ->> 'requestDeadlineAt')::timestamptz
+        is distinct from effect_row.restore_request_deadline_at
+      or effect_row.restore_request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'Protected record restore authority is unavailable';
+    end if;
+
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
       'restore', p_record_type_id, p_record_id, p_command_id, null
     );
@@ -251,6 +293,15 @@ begin
     perform vortex_record.append_record_lifecycle_activity_internal(
       receipt.activity_id, 'restore', array[p_record_id]::uuid[]
     );
+
+    if effect_row.restore_original_deleted_at
+        + pg_catalog.make_interval(days => effect_row.restore_recovery_window_days)
+        <= pg_catalog.clock_timestamp()
+      or effect_row.restore_request_deadline_at <= pg_catalog.clock_timestamp()
+      or request_deadline_at <= pg_catalog.clock_timestamp() then
+      raise exception using errcode = '57014',
+        message = 'Protected record restore deadline expired before receipt completion';
+    end if;
 
     perform vortex_record.complete_command_receipt_internal(
       'record_lifecycle', p_command_id, null, restored_revision,

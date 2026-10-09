@@ -64,6 +64,10 @@ function flowCommitActionKeys(
             `${literal("record_type")}:${properties?.record === undefined ? "create" : "update"}`,
           ) ?? "",
         );
+      else if (task.type === "record.restore")
+        keys.push(
+          actions.standardActionKeysByRecordAction.get(`${literal("record_type")}:restore`) ?? "",
+        );
       else if (task.type === "operation.call") {
         const called = literal("operation");
         if (called !== undefined && actions.executableActionKeys.has(called)) keys.push(called);
@@ -140,7 +144,7 @@ export function deriveFormCommitActionKeys(
   const commits = new Map<string, string[]>();
   for (const pageValue of content.pages) {
     const page = object(pageValue);
-    if (page.type !== "form" && page.type !== "guided_form") continue;
+    if (page.type !== "form" && page.type !== "guided_form" && page.type !== "recovery") continue;
     const keys = new Set<string>();
     for (const placementId of pagePlacementIds(page, shellsById))
       for (const key of keysByControl.get(placementId) ?? []) keys.add(key);

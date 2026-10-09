@@ -72,6 +72,7 @@ export * from "./organization-stewardship";
 export * from "./permissions";
 export * from "./permission-registry";
 export * from "./record-lifecycle-policy";
+export * from "./record-recovery";
 export * from "./record-ownership-compatibility";
 export * from "./record-links";
 export * from "./records";

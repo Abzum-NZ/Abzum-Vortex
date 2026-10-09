@@ -20,7 +20,10 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
-import { applyRecordOwnedFileDeleteCascade } from "@vortex/file";
+import {
+  applyRecordOwnedFileDeleteCascade,
+  applyRecordOwnedFileRestoreCascade,
+} from "@vortex/file";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   calculateLockedRelationshipTotalSave,
@@ -641,17 +644,22 @@ export const createRecordDeleteService = (dependencies: RecordDeleteServiceDepen
       const { preparation } = prepared;
       const settings = await readOrganizationRuntimeSettings(transaction);
       const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
-      // Retained links were revalidated by the restore primitive; any other
-      // pending check would need a value the restore does not supply.
+      // Retained links are revalidated by the Record restore primitive. File
+      // references are resolved by the protected, receipt-bound File cascade
+      // below; no value or owner list from the request is accepted here.
       if (
         calculated === undefined ||
-        calculated.pendingChecks.some((check) => check.kind !== "record_reference")
+        calculated.pendingChecks.some(
+          (check) => check.kind !== "record_reference" && check.kind !== "file_reference",
+        )
       )
         return refuseCalculation(command.recordId, preparation.correlationId);
       const mutations = [
         restoredRootMutation(preparation, calculated.sourceFinalValues),
         ...calculated.parentMutations,
       ];
+
+      await applyRecordOwnedFileRestoreCascade(transaction, command.commandId);
 
       const finalized = parseDatabaseOutcome(
         one(

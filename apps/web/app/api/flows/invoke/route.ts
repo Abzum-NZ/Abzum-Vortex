@@ -51,7 +51,12 @@ import {
   createPageSubjectReader,
   createPrivateFormSubmitAdapter,
 } from "@vortex/page";
-import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/record";
+import {
+  createNamedActionRecordPort,
+  createRecordDeleteService,
+  createRecordRecoveryService,
+  createRecordSaveService,
+} from "@vortex/record";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
@@ -176,6 +181,16 @@ const requestSchema = z
 const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const compositionContainsPlacement = (value: unknown, placementId: string): boolean => {
+  if (!isRecord(value)) return false;
+  if (
+    isRecord(value.placements) &&
+    Object.keys(value.placements).some((candidate) => sameId(candidate, placementId))
+  )
+    return true;
+  return Object.values(value).some((child) => compositionContainsPlacement(child, placementId));
+};
 
 type SelectedRecordReadField = Readonly<{
   alias: string;
@@ -613,6 +628,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // #1369, #1370: Save record tasks and named actions run through the record service's own
     // protected paths, under the initiator's verified request and in their own transactions.
     const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
+    const recordLifecycle = createRecordDeleteService({ identityAuthorityId: authorityId, telemetry });
+    const recordRecovery = createRecordRecoveryService({ identityAuthorityId: authorityId, telemetry });
     const subjectReader = createPageSubjectReader({ identityAuthorityId: authorityId, telemetry });
     const actionRecords = createNamedActionRecordPort({
       identityAuthorityId: authorityId,
@@ -682,6 +699,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       createFlowOrchestrator({
         executor,
         records,
+        restores: { restore: recordLifecycle.restoreRecord },
         actionRecords,
         subjects: {
           read: async (session, selection, subject) =>
@@ -1185,6 +1203,62 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       readInstallation:
         invocation.kind === "binding" ? async () => bindingInstallation : readInstalled,
       adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
+        const recoveryPages = installation.applicationContent?.pages.filter(
+          (page) =>
+            page.type === "recovery" &&
+            compositionContainsPlacement(page.composition, binding.controlId),
+        ) ?? [];
+        if (recoveryPages.length > 0) {
+          if (
+            recoveryPages.length !== 1 ||
+            binding.event !== "form_submit" ||
+            subject === undefined ||
+            installation.applicationContent === undefined ||
+            !isRecord(callerInputs.values) ||
+            Object.keys(callerInputs).length !== 1 ||
+            Object.keys(callerInputs.values).length !== 0
+          )
+            return undefined;
+          const recoveryPage = recoveryPages[0]!;
+          if (recoveryPage.recordType.state !== "resolved") return undefined;
+          const callerDeclarations = Object.values(binding.flow.inputs).filter(
+            (candidate) => isRecord(candidate) && candidate.kind === "caller",
+          );
+          const callerNames = callerDeclarations.map((candidate) =>
+            isRecord(candidate) && typeof candidate.name === "string" ? candidate.name : "",
+          );
+          if (
+            callerDeclarations.length !== 2 ||
+            new Set(callerNames).size !== 2 ||
+            !callerNames.includes("record") ||
+            !callerNames.includes("expected_revision")
+          )
+            return undefined;
+          const recordTypeId = String(recoveryPage.recordType.recordTypeId);
+          const checked = await recordRecovery.readRecoverableRecord(
+            identity.session,
+            selection,
+            { recordTypeId, recordId: subject.recordId, revision: subject.revision },
+          );
+          if (
+            checked.kind !== "available" ||
+            checked.value.outcome !== "available" ||
+            !sameId(checked.value.record.recordId, subject.recordId) ||
+            checked.value.record.revision !== subject.revision
+          )
+            return undefined;
+          return {
+            callerInputs: {
+              record: checked.value.record.recordId,
+              expected_revision: checked.value.record.revision,
+            },
+            recoverySubject: {
+              recordTypeId,
+              recordId: checked.value.record.recordId,
+              revision: checked.value.record.revision,
+            },
+          };
+        }
         const resolveValues = async (values: unknown) => {
           if (installation.applicationContent === undefined || installation.modules === undefined)
             return undefined;
@@ -1301,9 +1375,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             { ...adapterInputs, values: resolved.values },
             subject,
           );
-          return adaptedInputs === undefined
-            ? undefined
-            : adaptSelectedReadInputs(adaptedInputs, resolved);
+          if (adaptedInputs === undefined) return undefined;
+          const selected = adaptSelectedReadInputs(adaptedInputs, resolved);
+          return selected === undefined ? undefined : { callerInputs: selected };
         }
         if (
           guided === null ||
@@ -1385,9 +1459,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           },
           subject,
         );
-        return adaptedInputs === undefined
-          ? undefined
-          : adaptSelectedReadInputs(adaptedInputs, resolved);
+        if (adaptedInputs === undefined) return undefined;
+        const selected = adaptSelectedReadInputs(adaptedInputs, resolved);
+        return selected === undefined ? undefined : { callerInputs: selected };
       },
       continueForm,
       orchestratorFor,

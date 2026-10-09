@@ -10,6 +10,7 @@ export * from "./storage-policy";
 export * from "./content-safety";
 export * from "./attachment-authority";
 export * from "./record-delete-cascade";
+export * from "./recovery";
 export {
   STRUCTURED_RECORD_IMPORT_FORMAT_VERSION,
   decodeStructuredRecordImport,

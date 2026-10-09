@@ -3884,6 +3884,12 @@ function compileApplicationPagesV2(
         type: "form",
         recordType: resolution.recordType(String(page.record_type)),
       };
+    if (page.type === "recovery")
+      return {
+        ...base,
+        type: "recovery",
+        recordType: resolution.recordType(String(page.record_type)),
+      };
     if (page.type === "guided_form")
       return {
         ...base,

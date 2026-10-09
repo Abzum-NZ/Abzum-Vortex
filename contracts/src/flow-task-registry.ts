@@ -488,7 +488,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: protectedLocations,
     effect: "change",
     protectedOperationKey: applyRecordChanges,
-    properties: recordProperties,
+    properties: { ...recordProperties, expected_revision: required("number") },
     outputs: [output("record", "record_reference")],
     kestra: "protected_callback",
     retry: durableRetry,

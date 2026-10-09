@@ -4598,7 +4598,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       { standardActionKeysByRecordAction, executableActionKeys },
     );
     for (const page of pages.values()) {
-      if (page.type !== "form" && page.type !== "guided_form") continue;
+      if (page.type !== "form" && page.type !== "guided_form" && page.type !== "recovery") continue;
       const recordTypeId = page.recordType
         ? String(object(page.recordType).recordTypeId)
         : undefined;
@@ -5076,7 +5076,8 @@ function applicationControlBindingRule(
         blockKey === formContainerBlockKey
           ? (containsSubmitButton(placement) ||
               pageType === "form" ||
-              pageType === "guided_form") &&
+              pageType === "guided_form" ||
+              pageType === "recovery") &&
             !bound.has("form_submit")
           : blockKey === actionButtonBlockKey &&
             sourceButtonActionKind(placement) !== "submit" &&
