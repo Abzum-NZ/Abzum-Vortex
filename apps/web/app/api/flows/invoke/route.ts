@@ -1203,11 +1203,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       readInstallation:
         invocation.kind === "binding" ? async () => bindingInstallation : readInstalled,
       adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
-        const recoveryPages = installation.applicationContent?.pages.filter(
-          (page) =>
-            page.type === "recovery" &&
-            compositionContainsPlacement(page.composition, binding.controlId),
-        ) ?? [];
+        const recoveryPages =
+          installation.applicationContent?.pages
+            .filter((page) => page.type === "recovery")
+            .filter((page) =>
+              compositionContainsPlacement(page.composition, binding.controlId),
+            ) ?? [];
         if (recoveryPages.length > 0) {
           if (
             recoveryPages.length !== 1 ||

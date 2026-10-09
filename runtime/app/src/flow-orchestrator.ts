@@ -1493,6 +1493,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
                   return { outcome: "refused" };
               } else if (
                 !isSavedRecordEffectOutput(replayedOutputs) ||
+                !isSavedRecordEffectOutput(ledgerOutputs) ||
                 replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase()
               ) return { outcome: "refused" };
             }
