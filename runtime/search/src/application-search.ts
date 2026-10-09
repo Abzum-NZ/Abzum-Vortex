@@ -80,6 +80,7 @@ export const searchConfiguredApplication = async (input: Readonly<{
   scope: SelectedOrganizationScope;
   configuration: ApplicationSearch | undefined;
   expression: string;
+  expressionMode?: "literal" | "or";
   candidates: readonly SearchDocument[];
   readCurrentRecord(request: PermittedSearchCurrentReadRequest): Promise<ApplicationSearchRecord | undefined>;
 }>): Promise<ApplicationSearchResult> => {
@@ -94,16 +95,24 @@ export const searchConfiguredApplication = async (input: Readonly<{
     const current = new Map<string, ApplicationSearchRecord>();
     const result = await matchLiteralSearch({
       expression: input.expression,
+      expressionMode: input.expressionMode ?? "literal",
       search: {
         access: input.scope,
         request: { applicationRootId: input.scope.applicationRootId, recordTypeId,
           requestedFieldIds: entry.fields.map((field) => String(field.fieldId)) },
-        candidates: input.candidates.filter((candidate) => sameId(candidate.recordTypeId, recordTypeId)),
+        candidates: input.candidates.filter((candidate) =>
+          sameId(candidate.organisationId, input.scope.organizationId) &&
+          sameId(candidate.applicationRootId ?? "", input.scope.applicationRootId) &&
+          sameId(candidate.recordTypeId, recordTypeId)),
       },
     }, {
       readCurrentRecord: async (request) => {
         const record = await input.readCurrentRecord(request);
-        const indexed = input.candidates.find((candidate) => sameId(candidate.recordTypeId, request.recordTypeId) && sameId(candidate.recordId, request.recordId));
+        const indexed = input.candidates.find((candidate) =>
+          sameId(candidate.organisationId, request.organizationId) &&
+          sameId(candidate.applicationRootId ?? "", request.applicationRootId) &&
+          sameId(candidate.recordTypeId, request.recordTypeId) &&
+          sameId(candidate.recordId, request.recordId));
         if (record === undefined || indexed === undefined || record.concurrencyNumber !== indexed.sourceRecordVersion) return { outcome: "refused" };
         current.set(request.recordId.toLowerCase(), record);
         return { outcome: "allowed", concurrencyNumber: record.concurrencyNumber, readableFieldIds: Object.keys(record.values) };

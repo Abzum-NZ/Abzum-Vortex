@@ -8,6 +8,22 @@
                  "description":  "A general customer relationship application for companies, people, leads, opportunities and activities.",
                  "icon":  "contact-round",
                  "home_page":  "crm_dashboard",
+                 "search":  {
+                                "enabled":  true,
+                                "record_types":  [
+                                                   {
+                                                       "record_type":  "vortex.crm.opportunities:opportunity",
+                                                       "fields":  [
+                                                                      {
+                                                                          "field":  "vortex.crm.opportunities:opportunity.name",
+                                                                          "priority":  "first"
+                                                                      }
+                                                                  ],
+                                                       "title_field":  "vortex.crm.opportunities:opportunity.name",
+                                                       "target_page":  "crm_opportunity_detail"
+                                                   }
+                                               ]
+                            },
                  "module_bindings":  [
                                          {
                                              "module":  "vortex.crm.organisations",

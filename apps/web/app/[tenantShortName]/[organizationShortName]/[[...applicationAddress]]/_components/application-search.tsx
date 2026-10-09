@@ -11,6 +11,13 @@ export function ApplicationSearch({ view, pageSubject }: { view: ApplicationSear
         <input name="q" type="search" maxLength={2_000} defaultValue={view.kind === "available" ? view.expression : ""}
           className="w-full rounded border px-3 py-2" placeholder="Search this application" />
       </label>
+      <label className="self-end">Match
+        <select name="mode" defaultValue={view.kind === "available" ? view.expressionMode : "literal"}
+          className="block rounded border px-3 py-2">
+          <option value="literal">All terms</option>
+          <option value="or">Any group</option>
+        </select>
+      </label>
       <button type="submit" className="self-end rounded border px-3 py-2">Search</button>
     </form>
     {view.kind === "unavailable" ? <p role="status">Search is unavailable. Try again.</p> :

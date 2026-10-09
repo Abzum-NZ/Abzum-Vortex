@@ -38,14 +38,16 @@ begin
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(pg_catalog.concat_ws(E'\x1f', 'search_document',
-      p_organization_id::text, p_record_type_id::text, p_record_id::text), 643)
+      p_organization_id::text, p_record_type_id::text, p_record_id::text,
+      coalesce(p_application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)::text), 643)
   );
 
   select existing.* into stored
   from vortex_search.documents as existing
   where existing.organization_id = p_organization_id
     and existing.record_type_id = p_record_type_id
-    and existing.record_id = p_record_id;
+    and existing.record_id = p_record_id
+    and existing.application_root_id is not distinct from p_application_root_id;
 
   if found then
     if stored.source_record_version > p_source_record_version then
@@ -75,7 +77,8 @@ begin
         updated_at = pg_catalog.statement_timestamp()
     where existing.organization_id = p_organization_id
       and existing.record_type_id = p_record_type_id
-      and existing.record_id = p_record_id;
+      and existing.record_id = p_record_id
+      and existing.application_root_id is not distinct from p_application_root_id;
     return query select case
       when stored.source_record_version = p_source_record_version then 'rebuilt'
       else 'replaced'
@@ -106,7 +109,7 @@ grant execute on function vortex_search.put_document(
 comment on function vortex_search.put_document(
   uuid, uuid, uuid, uuid, bigint, boolean, jsonb, text
 ) is
-  'Stores one built search document or deletion marker for the request organisation; an older source version never overwrites a newer one, and a same-version rebuild replaces changed content.';
+  'Stores one built search document or deletion marker for the request organisation and Application scope; an older source version never overwrites a newer one, and a same-version rebuild replaces changed content only within that scope.';
 
 alter function vortex_search.put_document(
   uuid, uuid, uuid, uuid, bigint, boolean, jsonb, text

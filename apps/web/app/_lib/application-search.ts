@@ -16,7 +16,7 @@ import { humanOrganizationRequestDependencies, humanOrganizationRequestsFor } fr
 export type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "available"; expression: string; results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[]; more: boolean }>;
+  | Readonly<{ kind: "available"; expression: string; expressionMode: "literal" | "or"; results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[]; more: boolean }>;
 const unavailable = { kind: "unavailable" } as const;
 const recordSchema = z.object({ outcome: z.literal("allowed"), recordId: recordIdSchema,
   concurrencyNumber: revisionSchema, values: z.record(fieldIdSchema, jsonValueSchema) }).strict();
@@ -26,6 +26,7 @@ export const loadApplicationSearch = async (
   session: IdentitySession,
   address: Readonly<{ tenantShortName: string; organizationShortName: string; applicationKey: string }>,
   expression: string | undefined,
+  expressionMode: "literal" | "or" = "literal",
 ): Promise<ApplicationSearchView> => {
   try {
     const dependencies = humanOrganizationRequestDependencies();
@@ -74,7 +75,7 @@ export const loadApplicationSearch = async (
             contentFingerprint: String(row.content_fingerprint) });
           }
         }
-        const result = await searchConfiguredApplication({ scope, configuration, expression, candidates,
+        const result = await searchConfiguredApplication({ scope, configuration, expression, expressionMode, candidates,
           readCurrentRecord: async (request): Promise<ApplicationSearchRecord | undefined> => {
             const entry = configuration.recordTypes.find((entry) => entry.recordType.state === "resolved" && sameId(entry.recordType.recordTypeId, request.recordTypeId));
             if (entry?.recordType.state !== "resolved" || !sameId(request.organizationId, scope.organizationId) || !sameId(request.applicationRootId, scopedApplicationRootId)) return undefined;
@@ -122,7 +123,7 @@ export const loadApplicationSearch = async (
       });
     if (searched.kind !== "available") return unavailable;
     if (searched.value.kind === "disabled") return { kind: "disabled" };
-    if (searched.value.kind === "ready") return { kind: "available", expression: "", results: [], more: false };
+    if (searched.value.kind === "ready") return { kind: "available", expression: "", expressionMode, results: [], more: false };
     if (searched.value.kind !== "searched") return unavailable;
     const result = searched.value;
     const links = new Map<string, Awaited<ReturnType<ReturnType<typeof createApplicationPageLinkReader>["read"]>>>();
@@ -140,6 +141,6 @@ export const loadApplicationSearch = async (
         title: match.title, ...(match.subtitle === undefined ? {} : { subtitle: match.subtitle }) });
       if (results.length === 51) break;
     }
-    return { kind: "available", expression: expression!, results: results.slice(0, 50), more: results.length > 50 };
+    return { kind: "available", expression: expression!, expressionMode, results: results.slice(0, 50), more: results.length > 50 };
   } catch { return unavailable; }
 };

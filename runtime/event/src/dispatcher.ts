@@ -72,6 +72,9 @@ export type EventConsumerDeliveryPolicy = Readonly<{
 export type EventConsumerDelivery = Readonly<{
   consumerKey: string;
   occurrence: EventOccurrenceEnvelopeV2;
+  /** The exact cursor of this live retained claim; consumers may use it only
+   * to revalidate their own purpose-bound transactional effect. */
+  claimCursor?: string;
   causalDepth: number;
   leaseExpiresAt: string;
   /**
@@ -610,6 +613,7 @@ export const createEventDispatcher = (
     const delivery: EventConsumerDelivery = Object.freeze({
       consumerKey: consumer.consumerKey,
       occurrence: claimed.occurrence,
+      claimCursor: ackCursor,
       causalDepth: claimed.causalDepth,
       leaseExpiresAt,
       renewLease: async () => (await renew(consumer, ackCursor, occurrenceId)) !== undefined,
