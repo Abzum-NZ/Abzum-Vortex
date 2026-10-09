@@ -1,3 +1,11 @@
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
   p_record_type_id uuid,
   p_action_kind text,
@@ -488,3 +496,9 @@ comment on function vortex_record.load_record_access_facts_from_installation_int
   uuid, text, uuid, bigint, jsonb
 ) is
   'Private adapter fact loader over one exact trusted installation or owner-validated preview, resolving definitions from the cached installation access plan.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+commit;
