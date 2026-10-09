@@ -11,6 +11,7 @@ import {
   moduleRootIdSchema,
   organizationIdSchema,
   type PermissionDeclaration,
+  recordTypeIdSchema,
   revisionSchema,
   systemApplicationBoundReleaseSetResultSchema,
   type InstallationRuntimeBundleSourceManifest,
@@ -62,7 +63,9 @@ const requirePreparedPlanMatchesReleaseSet = (
   applicationReleaseRevision: number,
 ): void => {
   const plan = planCandidate.plan;
-  const invalid = () => { throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID"); };
+  const invalid = (): never => {
+    throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+  };
   if (
     plan.organizationId !== organizationId ||
     plan.applicationRootId !== applicationRootId ||
@@ -75,7 +78,9 @@ const requirePreparedPlanMatchesReleaseSet = (
   const expectedRelationships: Record<string, unknown> = {};
   for (const module of modules)
     for (const recordType of module.content.recordTypes) {
-      const recordTypeId = recordType.recordTypeId.toLowerCase();
+      const parsedRecordTypeId = recordTypeIdSchema.safeParse(recordType.recordTypeId.toLowerCase());
+      if (!parsedRecordTypeId.success) invalid();
+      const recordTypeId = parsedRecordTypeId.data;
       if (expectedRecordTypeIds.has(recordTypeId)) invalid();
       expectedRecordTypeIds.add(recordTypeId);
       const planned = plan.recordTypes[recordTypeId];
