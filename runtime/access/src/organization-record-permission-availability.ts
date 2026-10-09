@@ -20,7 +20,7 @@ const unavailableCode = "ORGANIZATION_RECORD_PERMISSION_AVAILABILITY_UNAVAILABLE
 
 /** Permission availability only: no row identity, final access decision or operation callback. */
 export type OrganizationRecordPermissionAvailability =
-  | Readonly<{ outcome: "eligible"; correlationId: string }>
+  | Readonly<{ outcome: "eligible"; correlationId: string; validUntil: string }>
   | SafeOrganizationAccessRefusal;
 
 type AvailabilityRow = DatabaseRow & {
@@ -122,5 +122,9 @@ export const evaluateOrganizationRecordPermissionAvailability = async (
     throw unavailableError(unavailableCode);
   return evidence.data.outcome === "refused"
     ? safeOrganizationAccessRefusal(evidence.data)
-    : { outcome: "eligible", correlationId: evidence.data.correlationId };
+    : {
+        outcome: "eligible",
+        correlationId: evidence.data.correlationId,
+        validUntil: evidence.data.validUntil,
+      };
 };

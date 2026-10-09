@@ -1,8 +1,10 @@
 import "server-only";
 
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   readAddressedApplicationAtAddress,
+  readAddressedApplicationIdentityAtAddress,
+  matchesInstalledPageBundleIdentity,
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
   resolvePermittedApplicationAddress,
@@ -16,7 +18,7 @@ import {
   type IdentitySession,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { createActiveInstallationBundleRepository } from "@vortex/module";
 import { createStoredPageCapabilityService } from "@vortex/page";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import {
@@ -52,6 +54,14 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           return unavailable;
 
         const dependencies = humanOrganizationRequestDependencies();
+        const addressIdentity = await readAddressedApplicationIdentityAtAddress(
+          session,
+          tenantShortName.data,
+          organizationShortName.data,
+          dependencies.identityAuthorityId,
+          selector.data.applicationKey,
+        );
+        if (addressIdentity === undefined) return unavailable;
         const { read } = await readAddressedApplicationAtAddress(
           session,
           tenantShortName.data,
@@ -61,11 +71,14 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
         );
         if (
           read.kind !== "available" ||
+          read.organizationId !== addressIdentity.organizationId ||
           read.tenantShortName !== tenantShortName.data ||
           read.organizationShortName !== organizationShortName.data ||
           read.applications.length !== 1
         )
           return unavailable;
+
+        const addressedIdentity = addressIdentity.identity;
 
         const target = resolvePermittedApplicationAddress(
           read,
@@ -76,14 +89,15 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           target.kind !== "available" ||
           target.application === null ||
           target.pageKey === null ||
-          target.application.key !== selector.data.applicationKey
+          target.application.key !== selector.data.applicationKey ||
+          !sameId(target.application.applicationRootId, addressedIdentity.applicationRootId)
         )
           return unavailable;
 
         const permittedApplication = target.application;
         const selection = {
           organizationId: read.organizationId,
-          applicationRootId: permittedApplication.applicationRootId,
+          applicationRootId: addressedIdentity.applicationRootId,
         };
         const loaded = await humanOrganizationRequestsFor(dependencies).run(
           session,
@@ -91,8 +105,8 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           async (transaction, scope) => {
             if (scope.applicationRootId === undefined)
               throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-            return createHumanInstalledRuntimeContextLoader({
-              activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+            return createHumanInstalledPageBundleContextLoader({
+              transaction,
               releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
                 installedReleaseCatalogue,
                 transaction,
@@ -110,9 +124,11 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
         const application = context.releaseSet.application;
         if (
           !sameId(context.organizationId, read.organizationId) ||
-          !sameId(context.applicationRootId, permittedApplication.applicationRootId) ||
+          !sameId(context.applicationRootId, addressedIdentity.applicationRootId) ||
           !sameId(application.organizationId, context.organizationId) ||
           !sameId(application.rootId, context.applicationRootId) ||
+          application.releaseRevision !== addressedIdentity.applicationReleaseRevision ||
+          application.definitionKey !== addressedIdentity.definitionKey ||
           application.definitionKey !== selector.data.applicationKey ||
           application.releaseRevision !== context.applicationReleaseRevision ||
           application.content.name !== permittedApplication.name ||
@@ -151,6 +167,30 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           projected.value.applicationReleaseRevision !== context.applicationReleaseRevision
         )
           return unavailable;
+
+        const projectedAccessVersion =
+          typeof projected.value.accessVersion === "number"
+            ? projected.value.accessVersion
+            : undefined;
+        if (projectedAccessVersion === undefined) return unavailable;
+        const finalIdentity = await humanOrganizationRequestsFor(dependencies).run(
+          session,
+          selection,
+          async (transaction, scope) => {
+            if (scope.applicationRootId === undefined)
+              throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
+            const state = await createActiveInstallationBundleRepository(transaction).readCurrentState();
+            return !state.repairNeeded &&
+              state.identity.organizationId === scope.organizationId &&
+              state.identity.organizationAccountId === scope.organizationAccountId &&
+              state.identity.applicationRootId === scope.applicationRootId &&
+              state.identity.accessVersion === scope.accessVersion &&
+              state.identity.accessVersion === projectedAccessVersion &&
+              state.identity.applicationReleaseRevision === context.applicationReleaseRevision &&
+              matchesInstalledPageBundleIdentity(context, state);
+          },
+        );
+        if (finalIdentity.kind !== "available" || !finalIdentity.value) return unavailable;
 
         // Hidden or unusable placements do not make a protected, openable Page unavailable.
         const result = applicationPageLinkResultSchema.safeParse({

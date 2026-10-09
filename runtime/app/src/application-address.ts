@@ -185,7 +185,19 @@ export type AddressedApplicationRead = Readonly<{
 type AddressRow = Readonly<{ address: unknown }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
+type AddressedIdentityRow = Readonly<{ addressed_identity: unknown }>;
 type ApplicationCandidate = z.infer<typeof applicationCandidateSchema>;
+
+const addressedActiveApplicationIdentitySchema = z.object({
+  organizationId: organizationIdSchema,
+  applicationRootId: applicationRootIdSchema,
+  definitionKey: namespacedKeySchema,
+  applicationReleaseRevision: revisionSchema,
+}).strict();
+
+export type AddressedActiveApplicationIdentity = z.infer<
+  typeof addressedActiveApplicationIdentitySchema
+>;
 
 const permittedApplication = async (
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
@@ -375,6 +387,114 @@ export const readAddressedApplicationAtAddress = (
     identityAuthorityIdCandidate,
     applicationKeyCandidate,
   );
+
+/** Resolves only the active Application identity under its exact HUMAN organization request. */
+export const readAddressedActiveApplicationIdentity = async (
+  sessionCandidate: IdentitySession,
+  organizationIdCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<AddressedActiveApplicationIdentity | undefined> => {
+  const session = identitySessionSchema.safeParse(sessionCandidate);
+  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
+  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
+  const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
+  if (!session.success || !organizationId.success || !identityAuthorityId.success || !applicationKey.success)
+    return undefined;
+  const requests = createHumanOrganizationRequestService({
+    identityAuthorityId: identityAuthorityId.data,
+  });
+  const result = await requests.run(
+    session.data,
+    { organizationId: organizationId.data },
+    async (transaction, scope) => {
+      if (scope.applicationRootId !== undefined)
+        throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
+      const rows = await transaction.query<AddressedIdentityRow>`
+        select vortex_module.resolve_addressed_active_application_identity(
+          ${applicationKey.data}::text
+        ) as addressed_identity
+      `;
+      if (rows.length !== 1 || rows[0] === undefined)
+        throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
+      const identity = addressedActiveApplicationIdentitySchema.safeParse(rows[0].addressed_identity);
+      if (!identity.success || identity.data.organizationId !== organizationId.data ||
+        identity.data.definitionKey !== applicationKey.data)
+        throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
+      return identity.data;
+    },
+  );
+  return result.kind === "available" ? result.value : undefined;
+};
+
+/** Resolves an address to a thin current active identity before any Application-scoped read. */
+export const readAddressedApplicationIdentityAtAddress = async (
+  sessionCandidate: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<Readonly<{
+  organizationId: string;
+  tenantShortName: string;
+  organizationShortName: string;
+  identity: AddressedActiveApplicationIdentity;
+}> | undefined> => {
+  const session = identitySessionSchema.safeParse(sessionCandidate);
+  const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
+  const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
+  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
+  const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
+  if (
+    !session.success || !tenantShortName.success || !organizationShortName.success ||
+    !identityAuthorityId.success || !applicationKey.success ||
+    isReservedTenantSegment(tenantShortNameCandidate) ||
+    Date.parse(session.data.accessTokenExpiresAt) <= Date.now()
+  ) return undefined;
+
+  try {
+    const rows = await withRuntimeTransaction(async (transaction) =>
+      transaction.query<AddressRow>`
+        select vortex_access.read_application_address_candidates(
+          ${session.data.identityId}::uuid,
+          ${tenantShortName.data}::text,
+          ${organizationShortName.data}::text
+        ) as address
+      `,
+    );
+    if (rows.length !== 1) return undefined;
+    const address = addressCandidateReadSchema.safeParse(rows[0]?.address);
+    if (
+      !address.success || address.data.kind !== "available" ||
+      address.data.tenantShortName !== tenantShortName.data ||
+      address.data.organizationShortName !== organizationShortName.data
+    ) return undefined;
+    const matches = address.data.applications.filter((candidate) =>
+      candidate.key === applicationKey.data,
+    );
+    if (matches.length !== 1 || matches[0] === undefined) return undefined;
+    const identity = await readAddressedActiveApplicationIdentity(
+      session.data,
+      address.data.organizationId,
+      identityAuthorityId.data,
+      applicationKey.data,
+    );
+    if (
+      identity === undefined ||
+      identity.organizationId !== address.data.organizationId ||
+      identity.applicationRootId !== matches[0].applicationRootId ||
+      identity.definitionKey !== applicationKey.data
+    ) return undefined;
+    return Object.freeze({
+      organizationId: address.data.organizationId,
+      tenantShortName: address.data.tenantShortName,
+      organizationShortName: address.data.organizationShortName,
+      identity,
+    });
+  } catch {
+    return undefined;
+  }
+};
 
 const readAtAddress = async (
   session: IdentitySession,

@@ -3,6 +3,7 @@ import "server-only";
 import {
   isReservedTenantSegment,
   readAddressedApplicationAtAddress,
+  readAddressedApplicationIdentityAtAddress,
   resolvePermittedApplicationAddress,
   type AddressedApplicationRead,
   type ApplicationExperience,
@@ -48,13 +49,35 @@ const loadAddressedApplicationAtAddress = async (
   } catch {
     return { read: { kind: "temporarily_unavailable" }, experiences: [] };
   }
-  return readAddressedApplicationAtAddress(
+  const addressIdentity = await readAddressedApplicationIdentityAtAddress(
     session,
     tenantShortName,
     organizationShortName,
     authorityId,
     applicationKey,
   );
+  if (addressIdentity === undefined)
+    return { read: { kind: "unavailable" }, experiences: [] };
+  const addressed = await readAddressedApplicationAtAddress(
+    session,
+    tenantShortName,
+    organizationShortName,
+    authorityId,
+    applicationKey,
+  );
+  if (addressed.read.kind !== "available") return addressed;
+  if (
+    addressed.read.organizationId !== addressIdentity.organizationId ||
+    addressed.read.tenantShortName !== addressIdentity.tenantShortName ||
+    addressed.read.organizationShortName !== addressIdentity.organizationShortName
+  ) return { read: { kind: "unavailable" }, experiences: [] };
+  const matches = addressed.read.applications.filter((application) =>
+    application.key === addressIdentity.identity.definitionKey &&
+    application.applicationRootId === addressIdentity.identity.applicationRootId,
+  );
+  return matches.length === 1
+    ? addressed
+    : { read: { kind: "unavailable" }, experiences: [] };
 };
 
 export const resolveApplicationAddress = async (

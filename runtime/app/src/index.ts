@@ -36,10 +36,13 @@ export {
   permittedApplicationSchema,
   permittedApplicationsReadSchema,
   readAddressedApplicationAtAddress,
+  readAddressedApplicationIdentityAtAddress,
+  readAddressedActiveApplicationIdentity,
   readPermittedApplicationsAtAddress,
   resolvePermittedApplicationAddress,
   type AddressedApplicationRead,
   type ApplicationExperience,
+  type AddressedActiveApplicationIdentity,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "./application-address";
@@ -56,6 +59,13 @@ export {
   type InstalledRuntimeContextErrorCode,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+export {
+  createHumanInstalledPageBundleContextLoader,
+  isTrustedInstalledPageComposition,
+  matchesInstalledPageBundleIdentity,
+  readInstalledPageComposition,
+  type HumanInstalledPageBundleContextDependencies,
+} from "./installed-page-bundle-context";
 
 export {
   resolveInstalledPageIdentity,
