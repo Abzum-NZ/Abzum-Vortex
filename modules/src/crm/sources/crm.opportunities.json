@@ -592,7 +592,6 @@
             "value",
             "discount_percent",
             "probability",
-            "stage",
             "expected_close_date",
             "payment_schedule",
             "documents"
