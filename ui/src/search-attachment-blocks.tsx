@@ -14,6 +14,11 @@ import { resolveDisplayContext, type DisplayRenderProps } from "./display/contex
 import { parseDisplayData, parseDisplayEventHandlers } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 
+type ReadonlyAttachmentListPayload = Readonly<{
+  kind: AttachmentListPayloadV2["kind"];
+  files: readonly Readonly<AttachmentListPayloadV2["files"][number]>[];
+}>;
+
 function refuse(location: DefinitionRenderErrorLocation): never {
   throw new DefinitionRenderError(
     "INVALID_COMPOSITION",
@@ -26,7 +31,7 @@ function refuse(location: DefinitionRenderErrorLocation): never {
 export function parseAttachmentListPayload(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
-): AttachmentListPayloadV2 {
+): ReadonlyAttachmentListPayload {
   const parsed = attachmentListPayloadV2Schema.safeParse(value);
   if (!parsed.success) return refuse(location);
   return Object.freeze({
@@ -48,7 +53,7 @@ const formatBytes = (bytes: number): string => `${new Intl.NumberFormat().format
 
 /** A read-only accessible list. Download clicks return to the existing protected File GET route. */
 export function SearchAttachmentDisplay(
-  props: DisplayRenderProps<AttachmentListPayloadV2>,
+  props: DisplayRenderProps<ReadonlyAttachmentListPayload>,
 ): ReactElement {
   const metadata = props.metadata;
   const location = {
@@ -81,7 +86,7 @@ export function SearchAttachmentDisplay(
     refusedMessage,
     errorMessage,
     events,
-  } = resolveDisplayContext<AttachmentListPayloadV2>(
+  } = resolveDisplayContext<ReadonlyAttachmentListPayload>(
     props,
     (payload) => payload.files.length === 0,
     "No attachments to show",
@@ -95,7 +100,7 @@ export function SearchAttachmentDisplay(
       projectedData={state}
       emptyMessage={emptyMessage}
       refusedMessage={refusedMessage ?? "Attachments are not available."}
-      errorMessage={errorMessage}
+      {...(errorMessage === undefined ? {} : { errorMessage })}
     >
       {values === undefined ? null : (
         <Card
