@@ -8,6 +8,7 @@ import {
   executeNamedActionCommandV2Schema,
   executeNamedActionResultV2Schema,
   moduleValidationContractVersionV3,
+  preparedNamedActionQueryValueSchema,
   recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   type ExecuteNamedActionCommandV2,
@@ -21,7 +22,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import { withResolvedRequestTransaction, type DatabaseRow, type RequestDatabaseTransaction } from "@vortex/db";
 import type { ActionFlowRunner, BeforeSaveRuleWarning } from "@vortex/rule";
 import {
   actionFlowSeed,
@@ -146,7 +147,7 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
     : undefined;
 };
 
-const parsePreparation = (candidate: unknown): ActionPreparation => {
+const parsePreparation = (candidate: unknown, command: ExecuteNamedActionCommandV2): ActionPreparation => {
   if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
   const value = candidate as Record<string, unknown>;
   const correlationId = typeof value.correlationId === "string" ? value.correlationId : undefined;
@@ -169,6 +170,9 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   const actionV2 = actionDefinitionV3Schema.safeParse(value.action);
   const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
+  const derivedValues = value.derivedValues === undefined ? [] : value.derivedValues;
+  const parsedDerived = Array.isArray(derivedValues) && derivedValues.length <= 1
+    ? derivedValues.map((item) => preparedNamedActionQueryValueSchema.safeParse(item)) : undefined;
   // An action that targets a registered protected operation, and every action of a system
   // projection record type, runs through that operation's owning service, never through ordered
   // record tasks.
@@ -178,6 +182,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     !recordType.success ||
     recordType.data.systemProjection !== undefined ||
     createTargets === undefined ||
+    parsedDerived === undefined || parsedDerived.some((item) => !item.success) ||
     value.validationContractVersion !== moduleValidationContractVersionV3 ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
@@ -190,6 +195,20 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     correlationId === undefined
   )
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
+  const derived = parsedDerived.flatMap((item) => item.success ? [item.data] : []);
+  const nodes = actionV2.data.tasks.flatMap((task) => task.type === "record.set_fields"
+    ? Object.entries(task.properties.values).filter(([, node]) => node.kind === "protected_query_decimal_max_plus_quantum")
+      .map(([fieldId, node]) => ({ taskId: task.id, fieldId, node })) : []);
+  if (nodes.length !== derived.length || derived.some((proof) => {
+    const authored = nodes.find((node) => node.taskId === proof.taskId && node.fieldId === proof.fieldId);
+    return authored === undefined || authored.node.kind !== "protected_query_decimal_max_plus_quantum" ||
+      proof.node.fieldId !== proof.fieldId || proof.node.queryId !== authored.node.queryId ||
+      proof.source.queryId !== proof.node.queryId || proof.source.moduleId !== command.action.ownerId ||
+      command.action.ownerKind !== "module" || proof.source.moduleReleaseRevision !== command.action.releaseRevision ||
+      proof.source.recordTypeId !== command.recordTypeId || proof.source.subjectRecordId !== command.recordId ||
+      proof.source.subjectRevision !== command.expectedConcurrencyNumber ||
+      proof.source.organizationAccountId !== value.actorOrganizationAccountId;
+  })) return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   return {
     outcome: value.outcome,
     validationContractVersion: moduleValidationContractVersionV3,
@@ -199,6 +218,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     existingValues: value.existingValues as Readonly<Record<string, unknown>>,
     actorOrganizationAccountId: value.actorOrganizationAccountId,
     createTargets,
+    derivedValues: derived,
     readableFieldIds: new Set(
       value.readableFieldIds.filter((item): item is string => typeof item === "string"),
     ),
@@ -298,7 +318,7 @@ const prepare = async (
           ${JSON.stringify(command.inputs)}::text::jsonb, ${activityId}::uuid
         ) as value
       `;
-  return parsePreparation(one(rows).value);
+  return parsePreparation(one(rows).value, command);
 };
 
 const prepareTotals = async (
@@ -447,7 +467,15 @@ const composeFromFlow = (
  * writes every task of the action in one transaction, receipt, Activity and Events included.
  */
 export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortDependencies) => {
-  const requests = createHumanOrganizationRequestService(dependencies);
+  const baseRunner = dependencies.resolvedRequestTransaction ?? withResolvedRequestTransaction;
+  const requests = createHumanOrganizationRequestService({
+    ...dependencies,
+    resolvedRequestTransaction: (resolve, operation) => baseRunner(async (transaction) => {
+      // This fixed isolation precedes the genuine HUMAN resolver and its first snapshot read.
+      await transaction.query`set transaction isolation level repeatable read`;
+      return resolve(transaction);
+    }, operation),
+  });
   const newActivityId = dependencies.activityId ?? randomUUID;
   const newOccurrenceId = dependencies.occurrenceId ?? randomUUID;
   return Object.freeze({

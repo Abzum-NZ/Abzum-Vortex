@@ -11,7 +11,7 @@
     "module_bindings": [
       {
         "module": "vortex.landing_zone",
-        "version": { "selection": "exact", "version": "1.0.0" },
+        "version": { "selection": "exact", "version": "1.0.1" },
         "purpose": "primary"
       }
     ],
@@ -39,7 +39,8 @@
           "vortex.landing_zone.tile.read",
           "vortex.landing_zone.tile.update",
           "vortex.landing_zone.tile.delete",
-          "vortex.landing_zone.tile.remove"
+          "vortex.landing_zone.tile.remove",
+          "vortex.landing_zone.tile.move_to_end"
         ]
       }
     ],
@@ -145,6 +146,20 @@
       {
         "id": "row_action_bookmarks_tiles_remove_tile",
         "key": "vortex.app.events.bookmarks_tiles_remove_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "row_action_landing_zone_move_tile",
+        "key": "vortex.app.events.vortex_app_landing_zone_move_tile",
+        "record_type": "vortex.landing_zone:tile",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "form_submit_landing_zone_move_tile",
+        "key": "vortex.app.events.vortex_app_landing_zone_move_confirm",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -808,7 +823,24 @@
                       "kind": "list",
                       "items": [
                         { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_edit_favourite" }, "label": { "kind": "text", "value": "Edit favourite" }, "capability": { "kind": "choice", "value": "update" } } },
-                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_remove_tile" }, "label": { "kind": "text", "value": "Remove tile" }, "capability": { "kind": "choice", "value": "delete" } } }
+                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_remove_tile" }, "label": { "kind": "text", "value": "Remove tile" }, "capability": { "kind": "choice", "value": "delete" } } },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "event_id": {
+                              "kind": "text",
+                              "value": "row_action_landing_zone_move_tile"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Move to end"
+                            },
+                            "capability": {
+                              "kind": "choice",
+                              "value": "update"
+                            }
+                          }
+                        }
                       ]
                     }
                   },
@@ -917,6 +949,129 @@
               "order": { "desktop": ["remove_tile_form"] }
             },
             "slot_rail": { "placements": {}, "order": { "desktop": [] } }
+          }
+        }
+      },
+      {
+        "id": "page_landing_move_tile",
+        "key": "move_tile",
+        "name": "Move to end",
+        "type": "form",
+        "record_type": "vortex.landing_zone:tile",
+        "permission": "vortex.landing_zone.tile.update",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_landing_zone",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "move_tile_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Move selected favourite to end"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "move_tile_explanation": {
+                          "block": {
+                            "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "title": {
+                              "kind": "text",
+                              "value": "Move this favourite to the end"
+                            },
+                            "text": {
+                              "kind": "text",
+                              "value": "Only this favourite is updated. The complete permitted favourites Query must be available; a stale or unavailable selection is refused."
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "button_landing_move_tile": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Move to end"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "move_tile_explanation",
+                          "button_landing_move_tile"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "move_tile_form"
+                ]
+              }
+            },
+            "slot_rail": {
+              "placements": {},
+              "order": {
+                "desktop": []
+              }
+            }
           }
         }
       }
@@ -1482,6 +1637,153 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_open_move_tile",
+        "key": "landing_zone_open_move_tile",
+        "description": "Opens the protected subject form for one returned private tile.",
+        "labels": {
+          "name": "Move to end"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.landing_zone:tile"
+            ]
+          }
+        },
+        "variables": {},
+        "tasks": [
+          {
+            "id": "open_move_tile",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_move_tile"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "landing_zone_move_tile",
+        "key": "landing_zone_move_tile",
+        "description": "Moves the current protected favourite subject and returns only after its named action succeeds.",
+        "labels": {
+          "name": "Move favourite to end"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.landing_zone:tile"
+            ]
+          }
+        },
+        "variables": {},
+        "tasks": [
+          {
+            "id": "confirm_move_tile",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Move to end"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Move this favourite to the end of your permitted favourites?"
+                }
+              }
+            }
+          },
+          {
+            "id": "declined_move_tile",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm_move_tile",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_move_tile_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
+            ]
+          },
+          {
+            "id": "move_tile",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.landing_zone.tile.move_to_end"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {}
+              }
+            }
+          },
+          {
+            "id": "return_to_saved_tiles_after_move",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_manage_saved_tiles"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -1565,6 +1867,32 @@
         "flow": "landing_zone_remove_tile",
         "inputs": {
           "record": { "kind": "caller", "name": "record" }
+        }
+      },
+      {
+        "id": "binding_landing_zone_open_move_tile",
+        "control": "managed_saved_tiles",
+        "event_id": "row_action_landing_zone_move_tile",
+        "event": "row_action",
+        "flow": "landing_zone_open_move_tile",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_landing_zone_move_tile",
+        "control": "move_tile_form",
+        "event_id": "form_submit_landing_zone_move_tile",
+        "event": "form_submit",
+        "flow": "landing_zone_move_tile",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          }
         }
       }
     ]

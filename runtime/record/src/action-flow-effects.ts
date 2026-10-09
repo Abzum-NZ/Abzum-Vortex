@@ -14,6 +14,8 @@ import {
   type recordTypeDefinitionV3Schema,
   recordRichTextDocumentV2Schema,
   timestampSchema,
+  namedActionQueryValueSchema,
+  type PreparedNamedActionQueryValue,
   type JsonValue,
 } from "@vortex/contracts";
 import {
@@ -58,6 +60,7 @@ export type PreparedNamedAction = Readonly<{
   existingValues: Readonly<Record<string, unknown>>;
   actorOrganizationAccountId: string;
   createTargets: readonly NamedActionCreateTarget[];
+  derivedValues?: readonly PreparedNamedActionQueryValue[];
   /**
    * The subject fields the actor may currently read under the named action. A `record.changes`
    * task only copies relationships whose link field is in this set.
@@ -535,6 +538,23 @@ export const composeFlowEffects = (
       setFieldIds.add(fieldId.toLowerCase());
       const field = fields.get(fieldId);
       if (field === undefined) return undefined;
+      const node = namedActionQueryValueSchema.safeParse(source);
+      if (node.success) {
+        const carried = namedActionQueryValueSchema.safeParse(authored[fieldId]);
+        const proof = prepared.derivedValues?.find((item) => item.taskId === task.id && item.fieldId === fieldId);
+        if (!carried.success || proof === undefined || field.type !== "decimal_number" ||
+          tasks.length !== 1 || Object.keys(authoredValues).length !== 1 ||
+          prepared.derivedValues?.length !== 1 ||
+          carried.data.queryId !== node.data.queryId || carried.data.fieldId !== node.data.fieldId ||
+          proof.node.queryId !== node.data.queryId || proof.node.fieldId !== fieldId ||
+          proof.source.queryId !== node.data.queryId ||
+          proof.source.recordTypeId !== prepared.recordType.recordTypeId ||
+          proof.source.subjectRecordId !== prepared.recordId ||
+          proof.source.organizationAccountId !== prepared.actorOrganizationAccountId)
+          return undefined;
+        submittedValues[fieldId] = proof.value;
+        continue;
+      }
       const value = writtenValue(
         prepared,
         normalizedInputs,
