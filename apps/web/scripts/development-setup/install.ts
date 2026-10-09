@@ -11,6 +11,7 @@ import {
 } from "@vortex/app";
 import {
   applicationRootIdSchema,
+  moduleRootIdSchema,
   type IdentityAuthorityId,
 } from "@vortex/contracts";
 import {
@@ -67,11 +68,18 @@ const coordinatorDependencies = (
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
-  preparedRuntimeSource: (transaction, input) =>
-    createDatabasePreparedInstallationRuntimeSourceService(
+  preparedRuntimeSource: (transaction, input) => {
+    const moduleBindings = input.moduleBindings.map((binding) => {
+      const parsedModuleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
+      if (!parsedModuleRootId.success)
+        throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+      return { ...binding, moduleRootId: parsedModuleRootId.data };
+    });
+    return createDatabasePreparedInstallationRuntimeSourceService(
       developmentPublicationCatalogue,
       transaction,
-    ).read(input),
+    ).read({ ...input, moduleBindings });
+  },
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {
