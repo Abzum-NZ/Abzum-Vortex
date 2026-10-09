@@ -5,6 +5,7 @@ import {
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   FORM_CONTAINER_BLOCK_RELEASE,
   builderKeySchema,
+  type FieldId,
   jsonValueSchema,
   recordIdSchema,
   referenceChoiceSelectionEvidenceMapSchema,
@@ -45,7 +46,7 @@ type QueryChoicePlacementSettings = Readonly<{
 type PersonChoicePlacementSettings = Readonly<{
   sourceKind: "person";
   fieldKey: string;
-  fieldId: string;
+  fieldId: FieldId;
   releaseVersion: "1.3.0";
 }>;
 type ChoicePlacementSettings = QueryChoicePlacementSettings | PersonChoicePlacementSettings;
@@ -110,8 +111,9 @@ const placementSettings = (placement: unknown): ChoicePlacementSettings | undefi
   if (!hasReferenceChoiceSource(placement)) return undefined;
   const settings = settingsOf(placement);
   const name = settings?.name;
-  const fieldKey = builderKeySchema.safeParse(name?.value);
-  if (name?.kind !== "text" || !fieldKey.success) return undefined;
+  if (name?.kind !== "text") return undefined;
+  const fieldKey = builderKeySchema.safeParse(name.value);
+  if (!fieldKey.success) return undefined;
   const releaseVersion = blockOf(placement)?.releaseVersion;
   if (Object.hasOwn(settings ?? {}, "person_choice_source")) {
     const source = settings?.person_choice_source;
@@ -209,6 +211,7 @@ const personPurpose = (
       .map((field) => ({ module, recordType, field }))));
   if (fieldMatches.length !== 1) return undefined;
   const { field } = fieldMatches[0]!;
+  if (field.type !== "link_to_person") return undefined;
   if (field.settings.audience !== "application_accounts" || field.settings.applicationRootIdRequired !== true)
     return undefined;
 
@@ -238,10 +241,10 @@ const personPurpose = (
   if (operation?.kind !== "literal" || operation.literal.type !== "text" ||
       typeof operation.literal.value !== "string") return undefined;
   if (callInputs !== undefined) {
-    if (!isRecord(callInputs)) return undefined;
-    const callInput = callInputs[settings.fieldKey];
-    if (!isRecord(callInput) || callInput.kind !== "reference" || !isRecord(callInput.reference) ||
-        callInput.reference.source !== "input" || callInput.reference.name !== settings.fieldKey)
+    if (callInputs.kind !== "map") return undefined;
+    const callInput = callInputs.entries[settings.fieldKey];
+    if (callInput?.kind !== "reference" || callInput.reference.source !== "input" ||
+        callInput.reference.name !== settings.fieldKey)
       return undefined;
   }
 
@@ -270,8 +273,8 @@ const personPurpose = (
     ownerId: String(module.rootId),
     releaseRevision: module.releaseRevision,
     actionId: String(action.actionId),
-    recordTypeId: context.pageRecordTypeId,
-    recordId: context.subject.recordId,
+    recordTypeId: page.recordType.recordTypeId,
+    recordId: subjectRecordId.data,
     expectedConcurrencyNumber: context.subject.concurrencyNumber,
     inputKey: settings.fieldKey,
     fieldId: settings.fieldId,
@@ -606,7 +609,7 @@ export const resolveReferenceChoiceFormValues = async (args: Readonly<{
       if (
         field.command.kind !== "organization_account_reference" ||
         field.command.purpose === undefined ||
-        !isRecord(value) ||
+        !("organizationAccountId" in value) ||
         Object.keys(value).length !== 1 ||
         typeof value.organizationAccountId !== "string"
       ) return undefined;
