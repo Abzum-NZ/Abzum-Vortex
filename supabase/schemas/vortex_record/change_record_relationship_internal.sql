@@ -79,7 +79,7 @@ begin
       and meta ->> 'storageScope' = 'application_contained';
     if exact_copy_notice then
       perform vortex_record.write_relationship_value_internal(
-        p_record_type_id, p_record_id, p_relationship_id, p_target_value, false
+        p_record_type_id, p_record_id, p_relationship_id, p_target_value, false, false
       );
       execute pg_catalog.format(
         'update record_data.%I as stored
@@ -104,7 +104,7 @@ begin
       end if;
     else
       perform vortex_record.write_relationship_value_internal(
-        p_record_type_id, p_record_id, p_relationship_id, p_target_value, true
+        p_record_type_id, p_record_id, p_relationship_id, p_target_value, true, false
       );
       execute pg_catalog.format(
         'select concurrency_number from record_data.%I
