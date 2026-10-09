@@ -63,9 +63,9 @@ const requirePreparedPlanMatchesReleaseSet = (
   applicationReleaseRevision: number,
 ): void => {
   const plan = planCandidate.plan;
-  const invalid = (): never => {
+  function invalid(): never {
     throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
-  };
+  }
   if (
     plan.organizationId !== organizationId ||
     plan.applicationRootId !== applicationRootId ||
