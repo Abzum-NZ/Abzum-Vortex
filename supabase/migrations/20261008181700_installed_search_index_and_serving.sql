@@ -1,5 +1,50 @@
 begin;
 
+-- Search resolves protected source authority as a non-login owner role before
+-- establishing a request context. PostgreSQL also requires UPDATE privilege
+-- for SELECT row-lock clauses, so grant UPDATE only on immutable identity
+-- columns and make every corresponding owner UPDATE fail its forced-RLS check.
+alter table vortex_access.organization_access_versions enable row level security;
+alter table vortex_access.organization_access_versions force row level security;
+grant select (organization_id, current_version)
+  on table vortex_access.organization_access_versions to vortex_access_owner;
+grant update (organization_id)
+  on table vortex_access.organization_access_versions to vortex_access_owner;
+create policy search_index_access_versions_owner_select
+  on vortex_access.organization_access_versions
+  for select to vortex_access_owner using (true);
+create policy search_index_access_versions_owner_lock
+  on vortex_access.organization_access_versions
+  for update to vortex_access_owner using (true) with check (false);
+
+alter table vortex_access.permission_registrations enable row level security;
+alter table vortex_access.permission_registrations force row level security;
+grant update (registration_owner_id)
+  on table vortex_access.permission_registrations to vortex_access_owner;
+create policy search_index_permission_registrations_owner_lock
+  on vortex_access.permission_registrations
+  for update to vortex_access_owner using (true) with check (false);
+
+alter table vortex_access.system_actor_grants enable row level security;
+alter table vortex_access.system_actor_grants force row level security;
+grant select (system_actor_id, operation_key, organization_id, flow_id, scope_key, state)
+  on table vortex_access.system_actor_grants to vortex_access_owner;
+grant update (system_actor_grant_id)
+  on table vortex_access.system_actor_grants to vortex_access_owner;
+create policy search_index_system_actor_grants_owner_select
+  on vortex_access.system_actor_grants
+  for select to vortex_access_owner using (true);
+create policy search_index_system_actor_grants_owner_lock
+  on vortex_access.system_actor_grants
+  for update to vortex_access_owner using (true) with check (false);
+
+alter table vortex_identity.tenants enable row level security;
+alter table vortex_identity.tenants force row level security;
+grant update (tenant_id) on table vortex_identity.tenants to vortex_identity_owner;
+create policy search_index_tenants_owner_lock
+  on vortex_identity.tenants
+  for update to vortex_identity_owner using (true) with check (false);
+
 alter table vortex_search.documents
   add column application_scope_id uuid generated always as (
     coalesce(application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)

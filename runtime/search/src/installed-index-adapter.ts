@@ -112,11 +112,12 @@ const parseActorScope = (candidate: unknown): ResolvedSearchActorScope => {
     "leaseExpiresAt",
   ]);
   const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(value?.occurrence);
+  const organizationId = organizationIdSchema.safeParse(value?.organizationId);
   if (
     value === undefined ||
     !nonNilUuid(value.systemActorId) ||
     !nonNilUuid(value.tenantId) ||
-    !organizationIdSchema.safeParse(value.organizationId).success ||
+    !organizationId.success ||
     !nonNilUuid(value.applicationRootId) ||
     !nonNilUuid(value.storageContractId) ||
     value.storageScope !== "application_contained" ||
@@ -127,13 +128,13 @@ const parseActorScope = (candidate: unknown): ResolvedSearchActorScope => {
     Date.parse(value.leaseExpiresAt) <= Date.parse(value.observedAt) ||
     !occurrence.success ||
     occurrence.data.installation.applicationRootId !== value.applicationRootId ||
-    occurrence.data.organizationId !== value.organizationId
+    occurrence.data.organizationId !== organizationId.data
   )
     throw new Error("SEARCH_REQUEST_AUTHORITY_UNAVAILABLE");
   return Object.freeze({
     systemActorId: value.systemActorId,
     tenantId: value.tenantId,
-    organizationId: value.organizationId,
+    organizationId: organizationId.data,
     applicationRootId: value.applicationRootId,
     storageContractId: value.storageContractId,
     storageScope: "application_contained",
@@ -165,6 +166,10 @@ const parseInstalledSource = (
     "fieldValues",
   ]);
   const fieldValues = record(snapshotValue?.fieldValues);
+  const indexOrganisationId = organizationIdSchema.safeParse(snapshotValue?.indexOrganisationId);
+  const ownerOrganisationId = organizationIdSchema.safeParse(snapshotValue?.ownerOrganisationId);
+  const snapshotRecordTypeId = recordTypeIdSchema.safeParse(snapshotValue?.recordTypeId);
+  const snapshotRecordId = recordIdSchema.safeParse(snapshotValue?.recordId);
   if (
     value === undefined ||
     !retained.success ||
@@ -173,11 +178,11 @@ const parseInstalledSource = (
     !Array.isArray(recordTypeFields) ||
     snapshotValue === undefined ||
     fieldValues === undefined ||
-    !organizationIdSchema.safeParse(snapshotValue.indexOrganisationId).success ||
-    !organizationIdSchema.safeParse(snapshotValue.ownerOrganisationId).success ||
+    !indexOrganisationId.success ||
+    !ownerOrganisationId.success ||
     !nonNilUuid(snapshotValue.applicationRootId) ||
-    !recordTypeIdSchema.safeParse(snapshotValue.recordTypeId).success ||
-    !recordIdSchema.safeParse(snapshotValue.recordId).success ||
+    !snapshotRecordTypeId.success ||
+    !snapshotRecordId.success ||
     !positiveSafeInteger(snapshotValue.recordVersion) ||
     (snapshotValue.lifecycle !== "active" && snapshotValue.lifecycle !== "deleted") ||
     retained.data.occurrenceId !== occurrence.occurrenceId ||
@@ -185,23 +190,23 @@ const parseInstalledSource = (
     retained.data.recordId !== occurrence.recordId ||
     retained.data.descriptor.recordTypeId !== occurrence.descriptor.recordTypeId ||
     recordTypeId.data !== occurrence.descriptor.recordTypeId ||
-    snapshotValue.indexOrganisationId !== occurrence.organizationId ||
-    snapshotValue.ownerOrganisationId !== occurrence.organizationId ||
+    indexOrganisationId.data !== occurrence.organizationId ||
+    ownerOrganisationId.data !== occurrence.organizationId ||
     snapshotValue.applicationRootId !== occurrence.installation.applicationRootId ||
-    snapshotValue.recordTypeId !== occurrence.descriptor.recordTypeId ||
-    snapshotValue.recordId !== occurrence.recordId
+    snapshotRecordTypeId.data !== occurrence.descriptor.recordTypeId ||
+    snapshotRecordId.data !== occurrence.recordId
   )
     throw new Error("SEARCH_SOURCE_UNAVAILABLE");
 
   const snapshot: SearchRecordSnapshot = Object.freeze({
-    indexOrganisationId: snapshotValue.indexOrganisationId,
-    ownerOrganisationId: snapshotValue.ownerOrganisationId,
+    indexOrganisationId: indexOrganisationId.data,
+    ownerOrganisationId: ownerOrganisationId.data,
     applicationRootId: snapshotValue.applicationRootId,
-    recordTypeId: snapshotValue.recordTypeId,
-    recordId: snapshotValue.recordId,
+    recordTypeId: snapshotRecordTypeId.data,
+    recordId: snapshotRecordId.data,
     recordVersion: snapshotValue.recordVersion,
     lifecycle: snapshotValue.lifecycle,
-    fieldValues: fieldValues as Readonly<Record<string, unknown>>,
+    fieldValues,
   });
   return Object.freeze({
     recordType: {
