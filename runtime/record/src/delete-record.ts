@@ -20,6 +20,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
+import { applyRecordOwnedFileDeleteCascade } from "@vortex/file";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   calculateLockedRelationshipTotalSave,
@@ -488,6 +489,12 @@ export const performProtectedRecordDelete = async (
       return refuseCalculation(command.recordId, preparation.correlationId);
     parentMutations = calculated.parentMutations;
   }
+
+  // The File writer re-derives the pending HUMAN receipt and exact deleted
+  // owner set in this same request transaction. It runs after relationship
+  // calculation succeeds and before the terminal writer can complete the
+  // receipt or append Events and Activity.
+  await applyRecordOwnedFileDeleteCascade(transaction, command.commandId);
 
   const finalized = parseDatabaseOutcome(
     one(

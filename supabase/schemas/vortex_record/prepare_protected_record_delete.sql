@@ -134,4 +134,4 @@ grant execute on function vortex_record.prepare_protected_record_delete(
 comment on function vortex_record.prepare_protected_record_delete(
   uuid, uuid, uuid, bigint, uuid, uuid
 ) is
-  'Protected delete preflight: receipt, recursive soft delete and the locked dependency-total closure of every affected parent.';
+  'Protected delete preflight: receipt, recursive soft delete with private File-cascade proofs and the locked dependency-total closure of every affected parent.';

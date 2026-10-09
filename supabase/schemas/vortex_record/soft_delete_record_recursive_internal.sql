@@ -13,6 +13,14 @@ as $function$
 declare
   meta jsonb;
   loaded jsonb;
+  read_meta jsonb;
+  read_loaded jsonb;
+  read_decision jsonb;
+  read_bounds jsonb;
+  update_meta jsonb;
+  update_loaded jsonb;
+  update_decision jsonb;
+  update_bounds jsonb;
   facts jsonb;
   decision jsonb;
   context_value jsonb;
@@ -35,6 +43,18 @@ declare
   saved_concurrency_number bigint;
   preview_installation jsonb;
   notice_sequence bigint;
+  attachment_field jsonb;
+  attachment_value jsonb;
+  attachment_fields jsonb := '[]'::jsonb;
+  attachment_file_ids uuid[];
+  attachment_file_id uuid;
+  attachment_file_text text;
+  has_attachments boolean := false;
+  attachment_policy jsonb;
+  proof_value jsonb;
+  proof_digest text;
+  effect_sequence integer;
+  changed_effects integer;
 begin
   meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'delete');
   context_value := meta -> 'context';
@@ -67,8 +87,169 @@ begin
   decision := vortex_access.evaluate_organization_record_access_internal(
     meta -> 'declaration', p_record_id, facts
   );
-  if decision ->> 'outcome' <> 'allowed' then
+  if decision ->> 'outcome' <> 'allowed'
+    or nullif(decision ->> 'validUntil', '')::timestamptz is null
+    or nullif(decision ->> 'validUntil', '')::timestamptz
+      <= pg_catalog.statement_timestamp() then
     raise exception using errcode = 'P0002', message = 'Record is unavailable';
+  end if;
+
+  -- Capture only the IDs needed by the File owner. The complete value and
+  -- current action decisions remain in memory; only a server SHA-256 proof is
+  -- attached to the private lifecycle effect after the Record CAS succeeds.
+  for attachment_field in
+    select declared.value
+    from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as declared(value)
+    where declared.value ->> 'type' = 'attachment'
+    order by pg_catalog.lower(declared.value ->> 'fieldId') collate "C"
+  loop
+    attachment_file_ids := array[]::uuid[];
+    attachment_value := loaded -> 'fieldValues' -> pg_catalog.lower(
+      attachment_field ->> 'fieldId'
+    );
+    if attachment_value is not null
+      and pg_catalog.jsonb_typeof(attachment_value) <> 'null' then
+      if pg_catalog.jsonb_typeof(attachment_value) <> 'array' then
+        raise exception using errcode = '23514',
+          message = 'Attachment ownership is invalid';
+      end if;
+      for attachment_file_text in
+        select item.value
+        from pg_catalog.jsonb_array_elements_text(attachment_value) as item(value)
+      loop
+        begin
+          attachment_file_id := attachment_file_text::uuid;
+        exception when invalid_text_representation then
+          raise exception using errcode = '23514',
+            message = 'Attachment ownership is invalid';
+        end;
+        if not vortex_context.is_non_nil_uuid(attachment_file_id::text)
+          or attachment_file_id = any (attachment_file_ids) then
+          raise exception using errcode = '23514',
+            message = 'Attachment ownership is invalid';
+        end if;
+        attachment_file_ids := pg_catalog.array_append(
+          attachment_file_ids, attachment_file_id
+        );
+      end loop;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
+    into attachment_file_ids
+    from pg_catalog.unnest(attachment_file_ids) as item(file_id);
+    if pg_catalog.cardinality(attachment_file_ids) > 0 then
+      has_attachments := true;
+    end if;
+    attachment_fields := attachment_fields || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'fieldId', pg_catalog.lower(attachment_field ->> 'fieldId'),
+        'fileIds', pg_catalog.to_jsonb(attachment_file_ids)
+      )
+    );
+  end loop;
+
+  if has_attachments then
+    read_meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+    update_meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'update');
+    if read_meta ->> 'outcome' = 'refused'
+      or update_meta ->> 'outcome' = 'refused'
+      or read_meta ? 'previewInstallationId'
+      or update_meta ? 'previewInstallationId'
+      or (read_meta ->> 'storageContractId') is distinct from
+        (meta ->> 'storageContractId')
+      or (update_meta ->> 'storageContractId') is distinct from
+        (meta ->> 'storageContractId')
+      or (read_meta ->> 'moduleRootId') is distinct from (meta ->> 'moduleRootId')
+      or (update_meta ->> 'moduleRootId') is distinct from (meta ->> 'moduleRootId')
+      or (read_meta ->> 'moduleReleaseRevision') is distinct from
+        (meta ->> 'moduleReleaseRevision')
+      or (update_meta ->> 'moduleReleaseRevision') is distinct from
+        (meta ->> 'moduleReleaseRevision')
+      or (read_meta -> 'context' ->> 'organizationId') is distinct from
+        (context_value ->> 'organizationId')
+      or (update_meta -> 'context' ->> 'organizationId') is distinct from
+        (context_value ->> 'organizationId')
+      or (read_meta -> 'context' ->> 'applicationRootId') is distinct from
+        (context_value ->> 'applicationRootId')
+      or (update_meta -> 'context' ->> 'applicationRootId') is distinct from
+        (context_value ->> 'applicationRootId') then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'read', p_record_id, p_expected_concurrency_number
+    );
+    update_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    );
+    if read_loaded ->> 'outcome' <> 'loaded'
+      or update_loaded ->> 'outcome' <> 'loaded'
+      or (read_loaded ->> 'concurrencyNumber')::bigint is distinct from
+        p_expected_concurrency_number
+      or (update_loaded ->> 'concurrencyNumber')::bigint is distinct from
+        p_expected_concurrency_number
+      or pg_catalog.jsonb_typeof(read_meta -> 'declaration') <> 'object'
+      or pg_catalog.jsonb_typeof(update_meta -> 'declaration') <> 'object' then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_decision := vortex_access.evaluate_organization_record_access_internal(
+      read_meta -> 'declaration', p_record_id,
+      (read_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', read_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    update_decision := vortex_access.evaluate_organization_record_access_internal(
+      update_meta -> 'declaration', p_record_id,
+      (update_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', update_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    if read_decision ->> 'outcome' <> 'allowed'
+      or update_decision ->> 'outcome' <> 'allowed'
+      or nullif(read_decision ->> 'validUntil', '')::timestamptz is null
+      or nullif(update_decision ->> 'validUntil', '')::timestamptz is null
+      or nullif(read_decision ->> 'validUntil', '')::timestamptz
+        <= pg_catalog.statement_timestamp()
+      or nullif(update_decision ->> 'validUntil', '')::timestamptz
+        <= pg_catalog.statement_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
+    update_bounds := vortex_access.resolve_record_field_bounds_internal(update_decision);
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(attachment_fields) as field_item(value)
+      where pg_catalog.jsonb_array_length(field_item.value -> 'fileIds') > 0
+        and (
+          not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements_text(read_bounds -> 'readableFieldIds') as allowed(value)
+            where pg_catalog.lower(allowed.value) = field_item.value ->> 'fieldId'
+          )
+          or not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements_text(update_bounds -> 'changeableFieldIds') as allowed(value)
+            where pg_catalog.lower(allowed.value) = field_item.value ->> 'fieldId'
+          )
+        )
+    ) then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    attachment_policy := vortex_record.lock_record_recovery_policy_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (meta ->> 'storageContractId')::uuid,
+      case when meta ->> 'storageScope' = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+    if attachment_policy ->> 'action' is distinct from 'delete'
+      or pg_catalog.jsonb_typeof(attachment_policy -> 'recoveryWindowDays') <> 'number'
+      or (attachment_policy ->> 'recoveryWindowDays') !~ '^[1-9][0-9]{0,8}$'
+      or (attachment_policy ->> 'recoveryWindowDays')::bigint > 104249991 then
+      raise exception using errcode = '23514',
+        message = 'File recovery policy is unavailable';
+    end if;
   end if;
 
   -- Incoming edges are canonicalised before any child lock.  Every affected
@@ -220,6 +401,57 @@ begin
     'soft_deleted', (meta ->> 'storageContractId')::uuid,
     p_record_type_id, p_record_id, p_expected_concurrency_number, null
   );
+  proof_value := pg_catalog.jsonb_build_object(
+    'version', 1,
+    'commandId', pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid,
+    'organizationId', (context_value ->> 'organizationId')::uuid,
+    'applicationRootId', (context_value ->> 'applicationRootId')::uuid,
+    'actorOrganizationAccountId', (context_value ->> 'organizationAccountId')::uuid,
+    'storageContractId', (meta ->> 'storageContractId')::uuid,
+    'moduleRootId', (meta ->> 'moduleRootId')::uuid,
+    'moduleReleaseRevision', (meta ->> 'moduleReleaseRevision')::bigint,
+    'recordTypeId', p_record_type_id,
+    'recordId', p_record_id,
+    'preConcurrencyNumber', p_expected_concurrency_number,
+    'postConcurrencyNumber', saved_concurrency_number,
+    'attachmentFields', attachment_fields
+  );
+  proof_digest := pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(proof_value::text, 'UTF8')),
+    'hex'
+  );
+  select effect.effect_sequence into strict effect_sequence
+  from vortex_record.record_lifecycle_command_effects as effect
+  where effect.organization_id = (context_value ->> 'organizationId')::uuid
+    and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and effect.actor_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
+    and effect.command_id =
+      pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid
+    and effect.effect_kind = 'soft_deleted'
+    and effect.storage_contract_id = (meta ->> 'storageContractId')::uuid
+    and effect.record_type_id = p_record_type_id
+    and effect.record_id = p_record_id
+    and effect.pre_concurrency_number = p_expected_concurrency_number
+    and effect.post_concurrency_number = saved_concurrency_number;
+  update vortex_record.record_lifecycle_command_effects as effect
+  set file_cascade_proof_digest = proof_digest,
+    file_cascade_settled = false
+  where effect.organization_id = (context_value ->> 'organizationId')::uuid
+    and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and effect.actor_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
+    and effect.command_id =
+      pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid
+    and effect.effect_sequence = effect_sequence
+    and effect.effect_kind = 'soft_deleted'
+    and effect.file_cascade_proof_digest is null
+    and not effect.file_cascade_settled;
+  get diagnostics changed_effects = row_count;
+  if changed_effects <> 1 then
+    raise exception using errcode = '55000',
+      message = 'Record File cascade proof could not be recorded';
+  end if;
   application_scope := case when meta ->> 'storageScope' = 'application_contained'
     then (context_value ->> 'applicationRootId')::uuid else null end;
   preview_installation :=

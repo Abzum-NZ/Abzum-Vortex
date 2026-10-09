@@ -74,6 +74,33 @@ begin
         message = 'Protected record delete is not prepared';
     end if;
 
+    if not exists (
+      select 1
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+        and effect.effect_kind = 'soft_deleted'
+        and effect.record_type_id = receipt.record_type_id
+        and effect.record_id = receipt.record_id
+        and effect.pre_concurrency_number = receipt.expected_concurrency_number
+    ) or exists (
+      select 1
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = receipt.organization_id
+        and effect.application_root_id = receipt.application_root_id
+        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+        and effect.command_id = receipt.command_id
+        and effect.effect_kind = 'soft_deleted'
+        and (not effect.file_cascade_settled
+          or effect.file_cascade_proof_digest is null
+          or effect.file_cascade_proof_digest !~ '^[0-9a-f]{64}$')
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Protected record delete File cascade is not settled';
+    end if;
+
     -- Closure identity and revisions are re-derived under the held locks rather
     -- than taken from the caller.
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
