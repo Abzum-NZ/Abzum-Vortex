@@ -30,6 +30,7 @@
     "@vortex/page": "workspace:*",
     "@vortex/query": "workspace:*",
     "@vortex/record": "workspace:*",
+    "@vortex/search": "workspace:*",
     "@vortex/workflow": "workspace:*",
     "zod": "4.6.5",
     "ws": "catalog:"

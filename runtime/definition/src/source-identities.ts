@@ -41,6 +41,15 @@ export type SourceIdentityRequirementV3 = Readonly<{
 
 type SourceObject = Record<string, unknown>;
 
+/** Search borrows existing Module fields and Page identities; it owns no new identities. */
+export const applicationSearchSourceReferences = (source: ApplicationSourceDocumentV2) =>
+  (source.body.search?.record_types ?? []).map((entry) => ({
+    recordType: entry.record_type,
+    fields: [...new Set([...entry.fields.map((field) => field.field), entry.title_field,
+      ...(entry.subtitle_field === undefined ? [] : [entry.subtitle_field])])],
+    page: entry.target_page,
+  }));
+
 const objects = (value: unknown): SourceObject[] =>
   Array.isArray(value)
     ? value.filter(
