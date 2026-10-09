@@ -851,6 +851,11 @@
         "permission": "vortex.crm.opportunities.opportunity.mark_won",
         "shareable": false,
         "inputs": [],
+        "precondition": {
+          "field": "stage",
+          "operator": "equals",
+          "value": "negotiation"
+        },
         "tasks": [
           {
             "id": "set_stage_won",

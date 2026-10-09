@@ -271,3 +271,11 @@ export const AppService = Object.freeze({
   createFormContinuationService,
   createDatabaseFlowStores,
 });
+
+export {
+  applicationInstallAddressSchema,
+  applicationInstallColor,
+  createApplicationInstallManifest,
+  type ApplicationInstallAddress,
+  type ApplicationInstallManifest,
+} from "./install-metadata";
