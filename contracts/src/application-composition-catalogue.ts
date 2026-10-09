@@ -59,6 +59,11 @@ export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sour
 /** Exact immutable metadata release for the authored Notice display block. */
 export const NOTICE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.NOTICE_BLOCK_RELEASE);
 
+/** Exact immutable metadata release for the protected read-only attachment list. */
+export const ATTACHMENT_LIST_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.ATTACHMENT_LIST_BLOCK_RELEASE,
+);
+
 /** Exact immutable release for ordinary installed-query notices. */
 export const QUERY_NOTICE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.QUERY_NOTICE_BLOCK_RELEASE);
 
@@ -361,6 +366,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
+  ATTACHMENT_LIST_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
