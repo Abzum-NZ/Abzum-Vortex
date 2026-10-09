@@ -4,6 +4,7 @@ import {
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+  CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
   CONTROL_BLOCK_RELEASES,
   DATE_INPUT_BLOCK_RELEASE,
   DIALOG_BLOCK_RELEASE,
@@ -399,6 +400,11 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     }),
     Object.freeze({
       metadata: CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+      render: ChoiceInput,
+      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
+    }),
+    Object.freeze({
+      metadata: CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
       render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),

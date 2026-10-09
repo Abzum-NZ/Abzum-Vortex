@@ -171,7 +171,8 @@ export type ApplicationPageModel = Readonly<{
     placementId: string;
     formId: string;
     fieldKey: string;
-    releaseVersion: "1.1.0" | "1.2.0";
+    sourceKind: "query" | "person";
+    releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
     dependency?: Readonly<{ fieldKey: string; placementId: string }>;
   }>[];
   guidedForm?: Readonly<{
@@ -500,6 +501,7 @@ const projectReferenceChoicePage = async (
   | Readonly<{
       kind: "available";
       page: Readonly<Record<string, unknown>>;
+      pageDefinition: PageDefinitionV2;
       context: InstalledRuntimeContext;
       selection: OrganizationSelectionCandidate;
       dependencies: ReturnType<typeof requestDependencies>;
@@ -540,22 +542,96 @@ const projectReferenceChoicePage = async (
     return { kind: "temporarily_unavailable" };
   if (projected.kind !== "available" || projected.value === undefined)
     return { kind: "refused" };
-  return { kind: "available", page: projected.value, context, selection, dependencies };
+  return {
+    kind: "available", page: projected.value, pageDefinition, context, selection, dependencies,
+  };
+};
+
+type ProjectedReferenceChoicePage = Extract<
+  Awaited<ReturnType<typeof projectReferenceChoicePage>>,
+  { kind: "available" }
+>;
+
+type ReferenceChoicePurposeContext = NonNullable<
+  Parameters<typeof projectedReferenceChoiceForm>[3]
+>;
+
+const verifyReferenceChoiceSubject = async (
+  session: IdentitySession,
+  projected: ProjectedReferenceChoicePage,
+  subject: Readonly<{ recordId: string; revision: number }> | undefined,
+): Promise<
+  | Readonly<{ kind: "available"; context: ReferenceChoicePurposeContext }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>
+> => {
+  const page = projected.pageDefinition;
+  if (
+    subject === undefined ||
+    (page.type !== "detail" && page.type !== "form") ||
+    page.recordType.state !== "resolved" ||
+    !Number.isSafeInteger(subject.revision) || subject.revision < 1
+  ) return { kind: "refused" };
+  const recordId = recordIdSchema.safeParse(subject.recordId);
+  if (!recordId.success) return { kind: "refused" };
+  const recordTypeId = String(page.recordType.recordTypeId);
+  const read = await createPageSubjectReader(projected.dependencies).read(
+    session,
+    projected.selection,
+    { recordTypeId, recordId: recordId.data },
+  );
+  if (read.kind === "temporarily_unavailable") return read;
+  if (
+    read.kind !== "read" ||
+    !sameId(read.row.recordId, recordId.data) ||
+    read.row.revision !== subject.revision
+  ) return { kind: "refused" };
+  const application = projected.context.releaseSet.application;
+  return {
+    kind: "available",
+    context: {
+      application: application.content,
+      pageId: String(page.pageId),
+      pageRecordTypeId: recordTypeId,
+      installationRevision: projected.context.applicationReleaseRevision,
+      releaseKey: [
+        application.releaseVersion,
+        application.contentFingerprint,
+        application.resolutionFingerprint,
+      ].join(":"),
+      subject: { recordId: recordId.data, concurrencyNumber: subject.revision },
+    },
+  };
 };
 
 /** The form submission's fields come only from its current actor-permitted page. */
 export const loadProjectedReferenceChoiceForm = async (
   session: IdentitySession,
   address: ReferenceChoiceAddress,
-  request: Readonly<{ installationRevision: number; releaseKey: string; formId: string }>,
+  request: Readonly<{
+    installationRevision: number;
+    releaseKey: string;
+    formId: string;
+    subject?: Readonly<{ recordId: string; revision: number }>;
+  }>,
 ): Promise<ProjectedReferenceChoiceForm | undefined> => {
   try {
     const projected = await projectReferenceChoicePage(session, address, request);
-    return projected.kind === "available"
+    if (projected.kind !== "available") return undefined;
+    const base = projectedReferenceChoiceForm(
+      projected.page,
+      projected.context.releaseSet.modules,
+      request.formId,
+    );
+    if (base === undefined || ![...base.fields.values()].some((field) => field.sourceKind === "person"))
+      return base;
+    const verified = await verifyReferenceChoiceSubject(session, projected, request.subject);
+    return verified.kind === "available"
       ? projectedReferenceChoiceForm(
           projected.page,
           projected.context.releaseSet.modules,
           request.formId,
+          verified.context,
         )
       : undefined;
   } catch {
@@ -764,6 +840,7 @@ export const loadReferenceChoicePage = async (
     continuationToken?: string;
     selectedKey?: string;
     selectedEvidence?: ReferenceChoiceSelectionEvidence;
+    subject?: Readonly<{ recordId: string; revision: number }>;
     dependencyChoice?: Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>;
   }>,
 ): Promise<ReferenceChoicePageResult> => {
@@ -777,12 +854,29 @@ export const loadReferenceChoicePage = async (
     );
     if (placement === undefined || placement.formId === undefined)
       return { kind: "refused" };
-    const form = projectedReferenceChoiceForm(
+    let form = projectedReferenceChoiceForm(
       projected.page,
       context.releaseSet.modules,
       placement.formId,
     );
-    const field = form?.placements.get(request.placementId);
+    let field = form?.placements.get(request.placementId);
+    if (field?.sourceKind === "person") {
+      const verified = await verifyReferenceChoiceSubject(session, projected, request.subject);
+      if (verified.kind === "temporarily_unavailable") return verified;
+      if (verified.kind !== "available") return { kind: "refused" };
+      form = projectedReferenceChoiceForm(
+        projected.page,
+        context.releaseSet.modules,
+        placement.formId,
+        verified.context,
+      );
+      field = form?.placements.get(request.placementId);
+      if (
+        field?.sourceKind !== "person" ||
+        field.command.kind !== "organization_account_reference" ||
+        field.command.purpose === undefined
+      ) return { kind: "refused" };
+    }
     if (field === undefined || form === undefined) return { kind: "refused" };
 
     const service = createReferenceChoiceService({ ...dependencies, continuationKey });
@@ -2532,7 +2626,8 @@ const loadApplicationPageInternal = async (
           candidate.fieldKey === field.dependency?.fromField,
         );
       referenceChoiceInputs.push({
-        placementId, formId, fieldKey: field.fieldKey, releaseVersion: field.releaseVersion,
+        placementId, formId, fieldKey: field.fieldKey, sourceKind: field.sourceKind,
+        releaseVersion: field.releaseVersion,
         ...(parent === undefined ? {} : {
           dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
         }),
@@ -2541,6 +2636,13 @@ const loadApplicationPageInternal = async (
         data[placementId] = {
           status: "ready",
           values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
+        };
+        continue;
+      }
+      if (field.sourceKind === "person") {
+        data[placementId] = {
+          status: "ready",
+          values: projectReferenceChoiceInputValues([], null, undefined),
         };
         continue;
       }

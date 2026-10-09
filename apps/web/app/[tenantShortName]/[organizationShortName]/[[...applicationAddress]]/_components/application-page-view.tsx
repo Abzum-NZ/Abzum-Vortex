@@ -1281,6 +1281,7 @@ function ApplicationPageViewContent({
     ): Promise<void> => {
       const stateKey = choiceScopeKey(placementId, formId);
       const field = model.referenceChoiceInputs.find((candidate) => candidate.placementId === placementId);
+      if (field?.sourceKind === "person" && model.subject === undefined) return;
       const dependencyContext = model.referenceChoiceInputs.some((candidate) =>
         candidate.formId === field?.formId && candidate.dependency !== undefined,
       ) ? placementRequestsRef.current.key : undefined;
@@ -1307,6 +1308,9 @@ function ApplicationPageViewContent({
             placementId,
             installationRevision: application.installationRevision,
             releaseKey: application.releaseKey,
+            ...(field?.sourceKind !== "person" || model.subject === undefined
+              ? {}
+              : { subject: model.subject }),
             ...(event.search === undefined ? {} : { search: event.search }),
             ...(event.continuationToken === undefined
               ? {}

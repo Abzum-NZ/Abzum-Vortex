@@ -55,6 +55,7 @@ import {
   type RelationshipTotalPreparationOutcome,
 } from "./save-record";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
+import type { RecordFieldValuePendingCheck } from "./field-values";
 
 type ResultRow = DatabaseRow & { readonly value: unknown };
 
@@ -238,6 +239,47 @@ const parsePreparation = (candidate: unknown, command: ExecuteNamedActionCommand
  * construction: the preparation only reports those outcomes when no root type
  * participates in one.
  */
+const isSupportedPersonReferenceCheck = (
+  check: RecordFieldValuePendingCheck,
+  prepared: PreparedAction,
+  command: ExecuteNamedActionCommandV2,
+  submittedValues: Readonly<Record<string, JsonValue | null>>,
+  finalValues: Readonly<Record<string, JsonValue | null>>,
+): boolean => {
+  if (check.kind === "record_reference") return true;
+  if (check.kind !== "person_reference" || check.path.length !== 0 ||
+      check.audience !== "application_accounts" || !check.applicationRootIdRequired)
+    return false;
+  const field = prepared.recordType.fields.find((candidate) =>
+    candidate.fieldId.toLowerCase() === check.fieldId.toLowerCase(),
+  );
+  if (field?.type !== "link_to_person" || field.settings.audience !== "application_accounts" ||
+      field.settings.applicationRootIdRequired !== true ||
+      !Object.hasOwn(submittedValues, check.fieldId)) return false;
+  const exactValue = (candidate: unknown): boolean =>
+    typeof candidate === "object" && candidate !== null && !Array.isArray(candidate) &&
+    Object.keys(candidate).length === 1 &&
+    typeof (candidate as Record<string, unknown>).organizationAccountId === "string" &&
+    ((candidate as Record<string, unknown>).organizationAccountId as string).toLowerCase() ===
+      check.organizationAccountId.toLowerCase();
+  if (!exactValue(submittedValues[check.fieldId]) || !exactValue(finalValues[check.fieldId])) return false;
+  const sources = prepared.action.tasks.flatMap((task) => {
+    if (task.type !== "record.set_fields") return [];
+    return Object.entries(task.properties.values).flatMap(([fieldId, value]) =>
+      fieldId.toLowerCase() === check.fieldId.toLowerCase() && value.kind === "reference" &&
+      value.reference.source === "input" && typeof value.reference.name === "string"
+        ? [value.reference.name]
+        : [],
+    );
+  });
+  if (sources.length !== 1) return false;
+  const input = prepared.action.inputs.find((candidate) => candidate.key === sources[0]);
+  return input?.type === "organization_account_reference" &&
+    typeof command.inputs[sources[0]!] === "string" &&
+    (command.inputs[sources[0]!] as string).toLowerCase() ===
+      check.organizationAccountId.toLowerCase();
+};
+
 const creationFinalValues = (
   prepared: PreparedAction,
   creations: readonly NamedActionCreation[],
@@ -677,7 +719,11 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 (totalPreparation.outcome === "prepared" && root === undefined)
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
-              if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
+              if (calculated.pendingChecks.some((check) =>
+                !isSupportedPersonReferenceCheck(
+                  check, prepared, command.data, composition.submittedValues, finalValues,
+                ),
+              ))
                 return safeRefusal(prepared.correlationId, "operation_refused");
               if (
                 "creationPendingChecks" in calculated &&

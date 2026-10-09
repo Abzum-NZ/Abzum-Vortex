@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   builderKeySchema,
   containedComponentIdSchema,
+  recordIdSchema,
   referenceChoiceSelectionEvidenceSchema,
   revisionSchema,
 } from "@vortex/contracts";
@@ -29,6 +30,10 @@ const requestSchema = z
     placementId: containedComponentIdSchema,
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
+    subject: z.object({
+      recordId: recordIdSchema,
+      revision: revisionSchema,
+    }).strict().optional(),
     search: z.string().trim().max(100).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
     selectedKey: builderKeySchema.optional(),
@@ -90,6 +95,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         placementId: body.placementId,
         installationRevision: body.installationRevision,
         releaseKey: body.releaseKey,
+        ...(body.subject === undefined ? {} : { subject: body.subject }),
         ...(body.search === undefined ? {} : { search: body.search }),
         ...(body.continuationToken === undefined
           ? {}

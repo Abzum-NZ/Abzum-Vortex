@@ -42,9 +42,33 @@ export const recordReferenceChoiceCommandSchema = z
   .strict();
 export type RecordReferenceChoiceCommand = z.infer<typeof recordReferenceChoiceCommandSchema>;
 
+/** The protected current-page/action binding for one installed person field. */
+export const namedActionPersonReferencePurposeSchema = z.object({
+  kind: z.literal("named_action_person_field"),
+  ownerKind: z.enum(["application", "module"]),
+  ownerId: z.string().uuid(),
+  releaseRevision: z.number().int().min(1).max(9_007_199_254_740_991),
+  actionId: z.string().uuid(),
+  recordTypeId: recordTypeIdSchema,
+  recordId: recordIdSchema,
+  expectedConcurrencyNumber: z.number().int().min(1).max(9_007_199_254_740_990),
+  inputKey: builderKeySchema,
+  fieldId: fieldIdSchema,
+  installationRevision: z.number().int().min(1).max(9_007_199_254_740_991),
+  releaseKey: z.string().min(1).max(300),
+  pageId: z.string().uuid(),
+  formId: z.string().uuid(),
+  placementId: z.string().uuid(),
+}).strict();
+export type NamedActionPersonReferencePurpose = z.infer<
+  typeof namedActionPersonReferencePurposeSchema
+>;
+
 /**
  * Choices for one organisation-account reference input: active accounts in
  * the verified current organisation only. The command names no organisation.
+ * The optional server-derived purpose narrows the same service to a current
+ * HUMAN named-action person field; it is never accepted from a browser body.
  */
 export const organizationAccountReferenceChoiceCommandSchema = z
   .object({
@@ -54,6 +78,7 @@ export const organizationAccountReferenceChoiceCommandSchema = z
     pageSize: choicePageSizeSchema,
     /** Opaque continuation issued by the previous page of the same search. */
     continuationToken: choiceContinuationTokenSchema.optional(),
+    purpose: namedActionPersonReferencePurposeSchema.optional(),
   })
   .strict();
 export type OrganizationAccountReferenceChoiceCommand = z.infer<

@@ -169,6 +169,11 @@ export const CHOICE_INPUT_BLOCK_RELEASE_1_2_0: PlatformBlockReleaseV2 = release(
   sources.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
 );
 
+/** Release 1.3.0 adds a purpose-bound HUMAN person picker to query-backed Choice input. */
+export const CHOICE_INPUT_BLOCK_RELEASE_1_3_0: PlatformBlockReleaseV2 = release(
+  sources.CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
+);
+
 /** Exact immutable metadata release for the validation message block. */
 export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.VALIDATION_MESSAGE_BLOCK_RELEASE);
 
@@ -395,6 +400,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+  CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,

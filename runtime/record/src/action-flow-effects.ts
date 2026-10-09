@@ -318,8 +318,13 @@ const writtenValue = (
     if (reference.source === "input" && typeof reference.name === "string") {
       if (reference.name === subjectInput)
         value = { recordTypeId: prepared.recordType.recordTypeId, recordId: prepared.recordId };
-      else if (hasOwn(normalizedInputs, reference.name)) value = normalizedInputs[reference.name];
-      else return undefined;
+      else if (hasOwn(normalizedInputs, reference.name)) {
+        const input = prepared.action.inputs.find((candidate) => candidate.key === reference.name);
+        const inputValue = normalizedInputs[reference.name];
+        value = field.type === "link_to_person" && input?.type === "organization_account_reference"
+          ? { organizationAccountId: inputValue }
+          : inputValue;
+      } else return undefined;
     } else if (reference.source === "trigger_record" && typeof reference.field === "string") {
       const subjectField = prepared.recordType.fields.find((item) => item.key === reference.field);
       if (subjectField === undefined) return undefined;

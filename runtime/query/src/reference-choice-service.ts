@@ -7,6 +7,7 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
+  canonicalJson,
   sameId,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -34,6 +35,8 @@ import {
   type ReferenceChoiceRefusal,
   type ReferenceChoiceRefusalReasonCode,
   type ReferenceChoiceResult,
+  namedActionPersonReferencePurposeSchema,
+  type NamedActionPersonReferencePurpose,
   type ReferenceChoiceValue,
 } from "./reference-choice-contracts";
 
@@ -421,6 +424,197 @@ const accountChoices = async (
   };
 };
 
+const personAccountPageSchema = z
+  .object({
+    accounts: z.array(z.object({
+      organizationAccountId: organizationAccountIdSchema,
+      displayName: z.string().optional(),
+    }).strict()).max(100),
+    next: z.object({
+      sortKey: z.string().max(1_000),
+      organizationAccountId: organizationAccountIdSchema,
+    }).strict().nullable(),
+    validUntil: z.string().min(20).max(80),
+  })
+  .strict();
+
+const personContinuationSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal("named_action_person_field"),
+  organizationId: organizationIdSchema,
+  organizationAccountId: organizationAccountIdSchema,
+  applicationRootId: z.string().uuid(),
+  accessVersion: z.number().int().min(1).max(9_007_199_254_740_991),
+  purpose: namedActionPersonReferencePurposeSchema,
+  searchFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  sortKey: z.string().max(1_000),
+  afterOrganizationAccountId: organizationAccountIdSchema,
+  validUntil: z.string().min(20).max(80),
+}).strict();
+type PersonContinuation = z.infer<typeof personContinuationSchema>;
+
+class PersonContinuationError extends Error {
+  constructor() {
+    super("vortex.query.named_action_person_field_continuation_invalid");
+    this.name = "PersonContinuationError";
+  }
+}
+
+const personTokenVersion = 2;
+const personAssociatedData = Buffer.from(
+  "vortex.query.named_action_person_field_choice.v1",
+  "utf8",
+);
+
+const encodePersonContinuation = (
+  continuation: PersonContinuation,
+  key: QueryContinuationKey,
+): string => {
+  const payload = Buffer.from(JSON.stringify(personContinuationSchema.parse(continuation)), "utf8");
+  const nonce = randomBytes(nonceLength);
+  const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, { authTagLength: tagLength });
+  cipher.setAAD(personAssociatedData);
+  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+  return Buffer.concat([
+    Buffer.from([personTokenVersion]), nonce, cipher.getAuthTag(), encrypted,
+  ]).toString("base64url");
+};
+
+const decodePersonContinuation = (
+  token: string,
+  key: QueryContinuationKey,
+): PersonContinuation => {
+  const secret = cipherKey(key);
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(token)) throw new PersonContinuationError();
+    const bytes = Buffer.from(token, "base64url");
+    if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== personTokenVersion)
+      throw new PersonContinuationError();
+    const decipher = createDecipheriv("aes-256-gcm", secret, bytes.subarray(1, 1 + nonceLength), {
+      authTagLength: tagLength,
+    });
+    decipher.setAAD(personAssociatedData);
+    decipher.setAuthTag(bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength));
+    const payload = Buffer.concat([
+      decipher.update(bytes.subarray(1 + nonceLength + tagLength)), decipher.final(),
+    ]).toString("utf8");
+    const parsed = personContinuationSchema.safeParse(JSON.parse(payload));
+    if (!parsed.success) throw new PersonContinuationError();
+    return parsed.data;
+  } catch {
+    throw new PersonContinuationError();
+  }
+};
+
+const personSearchFingerprint = (
+  purpose: NamedActionPersonReferencePurpose,
+  search: string | undefined,
+): string => createHash("sha256")
+  .update(canonicalJson({ kind: "named_action_person_field", purpose, search: search?.toLowerCase() ?? null }), "utf8")
+  .digest("hex");
+
+const personAccountChoices = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: OrganizationAccountReferenceChoiceCommand & Readonly<{
+    purpose: NamedActionPersonReferencePurpose;
+  }>,
+  continuationKey: QueryContinuationKey,
+): Promise<ReferenceChoiceResult> => {
+  const purpose = namedActionPersonReferencePurposeSchema.parse(command.purpose);
+  if (scope.applicationRootId === undefined) return refusal("source_unavailable");
+  const fingerprint = personSearchFingerprint(purpose, command.search);
+  let after: PersonContinuation | undefined;
+  if (command.continuationToken !== undefined) {
+    try {
+      after = decodePersonContinuation(command.continuationToken, continuationKey);
+    } catch (error) {
+      if (error instanceof PersonContinuationError) return refusal("cursor_invalid");
+      throw error;
+    }
+    if (!sameId(after.organizationId, scope.organizationId) ||
+        !sameId(after.organizationAccountId, scope.organizationAccountId) ||
+        !sameId(after.applicationRootId, scope.applicationRootId) ||
+        after.accessVersion !== scope.accessVersion ||
+        canonicalJson(after.purpose) !== canonicalJson(purpose) ||
+        after.searchFingerprint !== fingerprint)
+      return refusal("cursor_stale");
+  }
+
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.list_named_action_person_reference_choices(
+      ${purpose.ownerKind}::text, ${purpose.ownerId}::uuid, ${purpose.releaseRevision}::bigint,
+      ${purpose.actionId}::uuid, ${purpose.recordTypeId}::uuid, ${purpose.recordId}::uuid,
+      ${purpose.expectedConcurrencyNumber}::bigint, ${purpose.inputKey}::text, ${purpose.fieldId}::uuid,
+      ${purpose.installationRevision}::bigint, ${purpose.releaseKey}::text,
+      ${command.search ?? null}::text, ${command.pageSize}::integer,
+      ${after?.sortKey ?? null}::text, ${after?.afterOrganizationAccountId ?? null}::uuid
+    ) as result
+  `;
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new Error("PERSON_ACCOUNT_CHOICE_RESULT_INVALID");
+  const page = personAccountPageSchema.parse(rows[0].result);
+
+  // The SQL helper repeats the protected HUMAN/app/action/subject checks. Re-read
+  // the request context here as well before an expiring page can become a token.
+  const contextRows = await transaction.query<DatabaseRow & Readonly<{
+    context: unknown;
+    now: string;
+  }>>`
+    select vortex_access.validated_human_request_context() as context,
+      vortex_context.format_timestamp_utc(pg_catalog.clock_timestamp()) as now
+  `;
+  if (contextRows.length !== 1 || contextRows[0] === undefined) return refusal("source_unavailable");
+  const current = z.object({
+    tenantId: z.string().uuid(),
+    organizationId: organizationIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    applicationRootId: z.string().uuid().optional(),
+    accessVersion: z.number().int().min(1).max(9_007_199_254_740_991),
+    expiresAt: z.string().min(20).max(80),
+  }).passthrough().safeParse(contextRows[0].context);
+  const now = Date.parse(contextRows[0].now);
+  const validUntil = Date.parse(page.validUntil);
+  if (!current.success || !Number.isFinite(now) || !Number.isFinite(validUntil) ||
+      current.data.applicationRootId === undefined ||
+      !sameId(current.data.tenantId, scope.tenantId) ||
+      !sameId(current.data.organizationId, scope.organizationId) ||
+      !sameId(current.data.organizationAccountId, scope.organizationAccountId) ||
+      !sameId(current.data.applicationRootId, scope.applicationRootId) ||
+      current.data.accessVersion !== scope.accessVersion ||
+      Date.parse(current.data.expiresAt) <= now || validUntil <= now ||
+      (after !== undefined && Date.parse(after.validUntil) <= now))
+    return refusal("source_stale");
+
+  const choices: ReferenceChoiceOption[] = page.accounts.map((account) => ({
+    key: choiceKey("a", account.organizationAccountId),
+    label: account.displayName !== undefined && account.displayName.trim().length > 0
+      ? boundedLabel(account.displayName)
+      : `Account ${account.organizationAccountId.slice(0, 8).toLowerCase()}`,
+    value: { organizationAccountId: account.organizationAccountId },
+  }));
+  return {
+    outcome: "completed",
+    kind: "organization_account_reference",
+    choices: freezeChoices(choices),
+    ...(page.next === null ? {} : {
+      nextContinuationToken: encodePersonContinuation({
+        version: 1,
+        kind: "named_action_person_field",
+        organizationId: scope.organizationId,
+        organizationAccountId: scope.organizationAccountId,
+        applicationRootId: scope.applicationRootId,
+        accessVersion: scope.accessVersion,
+        purpose,
+        searchFingerprint: fingerprint,
+        sortKey: page.next.sortKey,
+        afterOrganizationAccountId: page.next.organizationAccountId,
+        validUntil: page.validUntil,
+      }, continuationKey),
+    }),
+  };
+};
+
 /**
  * Protected choices for record- and account-reference inputs. Record choices
  * are the rows the #572 protected Query admits for a published query of an
@@ -444,7 +638,11 @@ export const createReferenceChoiceService = (dependencies: ReferenceChoiceServic
         return recordChoices(queries, session, selection, command.data);
       const accountCommand = command.data;
       return requests.run(session, selection, (transaction, scope) =>
-        accountChoices(transaction, scope, accountCommand, continuationKey),
+        accountCommand.purpose === undefined
+          ? accountChoices(transaction, scope, accountCommand, continuationKey)
+          : personAccountChoices(transaction, scope, accountCommand as OrganizationAccountReferenceChoiceCommand & Readonly<{
+              purpose: NamedActionPersonReferencePurpose;
+            }>, continuationKey),
       );
     },
   });

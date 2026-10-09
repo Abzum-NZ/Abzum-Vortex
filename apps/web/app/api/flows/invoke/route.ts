@@ -1267,6 +1267,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             installationRevision: installation.installationRevision,
             releaseKey: installation.releaseKey,
             formId: binding.controlId,
+            ...(subject === undefined ? {} : { subject }),
           });
           if (projectedForm === undefined) return undefined;
           const resolvedValues = await resolveReferenceChoiceFormValues({

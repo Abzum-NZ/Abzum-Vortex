@@ -6209,5 +6209,173 @@
       "refresh"
     ],
     "supportedStateOperations": []
+  },
+  "CHOICE_INPUT_BLOCK_RELEASE_1_3_0": {
+    "blockId": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+    "key": "platform.form.choice_input",
+    "releaseVersion": "1.3.0",
+    "name": "Choice input",
+    "icon": "list",
+    "paletteGroup": "input",
+    "rendererKey": "platform.renderer.choice_input",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "name",
+        "label": "Field name",
+        "help": "Key of this field in form values and events: lowercase words separated by underscores",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "label",
+        "label": "Label",
+        "help": "Accessible name and visual field label",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "label": "Placeholder",
+        "help": "Placeholder option label",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "help_text",
+        "label": "Help text",
+        "help": "Descriptive help text",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 500
+      },
+      {
+        "kind": "boolean",
+        "key": "required",
+        "label": "Required",
+        "help": "Whether the field is required",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "disabled",
+        "label": "Disabled",
+        "help": "Whether the field is disabled",
+        "required": false
+      },
+      {
+        "kind": "list",
+        "key": "options",
+        "label": "Options",
+        "help": "Choices offered when no projected options are supplied",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 100,
+        "item": {
+          "kind": "group",
+          "key": "option",
+          "label": "Option",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Key",
+              "help": "Stable option key: lowercase words separated by underscores",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "help": "Option text shown to people",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            }
+          ]
+        }
+      },
+      {
+        "kind": "group",
+        "key": "choice_source",
+        "label": "Choice source",
+        "help": "Use a published Module query and a readable label field instead of authored options",
+        "required": false,
+        "properties": [
+          {
+            "kind": "query_reference",
+            "key": "query",
+            "label": "Published Module query",
+            "help": "The installed Module query that supplies choices",
+            "required": true
+          },
+          {
+            "kind": "field_reference",
+            "key": "label_field",
+            "label": "Label field",
+            "help": "A selected text field from the query used to label each choice",
+            "required": true
+          }
+        ]
+      },
+      {
+        "kind": "group",
+        "key": "person_choice_source",
+        "label": "Person choice source",
+        "help": "Use the current subject Form named action and a declared person field to offer eligible installed application accounts",
+        "required": false,
+        "properties": [
+          {
+            "kind": "field_reference",
+            "key": "field",
+            "label": "Person field",
+            "help": "The installed Module person field written by the Form named action account input",
+            "required": true
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "variant",
+        "label": "Variant",
+        "help": "Render as select dropdown or radio buttons",
+        "required": false,
+        "options": [
+          {
+            "key": "select",
+            "label": "Select dropdown"
+          },
+          {
+            "key": "radio",
+            "label": "Radio buttons"
+          }
+        ]
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "refused",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": [
+        "label"
+      ]
+    },
+    "supportedEvents": [
+      "field_changed"
+    ],
+    "supportedStateOperations": []
   }
 }

@@ -576,9 +576,10 @@ export const parseDateTimeInputPayload = (
 export const parseChoiceInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
-  releaseVersion?: "1.1.0" | "1.2.0",
+  releaseVersion?: "1.1.0" | "1.2.0" | "1.3.0",
 ): ChoiceInputPayload => {
-  if (releaseVersion === "1.2.0") return parseDependentChoiceInputPayload(value, location);
+  if (releaseVersion === "1.2.0" || releaseVersion === "1.3.0")
+    return parseDependentChoiceInputPayload(value, location);
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "choice_input")
     return fail(
