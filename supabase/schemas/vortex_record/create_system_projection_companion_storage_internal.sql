@@ -28,13 +28,17 @@ declare
   relation_oid oid;
   owner_role_oid oid := 'vortex_record_owner'::regrole::oid;
   adapter_role_oid oid := 'vortex_record_adapter'::regrole::oid;
+  inventory_role_oid oid := 'vortex_record_inventory'::regrole::oid;
   has_mapping boolean;
   expected_columns text[];
   existing_columns text[];
   acl_adapter_count integer;
   acl_adapter_invalid_count integer;
+  acl_inventory_count integer;
+  acl_inventory_invalid_count integer;
   acl_other_count integer;
   policy_expression text;
+  inventory_policy_expression text;
 begin
   if not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
     or not vortex_context.is_non_nil_uuid(p_target_module_root_id::text)
@@ -223,11 +227,19 @@ begin
         with check (organisation_id = vortex_context.organization_id())', table_token
     );
     execute pg_catalog.format(
+      'create policy record_account_deletion_inventory on record_data.%I
+        for select to vortex_record_inventory
+        using (organisation_id = vortex_context.organization_id())', table_token
+    );
+    execute pg_catalog.format(
       'revoke all on record_data.%I from public, anon, authenticated, service_role,
         vortex_runtime, vortex_request, vortex_module_owner', table_token
     );
     execute pg_catalog.format(
       'grant select, insert, update on record_data.%I to vortex_record_adapter', table_token
+    );
+    execute pg_catalog.format(
+      'grant select on record_data.%I to vortex_record_inventory', table_token
     );
     expected_columns := expected_columns || column_token;
   else
@@ -373,9 +385,19 @@ begin
             or privilege.is_grantable)
       ),
       pg_catalog.count(*) filter (
-        where privilege.grantee not in (owner_role_oid, adapter_role_oid)
+        where privilege.grantee = inventory_role_oid
+          and privilege.privilege_type = 'SELECT'
+          and not privilege.is_grantable
+      ),
+      pg_catalog.count(*) filter (
+        where privilege.grantee = inventory_role_oid
+          and (privilege.privilege_type <> 'SELECT' or privilege.is_grantable)
+      ),
+      pg_catalog.count(*) filter (
+        where privilege.grantee not in (owner_role_oid, adapter_role_oid, inventory_role_oid)
       )
-    into acl_adapter_count, acl_adapter_invalid_count, acl_other_count
+    into acl_adapter_count, acl_adapter_invalid_count,
+      acl_inventory_count, acl_inventory_invalid_count, acl_other_count
     from pg_catalog.pg_class as relation
     cross join lateral pg_catalog.aclexplode(coalesce(
       relation.relacl, pg_catalog.acldefault('r', relation.relowner)
@@ -383,6 +405,8 @@ begin
     where relation.oid = relation_oid;
     if acl_adapter_count <> 3
       or acl_adapter_invalid_count <> 0
+      or acl_inventory_count <> 1
+      or acl_inventory_invalid_count <> 0
       or acl_other_count <> 0
       or exists (
         select 1 from pg_catalog.pg_attribute as attribute
@@ -399,6 +423,13 @@ begin
     from pg_catalog.pg_policy as policy
     where policy.polrelid = relation_oid
       and policy.polname = 'projection_companion_record_access';
+    select pg_catalog.regexp_replace(pg_catalog.lower(
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid)
+      ), '\s+', '', 'g')
+    into inventory_policy_expression
+    from pg_catalog.pg_policy as policy
+    where policy.polrelid = relation_oid
+      and policy.polname = 'record_account_deletion_inventory';
     if policy_expression is distinct from '(organisation_id=vortex_context.organization_id())'
       or not exists (
         select 1 from pg_catalog.pg_policy as policy
@@ -412,10 +443,23 @@ begin
           ), '\s+', '', 'g')
             = '(organisation_id=vortex_context.organization_id())'
       )
+      or inventory_policy_expression is distinct from
+        '(organisation_id=vortex_context.organization_id())'
+      or not exists (
+        select 1 from pg_catalog.pg_policy as policy
+        where policy.polrelid = relation_oid
+          and policy.polname = 'record_account_deletion_inventory'
+          and policy.polpermissive
+          and policy.polcmd = 'r'
+          and policy.polroles = array[inventory_role_oid]::oid[]
+          and pg_catalog.regexp_replace(pg_catalog.lower(
+            pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid)
+          ), '\s+', '', 'g') is null
+      )
       or (
         select pg_catalog.count(*) from pg_catalog.pg_policy as policy
         where policy.polrelid = relation_oid
-      ) <> 1 then
+      ) <> 2 then
       raise exception using errcode = '55000',
         message = 'Existing projection companion policies are incompatible';
     end if;
