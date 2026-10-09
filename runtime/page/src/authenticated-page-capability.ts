@@ -101,8 +101,8 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         page: PageDefinitionV2,
         condition: ConditionNode,
       ) => Promise<boolean>;
-      /** Final database-clock check for the earliest private record-eligibility deadline. */
-      validateRecordEligibilityUntil?: (
+      /** Final current-context and database-clock check for the earliest private Access deadline. */
+      validateAccessEligibilityUntil?: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
         validUntil: string,
@@ -196,12 +196,17 @@ const evaluate = async (
         transaction,
         scope,
         binding.declaration,
-        async (decision) => decision.correlationId,
+        async (decision) => ({
+          correlationId: decision.correlationId,
+          validUntil: decision.validUntil,
+        }),
       );
   const evaluated = result.outcome === "completed"
-    ? { allowed: true, correlationId: result.value }
+    ? { allowed: true, correlationId: result.value.correlationId }
     : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
-  const validUntil = result.outcome === "eligible" ? result.validUntil : undefined;
+  const validUntil = result.outcome === "eligible"
+    ? result.validUntil
+    : result.outcome === "completed" ? result.value.validUntil : undefined;
   // These diagnostic labels retain only the existing safe result, never private decision evidence.
   let viewReason: ObservedViewReason = "UNKNOWN";
   let targetKind: ObservedTargetKind = "UNPROVABLE";
@@ -256,15 +261,15 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ? []
             : [loaded.sourceCorrelationId.toLowerCase()]),
         ]);
-        let recordEligibilityUntil: string | undefined;
-        const retainEarliestRecordEligibility = (candidateUntil: string | undefined): void => {
+        let earliestAccessEligibilityUntil: string | undefined;
+        const retainEarliestAccessEligibility = (candidateUntil: string | undefined): void => {
           if (candidateUntil === undefined) return;
           if (
-            recordEligibilityUntil === undefined ||
-            Date.parse(candidateUntil) < Date.parse(recordEligibilityUntil)
-          ) recordEligibilityUntil = candidateUntil;
+            earliestAccessEligibilityUntil === undefined ||
+            Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
+          ) earliestAccessEligibilityUntil = candidateUntil;
         };
-        retainEarliestRecordEligibility(pageAccess.validUntil);
+        retainEarliestAccessEligibility(pageAccess.validUntil);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         const hiddenPlacements = new Set<string>();
         // Observation has its own finite custody and never changes the authoritative states.
@@ -301,8 +306,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
                 : undefined;
           if (view === undefined || use === undefined)
             throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-          retainEarliestRecordEligibility(view.validUntil);
-          retainEarliestRecordEligibility(use.validUntil);
+          retainEarliestAccessEligibility(view.validUntil);
+          retainEarliestAccessEligibility(use.validUntil);
           correlations.add(view.correlationId.toLowerCase());
           correlations.add(use.correlationId.toLowerCase());
           const ancestorHidden = required.ancestorPlacementIds.some((id) =>
@@ -376,13 +381,13 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ? {}
             : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
         });
-        if (projected !== undefined && recordEligibilityUntil !== undefined) {
+        if (projected !== undefined && earliestAccessEligibilityUntil !== undefined) {
           if (
-            dependencies.validateRecordEligibilityUntil === undefined ||
-            !(await dependencies.validateRecordEligibilityUntil(
+            dependencies.validateAccessEligibilityUntil === undefined ||
+            !(await dependencies.validateAccessEligibilityUntil(
               transaction,
               scope,
-              recordEligibilityUntil,
+              earliestAccessEligibilityUntil,
             ))
           ) return undefined;
         }

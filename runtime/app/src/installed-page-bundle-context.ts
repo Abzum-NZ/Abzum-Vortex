@@ -311,6 +311,7 @@ export const isTrustedInstalledPageComposition = (
 export const matchesInstalledPageBundleIdentity = (
   contextCandidate: unknown,
   stateCandidate: unknown,
+  expectedAccessVersion?: number,
 ): boolean => {
   try {
     const context = requireInstalledRuntimeContext(contextCandidate);
@@ -324,6 +325,8 @@ export const matchesInstalledPageBundleIdentity = (
       state.identity.organizationId !== expected.organizationId ||
       state.identity.applicationRootId !== expected.applicationRootId ||
       state.identity.applicationReleaseRevision !== expected.applicationReleaseRevision ||
+      (expectedAccessVersion !== undefined &&
+        state.identity.accessVersion !== expectedAccessVersion) ||
       state.identity.pinFingerprint !== expected.pinFingerprint ||
       state.bundleIndex.pinFingerprint !== expected.pinFingerprint ||
       canonicalJson(state.bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||

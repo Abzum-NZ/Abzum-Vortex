@@ -1,9 +1,7 @@
 import "server-only";
 
 import {
-  createHumanInstalledPageBundleContextLoader,
-  readAddressedApplicationAtAddress,
-  readAddressedApplicationIdentityAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
   matchesInstalledPageBundleIdentity,
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
@@ -54,23 +52,22 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           return unavailable;
 
         const dependencies = humanOrganizationRequestDependencies();
-        const addressIdentity = await readAddressedApplicationIdentityAtAddress(
+        const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
           session,
           tenantShortName.data,
           organizationShortName.data,
           dependencies.identityAuthorityId,
           selector.data.applicationKey,
+          (transaction) => createDatabaseApplicationBoundReleaseSetService(
+            installedReleaseCatalogue,
+            transaction,
+          ),
         );
-        if (addressIdentity === undefined) return unavailable;
-        const { read } = await readAddressedApplicationAtAddress(
-          session,
-          tenantShortName.data,
-          organizationShortName.data,
-          dependencies.identityAuthorityId,
-          selector.data.applicationKey,
-        );
+        const { read, context, identity: addressIdentity } = addressed;
         if (
           read.kind !== "available" ||
+          context === undefined ||
+          addressIdentity === undefined ||
           read.organizationId !== addressIdentity.organizationId ||
           read.tenantShortName !== tenantShortName.data ||
           read.organizationShortName !== organizationShortName.data ||
@@ -99,38 +96,17 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           organizationId: read.organizationId,
           applicationRootId: addressedIdentity.applicationRootId,
         };
-        const loaded = await humanOrganizationRequestsFor(dependencies).run(
-          session,
-          selection,
-          async (transaction, scope) => {
-            if (scope.applicationRootId === undefined)
-              throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-            return createHumanInstalledPageBundleContextLoader({
-              transaction,
-              releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                installedReleaseCatalogue,
-                transaction,
-              ),
-              scope: {
-                organizationId: scope.organizationId,
-                applicationRootId: scope.applicationRootId,
-              },
-            }).load();
-          },
-        );
-        if (loaded.kind !== "available") return unavailable;
-
-        const context = requireInstalledRuntimeContext(loaded.value);
-        const application = context.releaseSet.application;
+        const installedContext = requireInstalledRuntimeContext(context);
+        const application = installedContext.releaseSet.application;
         if (
-          !sameId(context.organizationId, read.organizationId) ||
-          !sameId(context.applicationRootId, addressedIdentity.applicationRootId) ||
-          !sameId(application.organizationId, context.organizationId) ||
-          !sameId(application.rootId, context.applicationRootId) ||
+          !sameId(installedContext.organizationId, read.organizationId) ||
+          !sameId(installedContext.applicationRootId, addressedIdentity.applicationRootId) ||
+          !sameId(application.organizationId, installedContext.organizationId) ||
+          !sameId(application.rootId, installedContext.applicationRootId) ||
           application.releaseRevision !== addressedIdentity.applicationReleaseRevision ||
           application.definitionKey !== addressedIdentity.definitionKey ||
           application.definitionKey !== selector.data.applicationKey ||
-          application.releaseRevision !== context.applicationReleaseRevision ||
+          application.releaseRevision !== installedContext.applicationReleaseRevision ||
           application.content.name !== permittedApplication.name ||
           application.content.icon !== permittedApplication.icon
         )
@@ -140,14 +116,14 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
         if (pages.length !== 1) return unavailable;
         const page = pages[0];
         if (page === undefined) return unavailable;
-        const identity = resolveInstalledPageIdentity(context, { pageId: page.pageId });
+        const identity = resolveInstalledPageIdentity(installedContext, { pageId: page.pageId });
         if (
           identity === undefined ||
-          !sameId(identity.organizationId, context.organizationId) ||
-          !sameId(identity.applicationRootId, context.applicationRootId) ||
+          !sameId(identity.organizationId, installedContext.organizationId) ||
+          !sameId(identity.applicationRootId, installedContext.applicationRootId) ||
           !sameId(identity.requested.pageId, page.pageId) ||
           identity.requested.key !== page.key ||
-          identity.applicationReleaseRevision !== context.applicationReleaseRevision ||
+          identity.applicationReleaseRevision !== installedContext.applicationReleaseRevision ||
           identity.releaseVersion !== application.releaseVersion ||
           identity.contentFingerprint !== application.contentFingerprint ||
           identity.resolutionFingerprint !== application.resolutionFingerprint
@@ -156,7 +132,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
 
         const projected = await createStoredPageCapabilityService({
           ...dependencies,
-          context,
+          context: installedContext,
           selection: { pageId: page.pageId },
         }).project(session, selection);
         if (
@@ -164,7 +140,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           projected.value === undefined ||
           typeof projected.value.pageId !== "string" ||
           !sameId(projected.value.pageId, page.pageId) ||
-          projected.value.applicationReleaseRevision !== context.applicationReleaseRevision
+          projected.value.applicationReleaseRevision !== installedContext.applicationReleaseRevision
         )
           return unavailable;
 
@@ -186,8 +162,8 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
               state.identity.applicationRootId === scope.applicationRootId &&
               state.identity.accessVersion === scope.accessVersion &&
               state.identity.accessVersion === projectedAccessVersion &&
-              state.identity.applicationReleaseRevision === context.applicationReleaseRevision &&
-              matchesInstalledPageBundleIdentity(context, state);
+              state.identity.applicationReleaseRevision === installedContext.applicationReleaseRevision &&
+              matchesInstalledPageBundleIdentity(installedContext, state);
           },
         );
         if (finalIdentity.kind !== "available" || !finalIdentity.value) return unavailable;
@@ -201,7 +177,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           applicationKey: application.definitionKey,
           pageId: identity.requested.pageId,
           pageKey: identity.requested.key,
-          applicationReleaseRevision: context.applicationReleaseRevision,
+          applicationReleaseRevision: installedContext.applicationReleaseRevision,
           releaseVersion: application.releaseVersion,
           contentFingerprint: application.contentFingerprint,
           resolutionFingerprint: application.resolutionFingerprint,

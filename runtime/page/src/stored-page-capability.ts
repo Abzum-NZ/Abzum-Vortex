@@ -35,6 +35,7 @@ import {
 } from "@vortex/access";
 import {
   requireInstalledRuntimeContext,
+  matchesInstalledPageBundleIdentity,
   readInstalledPageComposition,
   resolveInstalledPageIdentity,
   type InstalledRuntimeContext,
@@ -525,14 +526,16 @@ export const createStoredPageCapabilityService = (
       ...requestDependencies,
       // Override the spread dependency so pageOpens cannot inherit the primary observer.
       ...(observeProjectionDecision === undefined ? {} : { observeProjectionDecision }),
-      validateRecordEligibilityUntil: async (transaction, scope, validUntil) => {
+      validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
         try {
           const rows = await transaction.query<{
             readonly request_context: unknown;
             readonly observed_at: unknown;
+            readonly bundle_state: unknown;
           }>`
             select vortex_access.validated_human_request_context() as request_context,
-              clock_timestamp() as observed_at
+              clock_timestamp() as observed_at,
+              vortex_module.read_active_installation_bundle_identity() as bundle_state
           `;
           if (rows.length !== 1 || rows[0] === undefined) return false;
           const current = sessionContextSchema.safeParse(rows[0].request_context);
@@ -553,7 +556,8 @@ export const createStoredPageCapabilityService = (
             current.data.applicationRootId !== undefined &&
             sameId(current.data.applicationRootId, scope.applicationRootId) &&
             current.data.accessVersion === scope.accessVersion &&
-            Date.parse(validUntil) > observedMilliseconds;
+            Date.parse(validUntil) > observedMilliseconds &&
+            matchesInstalledPageBundleIdentity(context, rows[0].bundle_state, scope.accessVersion);
         } catch {
           return false;
         }

@@ -2,17 +2,18 @@ import "server-only";
 
 import {
   isReservedTenantSegment,
-  readAddressedApplicationAtAddress,
-  readAddressedApplicationIdentityAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
   type AddressedApplicationRead,
   type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
+import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/contracts";
+import { installedReleaseCatalogue } from "./definition-catalogue";
 
 export type ApplicationAddressResult =
   | Readonly<{
@@ -49,35 +50,18 @@ const loadAddressedApplicationAtAddress = async (
   } catch {
     return { read: { kind: "temporarily_unavailable" }, experiences: [] };
   }
-  const addressIdentity = await readAddressedApplicationIdentityAtAddress(
+  const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
     session,
     tenantShortName,
     organizationShortName,
     authorityId,
     applicationKey,
+    (transaction) => createDatabaseApplicationBoundReleaseSetService(
+      installedReleaseCatalogue,
+      transaction,
+    ),
   );
-  if (addressIdentity === undefined)
-    return { read: { kind: "unavailable" }, experiences: [] };
-  const addressed = await readAddressedApplicationAtAddress(
-    session,
-    tenantShortName,
-    organizationShortName,
-    authorityId,
-    applicationKey,
-  );
-  if (addressed.read.kind !== "available") return addressed;
-  if (
-    addressed.read.organizationId !== addressIdentity.organizationId ||
-    addressed.read.tenantShortName !== addressIdentity.tenantShortName ||
-    addressed.read.organizationShortName !== addressIdentity.organizationShortName
-  ) return { read: { kind: "unavailable" }, experiences: [] };
-  const matches = addressed.read.applications.filter((application) =>
-    application.key === addressIdentity.identity.definitionKey &&
-    application.applicationRootId === addressIdentity.identity.applicationRootId,
-  );
-  return matches.length === 1
-    ? addressed
-    : { read: { kind: "unavailable" }, experiences: [] };
+  return { read: addressed.read, experiences: addressed.experiences };
 };
 
 export const resolveApplicationAddress = async (
