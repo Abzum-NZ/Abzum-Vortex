@@ -53,6 +53,7 @@ if (!process.argv.includes("--worker")) {
     applicationSourceDocumentV2Schema,
     connectionTypeSourceDocumentSchema,
     PLATFORM_CONNECTION_TYPE_RELEASES,
+    semanticVersionSchema,
   } = await import("../contracts/src/index.ts");
   const { compare: compareVersions } = createRequire(
     path.join(root, "runtime", "definition", "package.json"),
@@ -142,9 +143,21 @@ if (!process.argv.includes("--worker")) {
         const values = Object.values(exports).flatMap((value) =>
           Array.isArray(value) ? value : [value],
         );
-        for (const source of values) {
-          if (source?.kind !== kind) continue;
-          sources.push({ path: relativePath, source });
+        const authoredSources = values.filter((source) => source?.kind === kind);
+        const versions = exports.shippedDefinitionReleaseVersions;
+        if (versions !== undefined &&
+          (versions === null || typeof versions !== "object" || Array.isArray(versions)))
+          throw new Error("Shipped definition release versions must be an explicit source-key map");
+        for (const [key, version] of Object.entries(versions ?? {})) {
+          if (!semanticVersionSchema.safeParse(version).success ||
+            authoredSources.filter((source) => source.key === key).length !== 1)
+            throw new Error("Shipped definition release version has no unique exported source or valid exact version");
+        }
+        for (const source of authoredSources) {
+          if (sources.some((entry) => entry.source.kind === kind && entry.source.key === source.key))
+            throw new Error("Shipped definition source is duplicated");
+          sources.push({ path: relativePath, source,
+            ...(versions?.[source.key] === undefined ? {} : { releaseVersion: versions[source.key] }) });
         }
       } catch (error) {
         failures.push({ path: relativePath, stage: "source import", error: String(error) });
