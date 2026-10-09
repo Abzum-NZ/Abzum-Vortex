@@ -43,7 +43,8 @@ import {
 
 type WorkspaceProps =
   | Readonly<{ mode: "new"; organizationId: string }>
-  | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft }>;
+  | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
+      searchMetadata?: StudioApplicationSearchMetadata | null }>;
 
 type PublicationSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
@@ -69,7 +70,8 @@ class StudioSaveError extends Error {
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new"
     ? <NewApplicationWorkspace organizationId={props.organizationId} />
-    : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft} />;
+    : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft}
+        initialSearchMetadata={props.searchMetadata ?? null} />;
 }
 
 function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
@@ -178,8 +180,8 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   </li>;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft }: {
-  organizationId: string; draft: StudioStoredApplicationDraft;
+function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata }: {
+  organizationId: string; draft: StudioStoredApplicationDraft; initialSearchMetadata: StudioApplicationSearchMetadata | null;
 }) {
   const active = useRef(false);
   const lifetime = useRef(0);
@@ -218,7 +220,7 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
   const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
-  const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(null);
+  const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
   const [pendingSearch, setPendingSearch] = useState(false);
   const searchPending = useRef(false);
   const searchRefresh = useRef(0);
@@ -364,7 +366,8 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     }
     finally { if (active.current && epoch === searchRefresh.current) setRefreshingSearch(false); }
   };
-  const currentSearchMetadata = searchMetadata !== null && searchMetadata.rootId === state.rootId &&
+  const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
+    searchMetadata.rootId === state.rootId &&
     searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
     searchMetadata.bindingsSignature === JSON.stringify(source.body.module_bindings) &&
     canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
@@ -383,6 +386,9 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
     [selectionKey, currentLabel, source.body.description]);
   const pendingLabels = editable && (label !== currentLabel ||
     (selected?.kind === "application" && description !== source.body.description));
+  const currentModuleMetadata = !state.isDirty && !state.isSaving && !isPublishing && !isReopening && !refreshingSearch &&
+    !pendingSearch && !pendingSourceImport && !pendingLabels && !pendingAppearance && !pendingComposition &&
+    !pendingCondition && !pendingFlowText && !pendingFlowAppend && workspaceLifetime !== 0 ? currentSearchMetadata : null;
   labelsPending.current = pendingLabels;
 
   // Read refs synchronously at every request and completion; rendered disabled state is advisory.
@@ -651,6 +657,22 @@ function ExistingApplicationWorkspace({ organizationId, draft }: {
         ? "Apply or discard the inspector text before saving or undoing." : state.isDirty
           ? "Unsaved local changes." : "Local history matches the saved baseline."} {message}</p>
     </header>
+    <section className="space-y-2 rounded border border-border p-4" aria-label="Bound Module drafts">
+      <h2 className="font-semibold">Bound Module drafts</h2>
+      <p className="text-sm">Open a Module's own draft to edit a field label. Its draft revision is separate from this Application.</p>
+      {currentModuleMetadata === null
+        ? <p role="status">Save local changes, then refresh the saved bindings or reopen this Application to load Module links.</p>
+        : <ul className="space-y-2">{currentModuleMetadata.modules.map((module) =>
+          <li key={module.moduleRootId} className="break-all text-sm">
+            <a className="underline" href={`/studio/modules/${encodeURIComponent(module.organizationId)}/${encodeURIComponent(module.moduleRootId)}`}>
+              {module.key}: open Module draft</a>
+            <p>Bound release {module.releaseVersion} (revision {module.releaseRevision}); content {module.contentFingerprint}; resolution {module.resolutionFingerprint}</p>
+          </li>)}</ul>}
+      <button type="button" className={buttonClass} onClick={refreshSearchMetadata}
+        disabled={refreshingSearch || isPublishing || state.isSaving || state.isDirty || isReopening || pendingSearch || pendingSourceImport ||
+          pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend}>
+        Refresh saved Module bindings</button>
+    </section>
     <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
       disabled={isPublishing || state.isSaving || isReopening || refreshingSearch || state.isDirty || pendingSourceImport || pendingLabels ||
         pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
