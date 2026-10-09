@@ -1,4 +1,5 @@
-import type { ApplicationShellV2, PageDefinitionV2 } from "./application-composition-v2";
+import type { ApplicationShellV2 } from "./application-composition-v2";
+import type { PageDefinitionV2 } from "./application-contracts";
 
 export type PlacementSlotV2 = ApplicationShellV2["layout"];
 export type ResolvedPageComposition = Readonly<{
