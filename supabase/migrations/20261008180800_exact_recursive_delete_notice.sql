@@ -242,7 +242,7 @@ begin
       perform vortex_invalidation.publish_change_notice(
         (context_value ->> 'organizationId')::uuid,
         application_scope, p_record_type_id,
-        saved_record_id, saved_concurrency_number, 'changed',
+        saved_record_id, saved_concurrency_number, 'deleted',
         notice_sequence, notice_sequence,
         (context_value ->> 'correlationId')::uuid
       );
