@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  applicationRootIdSchema,
   canonicalJson,
   installationRuntimeBundleFormatVersion,
   installationRuntimeBundlePagesSectionSchema,
@@ -39,11 +40,16 @@ export type PreparedInstallationRuntimeSourceReader = (
 export const installationRuntimeBundleKey = (
   applicationRootId: string,
   applicationReleaseRevision: number,
-) => ({
-  applicationRootId,
-  applicationReleaseRevision,
-  bundleFormatVersion: installationRuntimeBundleFormatVersion,
-});
+) => {
+  const parsedApplicationRootId = applicationRootIdSchema.safeParse(applicationRootId);
+  if (!parsedApplicationRootId.success)
+    throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+  return {
+    applicationRootId: parsedApplicationRootId.data,
+    applicationReleaseRevision,
+    bundleFormatVersion: installationRuntimeBundleFormatVersion,
+  };
+};
 
 export const buildInstallationRuntimeBundleWriteCommand = (
   sourceCandidate: PreparedInstallationRuntimeSource,
