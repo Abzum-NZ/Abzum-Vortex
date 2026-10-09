@@ -64,7 +64,8 @@ begin
       message = 'Named action creation authority input is invalid';
   end if;
   if pg_catalog.jsonb_array_length(p_creations) = 0
-    or pg_catalog.jsonb_object_length(p_created_records) <>
+    or (select pg_catalog.count(*)
+        from pg_catalog.jsonb_object_keys(p_created_records)) <>
       pg_catalog.jsonb_array_length(p_creations) then
     raise exception using errcode = '22023',
       message = 'Named action creation authority input is invalid';

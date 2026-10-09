@@ -1,4 +1,12 @@
 -- #2090: capture actual created-row tuples, reauthorize the whole graph at both barriers, and publish exact terminal created notices.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.insert_named_action_record_internal(
   p_record_type_id uuid,
   p_final_values jsonb,
@@ -117,7 +125,7 @@ begin
 
   if ownership_mode = 'organization_account' then
     owner_account_id := actor_id_value;
-  elsif ownership_mode = 'team' then
+  elsif ownership_mode = 'group' then
     raise exception using errcode = '42501',
       message = 'Named action creation owner is unavailable';
   end if;
@@ -338,7 +346,8 @@ begin
       message = 'Named action creation authority input is invalid';
   end if;
   if pg_catalog.jsonb_array_length(p_creations) = 0
-    or pg_catalog.jsonb_object_length(p_created_records) <>
+    or (select pg_catalog.count(*)
+        from pg_catalog.jsonb_object_keys(p_created_records)) <>
       pg_catalog.jsonb_array_length(p_creations) then
     raise exception using errcode = '22023',
       message = 'Named action creation authority input is invalid';
@@ -2677,3 +2686,10 @@ comment on function vortex_record.apply_record_changes(
 
 -- Retire the former per-row creation authorization helper; the dispatcher now consumes the complete-set helper.
 drop function vortex_record.authorize_named_action_created_record_internal(uuid,uuid,uuid[]);
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;

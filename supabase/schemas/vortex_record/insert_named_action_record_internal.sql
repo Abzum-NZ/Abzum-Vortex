@@ -116,7 +116,7 @@ begin
 
   if ownership_mode = 'organization_account' then
     owner_account_id := actor_id_value;
-  elsif ownership_mode = 'team' then
+  elsif ownership_mode = 'group' then
     raise exception using errcode = '42501',
       message = 'Named action creation owner is unavailable';
   end if;
