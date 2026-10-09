@@ -38,6 +38,13 @@ declare
   source_identity text;
   source_action_kind text;
   changed_rows integer;
+  clear_result jsonb;
+  clear_notice_eligible boolean;
+  expected_clear_notice_eligible boolean;
+  clear_saved_record_id uuid;
+  clear_saved_concurrency_number bigint;
+  clear_application_root_id uuid;
+  expected_clear_application_root_id uuid;
   application_scope uuid;
   saved_record_id uuid;
   saved_concurrency_number bigint;
@@ -347,15 +354,99 @@ begin
     end if;
 
     if incoming.on_parent_delete = 'empty_optional' then
-      perform vortex_record.write_relationship_value_internal(
+      clear_result := vortex_record.write_relationship_value_internal(
         source_catalogue.record_type_id, incoming.from_record_id,
-        incoming.relationship_id, 'null'::jsonb, true
+        incoming.relationship_id, 'null'::jsonb, true, true
       );
+      preview_installation := vortex_record.read_current_preview_installation_internal();
+      expected_clear_application_root_id := case
+        when source_meta ->> 'storageScope' = 'application_contained'
+          then (source_meta -> 'context' ->> 'applicationRootId')::uuid
+        else null
+      end;
+      expected_clear_notice_eligible := coalesce(
+        preview_installation is null
+          and source_meta ->> 'storageScope' = 'application_contained',
+        false
+      );
+      if pg_catalog.jsonb_typeof(clear_result) is distinct from 'object'
+        or not (clear_result ?& array[
+          'organizationId', 'applicationRootId', 'recordTypeId', 'storageContractId',
+          'recordId', 'concurrencyNumber', 'noticeEligible'
+        ])
+        or clear_result - array[
+          'organizationId', 'applicationRootId', 'recordTypeId', 'storageContractId',
+          'recordId', 'concurrencyNumber', 'noticeEligible'
+        ] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(clear_result -> 'organizationId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'recordTypeId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'storageContractId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'recordId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'concurrencyNumber') <> 'number'
+        or (clear_result ->> 'concurrencyNumber') !~ '^[1-9][0-9]{0,15}$'
+        or pg_catalog.jsonb_typeof(clear_result -> 'noticeEligible') <> 'boolean'
+        or pg_catalog.jsonb_typeof(clear_result -> 'applicationRootId') is distinct from
+          case when expected_clear_application_root_id is null then 'null' else 'string' end then
+        raise exception using errcode = '55000',
+          message = 'Optional relationship clear tuple is unavailable';
+      end if;
+      clear_saved_record_id := (clear_result ->> 'recordId')::uuid;
+      clear_saved_concurrency_number := (clear_result ->> 'concurrencyNumber')::bigint;
+      clear_notice_eligible := (clear_result ->> 'noticeEligible')::boolean;
+      clear_application_root_id := (clear_result ->> 'applicationRootId')::uuid;
+      if (
+        (source_meta ->> 'storageScope') = 'application_contained'
+        and (
+          expected_clear_application_root_id is null
+          or not coalesce(
+            vortex_context.is_non_nil_uuid(expected_clear_application_root_id::text), false
+          )
+        )
+      )
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'organizationId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'recordTypeId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'storageContractId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'recordId'), false)
+        or clear_saved_record_id is distinct from incoming.from_record_id
+        or clear_saved_concurrency_number not between 1 and 9007199254740991
+        or (clear_result ->> 'organizationId')::uuid is distinct from
+          (context_value ->> 'organizationId')::uuid
+        or (clear_result ->> 'recordTypeId')::uuid is distinct from
+          source_catalogue.record_type_id
+        or (clear_result ->> 'storageContractId')::uuid is distinct from
+          incoming.from_storage_contract_id
+        or clear_application_root_id is distinct from expected_clear_application_root_id
+        or clear_notice_eligible is distinct from expected_clear_notice_eligible then
+        raise exception using errcode = '55000',
+          message = 'Optional relationship clear tuple is unavailable';
+      end if;
       perform vortex_record.append_record_lifecycle_effect_internal(
         'optional_cleared', incoming.from_storage_contract_id,
         source_catalogue.record_type_id, incoming.from_record_id,
         source_concurrency, incoming.relationship_id
       );
+      if clear_notice_eligible then
+        begin
+          notice_sequence := pg_catalog.nextval(
+            'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+          );
+          if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
+            raise exception using errcode = '22003',
+              message = 'Optional relationship notice sequence is unavailable';
+          end if;
+          perform vortex_invalidation.publish_change_notice(
+            (clear_result ->> 'organizationId')::uuid,
+            clear_application_root_id,
+            (clear_result ->> 'recordTypeId')::uuid,
+            clear_saved_record_id, clear_saved_concurrency_number, 'changed',
+            notice_sequence, notice_sequence,
+            (context_value ->> 'correlationId')::uuid
+          );
+        exception when others then
+          -- The exact source notice is advisory; all prior authority and journals stay structural.
+          null;
+        end;
+      end if;
     elsif incoming.on_parent_delete = 'soft_delete_dependent' then
       source_record_type := source_meta -> 'recordType';
       if source_record_type ->> 'ownershipMode' <> 'inherited'

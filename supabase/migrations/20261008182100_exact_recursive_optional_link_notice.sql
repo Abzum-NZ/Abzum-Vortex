@@ -1,3 +1,1276 @@
+-- #2089: return the actual optional-link source tuple and publish one exact terminal notice.
+--
+-- Only recursive empty_optional clears defer the generic data-version bump. The
+-- protected recursive caller appends its mandatory journal before this advisory
+-- exact notice attempt; all other relationship writers keep their existing path.
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+drop function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean);
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
+create or replace function vortex_record.write_relationship_value_internal(
+  p_source_record_type_id uuid,
+  p_source_record_id uuid,
+  p_relationship_id uuid,
+  p_target_value jsonb,
+  p_increment_source_revision boolean,
+  p_defer_change_notice boolean
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  source_meta jsonb;
+  source_context jsonb;
+  source_type jsonb;
+  relationship_value jsonb;
+  field_value jsonb;
+  field_column jsonb;
+  target_type_id uuid;
+  target_record_id uuid;
+  target_meta jsonb;
+  target_loaded jsonb;
+  target_decision jsonb;
+  target_record jsonb;
+  target_scope jsonb;
+  source_application_root_id uuid;
+  target_application_root_id uuid;
+  mapping_row vortex_record.relationship_storage_mappings%rowtype;
+  application_root_required boolean;
+  existing_other boolean;
+  update_sql text;
+  changed_rows integer;
+  saved_record_id uuid;
+  saved_concurrency_number bigint;
+  notice_eligible boolean := false;
+  preview_installation jsonb;
+begin
+  if p_source_record_type_id is null or p_source_record_id is null
+    or p_relationship_id is null or p_increment_source_revision is null
+    or p_defer_change_notice is null then
+    raise exception using errcode = '22023', message = 'Relationship change is invalid';
+  end if;
+  if p_defer_change_notice and (
+    p_target_value is distinct from 'null'::jsonb or not p_increment_source_revision
+  ) then
+    raise exception using errcode = '22023', message = 'Relationship notice deferral is invalid';
+  end if;
+  source_meta := vortex_record.resolve_record_action_context_internal(
+    p_source_record_type_id, 'read'
+  );
+  source_context := source_meta -> 'context';
+  source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
+    then (source_context ->> 'applicationRootId')::uuid else null end;
+  if p_defer_change_notice then
+    if source_meta ->> 'storageScope' = 'application_contained'
+      and (
+        source_application_root_id is null
+        or not coalesce(vortex_context.is_non_nil_uuid(source_application_root_id::text), false)
+      ) then
+      raise exception using errcode = '55000',
+        message = 'Relationship source scope is unavailable';
+    end if;
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    notice_eligible := coalesce(
+      preview_installation is null
+        and source_meta ->> 'storageScope' = 'application_contained',
+      false
+    );
+  end if;
+  source_type := source_meta -> 'recordType';
+  select item.value into relationship_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'relationships') as item(value)
+  where (item.value ->> 'relationshipId')::uuid = p_relationship_id;
+  if not found then
+    raise exception using errcode = '23514',
+      message = 'Relationship is not declared by the active record type';
+  end if;
+  select item.value into field_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'fields') as item(value)
+  where (item.value ->> 'fieldId')::uuid = (relationship_value ->> 'fromFieldId')::uuid;
+  if not found or field_value ->> 'type' not in ('link', 'link_to_one_of_several') then
+    raise exception using errcode = '55000',
+      message = 'Relationship field definition is unavailable';
+  end if;
+  field_column := source_meta -> 'columns' -> pg_catalog.lower(field_value ->> 'fieldId');
+
+  select mapping.* into mapping_row
+  from vortex_record.relationship_storage_mappings as mapping
+  where mapping.relationship_id = p_relationship_id
+    and mapping.source_storage_contract_id =
+      (source_meta ->> 'storageContractId')::uuid
+    and mapping.source_field_id = (field_value ->> 'fieldId')::uuid
+    and mapping.release_revision <= (source_meta ->> 'moduleReleaseRevision')::bigint;
+  if not found
+    or mapping_row.cardinality is distinct from (relationship_value ->> 'cardinality')
+    or mapping_row.on_parent_delete is distinct from (relationship_value ->> 'onParentDelete') then
+    raise exception using errcode = '55000',
+      message = 'Relationship storage disagrees with the active definition';
+  end if;
+  if p_defer_change_notice
+    and mapping_row.on_parent_delete is distinct from 'empty_optional' then
+    raise exception using errcode = '22023',
+      message = 'Relationship notice deferral is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) = 'null' then
+    if (field_value ->> 'required')::boolean then
+      raise exception using errcode = '23514', message = 'Required relationship cannot be empty';
+    end if;
+    if p_increment_source_revision and not notice_eligible then
+      perform vortex_record.bump_record_data_version_internal(
+        (source_context ->> 'organizationId')::uuid,
+        (source_meta ->> 'storageContractId')::uuid,
+        case when source_meta ->> 'storageScope' = 'application_contained'
+          then (source_context ->> 'applicationRootId')::uuid else null end
+      );
+    end if;
+    perform vortex_record.acquire_relationship_edge_locks_internal(
+      vortex_record.relationship_edge_lock_identities_internal(
+        p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+        p_source_record_id, null, null
+      )
+    );
+    delete from vortex_record.relationship_edges as edge
+    where edge.relationship_id = p_relationship_id
+      and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
+      and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+      and edge.from_record_id = p_source_record_id;
+    update_sql := pg_catalog.format(
+      'update record_data.%I as stored set %I = null%s
+       where stored.organisation_id = $1 and stored.record_id = $2
+       returning stored.record_id, stored.concurrency_number',
+      source_meta ->> 'table', field_column ->> 'token',
+      case when p_increment_source_revision then
+        ', concurrency_number = concurrency_number + 1, updated_at = pg_catalog.statement_timestamp(), updated_by = $3'
+      else '' end
+    );
+    if p_increment_source_revision then
+      execute update_sql into saved_record_id, saved_concurrency_number using
+        (source_context ->> 'organizationId')::uuid,
+        p_source_record_id, (source_context ->> 'organizationAccountId')::uuid;
+    else
+      execute update_sql into saved_record_id, saved_concurrency_number using
+        (source_context ->> 'organizationId')::uuid,
+        p_source_record_id;
+    end if;
+    get diagnostics changed_rows = row_count;
+    if changed_rows <> 1 then
+      raise exception using errcode = '40001',
+        message = 'Relationship source record changed';
+    end if;
+    if not vortex_context.is_non_nil_uuid(saved_record_id::text)
+      or saved_record_id is distinct from p_source_record_id
+      or saved_concurrency_number is null
+      or saved_concurrency_number not between 1 and 9007199254740991 then
+      raise exception using errcode = '55000',
+        message = 'Relationship source tuple is unavailable';
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'organizationId', (source_context ->> 'organizationId')::uuid,
+      'applicationRootId', source_application_root_id,
+      'recordTypeId', p_source_record_type_id,
+      'storageContractId', (source_meta ->> 'storageContractId')::uuid,
+      'recordId', saved_record_id,
+      'concurrencyNumber', saved_concurrency_number,
+      'noticeEligible', notice_eligible
+    );
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) <> 'object'
+    or not (p_target_value ?& array['recordTypeId', 'recordId'])
+    or p_target_value - array['recordTypeId', 'recordId'] <> '{}'::jsonb then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end if;
+  begin
+    target_type_id := (p_target_value ->> 'recordTypeId')::uuid;
+    target_record_id := (p_target_value ->> 'recordId')::uuid;
+  exception when invalid_text_representation then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end;
+  if target_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_type_id <> all (mapping_row.target_record_type_ids) then
+    raise exception using errcode = '23514', message = 'Relationship target is unavailable';
+  end if;
+
+  target_meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
+  source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
+    then (source_context ->> 'applicationRootId')::uuid else null end;
+  application_root_required := coalesce(
+    (field_value #>> '{settings,applicationRootIdRequired}')::boolean, false
+  );
+  if application_root_required
+    and (target_meta #>> '{recordType,systemProjection,protectedView}')
+      is distinct from 'organization_accounts' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  -- Lock the protected row behind either ordinary record storage or a
+  -- registered system projection before rebuilding eligibility from current
+  -- facts. The lock is held until commit, so the target cannot disappear while
+  -- the unconstrainted relationship edge is installed.
+  perform vortex_record.lock_relationship_target_row_internal(
+    target_type_id, target_record_id,
+    (source_context ->> 'organizationId')::uuid
+  );
+
+  target_loaded := vortex_record.load_record_access_facts_internal(
+    target_type_id, 'read', target_record_id, null
+  );
+  if target_loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  target_decision := vortex_access.evaluate_organization_record_access_internal(
+    target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
+  );
+  if target_decision ->> 'outcome' <> 'allowed' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  select item.value into target_record
+  from pg_catalog.jsonb_array_elements(target_loaded -> 'facts' -> 'records') as item(value)
+  where (item.value -> 'recordScope' ->> 'recordId')::uuid = target_record_id;
+  target_scope := target_record -> 'recordScope';
+  target_application_root_id := case when target_meta ->> 'storageScope' = 'application_contained'
+    then (target_scope ->> 'applicationRootId')::uuid else null end;
+  if target_record is null or target_record ->> 'lifecycleState' <> 'active'
+    or (target_scope ->> 'organizationId')::uuid <>
+      (source_context ->> 'organizationId')::uuid
+    or (source_application_root_id is not null and target_application_root_id is not null
+      and source_application_root_id <> target_application_root_id) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  if application_root_required
+    and not vortex_access.organization_account_has_current_application_access_internal(
+      (source_context ->> 'organizationId')::uuid,
+      target_record_id,
+      (source_context ->> 'applicationRootId')::uuid
+    ) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  -- The target row is share-locked and eligible. The source data version is
+  -- taken next, then the shared edge identities last.
+  if p_increment_source_revision and not notice_eligible then
+    perform vortex_record.bump_record_data_version_internal(
+      (source_context ->> 'organizationId')::uuid,
+      (source_meta ->> 'storageContractId')::uuid,
+      source_application_root_id
+    );
+  end if;
+  perform vortex_record.acquire_relationship_edge_locks_internal(
+    vortex_record.relationship_edge_lock_identities_internal(
+      p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+      p_source_record_id, (target_meta ->> 'storageContractId')::uuid,
+      target_record_id
+    )
+  );
+  if mapping_row.cardinality = 'one_to_one' then
+    select exists (
+      select 1 from vortex_record.relationship_edges as edge
+      where edge.relationship_id = p_relationship_id
+        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
+        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
+        and edge.to_record_id = target_record_id
+        and edge.from_record_id <> p_source_record_id
+    ) into existing_other;
+    if existing_other then
+      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
+    end if;
+  end if;
+
+  delete from vortex_record.relationship_edges as edge
+  where edge.relationship_id = p_relationship_id
+    and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
+    and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+    and edge.from_record_id = p_source_record_id;
+  insert into vortex_record.relationship_edges (
+    relationship_id, from_organisation_id, to_organisation_id,
+    from_application_root_id, to_application_root_id,
+    from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+  ) values (
+    p_relationship_id,
+    (source_context ->> 'organizationId')::uuid,
+    (source_context ->> 'organizationId')::uuid,
+    source_application_root_id, target_application_root_id,
+    (source_meta ->> 'storageContractId')::uuid, p_source_record_id,
+    (target_meta ->> 'storageContractId')::uuid, target_record_id
+  );
+
+  update_sql := pg_catalog.format(
+    'update record_data.%I as stored set %I = $3::jsonb%s
+     where stored.organisation_id = $1 and stored.record_id = $2
+     returning stored.record_id, stored.concurrency_number',
+    source_meta ->> 'table', field_column ->> 'token',
+    case when p_increment_source_revision then
+      ', concurrency_number = concurrency_number + 1, updated_at = pg_catalog.statement_timestamp(), updated_by = $4'
+    else '' end
+  );
+  if p_increment_source_revision then
+    execute update_sql into saved_record_id, saved_concurrency_number using
+      (source_context ->> 'organizationId')::uuid,
+      p_source_record_id, p_target_value,
+      (source_context ->> 'organizationAccountId')::uuid;
+  else
+    execute update_sql into saved_record_id, saved_concurrency_number using
+      (source_context ->> 'organizationId')::uuid,
+      p_source_record_id, p_target_value;
+  end if;
+  get diagnostics changed_rows = row_count;
+  if changed_rows <> 1 then
+    raise exception using errcode = '40001', message = 'Relationship source record changed';
+  end if;
+  if not vortex_context.is_non_nil_uuid(saved_record_id::text)
+    or saved_record_id is distinct from p_source_record_id
+    or saved_concurrency_number is null
+    or saved_concurrency_number not between 1 and 9007199254740991 then
+    raise exception using errcode = '55000',
+      message = 'Relationship source tuple is unavailable';
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'organizationId', (source_context ->> 'organizationId')::uuid,
+    'applicationRootId', source_application_root_id,
+    'recordTypeId', p_source_record_type_id,
+    'storageContractId', (source_meta ->> 'storageContractId')::uuid,
+    'recordId', saved_record_id,
+    'concurrencyNumber', saved_concurrency_number,
+    'noticeEligible', notice_eligible
+  );
+end
+$function$;
+
+alter function vortex_record.write_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean,boolean) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, boolean)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, boolean) is
+  'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and shared edge identities before replacing the source link edge and typed value atomically. Returns the actual saved source tuple; only a protected recursive optional clear may defer its exact notice. Owner-only.';
+
+create or replace function vortex_record.soft_delete_record_recursive_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_visited text[]
+)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  meta jsonb;
+  loaded jsonb;
+  read_meta jsonb;
+  read_loaded jsonb;
+  read_decision jsonb;
+  read_bounds jsonb;
+  update_meta jsonb;
+  update_loaded jsonb;
+  update_decision jsonb;
+  update_bounds jsonb;
+  facts jsonb;
+  decision jsonb;
+  context_value jsonb;
+  record_fact jsonb;
+  identity_value text;
+  incoming record;
+  source_catalogue vortex_record.storage_catalogue%rowtype;
+  source_meta jsonb;
+  source_loaded jsonb;
+  source_decision jsonb;
+  source_record_type jsonb;
+  source_concurrency bigint;
+  source_link_column text;
+  source_link_value jsonb;
+  source_identity text;
+  source_action_kind text;
+  changed_rows integer;
+  clear_result jsonb;
+  clear_notice_eligible boolean;
+  expected_clear_notice_eligible boolean;
+  clear_saved_record_id uuid;
+  clear_saved_concurrency_number bigint;
+  clear_application_root_id uuid;
+  expected_clear_application_root_id uuid;
+  application_scope uuid;
+  saved_record_id uuid;
+  saved_concurrency_number bigint;
+  preview_installation jsonb;
+  notice_sequence bigint;
+  attachment_field jsonb;
+  attachment_value jsonb;
+  attachment_fields jsonb := '[]'::jsonb;
+  attachment_file_ids uuid[];
+  attachment_file_id uuid;
+  attachment_file_text text;
+  has_attachments boolean := false;
+  attachment_policy jsonb;
+  proof_value jsonb;
+  proof_digest text;
+  effect_sequence integer;
+  changed_effects integer;
+begin
+  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'delete');
+  context_value := meta -> 'context';
+  identity_value := pg_catalog.lower((meta ->> 'storageContractId')) || ':'
+    || pg_catalog.lower(p_record_id::text);
+  if identity_value = any (p_visited) then
+    raise exception using errcode = '23514', message = 'Relationship deletion cycle is invalid';
+  end if;
+  p_visited := pg_catalog.array_append(p_visited, identity_value);
+
+  loaded := vortex_record.load_record_access_facts_internal(
+    p_record_type_id, 'delete', p_record_id, p_expected_concurrency_number
+  );
+  if loaded ->> 'outcome' = 'conflict' then
+    raise exception using errcode = '40001', message = 'Record delete revision is stale';
+  end if;
+  if loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object' then
+    raise exception using errcode = 'P0002', message = 'Record is unavailable';
+  end if;
+  select item.value into record_fact
+  from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records') as item(value)
+  where (item.value -> 'recordScope' ->> 'recordId')::uuid = p_record_id;
+  if record_fact ->> 'lifecycleState' <> 'active' then
+    raise exception using errcode = 'P0002', message = 'Record is unavailable';
+  end if;
+  facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
+    'binding', meta -> 'declaration' -> 'recordBinding'
+  );
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    meta -> 'declaration', p_record_id, facts
+  );
+  if decision ->> 'outcome' <> 'allowed'
+    or nullif(decision ->> 'validUntil', '')::timestamptz is null
+    or nullif(decision ->> 'validUntil', '')::timestamptz
+      <= pg_catalog.statement_timestamp() then
+    raise exception using errcode = 'P0002', message = 'Record is unavailable';
+  end if;
+
+  -- Capture only the IDs needed by the File owner. The complete value and
+  -- current action decisions remain in memory; only a server SHA-256 proof is
+  -- attached to the private lifecycle effect after the Record CAS succeeds.
+  for attachment_field in
+    select declared.value
+    from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as declared(value)
+    where declared.value ->> 'type' = 'attachment'
+    order by pg_catalog.lower(declared.value ->> 'fieldId') collate "C"
+  loop
+    attachment_file_ids := array[]::uuid[];
+    attachment_value := loaded -> 'fieldValues' -> pg_catalog.lower(
+      attachment_field ->> 'fieldId'
+    );
+    if attachment_value is not null
+      and pg_catalog.jsonb_typeof(attachment_value) <> 'null' then
+      if pg_catalog.jsonb_typeof(attachment_value) <> 'array' then
+        raise exception using errcode = '23514',
+          message = 'Attachment ownership is invalid';
+      end if;
+      for attachment_file_text in
+        select item.value
+        from pg_catalog.jsonb_array_elements_text(attachment_value) as item(value)
+      loop
+        begin
+          attachment_file_id := attachment_file_text::uuid;
+        exception when invalid_text_representation then
+          raise exception using errcode = '23514',
+            message = 'Attachment ownership is invalid';
+        end;
+        if not vortex_context.is_non_nil_uuid(attachment_file_id::text)
+          or attachment_file_id = any (attachment_file_ids) then
+          raise exception using errcode = '23514',
+            message = 'Attachment ownership is invalid';
+        end if;
+        attachment_file_ids := pg_catalog.array_append(
+          attachment_file_ids, attachment_file_id
+        );
+      end loop;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.file_id order by item.file_id), array[]::uuid[])
+    into attachment_file_ids
+    from pg_catalog.unnest(attachment_file_ids) as item(file_id);
+    if pg_catalog.cardinality(attachment_file_ids) > 0 then
+      has_attachments := true;
+    end if;
+    attachment_fields := attachment_fields || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'fieldId', pg_catalog.lower(attachment_field ->> 'fieldId'),
+        'fileIds', pg_catalog.to_jsonb(attachment_file_ids)
+      )
+    );
+  end loop;
+
+  if has_attachments then
+    read_meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+    update_meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'update');
+    if read_meta ->> 'outcome' = 'refused'
+      or update_meta ->> 'outcome' = 'refused'
+      or read_meta ? 'previewInstallationId'
+      or update_meta ? 'previewInstallationId'
+      or (read_meta ->> 'storageContractId') is distinct from
+        (meta ->> 'storageContractId')
+      or (update_meta ->> 'storageContractId') is distinct from
+        (meta ->> 'storageContractId')
+      or (read_meta ->> 'moduleRootId') is distinct from (meta ->> 'moduleRootId')
+      or (update_meta ->> 'moduleRootId') is distinct from (meta ->> 'moduleRootId')
+      or (read_meta ->> 'moduleReleaseRevision') is distinct from
+        (meta ->> 'moduleReleaseRevision')
+      or (update_meta ->> 'moduleReleaseRevision') is distinct from
+        (meta ->> 'moduleReleaseRevision')
+      or (read_meta -> 'context' ->> 'organizationId') is distinct from
+        (context_value ->> 'organizationId')
+      or (update_meta -> 'context' ->> 'organizationId') is distinct from
+        (context_value ->> 'organizationId')
+      or (read_meta -> 'context' ->> 'applicationRootId') is distinct from
+        (context_value ->> 'applicationRootId')
+      or (update_meta -> 'context' ->> 'applicationRootId') is distinct from
+        (context_value ->> 'applicationRootId') then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'read', p_record_id, p_expected_concurrency_number
+    );
+    update_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    );
+    if read_loaded ->> 'outcome' <> 'loaded'
+      or update_loaded ->> 'outcome' <> 'loaded'
+      or (read_loaded ->> 'concurrencyNumber')::bigint is distinct from
+        p_expected_concurrency_number
+      or (update_loaded ->> 'concurrencyNumber')::bigint is distinct from
+        p_expected_concurrency_number
+      or pg_catalog.jsonb_typeof(read_meta -> 'declaration') <> 'object'
+      or pg_catalog.jsonb_typeof(update_meta -> 'declaration') <> 'object' then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_decision := vortex_access.evaluate_organization_record_access_internal(
+      read_meta -> 'declaration', p_record_id,
+      (read_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', read_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    update_decision := vortex_access.evaluate_organization_record_access_internal(
+      update_meta -> 'declaration', p_record_id,
+      (update_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', update_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    if read_decision ->> 'outcome' <> 'allowed'
+      or update_decision ->> 'outcome' <> 'allowed'
+      or nullif(read_decision ->> 'validUntil', '')::timestamptz is null
+      or nullif(update_decision ->> 'validUntil', '')::timestamptz is null
+      or nullif(read_decision ->> 'validUntil', '')::timestamptz
+        <= pg_catalog.statement_timestamp()
+      or nullif(update_decision ->> 'validUntil', '')::timestamptz
+        <= pg_catalog.statement_timestamp() then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
+    update_bounds := vortex_access.resolve_record_field_bounds_internal(update_decision);
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(attachment_fields) as field_item(value)
+      where pg_catalog.jsonb_array_length(field_item.value -> 'fileIds') > 0
+        and (
+          not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements_text(read_bounds -> 'readableFieldIds') as allowed(value)
+            where pg_catalog.lower(allowed.value) = field_item.value ->> 'fieldId'
+          )
+          or not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements_text(update_bounds -> 'changeableFieldIds') as allowed(value)
+            where pg_catalog.lower(allowed.value) = field_item.value ->> 'fieldId'
+          )
+        )
+    ) then
+      raise exception using errcode = '42501',
+        message = 'File attachment authority is unavailable';
+    end if;
+    attachment_policy := vortex_record.lock_record_recovery_policy_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (meta ->> 'storageContractId')::uuid,
+      case when meta ->> 'storageScope' = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+    if attachment_policy ->> 'action' is distinct from 'delete'
+      or pg_catalog.jsonb_typeof(attachment_policy -> 'recoveryWindowDays') <> 'number'
+      or (attachment_policy ->> 'recoveryWindowDays') !~ '^[1-9][0-9]{0,8}$'
+      or (attachment_policy ->> 'recoveryWindowDays')::bigint > 104249991 then
+      raise exception using errcode = '23514',
+        message = 'File recovery policy is unavailable';
+    end if;
+  end if;
+
+  -- Incoming edges are canonicalised before any child lock.  Every affected
+  -- child is then reloaded and locked by #401's fixed loader.
+  for incoming in
+    select edge.*, mapping.on_parent_delete, mapping.relationship_id,
+      mapping.source_field_id
+    from vortex_record.relationship_edges as edge
+    join vortex_record.relationship_storage_mappings as mapping
+      on mapping.relationship_id = edge.relationship_id
+    where edge.to_organisation_id = (context_value ->> 'organizationId')::uuid
+      and edge.to_storage_contract_id = (meta ->> 'storageContractId')::uuid
+      and edge.to_record_id = p_record_id
+    order by edge.from_storage_contract_id, edge.from_record_id, edge.relationship_id
+  loop
+    select catalogue.* into source_catalogue
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = incoming.from_storage_contract_id;
+    source_identity := pg_catalog.lower(incoming.from_storage_contract_id::text) || ':'
+      || pg_catalog.lower(incoming.from_record_id::text);
+    if source_identity = any (p_visited) then
+      raise exception using errcode = '23514', message = 'Relationship deletion cycle is invalid';
+    end if;
+
+    -- A child retained by another Application cannot be silently modified
+    -- under this Application's request context.  It is therefore a safe
+    -- blocking relationship, not an authority bypass.
+    source_action_kind := case
+      when incoming.on_parent_delete = 'empty_optional' then 'update'
+      when incoming.on_parent_delete = 'soft_delete_dependent' then 'delete'
+      else 'read'
+    end;
+    begin
+      source_meta := vortex_record.resolve_record_action_context_internal(
+        source_catalogue.record_type_id, source_action_kind
+      );
+    exception when others then
+      raise exception using errcode = '23514', message = 'Parent deletion is blocked';
+    end;
+
+    select field_mapping.physical_column_token into strict source_link_column
+    from vortex_record.field_storage_mappings as field_mapping
+    where field_mapping.storage_contract_id = incoming.from_storage_contract_id
+      and field_mapping.field_id = incoming.source_field_id
+      and field_mapping.state = 'active'
+      and field_mapping.introduced_at_release_revision <=
+        (source_meta ->> 'moduleReleaseRevision')::bigint;
+
+    execute pg_catalog.format(
+      'select concurrency_number, %I from record_data.%I as stored
+       where stored.organisation_id = $1 and stored.record_id = $2
+         and stored.lifecycle_state = ''active'' for update',
+      source_link_column, source_meta ->> 'table'
+    ) into source_concurrency, source_link_value using
+      (context_value ->> 'organizationId')::uuid, incoming.from_record_id;
+    if not found then
+      continue;
+    end if;
+    -- The incoming-edge cursor may have been opened before a concurrent link
+    -- change committed. The source row lock returns the current tuple, so
+    -- re-check its exact field before applying parent-delete behaviour. This
+    -- prevents a stale edge snapshot from clearing or revising the source a
+    -- second time after that link was already removed or redirected.
+    if pg_catalog.jsonb_typeof(source_link_value) <> 'object'
+      or source_link_value ->> 'recordId' is distinct from p_record_id::text then
+      continue;
+    end if;
+    source_loaded := vortex_record.load_record_access_facts_internal(
+      source_catalogue.record_type_id, source_action_kind, incoming.from_record_id,
+      source_concurrency
+    );
+    if source_loaded ->> 'outcome' <> 'loaded' then
+      continue;
+    end if;
+    select item.value into record_fact
+    from pg_catalog.jsonb_array_elements(source_loaded -> 'facts' -> 'records') as item(value)
+    where (item.value -> 'recordScope' ->> 'recordId')::uuid = incoming.from_record_id;
+    if record_fact ->> 'lifecycleState' <> 'active' then
+      continue;
+    end if;
+    if incoming.on_parent_delete = 'refuse' then
+      raise exception using errcode = '23514', message = 'Parent deletion is blocked';
+    end if;
+    if pg_catalog.jsonb_typeof(source_meta -> 'declaration') <> 'object' then
+      raise exception using errcode = '42501', message = 'Affected record is unavailable';
+    end if;
+    source_decision := vortex_access.evaluate_organization_record_access_internal(
+      source_meta -> 'declaration', incoming.from_record_id,
+      (source_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', source_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    if source_decision ->> 'outcome' <> 'allowed' then
+      raise exception using errcode = '42501', message = 'Affected record is unavailable';
+    end if;
+
+    if incoming.on_parent_delete = 'empty_optional' then
+      clear_result := vortex_record.write_relationship_value_internal(
+        source_catalogue.record_type_id, incoming.from_record_id,
+        incoming.relationship_id, 'null'::jsonb, true, true
+      );
+      preview_installation := vortex_record.read_current_preview_installation_internal();
+      expected_clear_application_root_id := case
+        when source_meta ->> 'storageScope' = 'application_contained'
+          then (source_meta -> 'context' ->> 'applicationRootId')::uuid
+        else null
+      end;
+      expected_clear_notice_eligible := coalesce(
+        preview_installation is null
+          and source_meta ->> 'storageScope' = 'application_contained',
+        false
+      );
+      if pg_catalog.jsonb_typeof(clear_result) is distinct from 'object'
+        or not (clear_result ?& array[
+          'organizationId', 'applicationRootId', 'recordTypeId', 'storageContractId',
+          'recordId', 'concurrencyNumber', 'noticeEligible'
+        ])
+        or clear_result - array[
+          'organizationId', 'applicationRootId', 'recordTypeId', 'storageContractId',
+          'recordId', 'concurrencyNumber', 'noticeEligible'
+        ] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(clear_result -> 'organizationId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'recordTypeId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'storageContractId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'recordId') <> 'string'
+        or pg_catalog.jsonb_typeof(clear_result -> 'concurrencyNumber') <> 'number'
+        or (clear_result ->> 'concurrencyNumber') !~ '^[1-9][0-9]{0,15}$'
+        or pg_catalog.jsonb_typeof(clear_result -> 'noticeEligible') <> 'boolean'
+        or pg_catalog.jsonb_typeof(clear_result -> 'applicationRootId') is distinct from
+          case when expected_clear_application_root_id is null then 'null' else 'string' end then
+        raise exception using errcode = '55000',
+          message = 'Optional relationship clear tuple is unavailable';
+      end if;
+      clear_saved_record_id := (clear_result ->> 'recordId')::uuid;
+      clear_saved_concurrency_number := (clear_result ->> 'concurrencyNumber')::bigint;
+      clear_notice_eligible := (clear_result ->> 'noticeEligible')::boolean;
+      clear_application_root_id := (clear_result ->> 'applicationRootId')::uuid;
+      if (
+        (source_meta ->> 'storageScope') = 'application_contained'
+        and (
+          expected_clear_application_root_id is null
+          or not coalesce(
+            vortex_context.is_non_nil_uuid(expected_clear_application_root_id::text), false
+          )
+        )
+      )
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'organizationId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'recordTypeId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'storageContractId'), false)
+        or not coalesce(vortex_context.is_non_nil_uuid(clear_result ->> 'recordId'), false)
+        or clear_saved_record_id is distinct from incoming.from_record_id
+        or clear_saved_concurrency_number not between 1 and 9007199254740991
+        or (clear_result ->> 'organizationId')::uuid is distinct from
+          (context_value ->> 'organizationId')::uuid
+        or (clear_result ->> 'recordTypeId')::uuid is distinct from
+          source_catalogue.record_type_id
+        or (clear_result ->> 'storageContractId')::uuid is distinct from
+          incoming.from_storage_contract_id
+        or clear_application_root_id is distinct from expected_clear_application_root_id
+        or clear_notice_eligible is distinct from expected_clear_notice_eligible then
+        raise exception using errcode = '55000',
+          message = 'Optional relationship clear tuple is unavailable';
+      end if;
+      perform vortex_record.append_record_lifecycle_effect_internal(
+        'optional_cleared', incoming.from_storage_contract_id,
+        source_catalogue.record_type_id, incoming.from_record_id,
+        source_concurrency, incoming.relationship_id
+      );
+      if clear_notice_eligible then
+        begin
+          notice_sequence := pg_catalog.nextval(
+            'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+          );
+          if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
+            raise exception using errcode = '22003',
+              message = 'Optional relationship notice sequence is unavailable';
+          end if;
+          perform vortex_invalidation.publish_change_notice(
+            (clear_result ->> 'organizationId')::uuid,
+            clear_application_root_id,
+            (clear_result ->> 'recordTypeId')::uuid,
+            clear_saved_record_id, clear_saved_concurrency_number, 'changed',
+            notice_sequence, notice_sequence,
+            (context_value ->> 'correlationId')::uuid
+          );
+        exception when others then
+          -- The exact source notice is advisory; all prior authority and journals stay structural.
+          null;
+        end;
+      end if;
+    elsif incoming.on_parent_delete = 'soft_delete_dependent' then
+      source_record_type := source_meta -> 'recordType';
+      if source_record_type ->> 'ownershipMode' <> 'inherited'
+        or not source_record_type ? 'ownershipRelationshipId'
+        or (source_record_type ->> 'ownershipRelationshipId')::uuid <>
+          incoming.relationship_id then
+        raise exception using errcode = '23514', message = 'Dependent deletion is not declared';
+      end if;
+      perform vortex_record.soft_delete_record_recursive_internal(
+        source_catalogue.record_type_id, incoming.from_record_id,
+        source_concurrency, p_visited
+      );
+    else
+      raise exception using errcode = '23514', message = 'Parent deletion behavior is invalid';
+    end if;
+  end loop;
+
+  execute pg_catalog.format(
+    'update record_data.%I as stored
+     set lifecycle_state = ''soft_deleted'',
+       concurrency_number = concurrency_number + 1,
+       updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
+       deleted_at = pg_catalog.statement_timestamp(), deleted_by = $3,
+       removal_due_at = null, definition_revision = $4
+     where organisation_id = $1 and record_id = $2
+       and lifecycle_state = ''active'' and concurrency_number = $5
+     returning stored.record_id, stored.concurrency_number',
+    meta ->> 'table'
+  ) into saved_record_id, saved_concurrency_number using
+    (context_value ->> 'organizationId')::uuid, p_record_id,
+    (context_value ->> 'organizationAccountId')::uuid,
+    (meta ->> 'moduleReleaseRevision')::bigint, p_expected_concurrency_number;
+  get diagnostics changed_rows = row_count;
+  if changed_rows <> 1 then
+    raise exception using errcode = '40001', message = 'Record delete revision changed';
+  end if;
+  if saved_record_id is distinct from p_record_id
+    or saved_concurrency_number is null
+    or saved_concurrency_number not between 1 and 9007199254740991 then
+    raise exception using errcode = '55000', message = 'Record delete saved identity is unavailable';
+  end if;
+  perform vortex_record.append_record_lifecycle_effect_internal(
+    'soft_deleted', (meta ->> 'storageContractId')::uuid,
+    p_record_type_id, p_record_id, p_expected_concurrency_number, null
+  );
+  proof_value := pg_catalog.jsonb_build_object(
+    'version', 1,
+    'commandId', pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid,
+    'organizationId', (context_value ->> 'organizationId')::uuid,
+    'applicationRootId', (context_value ->> 'applicationRootId')::uuid,
+    'actorOrganizationAccountId', (context_value ->> 'organizationAccountId')::uuid,
+    'storageContractId', (meta ->> 'storageContractId')::uuid,
+    'moduleRootId', (meta ->> 'moduleRootId')::uuid,
+    'moduleReleaseRevision', (meta ->> 'moduleReleaseRevision')::bigint,
+    'recordTypeId', p_record_type_id,
+    'recordId', p_record_id,
+    'preConcurrencyNumber', p_expected_concurrency_number,
+    'postConcurrencyNumber', saved_concurrency_number,
+    'attachmentFields', attachment_fields
+  );
+  proof_digest := pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(proof_value::text, 'UTF8')),
+    'hex'
+  );
+  select effect.effect_sequence into strict effect_sequence
+  from vortex_record.record_lifecycle_command_effects as effect
+  where effect.organization_id = (context_value ->> 'organizationId')::uuid
+    and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and effect.actor_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
+    and effect.command_id =
+      pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid
+    and effect.effect_kind = 'soft_deleted'
+    and effect.storage_contract_id = (meta ->> 'storageContractId')::uuid
+    and effect.record_type_id = p_record_type_id
+    and effect.record_id = p_record_id
+    and effect.pre_concurrency_number = p_expected_concurrency_number
+    and effect.post_concurrency_number = saved_concurrency_number;
+  update vortex_record.record_lifecycle_command_effects as effect
+  set file_cascade_proof_digest = proof_digest,
+    file_cascade_settled = false
+  where effect.organization_id = (context_value ->> 'organizationId')::uuid
+    and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and effect.actor_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
+    and effect.command_id =
+      pg_catalog.current_setting('vortex_record.lifecycle_command_id')::uuid
+    and effect.effect_sequence = effect_sequence
+    and effect.effect_kind = 'soft_deleted'
+    and effect.file_cascade_proof_digest is null
+    and not effect.file_cascade_settled;
+  get diagnostics changed_effects = row_count;
+  if changed_effects <> 1 then
+    raise exception using errcode = '55000',
+      message = 'Record File cascade proof could not be recorded';
+  end if;
+  application_scope := case when meta ->> 'storageScope' = 'application_contained'
+    then (context_value ->> 'applicationRootId')::uuid else null end;
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is null
+    and meta ->> 'storageScope' = 'application_contained' then
+    begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      perform vortex_invalidation.publish_change_notice(
+        (context_value ->> 'organizationId')::uuid,
+        application_scope, p_record_type_id,
+        saved_record_id, saved_concurrency_number, 'deleted',
+        notice_sequence, notice_sequence,
+        (context_value ->> 'correlationId')::uuid
+      );
+    exception when others then
+      -- Invalidation is advisory; the protected delete remains transactional.
+      null;
+    end;
+  else
+    perform vortex_record.bump_record_data_version_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (meta ->> 'storageContractId')::uuid, application_scope
+    );
+  end if;
+end
+$function$;
+
+alter function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) is null;
+
+create or replace function vortex_record.create_record_internal(
+  p_record_type_id uuid,
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[],
+  p_selected_group_id uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  meta jsonb;
+  context_value jsonb;
+  record_type_value jsonb;
+  record_id_value uuid := pg_catalog.gen_random_uuid();
+  ownership_mode text;
+  owner_account_id uuid;
+  owner_group_id uuid;
+  field_item jsonb;
+  field_id_value uuid;
+  column_value jsonb;
+  input_value jsonb;
+  final_values jsonb := coalesce(p_final_values, '{}'::jsonb);
+  column_names text[] := array[]::text[];
+  column_values text[] := array[]::text[];
+  insert_sql text;
+  loaded jsonb;
+  facts jsonb;
+  decision jsonb;
+  bounds jsonb;
+  preview_installation jsonb;
+  preview_bounds jsonb;
+  changeable text[];
+  submitted_id uuid;
+  relationship_value jsonb;
+  app_scope uuid;
+  refusal_reason text := 'record_create_refused';
+  exact_create_notice boolean := false;
+  saved_record_id uuid;
+  saved_concurrency_number bigint;
+  notice_sequence bigint;
+begin
+  if p_record_type_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or pg_catalog.jsonb_typeof(p_final_values) <> 'object'
+    or p_submitted_field_ids is null
+    or pg_catalog.array_position(p_submitted_field_ids, null::uuid) is not null
+    or pg_catalog.cardinality(p_submitted_field_ids) <>
+      (select pg_catalog.count(distinct value) from pg_catalog.unnest(p_submitted_field_ids) as item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
+  end if;
+
+  begin
+    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
+    preview_installation :=
+      vortex_record.read_current_preview_installation_internal();
+    if pg_catalog.jsonb_typeof(meta -> 'recordType') <> 'object'
+      or (preview_installation is null
+        and pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object')
+      or (preview_installation is not null
+        and (preview_installation ->> 'outcome' = 'refused'
+          or meta -> 'recordType' ? 'systemProjection')) then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    context_value := meta -> 'context';
+    record_type_value := meta -> 'recordType';
+    ownership_mode := record_type_value ->> 'ownershipMode';
+    app_scope := case when meta ->> 'storageScope' = 'application_contained'
+      then (context_value ->> 'applicationRootId')::uuid else null end;
+    exact_create_notice := preview_installation is null
+      and meta ->> 'storageScope' = 'application_contained'
+      and case when pg_catalog.jsonb_typeof(record_type_value -> 'relationships') = 'array'
+        then true
+        else false end;
+
+    if ownership_mode = 'organization_account' then
+      if p_selected_group_id is not null then
+        refusal_reason := 'owner_invalid';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      owner_account_id := (context_value ->> 'organizationAccountId')::uuid;
+    elsif ownership_mode = 'group' then
+      if not vortex_access.lock_current_record_owner_group_internal(p_selected_group_id) then
+        refusal_reason := 'owner_unavailable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      owner_group_id := p_selected_group_id;
+    elsif p_selected_group_id is not null then
+      refusal_reason := 'owner_invalid';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+
+    -- Every supplied value names one exact field.  Reference numbers are
+    -- generated here and cannot be supplied by a form or caller.
+    if exists (
+      select 1 from pg_catalog.jsonb_object_keys(final_values) as supplied(key)
+      where not (meta -> 'columns' ? pg_catalog.lower(supplied.key))
+    ) then
+      refusal_reason := 'unknown_field';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as item(value)
+      order by item.value ->> 'fieldId'
+    loop
+      field_id_value := (field_item ->> 'fieldId')::uuid;
+      column_value := meta -> 'columns' -> pg_catalog.lower(field_id_value::text);
+      if field_item ->> 'type' = 'reference_number' then
+        if final_values ? pg_catalog.lower(field_id_value::text)
+          or field_id_value = any (p_submitted_field_ids) then
+          refusal_reason := 'generated_field_not_submittable';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+        input_value := pg_catalog.to_jsonb(case when preview_installation is null
+          then vortex_record.allocate_reference_number_internal(
+            (context_value ->> 'organizationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, app_scope, field_item -> 'settings'
+          )
+          else vortex_record.allocate_preview_reference_number_internal(
+            (preview_installation ->> 'previewInstallationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, field_item -> 'settings'
+          ) end);
+        final_values := final_values || pg_catalog.jsonb_build_object(
+          pg_catalog.lower(field_id_value::text), input_value
+        );
+      elsif final_values ? pg_catalog.lower(field_id_value::text) then
+        input_value := final_values -> pg_catalog.lower(field_id_value::text);
+        if (field_item ->> 'required')::boolean
+          and pg_catalog.jsonb_typeof(input_value) = 'null' then
+          refusal_reason := 'required_field_missing';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+        if not vortex_record.canonical_record_value_matches(
+          input_value, field_item ->> 'type', column_value ->> 'databaseValueType'
+        ) then
+          refusal_reason := 'value_invalid';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+      else
+        if (field_item ->> 'required')::boolean then
+          refusal_reason := 'required_field_missing';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+        continue;
+      end if;
+
+      column_names := pg_catalog.array_append(
+        column_names, pg_catalog.format('%I', column_value ->> 'token')
+      );
+      column_values := pg_catalog.array_append(column_values,
+        case when pg_catalog.jsonb_typeof(input_value) = 'null' then 'null'
+        else case column_value ->> 'databaseValueType'
+          when 'decimal' then pg_catalog.format('%L::numeric', input_value #>> '{}')
+          when 'timestamp_with_time_zone' then
+            pg_catalog.format('%L::timestamptz', input_value #>> '{}')
+          when 'date' then pg_catalog.format('%L::date', input_value #>> '{}')
+          when 'integer' then pg_catalog.format('%L::bigint', input_value #>> '{}')
+          when 'boolean' then pg_catalog.format('%L::boolean', input_value #>> '{}')
+          when 'json' then pg_catalog.format('%L::jsonb', input_value::text)
+          else pg_catalog.format('%L::text', input_value #>> '{}')
+        end end
+      );
+    end loop;
+
+    insert_sql := pg_catalog.format(
+      'insert into record_data.%I (
+         organisation_id, module_root_id, record_type_id, storage_contract_id,
+         record_id, application_root_id, definition_revision,
+         owner_organisation_account_id, owner_group_id, lifecycle_state,
+         concurrency_number, created_at, created_by, updated_at, updated_by%s
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, ''active'', 1,
+         pg_catalog.statement_timestamp(), $10, pg_catalog.statement_timestamp(), $10%s)',
+      meta ->> 'table',
+      case when pg_catalog.cardinality(column_names) = 0 then ''
+        else ', ' || pg_catalog.array_to_string(column_names, ', ') end,
+      case when pg_catalog.cardinality(column_values) = 0 then ''
+        else ', ' || pg_catalog.array_to_string(column_values, ', ') end
+    );
+    if exact_create_notice then
+      execute insert_sql || ' returning record_id, concurrency_number'
+        into strict saved_record_id, saved_concurrency_number
+        using
+          (context_value ->> 'organizationId')::uuid,
+          (meta ->> 'moduleRootId')::uuid, p_record_type_id,
+          (meta ->> 'storageContractId')::uuid, record_id_value, app_scope,
+          (meta ->> 'moduleReleaseRevision')::bigint,
+          owner_account_id, owner_group_id,
+          (context_value ->> 'organizationAccountId')::uuid;
+      record_id_value := saved_record_id;
+    else
+      execute insert_sql using
+        (context_value ->> 'organizationId')::uuid,
+        (meta ->> 'moduleRootId')::uuid, p_record_type_id,
+        (meta ->> 'storageContractId')::uuid, record_id_value, app_scope,
+        (meta ->> 'moduleReleaseRevision')::bigint,
+        owner_account_id, owner_group_id,
+        (context_value ->> 'organizationAccountId')::uuid;
+    end if;
+
+    -- #1061: the canonical link-target share-lock prelude is written once in
+    -- lock_record_change_targets_internal. Every created link's target row is
+    -- locked here, before the data-version bump and edge pass below, so a
+    -- multi-link create takes all its row locks before its data version and any
+    -- edge identity, as the update writer does. A malformed or undeclared link
+    -- is left to the writer's own validation.
+    perform vortex_record.lock_record_change_targets_internal(
+      record_type_value, (context_value ->> 'organizationId')::uuid, final_values
+    );
+    -- The new record's data version is taken before any relationship edge
+    -- identity, as every other relationship writer takes it.
+    if exact_create_notice then
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+    else
+      perform vortex_record.bump_record_data_version_internal(
+        (context_value ->> 'organizationId')::uuid,
+        (meta ->> 'storageContractId')::uuid, app_scope
+      );
+    end if;
+    for relationship_value in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
+      order by (item.value ->> 'relationshipId')::uuid
+    loop
+      field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
+      if final_values ? pg_catalog.lower(field_id_value::text) then
+        perform vortex_record.write_relationship_value_internal(
+          p_record_type_id, record_id_value,
+          (relationship_value ->> 'relationshipId')::uuid,
+          final_values -> pg_catalog.lower(field_id_value::text), false, false
+        );
+      elsif ownership_mode = 'inherited'
+        and (record_type_value ->> 'ownershipRelationshipId')::uuid =
+          (relationship_value ->> 'relationshipId')::uuid then
+        refusal_reason := 'required_owner_relationship_missing';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+    end loop;
+
+    loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'create', record_id_value, null
+    );
+    if loaded ->> 'outcome' <> 'loaded' then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
+      'binding', meta -> 'declaration' -> 'recordBinding'
+    );
+    if preview_installation is null then
+      decision := vortex_access.evaluate_organization_record_access_internal(
+        meta -> 'declaration', record_id_value, facts
+      );
+      if decision ->> 'outcome' <> 'allowed' then
+        refusal_reason := 'access_refused';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    else
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (meta ->> 'storageContractId')::uuid,
+        meta -> 'recordType'
+      );
+      if preview_bounds is null then
+        refusal_reason := 'record_unavailable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := preview_bounds;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
+    into changeable
+    from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
+    foreach submitted_id in array p_submitted_field_ids loop
+      if not (meta -> 'columns' ? pg_catalog.lower(submitted_id::text)) then
+        refusal_reason := 'unknown_field';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
+        refusal_reason := 'field_not_changeable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+    end loop;
+
+    if exact_create_notice then
+      begin
+        perform vortex_invalidation.publish_change_notice(
+          (context_value ->> 'organizationId')::uuid, app_scope, p_record_type_id,
+          saved_record_id, saved_concurrency_number, 'created',
+          notice_sequence, notice_sequence,
+          (context_value ->> 'correlationId')::uuid
+        );
+      exception
+        when others then
+          -- Invalidation is advisory; a lost notice must not refuse the create.
+          null;
+      end;
+    end if;
+
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'completed', 'recordId', record_id_value,
+      'concurrencyNumber', case when exact_create_notice
+        then saved_concurrency_number else 1 end, 'values', final_values
+    );
+  exception
+    when sqlstate 'P4020' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', refusal_reason
+      );
+    when no_data_found or too_many_rows or object_not_in_prerequisite_state then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'record_unavailable'
+      );
+  end;
+end
+$function$;
+
+alter function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid) is
+  'Private fixed create primitive: derives scope, definition and human ownership, generates references, writes typed values and relationships, and decides create authority over the proposed record in one rollback-safe transaction.';
+
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -1871,3 +3144,151 @@ comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
   'The one protected Record-change operation: claims one live or preview-local receipt and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
+
+create or replace function vortex_record.change_record_relationship_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_relationship_id uuid,
+  p_target_value jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  loaded jsonb;
+  meta jsonb;
+  decision jsonb;
+  bounds jsonb;
+  field_id_value uuid;
+  relationship_value jsonb;
+  new_concurrency bigint;
+  saved_record_id uuid;
+  exact_copy_notice boolean := false;
+  preview_installation jsonb;
+  refusal_reason text := 'relationship_change_refused';
+begin
+  if p_record_type_id is null or p_record_id is null or p_relationship_id is null
+    or p_expected_concurrency_number is null
+    or p_expected_concurrency_number not between 1 and 9007199254740990
+    or p_target_value is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
+  end if;
+  begin
+    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'update');
+    loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    );
+    if loaded ->> 'outcome' = 'conflict' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
+      );
+    end if;
+    if loaded ->> 'outcome' <> 'loaded'
+      or pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object' then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    decision := vortex_access.evaluate_organization_record_access_internal(
+      meta -> 'declaration', p_record_id,
+      (loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    if decision ->> 'outcome' <> 'allowed' then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    select item.value into relationship_value
+    from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'relationships') as item(value)
+    where (item.value ->> 'relationshipId')::uuid = p_relationship_id;
+    if not found then
+      refusal_reason := 'relationship_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    if not exists (
+      select 1 from pg_catalog.jsonb_array_elements_text(
+        bounds -> 'changeableFieldIds'
+      ) as allowed(value)
+      where pg_catalog.lower(allowed.value) = pg_catalog.lower(field_id_value::text)
+    ) then
+      refusal_reason := 'field_not_changeable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    preview_installation :=
+      vortex_record.read_current_preview_installation_internal();
+    exact_copy_notice := preview_installation is null
+      and meta ->> 'storageScope' = 'application_contained';
+    if exact_copy_notice then
+      perform vortex_record.write_relationship_value_internal(
+        p_record_type_id, p_record_id, p_relationship_id, p_target_value, false, false
+      );
+      execute pg_catalog.format(
+        'update record_data.%I as stored
+         set concurrency_number = stored.concurrency_number + 1,
+           updated_at = pg_catalog.statement_timestamp(), updated_by = $6
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.record_type_id = $3 and stored.application_root_id = $4
+           and stored.lifecycle_state = ''active''
+           and stored.concurrency_number = $5
+         returning stored.record_id, stored.concurrency_number', meta ->> 'table'
+      ) into strict saved_record_id, new_concurrency using
+        (meta -> 'context' ->> 'organizationId')::uuid, p_record_id,
+        p_record_type_id, (meta -> 'context' ->> 'applicationRootId')::uuid,
+        p_expected_concurrency_number,
+        (meta -> 'context' ->> 'organizationAccountId')::uuid;
+      if saved_record_id is distinct from p_record_id
+        or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+        or new_concurrency is null
+        or new_concurrency not between 1 and 9007199254740991 then
+        raise exception using errcode = '55000',
+          message = 'Relationship copy saved identity is unavailable';
+      end if;
+    else
+      perform vortex_record.write_relationship_value_internal(
+        p_record_type_id, p_record_id, p_relationship_id, p_target_value, true, false
+      );
+      execute pg_catalog.format(
+        'select concurrency_number from record_data.%I
+         where organisation_id = $1 and record_id = $2', meta ->> 'table'
+      ) into new_concurrency using
+        (meta -> 'context' ->> 'organizationId')::uuid, p_record_id;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'completed', 'recordId', case when exact_copy_notice
+        then saved_record_id else p_record_id end,
+      'concurrencyNumber', new_concurrency
+    );
+  exception
+    when sqlstate 'P4020' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', refusal_reason);
+    when serialization_failure or deadlock_detected then
+      return pg_catalog.jsonb_build_object('outcome', 'conflict');
+    when no_data_found or check_violation or object_not_in_prerequisite_state then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
+      );
+  end;
+end
+$function$;
+
+alter function vortex_record.change_record_relationship_internal(uuid,uuid,bigint,uuid,jsonb)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+
+comment on function vortex_record.change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb) is
+  'Private revision-checked relationship primitive: decides source update and target eligibility, changes the edge atomically, and returns the actual saved identity, revision for the live application-contained copy owner to publish.';
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
