@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   readAddressedApplicationFromInstalledBundleAtAddress,
-  matchesInstalledPageBundleIdentity,
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
   resolvePermittedApplicationAddress,
@@ -16,13 +15,9 @@ import {
   type IdentitySession,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveInstallationBundleRepository } from "@vortex/module";
 import { createStoredPageCapabilityService } from "@vortex/page";
 import { installedReleaseCatalogue } from "./definition-catalogue";
-import {
-  humanOrganizationRequestDependencies,
-  humanOrganizationRequestsFor,
-} from "./server-composition";
+import { humanOrganizationRequestDependencies } from "./server-composition";
 
 const unavailable = Object.freeze({ availability: "unavailable" as const });
 
@@ -143,30 +138,6 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           projected.value.applicationReleaseRevision !== installedContext.applicationReleaseRevision
         )
           return unavailable;
-
-        const projectedAccessVersion =
-          typeof projected.value.accessVersion === "number"
-            ? projected.value.accessVersion
-            : undefined;
-        if (projectedAccessVersion === undefined) return unavailable;
-        const finalIdentity = await humanOrganizationRequestsFor(dependencies).run(
-          session,
-          selection,
-          async (transaction, scope) => {
-            if (scope.applicationRootId === undefined)
-              throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-            const state = await createActiveInstallationBundleRepository(transaction).readCurrentState();
-            return !state.repairNeeded &&
-              state.identity.organizationId === scope.organizationId &&
-              state.identity.organizationAccountId === scope.organizationAccountId &&
-              state.identity.applicationRootId === scope.applicationRootId &&
-              state.identity.accessVersion === scope.accessVersion &&
-              state.identity.accessVersion === projectedAccessVersion &&
-              state.identity.applicationReleaseRevision === installedContext.applicationReleaseRevision &&
-              matchesInstalledPageBundleIdentity(installedContext, state);
-          },
-        );
-        if (finalIdentity.kind !== "available" || !finalIdentity.value) return unavailable;
 
         // Hidden or unusable placements do not make a protected, openable Page unavailable.
         const result = applicationPageLinkResultSchema.safeParse({

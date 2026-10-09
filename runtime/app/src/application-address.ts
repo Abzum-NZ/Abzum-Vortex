@@ -216,9 +216,13 @@ type OrganizationLauncherRow = DatabaseRow & Readonly<{
   organization_display_name: unknown;
   account_display_name: unknown;
 }>;
-type AddressCompletionRow = DatabaseRow & Readonly<{
+type AddressCompletionContextRow = DatabaseRow & Readonly<{
   request_context: unknown;
+}>;
+type AddressCompletionClockRow = DatabaseRow & Readonly<{
   observed_at: unknown;
+}>;
+type AddressCompletionBundleRow = DatabaseRow & Readonly<{
   bundle_state: unknown;
 }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
@@ -429,17 +433,33 @@ const permittedApplication = async (
 
       if (expectedContext !== undefined) {
         if (earliestAccessDeadline === undefined) return null;
-        const completionRows = await transaction.query<AddressCompletionRow>`
-          select vortex_access.validated_human_request_context() as request_context,
-            clock_timestamp() as observed_at,
-            vortex_module.read_active_installation_bundle_identity() as bundle_state
+        const bundleRows = await transaction.query<AddressCompletionBundleRow>`
+          select vortex_module.read_active_installation_bundle_identity() as bundle_state
         `;
-        if (completionRows.length !== 1 || completionRows[0] === undefined) return null;
-        const completion = completionRows[0];
-        const current = sessionContextSchema.safeParse(completion.request_context);
-        const observedAt = databaseTimestamp(completion.observed_at);
-        if (!current.success || current.data.callerKind !== "human" ||
-          typeof observedAt !== "string") return null;
+        if (
+          bundleRows.length !== 1 ||
+          bundleRows[0] === undefined ||
+          !matchesInstalledPageBundleIdentity(
+            expectedContext,
+            bundleRows[0].bundle_state,
+            scope.accessVersion,
+            scope.organizationAccountId,
+          )
+        ) return null;
+
+        const contextRows = await transaction.query<AddressCompletionContextRow>`
+          select vortex_access.validated_human_request_context() as request_context
+        `;
+        if (contextRows.length !== 1 || contextRows[0] === undefined) return null;
+        const current = sessionContextSchema.safeParse(contextRows[0].request_context);
+        if (!current.success || current.data.callerKind !== "human") return null;
+
+        const clockRows = await transaction.query<AddressCompletionClockRow>`
+          select clock_timestamp() as observed_at
+        `;
+        if (clockRows.length !== 1 || clockRows[0] === undefined) return null;
+        const observedAt = databaseTimestamp(clockRows[0].observed_at);
+        if (typeof observedAt !== "string") return null;
         const observedMilliseconds = Date.parse(observedAt);
         const earliestDeadlineMilliseconds = Date.parse(earliestAccessDeadline);
         if (!Number.isFinite(observedMilliseconds) ||
@@ -456,12 +476,7 @@ const permittedApplication = async (
           scope.applicationRootId === undefined ||
           !sameId(current.data.applicationRootId, scope.applicationRootId) ||
           current.data.accessVersion !== scope.accessVersion ||
-          earliestDeadlineMilliseconds <= observedMilliseconds ||
-          !matchesInstalledPageBundleIdentity(
-            expectedContext,
-            completion.bundle_state,
-            scope.accessVersion,
-          )) return null;
+          earliestDeadlineMilliseconds <= observedMilliseconds) return null;
       }
 
       return {

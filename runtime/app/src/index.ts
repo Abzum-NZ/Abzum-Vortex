@@ -64,6 +64,7 @@ export {
 } from "./installed-runtime-context";
 export {
   createHumanInstalledPageBundleContextLoader,
+  isTrustedInstalledPageBundleContext,
   isTrustedInstalledPageComposition,
   matchesInstalledPageBundleIdentity,
   readInstalledPageComposition,

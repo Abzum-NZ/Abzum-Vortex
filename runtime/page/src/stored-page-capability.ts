@@ -34,6 +34,7 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
+  isTrustedInstalledPageBundleContext,
   requireInstalledRuntimeContext,
   matchesInstalledPageBundleIdentity,
   readInstalledPageComposition,
@@ -528,20 +529,40 @@ export const createStoredPageCapabilityService = (
       ...(observeProjectionDecision === undefined ? {} : { observeProjectionDecision }),
       validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
         try {
-          const rows = await transaction.query<{
+          if (isTrustedInstalledPageBundleContext(context)) {
+            const bundleRows = await transaction.query<{
+              readonly bundle_state: unknown;
+            }>`
+              select vortex_module.read_active_installation_bundle_identity() as bundle_state
+            `;
+            if (
+              bundleRows.length !== 1 ||
+              bundleRows[0] === undefined ||
+              !matchesInstalledPageBundleIdentity(
+                context,
+                bundleRows[0].bundle_state,
+                scope.accessVersion,
+                scope.organizationAccountId,
+              )
+            ) return false;
+          }
+
+          const contextRows = await transaction.query<{
             readonly request_context: unknown;
-            readonly observed_at: unknown;
-            readonly bundle_state: unknown;
           }>`
-            select vortex_access.validated_human_request_context() as request_context,
-              clock_timestamp() as observed_at,
-              vortex_module.read_active_installation_bundle_identity() as bundle_state
+            select vortex_access.validated_human_request_context() as request_context
           `;
-          if (rows.length !== 1 || rows[0] === undefined) return false;
-          const current = sessionContextSchema.safeParse(rows[0].request_context);
-          const observedAt = databaseTimestamp(rows[0].observed_at);
-          if (!current.success || current.data.callerKind !== "human" || typeof observedAt !== "string")
-            return false;
+          if (contextRows.length !== 1 || contextRows[0] === undefined) return false;
+          const current = sessionContextSchema.safeParse(contextRows[0].request_context);
+          if (!current.success || current.data.callerKind !== "human") return false;
+          const clockRows = await transaction.query<{
+            readonly observed_at: unknown;
+          }>`
+            select clock_timestamp() as observed_at
+          `;
+          if (clockRows.length !== 1 || clockRows[0] === undefined) return false;
+          const observedAt = databaseTimestamp(clockRows[0].observed_at);
+          if (typeof observedAt !== "string") return false;
           const observedMilliseconds = Date.parse(observedAt);
           return Number.isFinite(observedMilliseconds) &&
             current.data.expiresAt !== undefined &&
@@ -556,8 +577,7 @@ export const createStoredPageCapabilityService = (
             current.data.applicationRootId !== undefined &&
             sameId(current.data.applicationRootId, scope.applicationRootId) &&
             current.data.accessVersion === scope.accessVersion &&
-            Date.parse(validUntil) > observedMilliseconds &&
-            matchesInstalledPageBundleIdentity(context, rows[0].bundle_state, scope.accessVersion);
+            Date.parse(validUntil) > observedMilliseconds;
         } catch {
           return false;
         }

@@ -247,7 +247,10 @@ export const createActiveInstallationBundleRepository = (
         throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
       return installation.data;
     },
-    async readSections(state, expectedIndexCandidate) {
+    async readSections(
+      state: ActiveInstallationBundleState,
+      expectedIndexCandidate?: InstallationRuntimeBundleIndex,
+    ) {
       const expectedIndex = expectedIndexCandidate ?? state.bundleIndex;
       if (expectedIndex === null)
         throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
@@ -282,7 +285,10 @@ export const createActiveInstallationBundleRepository = (
         throw failure(error);
       }
     },
-    async repair(state, commandCandidate) {
+    async repair(
+      state: ActiveInstallationBundleState,
+      commandCandidate: InstallationRuntimeBundleWriteCommand,
+    ) {
       if (!state.repairNeeded || state.coldSource === null)
         throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
       const parsedCommand = installationRuntimeBundleWriteCommandSchema.safeParse(commandCandidate);

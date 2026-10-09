@@ -278,6 +278,18 @@ const retainPageCompositions = <Context extends InstalledRuntimeContext>(
   return context;
 };
 
+/** True only for an App context this module assembled from the active installed-bundle reader. */
+export const isTrustedInstalledPageBundleContext = (
+  contextCandidate: unknown,
+): contextCandidate is InstalledRuntimeContext => {
+  try {
+    const context = requireInstalledRuntimeContext(contextCandidate);
+    return installedPageBundleIdentities.has(context);
+  } catch {
+    return false;
+  }
+};
+
 /** Returns only the canonical precomposition held by this request's assembled App context. */
 export const readInstalledPageComposition = (
   contextCandidate: unknown,
@@ -312,6 +324,7 @@ export const matchesInstalledPageBundleIdentity = (
   contextCandidate: unknown,
   stateCandidate: unknown,
   expectedAccessVersion?: number,
+  expectedOrganizationAccountId?: string,
 ): boolean => {
   try {
     const context = requireInstalledRuntimeContext(contextCandidate);
@@ -327,6 +340,8 @@ export const matchesInstalledPageBundleIdentity = (
       state.identity.applicationReleaseRevision !== expected.applicationReleaseRevision ||
       (expectedAccessVersion !== undefined &&
         state.identity.accessVersion !== expectedAccessVersion) ||
+      (expectedOrganizationAccountId !== undefined &&
+        state.identity.organizationAccountId !== expectedOrganizationAccountId) ||
       state.identity.pinFingerprint !== expected.pinFingerprint ||
       state.bundleIndex.pinFingerprint !== expected.pinFingerprint ||
       canonicalJson(state.bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||
