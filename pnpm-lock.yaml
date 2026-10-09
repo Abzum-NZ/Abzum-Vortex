@@ -381,9 +381,6 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
     devDependencies:
       vitest:
         specifier: 'catalog:'
@@ -689,6 +686,9 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       vitest:
         specifier: 'catalog:'
