@@ -116,3 +116,6 @@ export {
   type SearchRebuildRefusal,
   type SearchRebuildStored,
 } from "./event-consumer";
+
+export { createInstalledSearchEventConsumer } from "./installed-index-adapter";
+export type { SearchRequestTransactionRunner } from "./installed-index-adapter";

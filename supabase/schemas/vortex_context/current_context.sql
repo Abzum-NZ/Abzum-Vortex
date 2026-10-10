@@ -25,7 +25,7 @@ revoke execute on function vortex_context.current_context()
 grant execute on function vortex_context.current_context()
   to vortex_request, vortex_record_adapter, vortex_search_owner,
     vortex_record_inventory, vortex_connection_owner,
-    vortex_identity_owner;
+    vortex_identity_owner, vortex_access_owner;
 
 comment on function vortex_context.current_context() is
   'Returns the validated request context established in this transaction or fails closed when it is absent, expired or stale.';

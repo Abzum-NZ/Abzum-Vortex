@@ -438,9 +438,16 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
   if (page.kind === "unavailable") return unavailableFallback;
-  const search = await loadApplicationSearch(identity.session, {
-    tenantShortName, organizationShortName, applicationKey: resolved.application.key,
-  }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
+  const searchMode = parameters.mode === undefined
+    ? "literal"
+    : parameters.mode === "literal" || parameters.mode === "or"
+      ? parameters.mode
+      : undefined;
+  const search = searchMode === undefined
+    ? { kind: "unavailable" as const }
+    : await loadApplicationSearch(identity.session, {
+        tenantShortName, organizationShortName, applicationKey: resolved.application.key,
+      }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "", searchMode);
   const searchPageSubject = recordIdSchema.safeParse(parameters.record_id);
   const projectionResponseEvidence = takeLocalPageProjectionResponseEvidence(page.model);
   const adoption = page.model.adoption;

@@ -4,13 +4,21 @@ import {
   createEventDispatcherWakeup,
   eventDispatcherWakeupLimits,
 } from "@vortex/event";
+import { withResolvedRequestTransaction } from "@vortex/db";
+import { createInstalledSearchEventConsumer } from "@vortex/search";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 
 // One protected wake-up endpoint serves both callers: a database webhook hint
 // and a scheduled Kestra recovery tick. Both authenticate with the same
 // configured dispatcher bearer credential and run the same bounded dispatcher.
-const wakeup = createEventDispatcherWakeup({ consumers: [] });
+const wakeup = createEventDispatcherWakeup({
+  consumers: [
+    createInstalledSearchEventConsumer({
+      resolvedRequestTransaction: withResolvedRequestTransaction,
+    }),
+  ],
+});
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
