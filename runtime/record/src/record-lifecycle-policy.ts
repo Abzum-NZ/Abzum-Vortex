@@ -512,7 +512,7 @@ const parseReadProvisionedLifecyclePolicySetupSnapshot = (
         value.storageScope !== "organization_shared") ||
       (value.storageScope === "application_contained" &&
         (applicationRootForTarget.data === null ||
-          !sameId(applicationRootForTarget.data, applicationRoot.data))) ||
+          !sameId(applicationRootForTarget.data, applicationRootId.data))) ||
       (value.storageScope === "organization_shared" && applicationRootForTarget.data !== null) ||
       (previousStorageContractId !== undefined &&
         compareCanonicalUuidText(previousStorageContractId, storageContractId.data) >= 0) ||
@@ -596,7 +596,7 @@ const parseReadProvisionedLifecyclePolicySetupSnapshot = (
 
   return {
     organizationId: organizationId.data,
-    applicationRootId: applicationRoot.data,
+    applicationRootId: applicationRootId.data,
     applicationReleaseRevision: applicationReleaseRevision.data,
     registrationRevision: registrationRevision.data,
     organizationLimits: organizationLimits.data,
