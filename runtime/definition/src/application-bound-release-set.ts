@@ -1,12 +1,15 @@
 import "server-only";
 
 import {
+  canonicalJson,
+  isRecord,
   sameId,
   applicationBoundReleaseSetCommandSchema,
   applicationBoundReleaseSetResultSchema,
   applicationRootIdSchema,
   correlationIdSchema,
   revisionSchema,
+  protectedOperationChannelSchema,
   sessionContextSchema,
   systemApplicationBoundReleaseSetCommandSchema,
   systemApplicationBoundReleaseSetResultSchema,
@@ -47,6 +50,68 @@ const storedSystemSetSchema = storedSetSchema.extend({
 type ApplicationRead = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
 type ModuleRead = Extract<DefinitionConsumerReadResult, { kind: "module" }>;
 type BoundReleaseSetRow = DatabaseRow & { readonly bound_release_set: unknown };
+type FirstInstallReleaseSetRow = DatabaseRow & {
+  readonly bound_release_set: unknown;
+  readonly request_context: unknown;
+};
+type FirstInstallHumanContext = Extract<SessionContext, Readonly<{ callerKind: "human" }>>;
+
+const firstInstallApplicationReleaseSetCommandSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+  })
+  .strict();
+
+const parseFirstInstallHumanContext = (candidate: unknown): FirstInstallHumanContext => {
+  if (!isRecord(candidate)) throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+  const { channel: rawChannel, ...sessionContextCandidate } = candidate;
+  const channel = protectedOperationChannelSchema.safeParse(rawChannel);
+  const parsedContext = sessionContextSchema.safeParse(sessionContextCandidate);
+  if (
+    !channel.success ||
+    channel.data !== "web" ||
+    !parsedContext.success ||
+    parsedContext.data.callerKind !== "human" ||
+    parsedContext.data.applicationRootId !== undefined
+  )
+    throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+  return parsedContext.data;
+};
+
+const readFirstInstallReleaseSet = async (
+  transaction: RequestDatabaseTransaction,
+  command: z.infer<typeof firstInstallApplicationReleaseSetCommandSchema>,
+): Promise<Readonly<{ candidate: unknown; context: FirstInstallHumanContext }>> => {
+  try {
+    const rows = await transaction.query<FirstInstallReleaseSetRow>`
+      select vortex_definition.read_first_install_application_release_set(
+        ${command.applicationRootId}::uuid,
+        ${command.applicationReleaseRevision}::bigint
+      ) as bound_release_set,
+      vortex_access.validated_human_request_context() as request_context
+    `;
+    const row = rows.length === 1 ? rows[0] : undefined;
+    if (row === undefined) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
+    if (row.bound_release_set === null)
+      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+    return {
+      candidate: row.bound_release_set,
+      context: parseFirstInstallHumanContext(row.request_context),
+    };
+  } catch (error) {
+    if (error instanceof DefinitionConsumerReadError) throw error;
+    const code = isRecord(error) && typeof error.code === "string" ? error.code : undefined;
+    if (code === "22023")
+      throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+    if (code === "P0002") throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+    if (code === "23514")
+      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionConsumerReadError(
+      isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
+    );
+  }
+};
 
 export interface ApplicationBoundReleaseSetRepository {
   read(command: ApplicationBoundReleaseSetCommand): Promise<unknown | undefined>;
@@ -158,6 +223,57 @@ const projectBoundReleaseSet = async (
   const result = schema.safeParse({ application, modules });
   if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   return result.data;
+};
+
+const exactFirstInstallModuleClosure = (
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+): boolean => {
+  const modulesByIdentity = new Map(
+    releaseSet.modules.map((module) => [
+      `${module.rootId.toLowerCase()}:${module.releaseRevision}`,
+      module,
+    ] as const),
+  );
+  if (modulesByIdentity.size !== releaseSet.modules.length) return false;
+  const orderedRoots = releaseSet.modules.map((module) => module.rootId.toLowerCase());
+  if (
+    orderedRoots.some((root, index) => {
+      if (index === 0) return false;
+      const previousRoot = orderedRoots[index - 1];
+      return previousRoot === undefined || previousRoot >= root;
+    })
+  )
+    return false;
+
+  const pending = releaseSet.application.dependencyManifest.filter(
+    (dependency) => dependency.kind === "module",
+  );
+  const visitedRoots = new Map<string, number>();
+  while (pending.length > 0) {
+    const dependency = pending.pop();
+    if (dependency === undefined) return false;
+    const rootKey = dependency.rootId.toLowerCase();
+    const previousRevision = visitedRoots.get(rootKey);
+    if (previousRevision !== undefined) {
+      if (previousRevision !== dependency.releaseRevision) return false;
+      continue;
+    }
+    visitedRoots.set(rootKey, dependency.releaseRevision);
+
+    const module = modulesByIdentity.get(`${rootKey}:${dependency.releaseRevision}`);
+    if (
+      module === undefined ||
+      !sameId(module.organizationId, releaseSet.application.organizationId) ||
+      module.definitionKey !== dependency.key ||
+      module.releaseVersion !== dependency.releaseVersion ||
+      module.contentFingerprint !== dependency.contentFingerprint ||
+      module.resolutionFingerprint !== dependency.resolutionFingerprint
+    )
+      return false;
+    for (const nested of module.dependencyManifest)
+      if (nested.kind === "module") pending.push(nested);
+  }
+  return visitedRoots.size === modulesByIdentity.size;
 };
 
 export const createApplicationBoundReleaseSetService = (
@@ -303,6 +419,62 @@ export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
         },
         catalogue,
       )) as SystemApplicationBoundReleaseSetResult;
+    },
+  });
+};
+
+/**
+ * Reads the exact published Application and complete Module closure for first installation.
+ * The caller must provide its genuine org-only HUMAN request transaction; this read grants no
+ * installation or mutation authority and is repeated after the asynchronous catalogue projection.
+ * Its existing system result shape only permits a valid empty Module set; no system context is used.
+ */
+export const createDatabaseFirstInstallApplicationReleaseSetService = (
+  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+  transaction: RequestDatabaseTransaction,
+) => {
+  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  return Object.freeze({
+    async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
+      const command = firstInstallApplicationReleaseSetCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+
+      const initial = await readFirstInstallReleaseSet(transaction, command.data);
+      const initialSet = storedSystemSetSchema.safeParse(initial.candidate);
+      if (!initialSet.success)
+        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+      if (!sameId(initialSet.data.correlationId, initial.context.correlationId))
+        throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+
+      const projected = await projectBoundReleaseSet(
+        initialSet.data,
+        {
+          applicationReleaseRevision: command.data.applicationReleaseRevision,
+          applicationRootId: command.data.applicationRootId,
+          organizationId: initial.context.organizationId,
+          correlationId: initial.context.correlationId,
+          allowEmptyModules: true,
+        },
+        catalogue,
+      );
+      const result = systemApplicationBoundReleaseSetResultSchema.safeParse(projected);
+      if (!result.success || !exactFirstInstallModuleClosure(result.data))
+        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+
+      const current = await readFirstInstallReleaseSet(transaction, command.data);
+      const currentSet = storedSystemSetSchema.safeParse(current.candidate);
+      if (!currentSet.success)
+        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+      if (
+        canonicalJson(initial.context) !== canonicalJson(current.context) ||
+        !sameId(currentSet.data.correlationId, current.context.correlationId)
+      )
+        throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+      if (canonicalJson(initialSet.data) !== canonicalJson(currentSet.data))
+        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+
+      return result.data;
     },
   });
 };
