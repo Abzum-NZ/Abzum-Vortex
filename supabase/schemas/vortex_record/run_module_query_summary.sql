@@ -77,6 +77,7 @@ declare
   aggregate_operation text;
   aggregate_field_id text;
   aggregate_field_type text;
+  aggregate_original_field_type text;
   aggregate_alias text;
   average_places integer;
   value_expression text;
@@ -254,7 +255,8 @@ begin
       or pg_catalog.length(aggregate_alias) > 40
       or aggregate_alias = any (aggregate_aliases)
       or (aggregate_item ? 'fieldId' and aggregate_field_id is null)
-      or (aggregate_operation <> 'count' and aggregate_field_id is null) then
+      or (aggregate_operation <> 'count' and aggregate_field_id is null)
+      or (aggregate_operation = 'count' and aggregate_field_id is not null) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     aggregate_aliases := pg_catalog.array_append(aggregate_aliases, aggregate_alias);
@@ -262,7 +264,19 @@ begin
       if aggregate_field_id !~ uuid_pattern or not (fields_by_id ? aggregate_field_id) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
       end if;
-      aggregate_field_type := fields_by_id -> aggregate_field_id ->> 'type';
+      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
+      aggregate_field_type := aggregate_original_field_type;
+      if aggregate_original_field_type = 'calculation' then
+        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
+          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
+            not in ('whole_number', 'decimal_number') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
+      elsif aggregate_original_field_type = 'total' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
       if (aggregate_operation in ('sum', 'average')
           and aggregate_field_type not in ('whole_number', 'decimal_number', 'money'))
         or (aggregate_operation in ('minimum', 'maximum')
@@ -343,12 +357,19 @@ begin
 
   -- The plan is exact only when every candidate is readable and every field
   -- used by grouping, aggregates or filtering is readable on every candidate.
-  -- Derived filter fields can lose their projection on an individual record
-  -- when an input is withheld, so they still require the per-record path.
+  -- Derived filter and aggregate fields can lose their projection on an
+  -- individual record when an input is withheld, so both require read_record.
   fast_path := pg_catalog.cardinality(readable_field_ids) > 0
     and not exists (
       select 1 from pg_catalog.unnest(filter_ids) as required(id)
       where fields_by_id -> required.id ->> 'type' in ('calculation', 'total')
+    )
+    and not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
+      where item.value ? 'fieldId'
+        and fields_by_id -> pg_catalog.lower(item.value ->> 'fieldId') ->> 'type'
+          in ('calculation', 'total')
     )
     and not exists (
       select 1 from pg_catalog.unnest(group_ids || filter_ids) as required(id)
@@ -427,7 +448,19 @@ begin
     aggregate_value_sql := 'pg_catalog.to_jsonb(pg_catalog.count(*))';
     aggregate_mixed_currency_sql := 'false';
     if aggregate_field_id is not null then
-      aggregate_field_type := fields_by_id -> aggregate_field_id ->> 'type';
+      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
+      aggregate_field_type := aggregate_original_field_type;
+      if aggregate_original_field_type = 'calculation' then
+        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
+          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
+            not in ('whole_number', 'decimal_number') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
+      elsif aggregate_original_field_type = 'total' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
       aggregate_present_sql := pg_catalog.format(
         '(candidate.projected_values ? %L and candidate.projected_values -> %L <> ''null''::jsonb)',
         aggregate_field_id, aggregate_field_id
