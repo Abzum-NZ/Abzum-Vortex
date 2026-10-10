@@ -227,11 +227,11 @@ export function ApplicationReleaseHistory({ initialPage }: {
               target="_blank" rel="noopener noreferrer">
               Review first install of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
             </a>
-            {pending === null && page !== null && failure !== "refused" && failure !== "conflict" &&
+            {pending === null && page !== null && failure !== "refused" &&
               page.entries.some((entry) => entry.releaseRevision === metadata.releaseRevision) &&
               metadata.isCurrent === (metadata.releaseRevision === page.snapshot.anchorReleaseRevision) &&
               <a className="inline-flex rounded border px-3 py-2 underline"
-                name="application.release_history.restore.open"
+                data-command="application.release_history.restore.open"
                 href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/restore`}
                 target="_blank" rel="noopener noreferrer">
                 Review restore of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
