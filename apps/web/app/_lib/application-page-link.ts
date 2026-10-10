@@ -70,7 +70,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
         )
           return unavailable;
 
-        const addressedIdentity = addressIdentity.identity;
+        const addressedIdentity = addressIdentity;
 
         const target = resolvePermittedApplicationAddress(
           read,
