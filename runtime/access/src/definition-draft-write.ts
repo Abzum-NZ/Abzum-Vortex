@@ -34,13 +34,13 @@ import {
   DefinitionStoreError,
   fingerprintCanonicalValue,
   readApplicationDefinitionDraft,
+  requireBuilderAuthority,
   validateDefinitionSource,
   type StoredApplicationDefinitionDraft,
 } from "@vortex/definition";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import {
   createBuilderAuthority,
-  requireBuilderAuthority,
   type BuilderTargetFactsReader,
 } from "./builder-authority";
 import { createHumanOrganizationRequestService } from "./human-organization-request";
