@@ -870,7 +870,7 @@ const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
 
   let pageCount = 1;
   let requestToken = first.nextContinuationToken;
-  while (requestToken !== undefined) {
+  while (requestToken !== undefined && selected === undefined) {
     if (pageCount >= 20 || seenTokens.has(requestToken)) return undefined;
     seenTokens.add(requestToken);
     const result = await args.service.run(args.session, args.selection, {
@@ -882,7 +882,7 @@ const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
     if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken)) return undefined;
     pageCount += 1;
     requestToken = page.nextContinuationToken;
-    if (requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
+    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
   }
 
   if (selected === undefined) return undefined;
