@@ -7,6 +7,7 @@ import {
   requireBuilderAuthority,
   runOrganizationAccessOperation,
   type BuilderOperation,
+  type BuilderConferredPermission,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
@@ -29,6 +30,7 @@ import {
   organizationLifecycleLimitsSchema,
   organizationAccessDecisionSchema,
   organizationAccessDeclarationSchema,
+  projectLiveApplicationRolePermissions,
   organizationIdSchema,
   organizationPermissionEligibilitySchema,
   protectedOperationChannelSchema,
@@ -97,6 +99,7 @@ import {
   studioApplicationFirstInstallSelectorSchema,
   studioApplicationFirstInstallSetupSchema,
   studioApplicationFirstInstallSnapshotSchema,
+  studioApplicationFirstInstallTargetSchema,
   type StudioApplicationArchiveOptionsResult,
   type StudioApplicationFirstInstallCommandResult,
   type StudioApplicationFirstInstallLoadResult,
@@ -109,6 +112,7 @@ import {
 } from "./studio-application-installation-contracts";
 
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
+type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
 type ReleaseIdentityInput = Readonly<{
   releaseRevision: number;
   releaseVersion: string;
@@ -596,6 +600,113 @@ const readInstallationAuthorityDeadlines = async (
       key,
       requirements.recentAuthentication && index === 0,
     ));
+  }
+  return deadlines;
+};
+
+const firstInstallConferredPermissions = (
+  prepared: PreparedFirstInstallRegistration,
+): readonly BuilderConferredPermission[] => {
+  const permissions = new Map<string, BuilderConferredPermission>();
+  for (const template of prepared.templates) {
+    for (const entry of [
+      ...projectLiveApplicationRolePermissions(
+        template.template.permissionSelection,
+        prepared.permissionRegistration.applicationRootId,
+        template.sourcePermissions,
+      ),
+      ...template.livePermissions,
+    ]) {
+      const permission: BuilderConferredPermission = {
+        applicationRootId: String(entry.applicationRootId),
+        ownerKind: entry.ownerKind,
+        ownerId: String(entry.ownerId),
+        permissionId: String(entry.permission.permissionId),
+      };
+      permissions.set([
+        permission.applicationRootId,
+        permission.ownerKind,
+        permission.ownerId,
+        permission.permissionId,
+      ].join(":").toLowerCase(), permission);
+    }
+  }
+  return [...permissions.values()];
+};
+
+const readBuilderOperationDeadlines = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: HumanContext,
+  operation: BuilderOperation,
+): Promise<readonly string[]> => {
+  const facts = await targetFacts(transaction, scope,
+    operation.kind === "installation" ? operation.applicationRootId : operation.rootId);
+  const requirements = deriveBuilderRequirements(operation, facts);
+  if (requirements.refused || requirements.permissionKeys.length === 0) problem("refused");
+
+  const deadlines: string[] = [];
+  for (const [index, key] of requirements.permissionKeys.entries()) {
+    deadlines.push(await readPermissionDeadline(
+      transaction,
+      scope,
+      context,
+      key,
+      requirements.recentAuthentication && index === 0,
+    ));
+  }
+
+  if (requirements.delegatedPermissions.length > 0) {
+    const applications = platformPermissionDeclarations.find(
+      (entry) => entry.key === "platform.organization.applications.manage",
+    );
+    if (applications === undefined) problem("temporarily_unavailable");
+    const decision = await runOrganizationAccessOperation(
+      transaction,
+      scope,
+      organizationAccessDeclarationSchema.parse({
+        operationKey: "platform.organization.application_role_templates.accept",
+        action: { actionKind: applications.actionKind },
+        target: { kind: "organization" },
+        requiredPermission: {
+          ownerKind: "platform",
+          ownerId: platformPermissionOwnerId,
+          permissionId: applications.permissionId,
+        },
+        recentAuthentication: requirements.recentAuthentication
+          ? builderRecentAuthentication
+          : { kind: "none" },
+        authority: {
+          kind: "delegated_management",
+          before: { kind: "none" },
+          after: {
+            kind: "bounded",
+            permissions: requirements.delegatedPermissions.map((permission) => ({
+              applicationRootId: permission.applicationRootId.toLowerCase(),
+              ownerKind: permission.ownerKind,
+              ownerId: permission.ownerId.toLowerCase(),
+              permissionId: permission.permissionId.toLowerCase(),
+            })),
+          },
+        },
+      }),
+      async (allowed) => allowed,
+    );
+    if (decision.outcome !== "completed")
+      problem(decision.reasonCode === "authentication_required" ? "authentication_required" : "refused");
+    const eligibility = organizationPermissionEligibilitySchema.safeParse({
+      ...decision.value,
+      outcome: "eligible",
+    });
+    if (!eligibility.success || eligibility.data.outcome !== "eligible" ||
+      eligibility.data.target.kind !== "organization" ||
+      !sameUuid(eligibility.data.organizationId, context.organizationId) ||
+      !sameUuid(eligibility.data.organizationAccountId, context.organizationAccountId) ||
+      eligibility.data.accessVersion !== context.accessVersion ||
+      !sameUuid(eligibility.data.correlationId, context.correlationId) ||
+      Date.parse(eligibility.data.checkedAt) > Date.parse(eligibility.data.validUntil))
+      problem("refused");
+    deadlines.push(eligibility.data.validUntil);
   }
   return deadlines;
 };
@@ -1647,6 +1758,7 @@ const firstInstallDefinitionAccess = (
   selector: StudioApplicationFirstInstallSelector,
   history: ReturnType<typeof firstInstallHistory>,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
+  onPreparedRegistration: (prepared: PreparedFirstInstallRegistration) => void,
 ): HumanInstallationDefinitionAccess => ({
   async readReleaseSet(session, target) {
     if (!sameUuid(target.organizationId, selector.organizationId) ||
@@ -1709,11 +1821,13 @@ const firstInstallDefinitionAccess = (
       target.applicationReleaseRevision !== selector.releaseRevision ||
       !sameFirstInstallRelease(releaseSet, expectedReleaseSet))
       throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-    return prepareApplicationRoleTemplatesForHumanRequest(
+    const prepared = prepareApplicationRoleTemplatesForHumanRequest(
       target.organizationId,
       { applicationRootId: target.applicationRootId, releaseRevision: target.applicationReleaseRevision },
       releaseSet,
     );
+    onPreparedRegistration(prepared);
+    return prepared;
   },
 });
 
@@ -1779,6 +1893,7 @@ const firstInstallCoordinator = (
 ) => {
   const requests = humanOrganizationRequests();
   let step = 0;
+  let preparedRegistration: PreparedFirstInstallRegistration | undefined;
   const installerRequests: Pick<ReturnType<typeof humanOrganizationRequests>, "runChange"> = {
     runChange: async <Result>(
       session: IdentitySession,
@@ -1816,7 +1931,43 @@ const firstInstallCoordinator = (
           assertFirstInstallCoordinatorBoundary(
             mode, currentStep === 0 ? "before" : "after_first", selector, expected, releaseSet, before,
           );
+          let registrationContext: HumanContext | undefined;
+          let registrationDeadline: string | undefined;
+          if (currentStep === 0 && mode === "prepare") {
+            const prepared = preparedRegistration;
+            if (prepared === undefined) problem("temporarily_unavailable");
+            registrationContext = context;
+            const draftDeadline = await readPermissionDeadline(
+              transaction, scope, context, "platform.organization.definition_drafts.manage",
+            );
+            const acceptedInstall = {
+              ...installOperation(selector.rootId, releaseSet),
+              acceptedPermissions: firstInstallConferredPermissions(prepared),
+            } satisfies BuilderOperation;
+            const installDeadlines = await readBuilderOperationDeadlines(
+              transaction, scope, context, acceptedInstall,
+            );
+            registrationDeadline = [context.expiresAt, draftDeadline, ...installDeadlines]
+              .reduce((earliest, deadline) =>
+                Date.parse(deadline) < Date.parse(earliest) ? deadline : earliest);
+            const prewriteAt = await databaseNow(transaction);
+            if (!Number.isFinite(Date.parse(prewriteAt)) ||
+              !Number.isFinite(Date.parse(registrationDeadline)) ||
+              Date.parse(prewriteAt) >= Date.parse(registrationDeadline)) problem("refused");
+          }
           const value = await operation(transaction, scope, issuedAt);
+          if (currentStep === 0 && mode === "prepare") {
+            if (typeof value !== "boolean" || registrationContext === undefined ||
+              registrationDeadline === undefined ||
+              value !== (before.registeredReleaseRevision !== selector.releaseRevision))
+              problem("conflict");
+            const completedAt = await databaseNow(transaction);
+            if (!Number.isFinite(Date.parse(completedAt)) ||
+              Date.parse(completedAt) >= Date.parse(registrationDeadline) ||
+              Date.parse(completedAt) >= Date.parse(registrationContext.expiresAt))
+              problem("refused");
+            return value;
+          }
           const after = await readInstallationBindings(transaction, selector.rootId);
           if (currentStep === 0) {
             if (after.registeredReleaseRevision !== selector.releaseRevision ||
@@ -1869,7 +2020,12 @@ const firstInstallCoordinator = (
     resolveModuleContributions,
     builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts }),
     containsCustomComponents: releaseSetContainsCustomComponents,
-    humanDefinitionAccess: firstInstallDefinitionAccess(selector, expected.history, expectedReleaseSet),
+    humanDefinitionAccess: firstInstallDefinitionAccess(
+      selector,
+      expected.history,
+      expectedReleaseSet,
+      (prepared) => { preparedRegistration = prepared; },
+    ),
   });
 };
 
@@ -1963,7 +2119,7 @@ export const loadStudioApplicationArchiveOptions = async (
         if (!same(finalSetup, initial.internalSetup)) problem("conflict");
         const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, query.data.selector);
         if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
-        await firstInstallAppCompletion(
+        const retainedFence = await firstInstallAppCompletion(
           transaction, _scope, current.session, _issuedAt, query.data.selector,
           query.data.expected.history, currentRelease, initial.context,
         );
@@ -1985,6 +2141,16 @@ export const loadStudioApplicationArchiveOptions = async (
           if (page.reasonCode === "stale_page") problem("conflict");
           problem("temporarily_unavailable");
         }
+        await completeFirstInstallConnectionRead(
+          transaction,
+          _scope,
+          current.session,
+          _issuedAt,
+          query.data.selector,
+          query.data.expected.history,
+          initial,
+          retainedFence,
+        );
         return studioApplicationArchiveOptionsResultSchema.parse({
           kind: "available",
           options: page.options.map(({ destinationFingerprint: _privateFingerprint, ...option }) => option),
@@ -2108,7 +2274,7 @@ const firstInstallAppCompletion = async (
   history: ReturnType<typeof firstInstallHistory>,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   initialContext: HumanContext,
-): Promise<void> => {
+): Promise<Readonly<{ checkedAt: string; minimumValidUntil: string }>> => {
   await firstInstallHistoryMatchesDraft(
     transaction, scope, selector, history, releaseSet.application.definitionKey,
   );
@@ -2132,14 +2298,21 @@ const firstInstallAppCompletion = async (
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.record_lifecycle.manage_policy"),
   ]);
   const completedAt = await databaseNow(transaction);
-  if (Date.parse(completedAt) >= Math.min(
-    Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
-    ...installDeadlines.map((deadline) => Date.parse(deadline)),
-  ) || setupDecisions.some((decision) =>
+  const retainedDeadlines = [draftDeadline, ...installDeadlines,
+    ...setupDecisions.map((decision) => decision.validUntil)];
+  let minimumValidUntil = finalContext.expiresAt;
+  for (const deadline of retainedDeadlines) {
+    const deadlineMs = Date.parse(deadline);
+    if (!Number.isFinite(deadlineMs)) problem("refused");
+    if (deadlineMs < Date.parse(minimumValidUntil)) minimumValidUntil = deadline;
+  }
+  const completedAtMs = Date.parse(completedAt);
+  if (!Number.isFinite(completedAtMs) || !Number.isFinite(Date.parse(minimumValidUntil)) ||
+    completedAtMs >= Date.parse(minimumValidUntil) || setupDecisions.some((decision) =>
     !sameUuid(decision.correlationId, finalContext.correlationId) ||
     decision.accessVersion !== finalContext.accessVersion ||
-    Date.parse(decision.checkedAt) > Date.parse(completedAt) ||
-    Date.parse(decision.validUntil) <= Date.parse(completedAt))) problem("refused");
+    Date.parse(decision.checkedAt) > completedAtMs)) problem("refused");
+  return { checkedAt: completedAt, minimumValidUntil };
 }
 
 type FirstInstallAppState = Readonly<{
@@ -2181,6 +2354,29 @@ const readFirstInstallAppState = async (
   const current = firstInstallSnapshot(selector, expected.history, releaseSet, bindings, state, setup);
   if (!sameFirstInstallExpectation(expected, current)) problem("conflict");
   return { context, releaseSet, bindings, setup, internalSetup };
+};
+
+const completeFirstInstallConnectionRead = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  session: IdentitySession,
+  issuedAt: string,
+  selector: StudioApplicationFirstInstallSelector,
+  history: ReturnType<typeof firstInstallHistory>,
+  initial: FirstInstallAppState,
+  retainedFence: Awaited<ReturnType<typeof firstInstallAppCompletion>>,
+): Promise<void> => {
+  const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, selector);
+  if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
+  const currentSetup = await readProvisionedSetupInternalInTransaction(
+    transaction, scope, session, issuedAt, selector, currentRelease,
+  );
+  if (!same(currentSetup, initial.internalSetup)) problem("conflict");
+  const completed = await firstInstallAppCompletion(
+    transaction, scope, session, issuedAt, selector, history, currentRelease, initial.context,
+  );
+  if (Date.parse(completed.checkedAt) >= Date.parse(retainedFence.minimumValidUntil))
+    problem("refused");
 };
 
 type FirstInstallTransactionAction<Value> = (
@@ -2457,12 +2653,22 @@ export const saveStudioApplicationFirstInstallPolicy = async (
             transaction, scope, candidate.session, issuedAt, command.data.selector, currentRelease,
           );
           if (!same(currentSetup, initial.internalSetup)) problem("conflict");
-          await firstInstallAppCompletion(
+          const retainedFence = await firstInstallAppCompletion(
             transaction, scope, candidate.session, issuedAt, command.data.selector,
             command.data.expected.history, currentRelease, initial.context,
           );
           const option = await readSelectedEligibleArchiveConnection(
             transaction, command.data.selector, initial.setup.organizationLimits, command.data.policy,
+          );
+          await completeFirstInstallConnectionRead(
+            transaction,
+            scope,
+            candidate.session,
+            issuedAt,
+            command.data.selector,
+            command.data.expected.history,
+            initial,
+            retainedFence,
           );
           invocationStarted = true;
           return writeInitialArchivePolicy(
