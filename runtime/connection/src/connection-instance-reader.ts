@@ -9,11 +9,13 @@ import {
   connectionTypeIdSchema,
   databaseRevision,
   databaseTimestamp,
+  isRecord,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
   organizationPermissionEligibilitySchema,
   permissionIdSchema,
   platformIdSchema,
+  protectedOperationChannelSchema,
   sameId,
   semanticVersionSchema,
   sessionContextSchema,
@@ -248,7 +250,15 @@ const verifyConnectionManagement = async (
     if (row === undefined)
       return { ok: false, reasonCode: "connection_options_unavailable" };
 
-    const parsedContext = sessionContextSchema.safeParse(row.request_context);
+    if (!isRecord(row.request_context))
+      return { ok: false, reasonCode: "not_authorized" };
+    const { channel: rawChannel, ...sessionContextCandidate } = row.request_context;
+    const channel = protectedOperationChannelSchema.safeParse(rawChannel);
+    // This chooser is for the Web HUMAN flow; transport metadata is not SessionContext.
+    if (!channel.success || channel.data !== "web")
+      return { ok: false, reasonCode: "not_authorized" };
+
+    const parsedContext = sessionContextSchema.safeParse(sessionContextCandidate);
     if (!parsedContext.success || parsedContext.data.callerKind !== "human")
       return { ok: false, reasonCode: "not_authorized" };
     const context = parsedContext.data;
