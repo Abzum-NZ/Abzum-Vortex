@@ -552,6 +552,96 @@
             "department"
           ]
         }
+      },
+      {
+        "id": "perm_hr_employee_read",
+        "key": "vortex.hr.employee.read",
+        "label": "Read employees",
+        "description": "Read employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_employee_create",
+        "key": "vortex.hr.employee.create",
+        "label": "Create employees",
+        "description": "Create employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_employee_update",
+        "key": "vortex.hr.employee.update",
+        "label": "Update employees",
+        "description": "Update employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ]
+        }
       }
     ],
     "actions": [],
@@ -596,6 +686,28 @@
         "sort": [
           {
             "field": "title",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_employees",
+        "key": "hr_employees",
+        "record_type": "employee",
+        "inputs": [],
+        "select": [
+          "employee_number",
+          "employment_status",
+          "start_date"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "employee_number",
             "direction": "ascending"
           }
         ],
