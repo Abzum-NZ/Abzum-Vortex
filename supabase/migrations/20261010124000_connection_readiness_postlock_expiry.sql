@@ -1,3 +1,7 @@
+begin;
+
+set local role postgres;
+
 create or replace function vortex_connection.resolve_connection_instance_readiness(
   p_organization_id uuid,
   p_application_root_id uuid,
@@ -187,3 +191,7 @@ grant execute on function
 grant execute on function vortex_connection.resolve_connection_instance_readiness(
   uuid, uuid, uuid, text, bigint, text
 ) to vortex_record_owner;
+
+reset role;
+
+commit;
