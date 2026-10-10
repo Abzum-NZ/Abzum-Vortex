@@ -27,6 +27,7 @@ declare
   decision jsonb;
   bounds jsonb;
   projection jsonb;
+  derived_values jsonb;
 begin
   if p_preview is null or p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -161,6 +162,14 @@ begin
       bounds -> 'readableFieldIds'
     )
   );
+  -- Completed receipts returned above. A new attempt derives only inside this protected snapshot.
+  derived_values := vortex_record.derive_named_action_query_values_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision, p_action_id,
+    p_record_type_id, p_record_id, p_expected_concurrency_number
+  );
+  if derived_values <> '[]'::jsonb and p_inputs <> '{}'::jsonb then
+    raise exception using errcode = '55000', message = 'Named action Query value is unavailable';
+  end if;
   return pg_catalog.jsonb_build_object(
     'outcome', case when p_preview then 'previewed' else 'prepared' end,
     'action', action_context -> 'action',
@@ -182,6 +191,7 @@ begin
       )
       from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)
     ), '[]'::jsonb),
+    'derivedValues', derived_values,
     'recordId', p_record_id,
     'existingValues', loaded -> 'fieldValues',
     'readableFieldIds', bounds -> 'readableFieldIds',
@@ -206,4 +216,4 @@ revoke all on function vortex_record.prepare_named_action_set_announce_internal(
 comment on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
 ) is
-  'Private named-action preparation: replays or refuses by command receipt, then returns the facts, permission decision and bounds of the exact installed action, writing nothing.';
+  'Private named-action preparation: replays or refuses by command receipt before any Query reduction, then returns the facts, permission decision, bounds and private complete action-bound Query values of the exact installed action; no Record write.';

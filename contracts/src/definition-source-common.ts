@@ -6,6 +6,7 @@ import {
   jsonValueSchema,
 } from "./common";
 import { flowValueSchema } from "./flow-contracts";
+import { sourceNamedActionQueryValueSchema } from "./named-action-query-values";
 
 export type SourceProvenanceAnnotation = Readonly<{
   /** Canonical path suffixes; use `#` for an array index and `**` for descendant paths. */
@@ -394,6 +395,8 @@ export const refineActionTaskIds = (
  * an authored flow (`flowValueSchema`). The `values` property is the flow `field_values` map: its
  * keys are field aliases of the task's record type and each entry is a flow value, so `input`,
  * subject-field and actor/time reads are the same closed references a flow authors.
+ * A set-fields value may also bind one protected complete Query reduction; the Module compiler
+ * resolves those identities and the named Record service consumes it without extending Flow.
  */
 export const sourceActionTaskSchema = z.discriminatedUnion("type", [
   z
@@ -404,7 +407,7 @@ export const sourceActionTaskSchema = z.discriminatedUnion("type", [
         z
           .object({
             values: sourceProvenanceTarget(
-              z.record(builderKeySchema, flowValueSchema),
+              z.record(builderKeySchema, z.union([flowValueSchema, sourceNamedActionQueryValueSchema])),
               ["values/**"],
               true,
             ),

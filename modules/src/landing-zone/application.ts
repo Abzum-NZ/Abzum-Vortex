@@ -68,3 +68,8 @@ export const landingZoneApplication: ApplicationSourceDocumentV2 = applicationSo
     theme,
   },
 });
+
+/** Explicit immutable publication input; adoption still requires publication and installation. */
+export const shippedDefinitionReleaseVersions: Readonly<Record<string, string>> = Object.freeze({
+  "vortex.app.landing_zone": "1.0.1",
+});
