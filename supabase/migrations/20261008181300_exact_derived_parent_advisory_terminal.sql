@@ -1,3 +1,11 @@
+-- #2097: finish derived-parent effects before advisory notice allocation and publication.
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.apply_relationship_total_parent_internal(
   p_record_type_id uuid,
   p_record_id uuid,
@@ -156,3 +164,10 @@ grant execute on function vortex_record.apply_relationship_total_parent_internal
 
 comment on function vortex_record.apply_relationship_total_parent_internal(uuid,uuid,bigint,jsonb) is
   'Applies protected generated parent totals and calculations with the actual saved revision, Activity and standard Events in the original transaction. Live application-contained writes publish an advisory content-free notice for the actual saved Record; other scopes and previews retain their existing invalidation behavior.';
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;
