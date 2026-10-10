@@ -233,7 +233,7 @@ begin
         perform vortex_record.write_relationship_value_internal(
           p_record_type_id, record_id_value,
           (relationship_value ->> 'relationshipId')::uuid,
-          final_values -> pg_catalog.lower(field_id_value::text), false
+          final_values -> pg_catalog.lower(field_id_value::text), false, false
         );
       elsif ownership_mode = 'inherited'
         and (record_type_value ->> 'ownershipRelationshipId')::uuid =

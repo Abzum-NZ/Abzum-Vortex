@@ -1,3 +1,8 @@
+begin;
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
 create or replace function vortex_record.run_module_query_summary(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -944,3 +949,8 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
   'Runs one bounded database-backed installed Module query summary or protected board summary. It uses shared query preparation and the same organisation, Application, record visibility, published filter and declared user filter as list reads, counts rows only after vortex_record.read_record admits them unless the exact readable-field plan permits SQL aggregation, normalizes unreadable board choices to one unassigned bucket, refuses every explicit preview address before preparation, and refuses neutrally above 100000 candidate rows.';
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+commit;

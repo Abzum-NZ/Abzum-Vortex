@@ -18,7 +18,7 @@
         "storage_scope": "application_contained",
         "ownership_mode": "organisation_account",
         "standard_actions": ["create", "read", "update", "soft_delete"],
-        "custom_actions": ["act_landing_zone_tile_remove"],
+        "custom_actions": ["act_landing_zone_tile_remove", "act_landing_zone_tile_move_to_end"],
         "fields": [
           {
             "id": "fld_landing_zone_tile_target_kind",
@@ -454,6 +454,31 @@
           "readable_fields": ["organization_id", "revision", "key", "name", "icon"],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "perm_landing_zone_tile_move_to_end",
+        "key": "vortex.landing_zone.tile.move_to_end",
+        "label": "Move tile to end",
+        "description": "Allows moving one owned favourite to the end of the complete readable favourites Query.",
+        "record_type": "tile",
+        "action_kind": "named",
+        "named_action": "move_to_end",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "ownership"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "favourite_order"
+          ],
+          "changeable_fields": [
+            "favourite_order"
+          ]
+        }
       }
     ],
     "actions": [
@@ -470,6 +495,31 @@
             "id": "delete_subject",
             "type": "record.delete",
             "properties": {}
+          }
+        ]
+      },
+      {
+        "id": "act_landing_zone_tile_move_to_end",
+        "key": "vortex.landing_zone.tile.move_to_end",
+        "label": "Move to end",
+        "record_type": "tile",
+        "permission": "vortex.landing_zone.tile.move_to_end",
+        "shareable": false,
+        "inputs": [],
+        "tasks": [
+          {
+            "id": "move_subject",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "favourite_order": {
+                  "kind": "protected_query_decimal_max_plus_quantum",
+                  "query": "landing_zone_favourites",
+                  "field": "favourite_order",
+                  "quantum": "0.000000000001"
+                }
+              }
+            }
           }
         ]
       }

@@ -1,3 +1,833 @@
+-- #2090: capture actual created-row tuples, reauthorize the whole graph at both barriers, and publish exact terminal created notices.
+
+begin;
+
+set local role vortex_record_owner;
+grant create on schema vortex_record to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.insert_named_action_record_internal(
+  p_record_type_id uuid,
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[]
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  meta jsonb;
+  context_value jsonb;
+  record_type_value jsonb;
+  record_id_value uuid := pg_catalog.gen_random_uuid();
+  returned_record_id uuid;
+  returned_concurrency_number bigint;
+  returned_definition_revision bigint;
+  returned_organization_id uuid;
+  returned_module_root_id uuid;
+  returned_record_type_id uuid;
+  returned_storage_contract_id uuid;
+  returned_application_root_id uuid;
+  returned_created_by uuid;
+  ownership_mode text;
+  owner_account_id uuid;
+  field_item jsonb;
+  field_id_value uuid;
+  column_value jsonb;
+  input_value jsonb;
+  final_values jsonb := p_final_values;
+  column_names text[] := array[]::text[];
+  column_values text[] := array[]::text[];
+  insert_sql text;
+  app_scope uuid;
+  inserted_rows integer;
+  organization_id_value uuid;
+  module_root_id_value uuid;
+  storage_contract_id_value uuid;
+  module_release_revision_value bigint;
+  storage_scope_value text;
+  actor_id_value uuid;
+  eligible_for_created_notice boolean;
+begin
+  if p_record_type_id is null or p_record_type_id = nil_uuid
+    or pg_catalog.jsonb_typeof(p_final_values) is distinct from 'object'
+    or p_submitted_field_ids is null
+    or pg_catalog.array_position(p_submitted_field_ids, null::uuid) is not null
+    or pg_catalog.cardinality(p_submitted_field_ids) <> (
+      select pg_catalog.count(distinct value)
+      from pg_catalog.unnest(p_submitted_field_ids) as item(value)
+    ) then
+    raise exception using errcode = '22023', message = 'Named action creation is invalid';
+  end if;
+
+  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
+  if pg_catalog.jsonb_typeof(meta) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'declaration') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'context') is distinct from 'object'
+    or meta ? 'previewInstallationId'
+    or pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'recordTypeId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'recordType' ->> 'recordTypeId', 'uuid'), true)
+    or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'fields') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(meta -> 'columns') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'table') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(meta -> 'storageScope') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'storageContractId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleReleaseRevision', 'bigint'), true) then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  context_value := meta -> 'context';
+  if pg_catalog.jsonb_typeof(context_value -> 'organizationId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'applicationRootId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'organizationAccountId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'correlationId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'organizationId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'applicationRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'organizationAccountId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'correlationId', 'uuid'), true) then
+    raise exception using errcode = '55000',
+      message = 'Named action creation context is unavailable';
+  end if;
+  organization_id_value := (context_value ->> 'organizationId')::uuid;
+  actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
+  module_root_id_value := (meta ->> 'moduleRootId')::uuid;
+  storage_contract_id_value := (meta ->> 'storageContractId')::uuid;
+  module_release_revision_value := (meta ->> 'moduleReleaseRevision')::bigint;
+  storage_scope_value := meta ->> 'storageScope';
+  if organization_id_value = nil_uuid or (context_value ->> 'applicationRootId')::uuid = nil_uuid
+    or actor_id_value = nil_uuid
+    or module_root_id_value = nil_uuid or storage_contract_id_value = nil_uuid
+    or module_release_revision_value not between 1 and 9007199254740991
+    or record_id_value is null or record_id_value = nil_uuid
+    or storage_scope_value not in ('application_contained', 'organization_shared') then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  app_scope := case when storage_scope_value = 'application_contained'
+    then (context_value ->> 'applicationRootId')::uuid else null end;
+  if storage_scope_value = 'application_contained' and app_scope = nil_uuid then
+    raise exception using errcode = '55000',
+      message = 'Named action creation context is unavailable';
+  end if;
+  record_type_value := meta -> 'recordType';
+  if (record_type_value ->> 'recordTypeId')::uuid is distinct from p_record_type_id
+    or record_type_value ->> 'storageScope' is distinct from storage_scope_value then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  ownership_mode := record_type_value ->> 'ownershipMode';
+
+  if ownership_mode = 'organization_account' then
+    owner_account_id := actor_id_value;
+  elsif ownership_mode = 'group' then
+    raise exception using errcode = '42501',
+      message = 'Named action creation owner is unavailable';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.jsonb_object_keys(final_values) as supplied(key)
+    where not (meta -> 'columns' ? pg_catalog.lower(supplied.key))
+  ) then
+    raise exception using errcode = '23514', message = 'Named action creation field is unknown';
+  end if;
+
+  for field_item in
+    select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as item(value)
+    order by item.value ->> 'fieldId'
+  loop
+    field_id_value := (field_item ->> 'fieldId')::uuid;
+    column_value := meta -> 'columns' -> pg_catalog.lower(field_id_value::text);
+    if pg_catalog.jsonb_typeof(column_value) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(column_value -> 'token') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(column_value -> 'databaseValueType') is distinct from 'string' then
+      raise exception using errcode = '55000',
+        message = 'Named action creation storage is unavailable';
+    end if;
+    if field_item ->> 'type' = 'reference_number' then
+      if final_values ? pg_catalog.lower(field_id_value::text)
+        or field_id_value = any (p_submitted_field_ids) then
+        raise exception using errcode = '23514',
+          message = 'Named action creation cannot submit a generated field';
+      end if;
+      input_value := pg_catalog.to_jsonb(vortex_record.allocate_reference_number_internal(
+        organization_id_value, storage_contract_id_value, field_id_value, app_scope,
+        field_item -> 'settings'
+      ));
+      final_values := final_values || pg_catalog.jsonb_build_object(
+        pg_catalog.lower(field_id_value::text), input_value
+      );
+    elsif final_values ? pg_catalog.lower(field_id_value::text) then
+      input_value := final_values -> pg_catalog.lower(field_id_value::text);
+      if (field_item ->> 'required')::boolean
+        and pg_catalog.jsonb_typeof(input_value) = 'null' then
+        raise exception using errcode = '23514',
+          message = 'Named action creation is missing a required value';
+      end if;
+      if not vortex_record.canonical_record_value_matches(
+        input_value, field_item ->> 'type', column_value ->> 'databaseValueType'
+      ) then
+        raise exception using errcode = '23514',
+          message = 'Named action creation value is invalid';
+      end if;
+    else
+      if (field_item ->> 'required')::boolean then
+        raise exception using errcode = '23514',
+          message = 'Named action creation is missing a required value';
+      end if;
+      continue;
+    end if;
+
+    column_names := pg_catalog.array_append(
+      column_names, pg_catalog.format('%I', column_value ->> 'token')
+    );
+    column_values := pg_catalog.array_append(column_values,
+      case when pg_catalog.jsonb_typeof(input_value) = 'null' then 'null'
+      else case column_value ->> 'databaseValueType'
+        when 'decimal' then pg_catalog.format('%L::numeric', input_value #>> '{}')
+        when 'timestamp_with_time_zone' then
+          pg_catalog.format('%L::timestamptz', input_value #>> '{}')
+        when 'date' then pg_catalog.format('%L::date', input_value #>> '{}')
+        when 'integer' then pg_catalog.format('%L::bigint', input_value #>> '{}')
+        when 'boolean' then pg_catalog.format('%L::boolean', input_value #>> '{}')
+        when 'json' then pg_catalog.format('%L::jsonb', input_value::text)
+        else pg_catalog.format('%L::text', input_value #>> '{}')
+      end end
+    );
+  end loop;
+
+  insert_sql := pg_catalog.format(
+    'insert into record_data.%I (
+       organisation_id, module_root_id, record_type_id, storage_contract_id,
+       record_id, application_root_id, definition_revision,
+       owner_organisation_account_id, owner_group_id, lifecycle_state,
+       concurrency_number, created_at, created_by, updated_at, updated_by%s
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, null, ''active'', 1,
+       pg_catalog.statement_timestamp(), $9, pg_catalog.statement_timestamp(), $9%s)
+     returning record_id, concurrency_number, definition_revision, organisation_id, module_root_id,
+       record_type_id, storage_contract_id, application_root_id, created_by',
+    meta ->> 'table',
+    case when pg_catalog.cardinality(column_names) = 0 then ''
+      else ', ' || pg_catalog.array_to_string(column_names, ', ') end,
+    case when pg_catalog.cardinality(column_values) = 0 then ''
+      else ', ' || pg_catalog.array_to_string(column_values, ', ') end
+  );
+  execute insert_sql into returned_record_id, returned_concurrency_number,
+    returned_definition_revision,
+    returned_organization_id, returned_module_root_id, returned_record_type_id,
+    returned_storage_contract_id, returned_application_root_id, returned_created_by
+  using organization_id_value, module_root_id_value, p_record_type_id,
+    storage_contract_id_value, record_id_value, app_scope,
+    module_release_revision_value, owner_account_id, actor_id_value;
+  get diagnostics inserted_rows = row_count;
+  if inserted_rows <> 1 or returned_record_id is null
+    or returned_record_id = nil_uuid or returned_record_id is distinct from record_id_value
+    or returned_concurrency_number is null
+    or returned_concurrency_number not between 1 and 9007199254740991
+    or returned_definition_revision is distinct from module_release_revision_value
+    or returned_organization_id is distinct from organization_id_value
+    or returned_module_root_id is distinct from module_root_id_value
+    or returned_record_type_id is distinct from p_record_type_id
+    or returned_storage_contract_id is distinct from storage_contract_id_value
+    or returned_application_root_id is distinct from app_scope
+    or returned_created_by is distinct from actor_id_value then
+    raise exception using errcode = '55000',
+      message = 'Named action creation insert result is unavailable';
+  end if;
+
+  eligible_for_created_notice := storage_scope_value = 'application_contained';
+  if not eligible_for_created_notice then
+    perform vortex_record.bump_record_data_version_internal(
+      organization_id_value, storage_contract_id_value, app_scope
+    );
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'recordId', returned_record_id,
+    'storageContractId', returned_storage_contract_id,
+    'values', final_values,
+    '_savedTuple', pg_catalog.jsonb_build_object(
+      'recordId', returned_record_id,
+      'concurrencyNumber', returned_concurrency_number,
+      'organizationId', returned_organization_id,
+      'applicationRootId', returned_application_root_id,
+      'moduleRootId', returned_module_root_id,
+      'recordTypeId', returned_record_type_id,
+      'storageContractId', returned_storage_contract_id,
+      'moduleReleaseRevision', module_release_revision_value,
+      'storageScope', storage_scope_value,
+      'actorId', returned_created_by,
+      'correlationId', (context_value ->> 'correlationId')::uuid,
+      'eligible', eligible_for_created_notice
+    )
+  );
+end
+$function$;
+
+alter function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+  to vortex_record_adapter;
+
+comment on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[]) is
+  'Private named-action insert phase: validates current installed create metadata, allocates required reference values before all edges, captures the actual inserted row and revision with RETURNING, and returns a private tuple for whole-graph authorization and terminal created-notice emission.';
+
+create or replace function vortex_record.authorize_created_records_for_command_internal(
+  p_creations jsonb,
+  p_created_records jsonb,
+  p_original_context jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  safe_integer_max constant bigint := 9007199254740991;
+  current_context jsonb;
+  meta jsonb;
+  meta_context jsonb;
+  loaded jsonb;
+  loaded_context jsonb;
+  facts jsonb;
+  record_fact jsonb;
+  record_scope jsonb;
+  decision jsonb;
+  bounds jsonb;
+  creation jsonb;
+  created_value jsonb;
+  saved_tuple jsonb;
+  submitted_field text;
+  returned_field text;
+  submitted_id uuid;
+  changeable_id text;
+  ordinal_key text;
+  ordinal_value integer;
+  record_type_id_value uuid;
+  record_id_value uuid;
+  organization_id_value uuid;
+  application_root_id_value uuid;
+  account_id_value uuid;
+  correlation_id_value uuid;
+  module_root_id_value uuid;
+  storage_contract_id_value uuid;
+  module_release_revision_value bigint;
+  definition_revision_value bigint;
+  storage_scope_value text;
+  actual_concurrency_number bigint;
+  expected_record_scope jsonb;
+  ordinals integer[] := array[]::integer[];
+  seen_map_ordinals integer[] := array[]::integer[];
+  seen_record_ids uuid[] := array[]::uuid[];
+  result_tuples jsonb := '[]'::jsonb;
+  matching_target_count integer;
+  eligible_value boolean;
+begin
+  if pg_catalog.jsonb_typeof(p_creations) is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_created_records) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_original_context) is distinct from 'object'
+    or not (p_original_context ?& array[
+      'organizationId', 'applicationRootId', 'organizationAccountId', 'correlationId'
+    ])
+    or p_original_context - array[
+      'organizationId', 'applicationRootId', 'organizationAccountId', 'correlationId'
+    ]::text[] <> '{}'::jsonb then
+    raise exception using errcode = '22023',
+      message = 'Named action creation authority input is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_creations) = 0
+    or (select pg_catalog.count(*)
+        from pg_catalog.jsonb_object_keys(p_created_records)) <>
+      pg_catalog.jsonb_array_length(p_creations) then
+    raise exception using errcode = '22023',
+      message = 'Named action creation authority input is invalid';
+  end if;
+  if pg_catalog.jsonb_typeof(p_original_context -> 'organizationId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_original_context -> 'applicationRootId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_original_context -> 'organizationAccountId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_original_context -> 'correlationId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(p_original_context ->> 'organizationId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(p_original_context ->> 'applicationRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(p_original_context ->> 'organizationAccountId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(p_original_context ->> 'correlationId', 'uuid'), true) then
+    raise exception using errcode = '42501',
+      message = 'Named action creation context is unavailable';
+  end if;
+  organization_id_value := (p_original_context ->> 'organizationId')::uuid;
+  application_root_id_value := (p_original_context ->> 'applicationRootId')::uuid;
+  account_id_value := (p_original_context ->> 'organizationAccountId')::uuid;
+  correlation_id_value := (p_original_context ->> 'correlationId')::uuid;
+  if organization_id_value = nil_uuid or application_root_id_value = nil_uuid
+    or account_id_value = nil_uuid or correlation_id_value = nil_uuid then
+    raise exception using errcode = '42501',
+      message = 'Named action creation context is unavailable';
+  end if;
+
+  current_context := vortex_access.validated_human_request_context();
+  if pg_catalog.jsonb_typeof(current_context) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(current_context -> 'organizationId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(current_context -> 'applicationRootId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(current_context -> 'organizationAccountId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(current_context -> 'correlationId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(current_context ->> 'organizationId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(current_context ->> 'applicationRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(current_context ->> 'organizationAccountId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(current_context ->> 'correlationId', 'uuid'), true)
+    or (current_context ->> 'organizationId')::uuid is distinct from organization_id_value
+    or (current_context ->> 'applicationRootId')::uuid is distinct from application_root_id_value
+    or (current_context ->> 'organizationAccountId')::uuid is distinct from account_id_value
+    or (current_context ->> 'correlationId')::uuid is distinct from correlation_id_value then
+    raise exception using errcode = '42501',
+      message = 'Named action creation context changed';
+  end if;
+
+  -- Validate and retain each canonical ordinal before using it as an object key.
+  for creation in
+    select item.value from pg_catalog.jsonb_array_elements(p_creations) item(value)
+  loop
+    if pg_catalog.jsonb_typeof(creation) is distinct from 'object'
+      or not (creation ?& array['ordinal', 'recordTypeId', 'values', 'finalValues'])
+      or creation - array['ordinal', 'recordTypeId', 'values', 'finalValues']::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(creation -> 'ordinal') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(creation ->> 'ordinal', 'integer'), true)
+      or pg_catalog.jsonb_typeof(creation -> 'recordTypeId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(creation ->> 'recordTypeId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(creation -> 'values') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(creation -> 'finalValues') is distinct from 'object' then
+      raise exception using errcode = '22023',
+        message = 'Named action creation authority input is invalid';
+    end if;
+    ordinal_value := (creation ->> 'ordinal')::integer;
+    record_type_id_value := (creation ->> 'recordTypeId')::uuid;
+    if ordinal_value < 1 or record_type_id_value = nil_uuid
+      or ordinal_value = any (ordinals) then
+      raise exception using errcode = '22023',
+        message = 'Named action creation ordinal is invalid';
+    end if;
+    ordinals := pg_catalog.array_append(ordinals, ordinal_value);
+  end loop;
+
+  -- A JSON object can contain text keys such as "01" and "1" that cast to the
+  -- same integer. Admit only the exact decimal form of each declared ordinal.
+  for ordinal_key in
+    select item.key from pg_catalog.jsonb_object_keys(p_created_records) item(key)
+  loop
+    if coalesce(not pg_catalog.pg_input_is_valid(ordinal_key, 'integer'), true) then
+      raise exception using errcode = '22023',
+        message = 'Named action creation result key is invalid';
+    end if;
+    ordinal_value := ordinal_key::integer;
+    if ordinal_value < 1 or ordinal_key is distinct from ordinal_value::text
+      or not (ordinal_value = any (ordinals))
+      or ordinal_value = any (seen_map_ordinals) then
+      raise exception using errcode = '22023',
+        message = 'Named action creation result key is invalid';
+    end if;
+    seen_map_ordinals := pg_catalog.array_append(seen_map_ordinals, ordinal_value);
+  end loop;
+  if pg_catalog.cardinality(seen_map_ordinals) <> pg_catalog.cardinality(ordinals) then
+    raise exception using errcode = '22023',
+      message = 'Named action creation result set is incomplete';
+  end if;
+
+  for creation in
+    select item.value
+    from pg_catalog.jsonb_array_elements(p_creations) with ordinality item(value, ordinality)
+    order by (item.value ->> 'ordinal')::integer
+  loop
+    ordinal_value := (creation ->> 'ordinal')::integer;
+    record_type_id_value := (creation ->> 'recordTypeId')::uuid;
+    created_value := p_created_records -> ordinal_value::text;
+    if pg_catalog.jsonb_typeof(created_value) is distinct from 'object'
+      or not (created_value ?& array['recordId', 'storageContractId', 'values', '_savedTuple'])
+      or created_value - array['recordId', 'storageContractId', 'values', '_savedTuple']::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(created_value -> 'recordId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(created_value ->> 'recordId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(created_value -> 'storageContractId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(created_value ->> 'storageContractId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(created_value -> 'values') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(created_value -> '_savedTuple') is distinct from 'object' then
+      raise exception using errcode = '22023',
+        message = 'Named action creation result is invalid';
+    end if;
+    record_id_value := (created_value ->> 'recordId')::uuid;
+    storage_contract_id_value := (created_value ->> 'storageContractId')::uuid;
+    saved_tuple := created_value -> '_savedTuple';
+    if record_id_value = nil_uuid or storage_contract_id_value = nil_uuid
+      or pg_catalog.jsonb_typeof(saved_tuple) is distinct from 'object'
+      or not (saved_tuple ?& array[
+        'recordId', 'concurrencyNumber', 'organizationId', 'applicationRootId',
+        'moduleRootId', 'recordTypeId', 'storageContractId', 'moduleReleaseRevision',
+        'storageScope', 'actorId', 'correlationId', 'eligible'
+      ])
+      or saved_tuple - array[
+        'recordId', 'concurrencyNumber', 'organizationId', 'applicationRootId',
+        'moduleRootId', 'recordTypeId', 'storageContractId', 'moduleReleaseRevision',
+        'storageScope', 'actorId', 'correlationId', 'eligible'
+      ]::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'recordId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'recordId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'concurrencyNumber') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'concurrencyNumber', 'bigint'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'organizationId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'organizationId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'applicationRootId') not in ('string', 'null')
+      or (pg_catalog.jsonb_typeof(saved_tuple -> 'applicationRootId') = 'string'
+        and coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'applicationRootId', 'uuid'), true))
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'moduleRootId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'moduleRootId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'recordTypeId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'recordTypeId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'storageContractId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'storageContractId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'moduleReleaseRevision') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'moduleReleaseRevision', 'bigint'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'storageScope') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'actorId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'actorId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'correlationId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(saved_tuple ->> 'correlationId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(saved_tuple -> 'eligible') is distinct from 'boolean' then
+      raise exception using errcode = '22023',
+        message = 'Named action creation tuple is invalid';
+    end if;
+
+    if (saved_tuple ->> 'recordId')::uuid is distinct from record_id_value
+      or (saved_tuple ->> 'recordTypeId')::uuid is distinct from record_type_id_value
+      or (saved_tuple ->> 'storageContractId')::uuid is distinct from storage_contract_id_value
+      or (saved_tuple ->> 'organizationId')::uuid is distinct from organization_id_value
+      or (saved_tuple ->> 'actorId')::uuid is distinct from account_id_value
+      or (saved_tuple ->> 'correlationId')::uuid is distinct from correlation_id_value
+      or (saved_tuple ->> 'concurrencyNumber')::bigint not between 1 and safe_integer_max
+      or (saved_tuple ->> 'moduleReleaseRevision')::bigint not between 1 and safe_integer_max
+      or (saved_tuple ->> 'moduleRootId')::uuid = nil_uuid
+      or (saved_tuple ->> 'storageScope') not in ('application_contained', 'organization_shared')
+      or ((saved_tuple ->> 'storageScope') = 'application_contained'
+        and (saved_tuple ->> 'applicationRootId')::uuid is distinct from application_root_id_value)
+      or ((saved_tuple ->> 'storageScope') = 'organization_shared'
+        and saved_tuple -> 'applicationRootId' is distinct from 'null'::jsonb)
+      or (saved_tuple ->> 'eligible')::boolean is distinct from
+        ((saved_tuple ->> 'storageScope') = 'application_contained') then
+      raise exception using errcode = '42501',
+        message = 'Named action creation tuple context changed';
+    end if;
+    if record_id_value = any (seen_record_ids) then
+      raise exception using errcode = '22023',
+        message = 'Named action creation identity is duplicated';
+    end if;
+    seen_record_ids := pg_catalog.array_append(seen_record_ids, record_id_value);
+
+    meta := vortex_record.resolve_record_action_context_internal(record_type_id_value, 'create');
+    if pg_catalog.jsonb_typeof(meta) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(meta -> 'declaration') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(meta -> 'context') is distinct from 'object'
+      or meta ? 'previewInstallationId'
+      or pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(meta -> 'columns') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(meta -> 'moduleRootId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'storageContractId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'moduleReleaseRevision') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(meta -> 'context' -> 'organizationId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'context' -> 'applicationRootId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'context' -> 'organizationAccountId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'context' -> 'correlationId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'recordTypeId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'storageScope') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'table') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(meta -> 'declaration' -> 'recordBinding') is distinct from 'object'
+      or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'context' ->> 'organizationId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'context' ->> 'applicationRootId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'context' ->> 'organizationAccountId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'context' ->> 'correlationId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'recordType' ->> 'recordTypeId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(
+        meta -> 'declaration' -> 'recordBinding' ->> 'moduleRootId', 'uuid'
+      ), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(
+        meta -> 'declaration' -> 'recordBinding' ->> 'recordTypeId', 'uuid'
+      ), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(
+        meta -> 'declaration' -> 'recordBinding' ->> 'storageContractId', 'uuid'
+      ), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleRootId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'storageContractId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleReleaseRevision', 'bigint'), true)
+      or meta ->> 'storageScope' is distinct from saved_tuple ->> 'storageScope'
+      or (meta ->> 'moduleRootId')::uuid is distinct from (saved_tuple ->> 'moduleRootId')::uuid
+      or (meta ->> 'storageContractId')::uuid is distinct from storage_contract_id_value
+      or (meta ->> 'moduleReleaseRevision')::bigint is distinct from
+        (saved_tuple ->> 'moduleReleaseRevision')::bigint
+      or (meta -> 'context' ->> 'organizationId')::uuid is distinct from organization_id_value
+      or (meta -> 'context' ->> 'applicationRootId')::uuid is distinct from application_root_id_value
+      or (meta -> 'context' ->> 'organizationAccountId')::uuid is distinct from account_id_value
+      or (meta -> 'context' ->> 'correlationId')::uuid is distinct from correlation_id_value
+      or (meta -> 'recordType' ->> 'recordTypeId')::uuid is distinct from record_type_id_value
+      or (meta -> 'recordType' ->> 'storageScope') is distinct from saved_tuple ->> 'storageScope'
+      or (meta -> 'declaration' -> 'recordBinding' ->> 'moduleRootId')::uuid is distinct from
+        (saved_tuple ->> 'moduleRootId')::uuid
+      or (meta -> 'declaration' -> 'recordBinding' ->> 'recordTypeId')::uuid is distinct from
+        record_type_id_value
+      or (meta -> 'declaration' -> 'recordBinding' ->> 'storageContractId')::uuid is distinct from
+        storage_contract_id_value
+      or meta -> 'declaration' -> 'recordBinding' ->> 'storageScope' is distinct from
+        saved_tuple ->> 'storageScope' then
+      raise exception using errcode = '42501',
+        message = 'Named action creation installation is unavailable';
+    end if;
+    if exists (
+      select 1
+      from pg_catalog.jsonb_each(creation -> 'finalValues') expected(key, value)
+      where not (created_value -> 'values' ? expected.key)
+        or (created_value -> 'values' -> expected.key) is distinct from expected.value
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Named action creation values changed';
+    end if;
+    for returned_field in
+      select key from pg_catalog.jsonb_object_keys(created_value -> 'values') as field(key)
+    loop
+      if coalesce(not pg_catalog.pg_input_is_valid(returned_field, 'uuid'), true)
+        or not (meta -> 'columns' ? pg_catalog.lower(returned_field)) then
+        raise exception using errcode = '55000',
+          message = 'Named action creation values are unavailable';
+      end if;
+      if not (creation -> 'finalValues' ? returned_field)
+        and not exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') field(value)
+          where pg_catalog.lower(field.value ->> 'fieldId') =
+              pg_catalog.lower(returned_field)
+            and field.value ->> 'type' = 'reference_number'
+        ) then
+        raise exception using errcode = '55000',
+          message = 'Named action creation generated value is unavailable';
+      end if;
+    end loop;
+
+    loaded := vortex_record.load_record_access_facts_internal(
+      record_type_id_value, 'create', record_id_value, null
+    );
+    if pg_catalog.jsonb_typeof(loaded) is distinct from 'object'
+      or loaded ->> 'outcome' is distinct from 'loaded'
+      or loaded ? 'previewInstallationId'
+      or pg_catalog.jsonb_typeof(loaded -> 'context') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'context' -> 'organizationId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(loaded -> 'context' -> 'applicationRootId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(loaded -> 'context' -> 'organizationAccountId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(loaded -> 'context' -> 'correlationId') is distinct from 'string'
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded -> 'context' ->> 'organizationId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded -> 'context' ->> 'applicationRootId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded -> 'context' ->> 'organizationAccountId', 'uuid'), true)
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded -> 'context' ->> 'correlationId', 'uuid'), true)
+      or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'declaration' -> 'recordBinding') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'records') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'recordTypes') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'relationships') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'sharingConditions') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'edges') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(loaded -> 'facts' -> 'binding') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'columns') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(loaded -> 'table') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(loaded -> 'concurrencyNumber') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded ->> 'concurrencyNumber', 'bigint'), true)
+      or pg_catalog.jsonb_typeof(loaded -> 'definitionRevision') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded ->> 'definitionRevision', 'bigint'), true)
+      or pg_catalog.jsonb_typeof(loaded -> 'moduleReleaseRevision') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(loaded -> 'moduleReleaseRevision') is distinct from 'number'
+      or coalesce(not pg_catalog.pg_input_is_valid(loaded ->> 'moduleReleaseRevision', 'bigint'), true)
+      or (loaded -> 'context' ->> 'organizationId')::uuid is distinct from organization_id_value
+      or (loaded -> 'context' ->> 'applicationRootId')::uuid is distinct from application_root_id_value
+      or (loaded -> 'context' ->> 'organizationAccountId')::uuid is distinct from account_id_value
+      or (loaded -> 'context' ->> 'correlationId')::uuid is distinct from correlation_id_value
+      or loaded -> 'facts' -> 'binding' is distinct from
+        meta -> 'declaration' -> 'recordBinding'
+      or loaded -> 'declaration' -> 'recordBinding' is distinct from
+        meta -> 'declaration' -> 'recordBinding'
+      or loaded ->> 'table' is distinct from meta ->> 'table'
+      or (loaded ->> 'moduleReleaseRevision')::bigint is distinct from
+        (meta ->> 'moduleReleaseRevision')::bigint
+      or (loaded ->> 'moduleReleaseRevision')::bigint is distinct from
+        (saved_tuple ->> 'moduleReleaseRevision')::bigint then
+      raise exception using errcode = '42501',
+        message = 'Named action creation facts are unavailable';
+    end if;
+    if exists (
+        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'recordTypes') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+      ) or exists (
+        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'relationships') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+      ) or exists (
+        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'sharingConditions') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+      ) or exists (
+        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'edges') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+      ) then
+      raise exception using errcode = '55000',
+        message = 'Named action creation graph facts are malformed';
+    end if;
+    actual_concurrency_number := (loaded ->> 'concurrencyNumber')::bigint;
+    definition_revision_value := (loaded ->> 'definitionRevision')::bigint;
+    if actual_concurrency_number not between 1 and safe_integer_max then
+      raise exception using errcode = '55000',
+        message = 'Named action creation revision is unavailable';
+    end if;
+    if definition_revision_value not between 1 and safe_integer_max
+      or definition_revision_value is distinct from
+        (saved_tuple ->> 'moduleReleaseRevision')::bigint then
+      raise exception using errcode = '42501',
+        message = 'Named action creation definition changed';
+    end if;
+
+    matching_target_count := 0;
+    record_fact := null;
+    for record_fact in
+      select item.value from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records') item(value)
+    loop
+      if pg_catalog.jsonb_typeof(record_fact) is distinct from 'object'
+        or pg_catalog.jsonb_typeof(record_fact -> 'recordScope') is distinct from 'object'
+        or pg_catalog.jsonb_typeof(record_fact -> 'fieldValues') is distinct from 'object' then
+        raise exception using errcode = '55000',
+          message = 'Named action creation target facts are malformed';
+      end if;
+      if pg_catalog.jsonb_typeof(record_fact -> 'recordScope' -> 'recordId') = 'string'
+        and coalesce(pg_catalog.pg_input_is_valid(
+          record_fact -> 'recordScope' ->> 'recordId', 'uuid'
+        ), false)
+        and (record_fact -> 'recordScope' ->> 'recordId')::uuid = record_id_value then
+        matching_target_count := matching_target_count + 1;
+      end if;
+    end loop;
+    if matching_target_count <> 1 then
+      raise exception using errcode = '42501',
+        message = 'Named action creation target is unavailable';
+    end if;
+
+    -- Re-read the one exact saved target from the returned fact set and compare
+    -- its complete loader-produced scope; related graph facts never substitute.
+    select item.value into strict record_fact
+    from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records') item(value)
+    where item.value -> 'recordScope' ->> 'recordId' = record_id_value::text;
+    record_scope := record_fact -> 'recordScope';
+    expected_record_scope := pg_catalog.jsonb_build_object(
+      'storageScope', saved_tuple ->> 'storageScope',
+      'organizationId', organization_id_value,
+      'moduleRootId', (saved_tuple ->> 'moduleRootId')::uuid,
+      'recordTypeId', record_type_id_value,
+      'storageContractId', storage_contract_id_value,
+      'recordId', record_id_value
+    ) || case when saved_tuple ->> 'storageScope' = 'application_contained'
+      then pg_catalog.jsonb_build_object('applicationRootId', application_root_id_value)
+      else '{}'::jsonb end;
+    if record_scope is distinct from expected_record_scope
+      or pg_catalog.jsonb_typeof(record_fact -> 'fieldValues') is distinct from 'object'
+      or record_fact ->> 'lifecycleState' is distinct from 'active' then
+      raise exception using errcode = '42501',
+        message = 'Named action creation target scope changed';
+    end if;
+
+    facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
+      'binding', meta -> 'declaration' -> 'recordBinding'
+    );
+    decision := vortex_access.evaluate_organization_record_access_internal(
+      meta -> 'declaration', record_id_value, facts
+    );
+    if pg_catalog.jsonb_typeof(decision) is distinct from 'object'
+      or decision ->> 'outcome' is distinct from 'allowed' then
+      raise exception using errcode = '42501',
+        message = 'Named action creation authority is unavailable';
+    end if;
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    if pg_catalog.jsonb_typeof(bounds) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(bounds -> 'readableFieldIds') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(bounds -> 'changeableFieldIds') is distinct from 'array'
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'string'
+          or coalesce(not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid'), true)
+      )
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') item(value)
+        where pg_catalog.jsonb_typeof(item.value) is distinct from 'string'
+          or coalesce(not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid'), true)
+          or not (bounds -> 'readableFieldIds' ? (item.value #>> '{}'))
+      ) then
+      raise exception using errcode = '55000',
+        message = 'Named action creation field bounds are unavailable';
+    end if;
+    for submitted_field in
+      select key from pg_catalog.jsonb_object_keys(creation -> 'values') as field(key)
+    loop
+      if coalesce(not pg_catalog.pg_input_is_valid(submitted_field, 'uuid'), true) then
+        raise exception using errcode = '22023',
+          message = 'Named action creation field is invalid';
+      end if;
+      submitted_id := submitted_field::uuid;
+      changeable_id := pg_catalog.lower(submitted_id::text);
+      if not (meta -> 'columns' ? changeable_id)
+        or not exists (
+          select 1
+          from pg_catalog.jsonb_array_elements_text(bounds -> 'changeableFieldIds') item(value)
+          where pg_catalog.lower(item.value) = changeable_id
+        ) then
+        raise exception using errcode = '42501',
+          message = 'Named action creation field is not changeable';
+      end if;
+    end loop;
+
+    eligible_value := (saved_tuple ->> 'eligible')::boolean;
+    result_tuples := result_tuples || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'ordinal', ordinal_value,
+        'recordId', record_id_value,
+        'concurrencyNumber', actual_concurrency_number,
+        'organizationId', organization_id_value,
+        'applicationRootId', saved_tuple -> 'applicationRootId',
+        'moduleRootId', (saved_tuple ->> 'moduleRootId')::uuid,
+        'recordTypeId', record_type_id_value,
+        'storageContractId', storage_contract_id_value,
+        'moduleReleaseRevision', (loaded ->> 'moduleReleaseRevision')::bigint,
+        'storageScope', saved_tuple ->> 'storageScope',
+        'correlationId', correlation_id_value,
+        'eligible', eligible_value
+      )
+    );
+  end loop;
+
+  if pg_catalog.jsonb_array_length(result_tuples) <> pg_catalog.cardinality(ordinals)
+    or pg_catalog.cardinality(seen_record_ids) <> pg_catalog.cardinality(ordinals) then
+    raise exception using errcode = '55000',
+      message = 'Named action creation authority result is incomplete';
+  end if;
+  return result_tuples;
+end
+$function$;
+
+alter function vortex_record.authorize_created_records_for_command_internal(jsonb,jsonb,jsonb)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.authorize_created_records_for_command_internal(jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_record.authorize_created_records_for_command_internal(jsonb,jsonb,jsonb)
+  to vortex_record_adapter;
+
+comment on function vortex_record.authorize_created_records_for_command_internal(jsonb,jsonb,jsonb) is
+  'Private named-action whole-graph ordinary CREATE authorization barrier over the complete inserted set; revalidates the original HUMAN context, installed scope, actual loader target and revision, current Access decision and submitted field bounds, returning ordered final saved tuples for the terminal receipt and created-notice seam.';
+
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -88,8 +918,6 @@ declare
   correlation_id_value uuid;
   command_fingerprint_value text;
   receipt_claim jsonb;
-  action_query_values jsonb;
-  action_query_value jsonb;
   meta jsonb;
   loaded jsonb;
   decision jsonb;
@@ -830,22 +1658,6 @@ begin
 
   if action_mode then
     meta := action_context;
-    -- This lies after claim/replay and before any subject mutation. Never trust runtime derivation.
-    action_query_values := vortex_record.derive_named_action_query_values_internal(
-      action_owner_kind, action_owner_id, action_release_revision, action_id_value,
-      p_record_type_id, p_record_id, p_expected_concurrency_number
-    );
-    if action_query_values <> '[]'::jsonb and action_inputs <> '{}'::jsonb then
-      raise exception using errcode = '55000', message = 'Named action Query value is unavailable';
-    end if;
-    for action_query_value in select item.value
-      from pg_catalog.jsonb_array_elements(action_query_values) item(value)
-    loop
-      if p_submitted_values -> (action_query_value ->> 'fieldId') is distinct from action_query_value -> 'value'
-        or action_final_values -> (action_query_value ->> 'fieldId') is distinct from action_query_value -> 'value' then
-        raise exception using errcode = '55000', message = 'Named action Query value is unavailable';
-      end if;
-    end loop;
   else
     meta := vortex_record.resolve_record_action_context_internal(
       p_record_type_id, p_operation
@@ -1322,7 +2134,7 @@ begin
         perform vortex_record.write_relationship_value_internal(
           p_record_type_id, p_record_id,
           (relationship_change ->> 'relationshipId')::uuid,
-          relationship_change -> 'value', increment_for_relationship, false
+          relationship_change -> 'value', increment_for_relationship
         );
         increment_for_relationship := false;
       end loop;
@@ -1871,3 +2683,13 @@ comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
   'The one protected Record-change operation: claims one live or preview-local receipt and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
+
+-- Retire the former per-row creation authorization helper; the dispatcher now consumes the complete-set helper.
+drop function vortex_record.authorize_named_action_created_record_internal(uuid,uuid,uuid[]);
+
+reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
+
+commit;

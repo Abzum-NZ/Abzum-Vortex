@@ -51,6 +51,7 @@ export {
   type ModulePlatformPermissionDeclaration,
 } from "./module-source-contracts";
 export * from "./named-actions";
+export * from "./named-action-query-values";
 export * from "./module-field-values-v2";
 export * from "./exact-decimal";
 export * from "./operation-contracts";
