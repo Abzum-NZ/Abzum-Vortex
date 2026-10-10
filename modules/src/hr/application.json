@@ -47,7 +47,10 @@
           "application.hr.open",
           "vortex.hr.department.read",
           "vortex.hr.department.create",
-          "vortex.hr.department.update"
+          "vortex.hr.department.update",
+          "vortex.hr.position.read",
+          "vortex.hr.position.create",
+          "vortex.hr.position.update"
         ]
       }
     ],
@@ -58,6 +61,13 @@
         "label": "Departments",
         "page": "hr_departments",
         "permission": "vortex.hr.department.read"
+      },
+      {
+        "id": "nav_hr_positions",
+        "type": "page",
+        "label": "Positions",
+        "page": "hr_positions",
+        "permission": "vortex.hr.position.read"
       }
     ],
     "queries": [],
@@ -98,6 +108,41 @@
         "id": "event_hr_update_department",
         "key": "vortex.app.hr.hr_update_department",
         "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_open_position",
+        "key": "vortex.app.hr.hr_open_position",
+        "record_type": "vortex.hr:position",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_new_position",
+        "key": "vortex.app.hr.hr_new_position",
+        "record_type": "vortex.hr:position",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_edit_position",
+        "key": "vortex.app.hr.hr_edit_position",
+        "record_type": "vortex.hr:position",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_create_position",
+        "key": "vortex.app.hr.hr_create_position",
+        "record_type": "vortex.hr:position",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_update_position",
+        "key": "vortex.app.hr.hr_update_position",
+        "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -872,6 +917,641 @@
             }
           }
         }
+      },
+      {
+        "id": "page_hr_positions",
+        "key": "hr_positions",
+        "name": "Positions",
+        "type": "list",
+        "record_type": "vortex.hr:position",
+        "permission": "vortex.hr.position.read",
+        "query": "vortex.hr:hr_positions",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_position_list": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_hr_open_position"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.position_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position code"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Positions"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_positions"
+                },
+                "hr_new_position_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "New position"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.position.create"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_position_list",
+                  "hr_new_position_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_position_detail",
+        "key": "hr_position_detail",
+        "name": "Position",
+        "type": "detail",
+        "record_type": "vortex.hr:position",
+        "permission": "vortex.hr.position.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_position_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Position"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.position_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position code"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "hr_edit_position_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "Edit position"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.position.update"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_position_detail",
+                  "hr_edit_position_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_position_new",
+        "key": "hr_position_new",
+        "name": "New position",
+        "type": "form",
+        "record_type": "vortex.hr:position",
+        "permission": "vortex.hr.position.create",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_position_new_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "New position"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_position_new_position_code": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.position_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position code"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_new_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create position"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_new_title": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_new_department": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "department"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_departments"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:department.name"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_position_new_position_code",
+                          "hr_position_new_title",
+                          "hr_position_new_department",
+                          "hr_position_new_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_position_new_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_position_edit",
+        "key": "hr_position_edit",
+        "name": "Edit position",
+        "type": "form",
+        "record_type": "vortex.hr:position",
+        "permission": "vortex.hr.position.update",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_position_edit_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Edit position"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_position_edit_position_code": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.position_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position code"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_edit_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Save position"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_edit_title": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.title"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Title"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_position_edit_department": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "department"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_departments"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:department.name"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_position_edit_position_code",
+                          "hr_position_edit_title",
+                          "hr_position_edit_department",
+                          "hr_position_edit_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_position_edit_form"
+                ]
+              }
+            }
+          }
+        }
       }
     ],
     "flows": [
@@ -1165,6 +1845,297 @@
         "triggers": [],
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_open_position",
+        "key": "hr_open_position",
+        "labels": {
+          "name": "Open position"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_position_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the clicked position's own detail page with the record identity the clicked row carries."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_new_position",
+        "key": "hr_new_position",
+        "labels": {
+          "name": "New position"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_position_new"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the position creation form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_edit_position",
+        "key": "hr_edit_position",
+        "labels": {
+          "name": "Edit position"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_position_edit"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the current position in the edit form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_create_position",
+        "key": "hr_create_position",
+        "labels": {
+          "name": "Submit position"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:position"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_positions",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_positions"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_update_position",
+        "key": "hr_update_position",
+        "labels": {
+          "name": "Save position"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:position"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_position_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -1221,6 +2192,70 @@
         "event_id": "event_hr_update_department",
         "event": "form_submit",
         "flow": "flow_hr_update_department",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_open_position",
+        "control": "hr_position_list",
+        "event_id": "event_hr_open_position",
+        "event": "row_clicked",
+        "flow": "flow_hr_open_position",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_new_position",
+        "control": "hr_new_position_button",
+        "event_id": "event_hr_new_position",
+        "event": "action",
+        "flow": "flow_hr_new_position",
+        "inputs": {}
+      },
+      {
+        "id": "binding_hr_edit_position",
+        "control": "hr_edit_position_button",
+        "event_id": "event_hr_edit_position",
+        "event": "action",
+        "flow": "flow_hr_edit_position",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_create_position",
+        "control": "hr_position_new_form",
+        "event_id": "event_hr_create_position",
+        "event": "form_submit",
+        "flow": "flow_hr_create_position",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_update_position",
+        "control": "hr_position_edit_form",
+        "event_id": "event_hr_update_position",
+        "event": "form_submit",
+        "flow": "flow_hr_update_position",
         "inputs": {
           "record": {
             "kind": "caller",
