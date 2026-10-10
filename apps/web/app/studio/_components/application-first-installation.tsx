@@ -125,6 +125,8 @@ const commandMessage = (result: StudioApplicationFirstInstallCommandResult): str
     return "Preparation completed. The page is reloading the protected installation and policy setup.";
   if (result.action === "policy_saved")
     return "The initial policy was saved. The page is reloading its current protected state.";
+  if (!("postCommit" in result))
+    return "The command completed. Reload the protected installation before continuing.";
   if (result.action === "activated")
     return result.postCommit.kind === "observed"
       ? `Activation committed at revision ${result.activeAtCommitRevision}; a fresh read observed revision ${result.postCommit.activeReleaseRevision}.`
@@ -307,8 +309,19 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       });
       if (!token.current()) return;
       const parsed = studioApplicationArchiveOptionsResultSchema.safeParse(raw);
-      if (!parsed.success || parsed.data.kind !== "available") {
-        if (parsed.success && (parsed.data.kind === "conflict" || parsed.data.kind === "refused")) {
+      if (!parsed.success) {
+        setArchivePages((previous) => ({
+          ...previous,
+          [targetId]: {
+            ...(previous[targetId] ?? { options: [], nextAfterConnectionInstanceId: null, loading: false, message: "" }),
+            loading: false,
+            message: "Eligible Connections could not be loaded. Retry this read or reload the page.",
+          },
+        }));
+        return;
+      }
+      if (parsed.data.kind !== "available") {
+        if (parsed.data.kind === "conflict" || parsed.data.kind === "refused") {
           setNeedsReload(true);
           setDrafts({});
           setArchivePages({});
@@ -325,8 +338,9 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
         }));
         return;
       }
+      const available = parsed.data;
       const existing = after === undefined ? [] : archivePages[targetId]?.options ?? [];
-      const options = [...existing, ...parsed.data.options];
+      const options = [...existing, ...available.options];
       if (new Set(options.map((option) => option.connectionInstanceId.toLowerCase())).size !== options.length) {
         setNeedsReload(true);
         setDrafts({});
@@ -338,7 +352,7 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
         ...previous,
         [targetId]: {
           options,
-          nextAfterConnectionInstanceId: parsed.data.nextAfterConnectionInstanceId ?? null,
+          nextAfterConnectionInstanceId: available.nextAfterConnectionInstanceId ?? null,
           loading: false,
           message: options.length === 0 ? "No eligible Connection is available on this page." : "Eligible Connections loaded.",
         },
@@ -409,14 +423,16 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       const archivePage = archivePages[targetId];
       const selected = archivePage?.options.find((option) =>
         option.connectionInstanceId.toLowerCase() === draft.archiveConnectionInstanceId.toLowerCase());
-      if (selected === undefined || !snapshot.workflows.includes(draft.archiveWorkflowId)) {
+      const archiveWorkflowId = snapshot.workflows.find((workflowId) =>
+        workflowId.toLowerCase() === draft.archiveWorkflowId.toLowerCase());
+      if (selected === undefined || archiveWorkflowId === undefined) {
         setMessage("Choose an exact workflow from this published release and a currently loaded eligible Connection.");
         return;
       }
       policy = {
         ...common,
         action: "archive_workflow",
-        archiveWorkflowId: draft.archiveWorkflowId,
+        archiveWorkflowId,
         archiveConnectionInstanceId: selected.connectionInstanceId,
         archiveDestination: selected.destinationKey,
         expectedConnectionRevision: selected.expectedRevision,

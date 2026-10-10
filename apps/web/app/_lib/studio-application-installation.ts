@@ -1471,7 +1471,7 @@ const readProvisionedSetupAccessDecision = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   key: string,
-): Promise<OrganizationAccessDecision> => {
+): Promise<Extract<OrganizationAccessDecision, { outcome: "allowed" }>> => {
   const result = await runOrganizationAccessOperation(
     transaction,
     scope,
@@ -1480,13 +1480,15 @@ const readProvisionedSetupAccessDecision = async (
   );
   if (result.outcome !== "completed") problem("refused");
   const parsed = organizationAccessDecisionSchema.safeParse(result.value);
-  if (!parsed.success || parsed.data.outcome !== "allowed" || parsed.data.operationKey !== key ||
-    parsed.data.target.kind !== "organization" ||
-    !sameUuid(parsed.data.organizationId, scope.organizationId) ||
-    !sameUuid(parsed.data.organizationAccountId, scope.organizationAccountId) ||
-    parsed.data.accessVersion !== scope.accessVersion)
+  if (!parsed.success) problem("refused");
+  const decision = parsed.data;
+  if (decision.outcome !== "allowed" || decision.operationKey !== key ||
+    decision.target.kind !== "organization" ||
+    !sameUuid(decision.organizationId, scope.organizationId) ||
+    !sameUuid(decision.organizationAccountId, scope.organizationAccountId) ||
+    decision.accessVersion !== scope.accessVersion)
     problem("refused");
-  return parsed.data;
+  return decision;
 };
 
 const provisionedSetupModulePins = (
@@ -2257,12 +2259,14 @@ const readAppScopedFirstInstallReleaseSet = async (
     problem("refused");
   }
   const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success || !sameUuid(parsed.data.application.organizationId, selector.organizationId) ||
-    !sameUuid(parsed.data.application.rootId, selector.rootId) ||
-    parsed.data.application.releaseRevision !== selector.releaseRevision ||
-    parsed.data.modules.length === 0)
+  if (!parsed.success) firstInstallUnavailable("setup_unavailable");
+  const releaseSet = parsed.data;
+  if (!sameUuid(releaseSet.application.organizationId, selector.organizationId) ||
+    !sameUuid(releaseSet.application.rootId, selector.rootId) ||
+    releaseSet.application.releaseRevision !== selector.releaseRevision ||
+    releaseSet.modules.length === 0)
     firstInstallUnavailable("setup_unavailable");
-  return parsed.data;
+  return releaseSet;
 };
 
 const firstInstallAppCompletion = async (
@@ -2623,8 +2627,9 @@ export const saveStudioApplicationFirstInstallPolicy = async (
         kind: "conflict", stateMayHaveChanged: false,
       });
     const target = assertInitialPolicyTarget(candidate.snapshot.setup, command.data);
+    const selectedPolicy = command.data.policy;
     let saved: RecordTypeLifecyclePolicy;
-    if (command.data.policy.action === "delete") {
+    if (selectedPolicy.action === "delete") {
       await runFirstInstallAppTransaction(candidate, command.data.expected,
         async (_transaction, _scope, _issuedAt, initial) => {
           const currentTargetValue = assertInitialPolicyTarget(initial.setup, command.data);
@@ -2636,16 +2641,17 @@ export const saveStudioApplicationFirstInstallPolicy = async (
         target,
         command.data.expectedBindingRevision,
         command.data.expectedSettingsRevision,
-        command.data.policy,
+        selectedPolicy,
       );
     } else {
+      const archivePolicy = selectedPolicy;
       saved = await runFirstInstallAppTransaction(candidate, command.data.expected,
         async (transaction, scope, issuedAt, initial) => {
           const currentTargetValue = assertInitialPolicyTarget(initial.setup, command.data);
           if (!same(currentTargetValue, target) || !same(initial.setup, candidate.snapshot.setup))
             problem("conflict");
           if (!workflowIsInExactRelease(
-            initial.releaseSet, command.data.selector.rootId, command.data.policy.archiveWorkflowId,
+            initial.releaseSet, command.data.selector.rootId, archivePolicy.archiveWorkflowId,
           )) problem("refused");
           const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, command.data.selector);
           if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
@@ -2658,7 +2664,7 @@ export const saveStudioApplicationFirstInstallPolicy = async (
             command.data.expected.history, currentRelease, initial.context,
           );
           const option = await readSelectedEligibleArchiveConnection(
-            transaction, command.data.selector, initial.setup.organizationLimits, command.data.policy,
+            transaction, command.data.selector, initial.setup.organizationLimits, archivePolicy,
           );
           await completeFirstInstallConnectionRead(
             transaction,
@@ -2674,7 +2680,7 @@ export const saveStudioApplicationFirstInstallPolicy = async (
           return writeInitialArchivePolicy(
             transaction, candidate, currentTargetValue,
             command.data.expectedBindingRevision, command.data.expectedSettingsRevision,
-            command.data.policy, option,
+            archivePolicy, option,
           );
         }, true);
     }
