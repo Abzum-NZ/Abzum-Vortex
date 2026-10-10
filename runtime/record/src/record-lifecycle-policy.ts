@@ -708,18 +708,67 @@ const provisionedSetupReadDeclaration = organizationAccessDeclarationSchema.pars
   authority: { kind: "permission" },
 });
 
+const provisionedSetupInstallDeclaration = organizationAccessDeclarationSchema.parse({
+  operationKey: "platform.organization.applications.install",
+  action: { actionKind: "manage" },
+  target: { kind: "organization" },
+  requiredPermission: {
+    ownerKind: "platform",
+    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+  },
+  recentAuthentication: { kind: "none" },
+  authority: { kind: "permission" },
+});
+
+const provisionedSetupInstallScopeDeclaration = organizationAccessDeclarationSchema.parse({
+  operationKey: "platform.organization.applications.install_scope",
+  action: { actionKind: "manage" },
+  target: { kind: "organization" },
+  requiredPermission: {
+    ownerKind: "platform",
+    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+  },
+  recentAuthentication: { kind: "none" },
+  authority: {
+    kind: "delegated_management",
+    before: { kind: "organization_catalogue" },
+    after: { kind: "organization_catalogue" },
+  },
+});
+
+const isCurrentProvisionedSetupDecision = (
+  decision: OrganizationAccessDecision,
+  operationKey: string,
+  scope: SelectedOrganizationScope,
+  correlationId: string,
+  completedAt: number,
+): boolean =>
+  decision.outcome === "allowed" &&
+  decision.operationKey === operationKey &&
+  decision.target.kind === "organization" &&
+  sameId(decision.organizationId, scope.organizationId) &&
+  sameId(decision.organizationAccountId, scope.organizationAccountId) &&
+  decision.accessVersion === scope.accessVersion &&
+  sameId(decision.correlationId, correlationId) &&
+  Date.parse(decision.checkedAt) <= completedAt &&
+  Date.parse(decision.validUntil) > completedAt;
+
 const isCurrentProvisionedSetupRead = (
   snapshot: ProvisionedLifecyclePolicySetupSnapshot,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
   issuedAt: string,
-  decision: OrganizationAccessDecision,
+  managePolicyDecision: OrganizationAccessDecision,
+  installDecision: OrganizationAccessDecision,
+  installScopeDecision: OrganizationAccessDecision,
   row: ProvisionedSetupCompletionRow | undefined,
 ): boolean => {
   if (row === undefined) return false;
   const context = sessionContextSchema.safeParse(row.request_context);
   const completedAt = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
-  if (!context.success || !completedAt.success || decision.outcome !== "allowed") return false;
+  if (!context.success || !completedAt.success) return false;
   const current = context.data;
   const completedMs = Date.parse(completedAt.data);
   return (
@@ -740,14 +789,27 @@ const isCurrentProvisionedSetupRead = (
     current.issuedAt === issuedAt &&
     current.expiresAt === session.accessTokenExpiresAt &&
     current.accessVersion === scope.accessVersion &&
-    current.correlationId === decision.correlationId &&
-    sameId(decision.organizationId, scope.organizationId) &&
-    sameId(decision.organizationAccountId, scope.organizationAccountId) &&
-    decision.accessVersion === scope.accessVersion &&
-    decision.operationKey === provisionedSetupReadDeclaration.operationKey &&
-    decision.target.kind === "organization" &&
-    Date.parse(decision.checkedAt) <= completedMs &&
-    Date.parse(decision.validUntil) > completedMs &&
+    isCurrentProvisionedSetupDecision(
+      installDecision,
+      provisionedSetupInstallDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
+    isCurrentProvisionedSetupDecision(
+      installScopeDecision,
+      provisionedSetupInstallScopeDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
+    isCurrentProvisionedSetupDecision(
+      managePolicyDecision,
+      provisionedSetupReadDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
     Date.parse(current.issuedAt) <= completedMs &&
     Date.parse(current.expiresAt) > completedMs &&
     sameId(snapshot.organizationId, current.organizationId)
@@ -829,32 +891,49 @@ export const createRecordTypeLifecyclePolicyService = (
           )
             throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
 
+          const installResult = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            provisionedSetupInstallDeclaration,
+            async (decision) => decision,
+          );
+          const installScopeResult = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            provisionedSetupInstallScopeDeclaration,
+            async (decision) => decision,
+          );
           const accessResult = await runOrganizationAccessOperation(
             transaction,
             scope,
             provisionedSetupReadDeclaration,
-            async (decision) => {
-              const completionRows = await transaction.query<ProvisionedSetupCompletionRow>`
-                select vortex_access.validated_human_request_context() as request_context,
-                  pg_catalog.clock_timestamp() as completed_at
-              `;
-              if (
-                completionRows.length !== 1 ||
-                !isCurrentProvisionedSetupRead(
-                  snapshot,
-                  scope,
-                  session,
-                  issuedAt,
-                  decision,
-                  completionRows[0],
-                )
-              )
-                throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
-              return snapshot;
-            },
+            async (decision) => decision,
           );
-          if (accessResult.outcome !== "completed") return { kind: "unavailable" } as const;
-          return { kind: "snapshot", value: accessResult.value } as const;
+          if (
+            installResult.outcome !== "completed" ||
+            installScopeResult.outcome !== "completed" ||
+            accessResult.outcome !== "completed"
+          )
+            return { kind: "unavailable" } as const;
+          const completionRows = await transaction.query<ProvisionedSetupCompletionRow>`
+            select vortex_access.validated_human_request_context() as request_context,
+              pg_catalog.clock_timestamp() as completed_at
+          `;
+          if (
+            completionRows.length !== 1 ||
+            !isCurrentProvisionedSetupRead(
+              snapshot,
+              scope,
+              session,
+              issuedAt,
+              accessResult.value,
+              installResult.value,
+              installScopeResult.value,
+              completionRows[0],
+            )
+          )
+            throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
+          return { kind: "snapshot", value: snapshot } as const;
         },
       );
 

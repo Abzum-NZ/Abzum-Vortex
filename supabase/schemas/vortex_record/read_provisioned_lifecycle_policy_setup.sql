@@ -28,6 +28,8 @@ declare
   catalogue_row vortex_record.storage_catalogue%rowtype;
   context_after_lock jsonb;
   context_at_completion jsonb;
+  install_decision record;
+  install_scope_decision record;
   final_decision record;
   completed_at timestamptz;
   expected_binding_count integer := 0;
@@ -352,8 +354,44 @@ begin
     targets_value := targets_value || pg_catalog.jsonb_build_array(target_value);
   end loop;
 
-  -- Re-evaluate after every Module and Record lock wait. The request-role
-  -- caller also repeats this check at completion, after validating the DTO.
+  -- Re-evaluate all authority after every Module and Record lock wait. The
+  -- installation delegation can expire without an Access-version change, so
+  -- the request context alone is not sufficient completion evidence. The
+  -- request-role caller repeats all three decisions after validating the DTO.
+  select evaluated.* into strict install_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  select evaluated.* into strict install_scope_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install_scope',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object('kind', 'organization_catalogue'),
+        'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
+      )
+    )
+  ) as evaluated;
   select evaluated.* into strict final_decision
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
@@ -392,6 +430,35 @@ begin
     or final_decision.checked_at is null
     or final_decision.checked_at > completed_at
     or final_decision.valid_until <= completed_at
+    or install_decision.outcome is distinct from 'eligible'
+    or install_decision.operation_key is distinct from
+      'platform.organization.applications.install'
+    or install_decision.organization_id is distinct from authority.organization_id
+    or install_decision.organization_account_id is distinct from authority.organization_account_id
+    or install_decision.access_version is distinct from authority.access_version
+    or install_decision.correlation_id is distinct from authority.correlation_id
+    or install_decision.target_kind is distinct from 'organization'
+    or install_decision.target_application_root_id is not null
+    or install_decision.reason_code is not null
+    or install_decision.valid_until is null
+    or install_decision.checked_at is null
+    or install_decision.checked_at > completed_at
+    or install_decision.valid_until <= completed_at
+    or install_scope_decision.outcome is distinct from 'eligible'
+    or install_scope_decision.operation_key is distinct from
+      'platform.organization.applications.install_scope'
+    or install_scope_decision.organization_id is distinct from authority.organization_id
+    or install_scope_decision.organization_account_id is distinct from
+      authority.organization_account_id
+    or install_scope_decision.access_version is distinct from authority.access_version
+    or install_scope_decision.correlation_id is distinct from authority.correlation_id
+    or install_scope_decision.target_kind is distinct from 'organization'
+    or install_scope_decision.target_application_root_id is not null
+    or install_scope_decision.reason_code is not null
+    or install_scope_decision.valid_until is null
+    or install_scope_decision.checked_at is null
+    or install_scope_decision.checked_at > completed_at
+    or install_scope_decision.valid_until <= completed_at
     or context_at_completion ->> 'callerKind' is distinct from 'human'
     or context_at_completion ->> 'tenantId' is distinct from context_after_lock ->> 'tenantId'
     or context_at_completion ->> 'organizationId' is distinct from authority.organization_id::text
