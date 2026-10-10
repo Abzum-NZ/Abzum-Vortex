@@ -670,28 +670,28 @@ export const saveStudioModuleQueryFilter = async (
             },
           );
           if (receipt.kind === "validation_failed") throw new ValidationFailure(receipt.validation);
-          const expectedReceiptBindingFingerprint = receipt.selected === undefined
-            ? undefined
-            : fingerprintModuleQueryFilterOperandBinding({
-                organizationId: receipt.selected.organizationId,
-                rootId: receipt.selected.rootId,
-                definitionKey: receipt.selected.definitionKey,
-                draftRevision: reread.draftRevision,
-                savedSourceFingerprint: reread.sourceFingerprint,
-                resolutionFingerprint: receipt.selected.resolutionFingerprint,
-                query: receipt.selected.query,
-                fields: receipt.selected.fields,
-                parameters: receipt.selected.parameters,
-              });
-          if (receipt.kind !== "available" || receipt.selected === undefined ||
-              receipt.selected.organizationId !== reread.organizationId ||
-              receipt.selected.rootId !== reread.rootId ||
-              receipt.selected.definitionKey !== reread.key ||
-              receipt.selected.draftRevision !== reread.draftRevision ||
-              receipt.selected.savedSourceFingerprint !== reread.sourceFingerprint ||
-              !sameOperandBindingIdentity(receipt.selected, validated.context) ||
-              receipt.selected.operandBindingFingerprint !== expectedReceiptBindingFingerprint ||
-              canonicalJson(receipt.selected.filter) !== canonicalJson(validated.context.filter))
+          if (receipt.kind !== "available" || receipt.selected === undefined)
+            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+          const selectedReceipt = receipt.selected;
+          const expectedReceiptBindingFingerprint = fingerprintModuleQueryFilterOperandBinding({
+            organizationId: selectedReceipt.organizationId,
+            rootId: selectedReceipt.rootId,
+            definitionKey: selectedReceipt.definitionKey,
+            draftRevision: reread.draftRevision,
+            savedSourceFingerprint: reread.sourceFingerprint,
+            resolutionFingerprint: selectedReceipt.resolutionFingerprint,
+            query: selectedReceipt.query,
+            fields: selectedReceipt.fields,
+            parameters: selectedReceipt.parameters,
+          });
+          if (selectedReceipt.organizationId !== reread.organizationId ||
+              selectedReceipt.rootId !== reread.rootId ||
+              selectedReceipt.definitionKey !== reread.key ||
+              selectedReceipt.draftRevision !== reread.draftRevision ||
+              selectedReceipt.savedSourceFingerprint !== reread.sourceFingerprint ||
+              !sameOperandBindingIdentity(selectedReceipt, validated.context) ||
+              selectedReceipt.operandBindingFingerprint !== expectedReceiptBindingFingerprint ||
+              canonicalJson(selectedReceipt.filter) !== canonicalJson(validated.context.filter))
             throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
           await evaluateDraftPermission(
             transaction,
