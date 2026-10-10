@@ -36,8 +36,10 @@ import {
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
+  builderRecentAuthentication,
   DefinitionConsumerReadError,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
+  deriveBuilderRequirements,
   resolveModuleContributions,
 } from "@vortex/definition";
 import { createActiveApplicationInstallationRepository } from "@vortex/module";
@@ -238,7 +240,7 @@ const targetFacts = async (
   return readOrdinaryRoot(transaction, rootId);
 };
 
-const permissionDeclaration = (key: string) => {
+const permissionDeclaration = (key: string, requiresRecentAuthentication = false) => {
   const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
   if (permission === undefined) problem("temporarily_unavailable");
   return organizationAccessDeclarationSchema.parse({
@@ -250,7 +252,9 @@ const permissionDeclaration = (key: string) => {
       ownerId: platformPermissionOwnerId,
       permissionId: permission.permissionId,
     },
-    recentAuthentication: { kind: "none" },
+    recentAuthentication: requiresRecentAuthentication
+      ? builderRecentAuthentication
+      : { kind: "none" },
     authority: { kind: "permission" },
   });
 };
@@ -260,11 +264,12 @@ const readPermissionDeadline = async (
   scope: SelectedOrganizationScope,
   context: HumanContext,
   key: string,
+  requiresRecentAuthentication = false,
 ): Promise<string> => {
   const decision = await runOrganizationAccessOperation(
     transaction,
     scope,
-    permissionDeclaration(key),
+    permissionDeclaration(key, requiresRecentAuthentication),
     async (allowed) => allowed,
   );
   if (decision.outcome !== "completed")
@@ -520,6 +525,32 @@ const installOperation = (
   acceptedPermissions: [],
 });
 
+const readInstallationAuthorityDeadlines = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: HumanContext,
+  rootId: string,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+): Promise<readonly string[]> => {
+  const operation = installOperation(rootId, releaseSet);
+  const facts = await targetFacts(transaction, scope, rootId);
+  const requirements = deriveBuilderRequirements(operation, facts);
+  if (requirements.refused || requirements.permissionKeys.length === 0 ||
+    requirements.delegatedPermissions.length !== 0) problem("refused");
+
+  const deadlines: string[] = [];
+  for (const [index, key] of requirements.permissionKeys.entries()) {
+    deadlines.push(await readPermissionDeadline(
+      transaction,
+      scope,
+      context,
+      key,
+      requirements.recentAuthentication && index === 0,
+    ));
+  }
+  return deadlines;
+};
+
 const sameSnapshotState = (
   left: StudioApplicationInstallationSnapshot,
   right: StudioApplicationInstallationSnapshot,
@@ -602,12 +633,14 @@ const withCurrentAuthorizedState = async (
         const draftDeadline = await readPermissionDeadline(
           transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
         );
-        const installationDeadline = await readPermissionDeadline(
-          transaction, scope, finalContext, "platform.organization.applications.manage",
+        const installationDeadlines = await readInstallationAuthorityDeadlines(
+          transaction, scope, finalContext, selector.rootId, finalState.selectedReleaseSet,
         );
         const completedAt = await databaseNow(transaction);
         const deadline = Math.min(
-          Date.parse(finalContext.expiresAt), Date.parse(draftDeadline), Date.parse(installationDeadline),
+          Date.parse(finalContext.expiresAt),
+          Date.parse(draftDeadline),
+          ...installationDeadlines.map((validUntil) => Date.parse(validUntil)),
         );
         if (!Number.isFinite(deadline) || Date.parse(completedAt) >= deadline)
           problem("refused");
@@ -670,11 +703,19 @@ const readActiveObservation = async (
         );
         if (!same(context, finalContext)) problem("refused");
         await requireAuthority(transaction, scope, { kind: "draft_change", rootId });
-        const deadline = await readPermissionDeadline(
-          transaction, scope, context, "platform.organization.applications.manage",
+        const draftDeadline = await readPermissionDeadline(
+          transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
         );
-        if (Date.parse(await databaseNow(transaction)) >= Math.min(Date.parse(context.expiresAt), Date.parse(deadline)))
-          problem("refused");
+        const installationDeadlines = await readInstallationAuthorityDeadlines(
+          transaction, scope, finalContext, rootId, releaseSet,
+        );
+        const completedAt = await databaseNow(transaction);
+        const deadline = Math.min(
+          Date.parse(finalContext.expiresAt),
+          Date.parse(draftDeadline),
+          ...installationDeadlines.map((validUntil) => Date.parse(validUntil)),
+        );
+        if (!Number.isFinite(deadline) || Date.parse(completedAt) >= deadline) problem("refused");
         return releaseIdentity(releaseSet.application);
       } catch (error) {
         captured = safeFailure(error);
