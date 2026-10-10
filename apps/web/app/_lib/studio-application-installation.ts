@@ -278,7 +278,8 @@ const readPermissionDeadline = async (
     ...decision.value,
     outcome: "eligible",
   });
-  if (!parsed.success || parsed.data.target.kind !== "organization" ||
+  if (!parsed.success || parsed.data.outcome !== "eligible") problem("refused");
+  if (parsed.data.target.kind !== "organization" ||
     !sameUuid(parsed.data.organizationId, context.organizationId) ||
     !sameUuid(parsed.data.organizationAccountId, context.organizationAccountId) ||
     parsed.data.accessVersion !== context.accessVersion ||
