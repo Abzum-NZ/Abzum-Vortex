@@ -2259,13 +2259,13 @@ const readAppScopedFirstInstallReleaseSet = async (
     problem("refused");
   }
   const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success) firstInstallUnavailable("setup_unavailable");
+  if (!parsed.success) throw new FirstInstallUnavailable("setup_unavailable");
   const releaseSet = parsed.data;
   if (!sameUuid(releaseSet.application.organizationId, selector.organizationId) ||
     !sameUuid(releaseSet.application.rootId, selector.rootId) ||
     releaseSet.application.releaseRevision !== selector.releaseRevision ||
     releaseSet.modules.length === 0)
-    firstInstallUnavailable("setup_unavailable");
+    throw new FirstInstallUnavailable("setup_unavailable");
   return releaseSet;
 };
 
