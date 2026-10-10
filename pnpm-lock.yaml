@@ -265,6 +265,9 @@ importers:
       '@vortex/app':
         specifier: workspace:*
         version: link:../../runtime/app
+      '@vortex/connection':
+        specifier: workspace:*
+        version: link:../../runtime/connection
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
