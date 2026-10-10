@@ -397,12 +397,323 @@
         ]
       }
     ],
-    "permissions": [],
+    "permissions": [
+      {
+        "id": "perm_hr_department_read",
+        "key": "vortex.hr.department.read",
+        "label": "Read departments",
+        "description": "Read departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_department_create",
+        "key": "vortex.hr.department.create",
+        "label": "Create departments",
+        "description": "Create departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": [
+            "department_code",
+            "name"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_department_update",
+        "key": "vortex.hr.department.update",
+        "label": "Update departments",
+        "description": "Update departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": [
+            "department_code",
+            "name"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_position_read",
+        "key": "vortex.hr.position.read",
+        "label": "Read positions",
+        "description": "Read positions in this HR application.",
+        "record_type": "position",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "position_code",
+            "title",
+            "department"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_position_create",
+        "key": "vortex.hr.position.create",
+        "label": "Create positions",
+        "description": "Create positions in this HR application.",
+        "record_type": "position",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "position_code",
+            "title",
+            "department"
+          ],
+          "changeable_fields": [
+            "position_code",
+            "title",
+            "department"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_position_update",
+        "key": "vortex.hr.position.update",
+        "label": "Update positions",
+        "description": "Update positions in this HR application.",
+        "record_type": "position",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "position_code",
+            "title",
+            "department"
+          ],
+          "changeable_fields": [
+            "position_code",
+            "title",
+            "department"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_employee_read",
+        "key": "vortex.hr.employee.read",
+        "label": "Read employees",
+        "description": "Read employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_employee_create",
+        "key": "vortex.hr.employee.create",
+        "label": "Create employees",
+        "description": "Create employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_employee_update",
+        "key": "vortex.hr.employee.update",
+        "label": "Update employees",
+        "description": "Update employees in this HR application.",
+        "record_type": "employee",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ],
+          "changeable_fields": [
+            "employee_number",
+            "employment_status",
+            "start_date",
+            "person",
+            "position"
+          ]
+        }
+      }
+    ],
     "actions": [],
     "events": [],
     "flows": [],
     "extension_points": [],
     "sharing_conditions": [],
-    "queries": []
+    "queries": [
+      {
+        "id": "qry_hr_departments",
+        "key": "hr_departments",
+        "record_type": "department",
+        "inputs": [],
+        "select": [
+          "department_code",
+          "name"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_positions",
+        "key": "hr_positions",
+        "record_type": "position",
+        "inputs": [],
+        "select": [
+          "position_code",
+          "title"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "title",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_employees",
+        "key": "hr_employees",
+        "record_type": "employee",
+        "inputs": [],
+        "select": [
+          "employee_number",
+          "employment_status",
+          "start_date"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "employee_number",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }
