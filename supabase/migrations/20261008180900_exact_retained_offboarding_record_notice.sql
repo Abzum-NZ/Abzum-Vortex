@@ -1,3 +1,12 @@
+-- #2093: exact notices for active contained retained offboarding transfers.
+
+BEGIN;
+RESET ROLE;
+SET LOCAL ROLE vortex_record_owner;
+GRANT CREATE ON SCHEMA vortex_record TO vortex_record_adapter;
+RESET ROLE;
+SET LOCAL ROLE vortex_record_adapter;
+
 create or replace function vortex_record.transfer_record_ownership_for_offboarding_internal(
   p_command_id uuid,
   p_record_type_id uuid,
@@ -234,3 +243,9 @@ comment on function vortex_record.transfer_record_ownership_for_offboarding_inte
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, uuid
 ) is
   'Private offboarding single-record ownership transfer: the public transfer contract, with the command receipt, Activity and Event, for a named source owner.';
+
+RESET ROLE;
+SET LOCAL ROLE vortex_record_owner;
+REVOKE CREATE ON SCHEMA vortex_record FROM vortex_record_adapter;
+RESET ROLE;
+COMMIT;
