@@ -227,15 +227,23 @@ export function ApplicationReleaseHistory({ initialPage }: {
               target="_blank" rel="noopener noreferrer">
               Review first install of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
             </a>
+            {pending === null && page !== null && failure !== "refused" && failure !== "conflict" &&
+              page.entries.some((entry) => entry.releaseRevision === metadata.releaseRevision) &&
+              metadata.isCurrent === (metadata.releaseRevision === page.snapshot.anchorReleaseRevision) &&
+              <a className="inline-flex rounded border px-3 py-2 underline"
+                name="application.release_history.restore.open"
+                href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/restore`}
+                target="_blank" rel="noopener noreferrer">
+                Review restore of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+              </a>}
           </nav>
-          <p className="mt-2">These links open separate pages. First installation and upgrades are explicit; neither runs from the history list.</p>
+          <p className="mt-2">These links open separate pages. Restore, first installation, and upgrades require an explicit review; none runs from the history list.</p>
         </div>}
       </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
     <section aria-label="Unavailable release commands" className="space-y-3 rounded border p-4">
-      <p id="history-unavailable-commands">Restore and publish are unavailable in this history view. Installation never runs from the history list.</p>
+      <p id="history-unavailable-commands">To restore a release, inspect it and open its separate restore review page. Publish is unavailable here; installation never runs from the history list.</p>
       <div className="flex flex-wrap gap-3">
-        <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Restore unavailable</button>
         <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Publish unavailable</button>
       </div>
     </section>
