@@ -3,7 +3,6 @@ import "server-only";
 import {
   applicationRootIdSchema,
   canonicalJson,
-  fingerprintCanonicalValue,
   pageIdSchema,
   platformIdSchema,
   sameId,
@@ -13,8 +12,11 @@ import {
   type PageDefinitionV2,
   type SourceIdentityAssignmentV3,
 } from "@vortex/contracts";
-import type { StoredApplicationDefinitionDraft } from "@vortex/definition";
-import type { AuthenticatedApplicationPageAdoptionRelease } from "@vortex/definition";
+import {
+  fingerprintCanonicalValue,
+  type AuthenticatedApplicationPageAdoptionRelease,
+  type StoredApplicationDefinitionDraft,
+} from "@vortex/definition";
 import { z } from "zod";
 
 export const pageAdoptionCommandSchema = z
@@ -154,17 +156,31 @@ const pageFacts = (
     depth = 0,
   ): void => {
     add(path, property, propertyDisplayValue(property));
-    if (depth >= 3) return;
+    if (depth >= 3) {
+      if (property.kind === "group" && Object.keys(property.properties).length > 0) {
+        truncated = true;
+      }
+      if (property.kind === "list" && property.items.length > 0) {
+        truncated = true;
+      }
+      return;
+    }
     if (property.kind === "group") {
       for (const [key, child] of Object.entries(property.properties).sort(([left], [right]) => left.localeCompare(right))) {
+        if (facts.size >= maxPageDifferenceFacts) {
+          truncated = true;
+          break;
+        }
         addProperty(`${path} / ${safeDifferenceLabel(key)}`, child, depth + 1);
-        if (facts.size >= maxPageDifferenceFacts) break;
       }
     } else if (property.kind === "list") {
-      property.items.forEach((child, index) => {
-        if (facts.size < maxPageDifferenceFacts)
-          addProperty(`${path} / entry ${index + 1}`, child, depth + 1);
-      });
+      for (const [index, child] of property.items.entries()) {
+        if (facts.size >= maxPageDifferenceFacts) {
+          truncated = true;
+          break;
+        }
+        addProperty(`${path} / entry ${index + 1}`, child, depth + 1);
+      }
     }
   };
 
@@ -229,7 +245,10 @@ const pageFacts = (
   }
 
   const addSlot = (slot: PagePlacementSlot, label: string, depth = 0): void => {
-    if (depth > 5 || facts.size >= maxPageDifferenceFacts) return;
+    if (depth > 5 || facts.size >= maxPageDifferenceFacts) {
+      truncated = true;
+      return;
+    }
     const placements = slot.placements;
     const desktopOrder = slot.order.desktop;
     const blockReference = (placementId: string): string => {
@@ -265,18 +284,18 @@ const pageFacts = (
         placement.block,
         `${placement.block.blockId} @ ${placement.block.releaseVersion}`,
       );
-      const protectedBindings = {
-        viewPermission: placement.viewPermissionKey !== undefined,
-        usePermission: placement.usePermissionKey !== undefined,
-        visibilityCondition: placement.visibilityCondition !== undefined,
-        query: placement.queryId !== undefined,
-        readModel: placement.readModel !== undefined,
+      const protectedBindingValues = {
+        viewPermission: placement.viewPermissionKey ?? null,
+        usePermission: placement.usePermissionKey ?? null,
+        visibilityCondition: placement.visibilityCondition ?? null,
+        query: placement.queryId ?? null,
+        readModel: placement.readModel ?? null,
       };
       add(
         `${placementLabel} / access and data bindings`,
-        protectedBindings,
-        Object.entries(protectedBindings)
-          .filter(([, configured]) => configured)
+        protectedBindingValues,
+        Object.entries(protectedBindingValues)
+          .filter(([, binding]) => binding !== null)
           .map(([kind]) => kind.replace(/([A-Z])/g, " $1").toLowerCase())
           .join(", ") || "No additional binding",
       );
