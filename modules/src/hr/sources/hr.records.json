@@ -397,12 +397,110 @@
         ]
       }
     ],
-    "permissions": [],
+    "permissions": [
+      {
+        "id": "perm_hr_department_read",
+        "key": "vortex.hr.department.read",
+        "label": "Read departments",
+        "description": "Read departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_department_create",
+        "key": "vortex.hr.department.create",
+        "label": "Create departments",
+        "description": "Create departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": [
+            "department_code",
+            "name"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_department_update",
+        "key": "vortex.hr.department.update",
+        "label": "Update departments",
+        "description": "Update departments in this HR application.",
+        "record_type": "department",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "department_code",
+            "name"
+          ],
+          "changeable_fields": [
+            "department_code",
+            "name"
+          ]
+        }
+      }
+    ],
     "actions": [],
     "events": [],
     "flows": [],
     "extension_points": [],
     "sharing_conditions": [],
-    "queries": []
+    "queries": [
+      {
+        "id": "qry_hr_departments",
+        "key": "hr_departments",
+        "record_type": "department",
+        "inputs": [],
+        "select": [
+          "department_code",
+          "name"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "name",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      }
+    ]
   }
 }

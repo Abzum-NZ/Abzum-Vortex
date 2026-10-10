@@ -1,0 +1,1237 @@
+{
+  "source_contract_version": "2.0.0",
+  "root_alias": "app_hr",
+  "key": "vortex.app.hr",
+  "kind": "application",
+  "body": {
+    "name": "HR",
+    "description": "Department directory and forms for this organisation.",
+    "icon": "users",
+    "home_page": "hr_departments",
+    "module_bindings": [
+      {
+        "module": "vortex.hr",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
+      {
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_record_display"
+      }
+    ],
+    "permissions": [
+      {
+        "id": "perm_app_hr_open",
+        "key": "application.hr.open",
+        "label": "Open HR",
+        "description": "Open this installed HR application.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      }
+    ],
+    "roles": [
+      {
+        "id": "role_hr_administrator",
+        "key": "hr_administrator",
+        "name": "HR administrator",
+        "home_page": "hr_departments",
+        "permissions": [
+          "application.hr.open",
+          "vortex.hr.department.read",
+          "vortex.hr.department.create",
+          "vortex.hr.department.update"
+        ]
+      }
+    ],
+    "navigation": [
+      {
+        "id": "nav_hr_departments",
+        "type": "page",
+        "label": "Departments",
+        "page": "hr_departments",
+        "permission": "vortex.hr.department.read"
+      }
+    ],
+    "queries": [],
+    "pipelines": [],
+    "connection_bindings": [],
+    "interfaces": [],
+    "actions": [],
+    "events": [
+      {
+        "id": "event_hr_open_department",
+        "key": "vortex.app.hr.hr_open_department",
+        "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_new_department",
+        "key": "vortex.app.hr.hr_new_department",
+        "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_edit_department",
+        "key": "vortex.app.hr.hr_edit_department",
+        "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_create_department",
+        "key": "vortex.app.hr.hr_create_department",
+        "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_update_department",
+        "key": "vortex.app.hr.hr_update_department",
+        "record_type": "vortex.hr:department",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
+    "public_addresses": [],
+    "platform_block_dependencies": [],
+    "shells": [
+      {
+        "id": "shell_hr",
+        "key": "hr_shell",
+        "name": "HR shell",
+        "layout": {
+          "placements": {
+            "shell_root": {
+              "block": {
+                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                "release_version": "1.0.0"
+              },
+              "settings": {
+                "direction": {
+                  "kind": "choice",
+                  "value": "column"
+                },
+                "gap": {
+                  "kind": "choice",
+                  "value": "medium"
+                }
+              },
+              "theme_overrides": {},
+              "responsive": {
+                "desktop": {
+                  "visible": true,
+                  "width": {
+                    "kind": "fill"
+                  },
+                  "height": {
+                    "kind": "content"
+                  }
+                }
+              },
+              "slots": {
+                "header": {
+                  "placements": {
+                    "shell_heading": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "text": {
+                          "kind": "text",
+                          "value": "HR"
+                        },
+                        "level": {
+                          "kind": "choice",
+                          "value": "one"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
+                    },
+                    "shell_account": {
+                      "block": {
+                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {},
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "shell_heading",
+                      "shell_account"
+                    ]
+                  }
+                },
+                "content": {
+                  "placements": {
+                    "shell_body": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.2.0"
+                      },
+                      "settings": {
+                        "direction": {
+                          "kind": "choice",
+                          "value": "row"
+                        },
+                        "gap": {
+                          "kind": "choice",
+                          "value": "medium"
+                        },
+                        "menu_width": {
+                          "kind": "number",
+                          "value": 16
+                        },
+                        "menu_placement": {
+                          "kind": "choice",
+                          "value": "sticky"
+                        },
+                        "content_landmark": {
+                          "kind": "boolean",
+                          "value": true
+                        },
+                        "tablet_menu_width": {
+                          "kind": "number",
+                          "value": 14
+                        },
+                        "phone_direction": {
+                          "kind": "choice",
+                          "value": "column"
+                        },
+                        "phone_menu_placement": {
+                          "kind": "choice",
+                          "value": "flow"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {
+                        "menu": {
+                          "placements": {
+                            "shell_navigation": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "settings": {
+                                "title": {
+                                  "kind": "text",
+                                  "value": "HR"
+                                }
+                              },
+                              "theme_overrides": {},
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              },
+                              "slots": {}
+                            }
+                          },
+                          "order": {
+                            "desktop": [
+                              "shell_navigation"
+                            ]
+                          }
+                        },
+                        "content": {
+                          "placements": {},
+                          "order": {
+                            "desktop": []
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "shell_body"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "order": {
+            "desktop": [
+              "shell_root"
+            ]
+          }
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Primary",
+            "required": true,
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
+            "parent_placement": "shell_body",
+            "parent_slot": "content"
+          }
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "page_hr_departments",
+        "key": "hr_departments",
+        "name": "Departments",
+        "type": "list",
+        "record_type": "vortex.hr:department",
+        "permission": "vortex.hr.department.read",
+        "query": "vortex.hr:hr_departments",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_department_list": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_hr_open_department"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.department_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department code"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Name"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Departments"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_departments"
+                },
+                "hr_new_department_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "New department"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.department.create"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_department_list",
+                  "hr_new_department_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_department_detail",
+        "key": "hr_department_detail",
+        "name": "Department",
+        "type": "detail",
+        "record_type": "vortex.hr:department",
+        "permission": "vortex.hr.department.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_department_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Department"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.department_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department code"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Name"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "hr_edit_department_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "Edit department"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.department.update"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_department_detail",
+                  "hr_edit_department_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_department_new",
+        "key": "hr_department_new",
+        "name": "New department",
+        "type": "form",
+        "record_type": "vortex.hr:department",
+        "permission": "vortex.hr.department.create",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_department_new_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "New department"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_department_new_department_code": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.department_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department code"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_department_new_name": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Name"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_department_new_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create department"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_department_new_department_code",
+                          "hr_department_new_name",
+                          "hr_department_new_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_department_new_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_department_edit",
+        "key": "hr_department_edit",
+        "name": "Edit department",
+        "type": "form",
+        "record_type": "vortex.hr:department",
+        "permission": "vortex.hr.department.update",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_department_edit_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Edit department"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_department_edit_department_code": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.department_code"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department code"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_department_edit_name": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:department.name"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Name"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_department_edit_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Save department"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_department_edit_department_code",
+                          "hr_department_edit_name",
+                          "hr_department_edit_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_department_edit_form"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_open_department",
+        "key": "hr_open_department",
+        "labels": {
+          "name": "Open department"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_department_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the clicked department's own detail page with the record identity the clicked row carries."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_new_department",
+        "key": "hr_new_department",
+        "labels": {
+          "name": "New department"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_department_new"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the department creation form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_edit_department",
+        "key": "hr_edit_department",
+        "labels": {
+          "name": "Edit department"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_department_edit"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the current department in the edit form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_create_department",
+        "key": "hr_create_department",
+        "labels": {
+          "name": "Submit department"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:department"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_departments",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_departments"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_update_department",
+        "key": "hr_update_department",
+        "labels": {
+          "name": "Save department"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:department"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_department_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      }
+    ],
+    "flow_bindings": [
+      {
+        "id": "binding_hr_open_department",
+        "control": "hr_department_list",
+        "event_id": "event_hr_open_department",
+        "event": "row_clicked",
+        "flow": "flow_hr_open_department",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_new_department",
+        "control": "hr_new_department_button",
+        "event_id": "event_hr_new_department",
+        "event": "action",
+        "flow": "flow_hr_new_department",
+        "inputs": {}
+      },
+      {
+        "id": "binding_hr_edit_department",
+        "control": "hr_edit_department_button",
+        "event_id": "event_hr_edit_department",
+        "event": "action",
+        "flow": "flow_hr_edit_department",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_create_department",
+        "control": "hr_department_new_form",
+        "event_id": "event_hr_create_department",
+        "event": "form_submit",
+        "flow": "flow_hr_create_department",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_update_department",
+        "control": "hr_department_edit_form",
+        "event_id": "event_hr_update_department",
+        "event": "form_submit",
+        "flow": "flow_hr_update_department",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      }
+    ]
+  }
+}
