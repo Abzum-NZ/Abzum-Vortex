@@ -592,7 +592,6 @@
             "value",
             "discount_percent",
             "probability",
-            "stage",
             "expected_close_date",
             "payment_schedule",
             "documents"
@@ -877,6 +876,13 @@
             "type": "event.announce",
             "properties": {
               "event": "vortex.crm.opportunities.opportunity.won"
+            }
+          },
+          {
+            "id": "announce_opportunity_stage_changed",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.crm.opportunities.opportunity.stage_changed"
             }
           }
         ]
