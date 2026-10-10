@@ -1782,47 +1782,50 @@
                       "kind": "text",
                       "value": "Employee"
                     },
-                    "detail_fields": [
-                      {
-                        "kind": "group",
-                        "properties": {
-                          "field": {
-                            "kind": "field_reference",
-                            "field": "vortex.hr:employee.employee_number"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Employee identifier"
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employee_number"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee identifier"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employment_status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employment status"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
                           }
                         }
-                      },
-                      {
-                        "kind": "group",
-                        "properties": {
-                          "field": {
-                            "kind": "field_reference",
-                            "field": "vortex.hr:employee.employment_status"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Employment status"
-                          }
-                        }
-                      },
-                      {
-                        "kind": "group",
-                        "properties": {
-                          "field": {
-                            "kind": "field_reference",
-                            "field": "vortex.hr:employee.start_date"
-                          },
-                          "label": {
-                            "kind": "text",
-                            "value": "Start date"
-                          }
-                        }
-                      }
-                    ]
+                      ]
+                    }
                   },
                   "theme_overrides": {},
                   "responsive": {
