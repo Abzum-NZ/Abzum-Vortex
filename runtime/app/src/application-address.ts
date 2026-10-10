@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  databaseTimestamp,
   sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
@@ -9,6 +10,7 @@ import {
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
+  organizationLauncherEntrySchema,
   isPresentationOnlyApplicationExperience,
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
@@ -18,6 +20,7 @@ import {
   permissionIdSchema,
   revisionSchema,
   roleIdSchema,
+  sessionContextSchema,
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationAccessDeclaration,
@@ -28,8 +31,18 @@ import {
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   runOrganizationAccessOperation,
 } from "@vortex/access";
-import { withRuntimeTransaction } from "@vortex/db";
+import {
+  withRuntimeTransaction,
+  type DatabaseRow,
+  type RequestDatabaseTransaction,
+} from "@vortex/db";
 import { z } from "zod";
+import {
+  createHumanInstalledPageBundleContextLoader,
+  matchesInstalledPageBundleIdentity,
+  type HumanInstalledPageBundleContextDependencies,
+} from "./installed-page-bundle-context";
+import type { InstalledRuntimeContext } from "./installed-runtime-context";
 
 const reservedTenantSegments = new Set([
   "auth",
@@ -182,16 +195,108 @@ export type AddressedApplicationRead = Readonly<{
   experiences: readonly ApplicationExperience[];
 }>;
 
+/** The addressed projection and the exact HUMAN installed context that authorized it. */
+export type AddressedApplicationBundleRead = Readonly<{
+  read: PermittedApplicationsRead;
+  experiences: readonly ApplicationExperience[];
+  context?: InstalledRuntimeContext;
+  identity?: AddressedActiveApplicationIdentity;
+}>;
+
+export type AddressedBundleDefinitionReaderFactory = (
+  transaction: RequestDatabaseTransaction,
+) => HumanInstalledPageBundleContextDependencies["releaseSetReader"];
+
 type AddressRow = Readonly<{ address: unknown }>;
+type OrganizationLauncherRow = DatabaseRow & Readonly<{
+  organization_id: unknown;
+  tenant_short_name: unknown;
+  tenant_display_name: unknown;
+  organization_short_name: unknown;
+  organization_display_name: unknown;
+  account_display_name: unknown;
+}>;
+type AddressCompletionContextRow = DatabaseRow & Readonly<{
+  request_context: unknown;
+}>;
+type AddressCompletionClockRow = DatabaseRow & Readonly<{
+  observed_at: unknown;
+}>;
+type AddressCompletionBundleRow = DatabaseRow & Readonly<{
+  bundle_state: unknown;
+}>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
+type AddressedIdentityRow = Readonly<{ addressed_identity: unknown }>;
 type ApplicationCandidate = z.infer<typeof applicationCandidateSchema>;
+
+const applicationCandidateFromInstalledContext = (
+  context: InstalledRuntimeContext,
+): ApplicationCandidate => {
+  const application = context.releaseSet.application;
+  const pages = application.content.pages;
+  const pagePermissionKeys = new Set(pages.map((page) => page.accessPermissionKey));
+  const homePages = pages.filter((page) => sameId(page.pageId, application.content.homePageId));
+  if (homePages.length !== 1 || homePages[0] === undefined)
+    throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
+  const experiences = (application.content.experiences ?? []).map((experience) => {
+    const matches = pages.filter((page) => sameId(page.pageId, experience.pageId));
+    if (matches.length !== 1 || matches[0] === undefined)
+      throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
+    return { state: experience.state, page: matches[0] };
+  });
+  const permissions = context.permissionRegistration.entries
+    .filter((entry) => pagePermissionKeys.has(entry.permission.key))
+    .map((entry) => ({
+      key: entry.permission.key,
+      applicationRootId: entry.applicationRootId,
+      ownerKind: entry.ownerKind,
+      ownerId: entry.ownerId,
+      permissionId: entry.permission.permissionId,
+      actionKind: entry.permission.actionKind,
+      namedAction: entry.permission.namedAction ?? null,
+    }));
+  return applicationCandidateSchema.parse({
+    applicationRootId: application.rootId,
+    releaseRevision: application.releaseRevision,
+    key: application.definitionKey,
+    name: application.content.name,
+    icon: application.content.icon,
+    homePageKey: homePages[0].key,
+    pages: pages.map((page) => ({
+      pageId: page.pageId,
+      key: page.key,
+      accessPermissionKey: page.accessPermissionKey,
+    })),
+    roles: application.content.roles.map((role) => ({
+      roleId: role.roleId,
+      key: role.key,
+      homePageId: role.homePageId,
+    })),
+    permissions,
+    experiences,
+    shells: application.content.shells,
+    theme: application.content.theme,
+  });
+};
+
+const addressedActiveApplicationIdentitySchema = z.object({
+  organizationId: organizationIdSchema,
+  applicationRootId: applicationRootIdSchema,
+  definitionKey: namespacedKeySchema,
+  applicationReleaseRevision: revisionSchema,
+}).strict();
+
+export type AddressedActiveApplicationIdentity = z.infer<
+  typeof addressedActiveApplicationIdentitySchema
+>;
 
 const permittedApplication = async (
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   candidate: ApplicationCandidate,
+  expectedContext?: InstalledRuntimeContext,
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
@@ -221,6 +326,15 @@ const permittedApplication = async (
         roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
       );
       const allowedPageKeys = new Set<string>();
+      let earliestAccessDeadline: string | undefined;
+      const retainAccessDeadline = (deadline: string): void => {
+        const candidateMilliseconds = Date.parse(deadline);
+        if (!Number.isFinite(candidateMilliseconds))
+          throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
+        if (earliestAccessDeadline === undefined ||
+          candidateMilliseconds < Date.parse(earliestAccessDeadline))
+          earliestAccessDeadline = deadline;
+      };
       if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
         throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
@@ -276,7 +390,10 @@ const permittedApplication = async (
           transaction,
           scope,
           declaration,
-          async () => true,
+          async (decision) => {
+            retainAccessDeadline(decision.validUntil);
+            return true;
+          },
         );
         if (decision.outcome === "completed") allowedPageKeys.add(page.key);
       }
@@ -313,6 +430,54 @@ const permittedApplication = async (
             ...(candidate.theme === undefined ? {} : { theme: candidate.theme }),
           });
         });
+
+      if (expectedContext !== undefined) {
+        if (earliestAccessDeadline === undefined) return null;
+        const bundleRows = await transaction.query<AddressCompletionBundleRow>`
+          select vortex_module.read_active_installation_bundle_identity() as bundle_state
+        `;
+        if (
+          bundleRows.length !== 1 ||
+          bundleRows[0] === undefined ||
+          !matchesInstalledPageBundleIdentity(
+            expectedContext,
+            bundleRows[0].bundle_state,
+            scope.accessVersion,
+            scope.organizationAccountId,
+          )
+        ) return null;
+
+        const contextRows = await transaction.query<AddressCompletionContextRow>`
+          select vortex_access.validated_human_request_context() as request_context
+        `;
+        if (contextRows.length !== 1 || contextRows[0] === undefined) return null;
+        const current = sessionContextSchema.safeParse(contextRows[0].request_context);
+        if (!current.success || current.data.callerKind !== "human") return null;
+
+        const clockRows = await transaction.query<AddressCompletionClockRow>`
+          select clock_timestamp() as observed_at
+        `;
+        if (clockRows.length !== 1 || clockRows[0] === undefined) return null;
+        const observedAt = databaseTimestamp(clockRows[0].observed_at);
+        if (typeof observedAt !== "string") return null;
+        const observedMilliseconds = Date.parse(observedAt);
+        const earliestDeadlineMilliseconds = Date.parse(earliestAccessDeadline);
+        if (!Number.isFinite(observedMilliseconds) ||
+          !Number.isFinite(earliestDeadlineMilliseconds) ||
+          current.data.expiresAt === undefined ||
+          Date.parse(current.data.expiresAt) <= observedMilliseconds ||
+          (current.data.delegatedContext !== undefined &&
+            Date.parse(current.data.delegatedContext.expiresAt) <= observedMilliseconds) ||
+          (current.data.supportContext !== undefined &&
+            Date.parse(current.data.supportContext.expiresAt) <= observedMilliseconds) ||
+          !sameId(current.data.tenantId, scope.tenantId) ||
+          !sameId(current.data.organizationId, scope.organizationId) ||
+          !sameId(current.data.organizationAccountId, scope.organizationAccountId) ||
+          scope.applicationRootId === undefined ||
+          !sameId(current.data.applicationRootId, scope.applicationRootId) ||
+          current.data.accessVersion !== scope.accessVersion ||
+          earliestDeadlineMilliseconds <= observedMilliseconds) return null;
+      }
 
       return {
         application: permittedApplicationSchema.parse({
@@ -375,6 +540,218 @@ export const readAddressedApplicationAtAddress = (
     identityAuthorityIdCandidate,
     applicationKeyCandidate,
   );
+
+/** Resolves one addressed App from the current HUMAN installed bundle and page authority. */
+export const readAddressedApplicationFromInstalledBundleAtAddress = async (
+  sessionCandidate: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+  releaseSetReaderForTransaction: AddressedBundleDefinitionReaderFactory,
+): Promise<AddressedApplicationBundleRead> => {
+  const unavailable = (): AddressedApplicationBundleRead => ({
+    read: { kind: "unavailable" },
+    experiences: [],
+  });
+  const temporarilyUnavailable = (): AddressedApplicationBundleRead => ({
+    read: { kind: "temporarily_unavailable" },
+    experiences: [],
+  });
+  const session = identitySessionSchema.safeParse(sessionCandidate);
+  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
+  if (!session.success || !identityAuthorityId.success) return unavailable();
+
+  const addressedIdentity = await readAddressedApplicationIdentityAtAddress(
+    session.data,
+    tenantShortNameCandidate,
+    organizationShortNameCandidate,
+    identityAuthorityId.data,
+    applicationKeyCandidate,
+  );
+  if (addressedIdentity === undefined) return unavailable();
+  const organizationId = organizationIdSchema.safeParse(addressedIdentity.organizationId);
+  if (!organizationId.success) return unavailable();
+
+  const requests = createHumanOrganizationRequestService({
+    identityAuthorityId: identityAuthorityId.data,
+  });
+  try {
+    const contextResult = await requests.run<InstalledRuntimeContext | undefined>(
+      session.data,
+      {
+        organizationId: organizationId.data,
+        applicationRootId: addressedIdentity.identity.applicationRootId,
+      },
+      async (transaction, scope) => {
+        if (scope.applicationRootId === undefined ||
+          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId))
+          return undefined;
+        const context = await createHumanInstalledPageBundleContextLoader({
+          transaction,
+          releaseSetReader: releaseSetReaderForTransaction(transaction),
+          scope: {
+            organizationId: scope.organizationId,
+            applicationRootId: scope.applicationRootId,
+          },
+        }).load();
+        const application = context.releaseSet.application;
+        if (!sameId(context.organizationId, addressedIdentity.organizationId) ||
+          !sameId(context.applicationRootId, addressedIdentity.identity.applicationRootId) ||
+          application.releaseRevision !== addressedIdentity.identity.applicationReleaseRevision ||
+          application.definitionKey !== addressedIdentity.identity.definitionKey ||
+          application.releaseRevision !== context.applicationReleaseRevision)
+          return undefined;
+        return context;
+      },
+    );
+    if (contextResult.kind === "temporarily_unavailable") return temporarilyUnavailable();
+    if (contextResult.kind !== "available" || contextResult.value === undefined)
+      return unavailable();
+
+    const context = contextResult.value;
+    const candidate = applicationCandidateFromInstalledContext(context);
+    const permitted = await permittedApplication(
+      requests,
+      session.data,
+      organizationId.data,
+      candidate,
+      context,
+    );
+    if (permitted === "temporarily_unavailable") return temporarilyUnavailable();
+    if (permitted === null) return unavailable();
+    const read = permittedApplicationsReadSchema.parse({
+      kind: "available",
+      organizationId: organizationId.data,
+      tenantShortName: addressedIdentity.tenantShortName,
+      organizationShortName: addressedIdentity.organizationShortName,
+      defaultApplicationRootId: null,
+      applications: [permitted.application],
+    });
+    return {
+      read,
+      experiences: permitted.experiences,
+      context,
+      identity: addressedIdentity.identity,
+    };
+  } catch {
+    return temporarilyUnavailable();
+  }
+};
+
+/** Resolves only the active Application identity under its exact HUMAN organization request. */
+export const readAddressedActiveApplicationIdentity = async (
+  sessionCandidate: IdentitySession,
+  organizationIdCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<AddressedActiveApplicationIdentity | undefined> => {
+  const session = identitySessionSchema.safeParse(sessionCandidate);
+  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
+  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
+  const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
+  if (!session.success || !organizationId.success || !identityAuthorityId.success || !applicationKey.success)
+    return undefined;
+  const requests = createHumanOrganizationRequestService({
+    identityAuthorityId: identityAuthorityId.data,
+  });
+  const result = await requests.run(
+    session.data,
+    { organizationId: organizationId.data },
+    async (transaction, scope) => {
+      if (scope.applicationRootId !== undefined)
+        throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
+      const rows = await transaction.query<AddressedIdentityRow>`
+        select vortex_module.resolve_addressed_active_application_identity(
+          ${applicationKey.data}::text
+        ) as addressed_identity
+      `;
+      if (rows.length !== 1 || rows[0] === undefined)
+        throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
+      const identity = addressedActiveApplicationIdentitySchema.safeParse(rows[0].addressed_identity);
+      if (!identity.success || identity.data.organizationId !== organizationId.data ||
+        identity.data.definitionKey !== applicationKey.data)
+        throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
+      return identity.data;
+    },
+  );
+  return result.kind === "available" ? result.value : undefined;
+};
+
+/** Resolves an address to a thin current active identity before any Application-scoped read. */
+export const readAddressedApplicationIdentityAtAddress = async (
+  sessionCandidate: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<Readonly<{
+  organizationId: string;
+  tenantShortName: string;
+  organizationShortName: string;
+  identity: AddressedActiveApplicationIdentity;
+}> | undefined> => {
+  const session = identitySessionSchema.safeParse(sessionCandidate);
+  const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
+  const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
+  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
+  const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
+  if (
+    !session.success || !tenantShortName.success || !organizationShortName.success ||
+    !identityAuthorityId.success || !applicationKey.success ||
+    isReservedTenantSegment(tenantShortNameCandidate) ||
+    Date.parse(session.data.accessTokenExpiresAt) <= Date.now()
+  ) return undefined;
+
+  try {
+    const rows = await withRuntimeTransaction(async (transaction) =>
+      transaction.query<OrganizationLauncherRow>`
+        select *
+        from vortex_identity.list_organization_launcher(
+          ${session.data.identityId}::uuid
+        )
+      `,
+    );
+    const entries = rows.map((row) => organizationLauncherEntrySchema.safeParse({
+      organizationId: row.organization_id,
+      tenantShortName: row.tenant_short_name,
+      tenantDisplayName: row.tenant_display_name,
+      organizationShortName: row.organization_short_name,
+      organizationDisplayName: row.organization_display_name,
+      ...(row.account_display_name === null || row.account_display_name === undefined
+        ? {}
+        : { accountDisplayName: row.account_display_name }),
+    }));
+    if (entries.some((entry) => !entry.success)) return undefined;
+    const matchedEntries = entries.flatMap((entry) =>
+      entry.success && entry.data.tenantShortName === tenantShortName.data &&
+        entry.data.organizationShortName === organizationShortName.data
+        ? [entry.data]
+        : [],
+    );
+    if (matchedEntries.length !== 1 || matchedEntries[0] === undefined) return undefined;
+    const address = matchedEntries[0];
+    const identity = await readAddressedActiveApplicationIdentity(
+      session.data,
+      address.organizationId,
+      identityAuthorityId.data,
+      applicationKey.data,
+    );
+    if (
+      identity === undefined ||
+      identity.organizationId !== address.organizationId ||
+      identity.definitionKey !== applicationKey.data
+    ) return undefined;
+    return Object.freeze({
+      organizationId: address.organizationId,
+      tenantShortName: address.tenantShortName,
+      organizationShortName: address.organizationShortName,
+      identity,
+    });
+  } catch {
+    return undefined;
+  }
+};
 
 const readAtAddress = async (
   session: IdentitySession,
