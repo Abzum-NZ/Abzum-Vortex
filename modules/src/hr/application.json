@@ -35,6 +35,28 @@
         "action_kind": "named",
         "named_action": "open",
         "administrative": false
+      },
+      {
+        "id": "perm_app_hr_directory_person_read",
+        "key": "application.hr.directory.person.read",
+        "label": "Read directory people for HR references",
+        "description": "Read Person display names for HR employee references under current organization authority.",
+        "record_type": "vortex.system_directory:person",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "display_name"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -50,7 +72,11 @@
           "vortex.hr.department.update",
           "vortex.hr.position.read",
           "vortex.hr.position.create",
-          "vortex.hr.position.update"
+          "vortex.hr.position.update",
+          "vortex.hr.employee.read",
+          "vortex.hr.employee.create",
+          "vortex.hr.employee.update",
+          "application.hr.directory.person.read"
         ]
       }
     ],
@@ -68,6 +94,13 @@
         "label": "Positions",
         "page": "hr_positions",
         "permission": "vortex.hr.position.read"
+      },
+      {
+        "id": "nav_hr_employees",
+        "type": "page",
+        "label": "Employees",
+        "page": "hr_employees",
+        "permission": "vortex.hr.employee.read"
       }
     ],
     "queries": [],
@@ -143,6 +176,41 @@
         "id": "event_hr_update_position",
         "key": "vortex.app.hr.hr_update_position",
         "record_type": "vortex.hr:position",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_open_employee",
+        "key": "vortex.app.hr.hr_open_employee",
+        "record_type": "vortex.hr:employee",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_new_employee",
+        "key": "vortex.app.hr.hr_new_employee",
+        "record_type": "vortex.hr:employee",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_edit_employee",
+        "key": "vortex.app.hr.hr_edit_employee",
+        "record_type": "vortex.hr:employee",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_create_employee",
+        "key": "vortex.app.hr.hr_create_employee",
+        "record_type": "vortex.hr:employee",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_update_employee",
+        "key": "vortex.app.hr.hr_update_employee",
+        "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -1552,6 +1620,818 @@
             }
           }
         }
+      },
+      {
+        "id": "page_hr_employees",
+        "key": "hr_employees",
+        "name": "Employees",
+        "type": "list",
+        "record_type": "vortex.hr:employee",
+        "permission": "vortex.hr.employee.read",
+        "query": "vortex.hr:hr_employees",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_employee_list": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_hr_open_employee"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employee_number"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee identifier"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employment_status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employment status"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Employees"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_employees"
+                },
+                "hr_new_employee_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "New employee"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.employee.create"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_employee_list",
+                  "hr_new_employee_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_employee_detail",
+        "key": "hr_employee_detail",
+        "name": "Employee",
+        "type": "detail",
+        "record_type": "vortex.hr:employee",
+        "permission": "vortex.hr.employee.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_employee_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Employee"
+                    },
+                    "detail_fields": [
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.hr:employee.employee_number"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Employee identifier"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.hr:employee.employment_status"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Employment status"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.hr:employee.start_date"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Start date"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "hr_edit_employee_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "Edit employee"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.employee.update"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_employee_detail",
+                  "hr_edit_employee_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_employee_new",
+        "key": "hr_employee_new",
+        "name": "New employee",
+        "type": "form",
+        "record_type": "vortex.hr:employee",
+        "permission": "vortex.hr.employee.create",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_employee_new_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "New employee"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_employee_new_employee_number": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employee_number"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee identifier"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_new_employment_status": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employment_status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employment status"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_new_start_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_new_person": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "person"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Person"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.system_directory:people"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.system_directory:person.display_name"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_new_position": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "position"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_positions"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:position.title"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_new_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create employee"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_employee_new_employee_number",
+                          "hr_employee_new_employment_status",
+                          "hr_employee_new_start_date",
+                          "hr_employee_new_person",
+                          "hr_employee_new_position",
+                          "hr_employee_new_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_employee_new_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_employee_edit",
+        "key": "hr_employee_edit",
+        "name": "Edit employee",
+        "type": "form",
+        "record_type": "vortex.hr:employee",
+        "permission": "vortex.hr.employee.update",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_employee_edit_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Edit employee"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_employee_edit_employee_number": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employee_number"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee identifier"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_edit_employment_status": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.employment_status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employment status"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_edit_start_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_edit_person": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "person"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Person"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.system_directory:people"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.system_directory:person.display_name"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_edit_position": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "position"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_positions"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:position.title"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_employee_edit_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Save employee"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_employee_edit_employee_number",
+                          "hr_employee_edit_employment_status",
+                          "hr_employee_edit_start_date",
+                          "hr_employee_edit_person",
+                          "hr_employee_edit_position",
+                          "hr_employee_edit_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_employee_edit_form"
+                ]
+              }
+            }
+          }
+        }
       }
     ],
     "flows": [
@@ -2136,6 +3016,299 @@
         "triggers": [],
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_open_employee",
+        "key": "hr_open_employee",
+        "labels": {
+          "name": "Open employee"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_employee_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the clicked employee's own detail page with the record identity the clicked row carries."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_new_employee",
+        "key": "hr_new_employee",
+        "labels": {
+          "name": "New employee"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_employee_new"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the employee creation form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_edit_employee",
+        "key": "hr_edit_employee",
+        "labels": {
+          "name": "Edit employee"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_employee_edit"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the selected employee edit form with its current record identity."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_create_employee",
+        "key": "hr_create_employee",
+        "labels": {
+          "name": "Submit employee"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:employee"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_employees",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_employees"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Creates an Employee through the ordinary protected Record save path and returns to Employees.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_update_employee",
+        "key": "hr_update_employee",
+        "labels": {
+          "name": "Save employee"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:employee"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_employee_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Updates the selected Employee through the ordinary protected Record save path and returns to its detail page.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -2256,6 +3429,70 @@
         "event_id": "event_hr_update_position",
         "event": "form_submit",
         "flow": "flow_hr_update_position",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_open_employee",
+        "control": "hr_employee_list",
+        "event_id": "event_hr_open_employee",
+        "event": "row_clicked",
+        "flow": "flow_hr_open_employee",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_new_employee",
+        "control": "hr_new_employee_button",
+        "event_id": "event_hr_new_employee",
+        "event": "action",
+        "flow": "flow_hr_new_employee",
+        "inputs": {}
+      },
+      {
+        "id": "binding_hr_edit_employee",
+        "control": "hr_edit_employee_button",
+        "event_id": "event_hr_edit_employee",
+        "event": "action",
+        "flow": "flow_hr_edit_employee",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_create_employee",
+        "control": "hr_employee_new_form",
+        "event_id": "event_hr_create_employee",
+        "event": "form_submit",
+        "flow": "flow_hr_create_employee",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_update_employee",
+        "control": "hr_employee_edit_form",
+        "event_id": "event_hr_update_employee",
+        "event": "form_submit",
+        "flow": "flow_hr_update_employee",
         "inputs": {
           "record": {
             "kind": "caller",
