@@ -7,6 +7,7 @@ import {
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
+  isRecord,
   maximumRecoveryWindowDays,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -16,6 +17,7 @@ import {
   recordLifecycleActionSchema,
   recordTypeLifecyclePolicySchema,
   revisionSchema,
+  protectedOperationChannelSchema,
   sessionContextSchema,
   storageContractIdSchema,
   timestampSchema,
@@ -766,7 +768,11 @@ const isCurrentProvisionedSetupRead = (
   row: ProvisionedSetupCompletionRow | undefined,
 ): boolean => {
   if (row === undefined) return false;
-  const context = sessionContextSchema.safeParse(row.request_context);
+  if (!isRecord(row.request_context)) return false;
+  const { channel: rawChannel, ...sessionContextCandidate } = row.request_context;
+  const channel = protectedOperationChannelSchema.safeParse(rawChannel);
+  if (!channel.success || channel.data !== "web") return false;
+  const context = sessionContextSchema.safeParse(sessionContextCandidate);
   const completedAt = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
   if (!context.success || !completedAt.success) return false;
   const current = context.data;
