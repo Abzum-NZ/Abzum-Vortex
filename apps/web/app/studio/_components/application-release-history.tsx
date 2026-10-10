@@ -216,12 +216,19 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
         {selectedRevision === metadata.releaseRevision && <div className="pt-2">
-          <a className="inline-flex rounded border px-3 py-2 underline"
-            href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
-            target="_blank" rel="noopener noreferrer">
-            Review upgrade to version {metadata.releaseVersion}, revision {metadata.releaseRevision}
-          </a>
-          <p className="mt-2">This opens a separate page. Installation is explicit and available only for an eligible upgrade of an existing application.</p>
+          <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">
+            <a className="inline-flex rounded border px-3 py-2 underline"
+              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
+              target="_blank" rel="noopener noreferrer">
+              Review upgrade to version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+            </a>
+            <a className="inline-flex rounded border px-3 py-2 underline"
+              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/first-install`}
+              target="_blank" rel="noopener noreferrer">
+              Review first install of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+            </a>
+          </nav>
+          <p className="mt-2">These links open separate pages. First installation and upgrades are explicit; neither runs from the history list.</p>
         </div>}
       </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
