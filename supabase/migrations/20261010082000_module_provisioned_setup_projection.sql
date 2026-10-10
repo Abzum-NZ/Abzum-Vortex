@@ -65,11 +65,17 @@ begin
     select item.value
     from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
   loop
-    if pg_catalog.jsonb_typeof(pin.value) is distinct from 'object'
-      or not (pin.value ?& array['moduleRootId', 'bindingRevision'])
+    if pg_catalog.jsonb_typeof(pin.value) is distinct from 'object' then
+      raise exception using errcode = '22023',
+        message = 'Provisioned Application lifecycle setup binding pins are invalid';
+    end if;
+    if not (pin.value ?& array['moduleRootId', 'bindingRevision'])
       or pin.value - array['moduleRootId', 'bindingRevision'] <> '{}'::jsonb
-      or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(pin.value)) <> 2
-      or pg_catalog.jsonb_typeof(pin.value -> 'moduleRootId') is distinct from 'string'
+      or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(pin.value)) <> 2 then
+      raise exception using errcode = '22023',
+        message = 'Provisioned Application lifecycle setup binding pins are invalid';
+    end if;
+    if pg_catalog.jsonb_typeof(pin.value -> 'moduleRootId') is distinct from 'string'
       or pg_catalog.jsonb_typeof(pin.value -> 'bindingRevision') is distinct from 'number' then
       raise exception using errcode = '22023',
         message = 'Provisioned Application lifecycle setup binding pins are invalid';
