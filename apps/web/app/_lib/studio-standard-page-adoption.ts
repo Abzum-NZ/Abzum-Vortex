@@ -4,6 +4,7 @@ import {
   applicationRootIdSchema,
   canonicalJson,
   organizationIdSchema,
+  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   sessionContextSchema,
   sameId,
@@ -11,7 +12,6 @@ import {
   type StoredDefinitionSource,
   type SelectedOrganizationScope,
   type IdentitySession,
-  type SourceIdentityAssignmentV3,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
@@ -26,6 +26,7 @@ import {
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
   DefinitionStoreError,
+  DefinitionPublicationError,
   fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
@@ -41,6 +42,8 @@ import {
   type PageAdoptionTargetOption,
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
+
+type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -310,7 +313,7 @@ export const loadStudioStandardPageAdoption = async (
           throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
         const candidate = await readCurrentCandidate(transaction, context, draft);
         const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-        if (release === undefined) throw new DefinitionStoreError("DEFINITION_HISTORY_INVALID");
+        if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
         const choices = toChoices(
           draft,
           candidate.identities,
@@ -401,7 +404,7 @@ export const saveStudioStandardPageAdoption = async (
         throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
       const candidateState = await readCurrentCandidate(transaction, context, draft);
       const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-      if (release === undefined) throw new DefinitionStoreError("DEFINITION_HISTORY_INVALID");
+      if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
       const plan = buildPageAdoptionPlan({
         draft,
         currentIdentities: candidateState.identities,
@@ -448,7 +451,7 @@ export const saveStudioStandardPageAdoption = async (
             throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
           const verifiedRelease = await readLatestPageAdoptionRelease(verifyTransaction, verifiedContext, savedDraft);
           if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
-            throw new DefinitionStoreError("DEFINITION_HISTORY_INVALID");
+            throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
         },
       };
       },

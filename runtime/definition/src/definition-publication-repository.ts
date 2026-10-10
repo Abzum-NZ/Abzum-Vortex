@@ -30,12 +30,10 @@ import {
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
   type ApplicationSourceDocumentV2,
-  type ApplicationCompilationOutputV2,
   type DefinitionResolutionSnapshotV2,
   type DefinitionResolutionSnapshotV3,
   type PublishDefinitionResult,
   type SessionContext,
-  type SourceIdentityAssignmentV3,
   type StoredDefinitionSource,
   type VersionImpactReason,
 } from "@vortex/contracts";
@@ -252,6 +250,11 @@ const appendReleaseRowSchema = z
 
 type RawModuleRelease = z.infer<typeof rawModuleReleaseSchema>;
 type StoredHistoryRelease = z.infer<typeof storedHistoryReleaseSchema>;
+type SourceIdentityAssignmentV3 = z.infer<typeof sourceIdentityAssignmentV3Schema>;
+type StoredApplicationCompilationOutput = Extract<
+  z.infer<typeof storedDefinitionCompilationOutputSchema>,
+  { kind: "application" }
+>;
 
 /** Authenticated immutable Application evidence for one ordinary same-root comparison. */
 export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
@@ -261,7 +264,7 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   publication: z.infer<typeof publishedApplicationReferenceSchema>;
   authoredSource: ApplicationSourceDocumentV2;
   authoredSourceFingerprint: string;
-  compilationOutput: ApplicationCompilationOutputV2;
+  compilationOutput: StoredApplicationCompilationOutput;
   resolutionSnapshot: DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
   identities: readonly SourceIdentityAssignmentV3[];
   comparisonFingerprint: string;

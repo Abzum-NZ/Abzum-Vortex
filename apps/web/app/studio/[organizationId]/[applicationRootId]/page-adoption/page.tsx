@@ -12,5 +12,10 @@ export default async function StudioStandardPageAdoptionPage({
 }>) {
   const [{ organizationId, applicationRootId }, search] = await Promise.all([params, searchParams]);
   const result = await loadStudioStandardPageAdoption(organizationId, applicationRootId);
-  return <StandardPageAdoption result={result} message={search.result} />;
+  return (
+    <StandardPageAdoption
+      result={result}
+      {...(search.result !== undefined ? { message: search.result } : {})}
+    />
+  );
 }

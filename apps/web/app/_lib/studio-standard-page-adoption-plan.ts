@@ -5,12 +5,12 @@ import {
   canonicalJson,
   pageIdSchema,
   platformIdSchema,
+  sourceIdentityAssignmentV3Schema,
   sameId,
   type ApplicationContentV2,
   type ApplicationSourceDocumentV2,
   type BlockPropertyValueV2Contract,
   type PageDefinitionV2,
-  type SourceIdentityAssignmentV3,
 } from "@vortex/contracts";
 import {
   fingerprintCanonicalValue,
@@ -18,6 +18,8 @@ import {
   type StoredApplicationDefinitionDraft,
 } from "@vortex/definition";
 import { z } from "zod";
+
+type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
 
 export const pageAdoptionCommandSchema = z
   .object({
@@ -473,7 +475,7 @@ const setNavigationPage = (
   pageKey: string,
   identities: readonly SourceIdentityAssignmentV3[],
   source: ApplicationSourceDocumentV2,
-): readonly SourceNavigationItem[] =>
+): SourceNavigationItem[] =>
   items.map((item) => {
     if (item.type === "heading")
       return { ...item, children: setNavigationPage(item.children, identity, pageKey, identities, source) };
@@ -584,7 +586,7 @@ const normalizedSource = (
       ),
     };
   if (target.kind === "navigation") {
-    const normalize = (items: readonly SourceNavigationItem[]): readonly SourceNavigationItem[] =>
+    const normalize = (items: readonly SourceNavigationItem[]): SourceNavigationItem[] =>
       items.map((item) => {
         if (item.type === "heading") return { ...item, children: normalize(item.children) };
         if (item.type !== "page") return item;

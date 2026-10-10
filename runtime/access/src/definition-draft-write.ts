@@ -38,7 +38,11 @@ import {
   type StoredApplicationDefinitionDraft,
 } from "@vortex/definition";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import {
+  createBuilderAuthority,
+  requireBuilderAuthority,
+  type BuilderTargetFactsReader,
+} from "./builder-authority";
 import { createHumanOrganizationRequestService } from "./human-organization-request";
 
 export type HumanApplicationDraftWriteResult =
@@ -491,7 +495,7 @@ export const createHumanApplicationDraftWriter = (
           const writeStartedAt = await databaseClock(transaction);
           const store = createDefinitionStore(transaction, authority);
           const saved = await store.saveDraft({
-            rootId: command.data.rootId,
+            rootId: platformIdSchema.parse(command.data.rootId),
             expectedDraftRevision: command.data.expectedDraftRevision,
             source: source.data,
           });
