@@ -215,14 +215,21 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{metadata.publishedAt}</time></dd></div>
         <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
+        {selectedRevision === metadata.releaseRevision && <div className="pt-2">
+          <a className="inline-flex rounded border px-3 py-2 underline"
+            href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
+            target="_blank" rel="noopener noreferrer">
+            Review upgrade to version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+          </a>
+          <p className="mt-2">This opens a separate page. Installation is explicit and available only for an eligible upgrade of an existing application.</p>
+        </div>}
       </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
     <section aria-label="Unavailable release commands" className="space-y-3 rounded border p-4">
-      <p id="history-unavailable-commands">Restore, publish and installation are unavailable in this history view.</p>
+      <p id="history-unavailable-commands">Restore and publish are unavailable in this history view. Installation never runs from the history list.</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Restore unavailable</button>
         <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Publish unavailable</button>
-        <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Install unavailable</button>
       </div>
     </section>
   </main>;
