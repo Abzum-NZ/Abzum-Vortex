@@ -7,24 +7,36 @@ import {
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
+  isRecord,
   maximumRecoveryWindowDays,
+  moduleRootIdSchema,
   organizationIdSchema,
   organizationLifecycleLimitsSchema,
+  organizationAccessDeclarationSchema,
+  recordLifecyclePolicyIdSchema,
   recordLifecycleActionSchema,
   recordTypeLifecyclePolicySchema,
   revisionSchema,
+  protectedOperationChannelSchema,
+  sessionContextSchema,
   storageContractIdSchema,
+  timestampSchema,
   workflowIdSchema,
+  databaseTimestamp,
   type ApplicationRootId,
   type IdentitySession,
+  type ModuleRootId,
+  type OrganizationAccessDecision,
   type OrganizationId,
   type StorageContractId,
   type OrganizationLifecycleLimits,
   type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
   type RecordTypeLifecyclePolicy,
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
+  runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
@@ -108,6 +120,49 @@ export interface SaveInitialRecordTypeLifecyclePolicyForProvisionedSetupCommand 
   /** Must match the organisation's current lifecycle-limits revision. */
   readonly expectedSettingsRevision: number;
   readonly policy: RecordTypeLifecyclePolicyActionInput;
+}
+
+export interface ReadProvisionedLifecyclePolicySetupCommand {
+  /** Candidate used only by the existing HUMAN scope resolver. */
+  readonly organizationId: OrganizationId;
+  readonly applicationRootId: ApplicationRootId;
+  readonly applicationReleaseRevision: number;
+  readonly expectedModuleBindings: readonly Readonly<{
+    moduleRootId: ModuleRootId;
+    bindingRevision: number;
+  }>[];
+}
+
+export interface ProvisionedLifecyclePolicySourceBinding {
+  readonly moduleRootId: ModuleRootId;
+  readonly moduleReleaseRevision: number;
+  readonly bindingRevision: number;
+}
+
+export type ProvisionedLifecyclePolicyTargetPolicy =
+  | Readonly<{ state: "absent" }>
+  | Readonly<{
+      state: "configured";
+      policyId: string;
+      policyRevision: number;
+      policyBody: RecordTypeLifecyclePolicy;
+    }>;
+
+export interface ProvisionedLifecyclePolicySetupTarget {
+  readonly storageContractId: StorageContractId;
+  readonly storageScope: "application_contained" | "organization_shared";
+  readonly applicationRootId: ApplicationRootId | null;
+  readonly sourceBindings: readonly ProvisionedLifecyclePolicySourceBinding[];
+  readonly policy: ProvisionedLifecyclePolicyTargetPolicy;
+}
+
+export interface ProvisionedLifecyclePolicySetupSnapshot {
+  readonly organizationId: OrganizationId;
+  readonly applicationRootId: ApplicationRootId;
+  readonly applicationReleaseRevision: number;
+  readonly registrationRevision: number;
+  readonly organizationLimits: OrganizationLifecycleLimits;
+  readonly targets: readonly ProvisionedLifecyclePolicySetupTarget[];
 }
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -329,6 +384,226 @@ const parseSaveInitialPolicyForProvisionedSetupCommand = (
   };
 };
 
+const provisionedSetupReadCommandKeys = [
+  "organizationId",
+  "applicationRootId",
+  "applicationReleaseRevision",
+  "expectedModuleBindings",
+] as const;
+
+const parseReadProvisionedLifecyclePolicySetupCommand = (
+  candidate: unknown,
+): ReadProvisionedLifecyclePolicySetupCommand | undefined => {
+  if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, provisionedSetupReadCommandKeys))
+    return undefined;
+  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
+  const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
+  const applicationReleaseRevision = parseSafeRevision(candidate.applicationReleaseRevision);
+  if (
+    !organizationId.success ||
+    !applicationRootId.success ||
+    !applicationReleaseRevision.success ||
+    !Array.isArray(candidate.expectedModuleBindings) ||
+    candidate.expectedModuleBindings.length === 0 ||
+    candidate.expectedModuleBindings.length > 10_000
+  )
+    return undefined;
+
+  const expectedModuleBindings: Array<{
+    moduleRootId: ModuleRootId;
+    bindingRevision: number;
+  }> = [];
+  let previousModuleRootId: string | undefined;
+  for (const value of candidate.expectedModuleBindings) {
+    if (!isPlainObject(value) || !hasOnlyKeys(value, ["moduleRootId", "bindingRevision"]))
+      return undefined;
+    const moduleRootId = moduleRootIdSchema.safeParse(value.moduleRootId);
+    const bindingRevision = parseSafeRevision(value.bindingRevision);
+    if (
+      !moduleRootId.success ||
+      !bindingRevision.success ||
+      moduleRootId.data !== moduleRootId.data.toLowerCase()
+    )
+      return undefined;
+    const canonicalModuleRootId = moduleRootId.data.toLowerCase();
+    if (
+      previousModuleRootId !== undefined &&
+      previousModuleRootId >= canonicalModuleRootId
+    )
+      return undefined;
+    previousModuleRootId = canonicalModuleRootId;
+    expectedModuleBindings.push({
+      moduleRootId: moduleRootId.data,
+      bindingRevision: bindingRevision.data,
+    });
+  }
+
+  return {
+    organizationId: organizationId.data,
+    applicationRootId: applicationRootId.data,
+    applicationReleaseRevision: applicationReleaseRevision.data,
+    expectedModuleBindings,
+  };
+};
+
+const compareCanonicalUuidText = (left: string, right: string): number => {
+  const canonicalLeft = left.toLowerCase();
+  const canonicalRight = right.toLowerCase();
+  return canonicalLeft < canonicalRight ? -1 : canonicalLeft > canonicalRight ? 1 : 0;
+};
+
+const parseReadProvisionedLifecyclePolicySetupSnapshot = (
+  candidate: unknown,
+): ProvisionedLifecyclePolicySetupSnapshot | undefined => {
+  if (
+    !isPlainObject(candidate) ||
+    !hasOnlyKeys(candidate, [
+      "organizationId",
+      "applicationRootId",
+      "applicationReleaseRevision",
+      "registrationRevision",
+      "organizationLimits",
+      "targets",
+    ])
+  )
+    return undefined;
+  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
+  const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
+  const applicationReleaseRevision = parseSafeRevision(candidate.applicationReleaseRevision);
+  const registrationRevision = parseSafeRevision(candidate.registrationRevision);
+  const organizationLimits = organizationLifecycleLimitsSchema.safeParse(
+    candidate.organizationLimits,
+  );
+  if (
+    !organizationId.success ||
+    !applicationRootId.success ||
+    !applicationReleaseRevision.success ||
+    !registrationRevision.success ||
+    !organizationLimits.success ||
+    !sameId(organizationLimits.data.organizationId, organizationId.data) ||
+    !Array.isArray(candidate.targets) ||
+    candidate.targets.length === 0
+  )
+    return undefined;
+
+  const targets: ProvisionedLifecyclePolicySetupTarget[] = [];
+  let previousStorageContractId: string | undefined;
+  for (const value of candidate.targets) {
+    if (
+      !isPlainObject(value) ||
+      !hasOnlyKeys(value, [
+        "storageContractId",
+        "storageScope",
+        "applicationRootId",
+        "sourceBindings",
+        "policy",
+      ])
+    )
+      return undefined;
+    const storageContractId = storageContractIdSchema.safeParse(value.storageContractId);
+    const applicationRootForTarget =
+      value.applicationRootId === null
+        ? { success: true as const, data: null }
+        : applicationRootIdSchema.safeParse(value.applicationRootId);
+    if (
+      !storageContractId.success ||
+      !applicationRootForTarget.success ||
+      (value.storageScope !== "application_contained" &&
+        value.storageScope !== "organization_shared") ||
+      (value.storageScope === "application_contained" &&
+        (applicationRootForTarget.data === null ||
+          !sameId(applicationRootForTarget.data, applicationRoot.data))) ||
+      (value.storageScope === "organization_shared" && applicationRootForTarget.data !== null) ||
+      (previousStorageContractId !== undefined &&
+        compareCanonicalUuidText(previousStorageContractId, storageContractId.data) >= 0) ||
+      !Array.isArray(value.sourceBindings) ||
+      value.sourceBindings.length === 0 ||
+      !isPlainObject(value.policy)
+    )
+      return undefined;
+    previousStorageContractId = storageContractId.data;
+
+    const sourceBindings: ProvisionedLifecyclePolicySourceBinding[] = [];
+    let previousModuleRootId: string | undefined;
+    for (const sourceValue of value.sourceBindings) {
+      if (
+        !isPlainObject(sourceValue) ||
+        !hasOnlyKeys(sourceValue, ["moduleRootId", "moduleReleaseRevision", "bindingRevision"])
+      )
+        return undefined;
+      const moduleRootId = moduleRootIdSchema.safeParse(sourceValue.moduleRootId);
+      const moduleReleaseRevision = parseSafeRevision(sourceValue.moduleReleaseRevision);
+      const bindingRevision = parseSafeRevision(sourceValue.bindingRevision);
+      if (
+        !moduleRootId.success ||
+        !moduleReleaseRevision.success ||
+        !bindingRevision.success ||
+        (previousModuleRootId !== undefined &&
+          compareCanonicalUuidText(previousModuleRootId, moduleRootId.data) >= 0)
+      )
+        return undefined;
+      previousModuleRootId = moduleRootId.data;
+      sourceBindings.push({
+        moduleRootId: moduleRootId.data,
+        moduleReleaseRevision: moduleReleaseRevision.data,
+        bindingRevision: bindingRevision.data,
+      });
+    }
+
+    let policy: ProvisionedLifecyclePolicyTargetPolicy;
+    if (value.policy.state === "absent") {
+      if (!hasOnlyKeys(value.policy, ["state"])) return undefined;
+      policy = { state: "absent" };
+    } else if (value.policy.state === "configured") {
+      if (!hasOnlyKeys(value.policy, ["state", "policyId", "policyRevision", "policyBody"]))
+        return undefined;
+      const policyId = recordLifecyclePolicyIdSchema.safeParse(value.policy.policyId);
+      const policyRevision = parseSafeRevision(value.policy.policyRevision);
+      const policyBody = recordTypeLifecyclePolicySchema.safeParse(value.policy.policyBody);
+      if (
+        !policyId.success ||
+        !policyRevision.success ||
+        !policyBody.success ||
+        !sameId(policyBody.data.policyId, policyId.data) ||
+        policyBody.data.policyRevision !== policyRevision.data ||
+        !sameId(policyBody.data.organizationId, organizationId.data) ||
+        !sameId(policyBody.data.storageContractId, storageContractId.data) ||
+        (policyBody.data.applicationRootId === null) !==
+          (applicationRootForTarget.data === null) ||
+        (policyBody.data.applicationRootId !== null &&
+          applicationRootForTarget.data !== null &&
+          !sameId(policyBody.data.applicationRootId, applicationRootForTarget.data))
+      )
+        return undefined;
+      policy = {
+        state: "configured",
+        policyId: policyId.data,
+        policyRevision: policyRevision.data,
+        policyBody: policyBody.data,
+      };
+    } else {
+      return undefined;
+    }
+
+    targets.push({
+      storageContractId: storageContractId.data,
+      storageScope: value.storageScope,
+      applicationRootId: applicationRootForTarget.data,
+      sourceBindings,
+      policy,
+    });
+  }
+
+  return {
+    organizationId: organizationId.data,
+    applicationRootId: applicationRoot.data,
+    applicationReleaseRevision: applicationReleaseRevision.data,
+    registrationRevision: registrationRevision.data,
+    organizationLimits: organizationLimits.data,
+    targets,
+  };
+};
+
 const requireOneRow = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
     throw new Error("RECORD_LIFECYCLE_POLICY_STORAGE_UNAVAILABLE");
@@ -413,6 +688,140 @@ export const createOrganizationLifecycleLimitsStore = (
 
 type PolicyRow = DatabaseRow & { policy: unknown };
 
+type ProvisionedSetupReaderRow = DatabaseRow & {
+  snapshot: unknown;
+};
+
+type ProvisionedSetupCompletionRow = DatabaseRow & {
+  request_context: unknown;
+  completed_at: unknown;
+};
+
+const provisionedSetupReadDeclaration = organizationAccessDeclarationSchema.parse({
+  operationKey: "platform.organization.record_lifecycle.manage_policy",
+  action: { actionKind: "manage" },
+  target: { kind: "organization" },
+  requiredPermission: {
+    ownerKind: "platform",
+    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+  },
+  recentAuthentication: { kind: "none" },
+  authority: { kind: "permission" },
+});
+
+const provisionedSetupInstallDeclaration = organizationAccessDeclarationSchema.parse({
+  operationKey: "platform.organization.applications.install",
+  action: { actionKind: "manage" },
+  target: { kind: "organization" },
+  requiredPermission: {
+    ownerKind: "platform",
+    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+  },
+  recentAuthentication: { kind: "none" },
+  authority: { kind: "permission" },
+});
+
+const provisionedSetupInstallScopeDeclaration = organizationAccessDeclarationSchema.parse({
+  operationKey: "platform.organization.applications.install_scope",
+  action: { actionKind: "manage" },
+  target: { kind: "organization" },
+  requiredPermission: {
+    ownerKind: "platform",
+    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+  },
+  recentAuthentication: { kind: "none" },
+  authority: {
+    kind: "delegated_management",
+    before: { kind: "organization_catalogue" },
+    after: { kind: "organization_catalogue" },
+  },
+});
+
+const isCurrentProvisionedSetupDecision = (
+  decision: OrganizationAccessDecision,
+  operationKey: string,
+  scope: SelectedOrganizationScope,
+  correlationId: string,
+  completedAt: number,
+): boolean =>
+  decision.outcome === "allowed" &&
+  decision.operationKey === operationKey &&
+  decision.target.kind === "organization" &&
+  sameId(decision.organizationId, scope.organizationId) &&
+  sameId(decision.organizationAccountId, scope.organizationAccountId) &&
+  decision.accessVersion === scope.accessVersion &&
+  sameId(decision.correlationId, correlationId) &&
+  Date.parse(decision.checkedAt) <= completedAt &&
+  Date.parse(decision.validUntil) > completedAt;
+
+const isCurrentProvisionedSetupRead = (
+  snapshot: ProvisionedLifecyclePolicySetupSnapshot,
+  scope: SelectedOrganizationScope,
+  session: IdentitySession,
+  issuedAt: string,
+  managePolicyDecision: OrganizationAccessDecision,
+  installDecision: OrganizationAccessDecision,
+  installScopeDecision: OrganizationAccessDecision,
+  row: ProvisionedSetupCompletionRow | undefined,
+): boolean => {
+  if (row === undefined) return false;
+  if (!isRecord(row.request_context)) return false;
+  const { channel: rawChannel, ...sessionContextCandidate } = row.request_context;
+  const channel = protectedOperationChannelSchema.safeParse(rawChannel);
+  if (!channel.success || channel.data !== "web") return false;
+  const context = sessionContextSchema.safeParse(sessionContextCandidate);
+  const completedAt = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
+  if (!context.success || !completedAt.success) return false;
+  const current = context.data;
+  const completedMs = Date.parse(completedAt.data);
+  return (
+    current.callerKind === "human" &&
+    sameId(current.tenantId, scope.tenantId) &&
+    sameId(current.organizationId, scope.organizationId) &&
+    sameId(current.organizationAccountId, scope.organizationAccountId) &&
+    current.applicationRootId !== undefined &&
+    scope.applicationRootId !== undefined &&
+    sameId(current.applicationRootId, scope.applicationRootId) &&
+    sameId(current.applicationRootId, snapshot.applicationRootId) &&
+    sameId(current.identityId, session.identityId) &&
+    sameId(current.sessionId, session.sessionId) &&
+    current.authenticationStrength === session.authenticationStrength &&
+    current.accessTokenIssuedAt === session.accessTokenIssuedAt &&
+    current.primaryAuthenticatedAt === session.primaryAuthenticatedAt &&
+    current.multiFactorAuthenticatedAt === session.multiFactorAuthenticatedAt &&
+    current.issuedAt === issuedAt &&
+    current.expiresAt === session.accessTokenExpiresAt &&
+    current.accessVersion === scope.accessVersion &&
+    isCurrentProvisionedSetupDecision(
+      installDecision,
+      provisionedSetupInstallDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
+    isCurrentProvisionedSetupDecision(
+      installScopeDecision,
+      provisionedSetupInstallScopeDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
+    isCurrentProvisionedSetupDecision(
+      managePolicyDecision,
+      provisionedSetupReadDeclaration.operationKey,
+      scope,
+      current.correlationId,
+      completedMs,
+    ) &&
+    Date.parse(current.issuedAt) <= completedMs &&
+    Date.parse(current.expiresAt) > completedMs &&
+    sameId(snapshot.organizationId, current.organizationId)
+  );
+};
+
 export type RecordTypeLifecyclePolicyServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ activityId?: () => string }>;
 
@@ -450,6 +859,96 @@ export const createRecordTypeLifecyclePolicyService = (
   const newActivityId = dependencies.activityId ?? randomUUID;
 
   return Object.freeze({
+    readProvisionedSetup: async (
+      session: IdentitySession,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProvisionedLifecyclePolicySetupSnapshot>> => {
+      const command = parseReadProvisionedLifecyclePolicySetupCommand(commandCandidate);
+      if (command === undefined) return { kind: "unavailable" };
+      const selection: OrganizationSelectionCandidate = {
+        organizationId: command.organizationId,
+        applicationRootId: command.applicationRootId,
+      };
+
+      const requestResult = await requests.runChange(
+        session,
+        selection,
+        async (transaction, scope, issuedAt) => {
+          if (
+            scope.applicationRootId === undefined ||
+            !sameId(scope.applicationRootId, command.applicationRootId)
+          )
+            throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
+
+          const rows = await transaction.query<ProvisionedSetupReaderRow>`
+            select vortex_record.read_provisioned_lifecycle_policy_setup(
+              ${command.applicationRootId}::uuid,
+              ${command.applicationReleaseRevision}::bigint,
+              ${JSON.stringify(command.expectedModuleBindings)}::text::jsonb
+            ) as snapshot
+          `;
+          const row = requireOneRow(rows);
+          const snapshot = parseReadProvisionedLifecyclePolicySetupSnapshot(row.snapshot);
+          if (
+            snapshot === undefined ||
+            !sameId(snapshot.organizationId, scope.organizationId) ||
+            !sameId(snapshot.applicationRootId, command.applicationRootId) ||
+            snapshot.applicationReleaseRevision !== command.applicationReleaseRevision
+          )
+            throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
+
+          const installResult = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            provisionedSetupInstallDeclaration,
+            async (decision) => decision,
+          );
+          const installScopeResult = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            provisionedSetupInstallScopeDeclaration,
+            async (decision) => decision,
+          );
+          const accessResult = await runOrganizationAccessOperation(
+            transaction,
+            scope,
+            provisionedSetupReadDeclaration,
+            async (decision) => decision,
+          );
+          if (
+            installResult.outcome !== "completed" ||
+            installScopeResult.outcome !== "completed" ||
+            accessResult.outcome !== "completed"
+          )
+            return { kind: "unavailable" } as const;
+          const completionRows = await transaction.query<ProvisionedSetupCompletionRow>`
+            select vortex_access.validated_human_request_context() as request_context,
+              pg_catalog.clock_timestamp() as completed_at
+          `;
+          if (
+            completionRows.length !== 1 ||
+            !isCurrentProvisionedSetupRead(
+              snapshot,
+              scope,
+              session,
+              issuedAt,
+              accessResult.value,
+              installResult.value,
+              installScopeResult.value,
+              completionRows[0],
+            )
+          )
+            throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
+          return { kind: "snapshot", value: snapshot } as const;
+        },
+      );
+
+      if (requestResult.kind !== "available") return requestResult;
+      return requestResult.value.kind === "snapshot"
+        ? { kind: "available", value: requestResult.value.value }
+        : { kind: "unavailable" };
+    },
+
     save: async (
       session: IdentitySession,
       commandCandidate: unknown,
