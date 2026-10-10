@@ -10,6 +10,7 @@ import {
   databaseTimestamp,
   flowRunAsPrincipalActorSchema,
   flowRunAsPrincipalSchema,
+  flowRunAsRecordPermissionIntentSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -45,13 +46,22 @@ export const registerFlowRunAsPrincipalCommandSchema = z
     executionBindingId: containedComponentIdSchema,
     ...flowRunAsPrincipalScopeShape,
     actor: flowRunAsPrincipalActorSchema,
+    recordPermissions: flowRunAsRecordPermissionIntentSchema,
     expiresAt: timestampSchema.optional(),
     expectedRevision: revisionSchema.optional(),
     duplicateKey: administrationDuplicateKeySchema,
     activityId: activityIdSchema,
     authority: flowRunAsPrincipalAdministratorAuthoritySchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.actor.kind === "specified_account" && value.recordPermissions.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["recordPermissions"],
+        message: "Only a System flow principal may carry Record permission entries",
+      });
+  });
 
 /** Revokes one exact current principal at its next revision. */
 export const revokeFlowRunAsPrincipalCommandSchema = z
@@ -226,7 +236,8 @@ export const registerFlowRunAsPrincipal = async (
         ${value.actor.kind === "system" ? value.actor.systemActorId : null}::uuid,
         ${value.expiresAt ?? null}::timestamptz,
         ${value.expectedRevision ?? null}::bigint,
-        ${value.activityId}::uuid
+        ${value.activityId}::uuid,
+        ${JSON.stringify(value.recordPermissions)}::text::jsonb
       )
     `;
     return parseMutation(rows);
