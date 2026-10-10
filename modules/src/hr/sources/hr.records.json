@@ -642,6 +642,30 @@
             "position"
           ]
         }
+      },
+      {
+        "id": "perm_hr_leave_request_read",
+        "key": "vortex.hr.leave_request.read",
+        "label": "Read leave request dates and status",
+        "description": "Read leave request dates and status in this private HR application.",
+        "record_type": "leave_request",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "start_date",
+            "end_date",
+            "status"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "actions": [],
@@ -708,6 +732,28 @@
         "sort": [
           {
             "field": "employee_number",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_leave_requests",
+        "key": "hr_leave_requests",
+        "record_type": "leave_request",
+        "inputs": [],
+        "select": [
+          "start_date",
+          "end_date",
+          "status"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "start_date",
             "direction": "ascending"
           }
         ],
