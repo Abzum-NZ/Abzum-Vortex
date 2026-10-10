@@ -29,9 +29,15 @@ import {
   timestampSchema,
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
+  type ApplicationSourceDocumentV2,
+  type ApplicationCompilationOutputV2,
+  type DefinitionResolutionSnapshotV2,
+  type DefinitionResolutionSnapshotV3,
   type PublishDefinitionResult,
   type SessionContext,
+  type SourceIdentityAssignmentV3,
   type StoredDefinitionSource,
+  type VersionImpactReason,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -246,6 +252,21 @@ const appendReleaseRowSchema = z
 
 type RawModuleRelease = z.infer<typeof rawModuleReleaseSchema>;
 type StoredHistoryRelease = z.infer<typeof storedHistoryReleaseSchema>;
+
+/** Authenticated immutable Application evidence for one ordinary same-root comparison. */
+export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
+  organizationId: string;
+  rootId: string;
+  key: string;
+  publication: z.infer<typeof publishedApplicationReferenceSchema>;
+  authoredSource: ApplicationSourceDocumentV2;
+  authoredSourceFingerprint: string;
+  compilationOutput: ApplicationCompilationOutputV2;
+  resolutionSnapshot: DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+  identities: readonly SourceIdentityAssignmentV3[];
+  comparisonFingerprint: string;
+  impactReasons: readonly VersionImpactReason[];
+}>;
 
 const invalidStorage = (): never => {
   throw new DefinitionPublicationError("DEFINITION_PUBLICATION_FAILED");
@@ -501,6 +522,98 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const release = this.materializeModuleRelease(parsed.data);
     if (release !== undefined && release.organizationId !== organizationId) return invalidStorage();
     return release;
+  }
+
+  /**
+   * Returns one exact Application release only after the ordinary candidate reader has
+   * authenticated and folded the complete anchored history. The selected raw row is passed
+   * through the same immutable-release verifier used by that fold.
+   */
+  async readApplicationPageAdoptionRelease(
+    rootId: string,
+    releaseRevision: number,
+    expectedAnchorReleaseRevision: number,
+  ): Promise<AuthenticatedApplicationPageAdoptionRelease | undefined> {
+    const candidate = await this.readCandidate(rootId);
+    if (candidate === undefined) return undefined;
+    if (
+      candidate.draft.kind !== "application" ||
+      candidate.draft.source.kind !== "application" ||
+      candidate.historyEvidence.kind !== "application" ||
+      candidate.historyEvidence.anchorReleaseRevision !== expectedAnchorReleaseRevision ||
+      candidate.draft.publishedRevision !== expectedAnchorReleaseRevision ||
+      releaseRevision !== expectedAnchorReleaseRevision
+    )
+      return invalidStorage();
+
+    let after: number | null = null;
+    let previous: number | null = null;
+    let selected: StoredHistoryRelease | undefined;
+    while (after !== expectedAnchorReleaseRevision) {
+      const rows = await this.transaction.query`
+        select vortex_definition.read_publication_history_page(
+          ${rootId}, ${expectedAnchorReleaseRevision}, ${after}, ${100}
+        ) as publication_history_page
+      `;
+      const row = parseOneRow(rows, publicationHistoryPageRowSchema);
+      const page = publicationHistoryPageSchema.safeParse(row.publication_history_page);
+      if (!page.success || page.data.anchorReleaseRevision !== expectedAnchorReleaseRevision)
+        return invalidStorage();
+      for (const entry of page.data.entries) {
+        const materialized = this.materializeHistory(
+          [entry.release],
+          "application",
+          candidate.draft.key,
+          String(candidate.draft.rootId),
+        );
+        const release = materialized.kind === "application" ? materialized.history[0] : undefined;
+        if (
+          release === undefined ||
+          entry.previousReleaseRevision !== previous ||
+          release.publication.revision <= (previous ?? 0) ||
+          release.publication.revision > expectedAnchorReleaseRevision
+        )
+          return invalidStorage();
+        previous = release.publication.revision;
+        if (release.publication.revision === releaseRevision) {
+          if (selected !== undefined) return invalidStorage();
+          selected = entry.release;
+        }
+      }
+      if (page.data.nextAfterReleaseRevision === null) {
+        if (previous !== expectedAnchorReleaseRevision) return invalidStorage();
+        after = expectedAnchorReleaseRevision;
+      } else {
+        if (
+          page.data.nextAfterReleaseRevision !== previous ||
+          previous === null ||
+          previous >= expectedAnchorReleaseRevision
+        )
+          return invalidStorage();
+        after = previous;
+      }
+    }
+    if (selected === undefined) return undefined;
+    const evidence = selected.evidence;
+    if (
+      evidence.authoredSource.kind !== "application" ||
+      evidence.compilationOutput.kind !== "application" ||
+      evidence.resolutionSnapshot.contractVersion !== "2.0.0"
+    )
+      return invalidStorage();
+    return Object.freeze({
+      organizationId: candidate.draft.organizationId,
+      rootId: String(candidate.draft.rootId),
+      key: candidate.draft.key,
+      publication: publishedApplicationReferenceSchema.parse(selected.publication),
+      authoredSource: evidence.authoredSource,
+      authoredSourceFingerprint: evidence.authoredSourceFingerprint,
+      compilationOutput: evidence.compilationOutput,
+      resolutionSnapshot: evidence.resolutionSnapshot,
+      identities: evidence.resolutionSnapshot.identities,
+      comparisonFingerprint: evidence.comparisonFingerprint,
+      impactReasons: evidence.impactReasons,
+    });
   }
 
   private materializeHistory(
@@ -796,3 +909,19 @@ export const createDatabaseDefinitionPublicationRepository = (
       operation(new DatabasePublicationTransaction(transaction, context)),
     ),
 });
+
+/** Concrete full-evidence reader for the bounded ordinary page-adoption consumer. */
+export const readAuthenticatedApplicationPageAdoptionRelease = (
+  transaction: RequestDatabaseTransaction,
+  context: SessionContext,
+  rootId: string,
+  releaseRevision: number,
+  expectedAnchorReleaseRevision: number,
+): Promise<AuthenticatedApplicationPageAdoptionRelease | undefined> =>
+  safeRepositoryOperation(() =>
+    new DatabasePublicationReader(transaction, context).readApplicationPageAdoptionRelease(
+      rootId,
+      releaseRevision,
+      expectedAnchorReleaseRevision,
+    ),
+  );

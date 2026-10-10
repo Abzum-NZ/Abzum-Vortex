@@ -6,6 +6,8 @@ import {
   applicationRootIdSchema,
   canonicalJson,
   correlationIdSchema,
+  fingerprintSchema,
+  pageIdSchema,
   createDefinitionRootCommandSchema,
   databaseRevision,
   databaseTimestamp,
@@ -104,6 +106,38 @@ type CompletionRow = DatabaseRow & {
   reason_code: unknown;
   completed_at: unknown;
 };
+
+const derivedDraftCommandSchema = z
+  .object({
+    rootId: applicationRootIdSchema,
+    expectedDraftRevision: revisionSchema,
+    expectedPublicationAnchor: revisionSchema,
+    candidateReleaseRevision: revisionSchema,
+    originalPageId: pageIdSchema,
+    replacementPageId: pageIdSchema,
+    comparisonFingerprint: fingerprintSchema,
+    decision: z.enum(["keep_replacement", "adopt_original"]),
+    target: z
+      .object({
+        kind: z.enum(["navigation", "role_home", "application_home"]),
+        id: z.string().min(1).max(500),
+      })
+      .strict(),
+  })
+  .strict();
+
+type DerivedDraftCommand = z.infer<typeof derivedDraftCommandSchema>;
+type DerivedDraftMaterialization = Readonly<{
+  source: ApplicationSourceDocumentV2;
+  verifySaved: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    draft: StoredApplicationDefinitionDraft,
+  ) => Promise<void>;
+}>;
+type DerivedDraftWriteResult =
+  | Readonly<{ kind: "saved"; draft: StoredApplicationDefinitionDraft }>
+  | Readonly<{ kind: "no_change"; draftRevision: number; sourceFingerprint: string }>;
 
 const databaseClock = async (transaction: RequestDatabaseTransaction): Promise<number> => {
   const rows = await transaction.query<DatabaseRow>`
@@ -349,10 +383,148 @@ export const createHumanApplicationDraftWriter = (
       ? { kind: "refused" }
       : { kind: "temporarily_unavailable" };
   };
+  const writeDerived = async (
+    session: IdentitySession,
+    organizationId: string,
+    candidate: unknown,
+    derive: (input: Readonly<{
+      transaction: RequestDatabaseTransaction;
+      scope: SelectedOrganizationScope;
+      session: IdentitySession;
+      draft: StoredApplicationDefinitionDraft;
+      command: DerivedDraftCommand;
+    }>) => Promise<DerivedDraftMaterialization>,
+  ): Promise<HumanApplicationDraftWriteResult | Readonly<{
+    kind: "no_change";
+    draftRevision: number;
+    sourceFingerprint: string;
+  }>> => {
+    const organization = organizationIdSchema.safeParse(organizationId);
+    const command = derivedDraftCommandSchema.safeParse(candidate);
+    if (!organization.success || !command.success)
+      return { kind: "refused" };
+    if (command.data.candidateReleaseRevision !== command.data.expectedPublicationAnchor)
+      return { kind: "conflict" };
+
+    let failure: HumanApplicationDraftWriteResult | undefined;
+    const result = await dependencies.requests.runChange(
+      session,
+      { organizationId: organization.data },
+      async (transaction, scope): Promise<DerivedDraftWriteResult> => {
+        try {
+          if (!sameId(scope.organizationId, organization.data) || scope.applicationRootId !== undefined)
+            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+          await requireBuilderAuthority(authority, {
+            kind: "draft_change",
+            rootId: command.data.rootId,
+          });
+          const target = await targetFacts(transaction, scope, command.data.rootId);
+          if (target.isSystemApplication)
+            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+          const locked = await transaction.query<DatabaseRow>`
+            select vortex_definition.lock_application_page_adoption_draft_internal(
+              ${command.data.rootId}::uuid,
+              ${command.data.expectedDraftRevision},
+              ${command.data.expectedPublicationAnchor}
+            ) as publication_state
+          `;
+          if (
+            locked.length !== 1 ||
+            locked[0]?.publication_state === null ||
+            locked[0]?.publication_state === undefined
+          )
+            invalidResult();
+
+          const previous = await readApplicationDefinitionDraft(transaction, scope, {
+            rootId: command.data.rootId,
+            expectedDraftRevision: command.data.expectedDraftRevision,
+          });
+          if (
+            previous.kind !== "application" ||
+            previous.publishedRevision !== command.data.expectedPublicationAnchor
+          )
+            throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          const materialized = await derive({
+            transaction,
+            scope,
+            session,
+            draft: previous,
+            command: command.data,
+          });
+          const source = applicationSourceDocumentV2Schema.safeParse(materialized.source);
+          if (!source.success || !validateDefinitionSource(source.data).valid)
+            throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE");
+          if (
+            source.data.key !== previous.key ||
+            !sameId(source.data.root_alias, previous.source.root_alias)
+          )
+            throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+
+          if (canonicalJson(source.data) === canonicalJson(previous.source)) {
+            await materialized.verifySaved(transaction, scope, previous);
+            await assertLiveCompletion(transaction, scope, previous);
+            return {
+              kind: "no_change",
+              draftRevision: previous.draftRevision,
+              sourceFingerprint: previous.sourceFingerprint,
+            };
+          }
+
+          const writeStartedAt = await databaseClock(transaction);
+          const store = createDefinitionStore(transaction, authority);
+          const saved = await store.saveDraft({
+            rootId: command.data.rootId,
+            expectedDraftRevision: command.data.expectedDraftRevision,
+            source: source.data,
+          });
+          const returned = verifySavedDraft(saved, source.data, scope, writeStartedAt, previous);
+          const reread = await readApplicationDefinitionDraft(transaction, scope, {
+            rootId: returned.rootId,
+            expectedDraftRevision: returned.draftRevision,
+          });
+          const verified = verifySavedDraft(reread, source.data, scope, writeStartedAt, previous);
+          if (
+            !sameId(verified.rootId, returned.rootId) ||
+            canonicalJson(verified) !== canonicalJson(returned) ||
+            verified.publishedRevision !== command.data.expectedPublicationAnchor
+          )
+            invalidResult();
+          await materialized.verifySaved(transaction, scope, verified);
+          await assertLiveCompletion(transaction, scope, verified);
+          return { kind: "saved", draft: verified };
+        } catch (error) {
+          failure = safeFailure(error);
+          // Throw through runChange so every partial write is rolled back before safe mapping.
+          throw error;
+        }
+      },
+    );
+    if (result.kind === "available") {
+      if (result.value.kind === "no_change") return result.value;
+      return { kind: "available", draft: result.value.draft };
+    }
+    if (failure !== undefined) return failure;
+    return result.kind === "unavailable"
+      ? { kind: "refused" }
+      : { kind: "temporarily_unavailable" };
+  };
   return Object.freeze({
     createRoot: (session: IdentitySession, organizationId: string, candidate: unknown) =>
       write(session, organizationId, candidate, "create"),
     saveDraft: (session: IdentitySession, organizationId: string, candidate: unknown) =>
       write(session, organizationId, candidate, "save"),
+    saveDerivedDraft: (
+      session: IdentitySession,
+      organizationId: string,
+      candidate: unknown,
+      derive: (input: Readonly<{
+        transaction: RequestDatabaseTransaction;
+        scope: SelectedOrganizationScope;
+        session: IdentitySession;
+        draft: StoredApplicationDefinitionDraft;
+        command: DerivedDraftCommand;
+      }>) => Promise<DerivedDraftMaterialization>,
+    ) => writeDerived(session, organizationId, candidate, derive),
   });
 };
