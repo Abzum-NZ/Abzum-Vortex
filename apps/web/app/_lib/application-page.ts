@@ -67,6 +67,7 @@ import {
   exactDecimalTextV2Schema,
   jsonValueSchema,
   readRecordDetailContract,
+  fieldIdSchema,
   fileIdSchema,
   recordIdSchema,
   readRecordsTableContract,
@@ -842,20 +843,21 @@ const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
     if (choices.length > command.pageSize || totalChoices + choices.length > 1_000) return false;
     totalChoices += choices.length;
     for (const choice of choices) {
-      if ("organizationAccountId" in choice.value) return false;
-      const rowId = `${choice.value.recordTypeId.toLowerCase()}:${choice.value.recordId.toLowerCase()}`;
+      const choiceValue = choice.value;
+      if ("organizationAccountId" in choiceValue) return false;
+      const rowId = `${choiceValue.recordTypeId.toLowerCase()}:${choiceValue.recordId.toLowerCase()}`;
       if (
         seenKeys.has(choice.key) ||
         seenRowIds.has(rowId) ||
-        !sameId(choice.value.recordTypeId, queryTarget.recordTypeId) ||
-        !queryAllowedTargets.some((target) => sameId(target.recordTypeId, choice.value.recordTypeId))
+        !sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) ||
+        !queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId))
       )
         return false;
       seenKeys.add(choice.key);
       seenRowIds.add(rowId);
       if (
-        sameId(choice.value.recordTypeId, storedValue.recordTypeId) &&
-        sameId(choice.value.recordId, storedValue.recordId)
+        sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
+        sameId(choiceValue.recordId, storedValue.recordId)
       ) {
         if (selected !== undefined) return false;
         selected = choice;
@@ -3695,10 +3697,15 @@ const loadApplicationPageInternal = async (
             : Object.keys(subjectRow.row.values).find((key) =>
                 sameId(key, String(definition.fieldId)),
               );
+          const parsedValueFieldId =
+            valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
           projectedField = await projectSelectedReferenceChoiceEditField({
             firstPage,
             field: definition,
-            stored: valueKey === undefined ? undefined : subjectRow.row.values[valueKey],
+            stored:
+              parsedValueFieldId !== undefined && parsedValueFieldId.success
+                ? subjectRow.row.values[parsedValueFieldId.data]
+                : undefined,
             service: referenceChoices,
             session,
             selection,
