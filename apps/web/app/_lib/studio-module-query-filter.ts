@@ -29,6 +29,7 @@ import {
   createDefinitionStore,
   DefinitionPublicationError,
   DefinitionStoreError,
+  fingerprintModuleQueryFilterOperandBinding,
   fingerprintCanonicalValue,
   readModuleDefinitionDraft,
   requireBuilderAuthority,
@@ -316,6 +317,27 @@ const sameSavedReceipt = (left: StoredModuleDefinitionDraft, right: StoredModule
   sameId(left.updatedBy, right.updatedBy) && Date.parse(left.createdAt) === Date.parse(right.createdAt) &&
   Date.parse(left.updatedAt) === Date.parse(right.updatedAt);
 
+const sameOperandBindingIdentity = (
+  left: ModuleQueryFilterDraftContext,
+  right: ModuleQueryFilterDraftContext,
+): boolean => canonicalJson({
+  organizationId: left.organizationId,
+  rootId: left.rootId,
+  definitionKey: left.definitionKey,
+  resolutionFingerprint: left.resolutionFingerprint,
+  query: left.query,
+  fields: left.fields,
+  parameters: left.parameters,
+}) === canonicalJson({
+  organizationId: right.organizationId,
+  rootId: right.rootId,
+  definitionKey: right.definitionKey,
+  resolutionFingerprint: right.resolutionFingerprint,
+  query: right.query,
+  fields: right.fields,
+  parameters: right.parameters,
+});
+
 const changesOnlySelectedQueryFilter = (
   previous: ModuleSourceDocument,
   candidate: ModuleSourceDocument,
@@ -586,13 +608,31 @@ export const saveStudioModuleQueryFilter = async (
             transaction, scope, resolved.session, issuedAt, validated.liveContext, validated.draft,
           );
           if (validated.noChange) {
+            const current = await readModuleDefinitionDraft(transaction, scope, {
+              rootId: validated.draft.rootId,
+              expectedDraftRevision: validated.draft.draftRevision,
+            });
+            if (!sameDraft(current, validated.draft)) return { kind: "conflict" } as const;
+            const receipt = await queryFilterService(transaction, scope).readModuleQueryFilterDraft(
+              validated.liveContext,
+              {
+                rootId: platformIdSchema.parse(current.rootId),
+                expectedDraftRevision: current.draftRevision,
+                expectedSavedSourceFingerprint: current.sourceFingerprint,
+                queryAlias: validated.context.query.alias,
+              },
+            );
+            if (receipt.kind === "validation_failed") throw new ValidationFailure(receipt.validation);
+            if (receipt.kind !== "available" || receipt.selected === undefined ||
+                canonicalJson(receipt.selected) !== canonicalJson(validated.context))
+              return { kind: "conflict" } as const;
             await evaluateDraftPermission(
-              transaction, scope, resolved.session, issuedAt, validated.liveContext, validated.draft,
+              transaction, scope, resolved.session, issuedAt, validated.liveContext, current,
               originalDeadline,
             );
             return {
-              kind: "unchanged", snapshot: snapshotFor(validated.draft),
-              selected: validated.context,
+              kind: "unchanged", snapshot: snapshotFor(current),
+              selected: receipt.selected,
             } as const;
           }
           const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
@@ -630,21 +670,28 @@ export const saveStudioModuleQueryFilter = async (
             },
           );
           if (receipt.kind === "validation_failed") throw new ValidationFailure(receipt.validation);
+          const expectedReceiptBindingFingerprint = receipt.selected === undefined
+            ? undefined
+            : fingerprintModuleQueryFilterOperandBinding({
+                organizationId: receipt.selected.organizationId,
+                rootId: receipt.selected.rootId,
+                definitionKey: receipt.selected.definitionKey,
+                draftRevision: reread.draftRevision,
+                savedSourceFingerprint: reread.sourceFingerprint,
+                resolutionFingerprint: receipt.selected.resolutionFingerprint,
+                query: receipt.selected.query,
+                fields: receipt.selected.fields,
+                parameters: receipt.selected.parameters,
+              });
           if (receipt.kind !== "available" || receipt.selected === undefined ||
               receipt.selected.organizationId !== reread.organizationId ||
               receipt.selected.rootId !== reread.rootId ||
               receipt.selected.definitionKey !== reread.key ||
               receipt.selected.draftRevision !== reread.draftRevision ||
               receipt.selected.savedSourceFingerprint !== reread.sourceFingerprint ||
-               receipt.selected.query.alias !== validated.context.query.alias ||
-               receipt.selected.query.key !== validated.context.query.key ||
-              receipt.selected.query.queryId !== validated.context.query.queryId ||
-               receipt.selected.query.recordAlias !== validated.context.query.recordAlias ||
-               receipt.selected.query.recordKey !== validated.context.query.recordKey ||
-              receipt.selected.query.recordTypeId !== validated.context.query.recordTypeId ||
-               receipt.selected.resolutionFingerprint !== validated.context.resolutionFingerprint ||
-               receipt.selected.operandBindingFingerprint !== validated.context.operandBindingFingerprint ||
-               canonicalJson(receipt.selected.filter) !== canonicalJson(validated.context.filter))
+              !sameOperandBindingIdentity(receipt.selected, validated.context) ||
+              receipt.selected.operandBindingFingerprint !== expectedReceiptBindingFingerprint ||
+              canonicalJson(receipt.selected.filter) !== canonicalJson(validated.context.filter))
             throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
           await evaluateDraftPermission(
             transaction,

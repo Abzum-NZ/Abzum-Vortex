@@ -56,6 +56,7 @@ import {
   type ModuleFieldV3,
   type DefinitionValidationResult,
   type DefinitionValidationLocation,
+  type DefinitionValidationTranslationContext,
   type DefinitionRuleFailure,
   type QueryId,
   type RecordTypeId,
@@ -319,6 +320,43 @@ export type ModuleQueryFilterDraftContext = Readonly<{
   parameters: readonly Readonly<{ key: string; type: ModuleQueryFilterParameterType }>[];
   filter: ConditionNode | null;
 }>;
+
+type ModuleQueryFilterOperandBinding = Pick<
+  ModuleQueryFilterDraftContext,
+  | "organizationId"
+  | "rootId"
+  | "definitionKey"
+  | "draftRevision"
+  | "savedSourceFingerprint"
+  | "resolutionFingerprint"
+  | "query"
+  | "fields"
+  | "parameters"
+>;
+
+export const fingerprintModuleQueryFilterOperandBinding = (
+  binding: ModuleQueryFilterOperandBinding,
+): Fingerprint => fingerprintCanonicalValue({
+  domain: "vortex.module_query_filter_operand_binding.v1",
+  organizationId: binding.organizationId,
+  rootId: binding.rootId,
+  definitionKey: binding.definitionKey,
+  draftRevision: binding.draftRevision,
+  savedSourceFingerprint: binding.savedSourceFingerprint,
+  resolutionFingerprint: binding.resolutionFingerprint,
+  query: {
+    alias: binding.query.alias,
+    key: binding.query.key,
+    queryId: binding.query.queryId,
+  },
+  record: {
+    alias: binding.query.recordAlias,
+    key: binding.query.recordKey,
+    recordTypeId: binding.query.recordTypeId,
+  },
+  fields: binding.fields,
+  parameters: binding.parameters,
+});
 
 export type ModuleQueryFilterQueryChoice = Readonly<{
   alias: string;
@@ -1749,6 +1787,48 @@ const moduleValidationRoot = (source: ModuleSourceDocument): DefinitionValidatio
   segments: [{ kind: "module", key: source.key }],
 });
 
+const moduleValidationPathMap = (
+  source: ModuleSourceDocument,
+): DefinitionValidationTranslationContext["pathMap"] => {
+  const rootLocation = moduleValidationRoot(source);
+  const pathMap: NonNullable<DefinitionValidationTranslationContext["pathMap"]> = [];
+  source.body.record_types.forEach((record, recordIndex) => {
+    const recordLocation: DefinitionValidationLocation = {
+      ...rootLocation,
+      segments: [...rootLocation.segments, { kind: "record_type", key: record.key }],
+    };
+    pathMap.push({ sourcePath: ["body", "record_types", recordIndex], location: recordLocation });
+    record.fields.forEach((field, fieldIndex) => {
+      pathMap.push({
+        sourcePath: ["body", "record_types", recordIndex, "fields", fieldIndex],
+        location: {
+          ...recordLocation,
+          segments: [...recordLocation.segments, { kind: "field", key: field.key }],
+        },
+      });
+    });
+  });
+  source.body.queries.forEach((query, queryIndex) => {
+    pathMap.push({
+      sourcePath: ["body", "queries", queryIndex],
+      location: {
+        ...rootLocation,
+        segments: [...rootLocation.segments, { kind: "query", key: query.key }],
+      },
+    });
+  });
+  return pathMap;
+};
+
+const moduleValidationTranslationContext = (
+  source: ModuleSourceDocument,
+  correlationId: string,
+): DefinitionValidationTranslationContext => ({
+  correlationId,
+  rootLocation: moduleValidationRoot(source),
+  pathMap: moduleValidationPathMap(source),
+});
+
 const moduleValidationFailure = (
   error: DefinitionCompilationError,
   source: ModuleSourceDocument,
@@ -1922,27 +2002,13 @@ const moduleQueryChoices = (
     }
     if (!conditionUsesOnlyCurrentOperands(filter, fields, parameters))
       return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" } };
-    const operandBindingFingerprint = fingerprintCanonicalValue({
-      domain: "vortex.module_query_filter_operand_binding.v1",
+    const operandBinding = {
       organizationId: candidate.draft.organizationId,
       rootId: candidate.draft.rootId,
       definitionKey: source.key,
       draftRevision: candidate.draft.draftRevision,
       savedSourceFingerprint: candidate.draft.sourceFingerprint,
       resolutionFingerprint: output.resolutionFingerprint,
-      query: { alias: query.id, key: query.key, queryId: parsedQueryId.data },
-      record: { alias: record.id, key: record.key, recordTypeId: parsedRecordTypeId.data },
-      fields,
-      parameters,
-    });
-    const context: ModuleQueryFilterDraftContext = {
-      organizationId: candidate.draft.organizationId,
-      rootId: candidate.draft.rootId,
-      definitionKey: source.key,
-      draftRevision: candidate.draft.draftRevision,
-      savedSourceFingerprint: candidate.draft.sourceFingerprint,
-      resolutionFingerprint: output.resolutionFingerprint,
-      operandBindingFingerprint,
       query: {
         alias: query.id,
         key: query.key,
@@ -1953,6 +2019,19 @@ const moduleQueryChoices = (
       },
       fields,
       parameters,
+    };
+    const operandBindingFingerprint = fingerprintModuleQueryFilterOperandBinding(operandBinding);
+    const context: ModuleQueryFilterDraftContext = {
+      organizationId: operandBinding.organizationId,
+      rootId: operandBinding.rootId,
+      definitionKey: operandBinding.definitionKey,
+      draftRevision: operandBinding.draftRevision,
+      savedSourceFingerprint: operandBinding.savedSourceFingerprint,
+      resolutionFingerprint: operandBinding.resolutionFingerprint,
+      operandBindingFingerprint,
+      query: operandBinding.query,
+      fields: operandBinding.fields,
+      parameters: operandBinding.parameters,
       filter,
     };
     return { source: query, context, choice: { ...queryChoiceBase, eligible: true } };
@@ -2015,10 +2094,10 @@ const compileCurrentModuleQueryFilterState = async (
   if (!source.success)
     return {
       kind: "validation_failed",
-      validation: translateDefinitionSchemaError(source.error, {
-        correlationId: context.correlationId,
-        rootLocation: moduleValidationRoot(candidate.draft.source),
-      }),
+      validation: translateDefinitionSchemaError(
+        source.error,
+        moduleValidationTranslationContext(candidate.draft.source, context.correlationId),
+      ),
     };
   const shapeValidation = validateDefinitionSource(source.data);
   if (!shapeValidation.valid)
@@ -2157,10 +2236,10 @@ export const createDefinitionPublicationService = (
         if (!source.success)
           return {
             kind: "validation_failed",
-            validation: translateDefinitionSchemaError(source.error, {
-              correlationId: context.correlationId,
-              rootLocation: moduleValidationRoot(draft.source),
-            }),
+            validation: translateDefinitionSchemaError(
+              source.error,
+              moduleValidationTranslationContext(draft.source, context.correlationId),
+            ),
           };
         const shapeValidation = validateDefinitionSource(source.data);
         if (!shapeValidation.valid)

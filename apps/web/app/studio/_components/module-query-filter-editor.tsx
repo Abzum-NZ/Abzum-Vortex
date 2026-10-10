@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type ConditionNode, type DefinitionValidationResult } from "@vortex/contracts";
+import {
+  type ConditionNode,
+  type DefinitionValidationLocation,
+  type DefinitionValidationResult,
+} from "@vortex/contracts";
 import {
   StudioConditionControls,
   validateStudioCondition,
@@ -36,6 +40,21 @@ const initialContext = (result: StudioModuleQueryFilterResult): ModuleQueryFilte
   result.kind === "available" ? result.selected : undefined;
 const initialSnapshot = (result: StudioModuleQueryFilterResult): StudioModuleQueryFilterSnapshot | undefined =>
   result.kind === "available" ? result.snapshot : undefined;
+const queryChoiceForValidationLocation = (
+  location: DefinitionValidationLocation | undefined,
+  moduleKey: string | undefined,
+  choices: readonly ModuleQueryFilterQueryChoice[],
+): ModuleQueryFilterQueryChoice | undefined => {
+  if (location === undefined || location.documentKind !== "module" || moduleKey === undefined ||
+      location.documentKey !== moduleKey) return undefined;
+  let queryAlias: string | undefined;
+  for (const segment of location.segments) {
+    if (segment.kind === "query") queryAlias = segment.key;
+  }
+  if (queryAlias === undefined) return undefined;
+  const matches = choices.filter((choice) => choice.alias === queryAlias || choice.key === queryAlias);
+  return matches.length === 1 ? matches[0] : undefined;
+};
 const sameSelection = (
   current: ModuleQueryFilterDraftContext | undefined,
   next: ModuleQueryFilterDraftContext,
@@ -76,6 +95,9 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
   const selectionEpoch = useRef(0);
   const requestEpoch = useRef(0);
   const bufferEpoch = useRef(0);
+  const pendingValidationFocus = useRef<string | null>(null);
+  const querySelectRef = useRef<HTMLSelectElement | null>(null);
+  const editorSummaryRef = useRef<HTMLElement | null>(null);
   const contextRef = useRef(context);
   const selectedAliasRef = useRef(selectedAlias);
   const appliedRef = useRef(applied);
@@ -91,6 +113,22 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
       requestEpoch.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    const requestedAlias = pendingValidationFocus.current;
+    if (requestedAlias === null || busy || selectedAlias !== requestedAlias) return;
+    if (context?.query.alias === requestedAlias) {
+      (contextInvalidated || readonlyReason !== undefined
+        ? querySelectRef.current
+        : editorSummaryRef.current)?.focus();
+      pendingValidationFocus.current = null;
+      return;
+    }
+    if (context === undefined) {
+      querySelectRef.current?.focus();
+      pendingValidationFocus.current = null;
+    }
+  }, [busy, context, contextInvalidated, readonlyReason, selectedAlias]);
 
   const controlsContext = context === undefined ? undefined : moduleQueryFilterControlsContext(context);
   const computedValidation = controlsContext === undefined
@@ -162,7 +200,10 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
     if (busy || nextAlias === selectedAlias) return;
     if ((dirty || staged) && !window.confirm(
       "Discard the pending filter changes and switch Query? Choose OK to discard or Cancel to keep editing this Query.",
-    )) return;
+    )) {
+      pendingValidationFocus.current = null;
+      return;
+    }
     const selectedEpoch = ++selectionEpoch.current;
     const requestId = ++requestEpoch.current;
     setSelectedAlias(nextAlias);
@@ -430,6 +471,61 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
     }
   };
 
+  const focusValidationQuery = (queryAlias: string): void => {
+    if (busy) return;
+    if (selectedAlias === queryAlias) {
+      (context?.query.alias === queryAlias && !contextInvalidated && readonlyReason === undefined
+        ? editorSummaryRef.current
+        : querySelectRef.current)?.focus();
+      return;
+    }
+    pendingValidationFocus.current = queryAlias;
+    void chooseQuery(queryAlias);
+  };
+
+  const validationLocationText = (
+    error: DefinitionValidationResult["errors"][number],
+    query: ModuleQueryFilterQueryChoice | undefined,
+  ): string => {
+    if (query === undefined) return snapshot === undefined ? "Module" : `Module ${snapshot.key}`;
+    const label = query.label ?? query.key;
+    let fieldKey: string | undefined;
+    for (const segment of error.location?.segments ?? []) {
+      if (segment.kind === "field") fieldKey = segment.key;
+    }
+    if (fieldKey !== undefined && context?.query.alias === query.alias) {
+      const field = context.fields.find((entry) =>
+        entry.sourceAlias === fieldKey || entry.sourceKey === fieldKey ||
+        entry.field.fieldId === fieldKey,
+      );
+      if (field !== undefined) return `Query ${label}, field ${field.field.label}`;
+    }
+    return `Query ${label}`;
+  };
+
+  const renderValidationErrors = () => remoteValidation === null ? null : (
+    <div role="alert" aria-live="polite">
+      <h2 className="font-medium">Current Module validation</h2>
+      <ul className="list-disc pl-6">
+        {remoteValidation.errors.map((error, index) => {
+          const query = queryChoiceForValidationLocation(error.location, snapshot?.key, queryChoices);
+          const location = validationLocationText(error, query);
+          return (
+            <li key={`${error.code}:${index}`}>
+              {query === undefined
+                ? <span>{location}</span>
+                : <button type="button" className="underline" disabled={busy}
+                    onClick={() => focusValidationQuery(query.alias)}>
+                    {location}
+                  </button>}
+              <span>: {error.message} {error.guidance}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
   const localIssues = localValidation?.issues ?? [];
   const canEdit = context !== undefined && readonlyReason === undefined && !contextInvalidated;
 
@@ -450,7 +546,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
       <section className="space-y-3" aria-label="Query selection">
         <label className="block space-y-1">
           <span>Module Query</span>
-          <select className="w-full rounded border border-border bg-background px-3 py-2" value={selectedAlias}
+          <select ref={querySelectRef} className="w-full rounded border border-border bg-background px-3 py-2" value={selectedAlias}
             onChange={(event) => void chooseQuery(event.target.value)} disabled={busy}>
             <option value="">Choose a Query</option>
             {queryChoices.map((choice) => (
@@ -466,7 +562,8 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
       </section>
 
       {canEdit && controlsContext !== undefined && (
-        <section className="space-y-4" aria-label="Filter editor">
+        <section ref={editorSummaryRef} tabIndex={-1} className="space-y-4"
+          aria-label={`Filter editor for Query ${context.query.alias}`}>
           <fieldset disabled={busy}>
             <legend className="sr-only">Condition controls</legend>
             <StudioConditionControls
@@ -487,16 +584,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
               </ul>
             </div>
           )}
-          {remoteValidation !== null && (
-            <div role="alert" aria-live="polite">
-              <h2 className="font-medium">Current Module validation</h2>
-              <ul className="list-disc pl-6">
-                {remoteValidation.errors.map((error, index) => <li key={`${error.code}:${index}`}>
-                  {error.message} {error.guidance}
-                </li>)}
-              </ul>
-            </div>
-          )}
+          {renderValidationErrors()}
           <div className="flex flex-wrap gap-2">
             <button type="button" className={buttonClass} onClick={apply}
               disabled={busy || !staged || localValidation?.isValid !== true}>Apply</button>
@@ -517,11 +605,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
       {!canEdit && (
         <section className="space-y-3" aria-label="Read-only filter status">
           <p role="status">{message}</p>
-          {remoteValidation !== null && <ul className="list-disc pl-6" role="alert">
-            {remoteValidation.errors.map((error, index) => <li key={`${error.code}:${index}`}>
-              {error.message} {error.guidance}
-            </li>)}
-          </ul>}
+          {renderValidationErrors()}
           <button type="button" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</button>
         </section>
       )}
