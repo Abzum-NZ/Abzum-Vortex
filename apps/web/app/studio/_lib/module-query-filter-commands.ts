@@ -4,10 +4,13 @@ import {
   sourceConditionSchema,
   type ConditionNode,
   type JsonValue,
-  type SourceCondition,
+  type ModuleSourceDocument,
 } from "@vortex/contracts";
 import type { ModuleQueryFilterDraftContext } from "@vortex/definition";
 import type { StudioConditionControlsContext } from "@vortex/studio";
+
+type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
+type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;
 
 type ModuleConditionOperand = Extract<ConditionNode, { kind: "comparison" }>["left"];
 
@@ -55,6 +58,7 @@ const encodeCondition = (
     }
     return sourceConditionSchema.parse(condition.kind === "all" ? { all: children } : { any: children });
   }
+  if (condition.kind !== "comparison") return undefined;
   const encodeOperand = (operand: ModuleConditionOperand):
     | Readonly<{ source: "field"; field: string }>
     | Readonly<{ source: "value"; value: JsonValue }>

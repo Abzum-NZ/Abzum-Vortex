@@ -15,7 +15,7 @@ import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from
 import type {
   StudioModuleQueryFilterResult,
   StudioModuleQueryFilterSnapshot,
-} from "../_lib/studio-module-query-filter";
+} from "../../_lib/studio-module-query-filter";
 import { moduleQueryFilterControlsContext, sameModuleQueryFilter } from "../_lib/module-query-filter-commands";
 import {
   loadModuleQueryFilter,
@@ -568,7 +568,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
             <legend className="sr-only">Condition controls</legend>
             <StudioConditionControls
               key={`${context.savedSourceFingerprint}:${context.operandBindingFingerprint}`}
-              value={working ?? undefined}
+              {...(working === null ? {} : { value: working })}
               context={controlsContext}
               label="Query filter condition"
               onChange={updateWorking}

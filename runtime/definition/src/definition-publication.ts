@@ -10,6 +10,7 @@ import {
   definitionPublicationConfirmationSchema,
   definitionResolutionSnapshotV3Schema,
   moduleCompilationRequestV3Schema,
+  moduleRootIdSchema,
   moduleSourceDocumentSchema,
   sourceConditionSchema,
   queryIdSchema,
@@ -50,9 +51,7 @@ import {
   type SavedConditionRevisionAssignment,
   type SessionContext,
   type ConditionNode,
-  type SourceCondition,
   type ModuleSourceDocument,
-  type ModuleSourceQuery,
   type ModuleFieldV3,
   type DefinitionValidationResult,
   type DefinitionValidationLocation,
@@ -77,7 +76,7 @@ import {
 } from "@vortex/contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
 import { compare, satisfies } from "semver";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   requireBuilderAuthority,
   type BuilderAuthority,
@@ -92,7 +91,7 @@ import {
   type ProtectedOperationReferenceLookups,
 } from "./flow-operation-calls";
 import { DefinitionCompilationError } from "./compilation-error";
-import { definitionSemanticRules, validateDefinitionSet } from "./validation";
+import { definitionSemanticRules, validateDefinitionSet, validateDefinitionSource } from "./validation";
 import {
   compareDefinitionVersionImpactWithEvidence,
   deriveSavedConditionRevisionsFromHistoryEvidence,
@@ -101,6 +100,8 @@ import {
 import { DefinitionVersionImpactError } from "./version-impact-error";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];
+type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
+type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;
 type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
 type PublishableCompilationOutput = ApplicationCompilationOutputV2 | ModuleCompilationOutputV3;
@@ -1886,6 +1887,7 @@ const conditionUsesOnlyCurrentOperands = (
   const visit = (node: ConditionNode): boolean => {
     if (node.kind === "not") return visit(node.condition);
     if (node.kind === "all" || node.kind === "any") return node.conditions.every(visit);
+    if (node.kind !== "comparison") return false;
     const allowed = (operand: Extract<ConditionNode, { kind: "comparison" }> ["left"]): boolean =>
       operand.source === "value" ||
       (operand.source === "field" && fieldIds.has(operand.fieldId.toLowerCase())) ||
@@ -1908,6 +1910,8 @@ const moduleQueryChoices = (
 ): readonly EligibleModuleQuery[] => {
   if (candidate.draft.kind !== "module" || candidate.draft.source.kind !== "module")
     return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  const parsedModuleRootId = moduleRootIdSchema.safeParse(candidate.draft.rootId);
+  if (!parsedModuleRootId.success) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const source = candidate.draft.source;
   const moduleOutput = output.canonical;
   return source.body.queries.map((query): EligibleModuleQuery => {
@@ -1937,7 +1941,7 @@ const moduleQueryChoices = (
     if (
       records.length !== 1 ||
       compiledQuery.recordType.state !== "resolved" ||
-      !sameIdentifier(compiledQuery.recordType.moduleRootId, candidate.draft.rootId)
+      !sameIdentifier(compiledQuery.recordType.moduleRootId, parsedModuleRootId.data)
     )
       return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" } };
     const record = records[0]!;
@@ -2004,7 +2008,7 @@ const moduleQueryChoices = (
       return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" } };
     const operandBinding = {
       organizationId: candidate.draft.organizationId,
-      rootId: candidate.draft.rootId,
+      rootId: parsedModuleRootId.data,
       definitionKey: source.key,
       draftRevision: candidate.draft.draftRevision,
       savedSourceFingerprint: candidate.draft.sourceFingerprint,
@@ -2230,8 +2234,7 @@ export const createDefinitionPublicationService = (
           (query) => query.id === current.query.alias && query.key === current.query.key,
         );
         if (sourceQueries.length !== 1) refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-        if (parsed.filter === null) delete sourceQueries[0]!.filter;
-        else sourceQueries[0]!.filter = parsed.filter;
+        sourceQueries[0]!.filter = parsed.filter;
         const source = moduleSourceDocumentSchema.safeParse(sourceCandidate);
         if (!source.success)
           return {

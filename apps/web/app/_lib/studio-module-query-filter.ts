@@ -350,8 +350,7 @@ const changesOnlySelectedQueryFilter = (
   const nextQueries = candidate.body.queries.filter((query) => query.id === queryAlias);
   if (expectedQueries.length !== 1 || nextQueries.length !== 1 ||
       expectedQueries[0]!.key !== nextQueries[0]!.key) return false;
-  if (nextQueries[0]!.filter === undefined) delete expectedQueries[0]!.filter;
-  else expectedQueries[0]!.filter = nextQueries[0]!.filter;
+  expectedQueries[0]!.filter = nextQueries[0]!.filter;
   return canonicalJson(expected) === canonicalJson(candidate);
 };
 
@@ -381,7 +380,12 @@ const loadInTransaction = async (
   });
   if (loaded.kind === "validation_failed") return loaded;
   if (loaded.kind === "unsupported_context")
-    return { kind: "readonly", queryChoices: [], selectedAlias: request.queryAlias, reason: loaded.reason };
+    return {
+      kind: "readonly",
+      queryChoices: [],
+      ...(request.queryAlias === undefined ? {} : { selectedAlias: request.queryAlias }),
+      reason: loaded.reason,
+    };
   const current = await readModuleDefinitionDraft(transaction, scope, {
     rootId: draft.rootId,
     expectedDraftRevision: draft.draftRevision,
@@ -440,7 +444,7 @@ export const loadStudioModuleQueryFilter = async (
         }
       });
     return result.kind === "available" ? result.value : failure ??
-      (result.kind === "refused" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
+      (result.kind === "unavailable" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
   } catch {
     return { kind: "temporarily_unavailable" };
   }
@@ -580,7 +584,7 @@ export const validateStudioModuleQueryFilter = async (
         }
       });
     return result.kind === "available" ? result.value : failure ??
-      (result.kind === "refused" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
+      (result.kind === "unavailable" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
   } catch {
     return { kind: "temporarily_unavailable" };
   }
@@ -713,7 +717,7 @@ export const saveStudioModuleQueryFilter = async (
         }
       });
     return result.kind === "available" ? result.value : failure ??
-      (result.kind === "refused" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
+      (result.kind === "unavailable" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
   } catch {
     return { kind: "temporarily_unavailable" };
   }
