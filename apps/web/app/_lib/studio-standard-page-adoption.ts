@@ -37,6 +37,7 @@ import {
   listPageAdoptionTargets,
   pageAdoptionCommandSchema,
   type PageAdoptionCommand,
+  type PageAdoptionDifference,
   type PageAdoptionTargetOption,
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -174,6 +175,11 @@ export type ComparisonChoice = Readonly<{
   original: Readonly<{ pageId: string; key: string; name: string; type: string }>;
   replacement: Readonly<{ pageId: string; key: string; name: string; type: string }>;
   candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
+  differences: Readonly<{
+    entries: readonly PageAdoptionDifference[];
+    omittedCount: number;
+    summaryTruncated: boolean;
+  }>;
   target: PageAdoptionTargetOption;
   keepFingerprint: string;
   adoptFingerprint: string;
@@ -243,6 +249,7 @@ const toChoices = (
           original: keep.original,
           replacement: keep.replacement,
           candidate: keep.candidate,
+          differences: keep.differences,
           target,
           keepFingerprint: keep.comparisonFingerprint,
           adoptFingerprint: adopt.comparisonFingerprint,

@@ -71,6 +71,43 @@ export function StandardPageAdoption({
                   </ul>
                 )}
               </div>
+              <section aria-label="Page structure and content differences" className="space-y-2">
+                <h3 className="font-medium">Page structure and content</h3>
+                <p className="text-sm">Sensitive references and free-form values are summarized. The comparison is limited to changed items.</p>
+                {choice.differences.entries.length === 0 ? (
+                  <p>No differences were found in the safe page summary.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <caption className="sr-only">Differences between the current replacement and supplied page</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col" className="border-b p-2">Page element</th>
+                          <th scope="col" className="border-b p-2">Change</th>
+                          <th scope="col" className="border-b p-2">Current replacement</th>
+                          <th scope="col" className="border-b p-2">Supplied page</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {choice.differences.entries.map((difference, index) => (
+                          <tr key={`${difference.path}:${index}`}>
+                            <th scope="row" className="border-b p-2 font-medium">{difference.path}</th>
+                            <td className="border-b p-2">{difference.change}</td>
+                            <td className="border-b p-2">{difference.currentReplacement}</td>
+                            <td className="border-b p-2">{difference.suppliedPage}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {choice.differences.omittedCount > 0 && (
+                  <p>{choice.differences.omittedCount} additional differences are omitted from this bounded summary.</p>
+                )}
+                {choice.differences.summaryTruncated && (
+                  <p>Additional page details were omitted to keep this comparison bounded.</p>
+                )}
+              </section>
               <div className="flex flex-wrap items-center gap-3">
                 <p className="font-medium">Selected target: {choice.target.label}</p>
                 {choiceForm(choice, result, "keep_replacement")}

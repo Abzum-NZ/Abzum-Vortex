@@ -15,6 +15,7 @@ import {
   organizationAccountIdSchema,
   organizationIdSchema,
   organizationPermissionEligibilitySchema,
+  platformIdSchema,
   revisionSchema,
   sameId,
   saveDefinitionDraftCommandSchema,
@@ -117,12 +118,11 @@ const derivedDraftCommandSchema = z
     replacementPageId: pageIdSchema,
     comparisonFingerprint: fingerprintSchema,
     decision: z.enum(["keep_replacement", "adopt_original"]),
-    target: z
-      .object({
-        kind: z.enum(["navigation", "role_home", "application_home"]),
-        id: z.string().min(1).max(500),
-      })
-      .strict(),
+    target: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("navigation"), id: platformIdSchema }).strict(),
+      z.object({ kind: z.literal("role_home"), id: platformIdSchema }).strict(),
+      z.object({ kind: z.literal("application_home"), id: applicationRootIdSchema }).strict(),
+    ]),
   })
   .strict();
 
@@ -302,6 +302,11 @@ const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
   return { kind: "temporarily_unavailable" };
 };
 
+const databaseErrorCode = (error: unknown): string | undefined => {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+};
+
 /** SAME store operations and one resolved human change transaction, with no System identity. */
 export const createHumanApplicationDraftWriter = (
   dependencies: HumanApplicationDraftWriterDependencies,
@@ -422,13 +427,25 @@ export const createHumanApplicationDraftWriter = (
           const target = await targetFacts(transaction, scope, command.data.rootId);
           if (target.isSystemApplication)
             throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-          const locked = await transaction.query<DatabaseRow>`
-            select vortex_definition.lock_application_page_adoption_draft_internal(
-              ${command.data.rootId}::uuid,
-              ${command.data.expectedDraftRevision},
-              ${command.data.expectedPublicationAnchor}
-            ) as publication_state
-          `;
+          let locked: readonly DatabaseRow[];
+          try {
+            locked = await transaction.query<DatabaseRow>`
+              select vortex_definition.lock_application_page_adoption_draft_internal(
+                ${command.data.rootId}::uuid,
+                ${command.data.expectedDraftRevision},
+                ${command.data.expectedPublicationAnchor}
+              ) as publication_state
+            `;
+          } catch (error) {
+            const code = databaseErrorCode(error);
+            if (code === "40001")
+              throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+            if (code === "42501")
+              throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            if (code === "22023")
+              throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            throw error;
+          }
           if (
             locked.length !== 1 ||
             locked[0]?.publication_state === null ||

@@ -9,6 +9,7 @@ import {
   sameId,
   type ApplicationContentV2,
   type ApplicationSourceDocumentV2,
+  type BlockPropertyValueV2Contract,
   type PageDefinitionV2,
   type SourceIdentityAssignmentV3,
 } from "@vortex/contracts";
@@ -37,6 +38,13 @@ export const pageAdoptionCommandSchema = z
 export type PageAdoptionCommand = z.infer<typeof pageAdoptionCommandSchema>;
 export type PageAdoptionTarget = PageAdoptionCommand["target"];
 
+export type PageAdoptionDifference = Readonly<{
+  path: string;
+  currentReplacement: string;
+  suppliedPage: string;
+  change: "added" | "removed" | "changed";
+}>;
+
 export type PageAdoptionTargetOption = Readonly<{
   target: PageAdoptionTarget;
   label: string;
@@ -49,9 +57,278 @@ export type PageAdoptionPlan = Readonly<{
   original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
   replacement: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
   candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
+  differences: Readonly<{
+    entries: readonly PageAdoptionDifference[];
+    omittedCount: number;
+    summaryTruncated: boolean;
+  }>;
   target: PageAdoptionTargetOption;
   decision: PageAdoptionCommand["decision"];
 }>;
+
+type DefaultPageComposition = Extract<
+  PageDefinitionV2["composition"],
+  { shellKind: "default"; main: unknown }
+>;
+type PagePlacementSlot = DefaultPageComposition["main"];
+type PagePlacement = PagePlacementSlot["placements"][keyof PagePlacementSlot["placements"]];
+type PageFact = Readonly<{ comparisonValue: string; displayValue: string }>;
+
+const maxPageDifferenceFacts = 160;
+const maxDisplayedPageDifferences = 32;
+const maxDifferenceLabelLength = 112;
+const sensitiveLabelPattern =
+  /(?:bearer\s+[a-z0-9._~+\/=\-]{12,}|(?:password|secret|api[_ -]?key|access[_ -]?token|credential)\s*[:=]\s*\S{4,}|(?:sk|pk|ghp|gho|github_pat|xox[baprs])_[a-z0-9_-]{16,}|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i;
+
+const safeDifferenceLabel = (value: string): string => {
+  if (sensitiveLabelPattern.test(value)) return "Sensitive text omitted";
+  const bounded = value.trim().slice(0, maxDifferenceLabelLength);
+  return value.length > maxDifferenceLabelLength ? `${bounded}…` : bounded;
+};
+
+const propertyDisplayValue = (value: BlockPropertyValueV2Contract): string => {
+  switch (value.kind) {
+    case "text":
+      return `Text content (${value.value.length} characters)`;
+    case "number":
+      return `Number: ${value.value}`;
+    case "boolean":
+      return value.value ? "Enabled" : "Disabled";
+    case "choice":
+      return `Choice: ${safeDifferenceLabel(value.value)}`;
+    case "rich_text":
+      return `Formatted text content (${canonicalJson(value.value).length} serialized characters)`;
+    case "url":
+      return "External link target (omitted)";
+    case "asset_reference":
+    case "field_reference":
+    case "relationship_reference":
+    case "action_reference":
+    case "page_reference":
+    case "query_reference":
+    case "pipeline_reference":
+    case "record_type_reference":
+    case "record_reference":
+      return `${value.kind.replaceAll("_", " ")} (reference omitted)`;
+    case "icon":
+      return `Icon: ${safeDifferenceLabel(value.iconKey)}`;
+    case "theme_token":
+      return `Theme token: ${safeDifferenceLabel(value.tokenKey)}`;
+    case "group":
+      return `Group (${Object.keys(value.properties).length} settings)`;
+    case "list":
+      return `List (${value.items.length} entries)`;
+  }
+  return "Configured value";
+};
+
+const pageLayoutDisplay = (layout: PagePlacement["responsive"]["desktop"]): string => {
+  const width = layout.width.kind === "grid"
+    ? `grid column ${layout.width.startColumn}, span ${layout.width.span}`
+    : layout.width.kind;
+  const height = layout.height.kind === "bounded"
+    ? `bounded ${layout.height.units} units`
+    : layout.height.kind;
+  return `${layout.visible ? "Visible" : "Hidden"}; width ${width}; height ${height}`;
+};
+
+const pageFacts = (
+  page: PageDefinitionV2,
+  content: ApplicationContentV2,
+): Readonly<{ facts: ReadonlyMap<string, PageFact>; truncated: boolean }> => {
+  const facts = new Map<string, PageFact>();
+  let truncated = false;
+  const add = (path: string, comparisonValue: unknown, displayValue: string): void => {
+    if (facts.size >= maxPageDifferenceFacts) {
+      truncated = true;
+      return;
+    }
+    facts.set(path, {
+      comparisonValue: canonicalJson(comparisonValue),
+      displayValue: displayValue.slice(0, maxDifferenceLabelLength),
+    });
+  };
+  const addProperty = (
+    path: string,
+    property: BlockPropertyValueV2Contract,
+    depth = 0,
+  ): void => {
+    add(path, property, propertyDisplayValue(property));
+    if (depth >= 3) return;
+    if (property.kind === "group") {
+      for (const [key, child] of Object.entries(property.properties).sort(([left], [right]) => left.localeCompare(right))) {
+        addProperty(`${path} / ${safeDifferenceLabel(key)}`, child, depth + 1);
+        if (facts.size >= maxPageDifferenceFacts) break;
+      }
+    } else if (property.kind === "list") {
+      property.items.forEach((child, index) => {
+        if (facts.size < maxPageDifferenceFacts)
+          addProperty(`${path} / entry ${index + 1}`, child, depth + 1);
+      });
+    }
+  };
+
+  add("Page name", page.name, safeDifferenceLabel(page.name));
+  add("Page type", page.type, page.type.replaceAll("_", " "));
+  if ("recordType" in page)
+    add("Data binding / record type", page.recordType ?? null, "Record type binding (identifier omitted)");
+  if ("queryId" in page)
+    add("Data binding / list query", page.queryId, "List query binding (identifier omitted)");
+  if (page.type === "guided_form") {
+    page.steps.forEach((step, index) => {
+      add(`Guided form / step ${index + 1}`, step, `${safeDifferenceLabel(step.name)}${step.summary ? " (summary step)" : ""}`);
+    });
+  }
+
+  const composition = page.composition;
+  if (composition.shellKind === "default") {
+    add("Page shell", "default", "Default shell");
+  } else {
+    const shell = content.shells.find((candidate) => sameId(candidate.shellId, composition.shellId));
+    add(
+      "Page shell",
+      { shellId: composition.shellId, key: shell?.key ?? null, name: shell?.name ?? null },
+      shell === undefined
+        ? "Application shell (details unavailable)"
+        : `Application shell ${safeDifferenceLabel(shell.key)}: ${safeDifferenceLabel(shell.name)}`,
+    );
+  }
+
+  const groups: Array<Readonly<{ label: string; slot: PagePlacementSlot }>> = [];
+  const guidedSteps = page.type === "guided_form" ? page.steps : [];
+  if ("stepContent" in composition && composition.shellKind === "default") {
+    guidedSteps.forEach((step, stepIndex) => {
+      const slot = composition.stepContent[step.id];
+      if (slot === undefined) return;
+      groups.push({ label: `Step ${stepIndex + 1} main region`, slot });
+      add(
+        `Guided form / step ${stepIndex + 1} content binding`,
+        step.id,
+        safeDifferenceLabel(step.name),
+      );
+    });
+  } else if ("stepContent" in composition) {
+    guidedSteps.forEach((step, stepIndex) => {
+      const stepContent = composition.stepContent[step.id];
+      if (stepContent === undefined) return;
+      Object.entries(stepContent).sort(([left], [right]) => left.localeCompare(right)).forEach(([, slot], regionIndex) =>
+        groups.push({ label: `Step ${stepIndex + 1} region ${regionIndex + 1}`, slot }),
+      );
+      add(
+        `Guided form / step ${stepIndex + 1} content binding`,
+        step.id,
+        safeDifferenceLabel(step.name),
+      );
+    });
+  } else if (composition.shellKind === "default") {
+    groups.push({ label: "Main region", slot: composition.main });
+  } else {
+    Object.values(composition.content).forEach((slot, index) =>
+      groups.push({ label: `Content region ${index + 1}`, slot }),
+    );
+  }
+
+  const addSlot = (slot: PagePlacementSlot, label: string, depth = 0): void => {
+    if (depth > 5 || facts.size >= maxPageDifferenceFacts) return;
+    const placements = slot.placements;
+    const desktopOrder = slot.order.desktop;
+    const blockReference = (placementId: string): string => {
+      const placement = placements[placementId];
+      return placement === undefined
+        ? "Unknown placement"
+        : `${placement.block.blockId} @ ${placement.block.releaseVersion}`;
+    };
+    add(
+      `${label} / desktop order`,
+      desktopOrder,
+      desktopOrder.map(blockReference).join(" → ") || "No blocks",
+    );
+    if (slot.order.tablet !== undefined)
+      add(
+        `${label} / tablet order`,
+        slot.order.tablet,
+        slot.order.tablet.map(blockReference).join(" → ") || "No blocks",
+      );
+    if (slot.order.phone !== undefined)
+      add(
+        `${label} / phone order`,
+        slot.order.phone,
+        slot.order.phone.map(blockReference).join(" → ") || "No blocks",
+      );
+
+    desktopOrder.forEach((placementId, index) => {
+      const placement = placements[placementId];
+      if (placement === undefined) return;
+      const placementLabel = `${label} / block ${index + 1}`;
+      add(
+        `${placementLabel} / block release`,
+        placement.block,
+        `${placement.block.blockId} @ ${placement.block.releaseVersion}`,
+      );
+      const protectedBindings = {
+        viewPermission: placement.viewPermissionKey !== undefined,
+        usePermission: placement.usePermissionKey !== undefined,
+        visibilityCondition: placement.visibilityCondition !== undefined,
+        query: placement.queryId !== undefined,
+        readModel: placement.readModel !== undefined,
+      };
+      add(
+        `${placementLabel} / access and data bindings`,
+        protectedBindings,
+        Object.entries(protectedBindings)
+          .filter(([, configured]) => configured)
+          .map(([kind]) => kind.replace(/([A-Z])/g, " $1").toLowerCase())
+          .join(", ") || "No additional binding",
+      );
+      for (const [propertyKey, value] of Object.entries(placement.settings).sort(([left], [right]) => left.localeCompare(right))) {
+        addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
+        if (facts.size >= maxPageDifferenceFacts) break;
+      }
+      for (const [tokenKey, value] of Object.entries(placement.themeOverrides).sort(([left], [right]) => left.localeCompare(right))) {
+        add(`${placementLabel} / theme override ${safeDifferenceLabel(tokenKey)}`, value, `${value.kind.replaceAll("_", " ")} override`);
+        if (facts.size >= maxPageDifferenceFacts) break;
+      }
+      for (const [breakpoint, layout] of Object.entries(placement.responsive))
+        if (layout !== undefined)
+          add(`${placementLabel} / ${breakpoint} layout`, layout, pageLayoutDisplay(layout));
+      Object.values(placement.slots).forEach((nested, nestedIndex) =>
+        addSlot(nested, `${placementLabel} / nested region ${nestedIndex + 1}`, depth + 1),
+      );
+    });
+  };
+  groups.forEach(({ label, slot }) => addSlot(slot, label));
+  return { facts, truncated };
+};
+
+const comparePages = (
+  suppliedPage: PageDefinitionV2,
+  suppliedContent: ApplicationContentV2,
+  currentPage: PageDefinitionV2,
+  currentContent: ApplicationContentV2,
+): Readonly<{ entries: readonly PageAdoptionDifference[]; omittedCount: number; summaryTruncated: boolean }> => {
+  const suppliedSummary = pageFacts(suppliedPage, suppliedContent);
+  const currentSummary = pageFacts(currentPage, currentContent);
+  const supplied = suppliedSummary.facts;
+  const current = currentSummary.facts;
+  const paths = [...new Set([...current.keys(), ...supplied.keys()])].sort((left, right) => left.localeCompare(right));
+  const differences: PageAdoptionDifference[] = [];
+  for (const path of paths) {
+    const localFact = current.get(path);
+    const suppliedFact = supplied.get(path);
+    if (localFact?.comparisonValue === suppliedFact?.comparisonValue) continue;
+    differences.push({
+      path: safeDifferenceLabel(path),
+      currentReplacement: localFact?.displayValue ?? "Not present",
+      suppliedPage: suppliedFact?.displayValue ?? "Not present",
+      change: localFact === undefined ? "added" : suppliedFact === undefined ? "removed" : "changed",
+    });
+  }
+  return {
+    entries: differences.slice(0, maxDisplayedPageDifferences),
+    omittedCount: Math.max(0, differences.length - maxDisplayedPageDifferences),
+    summaryTruncated: suppliedSummary.truncated || currentSummary.truncated,
+  };
+};
 
 const invalid = (): never => {
   throw new Error("STUDIO_PAGE_ADOPTION_UNAVAILABLE");
@@ -512,6 +789,12 @@ export const buildPageAdoptionPlan = (input: Readonly<{
       releaseVersion: release.publication.releaseVersion,
       impactReasons: release.impactReasons.map((reason) => ({ code: reason.code, impact: reason.impact })),
     },
+    differences: comparePages(
+      candidateOriginalCanonical,
+      release.compilationOutput.canonical.content,
+      currentReplacementCanonical,
+      currentContent,
+    ),
     target: targetOption,
     decision,
   });
