@@ -105,9 +105,9 @@ class InstallationProblem extends Error {
   }
 }
 
-const problem = (kind: Problem["kind"], unavailableReason?: Problem["unavailableReason"]): never => {
+function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailableReason"]): never {
   throw new InstallationProblem({ kind, ...(unavailableReason === undefined ? {} : { unavailableReason }) });
-};
+}
 
 const safeFailure = (error: unknown): Problem => {
   if (error instanceof InstallationProblem) return error.problem;
@@ -662,8 +662,8 @@ const withCurrentAuthorizedState = async (
 };
 
 const readActiveObservation = async (
-  organizationId: string,
-  rootId: string,
+  organizationId: SelectedOrganizationScope["organizationId"],
+  rootId: StudioApplicationInstallationSelector["rootId"],
   session: IdentitySession,
 ): Promise<StudioApplicationInstallationReleaseIdentity> => {
   let captured: Problem | undefined;
