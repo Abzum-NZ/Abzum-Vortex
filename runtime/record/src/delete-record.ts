@@ -20,6 +20,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
+import { applyRecordOwnedFileDeleteCascade } from "@vortex/file";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   calculateLockedRelationshipTotalSave,
@@ -33,6 +34,9 @@ import {
   revision,
 } from "./save-record";
 import { operationClock } from "./field-candidate";
+
+const recordDeleteStatementTimeout = "30000ms";
+const recordDeleteLockTimeout = "5000ms";
 
 type Row = DatabaseRow & { readonly result: unknown };
 
@@ -456,6 +460,12 @@ export const performProtectedRecordDelete = async (
 ): Promise<RecordDeleteResult> => {
   const { activityId, occurrenceId } = command;
   await transaction.query`set local role vortex_runtime`;
+  await transaction.query`
+    select set_config('statement_timeout', ${recordDeleteStatementTimeout}, true)
+  `;
+  await transaction.query`
+    select set_config('lock_timeout', ${recordDeleteLockTimeout}, true)
+  `;
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`
@@ -488,6 +498,12 @@ export const performProtectedRecordDelete = async (
       return refuseCalculation(command.recordId, preparation.correlationId);
     parentMutations = calculated.parentMutations;
   }
+
+  // The File writer re-derives the pending HUMAN receipt and exact deleted
+  // owner set in this same request transaction. It runs after relationship
+  // calculation succeeds and before the terminal writer can complete the
+  // receipt or append Events and Activity.
+  await applyRecordOwnedFileDeleteCascade(transaction, command.commandId);
 
   const finalized = parseDatabaseOutcome(
     one(

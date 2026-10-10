@@ -13,6 +13,7 @@
     "@vortex/access": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/file": "workspace:*",
     "@vortex/rule": "workspace:*",
     "server-only": "0.0.1"
   },

@@ -677,6 +677,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/file':
+        specifier: workspace:*
+        version: link:../file
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
