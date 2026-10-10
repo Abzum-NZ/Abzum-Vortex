@@ -16,6 +16,8 @@ as $function$
 declare
   initial_authority record;
   current_authority record;
+  install_decision record;
+  install_scope_decision record;
   initial_context jsonb;
   current_context jsonb;
   completion_time timestamptz;
@@ -339,6 +341,40 @@ begin
 
   select locked.* into strict current_authority
   from vortex_access.lock_application_installation_authority() as locked;
+  select evaluated.* into strict install_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  select evaluated.* into strict install_scope_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install_scope',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object('kind', 'organization_catalogue'),
+        'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
+      )
+    )
+  ) as evaluated;
   current_context := vortex_access.validated_human_request_context();
   if current_authority.organization_id is distinct from initial_authority.organization_id
     or current_authority.organization_account_id is distinct from initial_authority.organization_account_id
@@ -355,9 +391,42 @@ begin
       message = 'Application installation authority changed';
   end if;
 
+  if install_decision.outcome is distinct from 'eligible'
+    or install_decision.operation_key is distinct from
+      'platform.organization.applications.install'
+    or install_decision.target_kind is distinct from 'organization'
+    or install_decision.target_application_root_id is not null
+    or install_decision.organization_id is distinct from current_authority.organization_id
+    or install_decision.organization_account_id is distinct from current_authority.organization_account_id
+    or install_decision.access_version is distinct from current_authority.access_version
+    or install_decision.correlation_id is distinct from current_authority.correlation_id
+    or install_decision.reason_code is not null
+    or install_scope_decision.outcome is distinct from 'eligible'
+    or install_scope_decision.operation_key is distinct from
+      'platform.organization.applications.install_scope'
+    or install_scope_decision.target_kind is distinct from 'organization'
+    or install_scope_decision.target_application_root_id is not null
+    or install_scope_decision.organization_id is distinct from current_authority.organization_id
+    or install_scope_decision.organization_account_id is distinct from
+      current_authority.organization_account_id
+    or install_scope_decision.access_version is distinct from current_authority.access_version
+    or install_scope_decision.correlation_id is distinct from current_authority.correlation_id
+    or install_scope_decision.reason_code is not null then
+    raise exception using errcode = '42501',
+      message = 'Application installation authority is unavailable';
+  end if;
+
   completion_time := pg_catalog.clock_timestamp();
   context_expires_at := (current_context ->> 'expiresAt')::timestamptz;
-  if not pg_catalog.isfinite(context_expires_at)
+  if install_decision.checked_at is null
+    or install_decision.checked_at > completion_time
+    or install_decision.valid_until is null
+    or install_decision.valid_until <= completion_time
+    or install_scope_decision.checked_at is null
+    or install_scope_decision.checked_at > completion_time
+    or install_scope_decision.valid_until is null
+    or install_scope_decision.valid_until <= completion_time
+    or not pg_catalog.isfinite(context_expires_at)
     or context_expires_at <= completion_time then
     raise exception using errcode = '42501',
       message = 'Application installation context expired';
