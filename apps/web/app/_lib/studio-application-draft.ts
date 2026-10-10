@@ -46,6 +46,11 @@ export type StudioApplicationLoadResult =
 export type StudioApplicationSearchMetadata = Readonly<{
   organizationId: string; rootId: string; draftRevision: number; sourceFingerprint: string;
   bindingsSignature: string; resolutionFingerprint: string;
+  modules: readonly Readonly<{
+    organizationId: string; moduleRootId: string; key: string;
+    releaseRevision: number; releaseVersion: string;
+    contentFingerprint: string; resolutionFingerprint: string;
+  }>[];
   records: readonly Readonly<{
     reference: string; label: string; recordTypeId: string;
     moduleRootId: string; releaseRevision: number; releaseVersion: string;
@@ -184,10 +189,13 @@ export const loadStudioApplicationDraft = async (
               compiled.compilation.artifact.resolutionFingerprint !== compiled.compilation.resolutionFingerprint)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
+          const modules = new Map<string, StudioApplicationSearchMetadata["modules"][number]>();
           await createDatabaseDefinitionPublicationRepository(transaction).read(context, async (reader) => {
             for (const binding of compiled.compilation.canonical.content.moduleBindings) {
-              const selection = compiled.compilation.resolvedDependencies.find((dependency) => dependency.rootId === binding.moduleRootId && dependency.kind === "module");
-              if (selection === undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+              const selections = compiled.compilation.resolvedDependencies.filter((dependency) => dependency.kind === "module" &&
+                sameId(dependency.rootId, binding.moduleRootId) && dependency.exactVersion === binding.resolvedVersion);
+              const selection = selections[0];
+              if (selections.length !== 1 || selection === undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
               let cursor: ModuleReleasePageCursor | undefined;
               let release: ResolvableModuleRelease | undefined;
               let previous: number | null = null;
@@ -213,7 +221,19 @@ export const loadStudioApplicationDraft = async (
                 if (page.nextAfterReleaseRevision !== previous) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
                 cursor = { rootId: page.rootId, anchorReleaseRevision: page.anchorReleaseRevision, afterReleaseRevision: page.nextAfterReleaseRevision };
               } while (true);
-              if (release === undefined || !sameId(release.organizationId, scope.organizationId)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+              if (release === undefined || !sameId(release.organizationId, scope.organizationId) ||
+                  !sameId(release.rootId, binding.moduleRootId) || release.key !== selection.key ||
+                  release.releaseVersion !== binding.resolvedVersion)
+                throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+              // All exact compiled bindings supply navigation, including Modules with no Search records.
+              const module = { organizationId: release.organizationId, moduleRootId: release.rootId, key: release.key,
+                releaseRevision: release.releaseRevision, releaseVersion: release.releaseVersion,
+                contentFingerprint: release.contentFingerprint, resolutionFingerprint: release.resolutionFingerprint };
+              const identity = release.rootId.toLowerCase();
+              const prior = modules.get(identity);
+              if (prior !== undefined && canonicalJson(prior) !== canonicalJson(module))
+                throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+              modules.set(identity, module);
               for (const record of release.compilationOutput.canonical.content.recordTypes) {
                 const fields = record.fields.filter((field) => applicationSearchFieldIsSelectable(record.fields, String(field.fieldId)))
                   .map((field) => ({ reference: `${release!.key}:${record.key}.${field.key}`, fieldId: String(field.fieldId), label: field.label }));
@@ -235,10 +255,11 @@ export const loadStudioApplicationDraft = async (
           if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           if (canonicalJson(await readContext()) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-          if (JSON.stringify(records).length > 999_000) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+          if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
+            throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
             sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(draft.source.body.module_bindings),
-            resolutionFingerprint: compiled.compilation.resolutionFingerprint, records };
+            resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
         } catch {
           // A failed metadata refresh never makes old choices authoritative or changes the draft.
           searchMetadata = null;
