@@ -75,8 +75,8 @@ type RestoreEvidence = StoredConsumerReleaseEvidence & {
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
   sourceContractVersion: "2.0.0" | "3.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
-  humanDraftSnapshot?: HumanDraftSnapshot;
-  humanCurrentDraft?: StoredDefinitionDraft;
+  humanDraftSnapshot?: HumanDraftSnapshot | undefined;
+  humanCurrentDraft?: StoredDefinitionDraft | undefined;
 };
 
 const humanDraftSnapshotSchema = z
@@ -514,8 +514,9 @@ const parseHumanRestoredDraft = (
     draft.createdBy !== before.createdBy ||
     draft.restoredFromReleaseRevision !== command.targetReleaseRevision ||
     draft.restoredFromSourceFingerprint !== verified.sourceFingerprint ||
-    draft.restoredBy !== context.organizationAccountId ||
-    draft.updatedBy !== context.organizationAccountId ||
+    draft.restoredBy === undefined ||
+    draft.restoredBy.toLowerCase() !== context.organizationAccountId.toLowerCase() ||
+    draft.updatedBy.toLowerCase() !== context.organizationAccountId.toLowerCase() ||
     draft.restoreCorrelationId !== context.correlationId ||
     draft.restoredAt === undefined ||
     draft.updatedAt !== draft.restoredAt
@@ -610,11 +611,12 @@ export const createDefinitionHistoryService = (
       const context = sessionContextSchema.safeParse(contextCandidate);
       if (!context.success || !isOrganizationOnlyHumanContext(context.data))
         throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      const humanContext = context.data;
       const humanCommand = humanRestoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
       if (!humanCommand.success)
         throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
       if (
-        context.data.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
+        humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
       )
         throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
       await requireBuilderAuthority(authority, {
@@ -633,12 +635,12 @@ export const createDefinitionHistoryService = (
         let verificationCallbackCount = 0;
         let retainedDraft: StoredDefinitionDraft | undefined;
         const attempt = await repository.restore(
-          context.data,
+          humanContext,
           command,
           async (evidence) => {
             const verified = await verifyRestoreEvidence(
               evidence,
-              context.data,
+              humanContext,
               command,
               catalogue,
               humanCommand.data,
@@ -657,7 +659,7 @@ export const createDefinitionHistoryService = (
               throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
             const draft = parseHumanRestoredDraft(
               draftCandidate,
-              context.data,
+              humanContext,
               humanCommand.data,
               verifiedRestore,
               verifiedRestore.humanDraftBefore,

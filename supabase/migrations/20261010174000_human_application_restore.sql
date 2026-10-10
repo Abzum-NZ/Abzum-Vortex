@@ -495,9 +495,12 @@ begin
         errcode = '23514',
         message = 'Definition restore identity evidence is inconsistent';
     end if;
-    snapshot_identity_count := pg_catalog.jsonb_array_length(
+    select count(*)::bigint
+    into snapshot_identity_count
+    from pg_catalog.jsonb_array_elements(
       selected_release.resolution_snapshot -> 'identities'
-    );
+    ) as snapshot(value)
+    where snapshot.value ->> 'definitionKey' = root_row.key;
 
     select
       count(*)::bigint,
@@ -515,7 +518,8 @@ begin
     join pg_catalog.jsonb_array_elements(
       selected_release.resolution_snapshot -> 'identities'
     ) as snapshot(value)
-      on snapshot.value ->> 'definitionKey' = requirement.value ->> 'definitionKey'
+      on snapshot.value ->> 'definitionKey' = root_row.key
+      and snapshot.value ->> 'definitionKey' = requirement.value ->> 'definitionKey'
       and snapshot.value ->> 'scope' = requirement.value ->> 'scope'
       and snapshot.value ->> 'kind' = requirement.value ->> 'kind'
       and snapshot.value ->> 'componentOwner' = requirement.value ->> 'componentOwner'
@@ -532,7 +536,12 @@ begin
     if requested_identity_count < 1
       or requested_identity_count <> snapshot_identity_count
       or matched_identity_count <> requested_identity_count
-      or unique_identity_count <> requested_identity_count then
+      or unique_identity_count <> requested_identity_count
+      or exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_identity_requirements) as requirement(value)
+        where requirement.value ->> 'definitionKey' is distinct from root_row.key
+      ) then
       raise exception using
         errcode = '23514',
         message = 'Definition restore identity evidence is inconsistent';
