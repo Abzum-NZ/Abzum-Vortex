@@ -115,7 +115,6 @@ export {
   grantTenantAdministrator,
   listTenantAdministratorAssignments,
   listTenantHierarchy,
-  listTenantLauncher,
   readTenantOrganization,
   reactivateTenantOrganization,
   renameTenantOrganization,
