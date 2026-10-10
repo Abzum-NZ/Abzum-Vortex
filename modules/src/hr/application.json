@@ -76,7 +76,8 @@
           "vortex.hr.employee.read",
           "vortex.hr.employee.create",
           "vortex.hr.employee.update",
-          "application.hr.directory.person.read"
+          "application.hr.directory.person.read",
+          "vortex.hr.leave_request.read"
         ]
       }
     ],
@@ -101,6 +102,13 @@
         "label": "Employees",
         "page": "hr_employees",
         "permission": "vortex.hr.employee.read"
+      },
+      {
+        "id": "nav_hr_leave_requests",
+        "type": "page",
+        "label": "Leave requests",
+        "page": "hr_leave_requests",
+        "permission": "vortex.hr.leave_request.read"
       }
     ],
     "queries": [],
@@ -211,6 +219,13 @@
         "id": "event_hr_update_employee",
         "key": "vortex.app.hr.hr_update_employee",
         "record_type": "vortex.hr:employee",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_open_leave_request",
+        "key": "vortex.app.hr.hr_open_leave_request",
+        "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -2435,6 +2450,201 @@
             }
           }
         }
+      },
+      {
+        "id": "page_hr_leave_requests",
+        "key": "hr_leave_requests",
+        "name": "Leave requests",
+        "type": "list",
+        "record_type": "vortex.hr:leave_request",
+        "permission": "vortex.hr.leave_request.read",
+        "query": "vortex.hr:hr_leave_requests",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_request_list": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_hr_open_leave_request"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.end_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "End date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Status"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Leave requests"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_leave_requests"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_request_list"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_request_detail",
+        "key": "hr_leave_request_detail",
+        "name": "Leave request",
+        "type": "detail",
+        "record_type": "vortex.hr:leave_request",
+        "permission": "vortex.hr.leave_request.read",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_request_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Leave request"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.end_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "End date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Status"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_request_detail"
+                ]
+              }
+            }
+          }
+        }
       }
     ],
     "flows": [
@@ -3312,6 +3522,51 @@
         "triggers": [],
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_open_leave_request",
+        "key": "hr_open_leave_request",
+        "labels": {
+          "name": "Open leave request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_request_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the clicked leave request's own detail page with the record identity the clicked row carries."
       }
     ],
     "flow_bindings": [
@@ -3504,6 +3759,19 @@
           "values": {
             "kind": "caller",
             "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_open_leave_request",
+        "control": "hr_leave_request_list",
+        "event_id": "event_hr_open_leave_request",
+        "event": "row_clicked",
+        "flow": "flow_hr_open_leave_request",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
           }
         }
       }
