@@ -1,12 +1,14 @@
 import "server-only";
 
 import {
+  databaseTimestamp,
   sameId,
   conditionNodeSchema,
   applicationRootIdSchema,
   organizationRecordAccessDeclarationSchema,
   pageIdSchema,
   revisionSchema,
+  sessionContextSchema,
   safeHttpsUrlSchema,
   type IdentitySession,
   type ApplicationRootId,
@@ -32,7 +34,10 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import {
+  isTrustedInstalledPageBundleContext,
   requireInstalledRuntimeContext,
+  matchesInstalledPageBundleIdentity,
+  readInstalledPageComposition,
   resolveInstalledPageIdentity,
   type InstalledRuntimeContext,
 } from "@vortex/app";
@@ -436,7 +441,9 @@ export const createStoredPageCapabilityService = (
     };
     const operationBindings = placementOperationBindings(context);
     const pagePermissionBinding = permission(page.accessPermissionKey);
-    const resolved = resolvePageComposition(page, applicationRelease.content.shells);
+    const resolvedComposition = readInstalledPageComposition(context, page.pageId);
+    const resolved = resolvedComposition ??
+      resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
       resolved.roots.kind === "page"
         ? v2Placements(resolved.roots.main)
@@ -444,6 +451,9 @@ export const createStoredPageCapabilityService = (
     return {
       page,
       applicationShells: applicationRelease.content.shells,
+      ...(resolvedComposition === undefined
+        ? {}
+        : { resolvedComposition, resolvedCompositionContext: context }),
       sourceCorrelationId: applicationRelease.correlationId,
       applicationReleaseRevision: releaseRevision,
       pagePermission: {
@@ -517,6 +527,61 @@ export const createStoredPageCapabilityService = (
       ...requestDependencies,
       // Override the spread dependency so pageOpens cannot inherit the primary observer.
       ...(observeProjectionDecision === undefined ? {} : { observeProjectionDecision }),
+      validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
+        try {
+          if (isTrustedInstalledPageBundleContext(context)) {
+            const bundleRows = await transaction.query<{
+              readonly bundle_state: unknown;
+            }>`
+              select vortex_module.read_active_installation_bundle_identity() as bundle_state
+            `;
+            if (
+              bundleRows.length !== 1 ||
+              bundleRows[0] === undefined ||
+              !matchesInstalledPageBundleIdentity(
+                context,
+                bundleRows[0].bundle_state,
+                scope.accessVersion,
+                scope.organizationAccountId,
+              )
+            ) return false;
+          }
+
+          const contextRows = await transaction.query<{
+            readonly request_context: unknown;
+          }>`
+            select vortex_access.validated_human_request_context() as request_context
+          `;
+          if (contextRows.length !== 1 || contextRows[0] === undefined) return false;
+          const current = sessionContextSchema.safeParse(contextRows[0].request_context);
+          if (!current.success || current.data.callerKind !== "human") return false;
+          const clockRows = await transaction.query<{
+            readonly observed_at: unknown;
+          }>`
+            select clock_timestamp() as observed_at
+          `;
+          if (clockRows.length !== 1 || clockRows[0] === undefined) return false;
+          const observedAt = databaseTimestamp(clockRows[0].observed_at);
+          if (typeof observedAt !== "string") return false;
+          const observedMilliseconds = Date.parse(observedAt);
+          return Number.isFinite(observedMilliseconds) &&
+            current.data.expiresAt !== undefined &&
+            Date.parse(current.data.expiresAt) > observedMilliseconds &&
+            (current.data.delegatedContext === undefined ||
+              Date.parse(current.data.delegatedContext.expiresAt) > observedMilliseconds) &&
+            (current.data.supportContext === undefined ||
+              Date.parse(current.data.supportContext.expiresAt) > observedMilliseconds) &&
+            sameId(current.data.tenantId, scope.tenantId) &&
+            sameId(current.data.organizationId, scope.organizationId) &&
+            sameId(current.data.organizationAccountId, scope.organizationAccountId) &&
+            current.data.applicationRootId !== undefined &&
+            sameId(current.data.applicationRootId, scope.applicationRootId) &&
+            current.data.accessVersion === scope.accessVersion &&
+            Date.parse(validUntil) > observedMilliseconds;
+        } catch {
+          return false;
+        }
+      },
       visibilityConditionReason: () => conditionReason,
       evaluateVisibilityCondition: async (transaction, scope, page, condition) => {
         conditionReason = "UNKNOWN";

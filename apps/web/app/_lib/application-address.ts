@@ -2,16 +2,18 @@ import "server-only";
 
 import {
   isReservedTenantSegment,
-  readAddressedApplicationAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
   type AddressedApplicationRead,
   type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
+import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/contracts";
+import { installedReleaseCatalogue } from "./definition-catalogue";
 
 export type ApplicationAddressResult =
   | Readonly<{
@@ -48,13 +50,18 @@ const loadAddressedApplicationAtAddress = async (
   } catch {
     return { read: { kind: "temporarily_unavailable" }, experiences: [] };
   }
-  return readAddressedApplicationAtAddress(
+  const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
     session,
     tenantShortName,
     organizationShortName,
     authorityId,
     applicationKey,
+    (transaction) => createDatabaseApplicationBoundReleaseSetService(
+      installedReleaseCatalogue,
+      transaction,
+    ),
   );
+  return { read: addressed.read, experiences: addressed.experiences };
 };
 
 export const resolveApplicationAddress = async (
