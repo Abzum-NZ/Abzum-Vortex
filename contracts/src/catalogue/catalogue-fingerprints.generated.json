@@ -40,6 +40,10 @@
       "contentFingerprint": "sha256:8daa13fd51da05ba8b8c90390a8a89254a98fc399f1a40b3749256f5fb3f482f",
       "catalogueFingerprint": "sha256:56b342ab4d07a98e3fe644c644d3716c8913d19fc0ed8f2c65744ee5cbe32fb0"
     },
+    "39217bcc-8fd1-4825-afca-e97598a13f0a:1.0.0": {
+      "contentFingerprint": "sha256:ebc9b16b1cc9afec984c5d52d129a9fbf964e7ff8ae61f4e44bf58a0ad278ae1",
+      "catalogueFingerprint": "sha256:1b742660e5f50d7c5f3abfd52866ebeb92b8129fe9ad06900bcc224c958a7898"
+    },
     "39ab6f28-c166-47cf-91a7-f0b864ded4ff:1.0.0": {
       "contentFingerprint": "sha256:f3834bd367a1e2fb8f1bacba947242055b26c92f475f769aa4821b53e6fa6ed8",
       "catalogueFingerprint": "sha256:6d14243cbef91449ae6564a0fa8fb21eb854a5966920244392a32ce8d2874ab5"

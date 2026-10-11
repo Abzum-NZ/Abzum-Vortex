@@ -5,6 +5,7 @@ export { inspectApplicationPageReplacements } from "./application-page-replaceme
 export * from "./application-contract-versions";
 export * from "./application-composition-v2";
 export * from "./application-composition-catalogue";
+export * from "./application-attachment-blocks";
 export * from "./projected-navigation";
 export * from "./preview-installation-contracts";
 export * from "./builder-preview-operations";

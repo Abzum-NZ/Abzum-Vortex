@@ -92,7 +92,6 @@ export {
 } from "./organization-accounts";
 export {
   createOrganizationLauncherService,
-  listOrganizationLauncher,
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
 export {
@@ -116,7 +115,6 @@ export {
   grantTenantAdministrator,
   listTenantAdministratorAssignments,
   listTenantHierarchy,
-  listTenantLauncher,
   readTenantOrganization,
   reactivateTenantOrganization,
   renameTenantOrganization,

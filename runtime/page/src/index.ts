@@ -67,11 +67,20 @@ export {
   type RecordsTableQueryResolution,
   type RecordsTableQueryRunner,
 } from "./records-table-query";
+export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
   type PageSubjectReader,
   type PageSubjectReadResult,
 } from "./page-subject-read";
+export {
+  projectReadOnlyAttachmentList,
+  type ReadOnlyAttachmentDecision,
+  type ReadOnlyAttachmentFileEvidence,
+  type ReadOnlyAttachmentFileMetadata,
+  type ReadOnlyAttachmentListProjection,
+  type ReadOnlyAttachmentOwner,
+} from "./search-attachment-capabilities";
 export {
   abandonPrivateFormDraftCommandSchema,
   createPrivateFormDraftCommandSchema,

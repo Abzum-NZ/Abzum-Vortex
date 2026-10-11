@@ -6139,5 +6139,75 @@
     },
     "supportedEvents": [],
     "supportedStateOperations": []
+  },
+  "ATTACHMENT_LIST_BLOCK_RELEASE": {
+    "blockId": "39217bcc-8fd1-4825-afca-e97598a13f0a",
+    "key": "platform.display.attachment_list",
+    "releaseVersion": "1.0.0",
+    "name": "Attachments",
+    "icon": "file",
+    "paletteGroup": "record",
+    "rendererKey": "platform.renderer.attachment_list",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the attachment list heading",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "field_reference",
+        "key": "field",
+        "label": "Attachment field",
+        "help": "Attachment field of the addressed installed detail record",
+        "required": true
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when the readable attachment field is empty",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "refused_message",
+        "label": "Unavailable message",
+        "help": "Neutral text shown when attachments are unavailable",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "error_message",
+        "label": "Error message",
+        "help": "Text shown when attachments could not be loaded",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "refused",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh"
+    ],
+    "supportedStateOperations": []
   }
 }

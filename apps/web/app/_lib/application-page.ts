@@ -7,7 +7,7 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
@@ -22,6 +22,7 @@ import {
   projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
   type ProtectedQuerySummaryAggregateResult,
+  type ReferenceChoiceOption,
   type ReferenceChoiceInputValues,
 } from "@vortex/query";
 import {
@@ -40,13 +41,17 @@ import {
   createLinkTilesQueryResolver,
   createStoredNavigationProjectionService,
   createStoredPageCapabilityService,
+  projectReadOnlyAttachmentList,
   projectRecordDetailData,
+  readPageSubjectInTransaction,
   type PageSubjectReadResult,
   type PrivateFormDraftFieldValidation,
   type ProjectedNavigation,
+  type ReadOnlyAttachmentFileEvidence,
   type StoredPageCapabilityDependencies,
 } from "@vortex/page";
 import {
+  ATTACHMENT_LIST_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   BOARD_BLOCK_RELEASE,
@@ -62,6 +67,8 @@ import {
   exactDecimalTextV2Schema,
   jsonValueSchema,
   readRecordDetailContract,
+  fieldIdSchema,
+  fileIdSchema,
   recordIdSchema,
   readRecordsTableContract,
   richTextDocumentV2Schema,
@@ -79,9 +86,10 @@ import {
   type OrganizationSelectionCandidate,
   type PageDefinitionV2,
   type ReferenceChoiceSelectionEvidence,
+  recordLinkValueV2Schema,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
@@ -326,15 +334,22 @@ const projectedUseAvailability = (placement: unknown): "available" | "unavailabl
   return "invalid";
 };
 
+const isUnboundReferenceChoicePlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
+  if (!hasReferenceChoiceSource(placement) || !isRecord(placement.settings)) return false;
+  const source = placement.settings.choice_source;
+  return isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input");
+};
+
 const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
   const block = placement.block;
   return (
-    isRecord(block) &&
-    typeof block.blockId === "string" &&
-    (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
-      Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
-        sameId(release.blockId, block.blockId as string),
-      ))
+    isUnboundReferenceChoicePlacement(placement) ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+          sameId(release.blockId, block.blockId as string),
+        )))
   );
 };
 
@@ -739,6 +754,165 @@ const projectEditField = (
   };
 };
 
+type ReferenceChoiceFirstPage = Readonly<{
+  field: ReferenceChoiceFormField;
+  choices: readonly ReferenceChoiceOption[];
+  nextContinuationToken?: string;
+}>;
+
+/** Projects a saved record link only when the exact value is still offered by its declared Query. */
+const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
+  firstPage: ReferenceChoiceFirstPage | undefined;
+  field: ModuleField | undefined;
+  stored: JsonValue | undefined;
+  service: ReturnType<typeof createReferenceChoiceService>;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
+  const first = args.firstPage;
+  const field = args.field;
+  if (first === undefined || field === undefined || args.stored === undefined) return undefined;
+  if (field.type !== "link" && field.type !== "link_to_one_of_several") return undefined;
+
+  const fieldTargets = field.type === "link" ? [field.settings.target] : field.settings.targets;
+  const resolvedFieldTargets = fieldTargets.filter((target) => target.state === "resolved");
+  if (resolvedFieldTargets.length !== fieldTargets.length || resolvedFieldTargets.length === 0)
+    return undefined;
+  const command = first.field.command;
+  if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
+    return undefined;
+  const queryTarget = command.source.query.recordType;
+  const queryAllowedTargets = command.allowedRecordTypes.filter((target) => target.state === "resolved");
+  if (
+    queryAllowedTargets.length !== command.allowedRecordTypes.length ||
+    queryAllowedTargets.length === 0 ||
+    !resolvedFieldTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    ) ||
+    !queryAllowedTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    )
+  )
+    return undefined;
+
+  if (args.stored === null) {
+    if (field.required) return undefined;
+    return {
+      key: field.key,
+      value: null,
+      data: {
+        status: "ready",
+        values: projectReferenceChoiceInputValues(
+          first.choices,
+          null,
+          undefined,
+          first.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: first.nextContinuationToken },
+        ),
+      },
+    };
+  }
+  const storedLink = recordLinkValueV2Schema.safeParse(args.stored);
+  if (!storedLink.success) return undefined;
+  const storedValue = storedLink.data;
+  const fieldTarget = resolvedFieldTargets.find((target) =>
+    sameId(target.recordTypeId, storedValue.recordTypeId),
+  );
+  if (
+    fieldTarget === undefined ||
+    !sameId(fieldTarget.moduleRootId, queryTarget.moduleRootId) ||
+    !sameId(fieldTarget.recordTypeId, queryTarget.recordTypeId) ||
+    !queryAllowedTargets.some((target) => sameId(target.recordTypeId, storedValue.recordTypeId))
+  )
+    return undefined;
+
+  const seenKeys = new Set<string>();
+  const seenRowIds = new Set<string>();
+  const seenTokens = new Set<string>();
+  let selected: ReferenceChoiceOption | undefined;
+  let selectedEvidence: ReferenceChoiceSelectionEvidence | undefined;
+  let totalChoices = 0;
+  const consumePage = (
+    choices: readonly ReferenceChoiceOption[],
+    requestToken: string | undefined,
+  ): boolean => {
+    if (choices.length > command.pageSize || totalChoices + choices.length > 1_000) return false;
+    totalChoices += choices.length;
+    for (const choice of choices) {
+      const choiceValue = choice.value;
+      if ("organizationAccountId" in choiceValue) return false;
+      const rowId = `${choiceValue.recordTypeId.toLowerCase()}:${choiceValue.recordId.toLowerCase()}`;
+      if (
+        seenKeys.has(choice.key) ||
+        seenRowIds.has(rowId) ||
+        !sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) ||
+        !queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId))
+      )
+        return false;
+      seenKeys.add(choice.key);
+      seenRowIds.add(rowId);
+      if (
+        sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
+        sameId(choiceValue.recordId, storedValue.recordId)
+      ) {
+        if (selected !== undefined) return false;
+        selected = choice;
+        selectedEvidence = requestToken === undefined ? {} : { continuationToken: requestToken };
+      }
+    }
+    return true;
+  };
+  if (!consumePage(first.choices, undefined)) return undefined;
+
+  let pageCount = 1;
+  let requestToken = first.nextContinuationToken;
+  while (requestToken !== undefined && selected === undefined) {
+    if (pageCount >= 20 || seenTokens.has(requestToken)) return undefined;
+    seenTokens.add(requestToken);
+    const result = await args.service.run(args.session, args.selection, {
+      ...command,
+      continuationToken: requestToken,
+    });
+    if (result.kind !== "available" || result.value.outcome !== "completed") return undefined;
+    const page = result.value;
+    if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken)) return undefined;
+    pageCount += 1;
+    requestToken = page.nextContinuationToken;
+    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
+  }
+
+  if (selected === undefined) return undefined;
+  const visibleChoices = [...first.choices];
+  if (!visibleChoices.some((choice) => choice.key === selected?.key)) visibleChoices.push(selected);
+  const selectedToken = selectedEvidence?.continuationToken;
+  const optionEvidenceOverrides = selectedToken === undefined
+    ? {}
+    : { [selected.key]: { continuationToken: selectedToken } };
+  return {
+    key: field.key,
+    value: selected.key,
+    data: {
+      status: "ready",
+      values: projectReferenceChoiceInputValues(
+        visibleChoices,
+        selected.key,
+        undefined,
+        {
+          ...(first.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: first.nextContinuationToken }),
+          ...(Object.keys(optionEvidenceOverrides).length === 0
+            ? {}
+            : { optionEvidenceOverrides }),
+        },
+      ),
+    },
+  };
+};
+
 /** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
 export const loadReferenceChoicePage = async (
   session: IdentitySession,
@@ -916,7 +1090,18 @@ const summaryAggregateCellValue = (
   if (result.value === null || result.valueCount === 0) return { kind: "empty" };
   if (field === undefined) return undefined;
 
-  switch (field.type) {
+  const fieldType =
+    field.type === "calculation"
+      ? field.settings.expression.kind === "numeric" &&
+        field.settings.evaluation === "stored" &&
+        (field.settings.resultType === "whole_number" ||
+          field.settings.resultType === "decimal_number")
+        ? field.settings.resultType
+        : undefined
+      : field.type;
+  if (fieldType === undefined) return undefined;
+
+  switch (fieldType) {
     case "text":
       return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
         typeof result.value === "string"
@@ -1318,8 +1503,8 @@ const loadInstalledContext = (
     selection,
     async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
           installedReleaseCatalogue,
           transaction,
@@ -2045,8 +2230,8 @@ const loadApplicationPageInternal = async (
     ...dependencies,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
       });
@@ -2179,6 +2364,22 @@ const loadApplicationPageInternal = async (
   for (const { placementId, placement } of allPlacements) {
     if (placement.readModel !== undefined) continue;
     const block = placement.block;
+    const isAttachmentListBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, ATTACHMENT_LIST_BLOCK_RELEASE.blockId) &&
+      block.releaseVersion === ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion;
+    if (isAttachmentListBlock) {
+      if (
+        pageDefinition.type === "detail" &&
+        placement.queryId === undefined &&
+        pageSubjectRecordTypeId !== undefined
+      ) {
+        recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
+        addDataPlacement(pageSubjectRecordTypeId, placementId);
+      }
+      continue;
+    }
     if (
       pageSubjectRecordTypeId !== undefined &&
       isRecord(block) &&
@@ -2356,6 +2557,7 @@ const loadApplicationPageInternal = async (
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
+  const referenceChoiceFirstPages = new Map<string, ReferenceChoiceFirstPage>();
   for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
@@ -2406,6 +2608,10 @@ const loadApplicationPageInternal = async (
     }
 
     const block = placement.block;
+    const isAttachmentListBlock =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, ATTACHMENT_LIST_BLOCK_RELEASE.blockId);
     const isCalendarBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -2464,10 +2670,21 @@ const loadApplicationPageInternal = async (
         continue;
       }
       const result = await referenceChoices.run(session, selection, field.command);
-      if (result.kind !== "available" || result.value.outcome !== "completed") {
+      if (
+        result.kind !== "available" ||
+        result.value.outcome !== "completed" ||
+        result.value.kind !== "record_reference"
+      ) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
         continue;
       }
+      referenceChoiceFirstPages.set(placementId, {
+        field,
+        choices: result.value.choices,
+        ...(result.value.nextContinuationToken === undefined
+          ? {}
+          : { nextContinuationToken: result.value.nextContinuationToken }),
+      });
       data[placementId] = {
         status: "ready",
         values: projectReferenceChoiceInputValues(
@@ -2486,6 +2703,140 @@ const loadApplicationPageInternal = async (
     if (placement.readModel !== undefined) {
       logPlacementFailure(address, placementId, "read_model_not_served");
       data[placementId] = { status: "error" };
+      continue;
+    }
+    if (isAttachmentListBlock) {
+      if (
+        !isRecord(block) ||
+        block.releaseVersion !== ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion ||
+        placement.queryId !== undefined ||
+        pageDefinition.type !== "detail" ||
+        subjectType?.state !== "resolved" ||
+        pageSubjectRecordTypeId === undefined
+      ) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const fieldSetting = settings.field;
+      const fieldId = fieldSetting?.kind === "field_reference" ? fieldSetting.fieldId : undefined;
+      const subjectModuleRootId = String(subjectType.moduleRootId);
+      const subjectModuleMatches = context.releaseSet.modules.filter((module) =>
+        sameId(String(module.rootId), subjectModuleRootId),
+      );
+      const subjectModule = subjectModuleMatches.length === 1 ? subjectModuleMatches[0] : undefined;
+      const subjectRecordTypes = subjectModule?.content.recordTypes.filter((recordType) =>
+        sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
+      ) ?? [];
+      const subjectRecordType = subjectRecordTypes.length === 1 ? subjectRecordTypes[0] : undefined;
+      const matchingFields =
+        fieldId === undefined
+          ? []
+          : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
+      const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
+      if (fieldId === undefined || attachmentField?.type !== "attachment") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+      const maximumFiles = attachmentField.settings.multiple
+        ? attachmentField.settings.maxFiles
+        : 1;
+      const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+      if (maximumFiles === undefined || !subjectId.success) {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+        continue;
+      }
+
+      const currentAttachments = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        async (transaction, scope) => {
+          if (
+            scope.accessVersion !== page.accessVersion ||
+            !sameId(String(scope.organizationId), String(context.organizationId)) ||
+            scope.applicationRootId === undefined ||
+            !sameId(String(scope.applicationRootId), String(context.applicationRootId))
+          )
+            return { kind: "stale" as const };
+          const currentSubject = await readPageSubjectInTransaction(transaction, {
+            recordTypeId: pageSubjectRecordTypeId,
+            recordId: subjectId.data,
+          });
+          if (currentSubject.kind !== "read")
+            return { kind: "subject" as const, subject: currentSubject };
+          const repository = createSqlFileReadRepository(transaction);
+          const projection = await projectReadOnlyAttachmentList({
+            owner: {
+              organizationId: String(context.organizationId),
+              applicationRootId: String(context.applicationRootId),
+              recordTypeId: pageSubjectRecordTypeId,
+              recordId: subjectId.data,
+              fieldId,
+            },
+            subjectValues: currentSubject.row.values,
+            maximumFiles,
+            readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
+              const parsedFileId = fileIdSchema.safeParse(candidateFileId);
+              if (!parsedFileId.success) return { kind: "refused" };
+              try {
+                const decision = await decideFileRead(transaction, parsedFileId.data);
+                if (decision.outcome !== "allowed") return { kind: "refused" };
+                const file = await repository.readFile(parsedFileId.data);
+                if (file === null) return { kind: "refused" };
+                return {
+                  kind: "read",
+                  decision,
+                  metadata: {
+                    fileId: String(file.fileId),
+                    organizationId: String(file.organizationId),
+                    ...(file.applicationRootId === undefined
+                      ? {}
+                      : { applicationRootId: String(file.applicationRootId) }),
+                    ...(file.ownerRecordTypeId === undefined
+                      ? {}
+                      : { ownerRecordTypeId: String(file.ownerRecordTypeId) }),
+                    ...(file.ownerRecordId === undefined
+                      ? {}
+                      : { ownerRecordId: String(file.ownerRecordId) }),
+                    ...(file.ownerFieldId === undefined
+                      ? {}
+                      : { ownerFieldId: String(file.ownerFieldId) }),
+                    lifecycleState: file.lifecycleState,
+                    scannerResult: file.scannerResult,
+                    originalSafeDisplayName: file.originalSafeDisplayName,
+                    detectedMediaType: file.detectedMediaType,
+                    sizeBytes: file.sizeBytes,
+                  },
+                };
+              } catch {
+                return { kind: "unavailable" };
+              }
+            },
+          });
+          return { kind: "projected" as const, subject: currentSubject, projection };
+        },
+      );
+      if (currentAttachments.kind === "temporarily_unavailable") {
+        data[placementId] = { status: "error" };
+      } else if (currentAttachments.kind === "unavailable") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else if (currentAttachments.value.kind === "stale") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else if (currentAttachments.value.subject.kind === "temporarily_unavailable") {
+        data[placementId] = { status: "error" };
+      } else if (currentAttachments.value.kind === "subject") {
+        data[placementId] = { status: "refused", reason: "not_permitted" };
+      } else {
+        subjectRead ??= Promise.resolve(currentAttachments.value.subject);
+        const projection = currentAttachments.value.projection;
+        data[placementId] =
+          projection.kind === "ready"
+            ? { status: "ready", values: projection.values }
+            : projection.kind === "empty"
+              ? { status: "empty" }
+              : projection.kind === "unavailable"
+                ? { status: "error" }
+                : { status: "refused", reason: "not_permitted" };
+      }
       continue;
     }
     if (isCalendarBlock && calendarContract === undefined) {
@@ -3345,18 +3696,44 @@ const loadApplicationPageInternal = async (
       const projected: Record<string, PageDataState> = {};
       let complete = true;
       for (const entry of fields) {
-        const field = projectEditField(
-          entry.placement,
-          subjectRecordType,
-          subjectRow.row.values,
-          dateTimeZones,
-        );
-        if (field === undefined || Object.hasOwn(baseline, field.key)) {
+        let projectedField: Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
+        if (isUnboundReferenceChoicePlacement(entry.placement)) {
+          const firstPage = referenceChoiceFirstPages.get(entry.placementId);
+          const definition = firstPage === undefined
+            ? undefined
+            : subjectRecordType.fields.find((candidate) => candidate.key === firstPage.field.fieldKey);
+          const valueKey = definition === undefined
+            ? undefined
+            : Object.keys(subjectRow.row.values).find((key) =>
+                sameId(key, String(definition.fieldId)),
+              );
+          const parsedValueFieldId =
+            valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
+          projectedField = await projectSelectedReferenceChoiceEditField({
+            firstPage,
+            field: definition,
+            stored:
+              parsedValueFieldId !== undefined && parsedValueFieldId.success
+                ? subjectRow.row.values[parsedValueFieldId.data]
+                : undefined,
+            service: referenceChoices,
+            session,
+            selection,
+          });
+        } else {
+          projectedField = projectEditField(
+            entry.placement,
+            subjectRecordType,
+            subjectRow.row.values,
+            dateTimeZones,
+          );
+        }
+        if (projectedField === undefined || Object.hasOwn(baseline, projectedField.key)) {
           complete = false;
           break;
         }
-        baseline[field.key] = field.value;
-        projected[entry.placementId] = field.data;
+        baseline[projectedField.key] = projectedField.value;
+        projected[entry.placementId] = projectedField.data;
       }
       if (!complete) {
         data[placementId] = { status: "disabled", reason: "Record unavailable" };

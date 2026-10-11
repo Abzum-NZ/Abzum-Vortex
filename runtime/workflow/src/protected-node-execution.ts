@@ -27,6 +27,7 @@ import {
   retainedRunAuthoritySchema,
   type VerifiedDurableActorContext,
 } from "./durable-actor-context";
+import { protectedRunRegisteredReleaseSchema } from "./flow-registration-repository";
 
 const maximumCallbackAttempts = 5;
 const callbackRetryDelayMs = 1_000;
@@ -143,9 +144,34 @@ export const protectedNodeRunRecordSchema = z
 
 export type ProtectedNodeRunRecord = z.infer<typeof protectedNodeRunRecordSchema>;
 
+/** Private run reads must carry the exact registration/release proof before effects. */
+export const protectedNodeRegisteredRunSchema = z
+  .object({
+    runRecord: protectedNodeRunRecordSchema,
+    registeredRelease: protectedRunRegisteredReleaseSchema,
+  })
+  .strict()
+  .superRefine(({ runRecord, registeredRelease }, context) => {
+    const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+    const authority = runRecord.authority;
+    if (
+      !same(authority.organizationId, registeredRelease.organizationId) ||
+      !same(authority.applicationRootId, registeredRelease.applicationRootId) ||
+      !same(authority.workflowId, registeredRelease.permanentFlowId) ||
+      authority.applicationReleaseVersion !== registeredRelease.applicationVersion ||
+      runRecord.executionReference.applicationVersion !== registeredRelease.applicationVersion ||
+      authority.workflowRevision !== registeredRelease.compilerWorkflowRevision ||
+      runRecord.kestra.namespace !== registeredRelease.namespace ||
+      runRecord.kestra.flowId !== registeredRelease.providerFlowId
+    )
+      context.addIssue({ code: "custom", message: "Retained run registration identity mismatch" });
+  });
+
+export type ProtectedNodeRegisteredRun = z.infer<typeof protectedNodeRegisteredRunSchema>;
+
 /** The narrow run-store API. Kestra identifiers remain private to this server-side adapter. */
 export type ProtectedNodeRunStore = Readonly<{
-  read: (runId: string) => Promise<unknown | undefined>;
+  read: (runId: string) => Promise<ProtectedNodeRegisteredRun | undefined>;
   /** The #666 flow-start owner calls this seam after accepting the private Kestra mapping. */
   write: (record: unknown) => Promise<boolean>;
   refreshLastKnownState?: (
@@ -447,8 +473,10 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       } catch {
         return { outcome: "retryable_failure", safeCode: "run_store_unavailable", nextPollAt: nextPollAt(clock()) };
       }
-      const run = protectedNodeRunRecordSchema.safeParse(storedCandidate);
-      if (!run.success) return { outcome: "permanent_refusal", safeCode: "callback_refused" };
+      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(storedCandidate);
+      if (!registeredRun.success || !sameIdentity(registeredRun.data.runRecord.authority.runId, envelope.data.runId))
+        return { outcome: "permanent_refusal", safeCode: "callback_refused" };
+      const run = { data: registeredRun.data.runRecord };
 
       const contextResolution = resolveDurableActorContext(envelope.data, run.data.authority, {
         callbackKey: dependencies.callbackKey,
@@ -611,13 +639,15 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           safeCode: "kestra_status_unavailable",
         };
       }
-      const run = protectedNodeRunRecordSchema.safeParse(storedCandidate);
-      if (!run.success) {
+      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(storedCandidate);
+      if (!registeredRun.success) {
         return {
           availability: "unavailable",
           safeCode: "kestra_status_unavailable",
         };
       }
+
+      const run = { data: registeredRun.data.runRecord };
 
       const reference = workflowExecutionReferenceSchema.parse(run.data.executionReference);
       if (!sameIdentity(reference.runId, parsedRunId.data))

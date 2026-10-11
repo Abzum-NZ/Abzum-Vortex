@@ -107,6 +107,8 @@ declare
   saved_record_id uuid;
   saved_concurrency_number bigint;
   notice_sequence bigint;
+  named_relationship_subject_saved boolean := false;
+  changed_rows integer;
   changed_field_ids uuid[];
   activity_time timestamptz := pg_catalog.statement_timestamp();
   event_kind text;
@@ -1190,6 +1192,59 @@ begin
         value_final_values, value_submitted_field_ids
       );
       increment_for_relationship := false;
+    elsif action_mode
+      and p_operation = 'update'
+      and preview_installation is null
+      and meta ->> 'storageScope' = 'application_contained'
+      and pg_catalog.jsonb_array_length(relationship_changes) > 0
+      and creation_count = 0
+      and pg_catalog.jsonb_typeof(action_parents) = 'array'
+      and pg_catalog.jsonb_array_length(action_parents) = 0
+      and (case
+        when copy_plan is null then true
+        when pg_catalog.jsonb_typeof(copy_plan) = 'object'
+          and copy_plan ->> 'outcome' = 'planned'
+          and pg_catalog.jsonb_typeof(copy_plan -> 'copies') = 'array'
+          then pg_catalog.jsonb_array_length(copy_plan -> 'copies') = 0
+        else false
+      end)
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks') task(value)
+        where task.value ->> 'type' = 'record.delete'
+      ) then
+      -- The named declaration and proposed graph already passed their protected
+      -- decisions and target locks. Save one actual subject tuple before edges.
+      execute pg_catalog.format(
+        'update record_data.%I as stored
+         set concurrency_number = stored.concurrency_number + 1,
+           updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
+           definition_revision = $4
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.concurrency_number = $5
+         returning stored.record_id, stored.concurrency_number',
+        loaded ->> 'table'
+      ) into saved_record_id, saved_concurrency_number
+      using organization_id_value, p_record_id, actor_id_value,
+        (loaded ->> 'moduleReleaseRevision')::bigint, p_expected_concurrency_number;
+      get diagnostics changed_rows = row_count;
+      if changed_rows <> 1 then
+        raise exception using errcode = '40001',
+          message = 'Named relationship change did not apply to exactly one row';
+      end if;
+      if saved_record_id is distinct from p_record_id
+        or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+        or saved_concurrency_number is null
+        or saved_concurrency_number not between 1 and 9007199254740991 then
+        raise exception using errcode = '55000',
+          message = 'Named relationship saved identity is unavailable';
+      end if;
+      mutation := pg_catalog.jsonb_build_object(
+        'outcome', 'completed', 'recordId', saved_record_id,
+        'concurrencyNumber', saved_concurrency_number
+      );
+      named_relationship_subject_saved := true;
+      increment_for_relationship := false;
     else
       mutation := pg_catalog.jsonb_build_object(
         'outcome', 'completed', 'recordId', p_record_id,
@@ -1514,6 +1569,21 @@ begin
       reduced_final_values
     );
   end loop;
+  if named_relationship_subject_saved then
+    begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      perform vortex_invalidation.publish_change_notice(
+        organization_id_value, application_root_id_value, p_record_type_id,
+        saved_record_id, saved_concurrency_number, 'changed',
+        notice_sequence, notice_sequence, correlation_id_value
+      );
+    exception when others then
+      -- Invalidation is advisory after the protected named action is complete.
+      null;
+    end;
+  end if;
   return result_value || pg_catalog.jsonb_build_object('createdRecords', created_records);
 end
 $function$;

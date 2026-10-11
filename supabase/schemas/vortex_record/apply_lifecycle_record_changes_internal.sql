@@ -42,6 +42,17 @@ declare
   updated_concurrency_number bigint;
   changed_rows integer;
   notice_sequence bigint;
+  context_after jsonb;
+  shared_consumers_initial jsonb;
+  shared_consumers_final jsonb;
+  target_item jsonb;
+  module_item jsonb;
+  target_application_root_id uuid;
+  previous_target_application_root_id uuid;
+  target_module_root_id uuid;
+  previous_target_module_root_id uuid;
+  target_module_binding_count integer;
+  origin_application_is_consumer boolean;
 begin
   -- The terminal delete, restore and ownership-transfer writes now run inside the
   -- one protected apply_record_changes operation. Each branch is the exact body
@@ -219,7 +230,7 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
     end if;
 
-    context_value := vortex_access.validated_human_request_context();
+    context_value := vortex_access.lock_human_request_access_version_internal();
     if not context_value ? 'applicationRootId' then
       raise exception using errcode = '42501', message = 'Record ownership transfer requires an Application context';
     end if;
@@ -368,13 +379,6 @@ begin
       or updated_concurrency_number not between 1 and 9007199254740991 then
       raise exception using errcode = '55000', message = 'Record ownership transfer saved identity is unavailable';
     end if;
-    if record_fact #>> '{recordScope,storageScope}' is distinct from 'application_contained' then
-      perform vortex_record.bump_record_data_version_internal(
-        organization_id_value, (record_type_fact ->> 'storageContractId')::uuid,
-        case when record_fact #>> '{recordScope,storageScope}' = 'application_contained'
-          then application_root_id_value else null end
-      );
-    end if;
     perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id, p_record_id, 'completed');
     event_result := vortex_event.append_record_occurrences(
       (record_type_fact ->> 'storageContractId')::uuid,
@@ -385,7 +389,10 @@ begin
         ), 'payload', pg_catalog.jsonb_build_object('kind', 'reassigned')
       ))
     );
-    if pg_catalog.jsonb_array_length(event_result) <> 1 then
+    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array' then
+      raise exception using errcode = '55000', message = 'Record ownership transfer Event append failed';
+    end if;
+    if pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
       raise exception using errcode = '55000', message = 'Record ownership transfer Event append failed';
     end if;
     perform vortex_record.complete_command_receipt_internal(
@@ -404,6 +411,217 @@ begin
         -- Invalidation is advisory after the protected transfer is complete.
         null;
       end;
+    elsif record_fact #>> '{recordScope,storageScope}' = 'organization_shared' then
+      begin
+        notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::regclass);
+        if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
+          raise exception using errcode = '22003',
+            message = 'Shared ownership transfer notice sequence is unavailable';
+        end if;
+
+        if record_fact -> 'recordScope' ->> 'moduleRootId'
+            is distinct from record_type_fact ->> 'moduleRootId'
+          or record_fact -> 'recordScope' ->> 'storageContractId'
+            is distinct from record_type_fact ->> 'storageContractId'
+          or not vortex_context.is_non_nil_uuid(record_fact -> 'recordScope' ->> 'moduleRootId')
+          or not vortex_context.is_non_nil_uuid(record_type_fact ->> 'storageContractId') then
+          raise exception using errcode = '55000',
+            message = 'Shared ownership transfer record lineage is unavailable';
+        end if;
+
+        shared_consumers_initial := vortex_module.read_active_shared_record_consumers_internal(
+          (record_fact -> 'recordScope' ->> 'moduleRootId')::uuid,
+          p_record_type_id,
+          (record_type_fact ->> 'storageContractId')::uuid
+        );
+        if pg_catalog.jsonb_typeof(shared_consumers_initial) is distinct from 'object'
+          or not (shared_consumers_initial ?& array['organizationId', 'accessVersion', 'targets'])
+          or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(shared_consumers_initial)) <> 3
+          or shared_consumers_initial ->> 'organizationId' is distinct from organization_id_value::text
+          or not pg_catalog.pg_input_is_valid(shared_consumers_initial ->> 'accessVersion', 'bigint')
+          or (shared_consumers_initial ->> 'accessVersion')::bigint
+            is distinct from (context_value ->> 'accessVersion')::bigint
+          or pg_catalog.jsonb_typeof(shared_consumers_initial -> 'targets') is distinct from 'array'
+          or pg_catalog.jsonb_array_length(shared_consumers_initial -> 'targets') = 0 then
+          raise exception using errcode = '55000',
+            message = 'Shared ownership transfer consumer selection is malformed';
+        end if;
+
+        previous_target_application_root_id := null;
+        origin_application_is_consumer := false;
+        for target_item in
+          select item.value
+          from pg_catalog.jsonb_array_elements(shared_consumers_initial -> 'targets') as item(value)
+          order by (item.value ->> 'applicationRootId')::uuid
+        loop
+          if pg_catalog.jsonb_typeof(target_item) is distinct from 'object'
+            or not (target_item ?& array[
+              'applicationRootId', 'applicationReleaseRevision', 'moduleRootId',
+              'moduleReleaseRevision', 'bindingRevision', 'recordTypeId',
+              'storageContractId', 'registrationRevision', 'definitionKey',
+              'releaseVersion', 'validationContractVersion', 'contentFingerprint',
+              'resolutionFingerprint', 'catalogueFingerprint', 'moduleBindings'
+            ])
+            or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(target_item)) <> 15
+            or not vortex_context.is_non_nil_uuid(target_item ->> 'applicationRootId')
+            or not vortex_context.is_non_nil_uuid(target_item ->> 'moduleRootId')
+            or not vortex_context.is_non_nil_uuid(target_item ->> 'storageContractId')
+            or not pg_catalog.pg_input_is_valid(target_item ->> 'applicationReleaseRevision', 'bigint')
+            or (target_item ->> 'applicationReleaseRevision')::bigint not between 1 and 9007199254740991
+            or target_item ->> 'moduleRootId' is distinct from record_fact -> 'recordScope' ->> 'moduleRootId'
+            or not pg_catalog.pg_input_is_valid(target_item ->> 'moduleReleaseRevision', 'bigint')
+            or (target_item ->> 'moduleReleaseRevision')::bigint not between 1 and 9007199254740991
+            or not pg_catalog.pg_input_is_valid(target_item ->> 'bindingRevision', 'bigint')
+            or (target_item ->> 'bindingRevision')::bigint not between 1 and 9007199254740991
+            or target_item ->> 'recordTypeId' is distinct from p_record_type_id::text
+            or target_item ->> 'storageContractId'
+              is distinct from record_type_fact ->> 'storageContractId'
+            or not pg_catalog.pg_input_is_valid(target_item ->> 'registrationRevision', 'bigint')
+            or (target_item ->> 'registrationRevision')::bigint not between 1 and 9007199254740991
+            or target_item ->> 'definitionKey' is null or target_item ->> 'definitionKey' = ''
+            or target_item ->> 'releaseVersion' is null or target_item ->> 'releaseVersion' = ''
+            or target_item ->> 'validationContractVersion' is null
+            or target_item ->> 'validationContractVersion' = ''
+            or target_item ->> 'contentFingerprint' is null
+            or target_item ->> 'contentFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+            or target_item ->> 'resolutionFingerprint' is null
+            or target_item ->> 'resolutionFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+            or target_item ->> 'catalogueFingerprint' is null
+            or target_item ->> 'catalogueFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+            or pg_catalog.jsonb_typeof(target_item -> 'moduleBindings') is distinct from 'array'
+            or pg_catalog.jsonb_array_length(target_item -> 'moduleBindings') = 0 then
+            raise exception using errcode = '55000',
+              message = 'Shared ownership transfer consumer evidence is malformed';
+          end if;
+
+          target_application_root_id := (target_item ->> 'applicationRootId')::uuid;
+          if previous_target_application_root_id is not null
+            and target_application_root_id <= previous_target_application_root_id then
+            raise exception using errcode = '55000',
+              message = 'Shared ownership transfer consumer set is not unique and ordered';
+          end if;
+          previous_target_application_root_id := target_application_root_id;
+          if target_application_root_id = application_root_id_value then
+            origin_application_is_consumer := true;
+          end if;
+
+          previous_target_module_root_id := null;
+          target_module_binding_count := 0;
+          for module_item in
+            select binding.value
+            from pg_catalog.jsonb_array_elements(target_item -> 'moduleBindings') as binding(value)
+            order by (binding.value ->> 'moduleRootId')::uuid
+          loop
+            if pg_catalog.jsonb_typeof(module_item) is distinct from 'object'
+              or not (module_item ?& array[
+                'moduleRootId', 'bindingRevision', 'applicationReleaseRevision',
+                'moduleReleaseRevision', 'state', 'contentFingerprint',
+                'resolutionFingerprint', 'generatorContractVersion', 'storageContractIds'
+              ])
+              or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(module_item)) <> 9
+              or not vortex_context.is_non_nil_uuid(module_item ->> 'moduleRootId')
+              or not pg_catalog.pg_input_is_valid(module_item ->> 'bindingRevision', 'bigint')
+              or (module_item ->> 'bindingRevision')::bigint not between 1 and 9007199254740991
+              or not pg_catalog.pg_input_is_valid(module_item ->> 'applicationReleaseRevision', 'bigint')
+              or (module_item ->> 'applicationReleaseRevision')::bigint
+                is distinct from (target_item ->> 'applicationReleaseRevision')::bigint
+              or not pg_catalog.pg_input_is_valid(module_item ->> 'moduleReleaseRevision', 'bigint')
+              or (module_item ->> 'moduleReleaseRevision')::bigint not between 1 and 9007199254740991
+              or module_item ->> 'state' is distinct from 'active'
+              or module_item ->> 'contentFingerprint' is null
+              or module_item ->> 'contentFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+              or module_item ->> 'resolutionFingerprint' is null
+              or module_item ->> 'resolutionFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+              or module_item ->> 'generatorContractVersion' is distinct from '1.0.0'
+              or pg_catalog.jsonb_typeof(module_item -> 'storageContractIds') is distinct from 'array'
+              or pg_catalog.jsonb_array_length(module_item -> 'storageContractIds') = 0
+              or exists (
+                select 1
+                from pg_catalog.jsonb_array_elements(module_item -> 'storageContractIds') as contract(value)
+                where pg_catalog.jsonb_typeof(contract.value) is distinct from 'string'
+                  or not vortex_context.is_non_nil_uuid(contract.value #>> '{}')
+              )
+              or exists (
+                select contract.value
+                from pg_catalog.jsonb_array_elements(module_item -> 'storageContractIds') as contract(value)
+                group by contract.value having pg_catalog.count(*) <> 1
+              )
+              or module_item -> 'storageContractIds' is distinct from (
+                select pg_catalog.jsonb_agg(contract.value order by (contract.value #>> '{}')::uuid)
+                from pg_catalog.jsonb_array_elements(module_item -> 'storageContractIds') as contract(value)
+              ) then
+              raise exception using errcode = '55000',
+                message = 'Shared ownership transfer Module binding evidence is malformed';
+            end if;
+
+            target_module_root_id := (module_item ->> 'moduleRootId')::uuid;
+            if previous_target_module_root_id is not null
+              and target_module_root_id <= previous_target_module_root_id then
+              raise exception using errcode = '55000',
+                message = 'Shared ownership transfer Module bindings are not unique and ordered';
+            end if;
+            previous_target_module_root_id := target_module_root_id;
+            if target_module_root_id = (target_item ->> 'moduleRootId')::uuid then
+              target_module_binding_count := target_module_binding_count + 1;
+              if (module_item ->> 'moduleReleaseRevision')::bigint
+                  is distinct from (target_item ->> 'moduleReleaseRevision')::bigint
+                or (module_item ->> 'bindingRevision')::bigint
+                  is distinct from (target_item ->> 'bindingRevision')::bigint
+                or not exists (
+                  select 1
+                  from pg_catalog.jsonb_array_elements(module_item -> 'storageContractIds') as contract(value)
+                  where contract.value #>> '{}' = target_item ->> 'storageContractId'
+                ) then
+                raise exception using errcode = '55000',
+                  message = 'Shared ownership transfer target binding does not match its complete Module lineage';
+              end if;
+            end if;
+          end loop;
+          if target_module_binding_count <> 1 then
+            raise exception using errcode = '55000',
+              message = 'Shared ownership transfer target Module binding is ambiguous';
+          end if;
+        end loop;
+
+        if not origin_application_is_consumer then
+          raise exception using errcode = '42501',
+            message = 'Origin Application is not a proved shared record consumer';
+        end if;
+
+        shared_consumers_final := vortex_module.read_active_shared_record_consumers_internal(
+          (record_fact -> 'recordScope' ->> 'moduleRootId')::uuid,
+          p_record_type_id,
+          (record_type_fact ->> 'storageContractId')::uuid
+        );
+        if shared_consumers_final is distinct from shared_consumers_initial then
+          raise exception using errcode = '40001',
+            message = 'Shared ownership transfer consumer snapshot changed before publication';
+        end if;
+        context_after := vortex_access.validated_human_request_context();
+        if context_after is distinct from context_value then
+          raise exception using errcode = '40001',
+            message = 'Human ownership transfer context changed before publication';
+        end if;
+
+        for target_item in
+          select item.value
+          from pg_catalog.jsonb_array_elements(shared_consumers_initial -> 'targets') as item(value)
+          order by (item.value ->> 'applicationRootId')::uuid
+        loop
+          perform vortex_invalidation.publish_change_notice(
+            organization_id_value, (target_item ->> 'applicationRootId')::uuid,
+            p_record_type_id, updated_record_id, updated_concurrency_number, 'changed',
+            notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+          );
+        end loop;
+      exception when others then
+        -- The completed transfer is structural. All App-scoped notices are one
+        -- advisory subtransaction, so a failure rolls back every send together.
+        null;
+      end;
+    else
+      raise exception using errcode = '55000',
+        message = 'Ownership transfer storage scope is unavailable';
     end if;
     -- This is deliberately an undisclosed result: an authorised transfer may
     -- remove the operator's read path.  A post-write projection would turn that
