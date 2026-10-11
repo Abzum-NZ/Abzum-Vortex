@@ -7,12 +7,17 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
+import {
+  readInstallationRuntimeBundleCacheStatus,
+  type InstallationRuntimeBundleObservationEvent,
+  type InstallationRuntimeBundleObservationObserver,
+} from "@vortex/module";
 import {
   arrangeDataset,
   protectedQueryCommandSchema,
@@ -22,6 +27,7 @@ import {
   projectReferenceChoiceInputValues,
   type ProtectedQueryRow,
   type ProtectedQuerySummaryAggregateResult,
+  type ReferenceChoiceOption,
   type ReferenceChoiceInputValues,
 } from "@vortex/query";
 import {
@@ -66,6 +72,7 @@ import {
   exactDecimalTextV2Schema,
   jsonValueSchema,
   readRecordDetailContract,
+  fieldIdSchema,
   fileIdSchema,
   recordIdSchema,
   readRecordsTableContract,
@@ -84,10 +91,10 @@ import {
   type OrganizationSelectionCandidate,
   type PageDefinitionV2,
   type ReferenceChoiceSelectionEvidence,
+  recordLinkValueV2Schema,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
@@ -332,15 +339,22 @@ const projectedUseAvailability = (placement: unknown): "available" | "unavailabl
   return "invalid";
 };
 
+const isUnboundReferenceChoicePlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
+  if (!hasReferenceChoiceSource(placement) || !isRecord(placement.settings)) return false;
+  const source = placement.settings.choice_source;
+  return isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input");
+};
+
 const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
   const block = placement.block;
   return (
-    isRecord(block) &&
-    typeof block.blockId === "string" &&
-    (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
-      Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
-        sameId(release.blockId, block.blockId as string),
-      ))
+    isUnboundReferenceChoicePlacement(placement) ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+          sameId(release.blockId, block.blockId as string),
+        )))
   );
 };
 
@@ -745,6 +759,165 @@ const projectEditField = (
   };
 };
 
+type ReferenceChoiceFirstPage = Readonly<{
+  field: ReferenceChoiceFormField;
+  choices: readonly ReferenceChoiceOption[];
+  nextContinuationToken?: string;
+}>;
+
+/** Projects a saved record link only when the exact value is still offered by its declared Query. */
+const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
+  firstPage: ReferenceChoiceFirstPage | undefined;
+  field: ModuleField | undefined;
+  stored: JsonValue | undefined;
+  service: ReturnType<typeof createReferenceChoiceService>;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
+  const first = args.firstPage;
+  const field = args.field;
+  if (first === undefined || field === undefined || args.stored === undefined) return undefined;
+  if (field.type !== "link" && field.type !== "link_to_one_of_several") return undefined;
+
+  const fieldTargets = field.type === "link" ? [field.settings.target] : field.settings.targets;
+  const resolvedFieldTargets = fieldTargets.filter((target) => target.state === "resolved");
+  if (resolvedFieldTargets.length !== fieldTargets.length || resolvedFieldTargets.length === 0)
+    return undefined;
+  const command = first.field.command;
+  if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
+    return undefined;
+  const queryTarget = command.source.query.recordType;
+  const queryAllowedTargets = command.allowedRecordTypes.filter((target) => target.state === "resolved");
+  if (
+    queryAllowedTargets.length !== command.allowedRecordTypes.length ||
+    queryAllowedTargets.length === 0 ||
+    !resolvedFieldTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    ) ||
+    !queryAllowedTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    )
+  )
+    return undefined;
+
+  if (args.stored === null) {
+    if (field.required) return undefined;
+    return {
+      key: field.key,
+      value: null,
+      data: {
+        status: "ready",
+        values: projectReferenceChoiceInputValues(
+          first.choices,
+          null,
+          undefined,
+          first.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: first.nextContinuationToken },
+        ),
+      },
+    };
+  }
+  const storedLink = recordLinkValueV2Schema.safeParse(args.stored);
+  if (!storedLink.success) return undefined;
+  const storedValue = storedLink.data;
+  const fieldTarget = resolvedFieldTargets.find((target) =>
+    sameId(target.recordTypeId, storedValue.recordTypeId),
+  );
+  if (
+    fieldTarget === undefined ||
+    !sameId(fieldTarget.moduleRootId, queryTarget.moduleRootId) ||
+    !sameId(fieldTarget.recordTypeId, queryTarget.recordTypeId) ||
+    !queryAllowedTargets.some((target) => sameId(target.recordTypeId, storedValue.recordTypeId))
+  )
+    return undefined;
+
+  const seenKeys = new Set<string>();
+  const seenRowIds = new Set<string>();
+  const seenTokens = new Set<string>();
+  let selected: ReferenceChoiceOption | undefined;
+  let selectedEvidence: ReferenceChoiceSelectionEvidence | undefined;
+  let totalChoices = 0;
+  const consumePage = (
+    choices: readonly ReferenceChoiceOption[],
+    requestToken: string | undefined,
+  ): boolean => {
+    if (choices.length > command.pageSize || totalChoices + choices.length > 1_000) return false;
+    totalChoices += choices.length;
+    for (const choice of choices) {
+      const choiceValue = choice.value;
+      if ("organizationAccountId" in choiceValue) return false;
+      const rowId = `${choiceValue.recordTypeId.toLowerCase()}:${choiceValue.recordId.toLowerCase()}`;
+      if (
+        seenKeys.has(choice.key) ||
+        seenRowIds.has(rowId) ||
+        !sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) ||
+        !queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId))
+      )
+        return false;
+      seenKeys.add(choice.key);
+      seenRowIds.add(rowId);
+      if (
+        sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
+        sameId(choiceValue.recordId, storedValue.recordId)
+      ) {
+        if (selected !== undefined) return false;
+        selected = choice;
+        selectedEvidence = requestToken === undefined ? {} : { continuationToken: requestToken };
+      }
+    }
+    return true;
+  };
+  if (!consumePage(first.choices, undefined)) return undefined;
+
+  let pageCount = 1;
+  let requestToken = first.nextContinuationToken;
+  while (requestToken !== undefined && selected === undefined) {
+    if (pageCount >= 20 || seenTokens.has(requestToken)) return undefined;
+    seenTokens.add(requestToken);
+    const result = await args.service.run(args.session, args.selection, {
+      ...command,
+      continuationToken: requestToken,
+    });
+    if (result.kind !== "available" || result.value.outcome !== "completed") return undefined;
+    const page = result.value;
+    if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken)) return undefined;
+    pageCount += 1;
+    requestToken = page.nextContinuationToken;
+    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
+  }
+
+  if (selected === undefined) return undefined;
+  const visibleChoices = [...first.choices];
+  if (!visibleChoices.some((choice) => choice.key === selected?.key)) visibleChoices.push(selected);
+  const selectedToken = selectedEvidence?.continuationToken;
+  const optionEvidenceOverrides = selectedToken === undefined
+    ? {}
+    : { [selected.key]: { continuationToken: selectedToken } };
+  return {
+    key: field.key,
+    value: selected.key,
+    data: {
+      status: "ready",
+      values: projectReferenceChoiceInputValues(
+        visibleChoices,
+        selected.key,
+        undefined,
+        {
+          ...(first.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: first.nextContinuationToken }),
+          ...(Object.keys(optionEvidenceOverrides).length === 0
+            ? {}
+            : { optionEvidenceOverrides }),
+        },
+      ),
+    },
+  };
+};
+
 /** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
 export const loadReferenceChoicePage = async (
   session: IdentitySession,
@@ -922,7 +1095,18 @@ const summaryAggregateCellValue = (
   if (result.value === null || result.valueCount === 0) return { kind: "empty" };
   if (field === undefined) return undefined;
 
-  switch (field.type) {
+  const fieldType =
+    field.type === "calculation"
+      ? field.settings.expression.kind === "numeric" &&
+        field.settings.evaluation === "stored" &&
+        (field.settings.resultType === "whole_number" ||
+          field.settings.resultType === "decimal_number")
+        ? field.settings.resultType
+        : undefined
+      : field.type;
+  if (fieldType === undefined) return undefined;
+
+  switch (fieldType) {
     case "text":
       return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
         typeof result.value === "string"
@@ -1318,19 +1502,21 @@ const loadInstalledContext = (
   session: IdentitySession,
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
+  observeBundleRead?: InstallationRuntimeBundleObservationObserver,
 ) =>
   humanOrganizationRequests(dependencies.identityAuthorityId).run(
     session,
     selection,
     async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
           installedReleaseCatalogue,
           transaction,
         ),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        ...(observeBundleRead === undefined ? {} : { observeBundleRead }),
       }).load();
     },
   );
@@ -1649,6 +1835,114 @@ const localPageCompositionObserver = (
 };
 
 /** One primary invocation only; internal placement identities never enter the fixed frame. */
+const localPageBundleObservation = () => {
+  try {
+    if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local")
+      return undefined;
+    const journey = getIdentityJourneyConfiguration();
+    const authority = getIdentityAuthorityConfiguration();
+    if (authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
+      return undefined;
+
+    let bundlePartQueryAttempts = 0;
+    let bundlePartQuerySuccesses = 0;
+    let cacheHitReads = 0;
+    let startedLoads = 0;
+    let completedLoads = 0;
+    let failedLoads = 0;
+    let pendingLoads = 0;
+    let invalid = false;
+    let finished = false;
+    const increment = (value: number): number => {
+      if (!Number.isSafeInteger(value) || value < 0 || value >= 4096) {
+        invalid = true;
+        return value;
+      }
+      return value + 1;
+    };
+    const observe: InstallationRuntimeBundleObservationObserver = (
+      event: InstallationRuntimeBundleObservationEvent,
+    ): void => {
+      try {
+        if (finished) { invalid = true; return; }
+        switch (event) {
+          case "PARTS_CACHE_HIT":
+            cacheHitReads = increment(cacheHitReads);
+            break;
+          case "PARTS_QUERY_ATTEMPT":
+            bundlePartQueryAttempts = increment(bundlePartQueryAttempts);
+            break;
+          case "PARTS_QUERY_SUCCESS":
+            bundlePartQuerySuccesses = increment(bundlePartQuerySuccesses);
+            break;
+          case "LOAD_STARTED":
+            startedLoads = increment(startedLoads);
+            pendingLoads = increment(pendingLoads);
+            break;
+          case "LOAD_COMPLETED":
+            if (pendingLoads === 0) { invalid = true; return; }
+            pendingLoads -= 1;
+            completedLoads = increment(completedLoads);
+            break;
+          case "LOAD_FAILED":
+            if (pendingLoads === 0) { invalid = true; return; }
+            pendingLoads -= 1;
+            failedLoads = increment(failedLoads);
+            break;
+          default:
+            invalid = true;
+        }
+      } catch {
+        invalid = true;
+      }
+    };
+    return Object.freeze({
+      observe,
+      finish(): void {
+        if (finished) { invalid = true; return; }
+        finished = true;
+        try {
+          if (invalid || startedLoads === 0 || pendingLoads !== 0 || failedLoads !== 0 ||
+              completedLoads !== startedLoads ||
+              bundlePartQueryAttempts !== bundlePartQuerySuccesses) return;
+          const cache = readInstallationRuntimeBundleCacheStatus();
+          const counters = [bundlePartQueryAttempts, bundlePartQuerySuccesses, cacheHitReads,
+            startedLoads, completedLoads, cache.maximumBytes, cache.chargedBytes, cache.entryCount];
+          if (counters.some((value) => !Number.isSafeInteger(value) || value < 0) ||
+              cache.sharedTierDisabled !== true || cache.chargedBytes > cache.maximumBytes) return;
+          const frame = {
+            schema: "page_bundle_observation_v1",
+            stage: "PAGE_MODEL",
+            result: "AVAILABLE",
+            bundlePartQueryAttempts,
+            bundlePartQuerySuccesses,
+            cacheHitReads,
+            startedLoads,
+            completedLoads,
+            maximumBytes: cache.maximumBytes,
+            chargedBytes: cache.chargedBytes,
+            entryCount: cache.entryCount,
+            sharedTierDisabled: cache.sharedTierDisabled,
+            requestBound: true,
+            observationComplete: true,
+          };
+          const line = "VORTEX_LOCAL_PAGE_BUNDLE_OBSERVATION:" + JSON.stringify(frame);
+          if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
+        } catch {
+          // Bounded diagnostics must never change a completed Page model.
+        }
+      },
+    });
+  } catch {
+    return undefined;
+  }
+};
+
 const localPageProjectionDecisionObserver = (
   installed: unknown,
   shells: readonly ApplicationShellV2[],
@@ -1800,8 +2094,17 @@ const loadApplicationPageInternal = async (
     applicationRootId: address.application.applicationRootId,
   };
 
+  const bundleObservation = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    expectedInstallationRevision === undefined && initialContinuationKey === undefined
+    ? localPageBundleObservation() : undefined;
+
   // The installed context is read once, under the person's own verified request scope.
-  const loaded = await loadInstalledContext(session, dependencies, selection);
+  const loaded = await loadInstalledContext(
+    session,
+    dependencies,
+    selection,
+    bundleObservation?.observe,
+  );
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   if (
@@ -2051,10 +2354,11 @@ const loadApplicationPageInternal = async (
     ...dependencies,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        ...(bundleObservation === undefined ? {} : { observeBundleRead: bundleObservation.observe }),
       });
     },
   });
@@ -2378,6 +2682,7 @@ const loadApplicationPageInternal = async (
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
+  const referenceChoiceFirstPages = new Map<string, ReferenceChoiceFirstPage>();
   for (const { placementId, placement, formId } of placements) {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
@@ -2490,10 +2795,21 @@ const loadApplicationPageInternal = async (
         continue;
       }
       const result = await referenceChoices.run(session, selection, field.command);
-      if (result.kind !== "available" || result.value.outcome !== "completed") {
+      if (
+        result.kind !== "available" ||
+        result.value.outcome !== "completed" ||
+        result.value.kind !== "record_reference"
+      ) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
         continue;
       }
+      referenceChoiceFirstPages.set(placementId, {
+        field,
+        choices: result.value.choices,
+        ...(result.value.nextContinuationToken === undefined
+          ? {}
+          : { nextContinuationToken: result.value.nextContinuationToken }),
+      });
       data[placementId] = {
         status: "ready",
         values: projectReferenceChoiceInputValues(
@@ -3505,18 +3821,44 @@ const loadApplicationPageInternal = async (
       const projected: Record<string, PageDataState> = {};
       let complete = true;
       for (const entry of fields) {
-        const field = projectEditField(
-          entry.placement,
-          subjectRecordType,
-          subjectRow.row.values,
-          dateTimeZones,
-        );
-        if (field === undefined || Object.hasOwn(baseline, field.key)) {
+        let projectedField: Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
+        if (isUnboundReferenceChoicePlacement(entry.placement)) {
+          const firstPage = referenceChoiceFirstPages.get(entry.placementId);
+          const definition = firstPage === undefined
+            ? undefined
+            : subjectRecordType.fields.find((candidate) => candidate.key === firstPage.field.fieldKey);
+          const valueKey = definition === undefined
+            ? undefined
+            : Object.keys(subjectRow.row.values).find((key) =>
+                sameId(key, String(definition.fieldId)),
+              );
+          const parsedValueFieldId =
+            valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
+          projectedField = await projectSelectedReferenceChoiceEditField({
+            firstPage,
+            field: definition,
+            stored:
+              parsedValueFieldId !== undefined && parsedValueFieldId.success
+                ? subjectRow.row.values[parsedValueFieldId.data]
+                : undefined,
+            service: referenceChoices,
+            session,
+            selection,
+          });
+        } else {
+          projectedField = projectEditField(
+            entry.placement,
+            subjectRecordType,
+            subjectRow.row.values,
+            dateTimeZones,
+          );
+        }
+        if (projectedField === undefined || Object.hasOwn(baseline, projectedField.key)) {
           complete = false;
           break;
         }
-        baseline[field.key] = field.value;
-        projected[entry.placementId] = field.data;
+        baseline[projectedField.key] = projectedField.value;
+        projected[entry.placementId] = projectedField.data;
       }
       if (!complete) {
         data[placementId] = { status: "disabled", reason: "Record unavailable" };
@@ -3571,6 +3913,7 @@ const loadApplicationPageInternal = async (
       },
   };
   observeProjectionDecision?.bind(model);
+  bundleObservation?.finish();
   return { kind: "available", model };
 };
 

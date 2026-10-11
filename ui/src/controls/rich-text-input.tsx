@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
+import { Field, FieldLabel } from "../components/field";
 import { Textarea } from "../components/textarea";
 import {
   readControlSettings,
@@ -98,16 +99,15 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   };
 
   return (
-    <div
+    <Field
       data-vortex-control="rich-text-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
-      className="vortex-field"
     >
-      <label htmlFor={ids.control} className="vortex-field-label">
+      <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
-      </label>
+      </FieldLabel>
       <Textarea
         id={ids.control}
         name={fieldKey}
@@ -126,6 +126,6 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }

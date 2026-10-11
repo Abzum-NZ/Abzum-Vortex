@@ -35,6 +35,28 @@ export {
 
 type BundleIndexRow = DatabaseRow & { readonly bundle_index: unknown };
 type BundlePartsRow = DatabaseRow & { readonly bundle_parts: unknown };
+export type InstallationRuntimeBundleObservationEvent =
+  | "PARTS_CACHE_HIT"
+  | "PARTS_QUERY_ATTEMPT"
+  | "PARTS_QUERY_SUCCESS"
+  | "LOAD_STARTED"
+  | "LOAD_COMPLETED"
+  | "LOAD_FAILED";
+
+export type InstallationRuntimeBundleObservationObserver = (
+  event: InstallationRuntimeBundleObservationEvent,
+) => void;
+
+const notifyObservation = (
+  observer: InstallationRuntimeBundleObservationObserver | undefined,
+  event: InstallationRuntimeBundleObservationEvent,
+): void => {
+  try {
+    observer?.(event);
+  } catch {
+    // Observation must never change the protected read result.
+  }
+};
 
 export const installationRuntimeBundleErrorCodes = [
   "INVALID_INSTALLATION_RUNTIME_BUNDLE",
@@ -175,6 +197,7 @@ export interface InstallationRuntimeBundleRepository {
 /** Stores exact-release bundle sections through the verified request transaction. */
 export const createInstallationRuntimeBundleRepository = (
   transaction: RequestDatabaseTransaction,
+  observeBundleRead?: InstallationRuntimeBundleObservationObserver,
 ): InstallationRuntimeBundleRepository => {
   const readIndex = async (
     keyCandidate: InstallationRuntimeBundleKey,
@@ -218,10 +241,13 @@ export const createInstallationRuntimeBundleRepository = (
     const completeCachedParts = cachedParts.filter(
       (part): part is InstallationRuntimeBundlePart => part !== undefined,
     );
-    if (expected.length > 0 && completeCachedParts.length === expected.length)
+    if (expected.length > 0 && completeCachedParts.length === expected.length) {
+      notifyObservation(observeBundleRead, "PARTS_CACHE_HIT");
       return sortParts(completeCachedParts);
+    }
 
     try {
+      notifyObservation(observeBundleRead, "PARTS_QUERY_ATTEMPT");
       const rows = await transaction.query<BundlePartsRow>`
         select vortex_module.read_installation_runtime_bundle_parts(
           ${command.data.applicationRootId}::uuid,
@@ -258,6 +284,7 @@ export const createInstallationRuntimeBundleRepository = (
       if (expectedByKey.size !== 0)
         throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
       const sortedParts = sortParts(parts);
+      notifyObservation(observeBundleRead, "PARTS_QUERY_SUCCESS");
       for (const part of sortedParts) retainInstallationRuntimeBundleCachePart(index, part);
       return sortedParts;
     } catch (error) {
