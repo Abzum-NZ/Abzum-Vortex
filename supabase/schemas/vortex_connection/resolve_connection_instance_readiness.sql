@@ -143,6 +143,19 @@ begin
     );
   end if;
 
+  -- All Connection, exact grant and permanent App-root lock waits are complete.
+  -- The early expiry refusal remains; a token that expired during either wait
+  -- must be refused at this same timestamp used by the ready evidence.
+  now_ts := pg_catalog.clock_timestamp();
+  if conn_row.token_expires_at is not null
+    and (not pg_catalog.isfinite(conn_row.token_expires_at)
+      or conn_row.token_expires_at <= now_ts) then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'connection_token_expired'
+    );
+  end if;
+
   -- 10. Return authoritative owner-projected readiness evidence
   return pg_catalog.jsonb_build_object(
     'outcome', 'ready',

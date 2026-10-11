@@ -550,7 +550,6 @@ export const createTenantGovernanceService = (
 };
 
 const defaultService = createTenantGovernanceService();
-export const listTenantLauncher = defaultService.listTenants;
 export const listTenantHierarchy = defaultService.listHierarchy;
 export const readTenantOrganization = defaultService.readOrganization;
 export const listTenantAdministratorAssignments = defaultService.listAssignments;
