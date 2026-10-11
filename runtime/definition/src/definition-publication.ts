@@ -2303,7 +2303,7 @@ const beforeSaveChoices = (
     const trigger = flow.triggers[0];
     if (trigger?.type !== "BeforeSave") continue;
     for (const [index, task] of flow.tasks.entries()) {
-      if (task.type !== "if") continue;
+      if (task.type !== "if" || !("condition" in task)) continue;
       const base = { alias: flow.id, key: flow.key, taskId: task.id };
       const unsupported = (reason: BeforeSaveReason): void => { result.push({ choice: { ...base, eligible: false, reason } }); };
       const flowId = currentOwnedIdentity(resolution.identities, source.key, "flow", "content", flow.id, [flow.id, flow.key]);
@@ -2426,7 +2426,7 @@ export const createDefinitionPublicationService = (
       const source = structuredClone(draft.source);
       const flows = source.body.flows.filter((entry) => entry.id === current.flow.alias && entry.key === current.flow.key);
       const task = flows.length === 1 ? flows[0]!.tasks[current.task.path[1]] : undefined;
-      if (task?.type !== "if" || task.id !== current.task.id) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+      if (task?.type !== "if" || !("condition" in task) || task.id !== current.task.id) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       task.condition = formula.data;
       if (fingerprintCanonicalValue(extractModuleSourceIdentityRequirementsV3(source)) !== fingerprintCanonicalValue(extractModuleSourceIdentityRequirementsV3(draft.source)))
         return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -2457,7 +2457,7 @@ export const createDefinitionPublicationService = (
         const nextTask = nextFlow?.tasks[current.task.path[1]];
         const expectedNode = expected.rules.find((entry) => String(entry.ruleId) === current.flow.flowId)?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
         const nextNode = nextContent.rules.find((entry) => String(entry.ruleId) === current.flow.flowId)?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
-        if (expectedTask?.type !== "if" || nextTask?.type !== "if" || expectedNode?.type !== "condition" || nextNode?.type !== "condition") return refuse("DEFINITION_COMPILATION_REFUSED");
+        if (expectedTask?.type !== "if" || !("condition" in expectedTask) || nextTask?.type !== "if" || !("condition" in nextTask) || expectedNode?.type !== "condition" || nextNode?.type !== "condition") return refuse("DEFINITION_COMPILATION_REFUSED");
         expectedTask.condition = nextTask.condition;
         expectedNode.condition = nextNode.condition;
         if (fingerprintCanonicalValue(expected) !== fingerprintCanonicalValue(nextContent)) return refuse("DEFINITION_COMPILATION_REFUSED");
