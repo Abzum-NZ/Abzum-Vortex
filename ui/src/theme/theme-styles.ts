@@ -38,10 +38,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   gap: var(--vortex-space-md);
 }
 
-.vortex-field-note {
-  color: var(--vortex-text-muted);
-}
-
 /* Single-select table control */
 .vortex-selection-radio {
   width: 1.125rem;
