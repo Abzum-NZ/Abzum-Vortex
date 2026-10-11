@@ -14,6 +14,7 @@ import {
   systemApplicationBoundReleaseSetResultSchema,
   type ApplicationInstallationLifecycleResult,
   type ApplicationRootId,
+  type InstallationRuntimeBundleIndex,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
   type ModuleInstallationStorageResult,
@@ -52,6 +53,11 @@ import {
 } from "@vortex/module";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
+import {
+  assertPreparedInstallationRuntimeBundleMatches,
+  writePreparedInstallationRuntimeBundle,
+  type PreparedInstallationRuntimeSourceReader,
+} from "./installation-runtime-bundle";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one
@@ -82,9 +88,10 @@ import { z } from "zod";
  *    whole switch back, so the previously active exact release stays selected, and an upgrade then
  *    restores the registration to that still-active release.
  *
- * A first installation is prepared before it is activated: `prepare` commits the registration and
- * the provisioned (inactive) storage, so the installer can store the initial record-type lifecycle
- * policies the activation gate requires. An upgrade cannot pre-provision a Module its active
+ * A first installation is prepared before it is activated: `prepare` commits the registration,
+ * provisioned inactive storage and the complete runtime bundle, so the installer can store the
+ * initial record-type lifecycle policies the activation gate requires. An upgrade cannot
+ * pre-provision a Module its active
  * release still binds, so its storage is prepared inside the atomic switch.
  *
  * Withdrawal is one transaction: detach the active or prepared binding set and retire its contributions
@@ -189,6 +196,7 @@ export type ActiveApplicationInstallationSummary = Readonly<{
 }>;
 
 export type ApplicationInstallationPreparationResult = Readonly<{
+  runtimeBundleIndex: InstallationRuntimeBundleIndex;
   outcome: "prepared" | "unchanged";
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
@@ -297,6 +305,8 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
    * the deployment rather than assumed absent.
    */
   containsCustomComponents: (releaseSet: SystemApplicationBoundReleaseSetResult) => boolean;
+  /** Prepared immutable source through the caller current human transaction. */
+  preparedRuntimeSource?: PreparedInstallationRuntimeSourceReader;
 }>;
 
 type BindingRow = Readonly<{ bindings: unknown }>;
@@ -1288,9 +1298,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
   return Object.freeze({
     /**
-     * Prepares one exact release for first installation: aligns the permission registration and
-     * commits provisioned, inactive storage for every pinned Module release. Nothing becomes
-     * active, and an installation with an active release is refused as stale.
+     * Prepares one exact release for first installation: aligns the permission registration,
+     * commits provisioned inactive storage for every pinned Module release, and stores the complete
+     * immutable runtime bundle. Nothing becomes active, and an installation with an active release
+     * is refused as stale.
      */
     async prepare(
       session: IdentitySession,
@@ -1301,6 +1312,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
+      const preparedRuntimeSource = dependencies.preparedRuntimeSource;
+      if (preparedRuntimeSource === undefined)
+        throw fail("APPLICATION_INSTALLATION_FAILED");
       const exact = await readExactRelease(verifiedSession.data, request);
       const { pins } = exact;
 
@@ -1334,7 +1348,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
-        async (transaction) => {
+        async (transaction, authority) => {
           const state = await readInstallationBindings(
             transaction,
             request.organizationId,
@@ -1363,7 +1377,25 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           const contributionsChanged = await changeContributions(
             transaction, request, exact.contributionGroups, provisioned, "attach",
           );
+          const preparedBindings = provisioned.map((result) => ({
+            moduleRootId: result.moduleRootId,
+            moduleReleaseRevision: result.moduleReleaseRevision,
+            bindingRevision: result.bindingRevision,
+            state: "provisioned" as const,
+          }));
+          const preparedSource = await preparedRuntimeSource(transaction, {
+            organizationId: request.organizationId,
+            applicationRootId: request.applicationRootId,
+            applicationReleaseRevision: request.applicationReleaseRevision,
+            moduleBindings: preparedBindings,
+          });
+          const runtimeBundleIndex = await writePreparedInstallationRuntimeBundle(
+            transaction,
+            preparedSource,
+          );
+          await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
           return {
+            runtimeBundleIndex,
             outcome:
               accessChanged || contributionsChanged || provisioned.some((result) => result.changed)
                 ? "prepared"
@@ -1398,6 +1430,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
+      const preparedRuntimeSource = dependencies.preparedRuntimeSource;
       const exact = await readExactRelease(verifiedSession.data, request);
       const { releaseSet, pins } = exact;
       // Optional evidence for the equality-only registration decision. Failure never turns the
@@ -1426,6 +1459,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
           requireNotDraining(state);
           const mode = requireExpectedActive(request, activeRelease(state));
+          if (
+            mode === "switch" &&
+            request.expectedActiveReleaseRevision === null &&
+            preparedRuntimeSource === undefined
+          )
+            throw fail("APPLICATION_INSTALLATION_FAILED");
           if (mode === "already_active") {
             const installation = activeSummary(request, state);
             requireExactBindings(request, pins, installation.moduleBindings, "active");
@@ -1491,7 +1530,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           verifiedSession.data,
           request.organizationId,
           installOperation(request.applicationRootId, exact, false),
-          async (transaction) => {
+          async (transaction, authority) => {
             const state = await readInstallationBindings(
               transaction,
               request.organizationId,
@@ -1539,6 +1578,28 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             const provisioned = await provisionPins(transaction, request, pins, current);
             await changeContributions(transaction, request, exact.contributionGroups,
               provisioned, "attach");
+            if (active === null && request.expectedActiveReleaseRevision === null) {
+              if (preparedRuntimeSource === undefined)
+                throw fail("APPLICATION_INSTALLATION_FAILED");
+              const preparedBindings = provisioned.map((result) => ({
+                moduleRootId: result.moduleRootId,
+                moduleReleaseRevision: result.moduleReleaseRevision,
+                bindingRevision: result.bindingRevision,
+                state: "provisioned" as const,
+              }));
+              const preparedSource = await preparedRuntimeSource(transaction, {
+                organizationId: request.organizationId,
+                applicationRootId: request.applicationRootId,
+                applicationReleaseRevision: request.applicationReleaseRevision,
+                moduleBindings: preparedBindings,
+              });
+              await assertPreparedInstallationRuntimeBundleMatches(
+                transaction,
+                preparedSource,
+                preparedBindings,
+              );
+              await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
+            }
             const activated = requireLifecycleResult(
               await lifecycle.activate({
                 applicationRootId: request.applicationRootId,
