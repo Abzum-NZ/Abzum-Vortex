@@ -51,8 +51,9 @@ export type StudioCompositionAddSettings = Readonly<Record<string,
   Readonly<{ kind: "text"; value: string }> | Readonly<{ kind: "boolean"; value: boolean }> |
   Readonly<{ kind: "choice"; value: string }>>>;
 export type StudioCompositionScalarSettings = Readonly<Record<string,
-  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }>>>;
-type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" }>;
+  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
+  Readonly<{ kind: "number"; value: number }>>>;
+type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" | "number" }>;
 export type StudioCompositionScalarSettingsModel =
   | Readonly<{ kind: "available"; placementAlias: string; properties: readonly ScalarProperty[];
       settings: StudioCompositionScalarSettings }>
@@ -384,6 +385,15 @@ const eligibleLayoutAddRelease = (release: PlatformBlockReleaseV2): boolean =>
   release.capabilities.accessibleName === "not_applicable" &&
   release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
 
+/** Existing fixed-slot layouts retain their children when editing declared scalar settings. */
+const eligibleLayoutSettingsRelease = (release: PlatformBlockReleaseV2): boolean =>
+  release.paletteGroup === "layout" && release.slots.length > 0 &&
+  release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
+  release.properties.every((property) => !property.required &&
+    (property.kind === "boolean" || property.kind === "choice" || property.kind === "number")) &&
+  release.capabilities.accessibleName === "not_applicable" &&
+  release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
+
 type AddTarget =
   | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot;
       layoutAllowed: boolean; replace: (slot: SourceSlot) => void }
@@ -526,6 +536,79 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
+/** Named content settings require the actual shell reservation and fixed-slot ancestry. */
+const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: Target,
+  optionalLayoutAncestry = false) => {
+  const matches: { page: ApplicationSourceDocumentV2["body"]["pages"][number];
+    shellAlias: string; slotAlias: string }[] = [];
+  for (const page of source.body.pages) {
+    if (page.type === "guided_form" || page.composition.shell_kind !== "application") continue;
+    for (const [slotAlias, slot] of Object.entries(page.composition.content))
+      if (slot === target.region.slot) matches.push({ page, shellAlias: page.composition.shell, slotAlias });
+  }
+  if (matches.length !== 1) return undefined;
+  const match = matches[0]!;
+  if (match.page.type !== "list" && match.page.type !== "detail" && match.page.type !== "dashboard")
+    return undefined;
+  const shells = source.body.shells.filter((shell) => shell.id === match.shellAlias);
+  if (shells.length !== 1) return undefined;
+  const shell = shells[0]!;
+  const bindings = shell.content_slots.filter((binding) => binding.id === match.slotAlias);
+  if (bindings.length !== 1 || !manifestMatches(source, shell.layout)) return undefined;
+  const binding = bindings[0]!;
+  // Validate the complete original shell, including its required-but-empty reservations.
+  bridge.toPuckShell(shell);
+  // Reservation validation does not validate each authored binding's metadata.
+  const shellPlacements = new Map<string, SourcePlacement>();
+  const collect = (slot: SourceSlot): void => {
+    for (const [alias, placement] of Object.entries(slot.placements)) {
+      if (shellPlacements.has(alias)) return refuse();
+      shellPlacements.set(alias, placement);
+      for (const child of Object.values(placement.slots)) collect(child);
+    }
+  };
+  collect(shell.layout);
+  for (const authoredBinding of shell.content_slots) {
+    const parent = shellPlacements.get(authoredBinding.parent_placement);
+    const declarations = parent === undefined ? undefined : releaseFor(parent)?.slots
+      .filter((slot) => slot.key === authoredBinding.parent_slot);
+    if (declarations?.length !== 1) return undefined;
+    const declaration = declarations[0]!;
+    if ((declaration.required && !authoredBinding.required) ||
+      authoredBinding.allowed_child_categories.some((category) =>
+        !declaration.allowedChildCategories.includes(category))) return undefined;
+  }
+  const parents: SourcePlacement[] = [];
+  const optionalParentPaths: boolean[] = [];
+  const visit = (slot: SourceSlot, optionalPath = true): void => {
+    for (const [alias, placement] of Object.entries(slot.placements)) {
+      const release = releaseFor(placement) ?? refuse();
+      if (alias === binding.parent_placement) {
+        parents.push(placement);
+        optionalParentPaths.push(optionalPath);
+      }
+      for (const declaration of release.slots) {
+        const child = placement.slots[declaration.key];
+        if (declaration.repeats === undefined && child !== undefined)
+          visit(child, optionalPath && !declaration.required);
+      }
+    }
+  };
+  visit(shell.layout);
+  if (parents.length !== 1 || parents[0] !== target.region.parent) return undefined;
+  const declarations = releaseFor(parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
+  if (declarations?.length !== 1 || declarations[0]!.repeats !== undefined) return undefined;
+  const declaration = declarations[0]!;
+  // Layout settings alone require optional immutable slots; authored required content stays required.
+  if (optionalLayoutAncestry && (!optionalParentPaths[0] || declaration.required)) return undefined;
+  if (Object.values(target.region.slot.placements).some((placement) => {
+    const release = releaseFor(placement);
+    return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup) ||
+      !binding.allowed_child_categories.includes(release.paletteGroup);
+  })) return undefined;
+  return match.page;
+};
+
 /** Setting changes retain identity, so Flow references and required content do not block them. */
 const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
   eligible: (release: PlatformBlockReleaseV2) => boolean = eligibleAddRelease) => {
@@ -533,14 +616,32 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
-  const page = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
-    candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
-  if (page === undefined || (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
-    target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
-    source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
-  if (release === undefined || !eligible(release)) return { kind: "unsupported" } as const;
-  const layoutSettings = eligibleLayoutAddRelease(release);
+  const layoutSettings = release !== undefined && eligibleLayoutSettingsRelease(release);
+  const ordinaryPage = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
+    candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
+  // Settings alone may edit one actual declared step region; it never becomes an ordinary main region.
+  const guidedPages = source.body.pages.flatMap((candidate) => {
+    if (candidate.type !== "guided_form" || candidate.composition.shell_kind !== "default") return [];
+    const composition = candidate.composition;
+    return candidate.steps.filter((step) => composition.step_content[step.id] === target.region.slot)
+      .map(() => candidate);
+  });
+  const guidedPage = guidedPages.length === 1 ? guidedPages[0] : undefined;
+  const namedPage = ordinaryPage === undefined && guidedPage === undefined
+    ? ordinaryNamedSettingsPage(source, target, layoutSettings) : undefined;
+  const page = ordinaryPage ?? guidedPage ?? namedPage;
+  const guided = ordinaryPage === undefined && guidedPage !== undefined;
+  const named = namedPage !== undefined;
+  if (page === undefined || (!guided && !named &&
+    ((page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
+      target.region.ordinaryMain !== true)) ||
+    source.body.public_addresses.some((address) => address.page === page.id) ||
+    source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
+  if (release === undefined || !eligible(release) ||
+    ((guided || (named && !layoutSettings)) &&
+      (release.paletteGroup !== "content" || release.slots.length !== 0)))
+    return { kind: "unsupported" } as const;
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
@@ -607,18 +708,20 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
-const scalarProperty = (property: BlockPropertySchemaV2Contract): property is ScalarProperty =>
-  property.kind === "boolean" || property.kind === "choice";
+const scalarProperties = (release: PlatformBlockReleaseV2): readonly ScalarProperty[] =>
+  release.properties.filter((property): property is ScalarProperty =>
+    property.kind === "boolean" || property.kind === "choice" ||
+    (release.paletteGroup === "layout" && property.kind === "number"));
 const eligibleScalarRelease = (release: PlatformBlockReleaseV2): boolean =>
-  release.properties.some(scalarProperty) &&
+  scalarProperties(release).length > 0 &&
   ((release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
-    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutAddRelease(release));
+    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutSettingsRelease(release));
 
 /** The command supplies only editable scalars; omitted keys deliberately stay omitted. */
 const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): StudioCompositionScalarSettings => {
   const raw = object(value);
   closedPlain(raw, properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
-  const settings: Record<string, { kind: "boolean"; value: boolean } | { kind: "choice"; value: string }> = {};
+  const settings: Record<string, StudioCompositionScalarSettings[string]> = {};
   for (const property of properties) {
     if (!Object.hasOwn(raw, property.key)) continue;
     const supplied = closedPlain(raw[property.key], ["kind", "value"]);
@@ -627,6 +730,9 @@ const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): 
     else if (property.kind === "choice" && supplied.kind === "choice" && typeof supplied.value === "string" &&
       property.options.some((option) => option.key === supplied.value))
       settings[property.key] = { kind: "choice", value: supplied.value };
+    else if (property.kind === "number" && supplied.kind === "number" && typeof supplied.value === "number" &&
+      Number.isFinite(supplied.value))
+      settings[property.key] = { kind: "number", value: supplied.value };
     else return refuse();
   }
   return settings;
@@ -637,15 +743,16 @@ export const describeStudioCompositionScalarSettings = (context: StudioCompositi
   try {
     const resolved = resolveSettings(context, selection, eligibleScalarRelease);
     if (resolved.kind !== "available") return resolved;
-    const properties = resolved.release.properties.filter(scalarProperty);
+    const properties = scalarProperties(resolved.release);
     const supplied: Record<string, unknown> = {};
     for (const property of properties)
       if (Object.hasOwn(resolved.target.placement.settings, property.key))
         supplied[property.key] = resolved.target.placement.settings[property.key];
+    const settings = scalarSettings(supplied, properties);
     if (validateComponentSettings(resolved.target.placement.settings, resolved.release.properties).length > 0)
       return { kind: "invalid" };
     return { kind: "available", placementAlias: resolved.alias, properties,
-      settings: scalarSettings(supplied, properties) };
+      settings };
   } catch { return { kind: "invalid" }; }
 };
 
@@ -655,7 +762,7 @@ const applyScalarSettings = (current: StudioCompositionContext, selection: Studi
   if (input.kind !== "scalar_settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection, eligibleScalarRelease);
   if (resolved.kind !== "available") return resolved;
-  const properties = resolved.release.properties.filter(scalarProperty);
+  const properties = scalarProperties(resolved.release);
   const supplied = scalarSettings(input.settings, properties);
   const settings = { ...resolved.target.placement.settings };
   for (const property of properties) delete settings[property.key];

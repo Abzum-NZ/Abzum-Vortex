@@ -33,6 +33,10 @@ declare
   application_root_required boolean;
   changed_rows integer;
   app_scope uuid;
+  saved_record_id uuid;
+  saved_concurrency_number bigint;
+  preview_installation jsonb;
+  notice_sequence bigint;
 begin
   if p_record_type_id is null or p_record_id is null
     or p_expected_concurrency_number not between 1 and 9007199254740990 then
@@ -214,9 +218,11 @@ begin
          deleted_at = null, deleted_by = null, removal_due_at = null,
          definition_revision = $4
        where organisation_id = $1 and record_id = $2
-         and lifecycle_state = ''soft_deleted'' and concurrency_number = $5',
+         and lifecycle_state = ''soft_deleted'' and concurrency_number = $5
+       returning stored.record_id, stored.concurrency_number',
       meta ->> 'table'
-    ) using (context_value ->> 'organizationId')::uuid, p_record_id,
+    ) into saved_record_id, saved_concurrency_number
+      using (context_value ->> 'organizationId')::uuid, p_record_id,
       (context_value ->> 'organizationAccountId')::uuid,
       (meta ->> 'moduleReleaseRevision')::bigint, p_expected_concurrency_number;
     get diagnostics changed_rows = row_count;
@@ -225,13 +231,38 @@ begin
     end if;
     app_scope := case when meta ->> 'storageScope' = 'application_contained'
       then (context_value ->> 'applicationRootId')::uuid else null end;
-    perform vortex_record.bump_record_data_version_internal(
-      (context_value ->> 'organizationId')::uuid,
-      (meta ->> 'storageContractId')::uuid, app_scope
-    );
+    preview_installation :=
+      vortex_record.read_current_preview_installation_internal();
+    if preview_installation is null
+      and meta ->> 'storageScope' = 'application_contained' then
+      begin
+        notice_sequence := pg_catalog.nextval(
+          'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+        );
+        perform vortex_invalidation.publish_change_notice(
+          (context_value ->> 'organizationId')::uuid,
+          (context_value ->> 'applicationRootId')::uuid,
+          p_record_type_id,
+          saved_record_id,
+          saved_concurrency_number,
+          'changed',
+          notice_sequence,
+          notice_sequence,
+          (context_value ->> 'correlationId')::uuid
+        );
+      exception when others then
+        -- Allocation and publication are advisory; the guarded write is not.
+        null;
+      end;
+    else
+      perform vortex_record.bump_record_data_version_internal(
+        (context_value ->> 'organizationId')::uuid,
+        (meta ->> 'storageContractId')::uuid, app_scope
+      );
+    end if;
     return pg_catalog.jsonb_build_object(
-      'outcome', 'completed', 'recordId', p_record_id,
-      'concurrencyNumber', p_expected_concurrency_number + 1
+      'outcome', 'completed', 'recordId', saved_record_id,
+      'concurrencyNumber', saved_concurrency_number
     );
   exception
     when serialization_failure or deadlock_detected then

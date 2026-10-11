@@ -13,7 +13,7 @@ const record = (value: unknown): value is Record<string, unknown> =>
 const validManifest = (value: unknown, path: string): boolean => {
   if (!record(value) || !exactKeys(value, ["id", "name", "short_name", "start_url", "scope", "icons",
       "background_color", "theme_color", "display", "lang", "dir"]) ||
-      value.id !== path || value.scope !== `${path}/` || value.start_url !== `${path}/_install` ||
+      value.id !== path || value.scope !== `${path}/` || value.start_url !== `${path}/` ||
       typeof value.name !== "string" || value.name.length < 1 || value.name.length > 120 ||
       value.short_name !== value.name || value.display !== "standalone" || value.lang !== "en" ||
       value.dir !== "ltr" || typeof value.background_color !== "string" ||

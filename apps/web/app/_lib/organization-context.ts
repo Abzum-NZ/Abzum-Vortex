@@ -5,12 +5,14 @@ import {
   readPermittedApplicationsAtAddress,
   type PermittedApplicationsRead,
 } from "@vortex/app";
-import { listOrganizationLauncher } from "@vortex/identity";
+import { createOrganizationLauncherService } from "@vortex/identity";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+
+const organizationLauncherService = createOrganizationLauncherService();
 
 export const loadOrganizationLauncher = async (
   session: IdentitySession,
-): Promise<OrganizationLauncherResolution> => listOrganizationLauncher(session);
+): Promise<OrganizationLauncherResolution> => organizationLauncherService.list(session);
 
 export const loadPermittedApplicationsAtAddress = async (
   session: IdentitySession,
