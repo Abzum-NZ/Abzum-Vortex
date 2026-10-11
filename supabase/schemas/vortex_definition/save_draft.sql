@@ -34,6 +34,7 @@ declare
   actor_id uuid;
   human_write boolean;
   root_key text;
+  root_kind text;
 begin
   human_write := vortex_context.current_context() ->> 'callerKind' = 'human';
   if human_write then
@@ -70,10 +71,11 @@ begin
   end if;
 
   if human_write then
-    select root.key into strict root_key
+    select root.key, root.kind into strict root_key, root_kind
     from vortex_definition.roots as root
     where root.root_id = p_root_id;
-    if p_draft_source ->> 'kind' is distinct from 'application'
+    if root_kind is null or root_kind not in ('application', 'module')
+      or p_draft_source ->> 'kind' is distinct from root_kind
       or p_draft_source ->> 'key' is distinct from root_key then
       raise exception using errcode = '22023',
         message = 'Definition draft write source is invalid';
