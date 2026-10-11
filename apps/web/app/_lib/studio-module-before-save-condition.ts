@@ -352,8 +352,12 @@ const changesOnlySelectedIfCondition = (
   if (flows.length !== 1 || nextFlows.length !== 1 || flows[0]!.key !== nextFlows[0]!.key) return false;
   const tasks = flows[0]!.tasks.filter((task) => task.id === taskId);
   const nextTasks = nextFlows[0]!.tasks.filter((task) => task.id === taskId);
-  if (tasks.length !== 1 || nextTasks.length !== 1 || tasks[0]!.type !== "if" || nextTasks[0]!.type !== "if") return false;
-  tasks[0]!.condition = nextTasks[0]!.condition;
+  if (tasks.length !== 1 || nextTasks.length !== 1) return false;
+  const task = tasks[0];
+  const nextTask = nextTasks[0];
+  if (task === undefined || nextTask === undefined || task.type !== "if" || !("condition" in task) ||
+      nextTask.type !== "if" || !("condition" in nextTask)) return false;
+  task.condition = nextTask.condition;
   return canonicalJson(expected) === canonicalJson(candidate);
 };
 
@@ -401,11 +405,11 @@ const loadInTransaction = async (
     return {
       kind: "readonly",
       flowChoices: [],
-      ...(request.flowAlias === undefined ? {} : { selectedAlias: request.flowAlias,
-        selectedTaskId: request.taskId }),
+      ...(request.flowAlias === undefined || request.taskId === undefined ? {} : {
+        selectedAlias: request.flowAlias, selectedTaskId: request.taskId }),
       reason: loaded.reason,
     };
-  if (request.flowAlias !== undefined && loaded.selected === undefined) {
+  if (request.flowAlias !== undefined && request.taskId !== undefined && loaded.selected === undefined) {
     const selectedChoice = loaded.flowChoices.find((choice) => choice.alias === request.flowAlias && choice.taskId === request.taskId);
     if (selectedChoice !== undefined)
       return {
