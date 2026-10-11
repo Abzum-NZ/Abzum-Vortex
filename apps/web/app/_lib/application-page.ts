@@ -7,12 +7,17 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@vortex/app";
+import {
+  readInstallationRuntimeBundleCacheStatus,
+  type InstallationRuntimeBundleObservationEvent,
+  type InstallationRuntimeBundleObservationObserver,
+} from "@vortex/module";
 import {
   arrangeDataset,
   protectedQueryCommandSchema,
@@ -90,7 +95,6 @@ import {
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
@@ -1091,7 +1095,18 @@ const summaryAggregateCellValue = (
   if (result.value === null || result.valueCount === 0) return { kind: "empty" };
   if (field === undefined) return undefined;
 
-  switch (field.type) {
+  const fieldType =
+    field.type === "calculation"
+      ? field.settings.expression.kind === "numeric" &&
+        field.settings.evaluation === "stored" &&
+        (field.settings.resultType === "whole_number" ||
+          field.settings.resultType === "decimal_number")
+        ? field.settings.resultType
+        : undefined
+      : field.type;
+  if (fieldType === undefined) return undefined;
+
+  switch (fieldType) {
     case "text":
       return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
         typeof result.value === "string"
@@ -1487,19 +1502,21 @@ const loadInstalledContext = (
   session: IdentitySession,
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
+  observeBundleRead?: InstallationRuntimeBundleObservationObserver,
 ) =>
   humanOrganizationRequests(dependencies.identityAuthorityId).run(
     session,
     selection,
     async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
           installedReleaseCatalogue,
           transaction,
         ),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        ...(observeBundleRead === undefined ? {} : { observeBundleRead }),
       }).load();
     },
   );
@@ -1818,6 +1835,114 @@ const localPageCompositionObserver = (
 };
 
 /** One primary invocation only; internal placement identities never enter the fixed frame. */
+const localPageBundleObservation = () => {
+  try {
+    if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local")
+      return undefined;
+    const journey = getIdentityJourneyConfiguration();
+    const authority = getIdentityAuthorityConfiguration();
+    if (authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
+      return undefined;
+
+    let bundlePartQueryAttempts = 0;
+    let bundlePartQuerySuccesses = 0;
+    let cacheHitReads = 0;
+    let startedLoads = 0;
+    let completedLoads = 0;
+    let failedLoads = 0;
+    let pendingLoads = 0;
+    let invalid = false;
+    let finished = false;
+    const increment = (value: number): number => {
+      if (!Number.isSafeInteger(value) || value < 0 || value >= 4096) {
+        invalid = true;
+        return value;
+      }
+      return value + 1;
+    };
+    const observe: InstallationRuntimeBundleObservationObserver = (
+      event: InstallationRuntimeBundleObservationEvent,
+    ): void => {
+      try {
+        if (finished) { invalid = true; return; }
+        switch (event) {
+          case "PARTS_CACHE_HIT":
+            cacheHitReads = increment(cacheHitReads);
+            break;
+          case "PARTS_QUERY_ATTEMPT":
+            bundlePartQueryAttempts = increment(bundlePartQueryAttempts);
+            break;
+          case "PARTS_QUERY_SUCCESS":
+            bundlePartQuerySuccesses = increment(bundlePartQuerySuccesses);
+            break;
+          case "LOAD_STARTED":
+            startedLoads = increment(startedLoads);
+            pendingLoads = increment(pendingLoads);
+            break;
+          case "LOAD_COMPLETED":
+            if (pendingLoads === 0) { invalid = true; return; }
+            pendingLoads -= 1;
+            completedLoads = increment(completedLoads);
+            break;
+          case "LOAD_FAILED":
+            if (pendingLoads === 0) { invalid = true; return; }
+            pendingLoads -= 1;
+            failedLoads = increment(failedLoads);
+            break;
+          default:
+            invalid = true;
+        }
+      } catch {
+        invalid = true;
+      }
+    };
+    return Object.freeze({
+      observe,
+      finish(): void {
+        if (finished) { invalid = true; return; }
+        finished = true;
+        try {
+          if (invalid || startedLoads === 0 || pendingLoads !== 0 || failedLoads !== 0 ||
+              completedLoads !== startedLoads ||
+              bundlePartQueryAttempts !== bundlePartQuerySuccesses) return;
+          const cache = readInstallationRuntimeBundleCacheStatus();
+          const counters = [bundlePartQueryAttempts, bundlePartQuerySuccesses, cacheHitReads,
+            startedLoads, completedLoads, cache.maximumBytes, cache.chargedBytes, cache.entryCount];
+          if (counters.some((value) => !Number.isSafeInteger(value) || value < 0) ||
+              cache.sharedTierDisabled !== true || cache.chargedBytes > cache.maximumBytes) return;
+          const frame = {
+            schema: "page_bundle_observation_v1",
+            stage: "PAGE_MODEL",
+            result: "AVAILABLE",
+            bundlePartQueryAttempts,
+            bundlePartQuerySuccesses,
+            cacheHitReads,
+            startedLoads,
+            completedLoads,
+            maximumBytes: cache.maximumBytes,
+            chargedBytes: cache.chargedBytes,
+            entryCount: cache.entryCount,
+            sharedTierDisabled: cache.sharedTierDisabled,
+            requestBound: true,
+            observationComplete: true,
+          };
+          const line = "VORTEX_LOCAL_PAGE_BUNDLE_OBSERVATION:" + JSON.stringify(frame);
+          if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
+        } catch {
+          // Bounded diagnostics must never change a completed Page model.
+        }
+      },
+    });
+  } catch {
+    return undefined;
+  }
+};
+
 const localPageProjectionDecisionObserver = (
   installed: unknown,
   shells: readonly ApplicationShellV2[],
@@ -1969,8 +2094,17 @@ const loadApplicationPageInternal = async (
     applicationRootId: address.application.applicationRootId,
   };
 
+  const bundleObservation = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    expectedInstallationRevision === undefined && initialContinuationKey === undefined
+    ? localPageBundleObservation() : undefined;
+
   // The installed context is read once, under the person's own verified request scope.
-  const loaded = await loadInstalledContext(session, dependencies, selection);
+  const loaded = await loadInstalledContext(
+    session,
+    dependencies,
+    selection,
+    bundleObservation?.observe,
+  );
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   if (
@@ -2220,10 +2354,11 @@ const loadApplicationPageInternal = async (
     ...dependencies,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        ...(bundleObservation === undefined ? {} : { observeBundleRead: bundleObservation.observe }),
       });
     },
   });
@@ -3778,6 +3913,7 @@ const loadApplicationPageInternal = async (
       },
   };
   observeProjectionDecision?.bind(model);
+  bundleObservation?.finish();
   return { kind: "available", model };
 };
 
