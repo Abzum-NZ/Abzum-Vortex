@@ -31,7 +31,10 @@ import {
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
-import { createInstallationRuntimeBundleRepository } from "./installation-runtime-bundle-repository";
+import {
+  createInstallationRuntimeBundleRepository,
+  type InstallationRuntimeBundleObservationObserver,
+} from "./installation-runtime-bundle-repository";
 
 const activeIdentitySchema = z.object({
   tenantId: z.uuid(),
@@ -193,9 +196,10 @@ export interface ActiveInstallationBundleRepository {
 /** Reads and repairs only the active format-2 bundle under the verified HUMAN request transaction. */
 export const createActiveInstallationBundleRepository = (
   transaction: RequestDatabaseTransaction,
+  observeBundleRead?: InstallationRuntimeBundleObservationObserver,
 ): ActiveInstallationBundleRepository => {
   let statePromise: Promise<ActiveInstallationBundleState> | undefined;
-  const bundles = createInstallationRuntimeBundleRepository(transaction);
+  const bundles = createInstallationRuntimeBundleRepository(transaction, observeBundleRead);
 
   const readCurrentState = async (): Promise<ActiveInstallationBundleState> => {
     if (statePromise !== undefined) return statePromise;
