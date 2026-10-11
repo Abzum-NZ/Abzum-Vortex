@@ -18,6 +18,7 @@ import {
 import {
   crmApplication,
   crmModuleSources,
+  hrApplication,
   hrModuleSources,
   iamApplication,
   iamModule,
@@ -101,6 +102,7 @@ const applicationDescriptors: readonly TrustedApplicationDescriptor[] = [
   },
   { source: operationsApplication, applicationOriginKind: "ordinary" },
   { source: crmApplication, applicationOriginKind: "ordinary" },
+  { source: hrApplication, applicationOriginKind: "ordinary" },
   { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
   { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
 ];

@@ -5,8 +5,10 @@ import {
   definitionReleaseHistoryResultSchema,
   definitionReleaseMetadataCommandSchema,
   definitionReleaseMetadataResultSchema,
+  applicationRootIdSchema,
   storedDefinitionSourceSchema,
   fingerprintSchema,
+  revisionSchema,
   restoreDefinitionDraftCommandSchema,
   assertModuleContractPair,
   selectApplicationContractPair,
@@ -24,7 +26,7 @@ import {
 } from "@vortex/contracts";
 import { z } from "zod";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
-import { fingerprintCanonicalValue } from "./canonical-json";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
   definitionReleaseManifestMatchesCanonicalContent,
   definitionReleaseModuleTargetsMatch,
@@ -73,7 +75,48 @@ type RestoreEvidence = StoredConsumerReleaseEvidence & {
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
   sourceContractVersion: "2.0.0" | "3.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
+  humanDraftSnapshot?: HumanDraftSnapshot | undefined;
+  humanCurrentDraft?: StoredDefinitionDraft | undefined;
 };
+
+const humanDraftSnapshotSchema = z
+  .object({
+    draftRevision: revisionSchema,
+    sourceFingerprint: fingerprintSchema,
+    anchorReleaseRevision: revisionSchema,
+  })
+  .strict();
+
+type HumanDraftSnapshot = z.infer<typeof humanDraftSnapshotSchema>;
+
+const humanRestoreDefinitionDraftCommandSchema = z
+  .object({
+    kind: z.literal("application"),
+    rootId: applicationRootIdSchema,
+    targetReleaseRevision: revisionSchema,
+    expectedDraftRevision: revisionSchema,
+    expectedSourceFingerprint: fingerprintSchema,
+    expectedPublicationAnchor: revisionSchema,
+  })
+  .strict()
+  .superRefine((command, refinement) => {
+    if (command.expectedDraftRevision >= Number.MAX_SAFE_INTEGER)
+      refinement.addIssue({
+        code: "custom",
+        path: ["expectedDraftRevision"],
+        message: "Restoring a draft requires a safe next revision",
+      });
+    if (command.targetReleaseRevision > command.expectedPublicationAnchor)
+      refinement.addIssue({
+        code: "custom",
+        path: ["targetReleaseRevision"],
+        message: "A restore target must not exceed the shown publication anchor",
+      });
+  });
+
+type HumanRestoreDefinitionDraftCommand = z.infer<
+  typeof humanRestoreDefinitionDraftCommandSchema
+>;
 
 const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
@@ -81,12 +124,16 @@ const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
     sourceFingerprint: fingerprintSchema,
     sourceContractVersion: z.enum(["2.0.0", "3.0.0"]),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
+    humanDraftSnapshot: humanDraftSnapshotSchema.optional(),
+    humanCurrentDraft: storedDefinitionDraftSchema.optional(),
   })
   .strict();
 
 type VerifiedRestoreInput = Readonly<{
+  source: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: string;
   identityRequirements: readonly unknown[];
+  humanDraftBefore?: StoredDefinitionDraft;
 }>;
 
 type RestoreAttempt =
@@ -108,6 +155,7 @@ export interface DefinitionHistoryRepository {
     context: SessionContext,
     command: RestoreDefinitionDraftCommand,
     verify: (evidence: unknown) => Promise<VerifiedRestoreInput>,
+    verifyRestored?: (draft: unknown) => Promise<StoredDefinitionDraft>,
   ): Promise<RestoreAttempt>;
 }
 
@@ -325,8 +373,33 @@ const verifyRestoreEvidence = async (
   context: SessionContext,
   command: RestoreDefinitionDraftCommand,
   catalogue: DefinitionPublicationCatalogue,
+  humanCommand?: HumanRestoreDefinitionDraftCommand,
 ): Promise<VerifiedRestoreInput> => {
   const release = parseRestoreEvidence(candidate);
+  let humanDraftBefore: StoredDefinitionDraft | undefined;
+  if (humanCommand !== undefined) {
+    const snapshot = release.humanDraftSnapshot;
+    const currentDraft = release.humanCurrentDraft;
+    if (snapshot === undefined || currentDraft === undefined)
+      throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    if (
+      context.callerKind !== "human" ||
+      currentDraft.kind !== "application" ||
+      currentDraft.organizationId !== context.organizationId ||
+      currentDraft.rootId !== humanCommand.rootId ||
+      currentDraft.draftRevision !== humanCommand.expectedDraftRevision ||
+      currentDraft.sourceFingerprint !== humanCommand.expectedSourceFingerprint ||
+      (currentDraft.publishedRevision ?? undefined) !== humanCommand.expectedPublicationAnchor ||
+      snapshot.draftRevision !== humanCommand.expectedDraftRevision ||
+      snapshot.sourceFingerprint !== humanCommand.expectedSourceFingerprint ||
+      snapshot.anchorReleaseRevision !== humanCommand.expectedPublicationAnchor ||
+      release.releaseRevision > humanCommand.expectedPublicationAnchor
+    )
+      throw new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    humanDraftBefore = currentDraft;
+  } else if (release.humanDraftSnapshot !== undefined || release.humanCurrentDraft !== undefined) {
+    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  }
   const source = release.authoredSource;
   if (
     release.organizationId !== context.organizationId ||
@@ -372,8 +445,10 @@ const verifyRestoreEvidence = async (
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   return {
+    source,
     sourceFingerprint: release.sourceFingerprint,
     identityRequirements: extractStoredSourceIdentityRequirements(source),
+    ...(humanDraftBefore === undefined ? {} : { humanDraftBefore }),
   };
 };
 
@@ -409,6 +484,47 @@ const parseRestoredDraft = (
   return draft;
 };
 
+const parseHumanRestoredDraft = (
+  candidate: unknown,
+  context: Extract<SessionContext, { callerKind: "human" }>,
+  command: HumanRestoreDefinitionDraftCommand,
+  verified: VerifiedRestoreInput,
+  before: StoredDefinitionDraft,
+): StoredDefinitionDraft => {
+  const withoutNulls = withoutOptionalNulls(candidate);
+  selectStoredDraftContract(withoutNulls);
+  const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
+  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  const draft = parsed.data;
+  if (
+    draft.kind !== "application" ||
+    before.kind !== "application" ||
+    draft.organizationId !== context.organizationId ||
+    draft.organizationId !== before.organizationId ||
+    draft.rootId !== command.rootId ||
+    draft.rootId !== before.rootId ||
+    draft.key !== before.key ||
+    draft.draftRevision !== command.expectedDraftRevision + 1 ||
+    (draft.publishedRevision ?? undefined) !== command.expectedPublicationAnchor ||
+    draft.sourceContractVersion !== verified.source.source_contract_version ||
+    canonicalJson(draft.source) !== canonicalJson(verified.source) ||
+    fingerprintCanonicalValue(draft.source) !== verified.sourceFingerprint ||
+    draft.sourceFingerprint !== verified.sourceFingerprint ||
+    draft.createdAt !== before.createdAt ||
+    draft.createdBy !== before.createdBy ||
+    draft.restoredFromReleaseRevision !== command.targetReleaseRevision ||
+    draft.restoredFromSourceFingerprint !== verified.sourceFingerprint ||
+    draft.restoredBy === undefined ||
+    draft.restoredBy.toLowerCase() !== context.organizationAccountId.toLowerCase() ||
+    draft.updatedBy.toLowerCase() !== context.organizationAccountId.toLowerCase() ||
+    draft.restoreCorrelationId !== context.correlationId ||
+    draft.restoredAt === undefined ||
+    draft.updatedAt !== draft.restoredAt
+  )
+    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  return draft;
+};
+
 const mapRepositoryFailure = (
   error: unknown,
   fallback: "DEFINITION_HISTORY_FAILED" | "DEFINITION_RESTORE_FAILED",
@@ -423,10 +539,19 @@ const mapRepositoryFailure = (
   return new DefinitionHistoryError(fallback);
 };
 
+const isOrganizationOnlyHumanContext = (
+  context: SessionContext,
+): context is Extract<SessionContext, { callerKind: "human" }> =>
+  context.callerKind === "human" &&
+  !Object.hasOwn(context, "applicationRootId") &&
+  !Object.hasOwn(context, "delegatedContext") &&
+  !Object.hasOwn(context, "supportContext");
+
 /**
- * Restoring a release writes a new draft revision, so it is a draft change: it needs
- * `definition_drafts.manage` (and `system_applications.manage` for a system application), decided
- * by the required builder authority before anything is read or written. Listing history and
+ * Restoring a release writes a new draft revision, so it is a draft change. The ordinary
+ * organization-only HUMAN Application path requires a shown draft/source/publication snapshot;
+ * the existing SYSTEM path still uses the required builder authority and its additional
+ * `system_applications.manage` permission for a platform system application. Listing history and
  * reading release metadata change nothing and stay ungated.
  */
 export const createDefinitionHistoryService = (
@@ -482,6 +607,83 @@ export const createDefinitionHistoryService = (
     contextCandidate: SessionContext,
     commandCandidate: unknown,
   ): Promise<StoredDefinitionDraft> {
+    if (asCandidate(contextCandidate)?.callerKind === "human") {
+      const context = sessionContextSchema.safeParse(contextCandidate);
+      if (!context.success || !isOrganizationOnlyHumanContext(context.data))
+        throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      const humanContext = context.data;
+      const humanCommand = humanRestoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
+      if (!humanCommand.success)
+        throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
+      if (
+        humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
+      )
+        throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      await requireBuilderAuthority(authority, {
+        kind: "draft_change",
+        rootId: humanCommand.data.rootId,
+      });
+
+      const command: RestoreDefinitionDraftCommand = {
+        kind: "application",
+        rootId: humanCommand.data.rootId,
+        targetReleaseRevision: humanCommand.data.targetReleaseRevision,
+        expectedDraftRevision: humanCommand.data.expectedDraftRevision,
+      };
+      try {
+        let verifiedRestore: VerifiedRestoreInput | undefined;
+        let verificationCallbackCount = 0;
+        let retainedDraft: StoredDefinitionDraft | undefined;
+        const attempt = await repository.restore(
+          humanContext,
+          command,
+          async (evidence) => {
+            const verified = await verifyRestoreEvidence(
+              evidence,
+              humanContext,
+              command,
+              catalogue,
+              humanCommand.data,
+            );
+            if (verified.humanDraftBefore === undefined)
+              throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+            verifiedRestore = verified;
+            return verified;
+          },
+          async (draftCandidate) => {
+            verificationCallbackCount += 1;
+            if (
+              verificationCallbackCount !== 1 ||
+              verifiedRestore?.humanDraftBefore === undefined
+            )
+              throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+            const draft = parseHumanRestoredDraft(
+              draftCandidate,
+              humanContext,
+              humanCommand.data,
+              verifiedRestore,
+              verifiedRestore.humanDraftBefore,
+            );
+            retainedDraft = draft;
+            return draft;
+          },
+        );
+        if (attempt.outcome === "not_found")
+          throw new DefinitionHistoryError("DEFINITION_RELEASE_NOT_FOUND");
+        if (attempt.outcome === "stale")
+          throw new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (
+          verificationCallbackCount !== 1 ||
+          retainedDraft === undefined ||
+          attempt.draft !== retainedDraft
+        )
+          throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+        return retainedDraft;
+      } catch (error) {
+        throw mapRepositoryFailure(error, "DEFINITION_RESTORE_FAILED");
+      }
+    }
+
     const command = restoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
     if (!command.success) throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
     const context = sessionContextSchema.safeParse(contextCandidate);

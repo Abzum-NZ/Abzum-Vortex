@@ -1,8 +1,7 @@
 import "server-only";
 
 import {
-  createHumanInstalledRuntimeContextLoader,
-  readAddressedApplicationAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
   resolvePermittedApplicationAddress,
@@ -16,13 +15,9 @@ import {
   type IdentitySession,
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { createStoredPageCapabilityService } from "@vortex/page";
 import { installedReleaseCatalogue } from "./definition-catalogue";
-import {
-  humanOrganizationRequestDependencies,
-  humanOrganizationRequestsFor,
-} from "./server-composition";
+import { humanOrganizationRequestDependencies } from "./server-composition";
 
 const unavailable = Object.freeze({ availability: "unavailable" as const });
 
@@ -52,20 +47,30 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           return unavailable;
 
         const dependencies = humanOrganizationRequestDependencies();
-        const { read } = await readAddressedApplicationAtAddress(
+        const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
           session,
           tenantShortName.data,
           organizationShortName.data,
           dependencies.identityAuthorityId,
           selector.data.applicationKey,
+          (transaction) => createDatabaseApplicationBoundReleaseSetService(
+            installedReleaseCatalogue,
+            transaction,
+          ),
         );
+        const { read, context, identity: addressIdentity } = addressed;
         if (
           read.kind !== "available" ||
+          context === undefined ||
+          addressIdentity === undefined ||
+          read.organizationId !== addressIdentity.organizationId ||
           read.tenantShortName !== tenantShortName.data ||
           read.organizationShortName !== organizationShortName.data ||
           read.applications.length !== 1
         )
           return unavailable;
+
+        const addressedIdentity = addressIdentity;
 
         const target = resolvePermittedApplicationAddress(
           read,
@@ -76,45 +81,27 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           target.kind !== "available" ||
           target.application === null ||
           target.pageKey === null ||
-          target.application.key !== selector.data.applicationKey
+          target.application.key !== selector.data.applicationKey ||
+          !sameId(target.application.applicationRootId, addressedIdentity.applicationRootId)
         )
           return unavailable;
 
         const permittedApplication = target.application;
         const selection = {
           organizationId: read.organizationId,
-          applicationRootId: permittedApplication.applicationRootId,
+          applicationRootId: addressedIdentity.applicationRootId,
         };
-        const loaded = await humanOrganizationRequestsFor(dependencies).run(
-          session,
-          selection,
-          async (transaction, scope) => {
-            if (scope.applicationRootId === undefined)
-              throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-            return createHumanInstalledRuntimeContextLoader({
-              activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-              releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                installedReleaseCatalogue,
-                transaction,
-              ),
-              scope: {
-                organizationId: scope.organizationId,
-                applicationRootId: scope.applicationRootId,
-              },
-            }).load();
-          },
-        );
-        if (loaded.kind !== "available") return unavailable;
-
-        const context = requireInstalledRuntimeContext(loaded.value);
-        const application = context.releaseSet.application;
+        const installedContext = requireInstalledRuntimeContext(context);
+        const application = installedContext.releaseSet.application;
         if (
-          !sameId(context.organizationId, read.organizationId) ||
-          !sameId(context.applicationRootId, permittedApplication.applicationRootId) ||
-          !sameId(application.organizationId, context.organizationId) ||
-          !sameId(application.rootId, context.applicationRootId) ||
+          !sameId(installedContext.organizationId, read.organizationId) ||
+          !sameId(installedContext.applicationRootId, addressedIdentity.applicationRootId) ||
+          !sameId(application.organizationId, installedContext.organizationId) ||
+          !sameId(application.rootId, installedContext.applicationRootId) ||
+          application.releaseRevision !== addressedIdentity.applicationReleaseRevision ||
+          application.definitionKey !== addressedIdentity.definitionKey ||
           application.definitionKey !== selector.data.applicationKey ||
-          application.releaseRevision !== context.applicationReleaseRevision ||
+          application.releaseRevision !== installedContext.applicationReleaseRevision ||
           application.content.name !== permittedApplication.name ||
           application.content.icon !== permittedApplication.icon
         )
@@ -124,14 +111,14 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
         if (pages.length !== 1) return unavailable;
         const page = pages[0];
         if (page === undefined) return unavailable;
-        const identity = resolveInstalledPageIdentity(context, { pageId: page.pageId });
+        const identity = resolveInstalledPageIdentity(installedContext, { pageId: page.pageId });
         if (
           identity === undefined ||
-          !sameId(identity.organizationId, context.organizationId) ||
-          !sameId(identity.applicationRootId, context.applicationRootId) ||
+          !sameId(identity.organizationId, installedContext.organizationId) ||
+          !sameId(identity.applicationRootId, installedContext.applicationRootId) ||
           !sameId(identity.requested.pageId, page.pageId) ||
           identity.requested.key !== page.key ||
-          identity.applicationReleaseRevision !== context.applicationReleaseRevision ||
+          identity.applicationReleaseRevision !== installedContext.applicationReleaseRevision ||
           identity.releaseVersion !== application.releaseVersion ||
           identity.contentFingerprint !== application.contentFingerprint ||
           identity.resolutionFingerprint !== application.resolutionFingerprint
@@ -140,7 +127,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
 
         const projected = await createStoredPageCapabilityService({
           ...dependencies,
-          context,
+          context: installedContext,
           selection: { pageId: page.pageId },
         }).project(session, selection);
         if (
@@ -148,7 +135,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           projected.value === undefined ||
           typeof projected.value.pageId !== "string" ||
           !sameId(projected.value.pageId, page.pageId) ||
-          projected.value.applicationReleaseRevision !== context.applicationReleaseRevision
+          projected.value.applicationReleaseRevision !== installedContext.applicationReleaseRevision
         )
           return unavailable;
 
@@ -161,7 +148,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           applicationKey: application.definitionKey,
           pageId: identity.requested.pageId,
           pageKey: identity.requested.key,
-          applicationReleaseRevision: context.applicationReleaseRevision,
+          applicationReleaseRevision: installedContext.applicationReleaseRevision,
           releaseVersion: application.releaseVersion,
           contentFingerprint: application.contentFingerprint,
           resolutionFingerprint: application.resolutionFingerprint,
