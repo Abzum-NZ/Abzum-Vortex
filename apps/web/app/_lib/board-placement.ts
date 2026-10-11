@@ -214,7 +214,18 @@ const metricValue = (
   if (result.value === null || result.valueCount === 0) return { kind: "empty" };
   if (field === undefined) return undefined;
 
-  switch (field.type) {
+  const fieldType =
+    field.type === "calculation"
+      ? field.settings.expression.kind === "numeric" &&
+        field.settings.evaluation === "stored" &&
+        (field.settings.resultType === "whole_number" ||
+          field.settings.resultType === "decimal_number")
+        ? field.settings.resultType
+        : undefined
+      : field.type;
+  if (fieldType === undefined) return undefined;
+
+  switch (fieldType) {
     case "text":
       return (aggregate.operation === "minimum" || aggregate.operation === "maximum") &&
         typeof result.value === "string"
