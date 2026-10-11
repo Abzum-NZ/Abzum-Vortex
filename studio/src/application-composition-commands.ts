@@ -51,8 +51,9 @@ export type StudioCompositionAddSettings = Readonly<Record<string,
   Readonly<{ kind: "text"; value: string }> | Readonly<{ kind: "boolean"; value: boolean }> |
   Readonly<{ kind: "choice"; value: string }>>>;
 export type StudioCompositionScalarSettings = Readonly<Record<string,
-  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }>>>;
-type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" }>;
+  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
+  Readonly<{ kind: "number"; value: number }>>>;
+type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" | "number" }>;
 export type StudioCompositionScalarSettingsModel =
   | Readonly<{ kind: "available"; placementAlias: string; properties: readonly ScalarProperty[];
       settings: StudioCompositionScalarSettings }>
@@ -384,6 +385,15 @@ const eligibleLayoutAddRelease = (release: PlatformBlockReleaseV2): boolean =>
   release.capabilities.accessibleName === "not_applicable" &&
   release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
 
+/** Existing fixed-slot layouts retain their children when editing declared scalar settings. */
+const eligibleLayoutSettingsRelease = (release: PlatformBlockReleaseV2): boolean =>
+  release.paletteGroup === "layout" && release.slots.length > 0 &&
+  release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
+  release.properties.every((property) => !property.required &&
+    (property.kind === "boolean" || property.kind === "choice" || property.kind === "number")) &&
+  release.capabilities.accessibleName === "not_applicable" &&
+  release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
+
 type AddTarget =
   | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot;
       layoutAllowed: boolean; replace: (slot: SourceSlot) => void }
@@ -540,7 +550,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
   if (release === undefined || !eligible(release)) return { kind: "unsupported" } as const;
-  const layoutSettings = eligibleLayoutAddRelease(release);
+  const layoutSettings = eligibleLayoutSettingsRelease(release);
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
@@ -607,18 +617,20 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
-const scalarProperty = (property: BlockPropertySchemaV2Contract): property is ScalarProperty =>
-  property.kind === "boolean" || property.kind === "choice";
+const scalarProperties = (release: PlatformBlockReleaseV2): readonly ScalarProperty[] =>
+  release.properties.filter((property): property is ScalarProperty =>
+    property.kind === "boolean" || property.kind === "choice" ||
+    (release.paletteGroup === "layout" && property.kind === "number"));
 const eligibleScalarRelease = (release: PlatformBlockReleaseV2): boolean =>
-  release.properties.some(scalarProperty) &&
+  scalarProperties(release).length > 0 &&
   ((release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
-    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutAddRelease(release));
+    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutSettingsRelease(release));
 
 /** The command supplies only editable scalars; omitted keys deliberately stay omitted. */
 const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): StudioCompositionScalarSettings => {
   const raw = object(value);
   closedPlain(raw, properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
-  const settings: Record<string, { kind: "boolean"; value: boolean } | { kind: "choice"; value: string }> = {};
+  const settings: Record<string, StudioCompositionScalarSettings[string]> = {};
   for (const property of properties) {
     if (!Object.hasOwn(raw, property.key)) continue;
     const supplied = closedPlain(raw[property.key], ["kind", "value"]);
@@ -627,6 +639,9 @@ const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): 
     else if (property.kind === "choice" && supplied.kind === "choice" && typeof supplied.value === "string" &&
       property.options.some((option) => option.key === supplied.value))
       settings[property.key] = { kind: "choice", value: supplied.value };
+    else if (property.kind === "number" && supplied.kind === "number" && typeof supplied.value === "number" &&
+      Number.isFinite(supplied.value))
+      settings[property.key] = { kind: "number", value: supplied.value };
     else return refuse();
   }
   return settings;
@@ -637,15 +652,16 @@ export const describeStudioCompositionScalarSettings = (context: StudioCompositi
   try {
     const resolved = resolveSettings(context, selection, eligibleScalarRelease);
     if (resolved.kind !== "available") return resolved;
-    const properties = resolved.release.properties.filter(scalarProperty);
+    const properties = scalarProperties(resolved.release);
     const supplied: Record<string, unknown> = {};
     for (const property of properties)
       if (Object.hasOwn(resolved.target.placement.settings, property.key))
         supplied[property.key] = resolved.target.placement.settings[property.key];
+    const settings = scalarSettings(supplied, properties);
     if (validateComponentSettings(resolved.target.placement.settings, resolved.release.properties).length > 0)
       return { kind: "invalid" };
     return { kind: "available", placementAlias: resolved.alias, properties,
-      settings: scalarSettings(supplied, properties) };
+      settings };
   } catch { return { kind: "invalid" }; }
 };
 
@@ -655,7 +671,7 @@ const applyScalarSettings = (current: StudioCompositionContext, selection: Studi
   if (input.kind !== "scalar_settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection, eligibleScalarRelease);
   if (resolved.kind !== "available") return resolved;
-  const properties = resolved.release.properties.filter(scalarProperty);
+  const properties = scalarProperties(resolved.release);
   const supplied = scalarSettings(input.settings, properties);
   const settings = { ...resolved.target.placement.settings };
   for (const property of properties) delete settings[property.key];
