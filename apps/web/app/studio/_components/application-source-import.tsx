@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { canonicalJson, sameId, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import { canonicalJson, sameId, type ApplicationSourceDocumentV2,
+  type DefinitionValidationResult } from "@vortex/contracts";
 import { reviewStudioApplicationSource } from "../actions";
 import {
   maximumApplicationSourceImportBytes,
@@ -17,6 +18,12 @@ type ReviewedSource = Readonly<{
   source: ApplicationSourceDocumentV2; fingerprint: string;
 }>;
 
+type SourceDiagnostics = Readonly<{
+  snapshot: StudioApplicationSourceImportSnapshot;
+  text: string; epoch: number;
+  validation: DefinitionValidationResult;
+}>;
+
 type Props = Readonly<{
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
@@ -28,10 +35,16 @@ type Props = Readonly<{
 const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
 const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
 
+const candidateFingerprint = async (source: ApplicationSourceDocumentV2): Promise<string> => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(source)));
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+};
+
 export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChange, onApply }: Props) {
   const [text, setText] = useState("");
   const [operation, setOperation] = useState<"reading" | "reviewing" | null>(null);
   const [reviewed, setReviewed] = useState<ReviewedSource | null>(null);
+  const [diagnostics, setDiagnostics] = useState<SourceDiagnostics | null>(null);
   const [message, setMessage] = useState("");
   const raw = useRef("");
   const busy = useRef<"reading" | "reviewing" | null>(null);
@@ -41,6 +54,18 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
   const pendingCallback = useRef(onPendingChange);
   pendingCallback.current = onPendingChange;
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const currentDisabled = useRef(disabled);
+  currentDisabled.current = disabled;
+  const currentSnapshotReader = useRef(readSnapshot);
+  currentSnapshotReader.current = readSnapshot;
+
+  // Suppress a previous result in the same render that changes the editor frame.
+  const diagnosticsCurrent = diagnostics !== null && active.current && !disabled &&
+    diagnostics.epoch === epoch.current && diagnostics.text === raw.current &&
+    sameStudioApplicationSourceImportSnapshot(diagnostics.snapshot, readSnapshot());
+  useEffect(() => {
+    if (diagnostics !== null && !diagnosticsCurrent) setDiagnostics(null);
+  }, [diagnostics, diagnosticsCurrent]);
 
   useEffect(() => {
     active.current = true;
@@ -57,6 +82,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     epoch.current += 1;
     acceptedReview.current = null;
     setReviewed(null);
+    setDiagnostics(null);
     busy.current = null;
     setOperation(null);
     raw.current = value;
@@ -70,13 +96,17 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     event.target.value = "";
     const snapshot = readSnapshot();
     if (file === undefined || disabled || snapshot === null) return;
+    const requestEpoch = ++epoch.current;
+    acceptedReview.current = null;
+    setReviewed(null);
+    setDiagnostics(null);
+    busy.current = null;
+    setOperation(null);
+    reportPending();
     if (file.size > maximumApplicationSourceImportBytes) {
       setMessage("The JSON source must be at most 2 MiB. Your existing input is preserved.");
       return;
     }
-    const requestEpoch = ++epoch.current;
-    acceptedReview.current = null;
-    setReviewed(null);
     busy.current = "reading";
     setOperation("reading");
     reportPending();
@@ -111,30 +141,34 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
   const review = async () => {
     const snapshot = readSnapshot();
     if (disabled || busy.current !== null || snapshot === null) return;
-    const submittedText = raw.current;
-    const candidate = readStudioApplicationSourceImport(submittedText, snapshot.key, snapshot.rootAlias);
-    if (candidate.kind !== "valid") { setMessage(candidate.message); return; }
     const requestEpoch = ++epoch.current;
     acceptedReview.current = null;
     setReviewed(null);
+    setDiagnostics(null);
+    const submittedText = raw.current;
+    const candidate = readStudioApplicationSourceImport(submittedText, snapshot.key, snapshot.rootAlias);
+    if (candidate.kind !== "valid") { setMessage(candidate.message); return; }
     busy.current = "reviewing";
     setOperation("reviewing");
     reportPending();
     setMessage("Reviewing the source against the current protected draft…");
+    const responseIsCurrent = () => active.current && !currentDisabled.current &&
+      requestEpoch === epoch.current && raw.current === submittedText &&
+      sameStudioApplicationSourceImportSnapshot(snapshot, currentSnapshotReader.current());
     try {
       const response = await reviewStudioApplicationSource(snapshot.organizationId, {
         rootId: snapshot.rootId, expectedDraftRevision: snapshot.draftRevision,
         expectedSavedSourceFingerprint: snapshot.savedSourceFingerprint, source: candidate.source,
       });
-      if (!active.current || requestEpoch !== epoch.current || raw.current !== submittedText) return;
-      if (!sameStudioApplicationSourceImportSnapshot(snapshot, readSnapshot())) {
+      if (!active.current || currentDisabled.current || requestEpoch !== epoch.current || raw.current !== submittedText) return;
+      if (!responseIsCurrent()) {
         setMessage("The editor changed. Review again; your JSON input is preserved.");
         return;
       }
       const parsed = studioApplicationSourceReviewResultSchema.safeParse(response);
       if (!parsed.success) { setMessage("The review could not be verified. Your input is preserved."); return; }
       const result = parsed.data;
-      if (result.kind !== "available") {
+      if (result.kind !== "available" && result.kind !== "validation_failed") {
         setMessage(result.kind === "conflict" ? "The saved draft changed. Reopen explicitly before reviewing again."
           : result.kind === "invalid" ? "The source failed draft validation. Your input is preserved."
             : result.kind === "refused" ? "The current draft read was refused. Your input is preserved."
@@ -143,8 +177,27 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       }
       if (!sameId(result.organizationId, snapshot.organizationId) || !sameId(result.rootId, snapshot.rootId) ||
         result.key !== snapshot.key || result.rootAlias !== snapshot.rootAlias ||
-        result.draftRevision !== snapshot.draftRevision || result.savedSourceFingerprint !== snapshot.savedSourceFingerprint ||
-        result.source.key !== snapshot.key || result.source.root_alias !== snapshot.rootAlias ||
+        result.draftRevision !== snapshot.draftRevision || result.savedSourceFingerprint !== snapshot.savedSourceFingerprint) {
+        setMessage("The review does not match this source and draft. Your input is preserved.");
+        return;
+      }
+      const submittedFingerprint = await candidateFingerprint(candidate.source);
+      if (!responseIsCurrent()) return;
+      if (result.candidateSourceFingerprint !== submittedFingerprint) {
+        setMessage("The review does not match the submitted source. Your input is preserved.");
+        return;
+      }
+      if (result.kind === "validation_failed") {
+        if (!result.validation.errors.every((error) => error.location === undefined ||
+          (error.location.documentKind === "application" && error.location.documentKey === snapshot.key))) {
+          setMessage("The validation locations do not match this Application. Your input is preserved.");
+          return;
+        }
+        setDiagnostics({ snapshot, text: submittedText, epoch: requestEpoch, validation: result.validation });
+        setMessage("The source failed semantic validation. Resolve the displayed issues and review again. Your input is preserved.");
+        return;
+      }
+      if (result.source.key !== snapshot.key || result.source.root_alias !== snapshot.rootAlias ||
         canonicalJson(result.source) !== canonicalJson(candidate.source)) {
         setMessage("The review does not match this source and draft. Your input is preserved.");
         return;
@@ -155,7 +208,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       setReviewed(next);
       setMessage("Source reviewed for draft editing. Applying it changes local history only.");
     } catch {
-      if (active.current && epoch.current === requestEpoch)
+      if (responseIsCurrent())
         setMessage("The review could not be completed. Your input is preserved.");
     } finally {
       if (active.current && epoch.current === requestEpoch) {
@@ -211,6 +264,18 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
         <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.snapshot.source, null, 2)}</pre></details>
       <details open><summary>Complete reviewed replacement source</summary>
         <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.source, null, 2)}</pre></details>
+    </div>}
+    {diagnosticsCurrent && diagnostics !== null && <div role="status" aria-live="polite" className="space-y-2">
+      <h3 className="font-semibold">Source validation issues</h3>
+      <ul className="space-y-3">
+        {diagnostics.validation.errors.map((error, index) => <li key={`${error.code}:${index}`}>
+          <p className="break-all">Application document: {error.location?.documentKey ?? diagnostics.snapshot.key}
+            {error.location?.segments.map((segment, segmentIndex) =>
+              <span key={segmentIndex}> · {segment.kind}: {segment.key}</span>)}</p>
+          <p><code>{error.code}</code>: {error.message}</p>
+          <p>{error.guidance}</p>
+        </li>)}
+      </ul>
     </div>}
     <div className="flex flex-wrap gap-2">
       <button className={buttonClass} type="button" disabled={disabled || operation !== null || text.length === 0}
