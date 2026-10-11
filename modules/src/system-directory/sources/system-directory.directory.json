@@ -2009,7 +2009,8 @@
           "role_kind",
           "privilege_classification",
           "assignment_policy",
-          "accepted_permission_count"
+          "accepted_permission_count",
+          "revision"
         ],
         "filter": null,
         "group_by": [],
@@ -2057,7 +2058,12 @@
           "starts_at",
           "expires_at",
           "state",
-          "temporal_state"
+          "temporal_state",
+          "role_id",
+          "role_key",
+          "organization_account_id",
+          "group_id",
+          "revision"
         ],
         "filter": null,
         "group_by": [],
