@@ -17,6 +17,7 @@ import {
   createActiveInstallationBundleRepository,
   activeInstallationBundleStateSchema,
   type ActiveInstallationBundleState,
+  type InstallationRuntimeBundleObservationObserver,
 } from "@vortex/module";
 import { z } from "zod";
 import { buildInstallationRuntimeBundleWriteCommand } from "./installation-runtime-bundle";
@@ -162,6 +163,7 @@ const identityMatchesReleaseSet = (
 export type HumanInstalledPageBundleContextDependencies =
   Omit<HumanInstalledRuntimeContextDependencies, "activeInstallationReader"> & Readonly<{
     transaction: RequestDatabaseTransaction;
+    observeBundleRead?: InstallationRuntimeBundleObservationObserver;
     /** The protected, request-bound Definition consumer used only on a genuine cold repair. */
     releaseSetReader: HumanInstalledRuntimeContextDependencies["releaseSetReader"];
   }>;
@@ -170,7 +172,10 @@ export type HumanInstalledPageBundleContextDependencies =
 export const createHumanInstalledPageBundleContextLoader = (
   dependencies: HumanInstalledPageBundleContextDependencies,
 ) => {
-  const repository = createActiveInstallationBundleRepository(dependencies.transaction);
+  const repository = createActiveInstallationBundleRepository(
+    dependencies.transaction,
+    dependencies.observeBundleRead,
+  );
   let compositions: ReadonlyMap<string, ResolvedPageComposition> | undefined;
   let bundleIdentityEvidence: InstalledPageBundleIdentityEvidence | undefined;
   const loader = createHumanInstalledRuntimeContextLoader({
@@ -257,10 +262,25 @@ export const createHumanInstalledPageBundleContextLoader = (
 
   return Object.freeze({
     async load(): Promise<InstalledRuntimeContext> {
-      const context = await loader.load();
-      if (compositions === undefined || bundleIdentityEvidence === undefined)
-        throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
-      return retainPageCompositions(context, compositions, bundleIdentityEvidence);
+      const observe = (event: Parameters<InstallationRuntimeBundleObservationObserver>[0]): void => {
+        try {
+          dependencies.observeBundleRead?.(event);
+        } catch {
+          // Optional observation must never change the protected read result.
+        }
+      };
+      observe("LOAD_STARTED");
+      try {
+        const context = await loader.load();
+        if (compositions === undefined || bundleIdentityEvidence === undefined)
+          throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
+        const retained = retainPageCompositions(context, compositions, bundleIdentityEvidence);
+        observe("LOAD_COMPLETED");
+        return retained;
+      } catch (error) {
+        observe("LOAD_FAILED");
+        throw error;
+      }
     },
   });
 };
