@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import {
   canonicalJson,
   installationPreparedRecordAccessPlanSchema,
@@ -32,6 +33,20 @@ const coldSourceSchema = z.object({
   sourceManifest: installationRuntimeBundleSourceManifestSchema,
   preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
 }).passthrough();
+
+const warmBundleIntegrityValidationVersion = 1;
+const warmBundleIntegrityProofLimit = 128;
+// These digests prove immutable content equality, never current Human authority.
+const warmBundleIntegrityProofs = new Set<string>();
+
+const retainWarmBundleIntegrityProof = (digest: string): void => {
+  if (warmBundleIntegrityProofs.has(digest)) return;
+  if (warmBundleIntegrityProofs.size >= warmBundleIntegrityProofLimit) {
+    const oldest = warmBundleIntegrityProofs.values().next().value;
+    if (oldest !== undefined) warmBundleIntegrityProofs.delete(oldest);
+  }
+  warmBundleIntegrityProofs.add(digest);
+};
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
   organizationId: ActiveInstallationBundleState["identity"]["organizationId"];
@@ -208,13 +223,21 @@ export const createHumanInstalledPageBundleContextLoader = (
           const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse(
             bundleIndex.sourceManifest,
           );
-          const expected = buildInstallationRuntimeBundleWriteCommand({
-            releaseSet,
-            sourceManifest,
-            preparedRecordAccessPlan: prepared.data,
-          });
-          compareSections(storedSections, expected.sections);
+          const integrityProof = createHash("sha256").update(canonicalJson({
+            validationContractVersion: warmBundleIntegrityValidationVersion,
+            index: bundleIndex,
+          })).digest("hex");
+          const integrityAlreadyProven = warmBundleIntegrityProofs.has(integrityProof);
+          if (!integrityAlreadyProven) {
+            const expected = buildInstallationRuntimeBundleWriteCommand({
+              releaseSet,
+              sourceManifest,
+              preparedRecordAccessPlan: prepared.data,
+            });
+            compareSections(storedSections, expected.sections);
+          }
           compositions = pageCompositions(releaseSet, storedSections);
+          if (!integrityAlreadyProven) retainWarmBundleIntegrityProof(integrityProof);
           bundleIdentityEvidence = deepFreeze({
             organizationId: state.identity.organizationId,
             applicationRootId: state.identity.applicationRootId,
