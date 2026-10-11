@@ -11,10 +11,12 @@ import {
 } from "@vortex/app";
 import {
   applicationRootIdSchema,
+  moduleRootIdSchema,
   type IdentityAuthorityId,
 } from "@vortex/contracts";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
+  createDatabasePreparedInstallationRuntimeSourceService,
   resolveModuleContributions,
 } from "@vortex/definition";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
@@ -66,6 +68,18 @@ const coordinatorDependencies = (
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
+  preparedRuntimeSource: (transaction, input) => {
+    const moduleBindings = input.moduleBindings.map((binding) => {
+      const parsedModuleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
+      if (!parsedModuleRootId.success)
+        throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+      return { ...binding, moduleRootId: parsedModuleRootId.data };
+    });
+    return createDatabasePreparedInstallationRuntimeSourceService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read({ ...input, moduleBindings });
+  },
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {
@@ -75,8 +89,9 @@ const release = (facts: InstallFacts, key: string): PublishedRelease => {
 };
 
 /**
- * Prepares one exact release and stores the initial record-type lifecycle policies the activation
- * gate requires. A release that is already active is left alone.
+ * Prepares one exact release, stores its source-bound runtime bundle, and then stores the initial
+ * record-type lifecycle policies the activation gate requires. A release that is already active is
+ * left alone.
  */
 const prepareRelease = async (
   facts: InstallFacts,
@@ -155,3 +170,4 @@ export const installApplications = async (
   facts.state.setupCompleted = true;
   facts.state.save();
 };
+

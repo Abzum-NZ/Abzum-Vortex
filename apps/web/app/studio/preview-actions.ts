@@ -6,7 +6,7 @@ import {
   type StudioApplicationPreviewResult,
 } from "../_lib/studio-application-preview";
 
-/** Returns an inert artifact for the saved homepage, never browser source or unsaved edits. */
+/** Returns an inert artifact for a selected saved page, never browser source or unsaved edits. */
 export async function previewStudioApplicationHomepage(
   organizationId: string,
   candidate: unknown,

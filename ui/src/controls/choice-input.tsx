@@ -13,7 +13,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from "../components/combobox";
-import { Field, FieldLabel } from "../components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { RadioGroup, RadioGroupItem } from "../components/radio-group";
 import {
   Select,
@@ -176,20 +176,19 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const ariaRequired = required || described["aria-required"] === true;
 
   return (
-    <div
+    <Field
       data-vortex-control="choice-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
       data-vortex-searchable={searchable ? "true" : "false"}
-      className="vortex-field"
     >
       {radio ? (
-        <fieldset disabled={disabled}>
-          <legend id={ids.label} className="vortex-field-label">
+        <FieldSet disabled={disabled}>
+          <FieldLegend id={ids.label} variant="label">
             <FieldLabelText label={label} required={required} />
-          </legend>
+          </FieldLegend>
           <RadioGroup
             name={ids.control}
             value={permittedSelected ?? ""}
@@ -215,12 +214,12 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
               );
             })}
           </RadioGroup>
-        </fieldset>
+        </FieldSet>
       ) : searchable ? (
         <>
-          <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
+          <FieldLabel id={ids.label} htmlFor={ids.control}>
             <FieldLabelText label={label} required={required} />
-          </label>
+          </FieldLabel>
           <Combobox
             items={options}
             value={selectedOption}
@@ -293,9 +292,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
         </>
       ) : (
         <>
-          <label id={ids.label} htmlFor={ids.control} className="vortex-field-label">
+          <FieldLabel id={ids.label} htmlFor={ids.control}>
             <FieldLabelText label={label} required={required} />
-          </label>
+          </FieldLabel>
           <Select
             items={[
               { value: null, label: placeholder },
@@ -340,6 +339,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
         note={note}
         draftFeedback={draftFeedback}
       />
-    </div>
+    </Field>
   );
 }
