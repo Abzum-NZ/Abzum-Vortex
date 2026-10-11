@@ -543,13 +543,27 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
-  const page = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
+  const ordinaryPage = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
     candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
-  if (page === undefined || (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
-    target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
+  // Settings alone may edit one actual declared step region; it never becomes an ordinary main region.
+  const guidedPages = source.body.pages.flatMap((candidate) => {
+    if (candidate.type !== "guided_form" || candidate.composition.shell_kind !== "default") return [];
+    const composition = candidate.composition;
+    return candidate.steps.filter((step) => composition.step_content[step.id] === target.region.slot)
+      .map(() => candidate);
+  });
+  const guidedPage = guidedPages.length === 1 ? guidedPages[0] : undefined;
+  const page = ordinaryPage ?? guidedPage;
+  const guided = ordinaryPage === undefined && guidedPage !== undefined;
+  if (page === undefined || (!guided &&
+    ((page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
+      target.region.ordinaryMain !== true)) ||
+    source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
-  if (release === undefined || !eligible(release)) return { kind: "unsupported" } as const;
+  if (release === undefined || !eligible(release) ||
+    (guided && (release.paletteGroup !== "content" || release.slots.length !== 0)))
+    return { kind: "unsupported" } as const;
   const layoutSettings = eligibleLayoutSettingsRelease(release);
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
