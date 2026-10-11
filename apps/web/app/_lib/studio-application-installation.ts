@@ -66,6 +66,7 @@ import {
   createDatabaseApplicationBoundReleaseSetService,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseFirstInstallApplicationReleaseSetService,
+  createDatabasePreparedInstallationRuntimeSourceService,
   deriveBuilderRequirements,
   readApplicationDefinitionDraft,
   resolveModuleContributions,
@@ -2028,6 +2029,18 @@ const firstInstallCoordinator = (
       expectedReleaseSet,
       (prepared) => { preparedRegistration = prepared; },
     ),
+    preparedRuntimeSource: (transaction, input) => {
+      const moduleBindings = input.moduleBindings.map((binding) => {
+        const moduleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
+        if (!moduleRootId.success)
+          throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_FAILED");
+        return { ...binding, moduleRootId: moduleRootId.data };
+      });
+      return createDatabasePreparedInstallationRuntimeSourceService(
+        installedReleaseCatalogue,
+        transaction,
+      ).read({ ...input, moduleBindings });
+    },
   });
 };
 
