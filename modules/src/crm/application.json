@@ -3562,6 +3562,11 @@
                 "release_version": "1.0.0"
             },
             "view_permission": "application.crm.opportunity.mark_won",
+            "visibility_condition": {
+                "field": "vortex.crm.opportunities:opportunity.stage",
+                "operator": "equals",
+                "value": "negotiation"
+            },
             "settings": {
                 "label": {
                     "kind": "text",

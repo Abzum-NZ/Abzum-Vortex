@@ -58,7 +58,7 @@ export const createApplicationInstallManifest = (
     id,
     name: application.content.name,
     short_name: application.content.name,
-    start_url: `${id}/_install`,
+    start_url: `${id}/`,
     scope: `${id}/`,
     icons: Object.freeze([Object.freeze({ src: iconDataUri, type: "image/svg+xml" as const,
       sizes: "any" as const, purpose: "any" as const })]),

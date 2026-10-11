@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import {
   applicationSourceDocumentV2Schema,
   canonicalJson,
@@ -8,6 +9,7 @@ import {
   PLATFORM_THEME_RELEASE_2_0_0,
   PLATFORM_THEME_RELEASE_3_0_0,
   sourceThemeTokenValueV2Schema,
+  translateDefinitionRuleFailures,
   type ApplicationContentV2,
 } from "@vortex/contracts";
 import { fingerprintCanonicalValue, materialiseApplicationThemeV2, validateDefinitionSource } from "@vortex/definition";
@@ -48,13 +50,24 @@ export async function reviewStudioApplicationSource(
       return { kind: "conflict" };
     const source = request.data.source;
     if (source.key !== draft.key || source.root_alias !== draft.source.root_alias ||
-      new TextEncoder().encode(canonicalJson(source)).byteLength > maximumApplicationSourceImportBytes ||
-      !validateDefinitionSource(source).valid) return { kind: "invalid" };
-    return studioApplicationSourceReviewResultSchema.parse({
-      kind: "available", organizationId: draft.organizationId, rootId: draft.rootId,
+      new TextEncoder().encode(canonicalJson(source)).byteLength > maximumApplicationSourceImportBytes)
+      return { kind: "invalid" };
+    const binding = {
+      organizationId: draft.organizationId, rootId: draft.rootId,
       key: draft.key, rootAlias: draft.source.root_alias, draftRevision: draft.draftRevision,
       savedSourceFingerprint: draft.sourceFingerprint,
-      candidateSourceFingerprint: fingerprintCanonicalValue(source), source,
+      candidateSourceFingerprint: fingerprintCanonicalValue(source),
+    };
+    const validation = validateDefinitionSource(source);
+    if (!validation.valid) return studioApplicationSourceReviewResultSchema.parse({
+      kind: "validation_failed", ...binding,
+      validation: translateDefinitionRuleFailures(validation.failures, {
+        correlationId: randomUUID(),
+        rootLocation: { documentKind: "application", documentKey: draft.key, segments: [] },
+      }),
+    });
+    return studioApplicationSourceReviewResultSchema.parse({
+      kind: "available", ...binding, source,
     });
   } catch { return { kind: "temporarily_unavailable" }; }
 }
