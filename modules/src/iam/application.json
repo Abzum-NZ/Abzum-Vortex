@@ -78,7 +78,7 @@
         "administrative": true,
         "record_scope": { "routes": [{ "kind": "all_records" }] },
         "field_policy": {
-          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count"],
+          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count", "revision"],
           "changeable_fields": []
         }
       },
@@ -120,7 +120,7 @@
         "administrative": true,
         "record_scope": { "routes": [{ "kind": "all_records" }] },
         "field_policy": {
-          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state", "role_id", "role_key", "organization_account_id", "group_id", "revision"],
           "changeable_fields": []
         }
       },
@@ -1366,6 +1366,19 @@
                             "value": "Accepted permissions"
                           }
                         }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role.revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role revision"
+                          }
+                        }
                       }
                     ]
                   },
@@ -2503,6 +2516,71 @@
                           "label": {
                             "kind": "text",
                             "value": "Temporal state"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.role_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.role_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role key"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.organization_account_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Organisation account ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.group_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Group ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Assignment revision"
                           }
                         }
                       }
