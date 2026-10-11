@@ -50,9 +50,34 @@ const sameInputs = (left: LayoutInputs, right: LayoutInputs): boolean =>
 const sameSettings = (left: StudioCompositionTextSettings, right: StudioCompositionTextSettings): boolean =>
   Object.keys(left).length === Object.keys(right).length && Object.keys(left).every((key) =>
     Object.hasOwn(right, key) && left[key]?.value === right[key]?.value);
-const sameScalarSettings = (left: StudioCompositionScalarSettings, right: StudioCompositionScalarSettings): boolean =>
+type ScalarInputs = Readonly<Record<string,
+  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
+  Readonly<{ kind: "number"; value: string }>>>;
+const scalarInputsFor = (settings: StudioCompositionScalarSettings): ScalarInputs => {
+  const inputs: Record<string, ScalarInputs[string]> = {};
+  for (const [key, value] of Object.entries(settings))
+    inputs[key] = value.kind === "number" ? { kind: "number", value: String(value.value) } : value;
+  return inputs;
+};
+const sameScalarInputs = (left: ScalarInputs, right: ScalarInputs): boolean =>
   Object.keys(left).length === Object.keys(right).length && Object.keys(left).every((key) =>
     Object.hasOwn(right, key) && left[key]?.kind === right[key]?.kind && left[key]?.value === right[key]?.value);
+const parseScalarInputs = (inputs: ScalarInputs): StudioCompositionScalarSettings | undefined => {
+  const settings: Record<string, StudioCompositionScalarSettings[string]> = {};
+  for (const [key, input] of Object.entries(inputs)) {
+    if (input.kind !== "number") {
+      settings[key] = input;
+      continue;
+    }
+    const raw = input.value.trim();
+    // Keep empty, malformed and non-finite buffers distinct from omission and zero.
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)) return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return undefined;
+    settings[key] = { kind: "number", value };
+  }
+  return settings;
+};
 const fieldClass = "w-full rounded border border-border bg-background px-3 py-2";
 const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -225,8 +250,8 @@ function PlacementCompositionEditor(props: Props) {
   const settingsSelection = useRef(selectionKey);
   const scalarModel = useMemo(() => describeStudioCompositionScalarSettings(props.context, props.selection),
     [props.context, props.selection]);
-  const [scalarInputs, setScalarInputs] = useState<StudioCompositionScalarSettings>(() =>
-    scalarModel.kind === "available" ? scalarModel.settings : {});
+  const [scalarInputs, setScalarInputs] = useState<ScalarInputs>(() =>
+    scalarModel.kind === "available" ? scalarInputsFor(scalarModel.settings) : {});
   const scalarPending = useRef(false);
   const scalarContext = useRef(props.context);
   const scalarSelection = useRef(selectionKey);
@@ -269,7 +294,7 @@ function PlacementCompositionEditor(props: Props) {
   // Scalar inputs share the accepted source/selection lifetime, not a breakpoint or disabled state.
   useEffect(() => {
     if (scalarContext.current === props.context && scalarSelection.current === selectionKey) return;
-    setScalarInputs(scalarModel.kind === "available" ? scalarModel.settings : {});
+    setScalarInputs(scalarModel.kind === "available" ? scalarInputsFor(scalarModel.settings) : {});
     scalarContext.current = props.context;
     scalarSelection.current = selectionKey;
     scalarPending.current = false;
@@ -287,7 +312,8 @@ function PlacementCompositionEditor(props: Props) {
   const dirty = !sameInputs(inputs, baseline);
   const moveDirty = destinationKey !== "";
   const settingsDirty = settingsModel.kind === "available" && !sameSettings(settingsInputs, settingsModel.settings);
-  const scalarDirty = scalarModel.kind === "available" && !sameScalarSettings(scalarInputs, scalarModel.settings);
+  const scalarDirty = scalarModel.kind === "available" &&
+    !sameScalarInputs(scalarInputs, scalarInputsFor(scalarModel.settings));
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const update = (next: LayoutInputs) => {
@@ -399,10 +425,10 @@ function PlacementCompositionEditor(props: Props) {
         : "No text change was applied. Use valid declared text within its limits. Your inputs are preserved.");
   };
 
-  const updateScalars = (next: StudioCompositionScalarSettings) => {
+  const updateScalars = (next: ScalarInputs) => {
     if (props.disabled || pending.current || movePending.current || settingsPending.current || scalarModel.kind !== "available" ||
       scalarContext.current !== props.context || scalarSelection.current !== selectionKey) return;
-    scalarPending.current = !sameScalarSettings(next, scalarModel.settings);
+    scalarPending.current = !sameScalarInputs(next, scalarInputsFor(scalarModel.settings));
     props.onPendingChange(scalarPending.current || pending.current || movePending.current || settingsPending.current);
     setScalarInputs(next);
     setMessage("");
@@ -417,11 +443,16 @@ function PlacementCompositionEditor(props: Props) {
       setMessage("The draft or selection changed. Your scalar inputs are preserved.");
       return;
     }
-    const result = props.onCommand(expected, expectedSelection, { kind: "scalar_settings", settings: scalarInputs });
+    const settings = parseScalarInputs(scalarInputs);
+    if (settings === undefined) {
+      setMessage("Supply a finite decimal number for each numeric setting. Your inputs are preserved.");
+      return;
+    }
+    const result = props.onCommand(expected, expectedSelection, { kind: "scalar_settings", settings });
     if (result === "applied") {
       scalarPending.current = false;
       props.onPendingChange(pending.current || movePending.current || settingsPending.current);
-      setMessage("Boolean and choice settings applied to one local history entry. Save to persist them.");
+      setMessage("Declared settings applied to one local history entry. Save to persist them.");
     } else setMessage(result === "stale" ? "The draft or selection changed. Your scalar inputs are preserved."
       : result === "unsupported" ? "These settings are unavailable for this placement. Your inputs are preserved."
         : "No scalar change was applied. Supply valid declared values and required fields. Your inputs are preserved.");
@@ -567,15 +598,16 @@ function PlacementCompositionEditor(props: Props) {
       </div>
       <p className="text-sm">Omitted text stays omitted until supplied. Apply and keyboard submission use one guarded command. Discard changes only these inputs; Save remains explicit.</p>
       {settingsDirty && <p role="status">Apply or discard text inputs before changing layout, destination, order, breakpoint or removing this placement.</p>}
-    </form> : <p role="status">Text settings are available only for supported released presentation placements in private list, detail or dashboard main regions.</p>}
+    </form> : <p role="status">Text settings are available only for supported released presentation placements in private list, detail or dashboard main or Application-shell content regions, or guided page content using the default shell.</p>}
     {scalarModel.kind === "available" && <form className="space-y-3" onSubmit={applyScalars}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || settingsDirty}>
-        <legend className="font-medium">Declared Boolean and choice settings</legend>
+        <legend className="font-medium">Declared settings</legend>
         {scalarModel.properties.map((property) => {
           const supplied = Object.hasOwn(scalarInputs, property.key) ? scalarInputs[property.key] : undefined;
           const canOmit = !property.required || property.defaultValue !== undefined;
           const defaultValue = property.defaultValue;
           const defaultLabel = defaultValue?.kind === "boolean" ? String(defaultValue.value)
+            : defaultValue?.kind === "number" ? String(defaultValue.value)
             : defaultValue?.kind === "choice" && property.kind === "choice"
               ? property.options.find((option) => option.key === defaultValue.value)?.label : undefined;
           return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
@@ -587,7 +619,8 @@ function PlacementCompositionEditor(props: Props) {
               disabled={!canOmit} onChange={(event) => {
                 const next = { ...scalarInputs };
                 if (event.target.checked) next[property.key] = property.kind === "boolean"
-                  ? { kind: "boolean", value: false } : { kind: "choice", value: "" };
+                  ? { kind: "boolean", value: false } : property.kind === "number"
+                    ? { kind: "number", value: "" } : { kind: "choice", value: "" };
                 else delete next[property.key];
                 updateScalars(next);
               }} />Supply this setting</label>
@@ -604,16 +637,27 @@ function PlacementCompositionEditor(props: Props) {
                 }}><option value="">Choose a declared value</option>
                   {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
                 </select></label>}
+            {property.kind === "number" && <p className="text-sm">
+              {property.integer ? "Whole numbers only." : "Fractional numbers are allowed."}
+              {property.minimum !== undefined && ` Minimum: ${property.minimum}.`}
+              {property.maximum !== undefined && ` Maximum: ${property.maximum}.`}
+            </p>}
+            {property.kind === "number" && supplied?.kind === "number" &&
+              <label className="block space-y-1"><span>{property.label} value</span>
+                <input className={fieldClass} type="text" inputMode={property.integer ? "numeric" : "decimal"}
+                  value={supplied.value} onChange={(event) => updateScalars({ ...scalarInputs,
+                    [property.key]: { kind: "number", value: event.target.value } })} />
+              </label>}
             {property.help !== undefined && <p className="text-sm">{property.help}</p>}
           </fieldset>;
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
         <button type="submit" className={buttonClass}
-          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply Boolean and choice settings</button>
+          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply declared settings</button>
         <button type="button" className={buttonClass}
           disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}
-          onClick={() => updateScalars(scalarModel.settings)}>Discard scalar inputs</button>
+          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard scalar inputs</button>
       </div>
       <p className="text-sm">Supplied false is an explicit value. Declared defaults are shown without writing them into omitted settings. Apply or Enter uses one guarded command; Save remains explicit.</p>
       {scalarDirty && <p role="status">Apply or discard scalar inputs before changing text, layout, destination, order, breakpoint or removing this placement.</p>}
