@@ -536,6 +536,50 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
+/** Named content settings require the actual shell reservation and fixed-slot ancestry. */
+const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: Target) => {
+  const matches: { page: ApplicationSourceDocumentV2["body"]["pages"][number];
+    shellAlias: string; slotAlias: string }[] = [];
+  for (const page of source.body.pages) {
+    if (page.type === "guided_form" || page.composition.shell_kind !== "application") continue;
+    for (const [slotAlias, slot] of Object.entries(page.composition.content))
+      if (slot === target.region.slot) matches.push({ page, shellAlias: page.composition.shell, slotAlias });
+  }
+  if (matches.length !== 1) return undefined;
+  const match = matches[0]!;
+  if (match.page.type !== "list" && match.page.type !== "detail" && match.page.type !== "dashboard")
+    return undefined;
+  const shells = source.body.shells.filter((shell) => shell.id === match.shellAlias);
+  if (shells.length !== 1) return undefined;
+  const shell = shells[0]!;
+  const bindings = shell.content_slots.filter((binding) => binding.id === match.slotAlias);
+  if (bindings.length !== 1 || !manifestMatches(source, shell.layout)) return undefined;
+  const binding = bindings[0]!;
+  // Validate the complete original shell, including its required-but-empty reservations.
+  bridge.toPuckShell(shell);
+  const parents: SourcePlacement[] = [];
+  const visit = (slot: SourceSlot): void => {
+    for (const [alias, placement] of Object.entries(slot.placements)) {
+      const release = releaseFor(placement) ?? refuse();
+      if (alias === binding.parent_placement) parents.push(placement);
+      for (const declaration of release.slots) {
+        const child = placement.slots[declaration.key];
+        if (declaration.repeats === undefined && child !== undefined) visit(child);
+      }
+    }
+  };
+  visit(shell.layout);
+  if (parents.length !== 1 || parents[0] !== target.region.parent) return undefined;
+  const declarations = releaseFor(parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
+  if (declarations?.length !== 1 || declarations[0]!.repeats !== undefined) return undefined;
+  const declaration = declarations[0]!;
+  if (Object.values(target.region.slot.placements).some((placement) => {
+    const release = releaseFor(placement);
+    return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup);
+  })) return undefined;
+  return match.page;
+};
+
 /** Setting changes retain identity, so Flow references and required content do not block them. */
 const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
   eligible: (release: PlatformBlockReleaseV2) => boolean = eligibleAddRelease) => {
@@ -553,16 +597,19 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
       .map(() => candidate);
   });
   const guidedPage = guidedPages.length === 1 ? guidedPages[0] : undefined;
-  const page = ordinaryPage ?? guidedPage;
+  const namedPage = ordinaryPage === undefined && guidedPage === undefined
+    ? ordinaryNamedSettingsPage(source, target) : undefined;
+  const page = ordinaryPage ?? guidedPage ?? namedPage;
   const guided = ordinaryPage === undefined && guidedPage !== undefined;
-  if (page === undefined || (!guided &&
+  const named = namedPage !== undefined;
+  if (page === undefined || (!guided && !named &&
     ((page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
       target.region.ordinaryMain !== true)) ||
     source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
   const release = releaseFor(target.placement);
   if (release === undefined || !eligible(release) ||
-    (guided && (release.paletteGroup !== "content" || release.slots.length !== 0)))
+    ((guided || named) && (release.paletteGroup !== "content" || release.slots.length !== 0)))
     return { kind: "unsupported" } as const;
   const layoutSettings = eligibleLayoutSettingsRelease(release);
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
