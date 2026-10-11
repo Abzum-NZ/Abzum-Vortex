@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  canonicalJson,
   pageDefinitionV2Schema,
   type ApplicationShellV2,
   type ConditionNode,
@@ -11,6 +12,10 @@ import {
   type PageDefinitionV2,
   type SelectedOrganizationScope,
 } from "@vortex/contracts";
+import {
+  isTrustedInstalledPageComposition,
+  type InstalledRuntimeContext,
+} from "@vortex/app";
 import type { RequestDatabaseTransaction } from "@vortex/db";
 import {
   createHumanOrganizationRequestService,
@@ -49,6 +54,9 @@ type PlacementPermissionBinding =
 export type FixedAuthenticatedPageCapability = Readonly<{
   page: PageDefinitionV2;
   applicationShells?: readonly ApplicationShellV2[];
+  /** Exact request-context-bound resolved roots from the validated immutable format-2 bundle. */
+  resolvedComposition?: ResolvedPageComposition;
+  resolvedCompositionContext?: InstalledRuntimeContext;
   sourceCorrelationId?: string;
   /**
    * The exact installed application release revision this fixed capability was loaded from. It is
@@ -92,6 +100,12 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         scope: SelectedOrganizationScope,
         page: PageDefinitionV2,
         condition: ConditionNode,
+      ) => Promise<boolean>;
+      /** Final current-context and database-clock check for the earliest private Access deadline. */
+      validateAccessEligibilityUntil?: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        validUntil: string,
       ) => Promise<boolean>;
       /** Diagnostic metadata only, latched by the original serial condition invocation. */
       visibilityConditionReason?: () =>
@@ -170,6 +184,7 @@ const evaluate = async (
 ): Promise<Readonly<{
   allowed: boolean;
   correlationId: string;
+  validUntil?: string;
   viewReason: ObservedViewReason;
   targetKind: ObservedTargetKind;
 }>> => {
@@ -181,11 +196,17 @@ const evaluate = async (
         transaction,
         scope,
         binding.declaration,
-        async (decision) => decision.correlationId,
+        async (decision) => ({
+          correlationId: decision.correlationId,
+          validUntil: decision.validUntil,
+        }),
       );
   const evaluated = result.outcome === "completed"
-    ? { allowed: true, correlationId: result.value }
+    ? { allowed: true, correlationId: result.value.correlationId }
     : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
+  const validUntil = result.outcome === "eligible"
+    ? result.validUntil
+    : result.outcome === "completed" ? result.value.validUntil : undefined;
   // These diagnostic labels retain only the existing safe result, never private decision evidence.
   let viewReason: ObservedViewReason = "UNKNOWN";
   let targetKind: ObservedTargetKind = "UNPROVABLE";
@@ -201,7 +222,7 @@ const evaluate = async (
   } catch {
     // Optional metadata cannot replace the original evaluated outcome or its genuine errors.
   }
-  return { ...evaluated, viewReason, targetKind };
+  return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }), viewReason, targetKind };
 };
 
 const sameKey = (left: string, right: string): boolean => left === right;
@@ -219,7 +240,16 @@ export const createAuthenticatedPageCapabilityService = <Command>(
       requests.run(session, candidate, async (transaction, scope) => {
         const loaded = await dependencies.adapter.load(transaction, scope, command);
         const page = pageDefinitionV2Schema.parse(loaded.page);
-        const resolved = resolvePageComposition(page, loaded.applicationShells);
+        if (loaded.resolvedComposition !== undefined && (
+          loaded.resolvedCompositionContext === undefined ||
+          !isTrustedInstalledPageComposition(
+            loaded.resolvedCompositionContext,
+            loaded.resolvedComposition,
+          ) ||
+          canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page)
+        )) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+        const resolved = loaded.resolvedComposition ??
+          resolvePageComposition(page, loaded.applicationShells);
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
@@ -231,6 +261,15 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ? []
             : [loaded.sourceCorrelationId.toLowerCase()]),
         ]);
+        let earliestAccessEligibilityUntil: string | undefined;
+        const retainEarliestAccessEligibility = (candidateUntil: string | undefined): void => {
+          if (candidateUntil === undefined) return;
+          if (
+            earliestAccessEligibilityUntil === undefined ||
+            Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
+          ) earliestAccessEligibilityUntil = candidateUntil;
+        };
+        retainEarliestAccessEligibility(pageAccess.validUntil);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         const hiddenPlacements = new Set<string>();
         // Observation has its own finite custody and never changes the authoritative states.
@@ -252,6 +291,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           const view =
             required.viewPermissionKey === undefined
               ? { allowed: true, correlationId: pageAccess.correlationId,
+                  validUntil: undefined,
                   viewReason: "ABSENT" as const, targetKind: "ABSENT" as const }
               : binding.viewPermission !== undefined &&
                   sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
@@ -259,13 +299,15 @@ export const createAuthenticatedPageCapabilityService = <Command>(
                 : undefined;
           const use =
             required.usePermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId }
+              ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
               : binding.usePermission !== undefined &&
                   sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
                 ? await evaluate(transaction, scope, binding.usePermission)
                 : undefined;
           if (view === undefined || use === undefined)
             throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+          retainEarliestAccessEligibility(view.validUntil);
+          retainEarliestAccessEligibility(use.validUntil);
           correlations.add(view.correlationId.toLowerCase());
           correlations.add(use.correlationId.toLowerCase());
           const ancestorHidden = required.ancestorPlacementIds.some((id) =>
@@ -339,6 +381,16 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ? {}
             : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
         });
+        if (projected !== undefined && earliestAccessEligibilityUntil !== undefined) {
+          if (
+            dependencies.validateAccessEligibilityUntil === undefined ||
+            !(await dependencies.validateAccessEligibilityUntil(
+              transaction,
+              scope,
+              earliestAccessEligibilityUntil,
+            ))
+          ) return undefined;
+        }
         if (projected !== undefined && observationValid) {
           try {
             observer?.call(dependencies, Object.freeze({
