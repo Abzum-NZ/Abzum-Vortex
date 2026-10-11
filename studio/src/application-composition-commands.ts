@@ -557,6 +557,26 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: 
   const binding = bindings[0]!;
   // Validate the complete original shell, including its required-but-empty reservations.
   bridge.toPuckShell(shell);
+  // Reservation validation does not validate each authored binding's metadata.
+  const shellPlacements = new Map<string, SourcePlacement>();
+  const collect = (slot: SourceSlot): void => {
+    for (const [alias, placement] of Object.entries(slot.placements)) {
+      if (shellPlacements.has(alias)) return refuse();
+      shellPlacements.set(alias, placement);
+      for (const child of Object.values(placement.slots)) collect(child);
+    }
+  };
+  collect(shell.layout);
+  for (const authoredBinding of shell.content_slots) {
+    const parent = shellPlacements.get(authoredBinding.parent_placement);
+    const declarations = parent === undefined ? undefined : releaseFor(parent)?.slots
+      .filter((slot) => slot.key === authoredBinding.parent_slot);
+    if (declarations?.length !== 1) return undefined;
+    const declaration = declarations[0]!;
+    if ((declaration.required && !authoredBinding.required) ||
+      authoredBinding.allowed_child_categories.some((category) =>
+        !declaration.allowedChildCategories.includes(category))) return undefined;
+  }
   const parents: SourcePlacement[] = [];
   const visit = (slot: SourceSlot): void => {
     for (const [alias, placement] of Object.entries(slot.placements)) {
@@ -575,7 +595,8 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: 
   const declaration = declarations[0]!;
   if (Object.values(target.region.slot.placements).some((placement) => {
     const release = releaseFor(placement);
-    return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup);
+    return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup) ||
+      !binding.allowed_child_categories.includes(release.paletteGroup);
   })) return undefined;
   return match.page;
 };
