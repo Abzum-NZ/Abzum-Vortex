@@ -15,6 +15,11 @@ export default async function StudioApplicationLayout({ children, params }: {
         target="_blank" rel="noopener noreferrer" data-semantic-command="application.release_history.open">
         History <span className="text-sm">(opens in a new tab)</span>
       </a>
+      <a className="rounded border px-3 py-2 underline"
+        href={`/studio/${encodeURIComponent(result.snapshot.organizationId)}/${encodeURIComponent(result.snapshot.rootId)}/page-adoption`}
+        target="_blank" rel="noopener noreferrer" data-semantic-command="application.standard_page_adoption.open">
+        Page adoption <span className="text-sm">(opens in a new tab)</span>
+      </a>
     </nav>}
     {children}
   </>;
