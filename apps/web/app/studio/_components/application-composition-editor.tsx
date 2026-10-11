@@ -598,7 +598,7 @@ function PlacementCompositionEditor(props: Props) {
       </div>
       <p className="text-sm">Omitted text stays omitted until supplied. Apply and keyboard submission use one guarded command. Discard changes only these inputs; Save remains explicit.</p>
       {settingsDirty && <p role="status">Apply or discard text inputs before changing layout, destination, order, breakpoint or removing this placement.</p>}
-    </form> : <p role="status">Text settings are available only for supported released presentation placements in private list, detail or dashboard main regions, or guided page content using the default shell.</p>}
+    </form> : <p role="status">Text settings are available only for supported released presentation placements in private list, detail or dashboard main or Application-shell content regions, or guided page content using the default shell.</p>}
     {scalarModel.kind === "available" && <form className="space-y-3" onSubmit={applyScalars}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || settingsDirty}>
         <legend className="font-medium">Declared settings</legend>
