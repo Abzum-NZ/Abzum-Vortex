@@ -7,7 +7,7 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
@@ -90,7 +90,6 @@ import {
 } from "@vortex/contracts";
 import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
 import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
@@ -1504,8 +1503,8 @@ const loadInstalledContext = (
     selection,
     async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
           installedReleaseCatalogue,
           transaction,
@@ -2231,8 +2230,8 @@ const loadApplicationPageInternal = async (
     ...dependencies,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
       });
