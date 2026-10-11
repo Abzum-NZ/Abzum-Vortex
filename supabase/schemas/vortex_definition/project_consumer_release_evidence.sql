@@ -96,5 +96,6 @@ $function$;
 
 revoke all on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) to vortex_module_owner;
 comment on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) is
   'Owner-private projection of one exact immutable release; performs no scope selection.';

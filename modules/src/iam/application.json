@@ -24,6 +24,14 @@
           "version": "1.0.0"
         },
         "purpose": "system_record_display"
+      },
+      {
+        "module": "vortex.organisation_administration",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "system_record_display"
       }
     ],
     "permissions": [
@@ -78,7 +86,7 @@
         "administrative": true,
         "record_scope": { "routes": [{ "kind": "all_records" }] },
         "field_policy": {
-          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count"],
+          "readable_fields": ["key", "label", "lifecycle", "role_kind", "privilege_classification", "assignment_policy", "accepted_permission_count", "revision"],
           "changeable_fields": []
         }
       },
@@ -120,7 +128,7 @@
         "administrative": true,
         "record_scope": { "routes": [{ "kind": "all_records" }] },
         "field_policy": {
-          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "readable_fields": ["role_label", "assignee_kind", "assignment_kind", "starts_at", "expires_at", "state", "temporal_state", "role_id", "role_key", "organization_account_id", "group_id", "revision"],
           "changeable_fields": []
         }
       },
@@ -149,6 +157,56 @@
         "record_scope": { "routes": [{ "kind": "all_records" }] },
         "field_policy": {
           "readable_fields": ["holder_kind", "group_id", "scope_kind", "starts_at", "expires_at", "state", "temporal_state"],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_installed_application_read",
+        "key": "application.iam.directory.installed_application.read",
+        "label": "Read installed applications",
+        "description": "Read currently reachable installed applications when choosing an application role template.",
+        "record_type": "vortex.organisation_administration:installed_application",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "key",
+            "release_revision",
+            "is_default"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_app_iam_application_role_template_read",
+        "key": "application.iam.directory.application_role_template.read",
+        "label": "Read application role templates",
+        "description": "Read currently available application role templates through the protected role catalogue.",
+        "record_type": "vortex.organisation_administration:application_role_template",
+        "action_kind": "read",
+        "administrative": true,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "application_root_id",
+            "source_role_id",
+            "key",
+            "label",
+            "continuity_revision"
+          ],
           "changeable_fields": []
         }
       }
@@ -206,7 +264,9 @@
           "application.iam.directory.group_membership.read",
           "application.iam.directory.role_assignment.read",
           "application.iam.directory.role_activation.read",
-          "application.iam.directory.delegation.read"
+          "application.iam.directory.delegation.read",
+          "application.iam.directory.installed_application.read",
+          "application.iam.directory.application_role_template.read"
         ]
       }
     ],
@@ -1366,6 +1426,19 @@
                             "value": "Accepted permissions"
                           }
                         }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role.revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role revision"
+                          }
+                        }
                       }
                     ]
                   },
@@ -2505,6 +2578,71 @@
                             "value": "Temporal state"
                           }
                         }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.role_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.role_key"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Role key"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.organization_account_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Organisation account ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.group_id"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Group ID"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.system_directory:role_assignment.revision"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Assignment revision"
+                          }
+                        }
                       }
                     ]
                   },
@@ -3299,8 +3437,8 @@
                     "placements": {
                       "input_accept_application_role_template_application_root_id": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.2.0"
                         },
                         "settings": {
                           "name": {
@@ -3309,11 +3447,24 @@
                           },
                           "label": {
                             "kind": "text",
-                            "value": "Application root id"
+                            "value": "Application"
                           },
                           "required": {
                             "kind": "boolean",
                             "value": true
+                          },
+                          "choice_source": {
+                            "kind": "group",
+                            "properties": {
+                              "query": {
+                                "kind": "query_reference",
+                                "query": "vortex.organisation_administration:installed_applications"
+                              },
+                              "label_field": {
+                                "kind": "field_reference",
+                                "field": "vortex.organisation_administration:installed_application.key"
+                              }
+                            }
                           }
                         },
                         "theme_overrides": {},
@@ -3332,8 +3483,8 @@
                       },
                       "input_accept_application_role_template_source_role_id": {
                         "block": {
-                          "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                          "release_version": "1.0.0"
+                          "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                          "release_version": "1.2.0"
                         },
                         "settings": {
                           "name": {
@@ -3342,11 +3493,37 @@
                           },
                           "label": {
                             "kind": "text",
-                            "value": "Source role id"
+                            "value": "Template role"
                           },
                           "required": {
                             "kind": "boolean",
                             "value": true
+                          },
+                          "choice_source": {
+                            "kind": "group",
+                            "properties": {
+                              "query": {
+                                "kind": "query_reference",
+                                "query": "vortex.organisation_administration:application_role_templates"
+                              },
+                              "label_field": {
+                                "kind": "field_reference",
+                                "field": "vortex.organisation_administration:application_role_template.label"
+                              },
+                              "input": {
+                                "kind": "group",
+                                "properties": {
+                                  "key": {
+                                    "kind": "text",
+                                    "value": "selected_application"
+                                  },
+                                  "from_field": {
+                                    "kind": "text",
+                                    "value": "template_application_root_id"
+                                  }
+                                }
+                              }
+                            }
                           }
                         },
                         "theme_overrides": {},
@@ -6910,41 +7087,91 @@
         "runAs": {
           "kind": "initiator"
         },
-        "inputs": {
-          "operation": {
-            "type": "choice",
-            "required": true
-          },
-          "template_application_root_id": {
-            "type": "text",
-            "required": true
-          },
-          "source_role_id": {
-            "type": "text",
-            "required": true
-          },
-          "role_key": {
-            "type": "text",
-            "required": true
-          },
-          "label": {
-            "type": "text",
-            "required": true
-          },
-          "description": {
-            "type": "text",
-            "required": true
-          },
-          "privilege_classification": {
-            "type": "choice",
-            "required": true
-          },
-          "accept_broadened_authority": {
-            "type": "choice",
-            "required": true
-          }
-        },
+        "inputs": {},
         "tasks": [
+          {
+            "id": "template_form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_accept_application_role_template"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "template_application_root_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "json",
+                      "value": null
+                    }
+                  },
+                  "source_role_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "json",
+                      "value": null
+                    }
+                  },
+                  "role_key": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "label": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "description": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "privilege_classification": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "template_form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "template_form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_template_form_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
           {
             "id": "confirm",
             "type": "interface.confirm",
@@ -6968,10 +7195,17 @@
                       "value": "Accept the application role template "
                     },
                     {
-                      "op": "reference",
-                      "reference": {
-                        "source": "input",
-                        "name": "source_role_id"
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "template_form",
+                          "key": "values",
+                          "path": [
+                            "source_role_id"
+                          ]
+                        }
                       }
                     },
                     {
@@ -6980,10 +7214,17 @@
                       "value": " of application "
                     },
                     {
-                      "op": "reference",
-                      "reference": {
-                        "source": "input",
-                        "name": "template_application_root_id"
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "template_form",
+                          "key": "values",
+                          "path": [
+                            "template_application_root_id"
+                          ]
+                        }
                       }
                     },
                     {
@@ -6994,8 +7235,12 @@
                     {
                       "op": "reference",
                       "reference": {
-                        "source": "input",
-                        "name": "role_key"
+                        "source": "task_output",
+                        "task": "template_form",
+                        "key": "values",
+                        "path": [
+                          "role_key"
+                        ]
                       }
                     },
                     {
@@ -7006,8 +7251,12 @@
                     {
                       "op": "reference",
                       "reference": {
-                        "source": "input",
-                        "name": "label"
+                        "source": "task_output",
+                        "task": "template_form",
+                        "key": "values",
+                        "path": [
+                          "label"
+                        ]
                       }
                     },
                     {
@@ -7018,8 +7267,12 @@
                     {
                       "op": "reference",
                       "reference": {
-                        "source": "input",
-                        "name": "privilege_classification"
+                        "source": "task_output",
+                        "task": "template_form",
+                        "key": "values",
+                        "path": [
+                          "privilege_classification"
+                        ]
                       }
                     },
                     {
@@ -7064,6 +7317,103 @@
                 "literal": {
                   "type": "text",
                   "value": "platform.prepare_role_change_evidence"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "operation": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "choice",
+                      "value": "accept_new_application_role"
+                    }
+                  },
+                  "template_application_root_id": {
+                    "kind": "formula",
+                    "formula": {
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "template_form",
+                          "key": "values",
+                          "path": [
+                            "template_application_root_id"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "source_role_id": {
+                    "kind": "formula",
+                    "formula": {
+                      "op": "record_id",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "template_form",
+                          "key": "values",
+                          "path": [
+                            "source_role_id"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "role_key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "template_form",
+                      "key": "values",
+                      "path": [
+                        "role_key"
+                      ]
+                    }
+                  },
+                  "label": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "template_form",
+                      "key": "values",
+                      "path": [
+                        "label"
+                      ]
+                    }
+                  },
+                  "description": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "template_form",
+                      "key": "values",
+                      "path": [
+                        "description"
+                      ]
+                    }
+                  },
+                  "privilege_classification": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "template_form",
+                      "key": "values",
+                      "path": [
+                        "privilege_classification"
+                      ]
+                    }
+                  },
+                  "accept_broadened_authority": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "choice",
+                      "value": "accept"
+                    }
+                  }
                 }
               }
             }
@@ -7745,46 +8095,7 @@
         "event_id": "event_iam_administration_action",
         "event": "action",
         "flow": "flow_accept_application_role_template",
-        "inputs": {
-          "operation": {
-            "kind": "literal",
-            "literal": {
-              "type": "choice",
-              "value": "accept_new_application_role"
-            }
-          },
-          "template_application_root_id": {
-            "kind": "caller",
-            "name": "template_application_root_id"
-          },
-          "source_role_id": {
-            "kind": "caller",
-            "name": "source_role_id"
-          },
-          "role_key": {
-            "kind": "caller",
-            "name": "role_key"
-          },
-          "label": {
-            "kind": "caller",
-            "name": "label"
-          },
-          "description": {
-            "kind": "caller",
-            "name": "description"
-          },
-          "privilege_classification": {
-            "kind": "caller",
-            "name": "privilege_classification"
-          },
-          "accept_broadened_authority": {
-            "kind": "literal",
-            "literal": {
-              "type": "choice",
-              "value": "accept"
-            }
-          }
-        }
+        "inputs": {}
       },
       {
         "id": "binding_accept_application_role_revision",
