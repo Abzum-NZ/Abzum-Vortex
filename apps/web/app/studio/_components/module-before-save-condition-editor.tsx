@@ -169,7 +169,9 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
   const validationErrors = remoteValidation === null ? null : <div role="alert" aria-live="polite">
     <h2 className="font-medium">Current Module validation</h2>
     <ul className="list-disc pl-6">{remoteValidation.errors.map((error, index) => <li key={`${error.code}:${index}`}>
-      Module {snapshot?.key ?? "draft"}: {error.message} {error.guidance}
+      {error.location === undefined ? `Module ${snapshot?.key ?? "draft"}`
+        : [error.location.documentKey, ...error.location.segments.map((segment) =>
+          `${segment.kind.replaceAll("_", " ")} ${segment.key}`)].join(" / ")}: {error.message} {error.guidance}
     </li>)}</ul>
   </div>;
   return <main className="mx-auto max-w-4xl space-y-6 p-6" aria-busy={busy}>
