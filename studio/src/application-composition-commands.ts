@@ -537,7 +537,8 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
 };
 
 /** Named content settings require the actual shell reservation and fixed-slot ancestry. */
-const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: Target) => {
+const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: Target,
+  optionalLayoutAncestry = false) => {
   const matches: { page: ApplicationSourceDocumentV2["body"]["pages"][number];
     shellAlias: string; slotAlias: string }[] = [];
   for (const page of source.body.pages) {
@@ -578,13 +579,18 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: 
         !declaration.allowedChildCategories.includes(category))) return undefined;
   }
   const parents: SourcePlacement[] = [];
-  const visit = (slot: SourceSlot): void => {
+  const optionalParentPaths: boolean[] = [];
+  const visit = (slot: SourceSlot, optionalPath = true): void => {
     for (const [alias, placement] of Object.entries(slot.placements)) {
       const release = releaseFor(placement) ?? refuse();
-      if (alias === binding.parent_placement) parents.push(placement);
+      if (alias === binding.parent_placement) {
+        parents.push(placement);
+        optionalParentPaths.push(optionalPath);
+      }
       for (const declaration of release.slots) {
         const child = placement.slots[declaration.key];
-        if (declaration.repeats === undefined && child !== undefined) visit(child);
+        if (declaration.repeats === undefined && child !== undefined)
+          visit(child, optionalPath && !declaration.required);
       }
     }
   };
@@ -593,6 +599,8 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: 
   const declarations = releaseFor(parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
   if (declarations?.length !== 1 || declarations[0]!.repeats !== undefined) return undefined;
   const declaration = declarations[0]!;
+  // Layout settings alone require optional immutable slots; authored required content stays required.
+  if (optionalLayoutAncestry && (!optionalParentPaths[0] || declaration.required)) return undefined;
   if (Object.values(target.region.slot.placements).some((placement) => {
     const release = releaseFor(placement);
     return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup) ||
@@ -608,6 +616,8 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
+  const release = releaseFor(target.placement);
+  const layoutSettings = release !== undefined && eligibleLayoutSettingsRelease(release);
   const ordinaryPage = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
     candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
   // Settings alone may edit one actual declared step region; it never becomes an ordinary main region.
@@ -619,7 +629,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   });
   const guidedPage = guidedPages.length === 1 ? guidedPages[0] : undefined;
   const namedPage = ordinaryPage === undefined && guidedPage === undefined
-    ? ordinaryNamedSettingsPage(source, target) : undefined;
+    ? ordinaryNamedSettingsPage(source, target, layoutSettings) : undefined;
   const page = ordinaryPage ?? guidedPage ?? namedPage;
   const guided = ordinaryPage === undefined && guidedPage !== undefined;
   const named = namedPage !== undefined;
@@ -628,11 +638,10 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
       target.region.ordinaryMain !== true)) ||
     source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
-  const release = releaseFor(target.placement);
   if (release === undefined || !eligible(release) ||
-    ((guided || named) && (release.paletteGroup !== "content" || release.slots.length !== 0)))
+    ((guided || (named && !layoutSettings)) &&
+      (release.paletteGroup !== "content" || release.slots.length !== 0)))
     return { kind: "unsupported" } as const;
-  const layoutSettings = eligibleLayoutSettingsRelease(release);
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
     !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
