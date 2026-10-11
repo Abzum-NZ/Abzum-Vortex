@@ -215,14 +215,36 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{metadata.publishedAt}</time></dd></div>
         <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
+        {selectedRevision === metadata.releaseRevision && <div className="pt-2">
+          <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">
+            <a className="inline-flex rounded border px-3 py-2 underline"
+              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
+              target="_blank" rel="noopener noreferrer">
+              Review upgrade to version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+            </a>
+            <a className="inline-flex rounded border px-3 py-2 underline"
+              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/first-install`}
+              target="_blank" rel="noopener noreferrer">
+              Review first install of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+            </a>
+            {pending === null && page !== null && failure !== "refused" &&
+              page.entries.some((entry) => entry.releaseRevision === metadata.releaseRevision) &&
+              metadata.isCurrent === (metadata.releaseRevision === page.snapshot.anchorReleaseRevision) &&
+              <a className="inline-flex rounded border px-3 py-2 underline"
+                data-command="application.release_history.restore.open"
+                href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/restore`}
+                target="_blank" rel="noopener noreferrer">
+                Review restore of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
+              </a>}
+          </nav>
+          <p className="mt-2">These links open separate pages. Restore, first installation, and upgrades require an explicit review; none runs from the history list.</p>
+        </div>}
       </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
     <section aria-label="Unavailable release commands" className="space-y-3 rounded border p-4">
-      <p id="history-unavailable-commands">Restore, publish and installation are unavailable in this history view.</p>
+      <p id="history-unavailable-commands">To restore a release, inspect it and open its separate restore review page. Publish is unavailable here; installation never runs from the history list.</p>
       <div className="flex flex-wrap gap-3">
-        <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Restore unavailable</button>
         <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Publish unavailable</button>
-        <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Install unavailable</button>
       </div>
     </section>
   </main>;

@@ -3,6 +3,7 @@ import {
   applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
   fingerprintSchema,
+  definitionValidationResultSchema,
   organizationIdSchema,
   revisionSchema,
   canonicalJson,
@@ -18,17 +19,26 @@ export const studioApplicationSourceReviewRequestSchema = z.object({
   source: applicationSourceDocumentV2Schema,
 }).strict();
 
+const sourceReviewBinding = {
+  organizationId: organizationIdSchema,
+  rootId: applicationRootIdSchema,
+  key: applicationSourceDocumentV2Schema.shape.key,
+  rootAlias: applicationSourceDocumentV2Schema.shape.root_alias,
+  draftRevision: revisionSchema,
+  savedSourceFingerprint: fingerprintSchema,
+  candidateSourceFingerprint: fingerprintSchema,
+};
+
 export const studioApplicationSourceReviewResultSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("available"),
-    organizationId: organizationIdSchema,
-    rootId: applicationRootIdSchema,
-    key: applicationSourceDocumentV2Schema.shape.key,
-    rootAlias: applicationSourceDocumentV2Schema.shape.root_alias,
-    draftRevision: revisionSchema,
-    savedSourceFingerprint: fingerprintSchema,
-    candidateSourceFingerprint: fingerprintSchema,
+    ...sourceReviewBinding,
     source: applicationSourceDocumentV2Schema,
+  }).strict(),
+  z.object({
+    kind: z.literal("validation_failed"),
+    ...sourceReviewBinding,
+    validation: definitionValidationResultSchema,
   }).strict(),
   z.object({ kind: z.literal("invalid") }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),

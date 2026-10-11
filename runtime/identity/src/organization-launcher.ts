@@ -70,6 +70,3 @@ export const createOrganizationLauncherService = (
   });
 };
 
-const defaultService = createOrganizationLauncherService();
-
-export const listOrganizationLauncher = defaultService.list;
