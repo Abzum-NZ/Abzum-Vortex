@@ -1,7 +1,7 @@
 "use client";
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { fingerprintSchema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import { fingerprintSchema, pageCompositionV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
 import {
   ApplicationPreview,
   createFullPlatformComponentRegistry,
@@ -187,7 +187,8 @@ export function ApplicationDraftPreview({ context, readContext }: {
         (sourcePage.type === "guided_form" ? artifact.activeStepId === undefined || stepMatches?.length !== 1 ||
           page.steps?.length !== sourcePage.steps.length || !("stepContent" in page.composition) ||
           !Object.hasOwn(page.composition.stepContent, artifact.activeStepId)
-          : artifact.activeStepId !== undefined || page.steps !== undefined || !("main" in page.composition))) {
+          : artifact.activeStepId !== undefined || page.steps !== undefined ||
+            !pageCompositionV2Schema.safeParse(page.composition).success)) {
         setState({ kind: "unavailable", request, message: "The preview did not match the requested saved page, step, revision and size." });
         return;
       }
