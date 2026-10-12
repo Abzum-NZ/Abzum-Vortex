@@ -502,7 +502,10 @@ const referenceInputsAsRecordIds = (
   inputs: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> | undefined => {
   const parsedFlow = flowSchema.safeParse(rawFlow);
-  if (!parsedFlow.success) return undefined;
+  if (!parsedFlow.success) {
+    console.error("[flows] installed flow input contract mismatch", parsedFlow.error.issues);
+    return undefined;
+  }
   const result: Record<string, unknown> = { ...inputs };
   for (const [name, declaration] of Object.entries(parsedFlow.data.inputs)) {
     const value = result[name];

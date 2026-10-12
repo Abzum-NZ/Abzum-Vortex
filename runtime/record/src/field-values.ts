@@ -242,7 +242,14 @@ const submittedDecimalText = (value: unknown): unknown => {
   if (typeof value !== "number" || !Number.isFinite(value)) return value;
   const text = String(value);
   if (!/e/i.test(text)) return text;
-  return value.toFixed(20).replace(/\.?0+$/, "");
+  const match = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(text);
+  if (match === null) return text;
+  const [, sign = "", whole = "", fraction = "", exponentText = "0"] = match;
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + Number(exponentText);
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 };
 
 const normalizeMoney = (
