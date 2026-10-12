@@ -112,7 +112,10 @@ const readHuman = async (transaction: RequestDatabaseTransaction, scope: Selecte
   return context;
 };
 
-const readCurrent = async (address: ApplicationInstallAddress, lifetime: RequestDatabaseLifetime) => {
+type ReleaseCache = { value?: { revision: number; releaseSet: InstalledRuntimeContext["releaseSet"] } };
+
+const readCurrent = async (address: ApplicationInstallAddress, lifetime: RequestDatabaseLifetime,
+  releaseCache: ReleaseCache) => {
   lifetime.checkpoint();
   const identity = await resolveIdentitySession();
   if (identity.kind !== "active") return { kind: identity.kind === "temporarily_unavailable"
@@ -132,9 +135,13 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
     try {
       lifetime.checkpoint();
       const human = await readHuman(transaction, scope, identity.session, issuedAt, lifetime.deadline);
+      const installationReader = createActiveApplicationInstallationRepository(transaction);
+      const releaseReader = createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction);
       const load = () => createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
+        activeInstallationReader: installationReader,
+        releaseSetReader: { read: async (command) =>
+          releaseCache.value?.revision === command.applicationReleaseRevision
+            ? releaseCache.value.releaseSet : releaseReader.read(command) },
         scope: { organizationId: resolved.read.organizationId,
           applicationRootId: resolved.application.applicationRootId },
       }).load().catch((error: unknown) => {
@@ -144,20 +151,22 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
         throw error;
       });
       const initial = await load();
+      releaseCache.value = { revision: initial.applicationReleaseRevision, releaseSet: initial.releaseSet };
       const initialRelease = digest(releaseFacts(initial));
+      const installationFacts = JSON.stringify(initial.installation);
+      const installationStillCurrent = async () =>
+        JSON.stringify(await installationReader.readCurrent()) === installationFacts;
       const declaration = homeDeclaration(initial, resolved.application.homePageKey);
       const access = await runOrganizationAccessOperation(transaction, scope, declaration, async (decision) => {
-        const current = await load();
-        if (digest(releaseFacts(current)) !== initialRelease ||
-            current.releaseSet.application.definitionKey !== address.applicationKey) return deny();
+        if (!await installationStillCurrent() ||
+            initial.releaseSet.application.definitionKey !== address.applicationKey) return deny();
         let manifest: ApplicationInstallManifest;
-        try { manifest = createApplicationInstallManifest(current, address, createApplicationInstallIcon(current)); }
+        try { manifest = createApplicationInstallManifest(initial, address, createApplicationInstallIcon(initial)); }
         catch { return deny(); }
         // Re-evaluate the same current permission after icon/manifest derivation.
         const completion = await runOrganizationAccessOperation(transaction, scope,
-          homeDeclaration(current, resolved.application.homePageKey), async (finalDecision) => {
-            const final = await load();
-            if (digest(releaseFacts(final)) !== initialRelease) return deny();
+          homeDeclaration(initial, resolved.application.homePageKey), async (finalDecision) => {
+            if (!await installationStillCurrent()) return deny();
             const finalHuman = await readHuman(transaction, scope, identity.session, issuedAt, lifetime.deadline)
               .catch((error: unknown) => { if (error instanceof InstallRefused) explicitRefusal = true; throw error; });
             if (JSON.stringify(finalHuman) !== JSON.stringify(human)) return deny();
@@ -168,7 +177,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
             if (clocks.length !== 1 || !completed.success || !Number.isFinite(expiry) ||
                 Date.parse(completed.data) >= expiry) return deny();
             lifetime.checkpoint();
-            return { manifest, snapshot: initialRelease, applicationReleaseRevision: final.applicationReleaseRevision,
+            return { manifest, snapshot: initialRelease, applicationReleaseRevision: initial.applicationReleaseRevision,
               validUntil: new Date(expiry).toISOString(),
               facts: digest([sessionFacts(identity.session), scope.tenantId, scope.organizationId,
                 scope.organizationAccountId, scope.applicationRootId, scope.accessVersion,
@@ -198,11 +207,12 @@ export const loadApplicationInstallMetadata = async (
   if (!address.success || (expected !== undefined && !expected.success)) return { kind: "unavailable" };
   try {
     return await withRequestDatabaseLifetime({ signal, deadline: Date.now() + 15_000 }, async (lifetime) => {
-      const initial = await readCurrent(address.data, lifetime);
+      const releaseCache: ReleaseCache = {};
+      const initial = await readCurrent(address.data, lifetime, releaseCache);
       if (initial.kind !== "available") return initial;
       if (expected?.success && (expected.data.snapshot !== initial.snapshot ||
           expected.data.applicationReleaseRevision !== initial.applicationReleaseRevision)) return { kind: "unavailable" };
-      const final = await readCurrent(address.data, lifetime);
+      const final = await readCurrent(address.data, lifetime, releaseCache);
       if (final.kind !== "available") return final;
       if (final.facts !== initial.facts || final.snapshot !== initial.snapshot) return { kind: "unavailable" };
       const validUntil = new Date(Math.min(Date.parse(initial.validUntil), Date.parse(final.validUntil))).toISOString();
