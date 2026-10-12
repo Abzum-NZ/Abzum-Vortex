@@ -17,10 +17,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/index";
-import type {
-  SearchIndexOccurrenceDependencies,
-  SearchIndexRecordType,
-} from "./event-consumer";
+import type { SearchIndexOccurrenceDependencies, SearchIndexRecordType } from "./event-consumer";
 import type {
   SearchDocumentStoreCommand,
   SearchDocumentStoreOutcome,
@@ -68,8 +65,9 @@ const inSystemScope = async <Result>(
   applicationRootId: string,
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ): Promise<Result> => {
-  const scopes = await withRuntimeTransaction((transaction) =>
-    transaction.query<DatabaseRow>`
+  const scopes = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query<DatabaseRow>`
       select system_actor_id, tenant_id, access_version
       from vortex_access.resolve_search_index_scope(${organizationId}::uuid, ${applicationRootId}::uuid)
     `,
@@ -115,7 +113,9 @@ const readFacts = async (occurrence: EventOccurrenceEnvelope): Promise<IndexFact
       const recordType = recordTypeDefinitionSchema.parse(result.recordType);
       const record = objectOf(result.record, "RECORD");
       const stored = objectOf(record.fieldValues, "FIELD_VALUES");
-      const storedByName = new Map(Object.entries(stored).map(([key, value]) => [key.toLowerCase(), value]));
+      const storedByName = new Map(
+        Object.entries(stored).map(([key, value]) => [key.toLowerCase(), value]),
+      );
       const fieldValues = Object.fromEntries(
         recordType.fields.flatMap((field) =>
           storedByName.has(field.fieldId.toLowerCase())
