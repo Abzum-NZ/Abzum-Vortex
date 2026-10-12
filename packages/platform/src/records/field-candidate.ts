@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { recordTypeDefinitionSchema } from "../schema";
+import type { ModuleField, recordTypeDefinitionSchema } from "../schema";
 import type { JsonValue } from "../schema";
 import {
   applyBeforeSaveRules,
@@ -80,13 +80,19 @@ export const calculateAndFinalize = ({
   timeZone,
   rules,
 }: CalculateAndFinalizeInput): CalculatedFieldValues => {
-  const initial = prepareInitialRecordFieldCandidate({
-    operation,
-    recordType,
-    submittedValues,
-    ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-    ...(operation === "update" && existingValues !== undefined ? { existingValues } : {}),
-  });
+  const fieldsById = new Map<string, ModuleField>(
+    recordType.fields.map((field) => [field.fieldId, field]),
+  );
+  const initial = prepareInitialRecordFieldCandidate(
+    {
+      operation,
+      recordType,
+      submittedValues,
+      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
+      ...(operation === "update" && existingValues !== undefined ? { existingValues } : {}),
+    },
+    fieldsById,
+  );
   if (!initial.success) return initial;
 
   // Every applicable compiled rule runs exactly once here, before calculations
@@ -121,14 +127,17 @@ export const calculateAndFinalize = ({
     .filter((field) => field.type === "calculation")
     .map((field) => field.fieldId);
   if (calculationFieldIds.length === 0)
-    return finalizeRecordFieldCandidate({
-      recordType,
-      initialCandidate: initial.candidate,
-      candidateValues: ruleCandidateValues,
-      requirements,
-      requiredGeneratedFieldIds: [],
-      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-    });
+    return finalizeRecordFieldCandidate(
+      {
+        recordType,
+        initialCandidate: initial.candidate,
+        candidateValues: ruleCandidateValues,
+        requirements,
+        requiredGeneratedFieldIds: [],
+        ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
+      },
+      fieldsById,
+    );
 
   // Most calculation forms do not use the organisation clock. Only a date
   // deadline comparison needs the organisation-local date; date-time
@@ -153,11 +162,14 @@ export const calculateAndFinalize = ({
       issues: [{ code: "invalid_input", path: ["organizationRuntimeSettings"] }],
     };
 
-  const calculations = evaluateRecordCalculations({
-    recordType,
-    authoritativeFieldValues: ruleCandidateValues,
-    clock: { instant: issuedAt, organizationLocalDate },
-  });
+  const calculations = evaluateRecordCalculations(
+    {
+      recordType,
+      authoritativeFieldValues: ruleCandidateValues,
+      clock: { instant: issuedAt, organizationLocalDate },
+    },
+    fieldsById,
+  );
   if (!calculations.success) return calculations;
 
   const candidateValues: Record<string, unknown> = {
@@ -165,14 +177,17 @@ export const calculateAndFinalize = ({
     ...calculations.setValues,
   };
   for (const fieldId of calculations.clearFieldIds) delete candidateValues[fieldId];
-  return finalizeRecordFieldCandidate({
-    recordType,
-    initialCandidate: initial.candidate,
-    candidateValues,
-    requirements,
-    requiredGeneratedFieldIds: calculationFieldIds,
-    ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
-  });
+  return finalizeRecordFieldCandidate(
+    {
+      recordType,
+      initialCandidate: initial.candidate,
+      candidateValues,
+      requirements,
+      requiredGeneratedFieldIds: calculationFieldIds,
+      ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
+    },
+    fieldsById,
+  );
 };
 
 /** @internal Shared by ordinary Record saves and named-action candidate composition. */
