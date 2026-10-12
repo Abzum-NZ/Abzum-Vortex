@@ -100,7 +100,10 @@ export type SearchIndexOccurrenceDependencies = Readonly<{
   loadRecordSnapshot: (
     occurrence: EventOccurrenceEnvelope,
   ) => Promise<SearchRecordSnapshot | undefined>;
-  storeDocument: (command: SearchDocumentStoreCommand) => Promise<SearchDocumentStoreOutcome>;
+  storeDocument: (
+    command: SearchDocumentStoreCommand,
+    occurrence: EventOccurrenceEnvelope,
+  ) => Promise<SearchDocumentStoreOutcome>;
 }>;
 
 export type SearchOccurrenceSkipReason =
@@ -402,7 +405,7 @@ const indexOccurrence = async (
   if (!built.success) return occurrenceResult(occurrence, { kind: "refused", code: built.code });
 
   const command = searchDocumentStoreCommand(built.output);
-  const storeOutcome = await dependencies.storeDocument(command);
+  const storeOutcome = await dependencies.storeDocument(command, occurrence);
   return occurrenceResult(occurrence, { kind: "indexed", command, storeOutcome });
 };
 

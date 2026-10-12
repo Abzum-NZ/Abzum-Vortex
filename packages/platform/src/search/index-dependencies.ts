@@ -123,16 +123,16 @@ const readFacts = async (occurrence: EventOccurrenceEnvelope): Promise<IndexFact
             : [],
         ),
       );
+      // An organisation-shared record has no application of its own; it stays
+      // unstamped so that every application installing its type finds it.
       const applicationRootId =
-        typeof record.applicationRootId === "string"
-          ? record.applicationRootId
-          : occurrence.installation.applicationRootId;
+        typeof record.applicationRootId === "string" ? record.applicationRootId : undefined;
       return {
         recordType,
         snapshot: {
           indexOrganisationId: occurrence.organizationId,
           ownerOrganisationId: String(record.ownerOrganizationId),
-          applicationRootId,
+          ...(applicationRootId === undefined ? {} : { applicationRootId }),
           recordTypeId: occurrence.descriptor.recordTypeId,
           recordId: occurrence.recordId,
           recordVersion: Number(record.concurrencyNumber),
@@ -161,11 +161,10 @@ export const createSearchIndexDependencies = (): SearchIndexOccurrenceDependenci
     loadRecordType: async (occurrence) => (await factsFor(occurrence))?.recordType,
     loadPolicy: async () => indexPolicy,
     loadRecordSnapshot: async (occurrence) => (await factsFor(occurrence))?.snapshot,
-    storeDocument: async (command: SearchDocumentStoreCommand) => {
-      if (command.applicationRootId === null) throw new Error("SEARCH_INDEX_SCOPE_UNAVAILABLE");
+    storeDocument: async (command: SearchDocumentStoreCommand, occurrence) => {
       const rows = await inSystemScope(
         command.organizationId,
-        command.applicationRootId,
+        occurrence.installation.applicationRootId,
         (transaction) =>
           transaction.query<DatabaseRow>`
             select outcome from vortex_search.put_document(

@@ -135,7 +135,7 @@ export const loadApplicationSearch = async (
               select record_id, source_record_version, document_schema_version, entries, content_fingerprint
               from vortex_search.documents as documents
               where organization_id = ${scope.organizationId}::uuid
-                and application_root_id = ${scopedApplicationRootId}::uuid
+                and (application_root_id = ${scopedApplicationRootId}::uuid or application_root_id is null)
                 and record_type_id = ${recordTypeId}::uuid and not deleted
                 and record_id > ${after}::uuid
                 and not exists (
