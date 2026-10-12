@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import localFont from "next/font/local";
+import { SHADCN_FONT_VARIABLE_CLASSES } from "./catalogue-fonts";
 import {
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
 } from "@vortex/ui";
 import "@vortex/ui/styles/globals.css";
-
-const inter = localFont({
-  src: "./fonts/inter-latin-wght-normal.woff2",
-  display: "swap",
-  weight: "100 900",
-  variable: "--vortex-font-inter",
-});
 
 export const metadata: Metadata = {
   title: "Vortex",
@@ -38,9 +31,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      className={inter.variable}
-      style={PLATFORM_THEME_STYLE}
+      className={SHADCN_FONT_VARIABLE_CLASSES.join(" ")}
       {...PLATFORM_VORTEX_STYLE}
+      style={{ ...PLATFORM_THEME_STYLE, ...PLATFORM_VORTEX_STYLE.style }}
     >
       <body>{children}</body>
     </html>

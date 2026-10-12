@@ -241,7 +241,7 @@ const catalogueFont = (familyKey: string): ShadcnFont | undefined =>
   findShadcnFontByFamilyKey(familyKey) ?? PLATFORM_FAMILY_FONTS.get(familyKey);
 
 const fontStack = (font: ShadcnFont): string =>
-  font.id === "inter" ? `var(--vortex-font-inter, Inter), ${FONT_FALLBACK}` : shadcnFontStack(font);
+  `var(--vortex-font-${font.id}, ${shadcnFontStack(font)})`;
 
 const fontFamily = (familyKey: string): string | undefined => {
   const font = catalogueFont(familyKey);
@@ -252,8 +252,8 @@ const fontFamily = (familyKey: string): string | undefined => {
 /**
  * The catalogue fonts a resolved theme paints with: the fonts its `body` and `heading` typography
  * tokens name, the default body font when it has no body token, and the body font for headings when
- * it has no heading token, exactly as `generateThemeCssVariables` paints them. The web app loads
- * its default Inter face with `next/font/local`.
+ * it has no heading token, exactly as `generateThemeCssVariables` paints them. The web app exposes
+ * each catalogue face through `next/font/local`; the selected CSS variable loads its face on demand.
  */
 export function resolveThemeFonts(tokens: ThemeTokens = {}): readonly ShadcnFont[] {
   const body = tokenOfKind(tokens, "body", "typography");
@@ -321,8 +321,7 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * `--destructive` from the matching colour role; `--radius` from `radius_base`. A fill and its
  * `<role>_foreground` (card, popover, accent, sidebar, sidebar_primary, sidebar_accent) change
  * together. `--font-sans-family` and `--font-heading-family` carry the `body` and `heading`
- * typography families; the default Inter family uses the local `next/font` face, while other
- * catalogue fonts use their declared family with a system fallback. A theme without a body token
+ * typography families through their self-hosted `next/font` variables. A theme without a body token
  * paints the default catalogue font.
  * `light-dark()` serves forced light, forced dark and the system preference through the
  * container's `color-scheme` (a `.dark` ancestor sets it dark), and the shadcn `dark:` variant in

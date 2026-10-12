@@ -18,6 +18,7 @@
 
 /* Shared component rules use the theme variables resolved on each application root. */
 @import "./shared-components.css" layer(vortex-components);
+@import "./style-variants.css" layer(vortex-components);
 
 /* Document defaults shared by the application and its account pages. */
 * {

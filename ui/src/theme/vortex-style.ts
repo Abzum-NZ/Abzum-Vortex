@@ -1,4 +1,6 @@
 import type { ApplicationThemeSelectionV2 } from "@vortex/contracts";
+import type { CSSProperties } from "react";
+import { createVortexStyleComponentVariables } from "./vortex-style-variables";
 
 /**
  * The shadcn/create visual styles the platform theme catalogue offers at the pinned shadcn version.
@@ -58,6 +60,7 @@ export type VortexStyleSelection = Readonly<{
 
 /** The root attributes the runtime page or preview canvas carries, beside `data-vortex-theme`. */
 export type VortexStyleRootProps = Readonly<{
+  style: CSSProperties;
   "data-vortex-style": VortexStyle;
   "data-vortex-menu": VortexMenuColor;
   "data-vortex-menu-accent": VortexMenuAccent;
@@ -98,6 +101,7 @@ export function resolveVortexStyleSelection(
  */
 export function createVortexStyleRootProps(resolved: VortexStyleSelection): VortexStyleRootProps {
   return {
+    style: createVortexStyleComponentVariables(resolved.style),
     "data-vortex-style": resolved.style,
     "data-vortex-menu": resolved.menu,
     "data-vortex-menu-accent": resolved.menuAccent,
