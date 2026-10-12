@@ -1,6 +1,6 @@
 # Architecture review — 21 September 2026
 
-> Historical source snapshot. The [25 September architecture decisions](architecture-decisions-2026-09-25.md) supersede this review in part, including its flow, package and system-application design. Current fleet roles and dispatch follow [agent coordination](agent-coordination.md) and [fleet operations](agent-fleet.md).
+> Historical source snapshot from 21 September 2026. The [target architecture](target-architecture.md) supersedes its technical direction where they conflict. This review records earlier findings; its coordination and delivery guidance is not current.
 
 Vortex needs a connected application runtime more than another foundation or verification programme. Main already contains substantial Definition, Identity, Access, Module and Record implementation. Query, App, the shared UI renderer and several later services are still placeholders. The revised roadmap connects the existing foundations to a real, definition-led application by the end of Phase 6, then adds designers and the remaining platform capabilities.
 

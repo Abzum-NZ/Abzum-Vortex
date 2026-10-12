@@ -2,11 +2,10 @@
 
 > Historical design note. Its node-and-edge flow canvas description is superseded by the [one flow definition](architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work). Current authoring follows the [Frontend Rule Designer specification](../specification/appendices/frontend-rule-designer.md).
 
-[Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md) · [Page-builder contracts](../specification/appendices/page-builder-contracts.md) · [Frontend flows](../specification/appendices/frontend-rule-designer.md)
+[Roadmap archive](README.md) · [Page-builder contracts](../specification/appendices/page-builder-contracts.md) · [Frontend flows](../specification/appendices/frontend-rule-designer.md)
 
 The September 2026 inspection identified useful interface patterns in the separate Fluid working tree. That source included uncommitted content, so its base commit did not identify the full inspected prototype. Inspect the actual files and asset/licence provenance before copying them. This document authorizes no changes to that separate repository.
 
-Current issue descriptions govern scope and pickup. Completion is implementation plus independent code review; no tests, hosted checks, screenshots as proof or compatibility layers are required.
 
 ## Reuse decisions
 

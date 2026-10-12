@@ -1,6 +1,6 @@
 # Definition-led application delivery
 
-Follow the [current roadmap](README.md). This page describes product sequencing, not additional acceptance gates.
+This page records product sequencing for the first visible definition-led application. The current delivery order is in the [target architecture](target-architecture.md).
 
 The Phase 6 outcome is a working application on the normal web UI. Its pages, navigation, forms, queries, actions and theme come from installed definitions. Persisted records and protected owning services supply actual behaviour. Issue [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327) connects the delivered Phase 1–6 engines; its [bounded scope](definition-first-application-proof.md) covers navigation, record lists and details, forms, declared actions, access decisions and theme.
 
@@ -37,4 +37,4 @@ Search/files, durable workflows, connections, sharing/federation and MCP follow 
 
 ## Completion
 
-A fresh GPT-6 Sol (Extra High) reviewer inspects the integrated source path, fixes findings and re-reviews. Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Reviewed source integration and assigned issue closure complete this work under the fleet policy. No browser proof, screenshot, test, database/hosted verification, Testing deployment or Kestra receipt is required. Product use of definition validation, publication and installation is functionality to implement, not an agent verification exercise.
+Changes to visible behaviour follow the local application walkthrough in the [target architecture](target-architecture.md), with screenshots in the pull request.

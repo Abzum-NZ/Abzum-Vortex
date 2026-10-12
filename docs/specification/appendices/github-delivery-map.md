@@ -1,6 +1,6 @@
 # GitHub delivery map
 
-The [project roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) contains the current assignments and pickup sequence. Issue bodies link directly to the specification files they implement.
+This phase-to-issue map is historical. The [target architecture](../../build-plan/target-architecture.md) defines the current delivery order; the [project roadmap](https://github.com/orgs/Abzum-NZ/Abzum-Vortex/projects/2/views/3) records current issue status and dependencies.
 
 | Phase | Scope | Phase issue | Main specification chapters |
 | ---: | --- | --- | --- |
@@ -17,5 +17,3 @@ The [project roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) conta
 | 11 | Sharing, copying and data exchange | [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164) | 16 |
 | 12 | Privacy, retention and capability limits | [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165) | 14, 15 |
 | 13 | Operational functionality | [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166) | 17, 19 |
-
-Each task and subtask has one phase label, a numeric Pickup Order, explicit native prerequisites, a planned agent and an active-minute estimate. Code review is the completion mechanism. Closed historical tasks remain history; cancelled verification-only tasks do not claim delivered functionality.
