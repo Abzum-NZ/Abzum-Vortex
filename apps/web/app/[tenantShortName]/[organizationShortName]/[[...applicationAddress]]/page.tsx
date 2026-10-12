@@ -16,8 +16,6 @@ import {
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
-import { AccountDetails } from "./_components/account-details";
-import { ApplicationSearch } from "./_components/application-search";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
@@ -44,11 +42,7 @@ import {
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadCurrentOrganizationAccount } from "../../../_lib/current-organization-account";
-import {
-  loadApplicationPage,
-  takeLocalPageProjectionResponseEvidence,
-} from "../../../_lib/application-page";
+import { loadApplicationPage } from "../../../_lib/application-page";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import { adoptApplicationRelease } from "../../../_lib/application-release-adoption";
 import {
@@ -339,6 +333,7 @@ export default async function ApplicationAddressPage({
         shells={resolved.experience.shells}
         theme={resolved.experience.theme}
         organizationName={organizationShortName}
+        identityId={identity.session.identityId}
       />
     );
   }
@@ -357,10 +352,6 @@ export default async function ApplicationAddressPage({
         ),
       );
 
-    const currentOrganizationAccount = await loadCurrentOrganizationAccount(
-      identity.session,
-      resolved.read.organizationId,
-    );
     const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
     const studioCreateHref =
       studioCreateAccess.kind === "available" &&
@@ -448,15 +439,6 @@ export default async function ApplicationAddressPage({
             </div>
           )}
 
-          <div className="mt-auto border-t border-border pt-6">
-            <AccountDetails
-              account={
-                currentOrganizationAccount.kind === "available"
-                  ? currentOrganizationAccount.value
-                  : undefined
-              }
-            />
-          </div>
         </div>
       </main>
     );
@@ -533,71 +515,33 @@ export default async function ApplicationAddressPage({
     tenantShortName, organizationShortName, applicationKey: resolved.application.key,
   }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
   const searchPageSubject = recordIdSchema.safeParse(parameters.record_id);
-  const projectionResponseEvidence = takeLocalPageProjectionResponseEvidence(page.model);
-  const adoption = page.model.adoption;
-  // The outcome notice is display only: it never selects a release, and the page below always
-  // renders whatever installation the server resolved for this request.
   const adoptionOutcome =
-    parameters.adoption === "adopted"
-      ? "The new release is now in use."
-      : parameters.adoption === "recent_authentication_required"
-        ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
-        : parameters.adoption === "refused"
-          ? "The release could not be adopted. The current release is still in use."
-          : undefined;
+    parameters.adoption === "recent_authentication_required"
+      ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
+      : parameters.adoption === "refused"
+        ? "The release could not be adopted. The current release is still in use."
+        : undefined;
   return (
     <ApplicationPageView
       model={applicationModel}
       onOpenApplication={openApplication}
+      adoptReleaseAction={adoptRelease}
       applicationSwitcherState={applicationSwitcherState}
-      applicationToolbar={
-        <ApplicationSearch
-          view={search}
-          pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined}
-        />
-      }
+      identityId={identity.session.identityId}
+      applicationSearch={search}
+      applicationSearchPageSubject={searchPageSubject.success ? searchPageSubject.data : undefined}
       pageFeedback={
-        <>
-          {projectionResponseEvidence === undefined ? null : (
-            <span
-              hidden
-              aria-hidden="true"
-              data-vortex-local-projection-response={JSON.stringify(projectionResponseEvidence)}
-            />
-          )}
-          {adoptionOutcome === undefined ? null : (
-            <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
-              <AlertDescription>{adoptionOutcome}</AlertDescription>
-            </Alert>
-          )}
-          {adoption === undefined ? null : (
-            <Alert role="region" aria-label="Application release">
-              <AlertDescription>
-                <form action={adoptRelease} data-vortex-release-adoption="offered">
-                  <input type="hidden" name="applicationKey" value={resolved.application.key} />
-                  <input type="hidden" name="pageKey" value={resolved.pageKey} />
-                  <input
-                    type="hidden"
-                    name="targetReleaseRevision"
-                    value={adoption.offeredReleaseRevision}
-                  />
-                    <input
-                      type="hidden"
-                      name="expectedActiveReleaseRevision"
-                      value={adoption.installedReleaseRevision}
-                    />
-                    <Button type="submit">Adopt release {adoption.offeredReleaseVersion}</Button>
-                  </form>
-                </AlertDescription>
-              </Alert>
-            )}
-        </>
+        adoptionOutcome === undefined ? undefined : (
+          <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
+            <AlertDescription>{adoptionOutcome}</AlertDescription>
+          </Alert>
+        )
       }
-        guidedFormActions={{
-          advance: advanceGuidedFormStepAction,
-          confirm: confirmGuidedFormAction,
-          abandon: abandonGuidedFormDraftAction,
-        }}
-      />
+      guidedFormActions={{
+        advance: advanceGuidedFormStepAction,
+        confirm: confirmGuidedFormAction,
+        abandon: abandonGuidedFormDraftAction,
+      }}
+    />
   );
 }

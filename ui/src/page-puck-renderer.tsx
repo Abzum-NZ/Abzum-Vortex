@@ -123,6 +123,10 @@ export type PagePuckRendererProps = Readonly<{
   timeZone?: string | undefined;
   /** Runtime labels and permitted application links for the application shell root. */
   applicationShellRuntime?: ApplicationShellRuntime | undefined;
+  /** Protected search results for a search block placed in the application definition. */
+  applicationSearch?: VortexPuckMetadata["applicationSearch"];
+  /** Record subject preserved by a search form placed on a detail page. */
+  applicationSearchPageSubject?: string | undefined;
   /**
    * The configured dedicated component origin. A page that places a custom component passes it so
    * the sandboxed host can frame the Vortex-owned bootstrap document on that origin.
@@ -154,6 +158,8 @@ export function PagePuckRenderer({
   locale,
   timeZone,
   applicationShellRuntime,
+  applicationSearch,
+  applicationSearchPageSubject,
   componentBundleOrigin,
 }: PagePuckRendererProps): ReactElement {
   const resolved = resolveRootPlacementSlotWithContext({
@@ -200,6 +206,8 @@ export function PagePuckRenderer({
     ...(currentPageId === undefined ? {} : { currentPageId }),
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
     ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
+    ...(applicationSearch === undefined ? {} : { applicationSearch }),
+    ...(applicationSearchPageSubject === undefined ? {} : { applicationSearchPageSubject }),
   };
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;

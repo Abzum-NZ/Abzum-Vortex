@@ -23,17 +23,20 @@ export function ApplicationExperiencePage({
   shells,
   theme,
   organizationName,
+  identityId,
 }: Readonly<{
   page: PageDefinitionV2;
   shells: readonly ApplicationShellV2[];
   /** The application's installed release theme; absent keeps the platform default. */
   theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
   organizationName: string;
+  identityId: string;
 }>): ReactElement {
   const router = useRouter();
   return (
     <ApplicationAccountActionsProvider
       actions={{
+        identityId,
         organizationName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,

@@ -13,7 +13,9 @@ import {
 } from "../components/dropdown-menu";
 /** Current account facts and platform actions, supplied by the signed-in route. */
 export type ApplicationAccountActions = Readonly<{
+  identityId: string;
   organizationName: string;
+  releaseAdoption?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
   chooseOrganization: () => void | Promise<void>;
   signOut: () => void | Promise<void>;
   openApplication: (href: string) => void | Promise<void>;
@@ -38,6 +40,7 @@ export function useApplicationAccountActions(): ApplicationAccountActions | null
 export function ApplicationAccountMenu(): ReactElement {
   const actions = useApplicationAccountActions();
   const organizationName = actions?.organizationName ?? "Account";
+  const releaseAdoption = actions?.releaseAdoption;
 
   return (
     <DropdownMenu>
@@ -52,9 +55,17 @@ export function ApplicationAccountMenu(): ReactElement {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+          <DropdownMenuLabel className="flex flex-col gap-1">
+            {actions === null ? <span>{organizationName}</span> : <span>Signed in as {actions.identityId}</span>}
+            <span className="font-normal text-muted-foreground">{organizationName}</span>
+          </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {releaseAdoption === undefined ? null : (
+          <DropdownMenuItem onClick={() => void releaseAdoption.adopt()}>
+            Adopt release {releaseAdoption.version}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.chooseOrganization()}>
           Choose organisation
         </DropdownMenuItem>
