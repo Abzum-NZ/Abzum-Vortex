@@ -24,6 +24,7 @@
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
     "guard": "node tooling/guard/guard.ts",
+    "knip": "knip",
     "build": "turbo run build",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs"

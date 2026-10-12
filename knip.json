@@ -1,0 +1,29 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "tags": ["-@knipignore"],
+  "workspaces": {
+    ".": {
+      "includeEntryExports": false,
+      "entry": ["tooling/**/*.{js,mjs,ts}"],
+      "project": ["tooling/**/*.{js,mjs,ts}"]
+    },
+    "apps/web": {
+      "includeEntryExports": false,
+      "entry": [
+        "app/**/{page,route,layout,template,default,loading,error,not-found,global-error}.{js,jsx,ts,tsx}",
+        "proxy.{js,ts}",
+        "instrumentation.{js,ts}",
+        "scripts/**/*.{js,mjs,ts}"
+      ],
+      "project": ["**/*.{js,jsx,mjs,ts,tsx}"]
+    },
+    "modules": {
+      "includeEntryExports": false,
+      "entry": ["src/**/*.{ts,tsx,json}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "ui": {
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
+    }
+  }
+}
