@@ -1,5 +1,150 @@
--- Append standard Events for the protected organisation-settings system projection under its row lock.
+-- Final function definitions for Landing Zone default initialization.
 begin;
+
+create or replace function vortex_access.save_organization_settings_record_for_administration(
+  p_record_id uuid,
+  p_expected_revision bigint,
+  p_core_values jsonb,
+  p_extension_values jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_correlation_id uuid;
+  saved record;
+  default_application_root_id_value uuid;
+  failure_sqlstate text;
+  failure_message text;
+begin
+  if p_record_id is null
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740990
+    or pg_catalog.jsonb_typeof(p_core_values) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_extension_values) is distinct from 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'invalid_request');
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if not context_value ? 'applicationRootId' then
+    raise exception using errcode = '42501',
+      message = 'Organization settings record save requires an Application context';
+  end if;
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  if p_record_id is distinct from context_organization_id then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'organization_mismatch');
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as access_version
+  where access_version.organization_id = context_organization_id
+  for update;
+  if not found then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'organization_access_missing');
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+
+  if not vortex_access.organization_runtime_settings_manage_is_current() then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'settings_permission_unavailable');
+  end if;
+
+  if p_core_values ? 'default_application_root_id'
+    and pg_catalog.jsonb_typeof(p_core_values -> 'default_application_root_id') <> 'null' then
+    if pg_catalog.jsonb_typeof(p_core_values -> 'default_application_root_id') <> 'string'
+      or not pg_catalog.pg_input_is_valid(
+        p_core_values ->> 'default_application_root_id', 'uuid'
+      ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'default_application_unavailable');
+    end if;
+    default_application_root_id_value :=
+      (p_core_values ->> 'default_application_root_id')::uuid;
+    if default_application_root_id_value = '00000000-0000-0000-0000-000000000000'::uuid
+      or not exists (
+        select 1
+        from vortex_access.permission_registrations as registration
+        join vortex_definition.roots as root
+          on root.root_id = registration.registration_owner_id
+          and root.organization_id = registration.organization_id
+          and root.kind = 'application'
+        where registration.organization_id = context_organization_id
+          and registration.registration_kind = 'application'
+          and registration.registration_owner_id = default_application_root_id_value
+          and registration.state = 'active'
+          and exists (
+            select 1
+            from vortex_definition.releases as release
+            where release.root_id = root.root_id
+              and release.release_revision = registration.source_revision
+              and release.content_fingerprint = registration.source_content_fingerprint
+              and release.resolution_fingerprint = registration.source_resolution_fingerprint
+              and release.compilation_output ->> 'kind' = 'application'
+          )
+          and exists (
+            select 1
+            from vortex_module.installation_bindings as binding
+            where binding.organization_id = context_organization_id
+              and binding.application_root_id = default_application_root_id_value
+              and binding.application_release_revision = registration.source_revision
+              and binding.state = 'active'
+          )
+      ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+  end if;
+
+  select updated.* into strict saved
+  from vortex_identity.save_organization_runtime_settings_record_internal(
+    context_organization_id, p_expected_revision, p_core_values, p_extension_values
+  ) as updated;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'saved',
+    'recordId', saved.organization_id,
+    'concurrencyNumber', saved.revision,
+    'correlationId', context_correlation_id
+  );
+exception
+  when serialization_failure or deadlock_detected then
+    get stacked diagnostics
+      failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise log 'Organization settings persistence conflicted: % (%)', failure_message, failure_sqlstate;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'reasonCode', 'persistence_conflict_' || failure_sqlstate
+    );
+  when no_data_found or too_many_rows or insufficient_privilege or check_violation
+    or object_not_in_prerequisite_state or invalid_text_representation then
+    get stacked diagnostics
+      failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise log 'Organization settings persistence refused: % (%)', failure_message, failure_sqlstate;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'persistence_refused_' || failure_sqlstate
+    );
+end
+$function$;
+
+revoke all on function vortex_access.save_organization_settings_record_for_administration(
+  uuid, bigint, jsonb, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_access.save_organization_settings_record_for_administration(
+  uuid, bigint, jsonb, jsonb
+) to vortex_record_adapter;
+
+comment on function vortex_access.save_organization_settings_record_for_administration(
+  uuid, bigint, jsonb, jsonb
+) is
+  'Protected organisation settings record writer requiring runtime-settings.manage and an exact current revision; the request organisation supplies the singleton identity and extensions are merged with the invariant settings in one transaction.';
+
+
 set local role postgres;
 create or replace function vortex_access.lock_organization_runtime_settings_record_for_event_internal(
   p_record_id uuid
@@ -47,9 +192,12 @@ alter function vortex_access.lock_organization_runtime_settings_record_for_event
 revoke all on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
   vortex_record_owner, vortex_module_owner;
+grant execute on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
+  to vortex_event_owner;
 
 comment on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid) is
   'Validates and locks the organisation runtime-settings row for the private Event append of its protected system projection.';
+
 
 create or replace function vortex_event.append_record_occurrences_for_resolved_installation_internal(
   p_storage_contract_id uuid,
@@ -566,11 +714,11 @@ comment on function vortex_event.append_record_occurrences_for_resolved_installa
 ) is
   'Appends an exact validated record occurrence batch; resolves the active installation under the canonical binding lock unless a trusted reader supplies an exact pin-set it resolved under that same lock.';
 
+
 set local role vortex_record_owner;
 grant create on schema vortex_record to vortex_record_adapter;
 reset role;
 set local role vortex_record_adapter;
-drop function vortex_record.save_organization_settings_record(uuid, uuid, uuid, bigint, jsonb, jsonb, uuid);
 create or replace function vortex_record.save_organization_settings_record(
   p_command_id uuid,
   p_record_type_id uuid,
@@ -667,16 +815,6 @@ begin
       'correlationId', correlation_id_value
     );
   end if;
-  if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
-    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'conflict',
-      'reasonCode', 'record_revision_conflict',
-      'concurrencyNumber', loaded -> 'concurrencyNumber',
-      'correlationId', correlation_id_value
-    );
-  end if;
-
   read_decision := vortex_access.evaluate_organization_record_access_internal(
     loaded -> 'declaration', p_record_id, loaded -> 'facts'
   );
@@ -881,6 +1019,16 @@ begin
     );
   end if;
 
+  if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
+    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict',
+      'reasonCode', 'record_revision_conflict',
+      'concurrencyNumber', loaded -> 'concurrencyNumber',
+      'correlationId', correlation_id_value
+    );
+  end if;
+
   access_result := vortex_access.save_organization_settings_record_for_administration(
     p_record_id, p_expected_concurrency_number, core_values, extension_values
   );
@@ -980,5 +1128,7 @@ comment on function vortex_record.save_organization_settings_record(
 alter function vortex_record.save_organization_settings_record(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) owner to vortex_record_adapter;
+
+reset role;
 
 commit;
