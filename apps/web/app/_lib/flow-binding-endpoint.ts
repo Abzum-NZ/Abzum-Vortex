@@ -492,6 +492,33 @@ const bindingInputs = (
   return inputs;
 };
 
+/**
+ * A flow receives a record reference input as the record's ID. A surface that chose the record
+ * supplies its typed reference, so the reference is checked against the record types the flow
+ * declares for that input and reduced to its record ID. `undefined` refuses the click.
+ */
+const referenceInputsAsRecordIds = (
+  rawFlow: unknown,
+  inputs: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | undefined => {
+  const parsedFlow = flowSchema.safeParse(rawFlow);
+  if (!parsedFlow.success) return undefined;
+  const result: Record<string, unknown> = { ...inputs };
+  for (const [name, declaration] of Object.entries(parsedFlow.data.inputs)) {
+    const value = result[name];
+    if (declaration.type !== "record_reference" || !isRecord(value)) continue;
+    const reference = selectedRecordInputSchema.safeParse(value);
+    if (
+      !reference.success ||
+      (declaration.recordTypeIds !== undefined &&
+        !declaration.recordTypeIds.some((id) => sameId(id, reference.data.recordTypeId)))
+    )
+      return undefined;
+    result[name] = reference.data.recordId;
+  }
+  return result;
+};
+
 const finishedResult = (
   response: Extract<FlowOrchestratorResponse, { kind: "finished" }>,
   context: Readonly<{
@@ -789,7 +816,12 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const selectedRecordReadInputs =
           installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??
           new Map<string, string>();
-        const inputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
+        const boundInputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
+        if (boundInputs === undefined) return refused;
+        const inputs = referenceInputsAsRecordIds(
+          installation.flows.get(String(binding.flow.flowId)),
+          boundInputs,
+        );
         if (inputs === undefined) return refused;
 
         const runId = runIdForClick(
