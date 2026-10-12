@@ -21,8 +21,5 @@
     "ships": true,
     "engine": true,
     "service": "connection"
-  },
-  "devDependencies": {
-    "vitest": "catalog:"
   }
 }

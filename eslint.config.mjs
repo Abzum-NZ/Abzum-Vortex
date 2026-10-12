@@ -9,7 +9,6 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/.pnpm-store/**",
-      "testing/fixtures/**",
     ],
   },
   eslint.configs.recommended,

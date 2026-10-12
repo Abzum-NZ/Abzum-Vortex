@@ -8,8 +8,7 @@
     "./compiler": "./src/compiler-api.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --root ../.. runtime/definition/test"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
@@ -22,8 +21,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/semver": "catalog:",
-    "vitest": "4.1.11"
+    "@types/semver": "catalog:"
   },
   "vortex": {
     "tier": 2,

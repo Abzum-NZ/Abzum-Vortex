@@ -14,9 +14,6 @@
     "postgres": "catalog:",
     "server-only": "0.0.1"
   },
-  "devDependencies": {
-    "vitest": "catalog:"
-  },
   "vortex": {
     "tier": 1,
     "environment": "server",

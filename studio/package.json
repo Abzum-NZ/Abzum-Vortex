@@ -21,7 +21,6 @@
     "ships": true
   },
   "devDependencies": {
-    "@types/react": "19.3.0",
-    "vitest": "catalog:"
+    "@types/react": "19.3.0"
   }
 }

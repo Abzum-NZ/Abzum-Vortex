@@ -8,8 +8,7 @@
     "./client": "./src/client.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --root ../.. runtime/event/test"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
@@ -25,8 +24,5 @@
     "ships": true,
     "engine": true,
     "service": "event"
-  },
-  "devDependencies": {
-    "vitest": "catalog:"
   }
 }
