@@ -11,8 +11,19 @@ export const requiredEnvironmentValue = (name: string): string => {
 
 /** The one hosted Storage destination and signing configuration for file and component reads. */
 export const hostedStorageSigningConfiguration = (supabaseUrl: string, service: string) => {
+  const destination = new URL(supabaseUrl);
+  if (
+    destination.protocol !== "https:" ||
+    destination.username !== "" ||
+    destination.password !== "" ||
+    destination.port !== "" ||
+    destination.pathname !== "/" ||
+    destination.search !== "" ||
+    destination.hash !== ""
+  )
+    throw new Error(`${service} requires an HTTPS hosted Supabase root origin`);
   const match = /^([a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?)\.supabase\.co$/.exec(
-    new URL(supabaseUrl).hostname,
+    destination.hostname,
   );
   if (match === null || match[1] === undefined)
     throw new Error(`${service} requires a hosted Supabase destination project`);
