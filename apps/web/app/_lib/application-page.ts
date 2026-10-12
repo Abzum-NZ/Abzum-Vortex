@@ -1805,9 +1805,43 @@ const loadApplicationPageInternal = async (
   const applicationPageLinks = createApplicationPageLinkReader({
     tenantShortName: address.tenantShortName, organizationShortName: address.organizationShortName,
   });
-  const linkTiles = createLinkTilesQueryResolver(queries,
-    (viewer, identity) => recordLinks.read(viewer, identity),
-    (viewer, selector) => applicationPageLinks.read(viewer, selector));
+  const readTargetBatch = async <Input, Output>(
+    candidates: readonly Input[],
+    read: (candidate: Input) => Promise<Output>,
+  ): Promise<readonly Output[]> => {
+    if (candidates.length > 10_000) throw new Error("LINK_TILE_TARGET_BATCH_TOO_LARGE");
+    const results = new Array<Output>(candidates.length);
+    let nextIndex = 0;
+    let failed = false;
+    let failure: unknown;
+    const worker = async (): Promise<void> => {
+      while (true) {
+        if (failed) return;
+        const index = nextIndex++;
+        if (index >= candidates.length) return;
+        try {
+          const candidate = candidates[index];
+          if (candidate === undefined) throw new Error("LINK_TILE_TARGET_BATCH_INPUT_MISSING");
+          results[index] = await read(candidate);
+        } catch (error) {
+          if (!failed) {
+            failed = true;
+            failure = error;
+          }
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, worker));
+    if (failed) throw failure;
+    return Object.freeze(results);
+  };
+  const linkTiles = createLinkTilesQueryResolver(
+    queries,
+    (viewer, identities) =>
+      readTargetBatch(identities, (identity) => recordLinks.read(viewer, identity)),
+    (viewer, selectors) =>
+      readTargetBatch(selectors, (selector) => applicationPageLinks.read(viewer, selector)),
+  );
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
