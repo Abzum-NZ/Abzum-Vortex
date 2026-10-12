@@ -688,6 +688,7 @@ const boardPayloadFor = (candidate: unknown): BoardPayload | undefined => {
 
 const tablePayloadFor = (candidate: unknown): ReturnType<typeof parseTablePayload> | undefined => {
   if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
+  if (!isRecord(candidate.values) || candidate.values.kind !== "table") return undefined;
   try {
     return parseTablePayload(candidate.values);
   } catch (error) {

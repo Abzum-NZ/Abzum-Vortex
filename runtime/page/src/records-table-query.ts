@@ -313,6 +313,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldChoiceLabels: request.fieldChoiceLabels }),
         },
         result.value.rows,
+        (request.page ?? 1) > 1,
       );
       if (projected === undefined) return refused;
       const nextContinuationToken = result.value.nextContinuationToken;
