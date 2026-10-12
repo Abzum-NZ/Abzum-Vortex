@@ -35,6 +35,8 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 
 ## Rules
 
+The [target architecture](docs/build-plan/target-architecture.md) is binding: read it before changing code. In short:
+
 - English only, in code, comments, documents and commit messages.
 - Work on a branch and open a pull request to `main`. Never push to `main`.
 - No tests. Do not add test files, test runners or test dependencies.
@@ -48,3 +50,14 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
   safe errors are product requirements. Preserve them in every change.
 - Keep secrets out of files, prompts and logs.
 - Packages use each other's public interfaces only; nothing depends upward.
+- One renderer: pages are Puck data rendered with the one Puck config built on shadcn/ui. No other
+  code path draws a block.
+- No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
+- One current version of every contract: no `V2`/`V3` copies.
+- One record write path (`apply_record_changes`), one activity append, one idempotency table.
+- No process artefacts in product code: no review receipts, fingerprints, continuity or evidence.
+- Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
+  `null`/"unavailable"; log the cause.
+- No layers without two implementations; no source file over 1,500 lines.
+- Every behaviour change is walked through in the running app on a freshly reset local database
+  before merge.
