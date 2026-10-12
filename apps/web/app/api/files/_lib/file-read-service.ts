@@ -118,10 +118,8 @@ export const handleFileReadRequest = async (
   const session: IdentitySession = identity.session;
 
   let identityAuthorityId;
-  let signing: StorageSigningConfiguration;
   try {
     identityAuthorityId = getIdentityAuthorityConfiguration().authorityId;
-    signing = storageSigningConfiguration();
   } catch {
     return refusalResponse("storage_unavailable");
   }
@@ -137,6 +135,14 @@ export const handleFileReadRequest = async (
     return refusalResponse("file_not_found");
   }
   const applicationRootId = located.value.applicationRootId;
+
+  // Refuse a foreign organisation or missing file before inspecting Storage configuration.
+  let signing: StorageSigningConfiguration;
+  try {
+    signing = storageSigningConfiguration();
+  } catch {
+    return refusalResponse("storage_unavailable");
+  }
 
   const rangeHeader = request.headers.get("range");
   const ifRangeHeader = request.headers.get("if-range");
