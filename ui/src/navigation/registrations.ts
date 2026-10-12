@@ -9,8 +9,6 @@ import {
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
 } from "../registry";
-import { ApplicationNavigationBlock } from "./navigation";
-import { ApplicationAccountActionsBlock } from "./account-actions";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -31,12 +29,10 @@ export const NAVIGATION_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegis
   Object.freeze([
     Object.freeze({
       metadata: APPLICATION_NAVIGATION_BLOCK_RELEASE,
-      render: ApplicationNavigationBlock,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
-      render: ApplicationAccountActionsBlock,
       parsePayload: noRuntimeInputs,
     }),
   ]);

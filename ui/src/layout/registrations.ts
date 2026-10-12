@@ -12,8 +12,6 @@ import {
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
 } from "../registry";
-import { Container } from "./container";
-import { Heading } from "./heading";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -37,27 +35,22 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
   Object.freeze([
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE,
-      render: Container,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE_1_1_0,
-      render: Container,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE_1_2_0,
-      render: Container,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: CONTAINER_BLOCK_RELEASE_1_3_0,
-      render: Container,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: HEADING_BLOCK_RELEASE,
-      render: Heading,
       parsePayload: noRuntimeInputs,
     }),
   ]);

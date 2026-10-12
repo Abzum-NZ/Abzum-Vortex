@@ -47,6 +47,17 @@ export {
   LAYOUT_ONLY_STYLES_CSS,
 } from "./layout-styles";
 
+// The one Puck component config: every definition block, for <Render>, <Puck> and the page runtime
+export {
+  createVortexPuckConfig,
+  getVortexPuckConfig,
+  resolveEffectiveSettings,
+  resolveSlotGap,
+  type VortexPlacementMeta,
+  type VortexPuckComponentProps,
+  type VortexPuckMetadata,
+} from "./puck-config";
+
 // Layout Renderer & Recursive Traversal
 export {
   PageLayoutRenderer,

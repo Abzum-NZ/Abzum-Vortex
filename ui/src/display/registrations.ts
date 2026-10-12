@@ -54,17 +54,7 @@ import {
   type TablePayload,
   type TextPayload,
 } from "./projected-data";
-import { GroupedDataDisplay } from "./grouped-data";
-import { CalendarDisplay } from "./calendar";
-import { BoardDisplay } from "./board";
-import { ListDisplay } from "./list";
-import { RecordDetailDisplay } from "./record-detail";
-import { RichTextDisplay } from "./rich-text-component";
-import { SummaryValuesDisplay } from "./summary-values";
-import { TableDisplay } from "./table";
-import { PlainTextDisplay } from "./text";
-import { NoticeBlock } from "./notice";
-import { QueryNoticeDisplay, QUERY_NOTICE_PAYLOAD_PARSER } from "./query-notice";
+import { QUERY_NOTICE_PAYLOAD_PARSER } from "./query-notice";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -115,117 +105,95 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
   Object.freeze([
     Object.freeze({
       metadata: TEXT_BLOCK_RELEASE,
-      render: PlainTextDisplay,
       parsePayload: TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RICH_TEXT_BLOCK_RELEASE,
-      render: RichTextDisplay,
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: LIST_BLOCK_RELEASE,
-      render: ListDisplay,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE,
-      render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RECORD_DETAIL_BLOCK_RELEASE,
-      render: RecordDetailDisplay,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: GROUPED_DATA_BLOCK_RELEASE,
-      render: GroupedDataDisplay,
       parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: SUMMARY_VALUES_BLOCK_RELEASE,
-      render: SummaryValuesDisplay,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: NOTICE_BLOCK_RELEASE,
-      render: NoticeBlock,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
       metadata: QUERY_NOTICE_BLOCK_RELEASE,
-      render: QueryNoticeDisplay,
       parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
     }),
     // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
     Object.freeze({
       metadata: TEXT_BLOCK_RELEASE_1_1_0,
-      render: PlainTextDisplay,
       parsePayload: TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RICH_TEXT_BLOCK_RELEASE_1_1_0,
-      render: RichTextDisplay,
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: LIST_BLOCK_RELEASE_1_1_0,
-      render: ListDisplay,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_1_0,
-      render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-      render: RecordDetailDisplay,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: GROUPED_DATA_BLOCK_RELEASE_1_1_0,
-      render: GroupedDataDisplay,
       parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
-      render: SummaryValuesDisplay,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
     // Release 1.2.0 declares the data contract as settings; the same renderers and parsers read it.
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_2_0,
-      render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
-      render: RecordDetailDisplay,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     // Release 1.3.0 adds configured row behaviours; the same parser reads them.
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_3_0,
-      render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     // Release 1.4.0 adds the interactive filter, search, sort, paging and selection controls and
     // each action's declared capability; the same parser reads them.
     Object.freeze({
       metadata: TABLE_BLOCK_RELEASE_1_4_0,
-      render: TableDisplay,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: CALENDAR_BLOCK_RELEASE,
-      render: CalendarDisplay,
       parsePayload: CALENDAR_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: BOARD_BLOCK_RELEASE,
-      render: BoardDisplay,
       parsePayload: BOARD_PAYLOAD_PARSER,
     }),
   ]);

@@ -11,10 +11,7 @@ import {
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
 } from "../registry";
-import {
-  CustomComponentHost,
-  type CustomComponentEventBinding,
-} from "./custom-component-host";
+import type { CustomComponentEventBinding } from "./custom-component-host";
 
 /**
  * Registers a custom component release with the sandboxed host. Custom component releases are
@@ -115,7 +112,6 @@ export const createCustomComponentRegistration = (
     );
   return Object.freeze({
     metadata: release,
-    render: CustomComponentHost,
     parsePayload: createCustomComponentPayloadParser(custom),
   });
 };

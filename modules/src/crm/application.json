@@ -5006,6 +5006,10 @@
                                "padding": {
                                    "kind": "choice",
                                    "value": "medium"
+                               },
+                               "content_width": {
+                                   "kind": "choice",
+                                   "value": "fill"
                                }
                            },
                            "theme_overrides": {},
@@ -5040,6 +5044,14 @@
                                              "phone_direction": {
                                                  "kind": "choice",
                                                  "value": "column"
+                                             },
+                                             "padding": {
+                                                 "kind": "choice",
+                                                 "value": "none"
+                                             },
+                                             "content_width": {
+                                                 "kind": "choice",
+                                                 "value": "fill"
                                              }
                                          },
                                          "theme_overrides": {},

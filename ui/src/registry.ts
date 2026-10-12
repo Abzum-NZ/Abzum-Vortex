@@ -209,13 +209,12 @@ export type PlatformBlockRenderProps = Readonly<{
 export type PlatformComponentRenderer = ComponentType<PlatformBlockRenderProps>;
 
 /**
- * An immutable registration pairing exact block metadata with its React renderer and the parser
- * that validates that block's own runtime inputs. The parser is part of the registration, so a new
- * data component is a release, a component and a parser and nothing else.
+ * An immutable registration pairing exact block metadata with the parser that validates that
+ * block's own runtime inputs. The React render function is not part of the registration: the one
+ * Puck component config (`puck-config.tsx`) binds every renderer key to its render function.
  */
 export type PlatformComponentRegistration = Readonly<{
   metadata: PlatformBlockReleaseV2;
-  render: PlatformComponentRenderer;
   parsePayload: PlatformComponentPayloadParser;
 }>;
 
@@ -238,9 +237,6 @@ export interface PlatformComponentRegistry {
    * Check if a block ID is known in any release version.
    */
   hasBlockId(blockId: string): boolean;
-
-  /** Look up the one React renderer bound to a renderer key across exact releases. */
-  getRenderer(rendererKey: string): PlatformComponentRenderer | undefined;
 
   /**
    * List all registered components.
@@ -279,7 +275,6 @@ export function createPlatformComponentRegistry(
   registrations: Iterable<PlatformComponentRegistration> = [],
 ): PlatformComponentRegistry {
   const byIdentity = new Map<string, PlatformComponentRegistration>();
-  const byRendererKey = new Map<string, PlatformComponentRegistration>();
   const blockKeyById = new Map<string, string>();
   const blockIdByKey = new Map<string, string>();
   const knownBlockIds = new Set<string>();
@@ -307,14 +302,6 @@ export function createPlatformComponentRegistry(
       throw new DefinitionRenderError(
         "ABSENT_RENDERER_KEY",
         `Block release '${metadata.key}' (${metadata.blockId}:${metadata.releaseVersion}) has no rendererKey`,
-        { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
-      );
-    }
-
-    if (typeof registration.render !== "function") {
-      throw new DefinitionRenderError(
-        "ABSENT_RENDERER_KEY",
-        `Block release '${metadata.key}' (${metadata.blockId}:${metadata.releaseVersion}) has no valid React renderer component`,
         { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
       );
     }
@@ -349,18 +336,8 @@ export function createPlatformComponentRegistry(
       );
     }
 
-    const rendererRegistration = byRendererKey.get(metadata.rendererKey);
-    if (rendererRegistration !== undefined && rendererRegistration.render !== registration.render) {
-      throw new DefinitionRenderError(
-        "RENDERER_KEY_CONFLICT",
-        `Renderer key '${metadata.rendererKey}' resolves to more than one React renderer`,
-        { blockId: metadata.blockId, releaseVersion: metadata.releaseVersion },
-      );
-    }
-
     const frozenRegistration: PlatformComponentRegistration = Object.freeze({
       metadata,
-      render: registration.render,
       parsePayload: registration.parsePayload,
     });
 
@@ -368,9 +345,6 @@ export function createPlatformComponentRegistry(
     knownBlockIds.add(metadata.blockId);
     blockKeyById.set(metadata.blockId, metadata.key);
     blockIdByKey.set(metadata.key, metadata.blockId);
-    if (!byRendererKey.has(metadata.rendererKey)) {
-      byRendererKey.set(metadata.rendererKey, frozenRegistration);
-    }
     list.push(frozenRegistration);
   }
 
@@ -388,10 +362,6 @@ export function createPlatformComponentRegistry(
 
     hasBlockId(blockId: string): boolean {
       return knownBlockIds.has(blockId);
-    },
-
-    getRenderer(rendererKey: string): PlatformComponentRenderer | undefined {
-      return byRendererKey.get(rendererKey)?.render;
     },
 
     list(): readonly PlatformComponentRegistration[] {

@@ -64,20 +64,7 @@ import {
   type ValidationPayload,
 } from "./projected-data";
 import type { FormDraftFeedbackSupply } from "./draft-feedback";
-import { TextInput } from "./text-input";
-import { LinkInput } from "./link-input";
-import { RichTextInput } from "./rich-text-input";
-import { NumberInput } from "./number-input";
-import { BooleanInput } from "./boolean-input";
-import { DateInput } from "./date-input";
-import { ChoiceInput } from "./choice-input";
-import { FieldInput } from "./field-input";
-import { ValidationMessage } from "./validation-message";
-import { Button } from "./button";
-import { Tabs } from "./tabs";
-import { Dialog } from "./dialog";
-import { Drawer } from "./drawer";
-import { FormContainer, type FormFlowFeedback } from "./form-container";
+import type { FormFlowFeedback } from "./form-container";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -359,87 +346,70 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
   Object.freeze([
     Object.freeze({
       metadata: TEXT_INPUT_BLOCK_RELEASE,
-      render: TextInput,
       parsePayload: controlPayloadParser<TextInputPayload>(parseTextInputPayload),
     }),
     Object.freeze({
       metadata: LINK_INPUT_BLOCK_RELEASE,
-      render: LinkInput,
       parsePayload: controlPayloadParser<LinkInputPayload>(parseLinkInputPayload),
     }),
     Object.freeze({
       metadata: RICH_TEXT_INPUT_BLOCK_RELEASE,
-      render: RichTextInput,
       parsePayload: controlPayloadParser<RichTextInputPayload>(parseRichTextInputPayload),
     }),
     Object.freeze({
       metadata: NUMBER_INPUT_BLOCK_RELEASE,
-      render: NumberInput,
       parsePayload: controlPayloadParser<NumberInputPayload>(parseNumberInputPayload),
     }),
     Object.freeze({
       metadata: BOOLEAN_INPUT_BLOCK_RELEASE,
-      render: BooleanInput,
       parsePayload: controlPayloadParser<BooleanInputPayload>(parseBooleanInputPayload),
     }),
     Object.freeze({
       metadata: DATE_INPUT_BLOCK_RELEASE,
-      render: DateInput,
       parsePayload: controlPayloadParser<DateInputPayload>(parseDateInputPayload),
     }),
     Object.freeze({
       metadata: CHOICE_INPUT_BLOCK_RELEASE,
-      render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
     Object.freeze({
       metadata: CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-      render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
     Object.freeze({
       metadata: CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-      render: ChoiceInput,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),
     Object.freeze({
       metadata: FIELD_INPUT_BLOCK_RELEASE,
-      render: FieldInput,
       parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
     }),
     Object.freeze({
       metadata: VALIDATION_MESSAGE_BLOCK_RELEASE,
-      render: ValidationMessage,
       parsePayload: controlPayloadParser<ValidationPayload>(parseValidationPayload),
     }),
     Object.freeze({
       metadata: BUTTON_BLOCK_RELEASE,
-      render: Button,
       parsePayload: controlPayloadParser<ButtonPayload>(parseButtonPayload),
     }),
     Object.freeze({
       metadata: TABS_BLOCK_RELEASE,
-      render: Tabs,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
     Object.freeze({
       metadata: TABS_BLOCK_RELEASE_2_0_0,
-      render: Tabs,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
     Object.freeze({
       metadata: DIALOG_BLOCK_RELEASE,
-      render: Dialog,
       parsePayload: controlPayloadParser<DialogPayload>(parseDialogPayload),
     }),
     Object.freeze({
       metadata: DRAWER_BLOCK_RELEASE,
-      render: Drawer,
       parsePayload: controlPayloadParser<DrawerPayload>(parseDrawerPayload),
     }),
     Object.freeze({
       metadata: FORM_CONTAINER_BLOCK_RELEASE,
-      render: FormContainer,
       parsePayload: FORM_PAYLOAD_PARSER,
     }),
   ]);

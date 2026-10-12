@@ -26,7 +26,6 @@ import {
 import { IconLibraryProvider } from "./icons";
 import {
   DefinitionRenderError,
-  validateAccessibleName,
   validatePlacementSlots,
   validatePlacementTree,
   validateSlotOrder,
@@ -34,23 +33,28 @@ import {
   type DefinitionRenderErrorLocation,
 } from "./definition-error";
 import {
-  computePlacementClassName,
-  computePlacementStyle,
   computeResponsiveLayoutCss,
   computeSlotContainerStyle,
   LAYOUT_CLASS_NAMES,
   LIVE_LAYOUT_SCOPE_ATTRIBUTE,
   RESPONSIVE_BREAKPOINT_ORDER,
   slotDeclaresGridChildren,
+  type SlotGapName,
 } from "./layout-styles";
 import { BreakpointOrderedChildren, LayoutBreakpointProvider } from "./breakpoint";
 import {
   assertRuntimeInputKeysArePlacements,
-  EMPTY_RUNTIME_INPUTS,
-  type PlatformBlockRuntimeInputs,
   type PlatformComponentRegistry,
   type RuntimeInputsByPlacement,
 } from "./registry";
+import { projectedAvailability } from "./placement-availability";
+import {
+  getVortexPuckConfig,
+  resolveEffectiveSettings,
+  resolveSlotGap,
+  type VortexPuckComponentProps,
+  type VortexPuckMetadata,
+} from "./puck-config";
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
 
@@ -99,31 +103,6 @@ export type ProjectedPlacementSlot = PlacementSlotV2 &
     placements: Record<string, BlockPlacementV2Contract & ProjectedPlacementAvailability>;
   }>;
 
-const projectedAvailability = (
-  placement: BlockPlacementV2Contract,
-  location: DefinitionRenderErrorLocation,
-): Readonly<{
-  availability: "available" | "unavailable";
-  unavailableReason?: "operation_unavailable";
-}> => {
-  const hasAvailability = "availability" in placement;
-  const hasReason = "unavailableReason" in placement;
-  if (!hasAvailability && !hasReason) return { availability: "available" };
-  if (
-    !hasAvailability ||
-    placement.availability !== "unavailable" ||
-    !hasReason ||
-    placement.unavailableReason !== "operation_unavailable"
-  ) {
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      "Projected placement availability must use the fixed operation-unavailable state",
-      location,
-    );
-  }
-  return { availability: "unavailable", unavailableReason: "operation_unavailable" };
-};
-
 const validateProjectedAvailabilityTree = (
   slot: PlacementSlotV2,
   location: DefinitionRenderErrorLocation,
@@ -144,7 +123,10 @@ const validatePlacementDependencies = (
   const releases = new Set(
     dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
   );
-  const visit = (current: PlacementSlotV2, currentLocation: DefinitionRenderErrorLocation): void => {
+  const visit = (
+    current: PlacementSlotV2,
+    currentLocation: DefinitionRenderErrorLocation,
+  ): void => {
     for (const [placementId, placement] of Object.entries(current.placements)) {
       const placementLocation = {
         ...currentLocation,
@@ -152,9 +134,7 @@ const validatePlacementDependencies = (
         blockId: placement.block.blockId,
         releaseVersion: placement.block.releaseVersion,
       };
-      if (
-        !releases.has(`${placement.block.blockId}@${placement.block.releaseVersion}`)
-      ) {
+      if (!releases.has(`${placement.block.blockId}@${placement.block.releaseVersion}`)) {
         throw new DefinitionRenderError(
           "MISMATCHED_RELEASE",
           `Placement '${placementId}' does not match the materialised platform-block dependency manifest`,
@@ -205,13 +185,6 @@ function findPlacementsInSlot(
   }
   return matches;
 }
-
-/** Reads only an own entry keyed by exact stable placement identity. */
-const ownPlacementEntry = <Value,>(
-  entries: Readonly<Record<string, Value>> | undefined,
-  placementId: string,
-): Value | undefined =>
-  entries !== undefined && Object.hasOwn(entries, placementId) ? entries[placementId] : undefined;
 
 function collectPlacementIds(
   slot: PlacementSlotV2,
@@ -308,10 +281,7 @@ export function resolveShellLayout(
       }
     }
 
-    if (
-      binding.required &&
-      (!supplied || Object.keys(supplied.placements).length === 0)
-    ) {
+    if (binding.required && (!supplied || Object.keys(supplied.placements).length === 0)) {
       throw new DefinitionRenderError(
         "UNDECLARED_CHILDREN",
         `Required shell content slot '${binding.key}' (${slotId}) in shell '${shell.key}' has no content`,
@@ -411,9 +381,14 @@ export function PlacementRenderer(props: PlacementRendererProps): ReactElement {
     placements: { [placementId]: placement },
     order: { desktop: [placementId], tablet: [placementId], phone: [placementId] },
   };
-  validatePlacementTree(slot, registry, { ...location, breakpoint }, {
-    allowEmptyRequiredSlots: props.allowEmptyRequiredSlots ?? false,
-  });
+  validatePlacementTree(
+    slot,
+    registry,
+    { ...location, breakpoint },
+    {
+      allowEmptyRequiredSlots: props.allowEmptyRequiredSlots ?? false,
+    },
+  );
   validateProjectedAvailabilityTree(slot, { ...location, breakpoint });
   return <PlacementView {...props} />;
 }
@@ -461,10 +436,10 @@ function PlacementView({
     );
   }
 
-  const { metadata, render: Component } = registration;
+  const { metadata } = registration;
 
   // 2. Validate renderer key
-  if (!metadata.rendererKey || metadata.rendererKey.trim().length === 0 || !Component) {
+  if (!metadata.rendererKey || metadata.rendererKey.trim().length === 0) {
     throw new DefinitionRenderError(
       "ABSENT_RENDERER_KEY",
       `Block '${metadata.key}' (${metadata.blockId}:${metadata.releaseVersion}) has absent or empty renderer key`,
@@ -472,33 +447,23 @@ function PlacementView({
     );
   }
 
-  // 3. Validate accessible name
-  validateAccessibleName(placement.settings, metadata.capabilities, currentLocation);
-
-  // 4. Validate child slots and child category restrictions
+  // 3. Validate child slots and child category restrictions
   validatePlacementSlots(placement, metadata, registry, currentLocation, {
     allowEmptyRequiredSlots,
   });
+  projectedAvailability(placement, currentLocation);
 
-  // 5. Parse this placement's own runtime inputs with its own registration's parser, fail-closed.
-  //    A placement whose use is unavailable stays viewable but never receives an invocable
-  //    callback, which each block's own context enforces from the availability it receives. The
-  //    parsed inputs are spread first, so the props every block always receives cannot be replaced.
-  const availability = projectedAvailability(placement, currentLocation);
-  const suppliedInputs = ownPlacementEntry(runtimeInputs, placementId);
-  const parsedInputs: PlatformBlockRuntimeInputs =
-    suppliedInputs === undefined
-      ? EMPTY_RUNTIME_INPUTS
-      : registration.parsePayload(suppliedInputs, currentLocation);
-
-  // Declared theme overrides apply to this placement and its subtree. A re-themed placement is
-  // also a theme root, so its surface, text and typography repaint from its own variables
-  // rather than keeping the values its ancestors computed.
+  // Declared theme overrides apply to this placement and its subtree, so its child slots are
+  // rendered against the scope the config's render function computes for the placement itself.
   const placementTheme = resolvePlacementTheme(themeScope, placement.themeOverrides);
+  const slotGap: SlotGapName = resolveSlotGap(
+    metadata,
+    resolveEffectiveSettings(metadata, placement.settings),
+  );
 
-  // 6. Recursively render declared named child slots in deterministic order. A repeatable slot
+  // 4. Recursively render declared named child slots in deterministic order. A repeatable slot
   //    renders one keyed slot per declared item identity, so each tab item carries its own content.
-  const renderedSlots: Record<string, ReactNode> = {};
+  const slotNodes: Record<string, ReactNode> = {};
   for (const declaredSlot of metadata.slots) {
     const slotKeys =
       declaredSlot.repeats === undefined
@@ -509,10 +474,11 @@ function PlacementView({
     for (const slotKey of slotKeys) {
       const childSlot = placement.slots[slotKey];
       if (childSlot && Object.keys(childSlot.placements).length > 0) {
-        renderedSlots[slotKey] = (
+        slotNodes[slotKey] = (
           <PlacementSlotView
             slot={childSlot}
             slotKey={slotKey}
+            slotGap={slotGap}
             breakpoint={breakpoint}
             registry={registry}
             parentPlacementId={placementId}
@@ -527,73 +493,55 @@ function PlacementView({
             responsive={responsive}
           />
         );
-      } else {
-        renderedSlots[slotKey] = null;
       }
     }
   }
 
-  // 7. Apply declared visibility, content/fill/grid placement and content/bounded-height sizing.
-  //    Live pages take all of it from the scoped per-breakpoint stylesheet, so the element carries
-  //    no breakpoint-specific style or label. A placement visible at any breakpoint stays in the
-  //    document so a narrower media rule can reveal it. Its block renders once, server-side, with
-  //    the desktop base breakpoint; a client block that must adapt reads useLayoutBreakpoint().
-  const layout = placement.responsive[breakpoint];
-  const placementStyle = responsive ? undefined : computePlacementStyle(layout, breakpoint);
-  const placementClassName = responsive
-    ? LAYOUT_CLASS_NAMES.placementWrapper
-    : computePlacementClassName(layout, breakpoint);
-  const visible = responsive
-    ? RESPONSIVE_BREAKPOINT_ORDER.some((candidate) => placement.responsive[candidate].visible)
-    : layout.visible;
-
-  const combinedStyle: CSSProperties = {
-    ...style,
-    ...placementTheme.style,
-    ...(placementStyle === undefined ? {} : placementStyle),
+  // 5. The Puck config owns everything a placement renders: wrapper, theme root, runtime inputs,
+  //    availability, geometry and the block itself. This renderer only validates and orders.
+  //    A live page takes geometry from the page's one scoped stylesheet; a preview breakpoint
+  //    is rendered inline.
+  const Block = getVortexPuckConfig(registry).components[metadata.rendererKey]?.render;
+  if (Block === undefined)
+    throw new DefinitionRenderError(
+      "ABSENT_RENDERER_KEY",
+      `Block '${metadata.key}' has no component in the Puck config`,
+      currentLocation,
+    );
+  const puckMetadata: VortexPuckMetadata = {
+    ...(responsive ? {} : { breakpoint }),
+    layoutCss: "page",
+    runtimeInputs,
+    projectedNavigation,
+    resolvePageHref,
+    currentPageId,
+    themeScope,
+    componentBundleOrigin,
   };
-
-  const combinedClassName = className
-    ? `${placementClassName} ${className}`
-    : placementClassName;
-
-  return (
-    <div
-      data-vortex-layout-wrapper=""
-      data-vortex-placement-id={placementId}
-      data-vortex-block-id={metadata.blockId}
-      data-vortex-block-key={metadata.key}
-      {...(responsive
-        ? {}
-        : { "data-vortex-breakpoint": breakpoint, "data-vortex-visible": String(layout.visible) })}
-      {...(placementTheme.style === undefined ? {} : { "data-vortex-theme": "" })}
-      className={combinedClassName}
-      style={combinedStyle}
-    >
-      {/* A re-themed placement may paint another font; its links join the application's. */}
-      {placementTheme.style === undefined ? null : (
-        <VortexFontStylesheets tokens={placementTheme.scope.inherited} />
-      )}
-      {visible ? (
-        <Component
-          {...parsedInputs}
-          placementId={placementId}
-          settings={placement.settings}
-          slots={renderedSlots}
-          breakpoint={breakpoint}
-          responsiveLayout={responsive}
-          metadata={metadata}
-          themeOverrides={placement.themeOverrides}
-          themeTokens={placementTheme.scope.inherited}
-          {...availability}
-          {...(projectedNavigation === undefined ? {} : { projectedNavigation })}
-          {...(resolvePageHref === undefined ? {} : { resolvePageHref })}
-          {...(currentPageId === undefined ? {} : { currentPageId })}
-          {...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin })}
-        />
-      ) : null}
-    </div>
-  );
+  const blockProps: VortexPuckComponentProps = {
+    id: placementId,
+    settings: placement.settings,
+    vortex: {
+      block: placement.block,
+      responsive: placement.responsive,
+      themeOverrides: placement.themeOverrides,
+      ...("availability" in placement && placement.availability === "unavailable"
+        ? {
+            availability: "unavailable" as const,
+            unavailableReason: "operation_unavailable" as const,
+          }
+        : {}),
+    },
+    puck: {
+      metadata: puckMetadata,
+      isEditing: false,
+      dragRef: null,
+      renderDropZone: () => null,
+    },
+    wrapper: { className, style },
+    slotNodes,
+  };
+  return <Block {...(blockProps as Parameters<typeof Block>[0])} />;
 }
 
 /**
@@ -602,6 +550,8 @@ function PlacementView({
 export type PlacementSlotRendererProps = Readonly<{
   slot: PlacementSlotV2;
   slotKey?: string;
+  /** The gap between this slot's children, always named by the owning placement's config. */
+  slotGap: SlotGapName;
   breakpoint: Breakpoint;
   registry: PlatformComponentRegistry;
   parentPlacementId?: string;
@@ -650,6 +600,7 @@ export function PlacementSlotRenderer(props: PlacementSlotRendererProps): ReactE
 function PlacementSlotView({
   slot,
   slotKey,
+  slotGap,
   breakpoint,
   registry,
   parentPlacementId,
@@ -692,16 +643,14 @@ function PlacementSlotView({
 
   const containerStyle: CSSProperties = {
     ...style,
-    ...computeSlotContainerStyle(hasGridChildren),
+    ...computeSlotContainerStyle(hasGridChildren, slotGap),
   };
 
   const containerClassName = hasGridChildren
     ? LAYOUT_CLASS_NAMES.gridContainer
     : LAYOUT_CLASS_NAMES.slotContainer;
 
-  const combinedClassName = className
-    ? `${containerClassName} ${className}`
-    : containerClassName;
+  const combinedClassName = className ? `${containerClassName} ${className}` : containerClassName;
 
   const renderChild = (childId: string): ReactElement => {
     const childPlacement = slot.placements[childId];
@@ -830,6 +779,12 @@ export type PageLayoutRendererProps = Readonly<{
 }>;
 
 /**
+ * The gap between the top-level placements of a page. A page root has no owning block to declare
+ * one, so the page chrome names it here until the Puck page route (#2224) makes it a root field.
+ */
+const PAGE_ROOT_SLOT_GAP: SlotGapName = "medium";
+
+/**
  * Top-level layout renderer for pages, application shells, and guided steps.
  * Consumes MaterialisedApplicationCompositionV2 or permission-projected page capability.
  */
@@ -899,6 +854,7 @@ export function PageLayoutRenderer({
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
 
   const sharedProps = {
+    slotGap: PAGE_ROOT_SLOT_GAP,
     registry,
     location,
     allowEmptyRequiredSlots: resolved.permissionProjected,
@@ -918,7 +874,11 @@ export function PageLayoutRenderer({
       ? "p-4"
       : undefined;
   const rootClassName =
-    surfacePadding === undefined ? className : className === undefined ? surfacePadding : `${className} ${surfacePadding}`;
+    surfacePadding === undefined
+      ? className
+      : className === undefined
+        ? surfacePadding
+        : `${className} ${surfacePadding}`;
 
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
@@ -985,7 +945,11 @@ export function PageLayoutRenderer({
                   <div key={field} className="rounded-md border p-3">
                     <dt className="font-medium">{field}</dt>
                     <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {value === null ? "Empty" : typeof value === "string" ? value : JSON.stringify(value)}
+                      {value === null
+                        ? "Empty"
+                        : typeof value === "string"
+                          ? value
+                          : JSON.stringify(value)}
                     </dd>
                   </div>
                 ))}
@@ -998,7 +962,9 @@ export function PageLayoutRenderer({
             <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
               <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
                 <span className="block font-medium text-foreground">{activeGuidedStep?.name}</span>
-                <span>Step {activeGuidedStepIndex + 1} of {guidedSteps.length}</span>
+                <span>
+                  Step {activeGuidedStepIndex + 1} of {guidedSteps.length}
+                </span>
               </span>
               <Button
                 type="button"

@@ -150,7 +150,6 @@ export const ATTACHMENT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegis
   Object.freeze([
     Object.freeze({
       metadata: ATTACHMENT_LIST_BLOCK_RELEASE,
-      render: SearchAttachmentDisplay,
       parsePayload: ATTACHMENT_PAYLOAD_PARSER,
     }),
   ]);
