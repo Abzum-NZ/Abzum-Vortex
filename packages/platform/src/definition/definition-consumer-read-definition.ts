@@ -8,6 +8,7 @@ import {
   hasAuthenticStoredCustomerDefinitionRelease,
   releaseManifestMatchesCanonicalContent,
 } from "./definition-release-integrity";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 export const definitionConsumerReadErrorCodes = [
   "INVALID_DEFINITION_READ_COMMAND",
@@ -19,16 +20,6 @@ export const definitionConsumerReadErrorCodes = [
 ] as const;
 
 export type DefinitionConsumerReadErrorCode = (typeof definitionConsumerReadErrorCodes)[number];
-
-export class DefinitionConsumerReadError extends Error {
-  readonly code: DefinitionConsumerReadErrorCode;
-
-  constructor(code: DefinitionConsumerReadErrorCode) {
-    super(code);
-    this.name = "DefinitionConsumerReadError";
-    this.code = code;
-  }
-}
 
 const moduleDependencyTargetSchema = z
   .object({
@@ -73,13 +64,13 @@ const selectReleaseContract = (candidate: unknown): void => {
     typeof record.sourceContractVersion !== "string" ||
     typeof record.validationContractVersion !== "string"
   )
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
     if (record.kind === "application")
       selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
     else assertModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
   } catch {
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
 };
 
@@ -258,7 +249,12 @@ export const projectStoredConsumerRelease = async (
 ): Promise<DefinitionConsumerReadResult> => {
   selectReleaseContract(candidate);
   const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
-  if (!parsed.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  if (!parsed.success)
+    throw unexpectedDefinitionFailure(
+      "DEFINITION_RELEASE_INTEGRITY_FAILED",
+      parsed.error,
+      "definition-consumer-read-definition",
+    );
   const release = parsed.data;
   const output = release.compilationOutput;
   if (
@@ -285,7 +281,7 @@ export const projectStoredConsumerRelease = async (
     !definitionReleaseManifestMatchesCanonicalContent(release) ||
     !definitionReleaseModuleTargetsMatch(release)
   )
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   let catalogueVerification: DefinitionCatalogueVerification;
   try {
@@ -295,12 +291,12 @@ export const projectStoredConsumerRelease = async (
       release.validationContractVersion,
     );
   } catch {
-    throw new DefinitionConsumerReadError("DEFINITION_READ_FAILED");
+    throw new DefinitionError("DEFINITION_READ_FAILED");
   }
   if (catalogueVerification === "unavailable")
-    throw new DefinitionConsumerReadError("DEFINITION_DEPENDENCY_UNAVAILABLE");
+    throw new DefinitionError("DEFINITION_DEPENDENCY_UNAVAILABLE");
   if (catalogueVerification === "invalid")
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   const content =
     output.kind === "application"
@@ -328,7 +324,12 @@ export const projectStoredConsumerRelease = async (
     ...(platformCompatibilityVersion !== undefined ? { platformCompatibilityVersion } : {}),
     correlationId,
   });
-  if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  if (!result.success)
+    throw unexpectedDefinitionFailure(
+      "DEFINITION_RELEASE_INTEGRITY_FAILED",
+      result.error,
+      "definition-consumer-read-definition",
+    );
   return result.data;
 };
 

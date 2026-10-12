@@ -32,7 +32,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   BuilderAuthorityError,
   createDefinitionStore,
-  DefinitionStoreError,
   fingerprintCanonicalValue,
   readApplicationDefinitionDraft,
   requireBuilderAuthority,
@@ -41,6 +40,7 @@ import {
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
+import { DefinitionError } from "../definition/definition-index";
 
 export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "available"; draft: StoredApplicationDefinitionDraft }>
@@ -53,7 +53,7 @@ export type HumanApplicationDraftWriterDependencies = Readonly<{
 }>;
 
 function invalidResult(): never {
-  throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
@@ -68,7 +68,7 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   const row = rows[0];
   if (rows.length !== 1 || row === undefined) invalidResult();
   if (row.outcome === "unavailable" && row.application_origin_kind === null)
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   if (
     row.outcome !== "available" ||
     (row.application_origin_kind !== "ordinary" &&
@@ -165,7 +165,7 @@ const assertLiveCompletion = async (
   let deadline = Number.POSITIVE_INFINITY;
   for (const key of keys) {
     const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
-    if (permission === undefined) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    if (permission === undefined) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     const declaration = organizationAccessDeclarationSchema.parse({
       operationKey: permission.key,
       action: { actionKind: permission.actionKind },
@@ -203,7 +203,7 @@ const assertLiveCompletion = async (
     });
     const completedAt = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
     if (!context.success || !eligibility.success || !completedAt.success)
-      throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     const current = context.data;
     const decision = eligibility.data;
     const now = Date.parse(completedAt.data);
@@ -227,12 +227,12 @@ const assertLiveCompletion = async (
       Date.parse(current.expiresAt) <= now ||
       Date.parse(draft.updatedAt) > now
     )
-      throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     deadline = Math.min(deadline, Date.parse(decision.validUntil), Date.parse(current.expiresAt));
   }
   // A first permission must still be live after a second permission's evaluation completes.
   if ((await databaseClock(transaction)) >= deadline)
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 };
 
 const verifySavedDraft = (
@@ -284,7 +284,7 @@ const verifySavedDraft = (
 
 const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
   if (error instanceof BuilderAuthorityError) return { kind: "refused" };
-  if (error instanceof DefinitionStoreError) {
+  if (error instanceof DefinitionError) {
     if (
       error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
       error.code === "DEFINITION_ROOT_MISSING" ||
@@ -340,7 +340,7 @@ export const createHumanApplicationDraftWriter = (
             !sameId(scope.organizationId, organization.data) ||
             scope.applicationRootId !== undefined
           )
-            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           const store = createDefinitionStore(transaction, authority);
           let saved: StoredDefinitionDraft;
@@ -350,15 +350,14 @@ export const createHumanApplicationDraftWriter = (
             writeStartedAt = await databaseClock(transaction);
             saved = await store.createRoot({ source: source.data });
           } else {
-            if (saveCommand === undefined)
-              throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            if (saveCommand === undefined) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
             await targetFacts(transaction, scope, saveCommand.rootId);
             previous = await readApplicationDefinitionDraft(transaction, scope, {
               rootId: applicationRootIdSchema.parse(saveCommand.rootId),
               expectedDraftRevision: saveCommand.expectedDraftRevision,
             });
             if (previous.key !== source.data.key)
-              throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+              throw new DefinitionError("INVALID_DEFINITION_COMMAND");
             writeStartedAt = await databaseClock(transaction);
             saved = await store.saveDraft({ ...saveCommand, source: source.data });
           }
@@ -429,15 +428,14 @@ export const createHumanApplicationDraftWriter = (
             !sameId(scope.organizationId, organization.data) ||
             scope.applicationRootId !== undefined
           )
-            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           await requireBuilderAuthority(authority, {
             kind: "draft_change",
             rootId: command.data.rootId,
           });
           const target = await targetFacts(transaction, scope, command.data.rootId);
-          if (target.isSystemApplication)
-            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+          if (target.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
           let locked: readonly DatabaseRow[];
           try {
             locked = await transaction.query<DatabaseRow>`
@@ -449,10 +447,9 @@ export const createHumanApplicationDraftWriter = (
             `;
           } catch (error) {
             const code = databaseErrorCode(error);
-            if (code === "40001")
-              throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-            if (code === "42501") throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-            if (code === "22023") throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            if (code === "40001") throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+            if (code === "42501") throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+            if (code === "22023") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
             throw error;
           }
           if (
@@ -470,7 +467,7 @@ export const createHumanApplicationDraftWriter = (
             previous.kind !== "application" ||
             previous.publishedRevision !== command.data.expectedPublicationAnchor
           )
-            throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+            throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
           const materialized = await derive({
             transaction,
             scope,
@@ -480,12 +477,12 @@ export const createHumanApplicationDraftWriter = (
           });
           const source = applicationSourceDocumentSchema.safeParse(materialized.source);
           if (!source.success || !validateDefinitionSource(source.data).valid)
-            throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE");
+            throw new DefinitionError("INVALID_DEFINITION_SOURCE");
           if (
             source.data.key !== previous.key ||
             !sameId(source.data.root_alias, previous.source.root_alias)
           )
-            throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            throw new DefinitionError("INVALID_DEFINITION_COMMAND");
 
           if (canonicalJson(source.data) === canonicalJson(previous.source)) {
             await materialized.verifySaved(transaction, scope, previous);

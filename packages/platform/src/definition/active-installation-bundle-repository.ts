@@ -35,6 +35,11 @@ import {
   createInstallationRuntimeBundleRepository,
   type InstallationRuntimeBundleObservationObserver,
 } from "./installation-runtime-bundle-repository";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 const activeIdentitySchema = z.object({
   tenantId: z.uuid(),
@@ -121,26 +126,18 @@ export const activeInstallationBundleErrorCodes = [
 export type ActiveInstallationBundleErrorCode =
   (typeof activeInstallationBundleErrorCodes)[number];
 
-export class ActiveInstallationBundleError extends Error {
-  readonly code: ActiveInstallationBundleErrorCode;
-
-  constructor(code: ActiveInstallationBundleErrorCode, options?: ErrorOptions) {
-    super(code, options);
-    this.name = "ActiveInstallationBundleError";
-    this.code = code;
-  }
-}
-
-const failure = (error: unknown): ActiveInstallationBundleError => {
-  if (error instanceof ActiveInstallationBundleError) return error;
-  const code = typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
+const failure = (error: unknown): DefinitionError<ActiveInstallationBundleErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  const code = databaseErrorCode(error);
   if (code === "42501" || code === "22023")
-    return new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_REFUSED", { cause: error });
+    return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_REFUSED", { cause: error });
   if (code === "P0002")
-    return new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE", { cause: error });
-  return new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED", { cause: error });
+    return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE", { cause: error });
+  return unexpectedDefinitionFailure(
+    "ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED",
+    error,
+    "active-installation-bundle-repository",
+  );
 };
 
 const sha256 = (content: string): string =>
@@ -176,7 +173,7 @@ const prepareParts = (command: InstallationRuntimeBundleWriteCommand): Installat
     splitSection(section, canonicalJson(command.sections[section])),
   );
   if (parts.some((part) => !installationRuntimeBundlePartSchema.safeParse(part).success))
-    throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+    throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
   return parts;
 };
 
@@ -209,17 +206,22 @@ export const createActiveInstallationBundleRepository = (
           select vortex_module.read_active_installation_bundle_identity() as bundle_state
         `;
         if (rows.length !== 1 || rows[0] === undefined)
-          throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
         const parsed = activeInstallationBundleStateSchema.safeParse(rows[0].bundle_state);
         if (!parsed.success)
-          throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+          throw unexpectedDefinitionFailure(
+            "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+            parsed.error,
+            "active-installation-bundle-repository",
+          );
         const roots = parsed.data.identity.moduleBindings.map((binding) => binding.moduleRootId);
         if (
           new Set(roots.map((root) => root.toLowerCase())).size !== roots.length ||
           parsed.data.identity.moduleBindings.some((binding, index) =>
             index > 0 && roots[index - 1]!.toLowerCase() >= binding.moduleRootId.toLowerCase(),
           )
-        ) throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+        )
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         return parsed.data;
       } catch (error) {
         throw failure(error);
@@ -248,7 +250,11 @@ export const createActiveInstallationBundleRepository = (
         })),
       });
       if (!installation.success)
-        throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+        throw unexpectedDefinitionFailure(
+          "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+          installation.error,
+          "active-installation-bundle-repository",
+        );
       return installation.data;
     },
     async readSections(
@@ -257,21 +263,26 @@ export const createActiveInstallationBundleRepository = (
     ) {
       const expectedIndex = expectedIndexCandidate ?? state.bundleIndex;
       if (expectedIndex === null)
-        throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
+        throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
       try {
         if (
           expectedIndex.organizationId !== state.identity.organizationId ||
           expectedIndex.applicationRootId !== state.identity.applicationRootId ||
           expectedIndex.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
           expectedIndex.pinFingerprint !== state.identity.pinFingerprint
-        ) throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+        )
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         const keyCandidate = installationRuntimeBundleKeySchema.safeParse({
           applicationRootId: state.identity.applicationRootId,
           applicationReleaseRevision: state.identity.applicationReleaseRevision,
           bundleFormatVersion: 2,
         });
         if (!keyCandidate.success)
-          throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+          throw unexpectedDefinitionFailure(
+            "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+            keyCandidate.error,
+            "active-installation-bundle-repository",
+          );
         const key: InstallationRuntimeBundleKey = {
           applicationRootId: keyCandidate.data.applicationRootId,
           applicationReleaseRevision: keyCandidate.data.applicationReleaseRevision,
@@ -279,11 +290,11 @@ export const createActiveInstallationBundleRepository = (
         };
         const index = await bundles.readIndex(key);
         if (canonicalJson(index) !== canonicalJson(expectedIndex))
-          throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         const sections = await bundles.readSections(key, installationRuntimeBundleSections);
         for (const section of installationRuntimeBundleSections)
           if (!jsonValueSchema.safeParse(sections[section]).success)
-            throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+            throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         return sections;
       } catch (error) {
         throw failure(error);
@@ -294,19 +305,24 @@ export const createActiveInstallationBundleRepository = (
       commandCandidate: InstallationRuntimeBundleWriteCommand,
     ) {
       if (!state.repairNeeded || state.coldSource === null)
-        throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
+        throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
       const parsedCommand = installationRuntimeBundleWriteCommandSchema.safeParse(commandCandidate);
       if (!parsedCommand.success ||
         parsedCommand.data.applicationRootId !== state.identity.applicationRootId ||
         parsedCommand.data.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
         parsedCommand.data.pinFingerprint !== state.identity.pinFingerprint
-      ) throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+      )
+        throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
       const parts = prepareParts(parsedCommand.data);
       const coldSource = z.object({
         sourceManifest: installationRuntimeBundleSourceManifestSchema,
       }).passthrough().safeParse(state.coldSource);
       if (!coldSource.success)
-        throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+        throw unexpectedDefinitionFailure(
+          "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+          coldSource.error,
+          "active-installation-bundle-repository",
+        );
       try {
         const rows = await transaction.query<RepairRow>`
           select vortex_module.repair_active_installation_runtime_bundle_internal(
@@ -315,7 +331,7 @@ export const createActiveInstallationBundleRepository = (
           ) as bundle_index
         `;
         if (rows.length !== 1 || rows[0] === undefined)
-          throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED");
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED");
         const index = installationRuntimeBundleIndexSchema.safeParse(rows[0].bundle_index);
         if (!index.success ||
           index.data.organizationId !== state.identity.organizationId ||
@@ -323,7 +339,8 @@ export const createActiveInstallationBundleRepository = (
           index.data.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
           index.data.pinFingerprint !== state.identity.pinFingerprint ||
           canonicalJson(index.data.sourceManifest) !== canonicalJson(coldSource.data.sourceManifest)
-        ) throw new ActiveInstallationBundleError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+        )
+          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         return index.data;
       } catch (error) {
         throw failure(error);

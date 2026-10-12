@@ -14,6 +14,7 @@ import {
   compareCanonicalStrings,
   fingerprintCanonicalValue,
 } from "./canonical-json-definition";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 type ApplicationRead = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
 type ModuleRead = Extract<DefinitionConsumerReadResult, { kind: "module" }>;
@@ -64,16 +65,6 @@ export const installedEventCatalogueErrorCodes = [
 
 export type InstalledEventCatalogueErrorCode = (typeof installedEventCatalogueErrorCodes)[number];
 
-export class InstalledEventCatalogueError extends Error {
-  readonly code: InstalledEventCatalogueErrorCode;
-
-  constructor(code: InstalledEventCatalogueErrorCode) {
-    super(code);
-    this.name = "InstalledEventCatalogueError";
-    this.code = code;
-  }
-}
-
 const releaseOf = (read: ApplicationRead | ModuleRead): ExactRelease => ({
   rootId: read.rootId,
   releaseRevision: read.releaseRevision,
@@ -112,12 +103,16 @@ export const resolveInstalledEventDefinitionContext = (
     rawInstallation.success &&
     rawInstallation.data.moduleBindings.some((binding) => binding.state !== "active")
   )
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_BINDING_INACTIVE");
+    throw new DefinitionError("INSTALLED_EVENT_BINDING_INACTIVE");
   if (!definitions.success || !rawInstallation.success)
-    throw new InstalledEventCatalogueError("INVALID_INSTALLED_EVENT_INPUT");
+    throw new DefinitionError("INVALID_INSTALLED_EVENT_INPUT");
   const installation = activeApplicationInstallationEvidenceSchema.safeParse(rawInstallation.data);
   if (!installation.success)
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
+    throw unexpectedDefinitionFailure(
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+      installation.error,
+      "installed-event-catalogue",
+    );
 
   const app = applicationReadSchema.parse(definitions.data.application);
   const moduleReads = z.array(moduleReadSchema).parse(definitions.data.modules);
@@ -128,7 +123,7 @@ export const resolveInstalledEventDefinitionContext = (
       (module) => fingerprintCanonicalValue(module.content) !== module.contentFingerprint,
     )
   )
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_RELEASE_MISMATCH");
+    throw new DefinitionError("INSTALLED_EVENT_RELEASE_MISMATCH");
   const modulesByRoot = new Map(moduleReads.map((module) => [String(module.rootId), module]));
   const bindingsByRoot = new Map(
     bindingEvidence.map((binding) => [String(binding.moduleRootId), binding]),
@@ -141,7 +136,7 @@ export const resolveInstalledEventDefinitionContext = (
     installation.data.applicationRootId !== app.rootId ||
     installation.data.applicationReleaseRevision !== app.releaseRevision
   )
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
+    throw new DefinitionError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
 
   for (const module of moduleReads) {
     const binding = bindingsByRoot.get(String(module.rootId));
@@ -153,7 +148,7 @@ export const resolveInstalledEventDefinitionContext = (
       binding.moduleReleaseRevision !== module.releaseRevision ||
       module.correlationId !== app.correlationId
     )
-      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
+      throw new DefinitionError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
   }
 
   const recordTypes = new Map<
@@ -163,7 +158,7 @@ export const resolveInstalledEventDefinitionContext = (
   for (const module of moduleReads)
     for (const recordType of module.content.recordTypes) {
       if (recordTypes.has(String(recordType.recordTypeId)))
-        throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEFINITION_INVALID");
+        throw new DefinitionError("INSTALLED_EVENT_DEFINITION_INVALID");
       recordTypes.set(String(recordType.recordTypeId), { module, recordType });
     }
 
@@ -189,7 +184,7 @@ export const resolveInstalledEventDefinitionContext = (
         record === undefined ||
         (owner.kind === "module" && record.module.rootId !== owner.moduleRootId)
       )
-        throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEFINITION_INVALID");
+        throw new DefinitionError("INSTALLED_EVENT_DEFINITION_INVALID");
       const fields = new Map(
         record.recordType.fields.map((field) => [String(field.fieldId), field] as const),
       );
@@ -199,7 +194,7 @@ export const resolveInstalledEventDefinitionContext = (
           (fieldId) => fields.get(String(fieldId))?.personalData !== "none",
         )
       )
-        throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEFINITION_INVALID");
+        throw new DefinitionError("INSTALLED_EVENT_DEFINITION_INVALID");
       descriptors.push(
         installedEventDescriptorSchema.parse({
           kind: "declared",
@@ -237,7 +232,7 @@ export const resolveInstalledEventDefinitionContext = (
     new Set(declaredIds).size !== declaredIds.length ||
     new Set(declaredKeys).size !== declaredKeys.length
   )
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEFINITION_INVALID");
+    throw new DefinitionError("INSTALLED_EVENT_DEFINITION_INVALID");
 
   const moduleBindings = bindingEvidence
     .map((binding) => ({

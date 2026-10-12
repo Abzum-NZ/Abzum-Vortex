@@ -13,8 +13,7 @@ import {
   type SessionContext,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
-import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, DefinitionHistoryError,
-  DefinitionStoreError, requireBuilderAuthority } from "@web/platform-server";
+import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, requireBuilderAuthority } from "@web/platform-server";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
@@ -37,6 +36,7 @@ import {
   type StudioApplicationRestoreLoadResult,
   type StudioApplicationRestoreReceipt,
 } from "./studio-application-restore-contracts";
+import { DefinitionError } from "@web/platform-server";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
@@ -122,12 +122,12 @@ const codeOf = (error: unknown): string | undefined => {
 
 const failureKind = (error: unknown): FailureKind => {
   const code = codeOf(error);
-  if (error instanceof DefinitionHistoryError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
     if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_RELEASE_NOT_FOUND", "DEFINITION_RELEASE_INTEGRITY_FAILED",
       "INVALID_DEFINITION_RESTORE_COMMAND"].includes(error.code)) return "refused";
   }
-  if (error instanceof DefinitionStoreError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || code === "40001") return "conflict";
     if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING", "INVALID_DEFINITION_COMMAND"].includes(error.code))
       return "refused";

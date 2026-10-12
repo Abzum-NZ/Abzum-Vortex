@@ -43,8 +43,6 @@ import {
   type PermissionRegistryDefinitionSetReader,
 } from "../access/index";
 import {
-  ApplicationInstallationLifecycleError,
-  ModuleInstallationStorageError,
   createApplicationInstallationLifecycleRepository,
   createInstallationRuntimeBundleCleanupRepository,
   createModuleInstallationStorageRepository,
@@ -58,6 +56,11 @@ import {
   writePreparedInstallationRuntimeBundle,
   type PreparedInstallationRuntimeSourceReader,
 } from "./installation-runtime-bundle-app";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one
@@ -120,16 +123,6 @@ export const applicationInstallationCoordinatorErrorCodes = [
 
 export type ApplicationInstallationCoordinatorErrorCode =
   (typeof applicationInstallationCoordinatorErrorCodes)[number];
-
-export class ApplicationInstallationCoordinatorError extends Error {
-  readonly code: ApplicationInstallationCoordinatorErrorCode;
-
-  constructor(code: ApplicationInstallationCoordinatorErrorCode, options?: ErrorOptions) {
-    super(code, options);
-    this.name = "ApplicationInstallationCoordinatorError";
-    this.code = code;
-  }
-}
 
 /** Prepare one exact release for first installation; nothing becomes active. */
 export const applicationInstallationPreparationRequestSchema = z
@@ -368,15 +361,18 @@ const byModuleRoot = <Value extends { readonly moduleRootId: string }>(values: V
   );
 
 const fail = (code: ApplicationInstallationCoordinatorErrorCode, cause?: unknown) =>
-  new ApplicationInstallationCoordinatorError(code, cause === undefined ? undefined : { cause });
+  new DefinitionError(code, cause === undefined ? undefined : { cause });
 
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
+const isCoordinatorError = (
+  error: unknown,
+): error is DefinitionError<ApplicationInstallationCoordinatorErrorCode> =>
+  error instanceof DefinitionError &&
+  (applicationInstallationCoordinatorErrorCodes as readonly string[]).includes(error.code);
 
-const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorError => {
-  if (error instanceof ApplicationInstallationCoordinatorError) return error;
+const toCoordinatorError = (
+  error: unknown,
+): DefinitionError<ApplicationInstallationCoordinatorErrorCode> => {
+  if (isCoordinatorError(error)) return error;
   if (error instanceof BuilderAuthorityError)
     return fail(
       error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
@@ -384,7 +380,7 @@ const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorE
         : "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
       error,
     );
-  if (error instanceof ModuleInstallationStorageError)
+  if (error instanceof DefinitionError)
     switch (error.code) {
       case "INVALID_MODULE_INSTALLATION_STORAGE_COMMAND":
         return fail("INVALID_APPLICATION_INSTALLATION_COMMAND", error);
@@ -400,7 +396,7 @@ const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorE
       case "RECORD_STORAGE_PROVISIONING_FAILED":
         return fail("APPLICATION_INSTALLATION_FAILED", error);
     }
-  if (error instanceof ApplicationInstallationLifecycleError)
+  if (error instanceof DefinitionError)
     switch (error.code) {
       case "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND":
         return fail("INVALID_APPLICATION_INSTALLATION_COMMAND", error);
@@ -415,7 +411,7 @@ const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorE
       case "APPLICATION_INSTALLATION_CHANGE_FAILED":
         return fail("APPLICATION_INSTALLATION_FAILED", error);
     }
-  switch (databaseCode(error)) {
+  switch (databaseErrorCode(error)) {
     case "22023":
       return fail("INVALID_APPLICATION_INSTALLATION_COMMAND", error);
     case "42501":
@@ -429,7 +425,11 @@ const toCoordinatorError = (error: unknown): ApplicationInstallationCoordinatorE
     case "55000":
       return fail("APPLICATION_INSTALLATION_STALE", error);
     default:
-      return fail("APPLICATION_INSTALLATION_FAILED", error);
+      return unexpectedDefinitionFailure(
+        "APPLICATION_INSTALLATION_FAILED",
+        error,
+        "application installation",
+      );
   }
 };
 
@@ -799,7 +799,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     builderOperation: BuilderOperation,
     operation: (transaction: InstallerTransaction, authority: BuilderAuthority) => Promise<Result>,
   ): Promise<Result> => {
-    const captured: { failure?: ApplicationInstallationCoordinatorError } = {};
+    const captured: { failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode> } = {};
     const outcome = await dependencies.installerRequests
       .runChange(session, { organizationId }, async (transaction, scope) => {
         try {
@@ -1036,7 +1036,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     try {
       return resolveStorageRelease(target, releaseSet);
     } catch (error) {
-      if (error instanceof ApplicationInstallationCoordinatorError) throw error;
+      if (isCoordinatorError(error)) throw error;
       throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
     }
   };
@@ -1069,7 +1069,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
       }
     } catch (error) {
-      if (error instanceof ApplicationInstallationCoordinatorError) throw error;
+      if (isCoordinatorError(error)) throw error;
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
     }
     const application = releaseSet.application;

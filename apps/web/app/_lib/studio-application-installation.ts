@@ -11,7 +11,6 @@ import {
   type HumanOrganizationRequestResult,
 } from "@web/platform-server";
 import {
-  ApplicationInstallationCoordinatorError,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationActivationResult,
   type HumanInstallationDefinitionAccess,
@@ -58,7 +57,6 @@ import { listEligibleArchiveConnectionsForApplication } from "@web/platform-serv
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   builderRecentAuthentication,
-  DefinitionConsumerReadError,
   createDatabaseApplicationBoundReleaseSetService,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseFirstInstallApplicationReleaseSetService,
@@ -108,6 +106,7 @@ import {
   type StudioApplicationInstallationSelector,
   type StudioApplicationInstallationSnapshot,
 } from "./studio-application-installation-contracts";
+import { DefinitionError } from "@web/platform-server";
 
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
@@ -160,7 +159,7 @@ function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailable
 
 const safeFailure = (error: unknown): Problem => {
   if (error instanceof InstallationProblem) return error.problem;
-  if (error instanceof ApplicationInstallationCoordinatorError) {
+  if (error instanceof DefinitionError) {
     switch (error.code) {
       case "APPLICATION_INSTALLATION_STALE":
         return { kind: "conflict" };
@@ -366,7 +365,7 @@ const readReleaseSet = async (
       transaction,
     ).read({ applicationRootId: rootId, applicationReleaseRevision: releaseRevision });
   } catch (error) {
-    if (!(error instanceof DefinitionConsumerReadError) || error.code === "DEFINITION_READ_FAILED")
+    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
       problem("temporarily_unavailable");
     problem("refused");
   }
@@ -932,7 +931,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
       }),
     );
     if (result.kind !== "available")
-      throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     return result.value;
   },
   async prepareRegistrationCandidate(target, releaseSet) {
@@ -1292,7 +1291,7 @@ const readFirstInstallReleaseSet = async (
       applicationReleaseRevision: selector.releaseRevision,
     });
   } catch (error) {
-    if (!(error instanceof DefinitionConsumerReadError)) problem("temporarily_unavailable");
+    if (!(error instanceof DefinitionError)) problem("temporarily_unavailable");
     if (error.code === "DEFINITION_RELEASE_NOT_FOUND")
       firstInstallUnavailable("release_not_published");
     if (error.code === "DEFINITION_CONTEXT_REFUSED") problem("refused");
@@ -1764,7 +1763,7 @@ const firstInstallDefinitionAccess = (
     if (!sameUuid(target.organizationId, selector.organizationId) ||
       !sameUuid(target.applicationRootId, selector.rootId) ||
       target.applicationReleaseRevision !== selector.releaseRevision)
-      throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     let callbackFailure: unknown;
     const result = await humanOrganizationRequests().runChange(
       session,
@@ -1811,7 +1810,7 @@ const firstInstallDefinitionAccess = (
     );
     if (result.kind !== "available") {
       if (callbackFailure !== undefined) throw callbackFailure;
-      throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     }
     return result.value;
   },
@@ -1820,7 +1819,7 @@ const firstInstallDefinitionAccess = (
       !sameUuid(target.applicationRootId, selector.rootId) ||
       target.applicationReleaseRevision !== selector.releaseRevision ||
       !sameFirstInstallRelease(releaseSet, expectedReleaseSet))
-      throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     const prepared = prepareApplicationRoleTemplatesForHumanRequest(
       target.organizationId,
       { applicationRootId: target.applicationRootId, releaseRevision: target.applicationReleaseRevision },
@@ -2030,7 +2029,7 @@ const firstInstallCoordinator = (
       const moduleBindings = input.moduleBindings.map((binding) => {
         const moduleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
         if (!moduleRootId.success)
-          throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_FAILED");
+          throw new DefinitionError("APPLICATION_INSTALLATION_FAILED");
         return { ...binding, moduleRootId: moduleRootId.data };
       });
       return createDatabasePreparedInstallationRuntimeSourceService(
@@ -2264,7 +2263,7 @@ const readAppScopedFirstInstallReleaseSet = async (
       transaction,
     ).read({ applicationReleaseRevision: selector.releaseRevision });
   } catch (error) {
-    if (!(error instanceof DefinitionConsumerReadError) || error.code === "DEFINITION_READ_FAILED")
+    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
       problem("temporarily_unavailable");
     problem("refused");
   }

@@ -26,8 +26,6 @@ import {
   readApplicationDefinitionDraft,
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
-  DefinitionStoreError,
-  DefinitionPublicationError,
   fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
@@ -43,6 +41,7 @@ import {
   type PageAdoptionTargetOption,
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
+import { DefinitionError } from "@web/platform-server";
 
 type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
@@ -61,7 +60,7 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
     (row.application_origin_kind !== "ordinary" &&
       row.application_origin_kind !== "platform_system_application")
   )
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
 };
 
@@ -84,11 +83,11 @@ const readCurrentHumanContext = async (
     !("channel" in raw) ||
     raw.channel !== "web"
   )
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const parsed = sessionContextSchema.safeParse(
     Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "channel")),
   );
-  if (!parsed.success) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (!parsed.success) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const context = parsed.data;
   if (
     context.callerKind !== "human" ||
@@ -111,7 +110,7 @@ const readCurrentHumanContext = async (
     context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
     context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt
   )
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return context;
 };
 
@@ -137,7 +136,7 @@ const readCurrentCandidate = async (
     candidate.draft.kind !== "application" ||
     !sameDraft(candidate.draft, draft)
   )
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   return candidate;
 };
 
@@ -161,7 +160,7 @@ const mapPageId = (
   identities: readonly SourceIdentityAssignment[],
   alias: string,
 ): string => {
-  if (source.kind !== "application") throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -171,7 +170,7 @@ const mapPageId = (
       identity.alias === alias,
   );
   const match = matches[0];
-  if (matches.length !== 1 || match === undefined) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (matches.length !== 1 || match === undefined) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   return match.identifier;
 };
 
@@ -311,10 +310,10 @@ export const loadStudioStandardPageAdoption = async (
           expectedDraftRevision: draft.draftRevision,
         });
         if (current.currentReleaseRevision !== draft.publishedRevision)
-          throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         const candidate = await readCurrentCandidate(transaction, context, draft);
         const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-        if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+        if (release === undefined) throw new DefinitionError("DEFINITION_HISTORY_INVALID");
         const choices = toChoices(
           draft,
           candidate.identities,
@@ -331,7 +330,7 @@ export const loadStudioStandardPageAdoption = async (
           canonicalJson(finalDraft) !== canonicalJson(draft) ||
           canonicalJson(finalContext) !== canonicalJson(context)
         )
-          throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         return {
           kind: "available",
           value: {
@@ -388,11 +387,11 @@ export const saveStudioStandardPageAdoption = async (
         draft.draftRevision !== lockedCommand.expectedDraftRevision ||
         draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
       )
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
       const context = await readCurrentHumanContext(transaction, scope, session);
       const authority = createBuilderAuthority({ transaction, scope, targetFacts });
       const facts = await targetFacts(transaction, scope, draft.rootId);
-      if (facts.isSystemApplication) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+      if (facts.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
       const current = await createDatabaseDefinitionPublicationService(
         installedReleaseCatalogue,
         transaction,
@@ -402,10 +401,10 @@ export const saveStudioStandardPageAdoption = async (
         expectedDraftRevision: draft.draftRevision,
       });
       if (current.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor)
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
       const candidateState = await readCurrentCandidate(transaction, context, draft);
       const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-      if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+      if (release === undefined) throw new DefinitionError("DEFINITION_HISTORY_INVALID");
       const plan = buildPageAdoptionPlan({
         draft,
         currentIdentities: candidateState.identities,
@@ -417,7 +416,7 @@ export const saveStudioStandardPageAdoption = async (
         decision: lockedCommand.decision,
       });
       if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
       return {
         source: plan.source,
         verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
@@ -426,7 +425,7 @@ export const saveStudioStandardPageAdoption = async (
             !sameId(savedDraft.rootId, lockedCommand.rootId) ||
             savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
           )
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
           const verifiedContext = await readCurrentHumanContext(
             verifyTransaction,
             verifyScope,
@@ -434,7 +433,7 @@ export const saveStudioStandardPageAdoption = async (
             context.issuedAt,
           );
           if (canonicalJson(verifiedContext) !== canonicalJson(context))
-            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
           const verifiedCandidate = await createDatabaseDefinitionPublicationService(
             installedReleaseCatalogue,
             verifyTransaction,
@@ -449,10 +448,10 @@ export const saveStudioStandardPageAdoption = async (
             fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
               fingerprintCanonicalValue(plan.expectedCanonicalContent)
           )
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
           const verifiedRelease = await readLatestPageAdoptionRelease(verifyTransaction, verifiedContext, savedDraft);
           if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
-            throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+            throw new DefinitionError("DEFINITION_HISTORY_INVALID");
         },
       };
       },

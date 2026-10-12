@@ -40,6 +40,11 @@ import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-releas
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 export const definitionHistoryErrorCodes = [
   "INVALID_DEFINITION_HISTORY_COMMAND",
@@ -55,16 +60,6 @@ export const definitionHistoryErrorCodes = [
 ] as const;
 
 export type DefinitionHistoryErrorCode = (typeof definitionHistoryErrorCodes)[number];
-
-export class DefinitionHistoryError extends Error {
-  readonly code: DefinitionHistoryErrorCode;
-
-  constructor(code: DefinitionHistoryErrorCode) {
-    super(code);
-    this.name = "DefinitionHistoryError";
-    this.code = code;
-  }
-}
 
 const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
   .extend({ ownerScope: z.string().min(1).max(500) })
@@ -200,7 +195,7 @@ const selectRestoreContract = (candidate: unknown): void => {
     validationContractVersion === undefined ||
     intrinsicSourceContractVersion === undefined
   )
-    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
     if (sourceContractVersion !== intrinsicSourceContractVersion)
       throw new TypeError("Stored source version mismatch");
@@ -209,7 +204,7 @@ const selectRestoreContract = (candidate: unknown): void => {
       selectApplicationContractPair(sourceContractVersion, validationContractVersion);
     } else assertModuleContractPair(sourceContractVersion, validationContractVersion);
   } catch {
-    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
 };
 
@@ -220,7 +215,7 @@ const selectStoredDraftContract = (candidate: unknown): void => {
   const sourceContractVersion = asString(record.sourceContractVersion);
   const intrinsicSourceContractVersion = asString(source?.source_contract_version);
   if (sourceContractVersion === undefined || intrinsicSourceContractVersion === undefined)
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   try {
     if (record.kind === "application")
       selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
@@ -230,7 +225,7 @@ const selectStoredDraftContract = (candidate: unknown): void => {
       assertModuleContractPair(sourceContractVersion, sourceContractVersion);
     }
   } catch {
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   }
 };
 
@@ -244,13 +239,13 @@ const parseHistory = (
     ...asCandidate(withoutOptionalNulls(candidate)),
     correlationId: context.correlationId,
   });
-  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   if (
     parsed.data.organizationId !== context.organizationId ||
     parsed.data.kind !== command.kind ||
     parsed.data.rootId !== command.rootId
   )
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
 };
 
@@ -267,14 +262,14 @@ const parseMetadata = (
     metadata: entry,
     correlationId: context.correlationId,
   });
-  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   if (
     parsed.data.organizationId !== context.organizationId ||
     parsed.data.kind !== command.kind ||
     parsed.data.rootId !== command.rootId ||
     parsed.data.metadata.releaseRevision !== command.releaseRevision
   )
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
 };
 
@@ -364,7 +359,7 @@ const parseRestoreEvidence = (candidate: unknown): RestoreEvidence => {
   // Select the exact source/canonical pair before either versioned payload is decoded.
   selectRestoreContract(candidate);
   const parsed = restoreEvidenceSchema.safeParse(candidate);
-  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
 };
 
@@ -381,7 +376,7 @@ const verifyRestoreEvidence = async (
     const snapshot = release.humanDraftSnapshot;
     const currentDraft = release.humanCurrentDraft;
     if (snapshot === undefined || currentDraft === undefined)
-      throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+      throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
     if (
       context.callerKind !== "human" ||
       currentDraft.kind !== "application" ||
@@ -395,10 +390,10 @@ const verifyRestoreEvidence = async (
       snapshot.anchorReleaseRevision !== humanCommand.expectedPublicationAnchor ||
       release.releaseRevision > humanCommand.expectedPublicationAnchor
     )
-      throw new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
+      throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     humanDraftBefore = currentDraft;
   } else if (release.humanDraftSnapshot !== undefined || release.humanCurrentDraft !== undefined) {
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   }
   const source = release.authoredSource;
   if (
@@ -429,7 +424,7 @@ const verifyRestoreEvidence = async (
     !definitionReleaseModuleTargetsMatch(release) ||
     !identitiesMatchSource(release)
   )
-    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   let catalogueResult: Awaited<ReturnType<typeof verifyDefinitionCatalogueDependencies>>;
   try {
@@ -439,10 +434,9 @@ const verifyRestoreEvidence = async (
       release.validationContractVersion,
     );
   } catch {
-    throw new DefinitionHistoryError("DEFINITION_RESTORE_FAILED");
+    throw new DefinitionError("DEFINITION_RESTORE_FAILED");
   }
-  if (catalogueResult !== "valid")
-    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  if (catalogueResult !== "valid") throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   return {
     source,
@@ -461,7 +455,7 @@ const parseRestoredDraft = (
   const withoutNulls = withoutOptionalNulls(candidate);
   selectStoredDraftContract(withoutNulls);
   const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
-  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   const draft = parsed.data;
   const systemActorId = context.callerKind === "system" ? context.systemActorId : undefined;
   if (
@@ -480,7 +474,7 @@ const parseRestoredDraft = (
     fingerprintCanonicalValue(draft.source) !== draft.sourceFingerprint ||
     draft.sourceFingerprint !== verified.sourceFingerprint
   )
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   return draft;
 };
 
@@ -494,7 +488,7 @@ const parseHumanRestoredDraft = (
   const withoutNulls = withoutOptionalNulls(candidate);
   selectStoredDraftContract(withoutNulls);
   const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
-  if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   const draft = parsed.data;
   if (
     draft.kind !== "application" ||
@@ -521,22 +515,24 @@ const parseHumanRestoredDraft = (
     draft.restoredAt === undefined ||
     draft.updatedAt !== draft.restoredAt
   )
-    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   return draft;
 };
 
 const mapRepositoryFailure = (
   error: unknown,
   fallback: "DEFINITION_HISTORY_FAILED" | "DEFINITION_RESTORE_FAILED",
-): DefinitionHistoryError => {
-  if (error instanceof DefinitionHistoryError) return error;
+): DefinitionError<DefinitionHistoryErrorCode> => {
+  if (
+    error instanceof DefinitionError &&
+    (definitionHistoryErrorCodes as readonly string[]).includes(error.code)
+  )
+    return error;
   if (isDefinitionContextFailure(error))
-    return new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
-  const databaseCode =
-    error !== null && typeof error === "object" && "code" in error ? String(error.code) : undefined;
-  if (databaseCode === "40001")
-    return new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  return new DefinitionHistoryError(fallback);
+    return new DefinitionError("DEFINITION_CONTEXT_REFUSED", { cause: error });
+  if (databaseErrorCode(error) === "40001")
+    return new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", { cause: error });
+  return unexpectedDefinitionFailure(fallback, error, "definition history");
 };
 
 const isOrganizationOnlyHumanContext = (
@@ -564,17 +560,17 @@ export const createDefinitionHistoryService = (
     commandCandidate: unknown,
   ): Promise<DefinitionReleaseHistoryResult> {
     const command = definitionReleaseHistoryCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_COMMAND");
+    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_COMMAND");
     const context = sessionContextSchema.safeParse(contextCandidate);
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     try {
       const result = parseHistory(
         await repository.list(context.data, command.data),
         context.data,
         command.data,
       );
-      if (result === undefined) throw new DefinitionHistoryError("DEFINITION_HISTORY_NOT_FOUND");
+      if (result === undefined) throw new DefinitionError("DEFINITION_HISTORY_NOT_FOUND");
       return result;
     } catch (error) {
       throw mapRepositoryFailure(error, "DEFINITION_HISTORY_FAILED");
@@ -586,17 +582,17 @@ export const createDefinitionHistoryService = (
     commandCandidate: unknown,
   ): Promise<DefinitionReleaseMetadataResult> {
     const command = definitionReleaseMetadataCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_COMMAND");
+    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_HISTORY_COMMAND");
     const context = sessionContextSchema.safeParse(contextCandidate);
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     try {
       const result = parseMetadata(
         await repository.readMetadata(context.data, command.data),
         context.data,
         command.data,
       );
-      if (result === undefined) throw new DefinitionHistoryError("DEFINITION_RELEASE_NOT_FOUND");
+      if (result === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
       return result;
     } catch (error) {
       throw mapRepositoryFailure(error, "DEFINITION_HISTORY_FAILED");
@@ -610,15 +606,12 @@ export const createDefinitionHistoryService = (
     if (asCandidate(contextCandidate)?.callerKind === "human") {
       const context = sessionContextSchema.safeParse(contextCandidate);
       if (!context.success || !isOrganizationOnlyHumanContext(context.data))
-        throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
       const humanContext = context.data;
       const humanCommand = humanRestoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
-      if (!humanCommand.success)
-        throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
-      if (
-        humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
-      )
-        throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      if (!humanCommand.success) throw new DefinitionError("INVALID_DEFINITION_RESTORE_COMMAND");
+      if (humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase())
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
       await requireBuilderAuthority(authority, {
         kind: "draft_change",
         rootId: humanCommand.data.rootId,
@@ -646,17 +639,14 @@ export const createDefinitionHistoryService = (
               humanCommand.data,
             );
             if (verified.humanDraftBefore === undefined)
-              throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+              throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
             verifiedRestore = verified;
             return verified;
           },
           async (draftCandidate) => {
             verificationCallbackCount += 1;
-            if (
-              verificationCallbackCount !== 1 ||
-              verifiedRestore?.humanDraftBefore === undefined
-            )
-              throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+            if (verificationCallbackCount !== 1 || verifiedRestore?.humanDraftBefore === undefined)
+              throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
             const draft = parseHumanRestoredDraft(
               draftCandidate,
               humanContext,
@@ -669,15 +659,15 @@ export const createDefinitionHistoryService = (
           },
         );
         if (attempt.outcome === "not_found")
-          throw new DefinitionHistoryError("DEFINITION_RELEASE_NOT_FOUND");
+          throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
         if (attempt.outcome === "stale")
-          throw new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         if (
           verificationCallbackCount !== 1 ||
           retainedDraft === undefined ||
           attempt.draft !== retainedDraft
         )
-          throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+          throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
         return retainedDraft;
       } catch (error) {
         throw mapRepositoryFailure(error, "DEFINITION_RESTORE_FAILED");
@@ -685,13 +675,13 @@ export const createDefinitionHistoryService = (
     }
 
     const command = restoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
+    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_RESTORE_COMMAND");
     const context = sessionContextSchema.safeParse(contextCandidate);
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     // The authority decides for exactly one organisation; any other context is refused first.
     if (context.data.organizationId.toLowerCase() !== authority.organizationId.toLowerCase())
-      throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.data.rootId });
     try {
       let verifiedRestore: VerifiedRestoreInput | undefined;
@@ -706,11 +696,11 @@ export const createDefinitionHistoryService = (
         return verified;
       });
       if (attempt.outcome === "not_found")
-        throw new DefinitionHistoryError("DEFINITION_RELEASE_NOT_FOUND");
+        throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
       if (attempt.outcome === "stale")
-        throw new DefinitionHistoryError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
       if (verifiedRestore === undefined)
-        throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+        throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
       return parseRestoredDraft(attempt.draft, context.data, command.data, verifiedRestore);
     } catch (error) {
       throw mapRepositoryFailure(error, "DEFINITION_RESTORE_FAILED");

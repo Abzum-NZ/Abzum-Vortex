@@ -1,3 +1,4 @@
+import { DefinitionError } from "./definition-error";
 import type { DefinitionVersionImpactFailureCode } from "../schema";
 
 const safeMessageByCode = {
@@ -11,16 +12,12 @@ const safeMessageByCode = {
   confirmation_mismatch: "The confirmation no longer matches the comparison.",
 } as const satisfies Record<DefinitionVersionImpactFailureCode, string>;
 
-export class DefinitionVersionImpactError extends Error {
-  readonly code: DefinitionVersionImpactFailureCode;
-
-  constructor(code: DefinitionVersionImpactFailureCode) {
-    super(safeMessageByCode[code]);
-    this.name = "DefinitionVersionImpactError";
-    this.code = code;
-  }
-}
-
 export const refuseVersionImpact = (code: DefinitionVersionImpactFailureCode): never => {
-  throw new DefinitionVersionImpactError(code);
+  throw new DefinitionError(code, { detail: safeMessageByCode[code] });
 };
+
+/** True for a refusal raised by the version-impact policy (a definition problem, not a failure). */
+export const isVersionImpactRefusal = (
+  error: unknown,
+): error is DefinitionError<DefinitionVersionImpactFailureCode> =>
+  error instanceof DefinitionError && Object.hasOwn(safeMessageByCode, error.code);

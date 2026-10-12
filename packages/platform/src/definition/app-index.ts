@@ -10,9 +10,16 @@ export { resolveInstalledPageIdentity } from "./standard-page-resolution";
 
 export { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 
-export { applicationInstallationActivationRequestSchema, ApplicationInstallationCoordinatorError, applicationInstallationPreparationRequestSchema, createApplicationInstallationCoordinator, type ApplicationInstallationActivationResult, type ApplicationInstallationCoordinatorDependencies, type HumanInstallationDefinitionAccess } from "./installation-coordinator";
+export {
+  applicationInstallationActivationRequestSchema,
+  applicationInstallationPreparationRequestSchema,
+  createApplicationInstallationCoordinator,
+  type ApplicationInstallationActivationResult,
+  type ApplicationInstallationCoordinatorDependencies,
+  type HumanInstallationDefinitionAccess,
+} from "./installation-coordinator";
 
-export { createPreviewInstallationCoordinator, PreviewInstallationCoordinatorError } from "./preview-installation-coordinator";
+export { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
 

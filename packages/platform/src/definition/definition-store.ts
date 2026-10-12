@@ -14,6 +14,11 @@ import { requireBuilderAuthority, type BuilderAuthority } from "./builder-author
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 export const definitionStoreErrorCodes = [
   "INVALID_DEFINITION_COMMAND",
@@ -29,16 +34,6 @@ export const definitionStoreErrorCodes = [
 ] as const;
 
 export type DefinitionStoreErrorCode = (typeof definitionStoreErrorCodes)[number];
-
-export class DefinitionStoreError extends Error {
-  readonly code: DefinitionStoreErrorCode;
-
-  constructor(code: DefinitionStoreErrorCode, options?: ErrorOptions & { detail?: string }) {
-    super(options?.detail ? `${code}: ${options.detail}` : code, options);
-    this.name = "DefinitionStoreError";
-    this.code = code;
-  }
-}
 
 type StoredDraftRow = DatabaseRow & {
   root_id: unknown;
@@ -94,7 +89,7 @@ const parseStoredDraft = (row: StoredDraftRow): StoredDefinitionDraft => {
       restoredFromReleaseRevision === undefined) ||
     (row.restored_at !== null && row.restored_at !== undefined && restoredAt === undefined)
   )
-    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const result = storedDefinitionDraftSchema.safeParse({
     rootId: row.root_id,
     organizationId: row.organization_id,
@@ -121,7 +116,7 @@ const parseStoredDraft = (row: StoredDraftRow): StoredDefinitionDraft => {
         }
       : {}),
   });
-  if (!result.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!result.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   return result.data;
 };
 
@@ -136,7 +131,7 @@ const sourceFailureDetail = (validation: ReturnType<typeof validateDefinitionSou
 const validateSource = (source: CreateDefinitionRootCommand["source"]) => {
   const validation = validateDefinitionSource(source);
   if (!validation.valid)
-    throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", {
+    throw new DefinitionError("INVALID_DEFINITION_SOURCE", {
       detail: sourceFailureDetail(validation),
     });
   return source;
@@ -165,27 +160,37 @@ const safeStoreOperation = async <Result>(
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof DefinitionStoreError) throw error;
-    const databaseCode =
-      error !== null && typeof error === "object" && "code" in error
-        ? String(error.code)
-        : undefined;
-    if (databaseCode === "40001")
-      throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-    if (databaseCode === "23505")
-      throw new DefinitionStoreError(
-        operationKind === "create_root"
-          ? "DEFINITION_ROOT_ALREADY_EXISTS"
-          : "DEFINITION_IDENTITY_ALIAS_CONFLICT",
-      );
-    if (databaseCode === "42501") throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-    if (databaseCode === "23503")
-      throw new DefinitionStoreError(
-        operationKind === "create_root" ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_ROOT_MISSING",
-      );
-    if (databaseCode === "22023" || databaseCode === "23514")
-      throw new DefinitionStoreError("DEFINITION_STORAGE_VALIDATION_FAILED");
-    throw new DefinitionStoreError("DEFINITION_STORAGE_FAILED");
+    if (error instanceof DefinitionError) throw error;
+    const cause = { cause: error };
+    switch (databaseErrorCode(error)) {
+      case "40001":
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", cause);
+      case "23505":
+        throw new DefinitionError(
+          operationKind === "create_root"
+            ? "DEFINITION_ROOT_ALREADY_EXISTS"
+            : "DEFINITION_IDENTITY_ALIAS_CONFLICT",
+          cause,
+        );
+      case "42501":
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED", cause);
+      case "23503":
+        throw new DefinitionError(
+          operationKind === "create_root"
+            ? "DEFINITION_CONTEXT_REFUSED"
+            : "DEFINITION_ROOT_MISSING",
+          cause,
+        );
+      case "22023":
+      case "23514":
+        throw new DefinitionError("DEFINITION_STORAGE_VALIDATION_FAILED", cause);
+      default:
+        throw unexpectedDefinitionFailure(
+          "DEFINITION_STORAGE_FAILED",
+          error,
+          "definition store " + operationKind,
+        );
+    }
   }
 };
 
@@ -217,8 +222,8 @@ export const createDefinitionStore = (
       if (!command.success) {
         const sourceDetail = invalidSourceDetail(candidate);
         if (sourceDetail)
-          throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
-        throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND", {
+          throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
+        throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
           detail: commandIssueDetail(command.error),
         });
       }
@@ -229,7 +234,7 @@ export const createDefinitionStore = (
           (mode.applicationOriginKind !== "ordinary" &&
             mode.applicationOriginKind !== "platform_system_application"))
       )
-        throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+        throw new DefinitionError("INVALID_DEFINITION_COMMAND");
       const applicationOriginKind =
         source.kind === "module"
           ? null
@@ -249,7 +254,7 @@ export const createDefinitionStore = (
           ${applicationOriginKind}::text
         )
       `;
-      if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+      if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
       return parseStoredDraft(rows[0]!);
     });
   };
@@ -272,7 +277,7 @@ export const createDefinitionStore = (
             ? (candidate as { rootId?: unknown }).rootId
             : undefined,
       });
-      if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      if (!rootId.success) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
       await requireBuilderAuthority(authority, {
         kind: "draft_change",
         rootId: rootId.data.rootId,
@@ -282,8 +287,8 @@ export const createDefinitionStore = (
         if (!command.success) {
           const sourceDetail = invalidSourceDetail(candidate);
           if (sourceDetail)
-            throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
-          throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND", {
+            throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
+          throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
             detail: commandIssueDetail(command.error),
           });
         }
@@ -300,8 +305,8 @@ export const createDefinitionStore = (
             ${JSON.stringify(identityRequirements)}::text::jsonb
           )
         `;
-        if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-        if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+        if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
         return parseStoredDraft(rows[0]!);
       });
     },

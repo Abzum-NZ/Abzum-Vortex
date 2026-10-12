@@ -22,7 +22,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { isDefinitionContextFailure } from "./definition-consumer-read-definition";
-import { DefinitionStoreError } from "./definition-store";
+import { DefinitionError } from "./definition-error";
 
 const draftReadCommandSchema = z
   .object({
@@ -117,7 +117,7 @@ const normalizeStoredDraft = (candidate: unknown): unknown => {
     return candidate;
   const draft = candidate as Record<string, unknown>;
   if (!Object.hasOwn(draft, "publishedRevision") || draft.publishedRevision === undefined)
-    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   if (draft.publishedRevision !== null) return candidate;
   return Object.fromEntries(Object.entries(draft).filter(([key]) => key !== "publishedRevision"));
 };
@@ -135,14 +135,14 @@ export const readApplicationDefinitionDraft = async (
   commandCandidate: ApplicationDefinitionDraftReadCommand,
 ): Promise<StoredApplicationDefinitionDraft> => {
   const command = draftReadCommandSchema.safeParse(commandCandidate);
-  if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+  if (!command.success) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
   const scope = selectedOrganizationScopeSchema.safeParse(serverResolvedScope);
   if (
     !scope.success ||
     (scope.data.applicationRootId !== undefined &&
       !sameUuid(scope.data.applicationRootId, command.data.rootId))
   )
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
   let rows: readonly DraftReadRow[];
   try {
@@ -152,34 +152,32 @@ export const readApplicationDefinitionDraft = async (
         vortex_definition.read_publication_state(${command.data.rootId}) as publication_state
     `;
   } catch (error) {
-    if (isDefinitionContextFailure(error))
-      throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    if (isDefinitionContextFailure(error)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     if (
       error instanceof Error &&
       "code" in error &&
       error.code === "23503" &&
       error.message === "A Definition root requires its current draft"
     )
-      throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
-    throw new DefinitionStoreError("DEFINITION_STORAGE_FAILED");
+      throw new DefinitionError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_STORAGE_FAILED");
   }
 
-  if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const row = draftReadRowSchema.safeParse(rows[0]);
-  if (!row.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!row.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   if (!hasMatchingLiveContext(row.data.request_context, scope.data))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-  if (row.data.publication_state === null)
-    throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  if (row.data.publication_state === null) throw new DefinitionError("DEFINITION_ROOT_MISSING");
 
   const state = publicationStateSchema.safeParse(row.data.publication_state);
-  if (!state.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!state.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const root = state.data.root;
   if (!sameUuid(root.organizationId, scope.data.organizationId))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-  if (root.kind !== "application") throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  if (root.kind !== "application") throw new DefinitionError("DEFINITION_ROOT_MISSING");
   const parsedDraft = storedDefinitionDraftSchema.safeParse(normalizeStoredDraft(state.data.draft));
-  if (!parsedDraft.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!parsedDraft.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const draft = parsedDraft.data;
   if (
     draft.kind !== "application" ||
@@ -194,12 +192,12 @@ export const readApplicationDefinitionDraft = async (
     !sameUuid(draft.createdBy, root.createdBy) ||
     fingerprintCanonicalValue(draft.source) !== draft.sourceFingerprint
   )
-    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   if (
     command.data.expectedDraftRevision !== undefined &&
     command.data.expectedDraftRevision !== draft.draftRevision
   )
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   return draft;
 };
 
@@ -214,10 +212,10 @@ export const readModuleDefinitionDraft = async (
   commandCandidate: ModuleDefinitionDraftReadCommand,
 ): Promise<StoredModuleDefinitionDraft> => {
   const command = moduleDraftReadCommandSchema.safeParse(commandCandidate);
-  if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+  if (!command.success) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
   const scope = selectedOrganizationScopeSchema.safeParse(serverResolvedScope);
   if (!scope.success || Object.hasOwn(scope.data, "applicationRootId"))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
   let rows: readonly DraftReadRow[];
   try {
@@ -227,42 +225,40 @@ export const readModuleDefinitionDraft = async (
         vortex_definition.read_publication_state(${command.data.rootId}) as publication_state
     `;
   } catch (error) {
-    if (isDefinitionContextFailure(error))
-      throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    if (isDefinitionContextFailure(error)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     if (
       error instanceof Error &&
       "code" in error &&
       error.code === "23503" &&
       error.message === "A Definition root requires its current draft"
     )
-      throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
-    throw new DefinitionStoreError("DEFINITION_STORAGE_FAILED");
+      throw new DefinitionError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_STORAGE_FAILED");
   }
 
-  if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const row = draftReadRowSchema.safeParse(rows[0]);
-  if (!row.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!row.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const context = humanReadContextSchema.safeParse(row.data.request_context);
   if (
     !context.success ||
     Object.hasOwn(context.data, "applicationRootId") ||
     !hasMatchingLiveContext(row.data.request_context, scope.data)
   )
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-  if (row.data.publication_state === null)
-    throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  if (row.data.publication_state === null) throw new DefinitionError("DEFINITION_ROOT_MISSING");
 
   const state = publicationStateSchema.safeParse(row.data.publication_state);
-  if (!state.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!state.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const root = state.data.root;
   if (!sameUuid(root.organizationId, scope.data.organizationId))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-  if (root.kind !== "module") throw new DefinitionStoreError("DEFINITION_ROOT_MISSING");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  if (root.kind !== "module") throw new DefinitionError("DEFINITION_ROOT_MISSING");
   // The kind-specific schema accepts only the current Module source contract.
   const parsedDraft = storedModuleDefinitionDraftSchema.safeParse(
     normalizeStoredDraft(state.data.draft),
   );
-  if (!parsedDraft.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!parsedDraft.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   const draft = parsedDraft.data;
   if (
     !sameUuid(root.rootId, command.data.rootId) ||
@@ -277,13 +273,13 @@ export const readModuleDefinitionDraft = async (
     Date.parse(draft.updatedAt) < Date.parse(draft.createdAt) ||
     fingerprintCanonicalValue(draft.source) !== draft.sourceFingerprint
   )
-    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   if (
     command.data.expectedDraftRevision !== undefined &&
     command.data.expectedDraftRevision !== draft.draftRevision
   )
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   if (!hasMatchingLiveContext(row.data.request_context, scope.data))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return draft;
 };

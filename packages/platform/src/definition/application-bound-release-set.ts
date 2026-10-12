@@ -23,7 +23,6 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
-  DefinitionConsumerReadError,
   isDefinitionContextFailure,
   isLiveDefinitionSystemContext,
   projectStoredConsumerRelease,
@@ -34,6 +33,7 @@ import {
   type ImmutableDefinitionPublicationCatalogueDefinition,
 } from "./definition-publication-catalogue";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
+import { DefinitionError } from "./definition-error";
 
 const storedSetSchema = z
   .object({
@@ -64,7 +64,7 @@ const firstInstallApplicationReleaseSetCommandSchema = z
   .strict();
 
 const parseFirstInstallHumanContext = (candidate: unknown): FirstInstallHumanContext => {
-  if (!isRecord(candidate)) throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+  if (!isRecord(candidate)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const { channel: rawChannel, ...sessionContextCandidate } = candidate;
   const channel = protectedOperationChannelSchema.safeParse(rawChannel);
   const parsedContext = sessionContextSchema.safeParse(sessionContextCandidate);
@@ -75,7 +75,7 @@ const parseFirstInstallHumanContext = (candidate: unknown): FirstInstallHumanCon
     parsedContext.data.callerKind !== "human" ||
     parsedContext.data.applicationRootId !== undefined
   )
-    throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return parsedContext.data;
 };
 
@@ -93,21 +93,18 @@ const readFirstInstallReleaseSet = async (
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
-    if (row.bound_release_set === null)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+    if (row.bound_release_set === null) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
     return {
       candidate: row.bound_release_set,
       context: parseFirstInstallHumanContext(row.request_context),
     };
   } catch (error) {
-    if (error instanceof DefinitionConsumerReadError) throw error;
+    if (error instanceof DefinitionError) throw error;
     const code = isRecord(error) && typeof error.code === "string" ? error.code : undefined;
-    if (code === "22023")
-      throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
-    if (code === "P0002") throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
-    if (code === "23514")
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-    throw new DefinitionConsumerReadError(
+    if (code === "22023") throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
+    if (code === "P0002") throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
+    if (code === "23514") throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError(
       isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
     );
   }
@@ -169,14 +166,13 @@ const projectBoundReleaseSet = async (
   const storedSet = (
     expectation.allowEmptyModules ? storedSystemSetSchema : storedSetSchema
   ).safeParse(candidate);
-  if (!storedSet.success)
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  if (!storedSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   const storedApplication = storedConsumerReleaseEvidenceSchema.safeParse(
     storedSet.data.application,
   );
   if (!storedApplication.success || storedApplication.data.kind !== "application")
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   const application = (await projectStoredConsumerRelease(
     storedApplication.data,
     {
@@ -196,13 +192,13 @@ const projectBoundReleaseSet = async (
     (expectation.applicationRootId !== undefined &&
       !sameId(application.rootId, expectation.applicationRootId))
   )
-    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   const modules: ModuleRead[] = [];
   for (const moduleCandidate of storedSet.data.modules) {
     const storedModule = storedConsumerReleaseEvidenceSchema.safeParse(moduleCandidate);
     if (!storedModule.success || storedModule.data.kind !== "module")
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+      throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
     modules.push(
       (await projectStoredConsumerRelease(
         storedModule.data,
@@ -221,7 +217,7 @@ const projectBoundReleaseSet = async (
     ? systemApplicationBoundReleaseSetResultSchema
     : applicationBoundReleaseSetResultSchema;
   const result = schema.safeParse({ application, modules });
-  if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  if (!result.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   return result.data;
 };
 
@@ -282,18 +278,17 @@ export const createApplicationBoundReleaseSetService = (
 ) => ({
   async read(commandCandidate: unknown): Promise<ApplicationBoundReleaseSetResult> {
     const command = applicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
 
     let candidate: unknown | undefined;
     try {
       candidate = await repository.read(command.data);
     } catch (error) {
-      throw new DefinitionConsumerReadError(
+      throw new DefinitionError(
         isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
       );
     }
-    if (candidate === undefined)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+    if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
     return (await projectBoundReleaseSet(
       candidate,
       {
@@ -315,25 +310,24 @@ export const createSystemApplicationBoundReleaseSetService = (
   ): Promise<SystemApplicationBoundReleaseSetResult> {
     const context = sessionContextSchema.safeParse(contextCandidate);
     const command = systemApplicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
     if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
     if (
       context.data.applicationRootId !== undefined &&
       !sameId(context.data.applicationRootId, command.data.applicationRootId)
     )
-      throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
     let candidate: unknown | undefined;
     try {
       candidate = await repository.read(context.data, command.data);
     } catch (error) {
-      throw new DefinitionConsumerReadError(
+      throw new DefinitionError(
         isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
       );
     }
-    if (candidate === undefined)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+    if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
     return (await projectBoundReleaseSet(
       candidate,
       {
@@ -387,8 +381,7 @@ export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
   return Object.freeze({
     async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
       const command = applicationReleaseAdoptionReleaseSetCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+      if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
 
       let candidate: unknown | undefined;
       try {
@@ -401,14 +394,13 @@ export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
         if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
         candidate = rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
       } catch (error) {
-        throw new DefinitionConsumerReadError(
+        throw new DefinitionError(
           isDefinitionContextFailure(error)
             ? "DEFINITION_CONTEXT_REFUSED"
             : "DEFINITION_READ_FAILED",
         );
       }
-      if (candidate === undefined)
-        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
+      if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
 
       return (await projectBoundReleaseSet(
         candidate,
@@ -437,15 +429,13 @@ export const createDatabaseFirstInstallApplicationReleaseSetService = (
   return Object.freeze({
     async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
       const command = firstInstallApplicationReleaseSetCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
+      if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
 
       const initial = await readFirstInstallReleaseSet(transaction, command.data);
       const initialSet = storedSystemSetSchema.safeParse(initial.candidate);
-      if (!initialSet.success)
-        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+      if (!initialSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
       if (!sameId(initialSet.data.correlationId, initial.context.correlationId))
-        throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
       const projected = await projectBoundReleaseSet(
         initialSet.data,
@@ -460,19 +450,18 @@ export const createDatabaseFirstInstallApplicationReleaseSetService = (
       );
       const result = systemApplicationBoundReleaseSetResultSchema.safeParse(projected);
       if (!result.success || !exactFirstInstallModuleClosure(result.data))
-        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+        throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
       const current = await readFirstInstallReleaseSet(transaction, command.data);
       const currentSet = storedSystemSetSchema.safeParse(current.candidate);
-      if (!currentSet.success)
-        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+      if (!currentSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
       if (
         canonicalJson(initial.context) !== canonicalJson(current.context) ||
         !sameId(currentSet.data.correlationId, current.context.correlationId)
       )
-        throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
       if (canonicalJson(initialSet.data) !== canonicalJson(currentSet.data))
-        throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+        throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
       return result.data;
     },

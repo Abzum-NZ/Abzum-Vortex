@@ -6,48 +6,30 @@ import {
   type ActiveApplicationInstallationEvidence,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 type ActiveInstallationRow = DatabaseRow & { readonly active_installation: unknown };
 
-export class ActiveApplicationInstallationError extends Error {
-  readonly code: ActiveApplicationInstallationErrorCode;
-  readonly databaseCode: string | undefined;
-
-  constructor(code: ActiveApplicationInstallationErrorCode, databaseCode?: string) {
-    super(code);
-    this.name = "ActiveApplicationInstallationError";
-    this.code = code;
-    this.databaseCode = databaseCode;
-  }
-}
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-const mapFailure = (error: unknown): ActiveApplicationInstallationError => {
-  if (error instanceof ActiveApplicationInstallationError) return error;
-  const code = databaseCode(error);
-  switch (code) {
+const mapFailure = (error: unknown): DefinitionError<ActiveApplicationInstallationErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  switch (databaseErrorCode(error)) {
     case "42501":
     case "22023":
-      return new ActiveApplicationInstallationError("ACTIVE_APPLICATION_CONTEXT_REFUSED", code);
+      return new DefinitionError("ACTIVE_APPLICATION_CONTEXT_REFUSED", { cause: error });
     case "P0002":
-      return new ActiveApplicationInstallationError(
-        "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE",
-        code,
-      );
+      return new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE", { cause: error });
     case "23514":
     case "55000":
-      return new ActiveApplicationInstallationError(
-        "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
-        code,
-      );
+      return new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE", { cause: error });
     default:
-      return new ActiveApplicationInstallationError(
+      return unexpectedDefinitionFailure(
         "ACTIVE_APPLICATION_INSTALLATION_READ_FAILED",
-        code,
+        error,
+        "active installation read",
       );
   }
 };
@@ -67,15 +49,15 @@ export const createActiveApplicationInstallationRepository = (
           select vortex_module.read_current_active_installation() as active_installation
         `;
         if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
-          throw new ActiveApplicationInstallationError(
-            "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE",
-          );
+          throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
         const result = activeApplicationInstallationEvidenceSchema.safeParse(
           rows[0].active_installation,
         );
         if (!result.success)
-          throw new ActiveApplicationInstallationError(
+          throw unexpectedDefinitionFailure(
             "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
+            result.error,
+            "installation-binding-reader",
           );
         return result.data;
       } catch (error) {

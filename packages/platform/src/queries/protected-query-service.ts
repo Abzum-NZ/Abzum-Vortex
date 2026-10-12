@@ -23,10 +23,7 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/index";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import {
-  ActiveApplicationInstallationError,
-  createActiveApplicationInstallationRepository,
-} from "../definition/module-index";
+import { createActiveApplicationInstallationRepository } from "../definition/module-index";
 import {
   decodeQueryContinuationToken,
   encodeQueryContinuationToken,
@@ -74,6 +71,7 @@ import {
   QueryInputRefusalError,
   validateQueryInputValues,
 } from "./typed-input-validation";
+import { DefinitionError } from "../definition/definition-index";
 
 /**
  * What the query path cannot read for itself and the caller must prove for one
@@ -993,8 +991,8 @@ const planCache = async (
       installation = await createActiveApplicationInstallationRepository(transaction).readCurrent();
     } catch (error) {
       if (
-        error instanceof ActiveApplicationInstallationError &&
-        error.databaseCode === undefined &&
+        error instanceof DefinitionError &&
+        error.cause === undefined &&
         (error.code === "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE" ||
           error.code === "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE")
       )

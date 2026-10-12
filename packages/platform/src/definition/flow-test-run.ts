@@ -46,6 +46,7 @@ import {
   type FlowTaskTraceObservation,
   type FlowTaskTraceObserver,
 } from "../rules/index";
+import { reportUnexpectedFailure } from "./definition-error";
 
 const maximumPayloadCharacters = 65_536;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;
@@ -106,8 +107,10 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 const withinPayload = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumPayloadCharacters;
-  } catch {
-    return false;
+  } catch (error) {
+    // JSON.stringify rejects only cyclic and BigInt values; anything else is a real defect.
+    if (error instanceof TypeError) return false;
+    throw error;
   }
 };
 
@@ -288,7 +291,8 @@ const previewFieldIds = async (
     }
     cache.set(key, fieldIds);
     return fieldIds;
-  } catch {
+  } catch (error) {
+    reportUnexpectedFailure("flow test record field lookup", error);
     return undefined;
   }
 };
@@ -407,7 +411,8 @@ const runRecordTask = async (
           failure: taskFailure("preview_record_refused", "refused", call.taskId),
         };
       expectedConcurrencyNumber = read.value.concurrencyNumber;
-    } catch {
+    } catch (error) {
+      reportUnexpectedFailure("flow test record read", error);
       return {
         outcome: "failed",
         failure: taskFailure("preview_record_read_failed", "failed", call.taskId),
@@ -456,7 +461,8 @@ const runRecordTask = async (
       outcome,
       failure: taskFailure(`record_${outcome}`, outcome, call.taskId),
     };
-  } catch {
+  } catch (error) {
+    reportUnexpectedFailure("flow test record save", error);
     return {
       outcome: "uncertain",
       failure: taskFailure("preview_record_save_uncertain", "uncertain", call.taskId),
@@ -520,7 +526,8 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
       let previewInstallation: PreviewInstallation;
       try {
         previewInstallation = await dependencies.previews.read(session.data, address.data);
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("flow test preview installation read", error);
         return refusal("preview_unavailable", { kind: "preview" });
       }
       if (
@@ -538,7 +545,8 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           session.data,
           selection.data,
         );
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("flow test previewer account lookup", error);
         return refusal("preview_unavailable", { kind: "preview" });
       }
       if (
@@ -582,7 +590,8 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         if (!permitted && dependencies.authorizeInvocation !== undefined) {
           try {
             permitted = await dependencies.authorizeInvocation(session.data, selection.data, flow);
-          } catch {
+          } catch (error) {
+            reportUnexpectedFailure("flow test invocation authorisation", error);
             permitted = false;
           }
         }

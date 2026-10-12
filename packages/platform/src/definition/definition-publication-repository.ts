@@ -44,16 +44,15 @@ import {
   hasAuthenticStoredCustomerDefinitionRelease,
   sameCanonicalJson,
 } from "./definition-release-integrity";
-import {
-  DefinitionPublicationError,
-  type DefinitionPublicationCandidate,
-  type DefinitionPublicationReader,
-  type DefinitionPublicationRepository,
-  type DefinitionPublicationTransaction,
-  type DefinitionReleaseAppend,
-  type ModuleReleasePageCursor,
-  type ResolvableModuleReleasePage,
-  type ResolvableModuleRelease,
+import type {
+  DefinitionPublicationCandidate,
+  DefinitionPublicationReader,
+  DefinitionPublicationRepository,
+  DefinitionPublicationTransaction,
+  DefinitionReleaseAppend,
+  ModuleReleasePageCursor,
+  ResolvableModuleReleasePage,
+  ResolvableModuleRelease,
 } from "./definition-publication";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import {
@@ -61,6 +60,11 @@ import {
   createDefinitionPublicationHistoryFold,
   foldDefinitionPublicationHistoryRelease,
 } from "./version-impact-definition";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -270,14 +274,18 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   impactReasons: readonly VersionImpactReason[];
 }>;
 
-const invalidStorage = (): never => {
-  throw new DefinitionPublicationError("DEFINITION_PUBLICATION_FAILED");
+const invalidStorage = (cause: string | z.ZodError): never => {
+  throw unexpectedDefinitionFailure(
+    "DEFINITION_PUBLICATION_FAILED",
+    typeof cause === "string" ? new Error(cause) : cause,
+    "publication storage",
+  );
 };
 
 const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Value>): Value => {
-  if (rows.length !== 1) return invalidStorage();
+  if (rows.length !== 1) return invalidStorage("parseOneRow found inconsistent stored evidence");
   const result = schema.safeParse(rows[0]);
-  if (!result.success) return invalidStorage();
+  if (!result.success) return invalidStorage(result.error);
   return result.data;
 };
 
@@ -362,7 +370,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const row = parseOneRow(rows, publicationStateRowSchema);
     if (row.publication_state === null) return undefined;
     const parsed = publicationStateSchema.safeParse(row.publication_state);
-    if (!parsed.success) return invalidStorage();
+    if (!parsed.success) return invalidStorage(parsed.error);
     const state = parsed.data;
     if (
       String(state.root.rootId) !== rootId ||
@@ -374,10 +382,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       state.root.currentReleaseRevision !== (state.draft.publishedRevision ?? null) ||
       !currentIdentityLookupMatches(state.draft.source, state.identities)
     )
-      return invalidStorage();
+      return invalidStorage("readCandidate found inconsistent stored evidence");
 
     if (state.root.currentReleaseRevision !== state.historyLatestReleaseRevision)
-      return invalidStorage();
+      return invalidStorage("readCandidate found inconsistent stored evidence");
     const anchor = state.root.currentReleaseRevision;
     const fold = createDefinitionPublicationHistoryFold({
       kind: state.draft.kind,
@@ -395,7 +403,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         `;
         const pageRow = parseOneRow(pageRows, publicationHistoryPageRowSchema);
         const page = publicationHistoryPageSchema.safeParse(pageRow.publication_history_page);
-        if (!page.success || page.data.anchorReleaseRevision !== anchor) return invalidStorage();
+        if (!page.success || page.data.anchorReleaseRevision !== anchor)
+          return invalidStorage("readCandidate found inconsistent stored evidence");
         let previous: number | null = after;
         for (const entry of page.data.entries) {
           const item = this.materializeHistory(
@@ -411,19 +420,20 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.publication.revision <= (previous ?? 0) ||
             release.publication.revision > anchor
           )
-            return invalidStorage();
+            return invalidStorage("readCandidate found inconsistent stored evidence");
           try {
             foldDefinitionPublicationHistoryRelease(fold, {
               previousReleaseRevision: entry.previousReleaseRevision,
               release,
             });
           } catch {
-            return invalidStorage();
+            return invalidStorage("readCandidate found inconsistent stored evidence");
           }
           previous = release.publication.revision;
         }
         if (page.data.nextAfterReleaseRevision === null) {
-          if (previous !== anchor) return invalidStorage();
+          if (previous !== anchor)
+            return invalidStorage("readCandidate found inconsistent stored evidence");
           after = anchor;
         } else {
           if (
@@ -431,7 +441,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             previous === null ||
             previous >= anchor
           )
-            return invalidStorage();
+            return invalidStorage("readCandidate found inconsistent stored evidence");
           after = previous;
         }
       }
@@ -440,7 +450,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     try {
       historyEvidence = completeDefinitionPublicationHistoryFold(fold);
     } catch {
-      return invalidStorage();
+      return invalidStorage("readCandidate found inconsistent stored evidence");
     }
     return {
       draft: state.draft,
@@ -464,7 +474,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     `;
     const row = parseOneRow(rows, moduleReleasePageRowSchema);
     const parsed = rawModuleReleasePageSchema.safeParse(row.module_release_page);
-    if (!parsed.success) return invalidStorage();
+    if (!parsed.success) return invalidStorage(parsed.error);
     const page = parsed.data;
     if (page.rootId === null || page.anchorReleaseRevision === null) {
       if (
@@ -474,7 +484,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         page.nextAfterReleaseRevision !== null ||
         cursor !== undefined
       )
-        return invalidStorage();
+        return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
       return {
         rootId: null,
         anchorReleaseRevision: null,
@@ -488,14 +498,14 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           page.anchorReleaseRevision !== cursor.anchorReleaseRevision)) ||
       page.entries.length === 0
     )
-      return invalidStorage();
+      return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
     const entries: ResolvableModuleReleasePage["entries"] = page.entries.map((entry) => {
       if (
         entry.release.organizationId !== organizationId ||
         entry.release.key !== key ||
         entry.release.rootId !== page.rootId
       )
-        return invalidStorage();
+        return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
       return {
         previousReleaseRevision: entry.previousReleaseRevision,
         release: this.materializeModuleRelease(entry.release),
@@ -523,9 +533,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const row = parseOneRow(rows, moduleReleaseRowSchema);
     if (row.module_release === null) return undefined;
     const parsed = rawModuleReleaseSchema.safeParse(row.module_release);
-    if (!parsed.success) return invalidStorage();
+    if (!parsed.success) return invalidStorage(parsed.error);
     const release = this.materializeModuleRelease(parsed.data);
-    if (release !== undefined && release.organizationId !== organizationId) return invalidStorage();
+    if (release !== undefined && release.organizationId !== organizationId)
+      return invalidStorage("readModuleRelease found inconsistent stored evidence");
     return release;
   }
 
@@ -549,7 +560,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       candidate.draft.publishedRevision !== expectedAnchorReleaseRevision ||
       releaseRevision !== expectedAnchorReleaseRevision
     )
-      return invalidStorage();
+      return invalidStorage(
+        "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+      );
 
     let after: number | null = null;
     let previous: number | null = null;
@@ -563,7 +576,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       const row = parseOneRow(rows, publicationHistoryPageRowSchema);
       const page = publicationHistoryPageSchema.safeParse(row.publication_history_page);
       if (!page.success || page.data.anchorReleaseRevision !== expectedAnchorReleaseRevision)
-        return invalidStorage();
+        return invalidStorage(
+          "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+        );
       for (const entry of page.data.entries) {
         const materialized = this.materializeHistory(
           [entry.release],
@@ -578,15 +593,23 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.publication.revision <= (previous ?? 0) ||
           release.publication.revision > expectedAnchorReleaseRevision
         )
-          return invalidStorage();
+          return invalidStorage(
+            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+          );
         previous = release.publication.revision;
         if (release.publication.revision === releaseRevision) {
-          if (selected !== undefined) return invalidStorage();
+          if (selected !== undefined)
+            return invalidStorage(
+              "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+            );
           selected = entry.release;
         }
       }
       if (page.data.nextAfterReleaseRevision === null) {
-        if (previous !== expectedAnchorReleaseRevision) return invalidStorage();
+        if (previous !== expectedAnchorReleaseRevision)
+          return invalidStorage(
+            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+          );
         after = expectedAnchorReleaseRevision;
       } else {
         if (
@@ -594,7 +617,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           previous === null ||
           previous >= expectedAnchorReleaseRevision
         )
-          return invalidStorage();
+          return invalidStorage(
+            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+          );
         after = previous;
       }
     }
@@ -605,11 +630,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       evidence.compilationOutput.kind !== "application" ||
       evidence.resolutionSnapshot.contractVersion !== "3.0.0"
     )
-      return invalidStorage();
+      return invalidStorage(
+        "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+      );
     const storedOutput = storedDefinitionCompilationOutputSchema.safeParse(
       evidence.compilationOutput,
     );
-    if (!storedOutput.success || storedOutput.data.kind !== "application") return invalidStorage();
+    if (!storedOutput.success || storedOutput.data.kind !== "application")
+      return invalidStorage(
+        "readApplicationPageAdoptionRelease found inconsistent stored evidence",
+      );
     const canonical = applicationDraftFromStoredRelease(storedOutput.data);
     return Object.freeze({
       organizationId: candidate.draft.organizationId,
@@ -645,17 +675,17 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           output.kind !== "application" ||
           release.publication.kind !== "application"
         )
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
         try {
           selectApplicationContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
         } catch {
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
         }
         if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "3.0.0")
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       if (kind === "module") {
         if (
@@ -663,17 +693,17 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           output.kind !== "module" ||
           release.publication.kind !== "module"
         )
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
         try {
           assertModuleContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
         } catch {
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
         }
         if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
-          return invalidStorage();
+          return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       const ownResolution = resolution.definitions.filter(
         (definition) =>
@@ -721,8 +751,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         }) ||
         !sameCanonicalJson(output.canonical.content, release.content)
       )
-        return invalidStorage();
-      if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
+        return invalidStorage("materializeHistory found inconsistent stored evidence");
+      if (!dependencyReferencesMatch(output, release.dependencyManifest))
+        return invalidStorage("materializeHistory found inconsistent stored evidence");
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
           ? moduleVersionImpactHistoryEntrySchema.safeParse({
@@ -743,7 +774,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
                 releaseNote: release.releaseNote,
               })
             : undefined;
-      if (published === undefined || !published.success) return invalidStorage();
+      if (published === undefined || !published.success)
+        return invalidStorage("materializeHistory found inconsistent stored evidence");
       history.push(published.data as never);
     }
     return kind === "module"
@@ -760,7 +792,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     try {
       assertModuleContractPair(sourceContractVersion, validationContractVersion);
     } catch {
-      return invalidStorage();
+      return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
     }
     const ownResolution = snapshot.definitions.filter(
       (definition) =>
@@ -806,7 +838,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !sameCanonicalJson(output.canonical.content, release.published.content) ||
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
-      return invalidStorage();
+      return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
     const published = moduleVersionImpactHistoryEntrySchema.safeParse({
       publication: release.published.publication,
       content: output.canonical.content,
@@ -817,7 +849,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !published.success ||
       fingerprintCanonicalValue(published.data.content) !== release.contentFingerprint
     )
-      return invalidStorage();
+      return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
     return {
       organizationId: release.organizationId,
       key: release.key,
@@ -853,7 +885,7 @@ class DatabasePublicationTransaction
         release.resolutionSnapshot.fingerprint ||
       !hasAuthenticResolutionFingerprint(release.resolutionSnapshot)
     )
-      return invalidStorage();
+      return invalidStorage("appendRelease found inconsistent stored evidence");
     const evidence = {
       releaseVersion: release.assignedVersion,
       compilationOutput: release.compilationOutput,
@@ -875,10 +907,9 @@ class DatabasePublicationTransaction
         ${JSON.stringify(evidence)}::text::jsonb
       )
     `;
-    if (rows.length === 0)
-      throw new DefinitionPublicationError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     const parsed = appendReleaseRowSchema.safeParse(rows.length === 1 ? rows[0] : undefined);
-    if (!parsed.success) return invalidStorage();
+    if (!parsed.success) return invalidStorage(parsed.error);
     return publishDefinitionResultSchema.parse({
       rootId: parsed.data.root_id,
       releaseRevision: parsed.data.release_revision,
@@ -899,16 +930,20 @@ const safeRepositoryOperation = async <Result>(
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof DefinitionPublicationError) throw error;
-    const databaseCode =
-      error !== null && typeof error === "object" && "code" in error
-        ? String(error.code)
-        : undefined;
-    if (databaseCode === "40001" || databaseCode === "23505")
-      throw new DefinitionPublicationError("DEFINITION_DRAFT_STALE_OR_MISSING");
-    if (databaseCode === "42501")
-      throw new DefinitionPublicationError("DEFINITION_ORGANIZATION_MISMATCH");
-    throw new DefinitionPublicationError("DEFINITION_PUBLICATION_FAILED");
+    if (error instanceof DefinitionError) throw error;
+    switch (databaseErrorCode(error)) {
+      case "40001":
+      case "23505":
+        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", { cause: error });
+      case "42501":
+        throw new DefinitionError("DEFINITION_ORGANIZATION_MISMATCH", { cause: error });
+      default:
+        throw unexpectedDefinitionFailure(
+          "DEFINITION_PUBLICATION_FAILED",
+          error,
+          "publication repository",
+        );
+    }
   }
 };
 
