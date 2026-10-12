@@ -363,14 +363,16 @@ const byModuleRoot = <Value extends { readonly moduleRootId: string }>(values: V
 const fail = (code: ApplicationInstallationCoordinatorErrorCode, cause?: unknown) =>
   new DefinitionError(code, cause === undefined ? undefined : { cause });
 
+const isCoordinatorError = (
+  error: unknown,
+): error is DefinitionError<ApplicationInstallationCoordinatorErrorCode> =>
+  error instanceof DefinitionError &&
+  (applicationInstallationCoordinatorErrorCodes as readonly string[]).includes(error.code);
+
 const toCoordinatorError = (
   error: unknown,
 ): DefinitionError<ApplicationInstallationCoordinatorErrorCode> => {
-  if (
-    error instanceof DefinitionError &&
-    (applicationInstallationCoordinatorErrorCodes as readonly string[]).includes(error.code)
-  )
-    return error;
+  if (isCoordinatorError(error)) return error;
   if (error instanceof BuilderAuthorityError)
     return fail(
       error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
@@ -1034,7 +1036,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     try {
       return resolveStorageRelease(target, releaseSet);
     } catch (error) {
-      if (error instanceof DefinitionError) throw error;
+      if (isCoordinatorError(error)) throw error;
       throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
     }
   };
@@ -1067,7 +1069,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
       }
     } catch (error) {
-      if (error instanceof DefinitionError) throw error;
+      if (isCoordinatorError(error)) throw error;
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
     }
     const application = releaseSet.application;
