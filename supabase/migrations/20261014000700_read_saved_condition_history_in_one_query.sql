@@ -1,3 +1,5 @@
+grant create on schema vortex_definition to postgres;
+
 create or replace function vortex_definition.read_saved_condition_history(
   p_root_id uuid
 )
@@ -52,3 +54,5 @@ grant execute on function vortex_definition.read_saved_condition_history(uuid) t
 comment on function vortex_definition.read_saved_condition_history(uuid) is
   'Returns, for each saved sharing condition ever published by one organisation-scoped Module root, its most recent published form, so the next release can assign condition revisions.';
 
+
+revoke create on schema vortex_definition from postgres;
