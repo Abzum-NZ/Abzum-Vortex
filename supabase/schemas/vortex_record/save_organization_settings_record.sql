@@ -94,16 +94,6 @@ begin
       'correlationId', correlation_id_value
     );
   end if;
-  if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
-    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'conflict',
-      'reasonCode', 'record_revision_conflict',
-      'concurrencyNumber', loaded -> 'concurrencyNumber',
-      'correlationId', correlation_id_value
-    );
-  end if;
-
   read_decision := vortex_access.evaluate_organization_record_access_internal(
     loaded -> 'declaration', p_record_id, loaded -> 'facts'
   );
@@ -304,6 +294,16 @@ begin
     end if;
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'command_invalid',
+      'correlationId', correlation_id_value
+    );
+  end if;
+
+  if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
+    perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict',
+      'reasonCode', 'record_revision_conflict',
+      'concurrencyNumber', loaded -> 'concurrencyNumber',
       'correlationId', correlation_id_value
     );
   end if;

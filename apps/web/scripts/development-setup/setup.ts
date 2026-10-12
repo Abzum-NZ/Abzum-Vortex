@@ -174,6 +174,13 @@ const initializeLandingZoneDefault = async (
       `initialized the organisation default to Landing Zone at settings revision ${result.value.concurrencyNumber}`,
     );
   } else {
+    if (
+      result.kind === "unavailable" ||
+      (result.kind === "available" && result.value.outcome !== "saved")
+    ) {
+      state.defaultApplicationInitializationAttempted = false;
+      state.save();
+    }
     const details =
       result.kind === "temporarily_unavailable"
         ? `temporarily unavailable${result.cause === undefined ? "" : `: ${result.cause}`}`
