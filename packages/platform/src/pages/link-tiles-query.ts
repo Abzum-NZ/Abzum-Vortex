@@ -89,13 +89,13 @@ const pinFields = [
 type PinField = (typeof pinFields)[number];
 type ProtectedRecordLinkReader = (
   session: IdentitySession,
-  identity: ViewerSafeRecordLinkIdentity,
-) => Promise<ViewerSafeRecordLinkResult>;
+  identities: readonly ViewerSafeRecordLinkIdentity[],
+) => Promise<readonly ViewerSafeRecordLinkResult[]>;
 
 type ProtectedApplicationPageLinkReader = (
   session: IdentitySession,
-  selector: ApplicationPageLinkSelector,
-) => Promise<ApplicationPageLinkResult>;
+  selectors: readonly ApplicationPageLinkSelector[],
+) => Promise<readonly ApplicationPageLinkResult[]>;
 
 const REFUSED = Object.freeze({ status: "refused", reason: "not_permitted" } as const);
 const ERROR = Object.freeze({ status: "error" } as const);
@@ -109,10 +109,10 @@ const projectionError = (stage: string, cause: unknown): typeof ERROR => {
 const maximumPages = 50;
 const maximumRows = 10_000;
 
-const cellKey = (settings: Settings, property: string, fallback: string): string | undefined => {
+const cellKey = (settings: Settings, property: string): string | undefined => {
   const value = Object.hasOwn(settings, property) ? settings[property] : undefined;
-  if (value !== undefined && value.kind !== "text") return undefined;
-  const parsed = builderKeySchema.safeParse(value?.kind === "text" ? value.value : fallback);
+  if (value?.kind !== "text") return undefined;
+  const parsed = builderKeySchema.safeParse(value.value);
   return parsed.success ? parsed.data : undefined;
 };
 
@@ -168,9 +168,9 @@ export const buildLinkTilesQueryBinding = (
     new Set(record.fields.map((field) => field.key)).size !== record.fields.length
   )
     return undefined;
-  const labelKey = cellKey(settings, "label_key", "label");
-  const addressKey = cellKey(settings, "address_key", "address");
-  const descriptionKey = cellKey(settings, "description_key", "description");
+  const labelKey = cellKey(settings, "label_key");
+  const addressKey = cellKey(settings, "address_key");
+  const descriptionKey = cellKey(settings, "description_key");
   if (
     labelKey === undefined ||
     addressKey === undefined ||
@@ -594,8 +594,150 @@ async function resolveRecordPins(
       command = continuation.data;
     }
     if (!complete) return REFUSED;
+    type TargetReadReference =
+      | Readonly<{
+          kind: "application_page";
+          key: string;
+        }>
+      | Readonly<{
+          kind: "record";
+          key: string;
+          identity: ViewerSafeRecordLinkIdentity;
+        }>;
+    const targetReadsBySource = new Map<string, TargetReadReference>();
+    const recordIdentities = new Map<string, ViewerSafeRecordLinkIdentity>();
+    const applicationPageSelectors = new Map<string, ApplicationPageLinkSelector>();
+    const recordIdentityKey = (identity: ViewerSafeRecordLinkIdentity): string =>
+      [
+        identity.organizationId,
+        identity.applicationRootId,
+        identity.moduleRootId,
+        identity.moduleReleaseRevision,
+        identity.recordTypeId,
+        identity.storageContractId,
+        identity.recordId,
+      ]
+        .map((value) => String(value).toLowerCase())
+        .join(":");
+
+    for (const source of sourceRows) {
+      const value = (id: string | undefined): JsonValue | undefined =>
+        id === undefined
+          ? undefined
+          : Object.entries(source.values).find(([key]) => sameId(key, id))?.[1];
+      const fields = binding.pinFields;
+      const kind = value(fields.target_kind);
+      if (
+        kind !== "record" &&
+        kind !== "external" &&
+        (!appPage || (kind !== "application" && kind !== "page"))
+      )
+        continue;
+      const behaviour = value(fields.open_behaviour);
+      if (behaviour !== "replace" && behaviour !== "new_page") continue;
+      if (kind === "external") continue;
+      if (kind === "application" || kind === "page") {
+        const mapped = binding.applicationFields;
+        const pageKey = value(mapped?.page_key);
+        const selector = applicationPageLinkSelectorSchema.safeParse({
+          kind,
+          applicationKey: value(mapped?.application_key),
+          ...(kind === "page"
+            ? { pageKey }
+            : pageKey === null || pageKey === undefined || pageKey === ""
+              ? {}
+              : { pageKey }),
+        });
+        if (!selector.success || readApplicationPageLink === undefined) continue;
+        const key = JSON.stringify(selector.data);
+        applicationPageSelectors.set(key, selector.data);
+        targetReadsBySource.set(source.recordId, {
+          kind: "application_page",
+          key,
+        });
+        continue;
+      }
+
+      const identity = viewerSafeRecordLinkIdentitySchema.safeParse({
+        organizationId: value(fields.organization_id),
+        applicationRootId: value(fields.application_root_id),
+        moduleRootId: value(fields.module_root_id),
+        moduleReleaseRevision: value(fields.module_release_revision),
+        recordTypeId: value(fields.record_type_id),
+        storageContractId: value(fields.storage_contract_id),
+        recordId: value(fields.record_id),
+      });
+      if (!identity.success || !sameId(identity.data.organizationId, context.organizationId))
+        continue;
+      const key = recordIdentityKey(identity.data);
+      recordIdentities.set(key, identity.data);
+      targetReadsBySource.set(source.recordId, { kind: "record", key, identity: identity.data });
+    }
+
+    const recordReads = new Map<string, ViewerSafeRecordLinkResult>();
+    const applicationPageReads = new Map<string, ApplicationPageLinkResult>();
+    try {
+      const recordBatch = [...recordIdentities.entries()];
+      const applicationPageBatch = [...applicationPageSelectors.entries()];
+      const [recordResults, applicationPageResults] = await Promise.all([
+        recordBatch.length === 0
+          ? Promise.resolve([] as readonly ViewerSafeRecordLinkResult[])
+          : readRecordLink(
+              session,
+              recordBatch.map(([, identity]) => identity),
+            ),
+        applicationPageBatch.length === 0 || readApplicationPageLink === undefined
+          ? Promise.resolve([] as readonly ApplicationPageLinkResult[])
+          : readApplicationPageLink(
+              session,
+              applicationPageBatch.map(([, selector]) => selector),
+            ),
+      ]);
+      if (
+        !Array.isArray(recordResults) ||
+        recordResults.length !== recordBatch.length ||
+        !Array.isArray(applicationPageResults) ||
+        applicationPageResults.length !== applicationPageBatch.length
+      )
+        throw new Error("LINK_TILE_TARGET_BATCH_RESULT_COUNT_MISMATCH");
+
+      for (const [index, [key, identity]] of recordBatch.entries()) {
+        const parsed = viewerSafeRecordLinkResultSchema.safeParse(recordResults[index]);
+        if (!parsed.success) return projectionError("record_target_result_invalid", parsed.error);
+        if (
+          parsed.data.outcome === "available" &&
+          (!sameId(parsed.data.detailAddress.applicationRootId, identity.applicationRootId) ||
+            !sameId(parsed.data.detailAddress.recordId, identity.recordId))
+        )
+          return projectionError(
+            "record_target_identity_mismatch",
+            new Error("LINK_TILE_RECORD_TARGET_IDENTITY_MISMATCH"),
+          );
+        recordReads.set(key, parsed.data);
+      }
+
+      for (const [index, [key, selector]] of applicationPageBatch.entries()) {
+        const parsed = applicationPageLinkResultSchema.safeParse(applicationPageResults[index]);
+        if (!parsed.success)
+          return projectionError("application_target_result_invalid", parsed.error);
+        if (
+          parsed.data.availability === "available" &&
+          (parsed.data.kind !== selector.kind ||
+            parsed.data.applicationKey !== selector.applicationKey ||
+            !sameId(parsed.data.organizationId, context.organizationId) ||
+            (selector.kind === "page" && parsed.data.pageKey !== selector.pageKey))
+        )
+          return projectionError(
+            "application_target_identity_mismatch",
+            new Error("LINK_TILE_TARGET_IDENTITY_MISMATCH"),
+          );
+        applicationPageReads.set(key, parsed.data);
+      }
+    } catch (error) {
+      return projectionError("target_batch_reader_failed", error);
+    }
+
     const rows: ProjectedApplicationPageLinkTiles["rows"] = [];
-    const reads = new Map<string, ViewerSafeRecordLinkResult>();
     for (const source of sourceRows) {
       const value = (id: string | undefined): JsonValue | undefined =>
         id === undefined
@@ -630,97 +772,45 @@ async function resolveRecordPins(
               openBehaviour: behaviour,
             };
         } else if (kind === "application" || kind === "page") {
-          const mapped = binding.applicationFields;
-          const pageKey = value(mapped?.page_key);
-          // An Application selector may not silently discard a stored Page selector.
-          const selector = applicationPageLinkSelectorSchema.safeParse({
-            kind,
-            applicationKey: value(mapped?.application_key),
-            ...(kind === "page"
-              ? { pageKey }
-              : pageKey === null || pageKey === undefined || pageKey === ""
-                ? {}
-                : { pageKey }),
-          });
-          if (selector.success && readApplicationPageLink !== undefined) {
-            try {
-              const candidate = await readApplicationPageLink(session, selector.data);
-              const read = applicationPageLinkResultSchema.safeParse(candidate);
-              if (!read.success)
-                return projectionError("application_target_result_invalid", read.error);
-              if (
-                read.data.availability === "available" &&
-                (read.data.kind !== kind ||
-                  read.data.applicationKey !== selector.data.applicationKey ||
-                  !sameId(read.data.organizationId, context.organizationId) ||
-                  (selector.data.kind === "page" && read.data.pageKey !== selector.data.pageKey))
-              )
-                return projectionError(
-                  "application_target_identity_mismatch",
-                  new Error("LINK_TILE_TARGET_IDENTITY_MISMATCH"),
-                );
-              if (read.data.availability === "available")
-                target = { ...read.data, openBehaviour: behaviour };
-            } catch (error) {
-              return projectionError("application_target_reader_failed", error);
-            }
-          }
+          const reference = targetReadsBySource.get(source.recordId);
+          const result =
+            reference?.kind === "application_page"
+              ? applicationPageReads.get(reference.key)
+              : undefined;
+          if (result === undefined && reference?.kind === "application_page")
+            return projectionError(
+              "application_target_batch_result_missing",
+              new Error("LINK_TILE_TARGET_BATCH_RESULT_MISSING"),
+            );
+          if (result?.availability === "available")
+            target = { ...result, openBehaviour: behaviour };
         } else {
-          const identity = viewerSafeRecordLinkIdentitySchema.safeParse({
-            organizationId: value(fields.organization_id),
-            applicationRootId: value(fields.application_root_id),
-            moduleRootId: value(fields.module_root_id),
-            moduleReleaseRevision: value(fields.module_release_revision),
-            recordTypeId: value(fields.record_type_id),
-            storageContractId: value(fields.storage_contract_id),
-            recordId: value(fields.record_id),
-          });
-          if (identity.success && sameId(identity.data.organizationId, context.organizationId)) {
-            const cacheKey = JSON.stringify(identity.data);
-            let result = reads.get(cacheKey);
-            if (result === undefined) {
-              try {
-                const candidate = await readRecordLink(session, identity.data);
-                const parsed = viewerSafeRecordLinkResultSchema.safeParse(candidate);
-                if (!parsed.success)
-                  return projectionError("record_target_result_invalid", parsed.error);
-                if (
-                  parsed.data.outcome === "available" &&
-                  (!sameId(
-                    parsed.data.detailAddress.applicationRootId,
-                    identity.data.applicationRootId,
-                  ) ||
-                    !sameId(parsed.data.detailAddress.recordId, identity.data.recordId))
-                )
-                  return projectionError(
-                    "record_target_identity_mismatch",
-                    new Error("LINK_TILE_RECORD_TARGET_IDENTITY_MISMATCH"),
-                  );
-                result = parsed.data;
-              } catch (error) {
-                return projectionError("record_target_reader_failed", error);
-              }
-              reads.set(cacheKey, result);
-            }
-            if (
-              result.outcome === "available" &&
-              sameId(result.detailAddress.applicationRootId, identity.data.applicationRootId) &&
-              sameId(result.detailAddress.recordId, identity.data.recordId)
-            )
-              target = {
-                kind: "record",
-                title: result.title,
-                detailAddress: result.detailAddress,
-                openBehaviour: behaviour,
-                association: {
-                  organizationId: identity.data.organizationId,
-                  applicationRootId: result.detailAddress.applicationRootId,
-                  applicationKey: result.detailAddress.applicationKey,
-                  recordTypeId: identity.data.recordTypeId,
-                  recordId: identity.data.recordId,
-                },
-              };
-          }
+          const reference = targetReadsBySource.get(source.recordId);
+          const result = reference?.kind === "record" ? recordReads.get(reference.key) : undefined;
+          if (result === undefined && reference?.kind === "record")
+            return projectionError(
+              "record_target_batch_result_missing",
+              new Error("LINK_TILE_TARGET_BATCH_RESULT_MISSING"),
+            );
+          if (
+            result?.outcome === "available" &&
+            reference?.kind === "record" &&
+            sameId(result.detailAddress.applicationRootId, reference.identity.applicationRootId) &&
+            sameId(result.detailAddress.recordId, reference.identity.recordId)
+          )
+            target = {
+              kind: "record",
+              title: result.title,
+              detailAddress: result.detailAddress,
+              openBehaviour: behaviour,
+              association: {
+                organizationId: reference.identity.organizationId,
+                applicationRootId: result.detailAddress.applicationRootId,
+                applicationKey: result.detailAddress.applicationKey,
+                recordTypeId: reference.identity.recordTypeId,
+                recordId: reference.identity.recordId,
+              },
+            };
         }
       }
       rows.push({ sourceRecordId: source.recordId, sourceRevision: source.revision, target });

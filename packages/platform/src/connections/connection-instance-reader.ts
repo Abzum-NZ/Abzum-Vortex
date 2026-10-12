@@ -31,7 +31,6 @@ import {
   type SessionContext,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import { readActiveConnectionEvidence } from "./connection-readiness";
 
 /**
  * The protected read side of connection administration.
@@ -364,6 +363,131 @@ const mapAdministrationUnavailable = (
   return "connection_options_unavailable";
 };
 
+type ArchiveConnectionOptionVerificationRow = DatabaseRow & {
+  readonly requested_connection_instance_id: unknown;
+  readonly status_organization_id: unknown;
+  readonly connection_instance: unknown;
+  readonly evidence_connection_instance_id: unknown;
+  readonly evidence_destination_key: unknown;
+  readonly evidence_destination_fingerprint: unknown;
+  readonly evidence_organization_id: unknown;
+  readonly evidence_authorized_application_ids: unknown;
+  readonly evidence_state: unknown;
+  readonly evidence_revision: unknown;
+  readonly evidence_last_health_outcome: unknown;
+};
+
+type ArchiveConnectionOptionVerification = Readonly<{
+  connectionInstanceId: ConnectionInstanceId;
+  status?: ConnectionInstanceStatus;
+  evidence?: ActiveConnectionEvidence;
+}>;
+
+/** Reads each bounded candidate's current status and locked active evidence in one DB statement. */
+const readArchiveConnectionOptionCandidates = async (
+  transaction: RequestDatabaseTransaction,
+  organization: OrganizationId,
+  candidateIds: readonly ConnectionInstanceId[],
+): Promise<readonly ArchiveConnectionOptionVerification[]> => {
+  if (candidateIds.length === 0) return Object.freeze([]);
+  if (
+    candidateIds.length > MAXIMUM_CONNECTION_INSTANCE_PAGE_SIZE ||
+    new Set(candidateIds.map((candidate) => candidate.toLowerCase())).size !== candidateIds.length
+  )
+    throw new Error("CONNECTION_OPTION_CANDIDATE_BATCH_INVALID");
+
+  const ids = candidateIds.map((candidate) => connectionInstanceIdSchema.parse(candidate));
+  const rows = await transaction.query<ArchiveConnectionOptionVerificationRow>`
+    with requested as materialized (
+      select (candidate.value #>> '{}')::uuid as connection_instance_id,
+        candidate.ordinality
+      from pg_catalog.jsonb_array_elements(${JSON.stringify(ids)}::jsonb)
+        with ordinality as candidate(value, ordinality)
+    ), current_status as materialized (
+      select requested.ordinality, requested.connection_instance_id,
+        status.organization_id, status.connection_instance
+      from requested
+      left join lateral vortex_connection.read_connection_instance_for_administration(
+        ${organization}::uuid, requested.connection_instance_id
+      ) as status on true
+    ), active_evidence as materialized (
+      select current_status.ordinality, evidence.connection_instance_id,
+        evidence.destination_key, evidence.destination_fingerprint, evidence.organization_id,
+        evidence.authorized_application_ids, evidence.state, evidence.revision,
+        evidence.last_health_outcome
+      from current_status
+      cross join lateral vortex_connection.read_active_connection_evidence(
+        current_status.connection_instance_id
+      ) as evidence
+      where current_status.connection_instance is not null
+    )
+    select requested.connection_instance_id as requested_connection_instance_id,
+      current_status.organization_id as status_organization_id,
+      current_status.connection_instance,
+      active_evidence.connection_instance_id as evidence_connection_instance_id,
+      active_evidence.destination_key as evidence_destination_key,
+      active_evidence.destination_fingerprint as evidence_destination_fingerprint,
+      active_evidence.organization_id as evidence_organization_id,
+      active_evidence.authorized_application_ids as evidence_authorized_application_ids,
+      active_evidence.state as evidence_state,
+      active_evidence.revision as evidence_revision,
+      active_evidence.last_health_outcome as evidence_last_health_outcome
+    from requested
+    left join current_status on current_status.ordinality = requested.ordinality
+    left join active_evidence on active_evidence.ordinality = requested.ordinality
+    order by requested.ordinality
+  `;
+  if (rows.length !== ids.length)
+    throw new Error("CONNECTION_OPTION_CANDIDATE_BATCH_RESULT_COUNT_MISMATCH");
+
+  return Object.freeze(
+    rows.map((row, index) => {
+      const requestedId = connectionInstanceIdSchema.parse(row.requested_connection_instance_id);
+      if (!sameId(requestedId, ids[index] ?? ""))
+        throw new Error("CONNECTION_OPTION_CANDIDATE_BATCH_IDENTITY_MISMATCH");
+      if ((row.status_organization_id === null) !== (row.connection_instance === null))
+        throw new Error("CONNECTION_OPTION_STATUS_ROW_MALFORMED");
+
+      let status: ConnectionInstanceStatus | undefined;
+      if (row.connection_instance !== null) {
+        if (!sameId(organizationIdSchema.parse(row.status_organization_id), organization))
+          throw new Error("CONNECTION_OPTION_STATUS_ORGANIZATION_MISMATCH");
+        const parsedStatus = connectionInstanceStatusSchema.safeParse(row.connection_instance);
+        if (!parsedStatus.success)
+          throw new Error("CONNECTION_OPTION_STATUS_MALFORMED", { cause: parsedStatus.error });
+        if (!sameId(parsedStatus.data.connectionInstanceId, requestedId))
+          throw new Error("CONNECTION_OPTION_STATUS_IDENTITY_MISMATCH");
+        status = parsedStatus.data;
+      }
+
+      let evidence: ActiveConnectionEvidence | undefined;
+      if (row.evidence_connection_instance_id !== null) {
+        const parsedEvidence = activeConnectionEvidenceSchema.safeParse({
+          connectionInstanceId: row.evidence_connection_instance_id,
+          destinationKey: row.evidence_destination_key,
+          destinationFingerprint: row.evidence_destination_fingerprint,
+          organizationId: row.evidence_organization_id,
+          authorizedApplicationIds: row.evidence_authorized_application_ids,
+          state: row.evidence_state,
+          revision: databaseRevision(row.evidence_revision),
+          lastHealthOutcome: row.evidence_last_health_outcome,
+        });
+        if (!parsedEvidence.success)
+          throw new Error("CONNECTION_OPTION_EVIDENCE_MALFORMED", { cause: parsedEvidence.error });
+        if (!sameId(parsedEvidence.data.connectionInstanceId, requestedId))
+          throw new Error("CONNECTION_OPTION_EVIDENCE_IDENTITY_MISMATCH");
+        evidence = parsedEvidence.data;
+      }
+
+      return Object.freeze({
+        connectionInstanceId: requestedId,
+        ...(status === undefined ? {} : { status }),
+        ...(evidence === undefined ? {} : { evidence }),
+      });
+    }),
+  );
+};
+
 const isSelectedApplication = (
   applicationIds: readonly ApplicationRootId[],
   applicationRootId: ApplicationRootId,
@@ -586,10 +710,10 @@ export async function listConnectionInstancesForAdministration(
  * method inside the same HUMAN `runChange` transaction that reads the provisioned target and saves
  * its policy. This method is read-only; the caller must rederive the selected tuple on submit.
  *
- * Connection status is first enumerated through the permission-gated administrative reader. Each
- * plausible row is then locked and checked by the existing active-evidence reader, followed by a
- * permission-gated status reread. Only the final server-side option tuple carries the destination
- * fingerprint; Web must omit it from any browser projection.
+ * Connection status is first enumerated through the permission-gated administrative reader. One
+ * bounded database statement then reads each plausible row's current status and locked active
+ * evidence in the same request context. Only the final server-side option tuple carries the
+ * destination fingerprint; Web must omit it from any browser projection.
  */
 export async function listEligibleArchiveConnectionsForApplication(
   transaction: RequestDatabaseTransaction,
@@ -669,9 +793,7 @@ export async function listEligibleArchiveConnectionsForApplication(
     permission = await refreshPermission();
     if (!permission.ok) return unavailableArchiveOptions(permission.reasonCode);
 
-    const activeCandidates: Array<
-      Readonly<{ listed: ConnectionInstanceStatus; evidence: ActiveConnectionEvidence }>
-    > = [];
+    const listedCandidates: ConnectionInstanceStatus[] = [];
     for (const instance of listed) {
       if (
         instance.state !== "active" ||
@@ -684,26 +806,34 @@ export async function listEligibleArchiveConnectionsForApplication(
       if (listedExpiry === undefined)
         return unavailableArchiveOptions("connection_options_unavailable");
       if (listedExpiry !== null && listedExpiry <= permission.value.completedAt) continue;
+      listedCandidates.push(instance);
+    }
 
-      let rawEvidence: ActiveConnectionEvidence;
-      try {
-        rawEvidence = await readActiveConnectionEvidence(
-          transaction,
-          instance.connectionInstanceId,
-        );
-      } catch {
-        // This reader intentionally collapses absence, stale/inactive state and SQL errors.
-        // None of those may be silently turned into a partial catalogue.
-        return unavailableArchiveOptions("connection_options_unavailable");
-      }
-      const parsedEvidence = activeConnectionEvidenceSchema.safeParse(rawEvidence);
-      if (!parsedEvidence.success)
-        throw new Error("CONNECTION_OPTION_EVIDENCE_MALFORMED", { cause: parsedEvidence.error });
-      const evidence = parsedEvidence.data;
+    const verifications = await readArchiveConnectionOptionCandidates(
+      transaction,
+      organization,
+      listedCandidates.map((candidate) => candidate.connectionInstanceId),
+    );
+    if (verifications.length !== listedCandidates.length)
+      throw new Error("CONNECTION_OPTION_CANDIDATE_BATCH_RESULT_COUNT_MISMATCH");
+
+    const optionCandidates: Array<
+      Readonly<{ option: EligibleArchiveConnectionOption; expiresAt: number | null }>
+    > = [];
+    for (const [index, listedInstance] of listedCandidates.entries()) {
+      const verification = verifications[index];
       if (
-        !sameId(evidence.connectionInstanceId, instance.connectionInstanceId) ||
+        verification === undefined ||
+        !sameId(verification.connectionInstanceId, listedInstance.connectionInstanceId)
+      )
+        throw new Error("CONNECTION_OPTION_CANDIDATE_BATCH_IDENTITY_MISMATCH");
+      const evidence = verification.evidence;
+      if (evidence === undefined)
+        return unavailableArchiveOptions("connection_options_unavailable");
+      if (
+        !sameId(evidence.connectionInstanceId, listedInstance.connectionInstanceId) ||
         !sameId(evidence.organizationId, organization) ||
-        evidence.revision !== instance.revision ||
+        evidence.revision !== listedInstance.revision ||
         evidence.state !== "active" ||
         evidence.lastHealthOutcome !== "healthy"
       )
@@ -711,40 +841,14 @@ export async function listEligibleArchiveConnectionsForApplication(
       if (!isSelectedApplication(evidence.authorizedApplicationIds, application))
         return unavailableArchiveOptions("stale_page");
       if (!destinations.has(evidence.destinationKey)) continue;
-      activeCandidates.push(Object.freeze({ listed: instance, evidence }));
-    }
-
-    permission = await refreshPermission();
-    if (!permission.ok) return unavailableArchiveOptions(permission.reasonCode);
-
-    const optionCandidates: Array<
-      Readonly<{ option: EligibleArchiveConnectionOption; expiresAt: number | null }>
-    > = [];
-    for (const candidate of activeCandidates) {
-      const status = await readConnectionInstanceForAdministration(
-        transaction,
-        organization,
-        candidate.evidence.connectionInstanceId,
-      );
-      if (status.outcome !== "available") {
-        if (status.reasonCode === "not_authorized")
-          return unavailableArchiveOptions("not_authorized");
-        if (status.reasonCode === "invalid_parameters")
-          return unavailableArchiveOptions("invalid_parameters");
-        if (status.reasonCode === "connection_unavailable")
-          return unavailableArchiveOptions("stale_page");
-        return unavailableArchiveOptions("connection_options_unavailable");
-      }
-      const current = connectionInstanceStatusSchema.safeParse(status.instance);
-      if (!current.success)
-        throw new Error("CONNECTION_OPTION_STATUS_MALFORMED", { cause: current.error });
-      const instance = current.data;
+      const instance = verification.status;
+      if (instance === undefined) return unavailableArchiveOptions("stale_page");
       if (
-        !sameId(instance.connectionInstanceId, candidate.listed.connectionInstanceId) ||
-        instance.revision !== candidate.listed.revision ||
-        instance.revision !== candidate.evidence.revision ||
-        !sameId(instance.connectionTypeId, candidate.listed.connectionTypeId) ||
-        instance.connectionTypeVersion !== candidate.listed.connectionTypeVersion ||
+        !sameId(instance.connectionInstanceId, listedInstance.connectionInstanceId) ||
+        instance.revision !== listedInstance.revision ||
+        instance.revision !== evidence.revision ||
+        !sameId(instance.connectionTypeId, listedInstance.connectionTypeId) ||
+        instance.connectionTypeVersion !== listedInstance.connectionTypeVersion ||
         instance.state !== "active" ||
         instance.lastHealthOutcome !== "healthy" ||
         !isSelectedApplication(instance.authorizedApplicationIds, application)
@@ -754,14 +858,14 @@ export async function listEligibleArchiveConnectionsForApplication(
       const expiresAt = tokenExpiryInstant(instance.tokenExpiresAt);
       if (expiresAt === undefined)
         return unavailableArchiveOptions("connection_options_unavailable");
-      const fingerprint = candidate.evidence.destinationFingerprint;
+      const fingerprint = evidence.destinationFingerprint;
       if (!/^[a-f0-9]{64}$/.test(fingerprint))
         return unavailableArchiveOptions("connection_options_unavailable");
       const option: EligibleArchiveConnectionOption = Object.freeze({
         connectionInstanceId: connectionInstanceIdSchema.parse(instance.connectionInstanceId),
         connectionTypeId: connectionTypeIdSchema.parse(instance.connectionTypeId),
         connectionTypeVersion: semanticVersionSchema.parse(instance.connectionTypeVersion),
-        destinationKey: archiveDestinationReferenceSchema.parse(candidate.evidence.destinationKey),
+        destinationKey: archiveDestinationReferenceSchema.parse(evidence.destinationKey),
         expectedRevision: instance.revision,
         destinationFingerprint: fingerprint,
       });
@@ -820,8 +924,9 @@ export async function listEligibleArchiveConnectionsForApplication(
         : { nextAfterConnectionInstanceId: page.nextAfterConnectionInstanceId }),
     });
   } catch (error) {
-    const failure = new ConnectionInstanceReadFailure("connection_options_unavailable", error);
+    const reasonCode = mapAdministrationUnavailable(refusalForFailure(error));
+    const failure = new ConnectionInstanceReadFailure(reasonCode, error);
     console.error(`[connection] eligible archive option read failed: ${describeFailure(failure)}`);
-    return unavailableArchiveOptions("connection_options_unavailable");
+    return unavailableArchiveOptions(reasonCode);
   }
 }
