@@ -147,7 +147,14 @@ if (!process.argv.includes("--worker")) {
           sources.push({ path: relativePath, source });
         }
       } catch (error) {
-        failures.push({ path: relativePath, stage: "source import", error: String(error) });
+        const issue = error?.issues?.[0];
+        failures.push({
+          path: relativePath,
+          stage: "source import",
+          error: issue
+            ? `${relativePath}:${issue.path.map(String).join(".") || "source"}: ${issue.message}`
+            : `${relativePath}: ${String(error)}`,
+        });
       }
     }
   }
@@ -255,18 +262,21 @@ if (!process.argv.includes("--worker")) {
   const usesUnavailableInput = (value, inputs, state) => {
     if (value?.kind === "literal") return false;
     const unavailableReference = (reference) => {
-      const shape = reference?.source === "input"
-        ? inputs.get(reference.name)
-        : reference?.source === "variable"
-          ? state.variables.get(reference.name)
-          : reference?.source === "task_output"
-            ? state.taskValues.get(reference.task + ":" + reference.key)
-            : undefined;
+      const shape =
+        reference?.source === "input"
+          ? inputs.get(reference.name)
+          : reference?.source === "variable"
+            ? state.variables.get(reference.name)
+            : reference?.source === "task_output"
+              ? state.taskValues.get(reference.task + ":" + reference.key)
+              : undefined;
       return shape?.unavailableInput === true;
     };
     if (value?.kind === "reference") return unavailableReference(value.reference);
     if (value?.kind === "map")
-      return Object.values(value.entries).some((entry) => usesUnavailableInput(entry, inputs, state));
+      return Object.values(value.entries).some((entry) =>
+        usesUnavailableInput(entry, inputs, state),
+      );
     if (value?.kind === "formula") {
       const visit = (node) => {
         if (node === null || typeof node !== "object") return false;
@@ -408,9 +418,7 @@ if (!process.argv.includes("--worker")) {
     };
     const settingText = (settings, key) => {
       const value = settings[key];
-      return value?.kind === "text" && typeof value.value === "string"
-        ? value.value
-        : undefined;
+      return value?.kind === "text" && typeof value.value === "string" ? value.value : undefined;
     };
     const addFieldControl = (form, placement, release) => {
       const settings =
@@ -484,9 +492,7 @@ if (!process.argv.includes("--worker")) {
           addFormIssue(activeForm, "the owning form has an unresolved ordered slot");
         return;
       }
-      const orderedPlacementIds = [
-        ...new Set([...order.desktop, ...order.tablet, ...order.phone]),
-      ];
+      const orderedPlacementIds = [...new Set([...order.desktop, ...order.tablet, ...order.phone])];
       for (const placementId of orderedPlacementIds) {
         const placement = placements[placementId];
         if (placement === undefined) {
@@ -507,9 +513,7 @@ if (!process.argv.includes("--worker")) {
         )
           addFieldControl(owningForm, placement, release);
         const childSlots =
-          placement.slots !== null && typeof placement.slots === "object"
-            ? placement.slots
-            : {};
+          placement.slots !== null && typeof placement.slots === "object" ? placement.slots : {};
         for (const [slotKey, childSlot] of Object.entries(childSlots)) {
           const replacement = substitutions.get(placementId + ":" + slotKey);
           walkSlot(replacement ?? childSlot, page, owningForm, substitutions);
@@ -561,8 +565,7 @@ if (!process.argv.includes("--worker")) {
         candidate.artifact?.exactVersion === undefined
       )
         continue;
-      const identity =
-        candidate.artifact.rootId + "@" + candidate.artifact.exactVersion;
+      const identity = candidate.artifact.rootId + "@" + candidate.artifact.exactVersion;
       const matches = moduleOutputsByExactDependency.get(identity) ?? [];
       matches.push(candidate);
       moduleOutputsByExactDependency.set(identity, matches);
@@ -601,9 +604,7 @@ if (!process.argv.includes("--worker")) {
         flow?.id ??
         "unresolved flow";
       const formLabel =
-        form === undefined
-          ? "unresolved form placement"
-          : form.pageKey + "/" + form.placementAlias;
+        form === undefined ? "unresolved form placement" : form.pageKey + "/" + form.placementAlias;
       const targetLabel = target?.key ?? target ?? "unresolved target";
       const missing =
         missingFields.length === 0
@@ -666,10 +667,7 @@ if (!process.argv.includes("--worker")) {
       seen.add(candidate.id);
       const visit = (tasks) =>
         (tasks ?? []).some((task) => {
-          if (
-            task.type === "record.save" &&
-            !Object.hasOwn(task.properties ?? {}, "record")
-          )
+          if (task.type === "record.save" && !Object.hasOwn(task.properties ?? {}, "record"))
             return true;
           if (task.type === "run_flow")
             return flowContainsRecordSave(flowById.get(task.flowId), seen);
@@ -684,21 +682,14 @@ if (!process.argv.includes("--worker")) {
             return (task.branches ?? []).some((branch) => visit(branch));
           return Array.isArray(task.tasks) && visit(task.tasks);
         });
-      return (
-        visit(candidate.tasks) ||
-        visit(candidate.errors) ||
-        visit(candidate.finally)
-      );
+      return visit(candidate.tasks) || visit(candidate.errors) || visit(candidate.finally);
     };
     const findFirstRecordSave = (candidate, seen = new Set()) => {
       if (candidate === undefined || seen.has(candidate.id)) return undefined;
       seen.add(candidate.id);
       const find = (flow) => {
         for (const task of flow.tasks ?? []) {
-          if (
-            task.type === "record.save" &&
-            !Object.hasOwn(task.properties ?? {}, "record")
-          )
+          if (task.type === "record.save" && !Object.hasOwn(task.properties ?? {}, "record"))
             return { flow, task };
           const children =
             task.type === "if"
@@ -706,7 +697,7 @@ if (!process.argv.includes("--worker")) {
               : task.type === "switch"
                 ? [...(task.cases ?? []).map((entry) => entry.tasks), task.default ?? []]
                 : task.type === "parallel"
-                  ? task.branches ?? []
+                  ? (task.branches ?? [])
                   : Array.isArray(task.tasks)
                     ? [task.tasks]
                     : [];
@@ -747,8 +738,7 @@ if (!process.argv.includes("--worker")) {
               value?.kind === "literal" && value.literal?.type === "text"
                 ? value.literal.value
                 : undefined;
-            if (typeof name === "string")
-              workingState.variables.set(name, unknownValueShape());
+            if (typeof name === "string") workingState.variables.set(name, unknownValueShape());
             else
               for (const key of workingState.variables.keys())
                 workingState.variables.set(key, unknownValueShape());
@@ -762,7 +752,7 @@ if (!process.argv.includes("--worker")) {
               : task.type === "switch"
                 ? [...(task.cases ?? []).map((entry) => entry.tasks), task.default ?? []]
                 : task.type === "parallel"
-                  ? task.branches ?? []
+                  ? (task.branches ?? [])
                   : Array.isArray(task.tasks)
                     ? [task.tasks]
                     : [];
@@ -820,13 +810,10 @@ if (!process.argv.includes("--worker")) {
             const branches = [entry];
             for (const branchTasks of task.branches ?? []) {
               const branch = cloneFlowState(entry);
-              walkTasks(
-                branchTasks,
-                branch,
-                currentInputs,
-                stack,
-                [...concurrentLists, ...(task.branches ?? [])],
-              );
+              walkTasks(branchTasks, branch, currentInputs, stack, [
+                ...concurrentLists,
+                ...(task.branches ?? []),
+              ]);
               branches.push(branch);
             }
             if (branches.length > 0) Object.assign(workingState, joinFlowStates(branches));
@@ -869,13 +856,7 @@ if (!process.argv.includes("--worker")) {
             }
             const childStack = new Set(stack);
             childStack.add(child.id);
-            const childResult = analyzeFlow(
-              child,
-              childInputs,
-              form,
-              bindingIssue,
-              childStack,
-            );
+            const childResult = analyzeFlow(child, childInputs, form, bindingIssue, childStack);
             for (const [name, shape] of childResult.outputs)
               workingState.taskValues.set(task.id + ":" + name, shape);
             continue;
@@ -929,11 +910,7 @@ if (!process.argv.includes("--worker")) {
                 ),
               );
             else {
-              const submittedShape = flowValueShape(
-                properties.values,
-                currentInputs,
-                workingState,
-              );
+              const submittedShape = flowValueShape(properties.values, currentInputs, workingState);
               if (submittedShape.kind !== "map" || submittedShape.complete !== true)
                 findings.push(
                   diagnostic(

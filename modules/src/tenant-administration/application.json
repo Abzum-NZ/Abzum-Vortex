@@ -147,7 +147,7 @@
             "type": "page",
             "label": "Tenant administrators",
             "page": "tenant_administrators",
-            "permission": "vortex.tenant_administration.tenant_administrator.read"
+            "permission": "application.tenant_administration.open"
           }
         ]
       }
@@ -1400,7 +1400,7 @@
         "name": "Organisation details",
         "type": "detail",
         "record_type": "vortex.system_directory:organization",
-        "permission": "vortex.tenant_administration.organization.read",
+        "permission": "application.tenant_administration.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -1517,7 +1517,7 @@
         "key": "tenant_administrators",
         "name": "Tenant administrators",
         "type": "dashboard",
-        "permission": "vortex.tenant_administration.tenant_administrator.read",
+        "permission": "application.tenant_administration.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
@@ -1663,7 +1663,7 @@
         "name": "Tenant administrator details",
         "type": "detail",
         "record_type": "vortex.system_directory:tenant_administrator",
-        "permission": "vortex.tenant_administration.tenant_administrator.read",
+        "permission": "application.tenant_administration.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_tenant_administration",
