@@ -131,13 +131,6 @@ const checkSelectionOptions = (
       });
       continue;
     }
-    if (dimension === "style" && option.asset === undefined)
-      addFailure({
-        code: "UNKNOWN_THEME_OPTION",
-        family: "broken_reference",
-        message: `Theme selection style option "${optionId}" ships no stylesheet`,
-        dimension,
-      });
   }
   if (selection.iconLibrary !== undefined && !isShadcnIconLibrary(selection.iconLibrary))
     addFailure({

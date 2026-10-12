@@ -1,22 +1,23 @@
 /*
- * shadcn base-nova style, scoped to [data-vortex-style="nova"] on the root element.
+ * Shared shadcn component reset, scoped to the application root.
  *
- * The component source in ui/src/components carries the style's class names. This file holds the
- * style's base layer only. The shadcn variables it paints with (--background, --card, --radius and
+ * The component source in ui/src/components carries the shared class names. This file holds the
+ * shared base layer only. The shadcn variables it paints with (--background, --card, --radius and
  * the rest) hold no palette here: the Vortex theme bridge (ui/src/theme/theme-variables.ts) sets
  * every one of them from the resolved theme on the root element and on each themed container.
  */
-[data-vortex-style="nova"] {
+[data-vortex-style] {
   color-scheme: light dark;
+  --spacing: var(--vortex-component-spacing, 0.25rem);
 }
 
 @layer base {
   /*
-   * Tailwind's preflight is not loaded (see globals.css), so the reset the style's class names rely
+   * Tailwind's preflight is not loaded (see globals.css), so the reset the component classes rely
    * on is applied to shadcn component elements (and their content) only. Existing screens carry no
    * data-slot and keep their look: no border, outline, spacing or font change reaches them.
    */
-  [data-vortex-style="nova"] :where([data-slot], [data-slot] *) {
+  [data-vortex-style] :where([data-slot], [data-slot] *) {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -24,7 +25,7 @@
     @apply border-border outline-ring/50;
   }
 
-  [data-vortex-style="nova"] :where(button, input, select, textarea):where([data-slot], [data-slot] *) {
+  [data-vortex-style] :where(button, input, select, textarea):where([data-slot], [data-slot] *) {
     font: inherit;
     letter-spacing: inherit;
     color: inherit;
@@ -32,16 +33,16 @@
     border-radius: 0;
   }
 
-  [data-vortex-style="nova"] :where(fieldset[data-slot]) {
+  [data-vortex-style] :where(fieldset[data-slot]) {
     min-width: 0;
   }
 
-  [data-vortex-style="nova"] :where(svg):where([data-slot], [data-slot] *) {
+  [data-vortex-style] :where(svg):where([data-slot], [data-slot] *) {
     display: block;
     vertical-align: middle;
   }
 
-  [data-vortex-style="nova"] body {
+  [data-vortex-style] body {
     @apply bg-background text-foreground;
   }
 }

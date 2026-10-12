@@ -10,7 +10,7 @@ import index from "./catalogue/shadcn-create-theme-catalogue.generated.json";
  * The shadcn/create theme catalogue index #1274 generated, exposed to the application theme
  * contract, the designer and the API/MCP draft operations. It lists every option of every
  * dimension at the pinned shadcn version, each option's release identity (or its refusal), the
- * token keys it sets, and its style asset or menu variant descriptor. It imports only the small
+ * token keys it sets, and its menu variant descriptor. It imports only the small
  * index; the option releases themselves are server-side and live in
  * `contracts/src/shadcn-theme-releases.ts`.
  */
@@ -68,8 +68,6 @@ export type ShadcnThemeCatalogueOption = Readonly<{
   /** Style option's base and description. */
   base?: string;
   description?: string;
-  /** Style option's scoped CSS asset and its pinned content fingerprint. */
-  asset?: Readonly<{ path: string; contentFingerprint: string }>;
 }>;
 
 export type ShadcnThemeCatalogueDimension = Readonly<{

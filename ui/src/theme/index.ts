@@ -22,8 +22,6 @@ export {
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
   VORTEX_STYLES,
-  VORTEX_STYLE_STYLESHEET_BASE_PATH,
-  vortexStyleStylesheetHref,
   type VortexMenuAccent,
   type VortexMenuColor,
   type VortexStyle,
@@ -31,11 +29,4 @@ export {
   type VortexStyleSelection,
 } from "./vortex-style";
 
-export { VortexStyleStylesheet } from "./vortex-style-stylesheet";
-export {
-  VORTEX_FONT_BASE_PATH,
-  VortexFontStylesheets,
-  vortexFontPreloadHref,
-  vortexFontStylesheetHref,
-} from "./vortex-fonts";
 export { VortexStyleRoot } from "./vortex-style-root";

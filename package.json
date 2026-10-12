@@ -20,9 +20,6 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
-    "catalogue:shadcn": "node tooling/import-shadcn-theme-catalogue.mjs",
-    "styles:emit": "node tooling/emit-style-stylesheets.mjs",
-    "fonts:emit": "node tooling/emit-font-assets.mjs",
     "build": "turbo run build",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs"
