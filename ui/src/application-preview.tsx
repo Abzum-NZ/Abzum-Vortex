@@ -14,11 +14,11 @@ import {
   type DefinitionRenderErrorLocation,
 } from "./definition-error";
 import {
-  PageLayoutRenderer,
   resolveRootPlacementSlot,
   type MaterialisedApplicationCompositionV2,
   type PlacementSlotV2,
-} from "./layout-renderer";
+} from "./page-composition";
+import { PagePuckRenderer } from "./page-puck-renderer";
 import { cn } from "./lib/utils";
 import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
 import {
@@ -35,7 +35,7 @@ import type { ThemeMode } from "./theme";
  * Browser side of the exact-draft Application preview (#597).
  *
  * This hook renders the artifact the Definition service emits through the shared #580
- * `PageLayoutRenderer`. It is deliberately inert: the only callbacks it wires are labelled
+ * `PagePuckRenderer`. It is deliberately inert: the only callbacks it wires are labelled
  * simulations that perform no work, so a preview interaction can never commit a record, change
  * access or start durable work. Unknown releases, illegal children or a missing accessible name
  * are surfaced as a truthful preview outcome instead of falling back to arbitrary output.
@@ -512,7 +512,7 @@ export function ApplicationPreview({
         </AlertDescription>
       </Alert>
       {renderFailure === undefined && resolvedSlot !== undefined ? (
-        <PageLayoutRenderer
+        <PagePuckRenderer
           composition={composition}
           registry={registry}
           pageId={artifact.pageId}

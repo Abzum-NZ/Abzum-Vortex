@@ -6,9 +6,7 @@
  * - one Puck component per block renderer key, with typed `fields` (one editor per declared
  *   property, one slot field per declared child slot) and `defaultProps`;
  * - one `render` function per component, which is the only place a block's React implementation is
- *   bound to a placement. The same render functions serve `<Render>`, the `<Puck>` editor and the
- *   hand-written page runtime in `layout-renderer.tsx`, which delegates here instead of rendering
- *   blocks itself.
+ *   bound to a placement. The same render functions serve `<Render>` and the `<Puck>` editor.
  *
  * Layout and spacing are explicit component fields: every container gap, padding, direction and
  * content width is a setting written into the placement (`LAYOUT_DEFAULTS` is what an inserted or
@@ -22,6 +20,7 @@
 import {
   createContext,
   useContext,
+  useRef,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
@@ -160,8 +159,6 @@ export type VortexPuckMetadata = Readonly<{
   resolvePageHref?: ((pageId: string) => string) | undefined;
   /** Internal page identity currently shown. */
   currentPageId?: string | undefined;
-  /** Theme tokens in force at the root of the rendered tree. */
-  themeScope?: PlacementThemeScope | undefined;
   /** Configured dedicated component origin, for the sandboxed custom-component host. */
   componentBundleOrigin?: string | undefined;
 }>;
@@ -174,7 +171,7 @@ export type VortexPlacementMeta = Readonly<{
   block: BlockPlacementV2Contract["block"];
   responsive: BlockPlacementV2Contract["responsive"];
   themeOverrides: BlockPlacementV2Contract["themeOverrides"];
-  /** Tablet and phone reading order of this placement's slot; desktop is the Puck array order. */
+  /** Authored slot order retained for editing; preview Puck arrays use the selected breakpoint. */
   order?: Readonly<{
     desktop: readonly string[];
     tablet: readonly string[];
@@ -207,6 +204,14 @@ const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, 
 
 /** Theme tokens in force for nested placements when the host supplies no explicit scope. */
 const ThemeScopeContext = createContext<PlacementThemeScope>(EMPTY_THEME_SCOPE);
+
+/** Seeds the root tokens while descendant placements inherit their nearest themed ancestor. */
+export function VortexPuckThemeScopeProvider({
+  scope,
+  children,
+}: Readonly<{ scope: PlacementThemeScope; children: ReactNode }>): ReactElement {
+  return <ThemeScopeContext.Provider value={scope}>{children}</ThemeScopeContext.Provider>;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Block implementations: the one table that binds a renderer key to its React component
@@ -535,22 +540,6 @@ const ownEntry = <Value,>(
 
 const isSlotComponent = (value: unknown): value is SlotComponent => typeof value === "function";
 
-/** Per-breakpoint reading position, as a CSS `order`, so a visual reorder needs no DOM change. */
-const orderCss = (selector: string, id: string, order: VortexPlacementMeta["order"]): string => {
-  if (order === undefined) return "";
-  let css = "";
-  const media = {
-    desktop: (rule: string) => rule,
-    tablet: (rule: string) => `@media (max-width: 1024px) { ${rule} }`,
-    phone: (rule: string) => `@media (max-width: 640px) { ${rule} }`,
-  } as const;
-  for (const breakpoint of RESPONSIVE_BREAKPOINT_ORDER) {
-    const index = order[breakpoint].indexOf(id);
-    if (index >= 0) css += `${media[breakpoint](`${selector} { order: ${index}; }`)}\n`;
-  }
-  return css;
-};
-
 const cssAttributeValue = (value: string): string =>
   value.replace(/[^A-Za-z0-9_-]/gu, (c) => `\\${(c.codePointAt(0) ?? 0xfffd).toString(16)} `);
 
@@ -562,7 +551,6 @@ function PlacementBlock(props: {
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
   const inheritedScope = useContext(ThemeScopeContext);
-  const themeScope = metadataIn.themeScope ?? inheritedScope;
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
   const activeBreakpoint: Breakpoint = breakpoint ?? "desktop";
@@ -604,18 +592,25 @@ function PlacementBlock(props: {
 
   // Declared theme overrides apply to this placement and its subtree; a re-themed placement is
   // also a theme root, so its surface, text and typography repaint from its own variables.
-  const placementTheme = resolvePlacementTheme(themeScope, vortex.themeOverrides);
+  const placementTheme = resolvePlacementTheme(inheritedScope, vortex.themeOverrides);
 
   const slotStyle: CSSProperties = { gap: slotGapLength(resolveSlotGap(release, settings)) };
   const slots: Record<string, ReactNode> = {};
+  const latestSlots = useRef<Record<string, SlotComponent>>({});
+  const stableSlots = useRef<Record<string, SlotComponent>>({});
   for (const slotKey of declaredSlotKeys(release, settings)) {
     const Slot = componentProps[slotKey];
     const hostNode = componentProps.slotNodes?.[slotKey];
+    if (isSlotComponent(Slot)) {
+      latestSlots.current[slotKey] = Slot;
+      stableSlots.current[slotKey] ??= (props) => latestSlots.current[slotKey]!(props);
+    }
+    const StableSlot = stableSlots.current[slotKey];
     slots[slotKey] =
       hostNode !== undefined ? (
         hostNode
-      ) : isSlotComponent(Slot) ? (
-        <Slot className="vortex-puck-slot" style={slotStyle} />
+      ) : StableSlot !== undefined ? (
+        <StableSlot className="vortex-puck-slot" style={slotStyle} />
       ) : null;
   }
 
@@ -632,11 +627,11 @@ function PlacementBlock(props: {
   );
   const wrapperClassName = responsive
     ? LAYOUT_CLASS_NAMES.placementWrapper
-    : computePlacementClassName(layout, activeBreakpoint);
+    : computePlacementClassName(layout);
   const wrapperStyle: CSSProperties = {
     ...wrapper?.style,
     ...placementTheme.style,
-    ...(responsive ? {} : computePlacementStyle(layout, activeBreakpoint)),
+    ...(responsive ? {} : computePlacementStyle(layout)),
   };
   const ownCss =
     responsive && !pageEmitsCss
@@ -644,7 +639,7 @@ function PlacementBlock(props: {
           `[data-vortex-wrapper-scope="${wrapperScope}"]`,
           vortex.responsive as ResponsivePlacementLayoutsV2,
           true,
-        ) + orderCss(`[data-vortex-wrapper-scope="${wrapperScope}"]`, placementId, vortex.order)
+        )
       : undefined;
 
   return (
@@ -829,8 +824,36 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
     ),
     components,
     root: {
-      render: ({ children, puck }: { children: ReactNode; puck: PuckContext }) => (
-        <div data-vortex-puck-root="" {...(puck.isEditing ? { "data-vortex-editing": "" } : {})}>
+      defaultProps: { gap: "medium", padding: "medium" },
+      fields: {
+        gap: {
+          type: "select",
+          label: "Gap",
+          options: ["none", "small", "medium", "large"].map((value) => ({ label: value, value })),
+        },
+        padding: {
+          type: "select",
+          label: "Padding",
+          options: ["none", "small", "medium", "large"].map((value) => ({ label: value, value })),
+        },
+      },
+      render: ({
+        children,
+        puck,
+        gap,
+        padding,
+      }: {
+        children: ReactNode;
+        puck: PuckContext;
+        gap: SlotGapName;
+        padding: SlotGapName;
+      }) => (
+        <div
+          data-vortex-puck-root=""
+          className="vortex-puck-slot"
+          style={{ gap: slotGapLength(gap), padding: slotGapLength(padding) }}
+          {...(puck.isEditing ? { "data-vortex-editing": "" } : {})}
+        >
           {children}
         </div>
       ),
