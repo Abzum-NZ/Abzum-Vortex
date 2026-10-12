@@ -12,7 +12,7 @@ import {
   type ApplicationRoleTemplatePreparationBasis,
   type ApplicationRootId,
   type DefinitionConsumerReadResult,
-  type PermissionCatalogueLookupResult,
+  type PermissionCatalogueEntry,
   type PermissionRegistryEntryCandidate,
   type PreparedApplicationPermissionRegistration,
   type PreparedApplicationRoleTemplate,
@@ -65,7 +65,7 @@ export interface ApplicationRoleTemplateAdapterDependencies {
   readonly definitionReader: PermissionRegistryDefinitionSetReader;
   readonly permissionRegistryFacts: Pick<
     PermissionRegistryPrivateRepository,
-    "lookup" | "readApplicationSnapshot"
+    "lookupMany" | "readApplicationSnapshot"
   >;
 }
 
@@ -260,33 +260,28 @@ const registrationMatchesSnapshot = (
   snapshot.catalogueFingerprint === registration.applicationCatalogueFingerprint &&
   canonicalJson(snapshot.permissionIds) === canonicalJson(registration.applicationPermissionIds);
 
+const sourcePermissionIdentity = (
+  permission: Pick<
+    PermissionRegistryEntryCandidate,
+    "applicationRootId" | "ownerKind" | "ownerId" | "permission"
+  >,
+): string =>
+  `${permission.applicationRootId}:${permission.ownerKind}:${permission.ownerId}:${permission.permission.permissionId}`;
+
 const uniqueSourcePermissions = (
   candidate: PreparedApplicationRoleTemplates,
 ): PermissionRegistryEntryCandidate[] => {
   const unique = new Map<string, PermissionRegistryEntryCandidate>();
   for (const prepared of candidate.templates)
     for (const permission of prepared.sourcePermissions) {
-      const identity = `${permission.applicationRootId}:${permission.ownerKind}:${permission.ownerId}:${permission.permission.permissionId}`;
+      const identity = sourcePermissionIdentity(permission);
       if (!unique.has(identity)) unique.set(identity, permission);
     }
   return [...unique.values()];
 };
 
-/** Fixed I/O concurrency, not an application permission or template limit. */
-const applicationRoleTemplateFactReadConcurrency = 16;
-
-const mapInDeterministicBatches = async <Input>(
-  values: readonly Input[],
-  concurrency: number,
-  map: (value: Input) => Promise<unknown>,
-): Promise<void> => {
-  for (let start = 0; start < values.length; start += concurrency) {
-    const settled = await Promise.allSettled(
-      values.slice(start, start + concurrency).map((value) => map(value)),
-    );
-    for (const result of settled) if (result.status === "rejected") throw result.reason;
-  }
-};
+/** Fixed I/O batch size, not an application permission or template limit. */
+const applicationRoleTemplateFactReadBatchSize = 500;
 
 export const createApplicationRoleTemplateAdapter = (
   dependencies: ApplicationRoleTemplateAdapterDependencies,
@@ -388,46 +383,65 @@ export const createApplicationRoleTemplateAdapter = (
         evidence.application,
       );
 
-      await mapInDeterministicBatches(
-        uniqueSourcePermissions(candidate),
-        applicationRoleTemplateFactReadConcurrency,
-        async (permission) => {
-          let result: PermissionCatalogueLookupResult;
-          try {
-            result = await dependencies.permissionRegistryFacts.lookup({
+      const permissions = uniqueSourcePermissions(candidate);
+      for (
+        let start = 0;
+        start < permissions.length;
+        start += applicationRoleTemplateFactReadBatchSize
+      ) {
+        const batch = permissions.slice(start, start + applicationRoleTemplateFactReadBatchSize);
+        let entries: readonly PermissionCatalogueEntry[];
+        try {
+          entries = await dependencies.permissionRegistryFacts.lookupMany(
+            batch.map((permission) => ({
               organizationId: context.organizationId,
               applicationRootId: permission.applicationRootId,
               ownerKind: permission.ownerKind,
               ownerId: permission.ownerId,
               permissionId: permission.permission.permissionId,
-            });
-          } catch (error) {
-            throw new ApplicationRoleTemplatePreparationError(
-              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-              { cause: error },
-            );
-          }
+            })),
+          );
+        } catch (error) {
+          throw new ApplicationRoleTemplatePreparationError(
+            "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+            { cause: error },
+          );
+        }
+        const found = new Map<string, string>();
+        for (const entry of entries) {
           if (
-            result.outcome !== "available" ||
-            result.entry.organizationId !== context.organizationId ||
-            result.entry.registrationRevision !== initialSnapshot.registrationRevision ||
-            result.entry.applicationRootId === undefined ||
-            result.entry.ownerKind === "platform" ||
-            result.entry.sourceRelease.kind === "platform_catalogue" ||
-            candidateEvidenceKey({
-              applicationRootId: result.entry.applicationRootId,
-              ownerKind: result.entry.ownerKind,
-              ownerId: result.entry.ownerId,
-              permission: result.entry.permission,
-              sourceRelease: result.entry.sourceRelease,
-              meaningFingerprint: result.entry.meaningFingerprint,
-            }) !== candidateEvidenceKey(permission)
+            entry.organizationId !== context.organizationId ||
+            entry.registrationRevision !== initialSnapshot.registrationRevision ||
+            entry.applicationRootId === undefined ||
+            entry.ownerKind === "platform" ||
+            entry.sourceRelease.kind === "platform_catalogue"
           )
             throw new ApplicationRoleTemplatePreparationError(
               "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
             );
-        },
-      );
+          found.set(
+            sourcePermissionIdentity({
+              applicationRootId: entry.applicationRootId,
+              ownerKind: entry.ownerKind,
+              ownerId: entry.ownerId,
+              permission: entry.permission,
+            }),
+            candidateEvidenceKey({
+              applicationRootId: entry.applicationRootId,
+              ownerKind: entry.ownerKind,
+              ownerId: entry.ownerId,
+              permission: entry.permission,
+              sourceRelease: entry.sourceRelease,
+              meaningFingerprint: entry.meaningFingerprint,
+            }),
+          );
+        }
+        for (const permission of batch)
+          if (found.get(sourcePermissionIdentity(permission)) !== candidateEvidenceKey(permission))
+            throw new ApplicationRoleTemplatePreparationError(
+              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+            );
+      }
 
       let finalSnapshot: ApplicationPermissionCatalogueSnapshot | undefined;
       try {
