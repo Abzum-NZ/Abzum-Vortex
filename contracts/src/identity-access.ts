@@ -1452,6 +1452,8 @@ const sessionContextCommon = {
   expiresAt: timestampSchema,
   accessVersion: revisionSchema,
   correlationId: correlationIdSchema,
+  /** The request channel recorded by the database context (for example `web`). */
+  channel: z.string().min(1).max(64).optional(),
 };
 const delegatedContextSchema = z
   .object({
