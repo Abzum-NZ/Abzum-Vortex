@@ -9,7 +9,7 @@
  * never asks an operator to approve their own action.
  */
 
-export interface OperationsRunbook {
+interface OperationsRunbook {
   /** The alert code the runbook answers, as a namespaced key. */
   readonly code: string;
   /** The exact runbook reference carried by the alert and stored on the incident. */
@@ -40,7 +40,7 @@ const runbookReferences = Object.freeze({
 } as const);
 
 /** The bounded operator actions every incident exposes, named on each runbook page. */
-export const operationsRunbookActionSet = Object.freeze([
+const operationsRunbookActionSet = Object.freeze([
   "Acknowledge",
   "Escalate",
   "Resolve",

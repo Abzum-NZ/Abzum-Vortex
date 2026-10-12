@@ -20,7 +20,7 @@
     },
     "modules": {
       "includeEntryExports": false,
-      "entry": ["src/**/*.{ts,tsx,json}"],
+      "entry": ["src/*/{module,application}.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
     "ui": {
