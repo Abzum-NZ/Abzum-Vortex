@@ -542,14 +542,42 @@ const allowed =
         (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
       )
     : null;
+const historicalPaths = new Map<string, Set<string>>();
+function pathsForFile(file: string): Set<string> {
+  const cached = historicalPaths.get(file);
+  if (cached) return cached;
+  const paths = new Set([file]);
+  const previousPath = renamedFromMain.get(file);
+  if (previousPath) paths.add(previousPath);
+  for (const [currentPath, previous] of renamedFromMain)
+    if (previous === file) paths.add(currentPath);
+  const history = spawnSync(
+    "git",
+    ["log", "--follow", "--find-renames=90%", "--name-status", "--format=", "HEAD", "--", file],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (history.status !== 0)
+    throw new Error(`Cannot read rename history for ${file}: ${history.stderr}`);
+  for (const line of history.stdout.split("\n")) {
+    const [status, before, after] = line.trim().split("\t");
+    if (status?.startsWith("R") && before && after) {
+      paths.add(normalize(before));
+      paths.add(normalize(after));
+    }
+  }
+  historicalPaths.set(file, paths);
+  return paths;
+}
 function existedUnderRenamedPath(id: string): boolean {
   if (!allowed) return false;
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return false;
-  const previous = renamedFromMain.get(id.slice(first + 1, second));
-  return (
-    previous !== undefined && allowed.has(`${id.slice(0, first + 1)}${previous}${id.slice(second)}`)
+  const prefix = id.slice(0, first + 1);
+  const file = id.slice(first + 1, second);
+  const suffix = id.slice(second);
+  return [...pathsForFile(file)].some(
+    (path) => path !== file && allowed.has(`${prefix}${path}${suffix}`),
   );
 }
 const current = new Set(unique.map((finding) => finding.id));
@@ -722,26 +750,47 @@ function mainFindingCount(rule: string, file: string, detail: string): number {
   }
   return 0;
 }
-function presentOnMain(id: string): boolean {
+function presentOnMain(id: string, sourceFile: string): boolean {
   const last = id.lastIndexOf("|");
   const occurrence = Number(id.slice(last + 1));
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0 || !Number.isInteger(occurrence) || occurrence < 1) return false;
   const rule = id.slice(0, first);
-  const file = id.slice(first + 1, second);
   const detail = id.slice(second + 1, last);
-  return mainFindingCount(rule, file, detail) >= occurrence;
+  return mainFindingCount(rule, sourceFile, detail) >= occurrence;
 }
-function mainBaselineId(id: string): string | undefined {
-  if (allowed?.has(id)) return id;
+function mainBaselineEntry(id: string): { id: string; sourceFile: string } | undefined {
+  if (!allowed) return undefined;
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return undefined;
-  const previous = renamedFromMain.get(id.slice(first + 1, second));
-  if (!previous) return undefined;
-  const previousId = `${id.slice(0, first + 1)}${previous}${id.slice(second)}`;
-  return allowed?.has(previousId) ? previousId : undefined;
+  const file = id.slice(first + 1, second);
+  for (const path of pathsForFile(file)) {
+    const candidate = `${id.slice(0, first + 1)}${path}${id.slice(second)}`;
+    if (!allowed.has(candidate)) continue;
+    const sourceFile = sourceFromMain(file) !== undefined ? file : path;
+    if (sourceFromMain(sourceFile) !== undefined) return { id: candidate, sourceFile };
+  }
+  return undefined;
+}
+const carriedForward = new Map<string, string>();
+for (const id of baseline) {
+  if (current.has(id)) continue;
+  const last = id.lastIndexOf("|");
+  const occurrence = Number(id.slice(last + 1));
+  const first = id.indexOf("|");
+  const second = id.indexOf("|", first + 1);
+  if (first < 0 || second < 0 || !Number.isInteger(occurrence)) continue;
+  const rule = id.slice(0, first);
+  const file = id.slice(first + 1, second);
+  const detail = id.slice(second + 1, last);
+  const movedFinding = unique.find((finding) => {
+    if (finding.rule !== rule || finding.detail !== detail) return false;
+    const findingOccurrence = Number(finding.id.slice(finding.id.lastIndexOf("|") + 1));
+    return findingOccurrence === occurrence && pathsForFile(finding.file).has(file);
+  });
+  if (movedFinding) carriedForward.set(id, movedFinding.id);
 }
 // Only blocking findings belong in the baseline. New baseline entries must describe
 // violations already present in an unchanged main file; stale entries only warn.
@@ -755,11 +804,11 @@ const growth = allowed
   : [];
 const added = unique.filter((finding) => {
   if (!isBlocking(finding.rule) || unchangedFromMain(finding.file)) return false;
-  const baselineId = mainBaselineId(finding.id);
-  return !baselineId || !presentOnMain(baselineId);
+  const baselineEntry = mainBaselineEntry(finding.id);
+  return !baselineEntry || !presentOnMain(baselineEntry.id, baselineEntry.sourceFile);
 });
 const warnings = unique.filter((finding) => !isBlocking(finding.rule));
-const stale = baseline.filter((id) => !current.has(id));
+const stale = baseline.filter((id) => !current.has(id) && !carriedForward.has(id));
 const today = new Date().toISOString().slice(0, 10);
 const reviewNotices = Object.entries(guardRules).filter(([, rule]) => today > rule.reviewBy);
 
@@ -854,7 +903,13 @@ if (process.argv.includes("--refresh-from-main")) {
     );
   writeFileSync(
     baselinePath,
-    `${JSON.stringify(hasBaseline ? baseline.filter((id) => current.has(id)) : unique.filter((finding) => isBlocking(finding.rule)).map((finding) => finding.id), null, 2)}\n`,
+    `${JSON.stringify(
+      hasBaseline
+        ? [...new Set([...baseline.filter((id) => current.has(id)), ...carriedForward.values()])]
+        : unique.filter((finding) => isBlocking(finding.rule)).map((finding) => finding.id),
+      null,
+      2,
+    )}\n`,
   );
   console.log(
     `Blocking baseline contains ${hasBaseline ? baseline.length - stale.length : blocking.length} findings.`,
