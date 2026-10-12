@@ -23,6 +23,7 @@ catalog:
   ws: 8.21.3
   sonner: 2.0.8
   knip: 5.63.0
+  re2js: 2.8.6
 
 catalogMode: strict
 
