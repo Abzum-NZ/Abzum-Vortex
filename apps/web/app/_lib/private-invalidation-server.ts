@@ -20,7 +20,6 @@ import {
 import {
   privateInvalidationSelectorsSchema,
   privateInvalidationTransportLimits as limits,
-  type WebPrivateInvalidationControl,
   type WebPrivateInvalidationScope,
   type WebPrivateInvalidationSelectors,
 } from "./private-invalidation-client";
@@ -39,6 +38,11 @@ const streamHeaders = {
 
 const frame = (event: "control" | "invalidation", content: unknown) =>
   encoder.encode(`event: ${event}\ndata: ${JSON.stringify(content)}\n\n`);
+
+/** One stream write can contain several ordinary singleton EventSource frames. */
+const framesForNotices = (notices: readonly LiveInvalidation[]) =>
+  encoder.encode(notices.map((notice) =>
+    `event: invalidation\ndata: ${JSON.stringify(notice)}\n\n`).join(""));
 
 const neutralResponse = (): Response => new Response(
   frame("control", { kind: "unavailable" }), { headers: streamHeaders },
@@ -215,11 +219,9 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
   };
   const onAbort = (): void => { void finish(); };
 
-  const emit = (event: "control" | "invalidation",
-    value: WebPrivateInvalidationControl | readonly LiveInvalidation[]): boolean => {
+  const emit = (bytes: Uint8Array): boolean => {
     if (!live()) { finish("unavailable"); return false; }
     const output = controller;
-    const bytes = frame(event, value);
     if (output === undefined || bytes.byteLength > limits.maximumFrameBytes ||
         (output.desiredSize ?? 0) <= 0) {
       finish("gap");
@@ -277,7 +279,7 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
     try {
       if (!ready) {
         if (!await authorizeFresh()) { finish("unavailable"); return; }
-        if (scope === undefined || !emit("control", { kind: "ready", scope })) return;
+        if (scope === undefined || !emit(frame("control", { kind: "ready", scope }))) return;
         ready = true;
         if (joinTimer !== undefined) clearTimeout(joinTimer);
         joinTimer = undefined;
@@ -285,14 +287,14 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
       while (!stopping && pending.length > 0) {
         const batch: LiveInvalidation[] = [];
         for (const notice of pending) {
-          if (frame("invalidation", [...batch, notice]).byteLength > limits.maximumFrameBytes)
+          if (framesForNotices([...batch, notice]).byteLength > limits.maximumFrameBytes)
             break;
           batch.push(notice);
         }
         if (batch.length === 0) { finish("gap"); return; }
         pending.splice(0, batch.length);
         if (!await authorizeFresh()) { finish("unavailable"); return; }
-        if (!emit("invalidation", batch)) return;
+        if (!emit(framesForNotices(batch))) return;
       }
     } catch { finish("unavailable"); }
     finally { pumping = false; }
@@ -355,13 +357,17 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
                 notice.organizationId.toLowerCase() !== scope.organizationId.toLowerCase() ||
                 notice.applicationRootId.toLowerCase() !== scope.applicationRootId.toLowerCase())
               return;
-            if (frame("invalidation", [notice]).byteLength > limits.maximumFrameBytes) {
+            if (frame("invalidation", notice).byteLength > limits.maximumFrameBytes) {
               finish("gap"); return;
             }
             const duplicate = pending.findIndex((existing) =>
-              existing.recordTypeId === notice.recordTypeId &&
-              existing.recordId === notice.recordId);
-            if (duplicate >= 0) { pending[duplicate] = notice; return; }
+              existing.recordTypeId === notice.recordTypeId);
+            if (duplicate >= 0) {
+              const existing = pending[duplicate];
+              pending[duplicate] = existing?.recordId === notice.recordId ? notice
+                : { ...notice, recordId: undefined };
+              return;
+            }
             if (pending.length >= limits.maximumPendingNotices) { finish("gap"); return; }
             pending.push(notice);
             track(pump());

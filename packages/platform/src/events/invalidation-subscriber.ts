@@ -235,25 +235,20 @@ export const createPrivateInvalidationSubscriber = (
   let stopSubscription: (() => void) | undefined;
 
   const receive = (message: unknown): readonly string[] => {
-    const candidates = Array.isArray(message) ? message : [message];
-    const envelopes = candidates.map(readChannelEnvelope);
-    if (envelopes.length === 0 || envelopes.some((envelope) =>
-      envelope === undefined || !scopeMatches(envelope, scope))) return emptyStalePlacements;
+    const envelope = readChannelEnvelope(message);
+    if (envelope === undefined || !scopeMatches(envelope, scope)) return emptyStalePlacements;
+    const recordTypeKey = envelope.recordTypeId.toLowerCase();
+    const noticeRecordKey = envelope.recordId?.toLowerCase();
     const stalePlacements = new Set<string>();
-    for (const envelope of envelopes) {
-      if (envelope === undefined) continue;
-      const recordTypeKey = envelope.recordTypeId.toLowerCase();
-      const noticeRecordKey = envelope.recordId?.toLowerCase();
-      for (const { watch } of watches.values()) {
-        if (watch.recordTypeId.toLowerCase() !== recordTypeKey) continue;
-        if (
-          noticeRecordKey !== undefined &&
-          watch.recordId !== undefined &&
-          watch.recordId.toLowerCase() !== noticeRecordKey
-        )
-          continue;
-        stalePlacements.add(watch.placementId);
-      }
+    for (const { watch } of watches.values()) {
+      if (watch.recordTypeId.toLowerCase() !== recordTypeKey) continue;
+      if (
+        noticeRecordKey !== undefined &&
+        watch.recordId !== undefined &&
+        watch.recordId.toLowerCase() !== noticeRecordKey
+      )
+        continue;
+      stalePlacements.add(watch.placementId);
     }
     if (stalePlacements.size === 0) return emptyStalePlacements;
     const placementIds: readonly string[] = Object.freeze([...stalePlacements].sort());
