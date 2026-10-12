@@ -2,7 +2,6 @@ import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
-  databaseTimestamp,
   sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
@@ -21,25 +20,23 @@ import {
   permissionIdSchema,
   revisionSchema,
   roleIdSchema,
-  sessionContextSchema,
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationAccessDeclaration,
+  type SelectedOrganizationScope,
 } from "../schema";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
-  runOrganizationAccessOperation,
+  decideOrganizationAccessBatch,
 } from "../access/index";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
+  type RequestDatabaseTransaction,
 } from "../db/index";
 import { z } from "zod";
-import {
-  createHumanInstalledPageBundleContextLoader,
-  matchesInstalledPageBundleIdentity,
-} from "./installed-page-bundle-context";
+import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 
 const reservedTenantSegments = new Set([
@@ -240,15 +237,6 @@ type OrganizationLauncherRow = DatabaseRow & Readonly<{
   organization_display_name: unknown;
   account_display_name: unknown;
 }>;
-type AddressCompletionContextRow = DatabaseRow & Readonly<{
-  request_context: unknown;
-}>;
-type AddressCompletionClockRow = DatabaseRow & Readonly<{
-  observed_at: unknown;
-}>;
-type AddressCompletionBundleRow = DatabaseRow & Readonly<{
-  bundle_state: unknown;
-}>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
 type AddressedIdentityRow = Readonly<{ addressed_identity: unknown }>;
@@ -315,12 +303,149 @@ export type AddressedActiveApplicationIdentity = z.infer<
   typeof addressedActiveApplicationIdentitySchema
 >;
 
+/**
+ * A page requirement names either a permission from this application's own catalogue or an exact
+ * platform administration permission from the shipped platform catalogue. A platform permission is
+ * organisation-scoped, so its declaration targets the organisation.
+ */
+const pageDiscoveryDeclaration = (
+  candidate: ApplicationCandidate,
+  page: ApplicationCandidate["pages"][number],
+): OrganizationAccessDeclaration => {
+  const platformDeclaration = platformPermissionSource().forKey(page.accessPermissionKey);
+  if (platformDeclaration !== undefined)
+    return organizationAccessDeclarationSchema.parse({
+      operationKey: "application.page.discover",
+      action: {
+        actionKind: platformDeclaration.actionKind,
+        ...(platformDeclaration.namedAction === undefined
+          ? {}
+          : { namedAction: platformDeclaration.namedAction }),
+      },
+      target: { kind: "organization" },
+      requiredPermission: {
+        ownerKind: "platform",
+        ownerId: platformPermissionSource().ownerId,
+        permissionId: platformDeclaration.permissionId,
+      },
+      recentAuthentication: { kind: "none" },
+      authority: { kind: "permission" },
+    });
+  const matches = candidate.permissions.filter((entry) => entry.key === page.accessPermissionKey);
+  if (matches.length !== 1 || matches[0] === undefined)
+    throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
+  const permission = matches[0];
+  return organizationAccessDeclarationSchema.parse({
+    operationKey: "application.page.discover",
+    action: {
+      actionKind: permission.actionKind,
+      ...(permission.namedAction === null ? {} : { namedAction: permission.namedAction }),
+    },
+    target: { kind: "application", applicationRootId: candidate.applicationRootId },
+    requiredPermission: {
+      applicationRootId: permission.applicationRootId,
+      ownerKind: permission.ownerKind,
+      ownerId: permission.ownerId,
+      permissionId: permission.permissionId,
+    },
+    recentAuthentication: { kind: "none" },
+    authority: { kind: "permission" },
+  });
+};
+
+/** Projects one application's permitted pages inside the caller's application-scoped request. */
+const projectPermittedApplication = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  candidate: ApplicationCandidate,
+): Promise<Readonly<{
+  application: PermittedApplication;
+  experiences: ApplicationExperience[];
+}> | null> => {
+  const releaseRows = await transaction.query<CurrentReleaseRow>`
+    select vortex_module.is_current_application_address_release(
+      ${candidate.releaseRevision}::bigint
+    ) as current_release
+  `;
+  if (
+    releaseRows.length !== 1 ||
+    releaseRows[0] === undefined ||
+    typeof releaseRows[0].current_release !== "boolean"
+  )
+    throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
+  if (!releaseRows[0].current_release) return null;
+
+  const roleRows = await transaction.query<SourceRoleRow>`
+    select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
+  `;
+  const activeRoleIds = new Set(
+    roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
+  );
+  if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
+    throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
+
+  // Every page of the application is decided by one access query.
+  const decisions = await decideOrganizationAccessBatch(
+    transaction,
+    scope,
+    candidate.pages.map((page) => pageDiscoveryDeclaration(candidate, page)),
+  );
+  const allowedPageKeys = new Set<string>();
+  candidate.pages.forEach((page, index) => {
+    if (decisions[index]?.allowed === true) allowedPageKeys.add(page.key);
+  });
+
+  // The release home wins if authorised. Otherwise use the lowest source
+  // role key among current application roles with an open home.
+  const roleHome = [...candidate.roles]
+    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
+    .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
+    .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
+    .find((page) => page !== undefined && allowedPageKeys.has(page.key));
+  const homePageKey = allowedPageKeys.has(candidate.homePageKey)
+    ? candidate.homePageKey
+    : roleHome?.key;
+  if (homePageKey === undefined) return null;
+
+  // An experience page is offered only when the viewer may open that page itself and it is
+  // presentation-only, so it can never show gated, conditional or data-bound content.
+  const shells = candidate.shells ?? [];
+  const experiences = (candidate.experiences ?? [])
+    .filter(
+      (experience) =>
+        allowedPageKeys.has(experience.page.key) &&
+        isPresentationOnlyApplicationExperience(experience.page, shells),
+    )
+    .map((experience) => {
+      const composition = experience.page.composition;
+      const shellId = composition.shellKind === "application" ? composition.shellId : undefined;
+      return applicationExperienceSchema.parse({
+        state: experience.state,
+        page: experience.page,
+        shells:
+          shellId === undefined ? [] : shells.filter((shell) => sameId(shell.shellId, shellId)),
+        ...(candidate.theme === undefined ? {} : { theme: candidate.theme }),
+      });
+    });
+
+  return {
+    application: permittedApplicationSchema.parse({
+      applicationRootId: candidate.applicationRootId,
+      key: candidate.key,
+      name: candidate.name,
+      icon: candidate.icon,
+      homePageKey,
+      pageKeys: [...allowedPageKeys].sort(),
+    }),
+    experiences,
+  };
+};
+
 const permittedApplication = async (
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   candidate: ApplicationCandidate,
-  expectedContext?: InstalledRuntimeContext,
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
@@ -329,192 +454,7 @@ const permittedApplication = async (
   const result = await requests.run(
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
-    async (transaction, scope) => {
-      const releaseRows = await transaction.query<CurrentReleaseRow>`
-        select vortex_module.is_current_application_address_release(
-          ${candidate.releaseRevision}::bigint
-        ) as current_release
-      `;
-      if (
-        releaseRows.length !== 1 ||
-        releaseRows[0] === undefined ||
-        typeof releaseRows[0].current_release !== "boolean"
-      )
-        throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
-      if (!releaseRows[0].current_release) return null;
-
-      const roleRows = await transaction.query<SourceRoleRow>`
-        select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
-      `;
-      const activeRoleIds = new Set(
-        roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
-      );
-      const allowedPageKeys = new Set<string>();
-      let earliestAccessDeadline: string | undefined;
-      const retainAccessDeadline = (deadline: string): void => {
-        const candidateMilliseconds = Date.parse(deadline);
-        if (!Number.isFinite(candidateMilliseconds))
-          throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
-        if (earliestAccessDeadline === undefined ||
-          candidateMilliseconds < Date.parse(earliestAccessDeadline))
-          earliestAccessDeadline = deadline;
-      };
-      if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
-        throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
-
-      for (const page of candidate.pages) {
-        // A page requirement names either a permission from this application's own catalogue or
-        // an exact platform administration permission from the shipped platform catalogue. A
-        // platform permission is organisation-scoped, so its declaration targets the organisation.
-        const platformDeclaration = platformPermissionSource().forKey(page.accessPermissionKey);
-        let declaration: OrganizationAccessDeclaration;
-        if (platformDeclaration !== undefined) {
-          declaration = organizationAccessDeclarationSchema.parse({
-            operationKey: "application.page.discover",
-            action: {
-              actionKind: platformDeclaration.actionKind,
-              ...(platformDeclaration.namedAction === undefined
-                ? {}
-                : { namedAction: platformDeclaration.namedAction }),
-            },
-            target: { kind: "organization" },
-            requiredPermission: {
-              ownerKind: "platform",
-              ownerId: platformPermissionSource().ownerId,
-              permissionId: platformDeclaration.permissionId,
-            },
-            recentAuthentication: { kind: "none" },
-            authority: { kind: "permission" },
-          });
-        } else {
-          const matches = candidate.permissions.filter(
-            (entry) => entry.key === page.accessPermissionKey,
-          );
-          if (matches.length !== 1 || matches[0] === undefined)
-            throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
-          const permission = matches[0];
-          declaration = organizationAccessDeclarationSchema.parse({
-            operationKey: "application.page.discover",
-            action: {
-              actionKind: permission.actionKind,
-              ...(permission.namedAction === null ? {} : { namedAction: permission.namedAction }),
-            },
-            target: { kind: "application", applicationRootId: candidate.applicationRootId },
-            requiredPermission: {
-              applicationRootId: permission.applicationRootId,
-              ownerKind: permission.ownerKind,
-              ownerId: permission.ownerId,
-              permissionId: permission.permissionId,
-            },
-            recentAuthentication: { kind: "none" },
-            authority: { kind: "permission" },
-          });
-        }
-        const decision = await runOrganizationAccessOperation(
-          transaction,
-          scope,
-          declaration,
-          async (decision) => {
-            retainAccessDeadline(decision.validUntil);
-            return true;
-          },
-        );
-        if (decision.outcome === "completed") allowedPageKeys.add(page.key);
-      }
-
-      // The release home wins if authorised. Otherwise use the lowest source
-      // role key among current application roles with an open home.
-      const roleHome = [...candidate.roles]
-        .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
-        .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
-        .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
-        .find((page) => page !== undefined && allowedPageKeys.has(page.key));
-      const homePageKey = allowedPageKeys.has(candidate.homePageKey)
-        ? candidate.homePageKey
-        : roleHome?.key;
-      if (homePageKey === undefined) return null;
-
-      // An experience page is offered only when the viewer may open that page itself and it is
-      // presentation-only, so it can never show gated, conditional or data-bound content.
-      const shells = candidate.shells ?? [];
-      const experiences = (candidate.experiences ?? [])
-        .filter(
-          (experience) =>
-            allowedPageKeys.has(experience.page.key) &&
-            isPresentationOnlyApplicationExperience(experience.page, shells),
-        )
-        .map((experience) => {
-          const composition = experience.page.composition;
-          const shellId = composition.shellKind === "application" ? composition.shellId : undefined;
-          return applicationExperienceSchema.parse({
-            state: experience.state,
-            page: experience.page,
-            shells:
-              shellId === undefined ? [] : shells.filter((shell) => sameId(shell.shellId, shellId)),
-            ...(candidate.theme === undefined ? {} : { theme: candidate.theme }),
-          });
-        });
-
-      if (expectedContext !== undefined) {
-        if (earliestAccessDeadline === undefined) return null;
-        const bundleRows = await transaction.query<AddressCompletionBundleRow>`
-          select vortex_module.read_active_installation_bundle_identity() as bundle_state
-        `;
-        if (
-          bundleRows.length !== 1 ||
-          bundleRows[0] === undefined ||
-          !matchesInstalledPageBundleIdentity(
-            expectedContext,
-            bundleRows[0].bundle_state,
-            scope.accessVersion,
-            scope.organizationAccountId,
-          )
-        ) return null;
-
-        const contextRows = await transaction.query<AddressCompletionContextRow>`
-          select vortex_access.validated_human_request_context() - 'channel' as request_context
-        `;
-        if (contextRows.length !== 1 || contextRows[0] === undefined) return null;
-        const current = sessionContextSchema.safeParse(contextRows[0].request_context);
-        if (!current.success || current.data.callerKind !== "human") return null;
-
-        const clockRows = await transaction.query<AddressCompletionClockRow>`
-          select clock_timestamp() as observed_at
-        `;
-        if (clockRows.length !== 1 || clockRows[0] === undefined) return null;
-        const observedAt = databaseTimestamp(clockRows[0].observed_at);
-        if (typeof observedAt !== "string") return null;
-        const observedMilliseconds = Date.parse(observedAt);
-        const earliestDeadlineMilliseconds = Date.parse(earliestAccessDeadline);
-        if (!Number.isFinite(observedMilliseconds) ||
-          !Number.isFinite(earliestDeadlineMilliseconds) ||
-          current.data.expiresAt === undefined ||
-          Date.parse(current.data.expiresAt) <= observedMilliseconds ||
-          (current.data.delegatedContext !== undefined &&
-            Date.parse(current.data.delegatedContext.expiresAt) <= observedMilliseconds) ||
-          (current.data.supportContext !== undefined &&
-            Date.parse(current.data.supportContext.expiresAt) <= observedMilliseconds) ||
-          !sameId(current.data.tenantId, scope.tenantId) ||
-          !sameId(current.data.organizationId, scope.organizationId) ||
-          !sameId(current.data.organizationAccountId, scope.organizationAccountId) ||
-          scope.applicationRootId === undefined ||
-          !sameId(current.data.applicationRootId, scope.applicationRootId) ||
-          current.data.accessVersion !== scope.accessVersion ||
-          earliestDeadlineMilliseconds <= observedMilliseconds) return null;
-      }
-
-      return {
-        application: permittedApplicationSchema.parse({
-          applicationRootId: candidate.applicationRootId,
-          key: candidate.key,
-          name: candidate.name,
-          icon: candidate.icon,
-          homePageKey,
-          pageKeys: [...allowedPageKeys].sort(),
-        }),
-        experiences,
-      };
-    },
+    (transaction, scope) => projectPermittedApplication(transaction, scope, candidate),
   );
   if (result.kind === "temporarily_unavailable")
     return {
@@ -607,7 +547,15 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     identityAuthorityId: identityAuthorityId.data,
   });
   try {
-    const contextResult = await requests.run<InstalledRuntimeContext | undefined>(
+    // The installed bundle context and the page permission decisions share one request, so the
+    // permitted pages are decided against exactly the release that is returned.
+    const addressedResult = await requests.run<
+      | Readonly<{
+          context: InstalledRuntimeContext;
+          permitted: NonNullable<Awaited<ReturnType<typeof projectPermittedApplication>>>;
+        }>
+      | undefined
+    >(
       session.data,
       {
         organizationId: organizationId.data,
@@ -631,26 +579,20 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           application.definitionKey !== addressedIdentity.identity.definitionKey ||
           application.releaseRevision !== context.applicationReleaseRevision)
           return undefined;
-        return context;
+        const permitted = await projectPermittedApplication(
+          transaction,
+          scope,
+          applicationCandidateFromInstalledContext(context),
+        );
+        return permitted === null ? undefined : { context, permitted };
       },
     );
-    if (contextResult.kind === "temporarily_unavailable")
-      return temporarilyUnavailable(contextResult.cause);
-    if (contextResult.kind !== "available" || contextResult.value === undefined)
+    if (addressedResult.kind === "temporarily_unavailable")
+      return temporarilyUnavailable(addressedResult.cause);
+    if (addressedResult.kind !== "available" || addressedResult.value === undefined)
       return unavailable();
 
-    const context = contextResult.value;
-    const candidate = applicationCandidateFromInstalledContext(context);
-    const permitted = await permittedApplication(
-      requests,
-      session.data,
-      organizationId.data,
-      candidate,
-      context,
-    );
-    if (isTemporarilyUnavailableApplicationRead(permitted))
-      return temporarilyUnavailable(permitted.cause);
-    if (permitted === null) return unavailable();
+    const { context, permitted } = addressedResult.value;
     const read = permittedApplicationsReadSchema.parse({
       kind: "available",
       organizationId: organizationId.data,
