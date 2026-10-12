@@ -17,6 +17,9 @@ type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "available"; expression: string; results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[]; more: boolean }>;
+const candidateBatchSize = 1_000;
+/** The matcher splits tokens on JavaScript `\s` and `\p{White_Space}`; the index filter splits on the same characters. */
+const whitespaceSeparator = "[\\s\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+";
 const unavailable = { kind: "unavailable" } as const;
 const recordSchema = z.object({ outcome: z.literal("allowed"), recordId: recordIdSchema,
   concurrencyNumber: revisionSchema, values: z.record(fieldIdSchema, jsonValueSchema) }).strict();
@@ -55,33 +58,39 @@ export const loadApplicationSearch = async (
         if (expression === undefined) return { kind: "ready" as const };
         const requiredTokens = literalSearchRequiredTokens(expression);
         if (requiredTokens === undefined) return { kind: "refused" as const };
-        const candidates: SearchDocument[] = [];
-        for (const entry of configuration.recordTypes) {
-          if (entry.recordType.state !== "resolved") throw new Error("SEARCH_CONFIGURATION_UNAVAILABLE");
-          const rows = await transaction.query<DatabaseRow>`
-            select record_id, source_record_version, document_schema_version, entries, content_fingerprint
-            from vortex_search.documents as documents
-            where organization_id = ${scope.organizationId}::uuid
-              and application_root_id = ${scopedApplicationRootId}::uuid
-              and record_type_id = ${entry.recordType.recordTypeId}::uuid and not deleted
-              and not exists (
-                select 1 from pg_catalog.jsonb_array_elements_text(${JSON.stringify(requiredTokens)}::jsonb) as required(token)
-                where not exists (
-                  select 1 from pg_catalog.jsonb_array_elements(documents.entries) as indexed(value)
-                  where pg_catalog.strpos(pg_catalog.lower(indexed.value ->> 'text'), required.token) > 0))
-            order by record_id limit ${1_001 - candidates.length}
-          `;
-          if (rows.length + candidates.length > 1_000) throw new Error("SEARCH_CANDIDATE_BOUND_EXCEEDED");
-          for (const row of rows) {
-            if (Number(row.document_schema_version) !== searchDocumentSchemaVersion) throw new Error("SEARCH_DOCUMENT_UNAVAILABLE");
-            candidates.push({ kind: "document", schemaVersion: searchDocumentSchemaVersion,
-            organisationId: scope.organizationId, applicationRootId: scopedApplicationRootId,
-            recordTypeId: entry.recordType.recordTypeId, recordId: String(row.record_id),
-            sourceRecordVersion: Number(row.source_record_version), entries: row.entries as SearchDocument["entries"],
-            contentFingerprint: String(row.content_fingerprint) });
+        // Records are scanned in keyset batches. No bound depends on how many indexed documents
+        // exist; only readable matches are returned, so hidden records cannot change the response.
+        const candidateBatches = async function* (recordTypeId: string): AsyncGenerator<readonly SearchDocument[]> {
+          let after = "00000000-0000-0000-0000-000000000000";
+          for (;;) {
+            const rows = await transaction.query<DatabaseRow>`
+              select record_id, source_record_version, document_schema_version, entries, content_fingerprint
+              from vortex_search.documents as documents
+              where organization_id = ${scope.organizationId}::uuid
+                and application_root_id = ${scopedApplicationRootId}::uuid
+                and record_type_id = ${recordTypeId}::uuid and not deleted
+                and record_id > ${after}::uuid
+                and not exists (
+                  select 1 from pg_catalog.jsonb_array_elements_text(${JSON.stringify(requiredTokens)}::jsonb) as required(token)
+                  where not exists (
+                    select 1 from pg_catalog.jsonb_array_elements(documents.entries) as indexed(value)
+                    where required.token = any (pg_catalog.regexp_split_to_array(pg_catalog.lower(indexed.value ->> 'text'),
+                      ${whitespaceSeparator}::text)))
+              order by record_id limit ${candidateBatchSize}
+            `;
+            if (rows.length === 0) return;
+            yield rows.map((row) => {
+              if (Number(row.document_schema_version) !== searchDocumentSchemaVersion) throw new Error("SEARCH_DOCUMENT_UNAVAILABLE");
+              return { kind: "document", schemaVersion: searchDocumentSchemaVersion,
+                organisationId: scope.organizationId, applicationRootId: scopedApplicationRootId,
+                recordTypeId, recordId: String(row.record_id),
+                sourceRecordVersion: Number(row.source_record_version), entries: row.entries as SearchDocument["entries"],
+                contentFingerprint: String(row.content_fingerprint) } as const;
+            });
+            after = String(rows[rows.length - 1]!.record_id);
           }
-        }
-        const result = await searchConfiguredApplication({ scope, configuration, expression, candidates,
+        };
+        const result = await searchConfiguredApplication({ scope, configuration, expression, candidateBatches,
           readCurrentRecords: async (request): Promise<ReadonlyMap<string, ApplicationSearchRecord>> => {
             const current = new Map<string, ApplicationSearchRecord>();
             const entry = configuration.recordTypes.find((entry) => entry.recordType.state === "resolved" && sameId(entry.recordType.recordTypeId, request.recordTypeId));
