@@ -224,6 +224,12 @@ const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, 
 /** Theme tokens in force for nested placements when the host supplies no explicit scope. */
 const ThemeScopeContext = createContext<PlacementThemeScope>(EMPTY_THEME_SCOPE);
 
+/**
+ * The page root's resolved slot gap. It travels by context rather than a CSS variable so slots
+ * rendered through a portal (dialogs, drawers), which sit outside the root's DOM subtree, get it.
+ */
+const RootSlotGapContext = createContext<string | undefined>(undefined);
+
 /** Seeds the root tokens while descendant placements inherit their nearest themed ancestor. */
 export function VortexPuckThemeScopeProvider({
   scope,
@@ -307,16 +313,23 @@ const isSlotGapName = (value: string): value is SlotGapName =>
 
 /**
  * The gap between the children of one of this placement's slots: the placement's own declared
- * `gap` setting, or, for a block that declares none, the page root's gap carried in the
- * `--vortex-slot-gap` variable.
+ * `gap` setting, or, for a block that declares none, the page root's gap.
  */
 const slotGapFor = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
+  rootGap: string | undefined,
   location: DefinitionRenderErrorLocation,
 ): string => {
-  if (!release.properties.some((property) => property.key === "gap"))
-    return "var(--vortex-slot-gap)";
+  if (!release.properties.some((property) => property.key === "gap")) {
+    if (rootGap === undefined)
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Block '${release.key}' renders outside a page root that supplies a slot gap`,
+        location,
+      );
+    return rootGap;
+  }
   const value = settings.gap;
   if (value?.kind !== "choice" || !isSlotGapName(value.value))
     throw new DefinitionRenderError(
@@ -551,6 +564,7 @@ function PlacementBlock(props: {
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
   const inheritedScope = useContext(ThemeScopeContext);
+  const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
   const activeBreakpoint: Breakpoint = breakpoint ?? "desktop";
@@ -594,7 +608,7 @@ function PlacementBlock(props: {
   // also a theme root, so its surface, text and typography repaint from its own variables.
   const placementTheme = resolvePlacementTheme(inheritedScope, vortex.themeOverrides);
 
-  const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, location) };
+  const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, rootSlotGap, location) };
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
@@ -860,12 +874,13 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
             {
               gap: slotGapLength(gap),
               padding: slotGapLength(padding),
-              "--vortex-slot-gap": slotGapLength(gap),
             } as CSSProperties
           }
           {...(puck.isEditing ? { editing: true } : {})}
         >
-          {children}
+          <RootSlotGapContext.Provider value={slotGapLength(gap)}>
+            {children}
+          </RootSlotGapContext.Provider>
         </ApplicationShellRoot>
       ),
     },
