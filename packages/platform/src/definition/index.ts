@@ -4,7 +4,6 @@ export * from "./app-index";
 export { createFlowBindingEndpoint, type InstalledFlowBindings } from "./flow-binding-endpoint";
 export {
   invokeInstalledFlow,
-  type FlowInvocationAdapters,
   type FlowInvocationAddress,
   type FlowInvocationRequest,
 } from "./flow-invocation";

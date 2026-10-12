@@ -16,34 +16,39 @@ const edits = () =>
     },
   });
 
+const withSession = async <Result>(
+  operation: (session: Awaited<ReturnType<typeof resolveIdentitySession>>) => Promise<Result>,
+): Promise<Result | Readonly<{ kind: "temporarily_unavailable" }>> => {
+  try {
+    return await operation(await resolveIdentitySession());
+  } catch (error) {
+    console.error("[studio] before-save condition session failed", error);
+    return { kind: "temporarily_unavailable" };
+  }
+};
+
 export const loadStudioModuleBeforeSaveCondition = async (
   organizationId: string,
   rootId: string,
   flowAlias?: string,
   taskId?: string,
-) => {
-  const session = await resolveIdentitySession();
-  return edits().loadStudioModuleBeforeSaveCondition(
-    organizationId,
-    rootId,
-    flowAlias,
-    taskId,
-    session,
+) =>
+  withSession((session) =>
+    edits().loadStudioModuleBeforeSaveCondition(organizationId, rootId, flowAlias, taskId, session),
   );
-};
 
 export const validateStudioModuleBeforeSaveCondition = async (
   organizationId: string,
   candidate: unknown,
-) => {
-  const session = await resolveIdentitySession();
-  return edits().validateStudioModuleBeforeSaveCondition(organizationId, candidate, session);
-};
+) =>
+  withSession((session) =>
+    edits().validateStudioModuleBeforeSaveCondition(organizationId, candidate, session),
+  );
 
 export const saveStudioModuleBeforeSaveCondition = async (
   organizationId: string,
   candidate: unknown,
-) => {
-  const session = await resolveIdentitySession();
-  return edits().saveStudioModuleBeforeSaveCondition(organizationId, candidate, session);
-};
+) =>
+  withSession((session) =>
+    edits().saveStudioModuleBeforeSaveCondition(organizationId, candidate, session),
+  );

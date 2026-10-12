@@ -13,7 +13,6 @@ import {
   recordTypeIdSchema,
   sameId,
   type ApplicationContent,
-  type ComponentFlowBinding,
   type ExactDefinitionDependency,
   type FlowBindingInvocation,
   type FlowDefinition,
@@ -84,7 +83,22 @@ type ConfirmationReference = Readonly<{
   signature: string;
 }>;
 
-export type FlowInvocationAdapters = Readonly<{
+type GuidedInvocationPage = Readonly<{
+  page: Readonly<Record<string, unknown>>;
+  pageId: string;
+  guidedForm?: Readonly<{
+    draftId: string;
+    revision: number;
+    flowId: string;
+    computedStepId: string;
+    values: Readonly<Record<string, JsonValue>>;
+  }>;
+  invocation: Readonly<{ installationRevision: number; releaseKey: string }>;
+  subject?: Readonly<{ recordId: string; revision: number }>;
+  bindings: Readonly<Record<string, readonly Readonly<{ event: string; bindingId: string }>[]>>;
+}>;
+
+type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
@@ -130,16 +144,11 @@ export type FlowInvocationAdapters = Readonly<{
       evidence?: unknown;
     }>,
   ) => Promise<Readonly<Record<string, JsonValue>> | undefined>;
-  verifyGuidedPage: (
-    args: Readonly<{
-      session: IdentitySession;
-      guided: GuidedControl;
-      subject: Readonly<{ recordId: string; revision: number }> | undefined;
-      binding: ComponentFlowBinding;
-      reference: ConfirmationReference;
-      invocation: FlowBindingInvocation;
-    }>,
-  ) => Promise<Readonly<Record<string, unknown>> | undefined>;
+  loadGuidedPage: (
+    session: IdentitySession,
+    guided: GuidedControl,
+    subject: Readonly<{ recordId: string; revision: number }> | undefined,
+  ) => Promise<GuidedInvocationPage | undefined>;
 }>;
 
 export type FlowInvocationAddress = Readonly<{
@@ -478,18 +487,18 @@ export async function invokeInstalledFlow(
   session: IdentitySession,
   body: FlowInvocationRequest,
   address: FlowInvocationAddress,
-  adapters: FlowInvocationAdapters,
+  dependencies: InvocationDependencies,
 ): Promise<FlowBindingEndpointResult> {
   const identity = { session };
-  const telemetry = adapters.telemetry;
-  const authorityId = adapters.authorityId;
+  const telemetry = dependencies.telemetry;
+  const authorityId = dependencies.authorityId;
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: authorityId,
     telemetry,
   });
   const referenceChoices = createReferenceChoiceService({
     ...{ identityAuthorityId: authorityId, telemetry },
-    continuationKey: adapters.continuationKey,
+    continuationKey: dependencies.continuationKey,
   });
   const selectedRecordReader = createViewerSafeRecordLinkReadService();
   const recordPinService = createViewerSafeRecordLinkService({
@@ -499,7 +508,7 @@ export async function invokeInstalledFlow(
       return createHumanInstalledRuntimeContextLoader({
         activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
         releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-          adapters.releaseCatalogue,
+          dependencies.releaseCatalogue,
           transaction,
         ),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
@@ -649,7 +658,7 @@ export async function invokeInstalledFlow(
             const current = await createHumanInstalledRuntimeContextLoader({
               activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
               releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                adapters.releaseCatalogue,
+                dependencies.releaseCatalogue,
                 transaction,
               ),
               scope: {
@@ -743,7 +752,7 @@ export async function invokeInstalledFlow(
             const current = await createHumanInstalledRuntimeContextLoader({
               activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
               releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                adapters.releaseCatalogue,
+                dependencies.releaseCatalogue,
                 transaction,
               ),
               scope: {
@@ -884,16 +893,16 @@ export async function invokeInstalledFlow(
       const installation =
         await createActiveApplicationInstallationRepository(transaction).readCurrent();
       const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
-        adapters.releaseCatalogue,
+        dependencies.releaseCatalogue,
         transaction,
       ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
       const application = releaseSet.application;
       guidedControls.clear();
       for (const page of application.content.pages) {
         if (page.type !== "guided_form") continue;
-        const controls = adapters.guidedFormControls(page, application.content.shells);
+        const controls = dependencies.guidedFormControls(page, application.content.shells);
         if (controls === undefined) throw new Error("INVALID_GUIDED_FORM_CONTROLS");
-        const flowId = adapters.guidedFormFlowId(
+        const flowId = dependencies.guidedFormFlowId(
           page,
           application.content.flowBindings,
           application.content.shells,
@@ -1079,17 +1088,17 @@ export async function invokeInstalledFlow(
     if (
       installed.applicationContent === undefined ||
       installed.modules === undefined ||
-      !adapters.hasAuthoredForm(installed.applicationContent, trustedFormId)
+      !dependencies.hasAuthoredForm(installed.applicationContent, trustedFormId)
     )
       return { kind: "refused", reason: "unavailable" };
-    const projectedForm = await adapters.projectForm(session, {
+    const projectedForm = await dependencies.projectForm(session, {
       installationRevision: installed.installationRevision,
       releaseKey: installed.releaseKey,
       formId: trustedFormId,
     });
     if (projectedForm === undefined) return { kind: "refused", reason: "unavailable" };
     if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
-    const values = await adapters.resolveFormValues({
+    const values = await dependencies.resolveFormValues({
       service: referenceChoices,
       session,
       selection,
@@ -1138,13 +1147,13 @@ export async function invokeInstalledFlow(
       const resolveValues = async (values: unknown) => {
         if (installation.applicationContent === undefined || installation.modules === undefined)
           return undefined;
-        const projectedForm = await adapters.projectForm(identity.session, {
+        const projectedForm = await dependencies.projectForm(identity.session, {
           installationRevision: installation.installationRevision,
           releaseKey: installation.releaseKey,
           formId: binding.controlId,
         });
         if (projectedForm === undefined) return undefined;
-        const resolvedValues = await adapters.resolveFormValues({
+        const resolvedValues = await dependencies.resolveFormValues({
           service: referenceChoices,
           session: identity.session,
           selection,
@@ -1238,7 +1247,7 @@ export async function invokeInstalledFlow(
       if (guided === undefined) {
         if (
           isRecord(callerInputs.values) &&
-          Object.hasOwn(callerInputs.values, adapters.confirmationKey)
+          Object.hasOwn(callerInputs.values, dependencies.confirmationKey)
         )
           return undefined;
         const resolved = await resolveValues(callerInputs.values);
@@ -1265,14 +1274,14 @@ export async function invokeInstalledFlow(
       if (
         !isRecord(submitted) ||
         Object.keys(submitted).length !== 1 ||
-        !Object.hasOwn(submitted, adapters.confirmationKey)
+        !Object.hasOwn(submitted, dependencies.confirmationKey)
       )
         return undefined;
-      const proof = submitted[adapters.confirmationKey];
-      const reference = adapters.confirmationReference(proof);
+      const proof = submitted[dependencies.confirmationKey];
+      const reference = dependencies.confirmationReference(proof);
       if (reference === undefined) return undefined;
       if (
-        !(await adapters.verifiesConfirmation(proof, {
+        !(await dependencies.verifiesConfirmation(proof, {
           pageId: guided.pageId,
           flowId: guided.flowId,
           sessionId: identity.session.sessionId,
@@ -1283,16 +1292,35 @@ export async function invokeInstalledFlow(
         }))
       )
         return undefined;
-      const draftValues = await adapters.verifyGuidedPage({
-        session: identity.session,
-        guided,
-        subject,
-        binding,
-        reference,
-        invocation: body.invocation,
-      });
-      if (draftValues === undefined) return undefined;
-      const resolved = await resolveValues(draftValues);
+      const model = await dependencies.loadGuidedPage(identity.session, guided, subject);
+      const draft = model?.guidedForm;
+      const summary = Array.isArray(model?.page.steps)
+        ? model.page.steps.find((step) => isRecord(step) && step.summary === true)
+        : undefined;
+      if (
+        model === undefined ||
+        draft === undefined ||
+        !isRecord(summary) ||
+        typeof summary.id !== "string" ||
+        guided.flowId === undefined ||
+        String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
+        draft.computedStepId !== summary.id ||
+        model.invocation.installationRevision !== body.invocation.installationRevision ||
+        model.invocation.releaseKey !== body.invocation.releaseKey ||
+        draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
+        draft.revision !== reference.revision ||
+        draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||
+        (model.subject?.recordId.toLowerCase() ?? null) !==
+          (subject?.recordId.toLowerCase() ?? null) ||
+        (subject !== undefined && model.subject?.revision !== subject.revision) ||
+        !(model.bindings[binding.controlId] ?? []).some(
+          (held) =>
+            held.event === "form_submit" &&
+            held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase(),
+        )
+      )
+        return undefined;
+      const resolved = await resolveValues(draft.values);
       if (resolved === undefined) return undefined;
       const adaptedInputs = adaptFormSubmit(
         binding,
@@ -1315,7 +1343,7 @@ export async function invokeInstalledFlow(
   const submittedValues =
     invocation.kind === "binding" ? invocation.callerInputs?.values : undefined;
   const confirmation = isRecord(submittedValues)
-    ? adapters.confirmationReference(submittedValues[adapters.confirmationKey])
+    ? dependencies.confirmationReference(submittedValues[dependencies.confirmationKey])
     : undefined;
   const invocationWithStableClick =
     invocation.kind === "binding" && confirmation !== undefined

@@ -3,9 +3,29 @@ import { z } from "zod";
 import { flowBindingInvocationSchema } from "@vortex/platform/schema";
 import { invokeInstalledFlow } from "@web/platform-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { flowInvocationAdapters } from "../../../_lib/flow-invocation-adapters";
+import {
+  loadApplicationPage,
+  loadProjectedReferenceChoiceForm,
+} from "../../../_lib/application-page";
+import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
+import {
+  getGuidedFormControlIds,
+  getGuidedFormFlowId,
+  guidedFormConfirmationKey,
+  guidedFormConfirmationReference,
+  verifiesGuidedFormConfirmation,
+} from "../../../_lib/guided-form-steps";
+import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
+import {
+  applicationHasAuthoredForm,
+  resolveReferenceChoiceFormValues,
+} from "../../../_lib/reference-choices";
+import { appTelemetry } from "../../../_lib/server-composition";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
-import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
+import {
+  getIdentityAuthorityConfiguration,
+  getIdentityJourneyConfiguration,
+} from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
@@ -67,12 +87,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return privateResponse({ kind: "unavailable" }, 503);
     if (address.kind !== "application_page") return refusedResponse();
 
-    const result = await invokeInstalledFlow(
-      identity.session,
-      body,
-      address,
-      flowInvocationAdapters(address, body),
-    );
+    const result = await invokeInstalledFlow(identity.session, body, address, {
+      authorityId: getIdentityAuthorityConfiguration().authorityId,
+      telemetry: appTelemetry,
+      releaseCatalogue: installedReleaseCatalogue,
+      continuationKey: getQueryContinuationKey(),
+      guidedFormControls: getGuidedFormControlIds,
+      guidedFormFlowId: getGuidedFormFlowId,
+      confirmationKey: guidedFormConfirmationKey,
+      confirmationReference: guidedFormConfirmationReference,
+      verifiesConfirmation: verifiesGuidedFormConfirmation,
+      hasAuthoredForm: applicationHasAuthoredForm,
+      projectForm: (session, form) => loadProjectedReferenceChoiceForm(session, address, form),
+      resolveFormValues: resolveReferenceChoiceFormValues,
+      loadGuidedPage: async (session, guided, subject) => {
+        const page = await loadApplicationPage(
+          session,
+          {
+            tenantShortName: body.tenantShortName,
+            organizationShortName: body.organizationShortName,
+            read: address.read,
+            application: address.application,
+            pageKey: guided.pageKey,
+          },
+          subject === undefined ? {} : { record_id: subject.recordId },
+        );
+        return page.kind === "available" ? page.model : undefined;
+      },
+    });
     if (result.kind === "refused") return refusedResponse();
     return privateResponse(result, result.kind === "reload" ? 409 : 200);
   } catch (error) {
