@@ -18,16 +18,16 @@ alter function <schema>.<function>(<argument types>) owner to <role>;
 
 It must name the function defined by the file. If it is absent, the recorded owner is `postgres`.
 The schema directory names the function's schema and the file name is the function name, both
-lowercase SQL identifiers, so one name has one file: do not overload a function name. The file
-applies on its own and matches the live database exactly.
+lowercase SQL identifiers, so one name has one file: do not overload a function name. Keep each
+canonical file synchronized with the migration that installs its function.
 
 ## Migration rule
 
 - A migration that creates a function or changes its definition carries the complete body,
   identical to the canonical file changed in the same commit. No text patching.
 - A new function owned by a role is created under `set local role <role>`. A later owner change uses
-  `alter function ... owner to <role>`. The canonical owner statement and its migration change are
-  committed together, and the checker verifies the recorded owner against the migration history.
+  `alter function ... owner to <role>`. Commit the canonical owner statement and migration change
+  together; review their parity manually.
 - An owner-only or privilege-only migration does not repeat the function body. In the same commit,
   change only the canonical owner statement or the function's grant/revoke statements that record
   that migration.
@@ -42,10 +42,14 @@ applies on its own and matches the live database exactly.
 
 ## Enforcement
 
-There is no automated checker. Reviewers rely on these rules: a function's canonical file under
-`supabase/schemas` must stay identical to the definition its latest migration installs, must record
-the same owner, and must hold only its one definition, comment, optional owner statement and
-privileges. Do not read a stored function definition or patch one with `replace()`; change an
+`pnpm guard` runs the check in [`tooling/guard/guard.ts`](../../tooling/guard/guard.ts): it compares
+each canonical function definition with the latest matching definition found in the ordered
+migrations, and rejects non-nil hard-coded UUIDs in function bodies. The comparison normalizes
+whitespace. It does not inspect the live database or verify the canonical file's comment, grants,
+revokes, owner statement, filename, or one-function-per-file layout. Review those details manually,
+including owner and privilege changes, and confirm the file contains only its function definition,
+comment, optional owner statement and privileges. Do not read a stored function definition
+(`pg_get_functiondef`, `prosrc`, `routine_definition`) or patch one with `replace()`; change an
 argument list only after an explicit `drop function`. Functions installed by migrations before
 `20260925000000` gain a canonical file when they are next changed.
 

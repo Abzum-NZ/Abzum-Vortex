@@ -4,15 +4,13 @@
 
 ## Definition of complete
 
-A development capability is complete when its bounded functionality is implemented, a separate code review confirms the issue's acceptance criteria, and the reviewed changes are merged. Parent tasks complete when their implementation children complete.
-
-Do not create or run tests, require database review, request hosted evidence, or add proof, screenshot, benchmark, deployment or release gates to development tasks. Code review is the only acceptance method for this build. Completion describes implemented code, not production readiness.
+A behaviour change is complete when its functionality is implemented, a separate code review confirms the acceptance criteria, and the affected pages are walked through in the running app on a freshly reset local database. Pull requests that change what users see include screenshots. Completion describes implemented code, not production readiness.
 
 ## Functional quality
 
-Visible functionality implements [Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) Level AA. Any platform limitation has a documented remediation plan. This is a product requirement assessed in code review, not a separate testing or evidence gate.
+Visible functionality implements [Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) Level AA. Any platform limitation has a documented remediation plan.
 
-Review code against the owning specification, focusing on behavior rather than test instructions:
+Review behaviour against the owning specification:
 
 - Organisation scope and current account/role permissions are enforced by the owning service on each protected operation. A page hiding a control is not authorization.
 - Rows, fields, files, search results, totals, subscriptions, caches and errors expose only permitted content. Switching organisation clears the old context; tenant administration does not imply child-organisation data access.
@@ -30,7 +28,7 @@ Review code against the owning specification, focusing on behavior rather than t
 
 ## Review scope
 
-The issue's What will be built section names the owning code, inputs, outputs, dependencies and excluded work. Acceptance criteria describe observable implementation behavior and structures a reviewer can inspect. They do not add a second implementation of the same feature, an unnecessary framework, an approval service, or a verification project.
+The issue's What will be built section names the owning code, inputs, outputs, dependencies and excluded work. Acceptance criteria describe observable implementation behaviour and structures a reviewer can inspect. They do not add a second implementation of the same feature or an unnecessary framework.
 
 Use the simplest design that meets the current specification. Correct an unsuitable contract or schema at its source. Published product revisions remain useful functionality; retaining an obsolete platform serialization is not required for this new application.
 
@@ -65,7 +63,7 @@ Application and role administration preserve scope:
 
 ## Groups and privileged access
 
-The [Groups and privileged-access contract](appendices/groups-and-privileged-access.md) governs current eligibility and activation. Eligibility alone grants no use when activation is required. Activation elevates only the selected member for the bounded role, application, time and policy; required recent authentication and independent human approval remain product rules owned by IAM, not extra fleet reviewers.
+The [Groups and privileged-access contract](appendices/groups-and-privileged-access.md) governs current eligibility and activation. Eligibility alone grants no use when activation is required. Activation elevates only the selected member for the bounded role, application, time and policy; required recent authentication and independent human approval remain product rules owned by IAM.
 
 Metadata changes, narrowing and pending additions preserve still-approved active authority while removed permission stops immediately. Added or restored authority requires a fresh activation. A mode or policy change cannot convert, revive or silently broaden a revoked, expired, scheduled or otherwise ineffective assignment.
 

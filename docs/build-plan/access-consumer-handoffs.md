@@ -1,8 +1,6 @@
 # Access operations and their consumers
 
-[Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md) · [Access specification](../specification/04-access-and-permissions.md)
-
-Current issue descriptions own delivery scope and ordering. Completion is implementation plus independent code review; this note requires no tests, database proof or hosted journey.
+[Roadmap archive](README.md) · [Access specification](../specification/04-access-and-permissions.md)
 
 ## Administration and IAM
 

@@ -1,8 +1,7 @@
 # Module installation and record storage
 
-[Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md) · [Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
+[Roadmap archive](README.md) · [Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
 
-Current issue descriptions own pickup order and bounded implementation scope. Completion is implementation plus independent code review. This note adds no tests, database proof, hosted checks or obsolete format support.
 
 ## Installation and storage
 
@@ -40,5 +39,3 @@ Current issue descriptions own pickup order and bounded implementation scope. Co
 - Use one private immutable outbox and the existing logged queue. Each occurrence has its own identifier; the transport message identifier is separate. Several occurrences from one save retain distinct sequence positions.
 - Fresh user operations have no parent cause. Caused work accepts only a trusted parent handoff; caller-authored causal claims cannot acquire authority.
 - Atomic append belongs to the save foundation. Ordered dispatch, duplicate-safe consumers and recovery belong to the subsequent Event delivery issues.
-
-Implementation owners are the current descriptions for #43, #44, #45, #47, #48, #50, #60, #64, #400, #401 and #402. Their dependencies determine pickup; this note does not impose whole-phase gates.
