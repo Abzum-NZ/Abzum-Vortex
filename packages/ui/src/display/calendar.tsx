@@ -14,6 +14,36 @@ import type { CalendarPayload, CalendarView } from "./projected-data";
 
 const calendarViews: readonly CalendarView[] = ["month", "week", "agenda"];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+type DayBoundaries = Readonly<{ start: number; end: number }>;
+const calendarDateFormatters = new Map<string, Intl.DateTimeFormat>();
+const itemTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const calendarDateFormatter = (timeZone: string): Intl.DateTimeFormat => {
+  let formatter = calendarDateFormatters.get(timeZone);
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat("en", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    calendarDateFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+};
+
+const itemTimeFormatter = (timeZone: string): Intl.DateTimeFormat => {
+  let formatter = itemTimeFormatters.get(timeZone);
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    itemTimeFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+};
 
 const dateAtUtc = (year: number, month: number, day: number): Date => {
   const result = new Date(0);
@@ -31,12 +61,7 @@ const addDays = (date: string, count: number): string => {
 };
 
 const localToday = (timeZone: string): string => {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
+  const parts = calendarDateFormatter(timeZone).formatToParts(new Date());
   const values = new Map(parts.map((part) => [part.type, part.value]));
   return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
 };
@@ -60,12 +85,7 @@ const shiftMonth = (date: string, offset: number): string => {
 };
 
 const localDateOf = (instant: string, timeZone: string): string => {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(instant));
+  const parts = calendarDateFormatter(timeZone).formatToParts(new Date(instant));
   const values = new Map(parts.map((part) => [part.type, part.value]));
   return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
 };
@@ -89,7 +109,7 @@ const localDayStart = (date: string, timeZone: string): number => {
 const itemIntersectsDay = (
   item: CalendarPayload["items"][number],
   day: string,
-  timeZone: string,
+  boundaries: DayBoundaries | undefined,
   endExclusive: boolean,
 ): boolean => {
   if (datePattern.test(item.start)) {
@@ -98,12 +118,12 @@ const itemIntersectsDay = (
     return startDay <= day &&
       (endExclusive && endDay > startDay ? endDay > day : endDay >= day);
   }
+  if (boundaries === undefined)
+    throw new Error("A timestamped calendar item requires precomputed day boundaries");
   const start = Date.parse(item.start);
   const end = item.end === null ? start : Date.parse(item.end);
-  const dayStart = localDayStart(day, timeZone);
-  const dayEnd = localDayStart(addDays(day, 1), timeZone);
-  return start < dayEnd &&
-    (endExclusive && end > start ? end > dayStart : end >= dayStart);
+  return start < boundaries.end &&
+    (endExclusive && end > start ? end > boundaries.start : end >= boundaries.start);
 };
 
 const dayLabel = (date: string): string => {
@@ -128,11 +148,7 @@ const monthLabel = (date: string): string => {
 const itemTime = (value: string, timeZone: string): string =>
   datePattern.test(value)
     ? ""
-    : new Intl.DateTimeFormat(undefined, {
-        timeZone,
-        hour: "numeric",
-        minute: "2-digit",
-      }).format(new Date(value));
+    : itemTimeFormatter(timeZone).format(new Date(value));
 
 const periodDays = (values: CalendarPayload): readonly string[] => {
   if (values.view === "week")
@@ -166,6 +182,26 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const days = values === undefined ? [] : periodDays(values);
+  const dayBoundaries = new Map<string, DayBoundaries>();
+  if (values?.items.some((item) => !datePattern.test(item.start))) {
+    const boundaryStarts = new Map<string, number>();
+    const boundaryStart = (day: string): number => {
+      let start = boundaryStarts.get(day);
+      if (start === undefined) {
+        start = localDayStart(day, values.timeZone);
+        boundaryStarts.set(day, start);
+      }
+      return start;
+    };
+    for (const day of days) {
+      if (day < values.windowStart || day >= values.windowEnd) continue;
+      dayBoundaries.set(day, {
+        start: boundaryStart(day),
+        end: boundaryStart(addDays(day, 1)),
+      });
+    }
+  }
 
   const replaceParameters = (change: (parameters: URLSearchParams) => void): void => {
     const parameters = new URLSearchParams(searchParams.toString());
@@ -261,12 +297,19 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
             <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
           ) : values.view === "agenda" ? (
             <div className="space-y-3" data-vortex-calendar-view="agenda">
-              {periodDays(values).map((day) => {
-                const items = values.items.filter((item) =>
+              {days.map((day) => {
+                const boundaries = dayBoundaries.get(day);
+                const items =
                   day >= values.windowStart && day < values.windowEnd
-                    ? itemIntersectsDay(item, day, values.timeZone, values.endExclusive)
-                    : false,
-                );
+                    ? values.items.filter((item) =>
+                        itemIntersectsDay(
+                          item,
+                          day,
+                          boundaries,
+                          values.endExclusive,
+                        ),
+                      )
+                    : [];
                 if (items.length === 0) return null;
                 return (
                   <section key={day} aria-label={dayLabel(day)} className="border-b pb-2">
@@ -301,10 +344,13 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                     </div>
                   ))
                 : null}
-              {periodDays(values).map((day) => {
+              {days.map((day) => {
                 const inPeriod = day >= values.windowStart && day < values.windowEnd;
+                const boundaries = dayBoundaries.get(day);
                 const items = inPeriod
-                  ? values.items.filter((item) => itemIntersectsDay(item, day, values.timeZone, values.endExclusive))
+                  ? values.items.filter((item) =>
+                      itemIntersectsDay(item, day, boundaries, values.endExclusive),
+                    )
                   : [];
                 return (
                   <div
