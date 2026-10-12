@@ -98,11 +98,11 @@ import {
   validateDefinitionSet,
   validateDefinitionSource,
 } from "./validation";
+import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
 import {
-  compareDefinitionVersionImpactWithEvidence,
-  deriveSavedConditionRevisionsFromHistoryEvidence,
-  isVerifiedDefinitionPublicationHistoryEvidence,
-} from "./version-impact-definition";
+  deriveSavedConditionRevisions,
+  type SavedConditionLike,
+} from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
@@ -141,14 +141,14 @@ type DefinitionPublicationCandidateCommon = Readonly<{
 }>;
 
 /**
- * Repositories return verified, incrementally folded history evidence before
- * any publication policy consumes it.
+ * Repositories return the latest release, which the database anchors as current, and for a
+ * Module each saved condition's most recent published form (empty for an Application).
  */
 export type DefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
-  Readonly<{ historyEvidence: DefinitionPublicationHistoryEvidence }>;
-
-type ValidatedDefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
-  Readonly<{ historyEvidence: DefinitionPublicationHistoryEvidence }>;
+  Readonly<{
+    historyEvidence: DefinitionPublicationHistoryEvidence;
+    savedConditionHistory: readonly SavedConditionLike[];
+  }>;
 
 /** Immutable organization-owned module release made available to a dependency compilation. */
 export type ResolvableModuleRelease = Readonly<{
@@ -693,7 +693,7 @@ const sortedManifest = (
   );
 
 const verifyParsedModuleRelease = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   expectedKey: string,
   release: ResolvableModuleRelease,
   parsedOutput: ReturnType<typeof definitionCompilationOutputSchema.safeParse>,
@@ -752,7 +752,7 @@ const verifyParsedModuleRelease = (
 
 /** Every selected, pinned or transitive dependency must satisfy the current Module contract. */
 const verifyModuleRelease = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
@@ -765,7 +765,7 @@ const verifyModuleRelease = (
 
 /** Historical enumeration preserves stored semantics before current dependency selection. */
 const verifyHistoricalModuleRelease = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
@@ -790,7 +790,7 @@ const sameModuleReleaseLocator = (
 
 const selectModuleRelease = async (
   reader: DefinitionPublicationReader,
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   key: string,
   requirements: readonly VersionRequirement[],
 ): Promise<ResolvableModuleRelease> => {
@@ -1018,7 +1018,7 @@ const resolveApplicationComposition = async (
 const resolveDependencies = async (
   reader: DefinitionPublicationReader,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ResolvedDependencies> => {
   const modules: ResolvableModuleRelease[] = [];
@@ -1164,7 +1164,7 @@ const resolveDependencies = async (
 
 const assertNoCycle = async (
   reader: DefinitionPublicationReader,
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   modules: readonly ResolvableModuleRelease[],
 ): Promise<void> => {
   const visited = new Set<string>();
@@ -1375,7 +1375,7 @@ const manifestFor = (
   ]);
 
 const buildResolution = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   ownVersion: string,
 ): DefinitionResolution => {
@@ -1461,7 +1461,7 @@ const draftMetadata = (draft: StoredDefinitionDraft) => ({
 });
 
 const provisionalSavedConditionRevisions = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
 ): SavedConditionRevisionAssignment[] => {
   if (candidate.draft.kind !== "module") return [];
   const conditions = candidate.draft.source.body.sharing_conditions;
@@ -1525,8 +1525,25 @@ type CompiledModuleCandidate = Readonly<{
   dependencyOutputs: readonly DefinitionCompilationOutput[];
 }>;
 
+const deriveSavedConditionRevisionsFromHistory = (
+  candidate: DefinitionPublicationCandidate,
+  conditions: readonly SavedConditionLike[],
+): SavedConditionRevisionAssignment[] => {
+  const evidence = candidate.historyEvidence;
+  if (evidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
+  const latestReleaseIds = new Set(
+    (evidence.latestRelease?.content.sharingConditions ?? []).map(
+      (condition) => condition.conditionId,
+    ),
+  );
+  return deriveSavedConditionRevisions({
+    conditions,
+    history: { lastSeen: candidate.savedConditionHistory, latestReleaseIds },
+  });
+};
+
 const compileModuleCandidate = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
 ): CompiledModuleCandidate => {
@@ -1556,10 +1573,8 @@ const compileModuleCandidate = (
     provisional.validationContractVersion !== "3.0.0"
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
-  if (candidate.historyEvidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
-  const savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
-    candidate.historyEvidence,
-    candidate.draft.rootId,
+  const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(
+    candidate,
     provisional.canonical.content.sharingConditions,
   );
   const request = parsedCompilationRequest(moduleCompilationRequestSchema, {
@@ -1578,7 +1593,7 @@ const compileModuleCandidate = (
 };
 
 const compileCandidate = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
   final: boolean,
@@ -1649,10 +1664,8 @@ const compileCandidate = (
       provisional.validationContractVersion !== "3.0.0"
     )
       return refuse("DEFINITION_COMPILATION_REFUSED");
-    if (candidate.historyEvidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
-    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
-      candidate.historyEvidence,
-      candidate.draft.rootId,
+    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(
+      candidate,
       provisional.canonical.content.sharingConditions,
     );
     const request = {
@@ -1673,16 +1686,16 @@ const validateCandidate = (
   context: SessionContext,
   candidateInput: DefinitionPublicationCandidate | undefined,
   command: PrepareDefinitionPublicationCommand,
-): ValidatedDefinitionPublicationCandidate => {
+): DefinitionPublicationCandidate => {
   if (candidateInput === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const supplied = candidateInput;
   const draft = storedDefinitionDraftSchema.safeParse(supplied.draft);
-  if (!draft.success || !isVerifiedDefinitionPublicationHistoryEvidence(supplied.historyEvidence))
-    return refuse("DEFINITION_HISTORY_INVALID");
-  const candidate: ValidatedDefinitionPublicationCandidate = {
+  if (!draft.success) return refuse("DEFINITION_HISTORY_INVALID");
+  const candidate: DefinitionPublicationCandidate = {
     draft: draft.data,
     identities: supplied.identities,
     historyEvidence: supplied.historyEvidence,
+    savedConditionHistory: supplied.savedConditionHistory,
   };
   if (candidate.draft.organizationId !== context.organizationId)
     refuse("DEFINITION_ORGANIZATION_MISMATCH");
@@ -1953,7 +1966,7 @@ type EligibleModuleQuery = Readonly<{
 }>;
 
 const moduleQueryChoices = (
-  candidate: ValidatedDefinitionPublicationCandidate,
+  candidate: DefinitionPublicationCandidate,
   resolution: DefinitionResolutionSnapshot,
   output: ModuleOutput,
 ): readonly EligibleModuleQuery[] => {
@@ -2130,7 +2143,7 @@ const definitionModuleReferenceFailures = (
 };
 
 type CurrentModuleQueryFilterState = Readonly<{
-  candidate: ValidatedDefinitionPublicationCandidate;
+  candidate: DefinitionPublicationCandidate;
   dependencies: ResolvedDependencies;
   resolution: DefinitionResolutionSnapshot;
   compiled: CompiledModuleCandidate;
@@ -2746,7 +2759,7 @@ export const createDefinitionPublicationService = (
           validation: moduleValidationFromFailures(shape.failures, source, context.correlationId),
         };
       const sourceFingerprint = fingerprintCanonicalValue(source);
-      const candidate: ValidatedDefinitionPublicationCandidate = {
+      const candidate: DefinitionPublicationCandidate = {
         ...state.candidate,
         draft: { ...draft, source, sourceFingerprint },
       };
@@ -2906,7 +2919,7 @@ export const createDefinitionPublicationService = (
           ),
         };
       const sourceFingerprint = fingerprintCanonicalValue(source.data);
-      const candidate: ValidatedDefinitionPublicationCandidate = {
+      const candidate: DefinitionPublicationCandidate = {
         ...state.state.candidate,
         draft: { ...draft, source: source.data, sourceFingerprint },
       };
