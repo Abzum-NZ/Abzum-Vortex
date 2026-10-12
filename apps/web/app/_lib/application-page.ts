@@ -259,6 +259,11 @@ type BoardContinuationTarget = Readonly<{
   request: BoardColumnContinuationRequest;
 }>;
 
+type TableContinuationTarget = Readonly<{
+  placementId: string;
+  request: Readonly<{ page: number; continuationToken?: string }>;
+}>;
+
 /**
  * The page address parameter that carries a detail page's subject record id, the same name the
  * component event vocabulary uses for a record identity. It is only a candidate: the record read
@@ -328,6 +333,12 @@ const isBoardPlacement = (placement: unknown): boolean => {
     placement.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion
   );
 };
+
+const isTablePlacement = (placement: unknown): boolean =>
+  isRecord(placement) &&
+  isRecord(placement.block) &&
+  typeof placement.block.blockId === "string" &&
+  sameId(placement.block.blockId, TABLE_BLOCK_RELEASE.blockId);
 
 const projectedUseAvailability = (placement: unknown): "available" | "unavailable" | "invalid" => {
   if (!isRecord(placement)) return "invalid";
@@ -2096,7 +2107,10 @@ const loadApplicationPageInternal = async (
   selectedPlacementIds?: ReadonlySet<string>,
   boardContinuation?: BoardContinuationTarget,
   expectedInstallationRevision?: number,
+  tableContinuation?: TableContinuationTarget,
 ): Promise<ApplicationPageInternalResult> => {
+  if (boardContinuation !== undefined && tableContinuation !== undefined)
+    return { kind: "unavailable" };
   const dependencies = requestDependencies();
   const initialContinuationKey =
     expectedInstallationRevision === undefined ? getQueryContinuationKey() : undefined;
@@ -2106,6 +2120,7 @@ const loadApplicationPageInternal = async (
   };
 
   const bundleObservation = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    tableContinuation === undefined &&
     expectedInstallationRevision === undefined && initialContinuationKey === undefined
     ? localPageBundleObservation() : undefined;
 
@@ -2141,11 +2156,13 @@ const loadApplicationPageInternal = async (
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
   const observeComposition = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    tableContinuation === undefined &&
     pageDefinition.type !== "guided_form"
     ? localPageCompositionObserver(pageDefinition, application.content.shells)
     : undefined;
   observeComposition?.("INSTALLED_PAGE", "AVAILABLE");
   const observeProjectionDecision = selectedPlacementIds === undefined && boardContinuation === undefined &&
+    tableContinuation === undefined &&
     pageDefinition.type !== "guided_form"
     ? localPageProjectionDecisionObserver(pageDefinition, application.content.shells)
     : undefined;
@@ -2189,6 +2206,18 @@ const loadApplicationPageInternal = async (
     if (
       targets.length !== 1 ||
       !isBoardPlacement(target) ||
+      projectedUseAvailability(target) !== "available"
+    )
+      return { kind: "unavailable" };
+  }
+  if (tableContinuation !== undefined) {
+    const targets = allPlacements.filter(({ placementId }) =>
+      sameId(placementId, tableContinuation.placementId),
+    );
+    const target = targets[0]?.placement;
+    if (
+      targets.length !== 1 ||
+      !isTablePlacement(target) ||
       projectedUseAvailability(target) !== "available"
     )
       return { kind: "unavailable" };
@@ -3566,6 +3595,14 @@ const loadApplicationPageInternal = async (
         pageParameters,
         fieldLabels,
         fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
+        page:
+          tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
+            ? tableContinuation.request.page
+            : 1,
+        ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId) ||
+          tableContinuation.request.continuationToken === undefined
+          ? {}
+          : { continuationToken: tableContinuation.request.continuationToken }),
         sort: state.sort,
         filters: state.filters,
         search: state.search,
@@ -3981,11 +4018,16 @@ export const loadApplicationPagePlacements = async (
   placementIds: readonly string[],
   expectedInstallationRevision: number,
   boardContinuation?: BoardContinuationTarget,
+  tableContinuation?: TableContinuationTarget,
 ): Promise<ApplicationPagePlacementReadResult> => {
   const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
   if (
-    boardContinuation !== undefined &&
-    (placementIds.length !== 1 || !sameId(placementIds[0] ?? "", boardContinuation.placementId))
+    (boardContinuation !== undefined || tableContinuation !== undefined) &&
+    (placementIds.length !== 1 ||
+      (boardContinuation !== undefined &&
+        !sameId(placementIds[0] ?? "", boardContinuation.placementId)) ||
+      (tableContinuation !== undefined &&
+        !sameId(placementIds[0] ?? "", tableContinuation.placementId)))
   )
     return { kind: "unavailable" };
   const loaded = await loadApplicationPageInternal(
@@ -3995,6 +4037,7 @@ export const loadApplicationPagePlacements = async (
     requestedIds,
     boardContinuation,
     expectedInstallationRevision,
+    tableContinuation,
   );
   if (loaded.kind === "reload") return loaded;
   if (loaded.kind !== "available") return loaded;

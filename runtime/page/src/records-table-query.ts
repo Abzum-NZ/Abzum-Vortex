@@ -50,6 +50,7 @@ export type RecordsTableQueryRequest = Readonly<{
   queryId: QueryId;
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
+  page?: number;
   continuationToken?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
@@ -303,7 +304,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
-      const display = projectRecordsTableData(
+      const projected = projectRecordsTableData(
         {
           settings: request.settings,
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
@@ -313,16 +314,27 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         },
         result.value.rows,
       );
-      if (display === undefined) return refused;
+      if (projected === undefined) return refused;
+      const nextContinuationToken = result.value.nextContinuationToken;
+      const display: ProjectedComponentData<ProjectedTableValues> =
+        projected.status === "empty"
+          ? projected
+          : {
+              status: "ready",
+              values: {
+                ...projected.values,
+                page: request.page ?? 1,
+                hasNextPage: nextContinuationToken !== undefined,
+                ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+              },
+            };
       return {
         kind: "available",
         fieldIds: built.fieldIds,
         display,
         pageSize: built.command.pageSize,
         rows: result.value.rows,
-        ...(result.value.nextContinuationToken === undefined
-          ? {}
-          : { nextContinuationToken: result.value.nextContinuationToken }),
+        ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
       };
     } catch {
       return unavailableResult;

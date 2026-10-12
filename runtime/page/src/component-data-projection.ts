@@ -45,6 +45,9 @@ export type ProjectedTableValues = Readonly<{
   kind: "table";
   columns: readonly Readonly<{ key: string; label: string }>[];
   rows: readonly ProjectedTableRow[];
+  page?: number;
+  hasNextPage?: boolean;
+  nextContinuationToken?: string;
 }>;
 
 export type ProjectedRecordDetailValues = Readonly<{

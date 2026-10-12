@@ -658,18 +658,27 @@ export function InlineEditCell({
 export function PaginationControl({
   page,
   pageCount,
+  hasNextPage,
+  nextContinuationToken,
   accessibleName,
   events,
 }: Readonly<{
   page: number | undefined;
   pageCount: number | undefined;
+  hasNextPage?: boolean;
+  nextContinuationToken?: string;
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
-  if (page === undefined || pageCount === undefined) return null;
+  if (
+    page === undefined ||
+    (pageCount === undefined && hasNextPage !== true && page <= 1)
+  )
+    return null;
   const onPage = events?.page_changed;
   const previousDisabled = page <= 1;
-  const nextDisabled = page >= pageCount;
+  const nextDisabled = pageCount === undefined ? hasNextPage !== true : page >= pageCount;
+  const pageLabel = pageCount === undefined ? `Page ${page}` : `Page ${page} of ${pageCount}`;
   // The shadcn paging links are anchors, so an unavailable page is announced as disabled and taken
   // out of the tab order instead of carrying the native disabled attribute.
   return (
@@ -690,8 +699,8 @@ export function PaginationControl({
           </PaginationItem>
         )}
         <PaginationItem>
-          <PaginationLink isActive size="default" aria-label={`Page ${page} of ${pageCount}`}>
-            {`${page} of ${pageCount}`}
+          <PaginationLink isActive size="default" aria-label={pageLabel}>
+            {pageLabel}
           </PaginationLink>
         </PaginationItem>
         {onPage === undefined ? null : (
@@ -703,7 +712,13 @@ export function PaginationControl({
               className={cn(nextDisabled && "pointer-events-none opacity-50")}
               onClick={() => {
                 if (nextDisabled) return;
-                onPage({ event: "page_changed", page: page + 1 });
+                onPage({
+                  event: "page_changed",
+                  page: page + 1,
+                  ...(nextContinuationToken === undefined
+                    ? {}
+                    : { continuationToken: nextContinuationToken }),
+                });
               }}
             />
           </PaginationItem>
