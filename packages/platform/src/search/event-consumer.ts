@@ -640,7 +640,10 @@ export const createSearchEventConsumer = (
             console.error(
               `[search] occurrence ${result.occurrenceId} not indexed yet: ${result.outcome.reason}`,
             );
-            return { outcome: "retryable_failure", failureCode: "transient_dependency_unavailable" };
+            return {
+              outcome: "retryable_failure",
+              failureCode: "transient_dependency_unavailable",
+            };
           }
           return { outcome: "completed" };
         case "refused":
