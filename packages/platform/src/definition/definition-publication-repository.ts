@@ -5,6 +5,7 @@ import {
   assertModuleContractPair,
   storedDefinitionCompilationOutputSchema,
   definitionKindSchema,
+  definitionPublicationHistoryEvidenceSchema,
   definitionResolutionSnapshotSchema,
   storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
@@ -19,6 +20,7 @@ import {
   moduleVersionImpactHistoryEntrySchema,
   publishedModuleReferenceSchema,
   revisionSchema,
+  savedSharingConditionSchema,
   semanticVersionSchema,
   selectApplicationContractPair,
   stableDefinitionReleaseVersionSchema,
@@ -55,11 +57,6 @@ import type {
   ResolvableModuleRelease,
 } from "./definition-publication";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
-import {
-  completeDefinitionPublicationHistoryFold,
-  createDefinitionPublicationHistoryFold,
-  foldDefinitionPublicationHistoryRelease,
-} from "./version-impact-definition";
 import {
   DefinitionError,
   databaseErrorCode,
@@ -214,6 +211,7 @@ const publicationStateRowSchema = z.object({ publication_state: z.unknown() }).s
 const publicationHistoryPageRowSchema = z
   .object({ publication_history_page: z.unknown() })
   .strict();
+const savedConditionHistoryRowSchema = z.object({ saved_condition_history: z.unknown() }).strict();
 const rawModuleReleasePageSchema = z
   .object({
     rootId: z.union([moduleRootIdSchema, z.null()]),
@@ -387,76 +385,85 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (state.root.currentReleaseRevision !== state.historyLatestReleaseRevision)
       return invalidStorage("readCandidate found inconsistent stored evidence");
     const anchor = state.root.currentReleaseRevision;
-    const fold = createDefinitionPublicationHistoryFold({
+    const latest =
+      anchor === null
+        ? undefined
+        : await this.readLatestRelease(
+            rootId,
+            anchor,
+            state.draft.kind,
+            state.draft.key,
+            String(state.draft.rootId),
+          );
+    const historyEvidence = definitionPublicationHistoryEvidenceSchema.safeParse({
       kind: state.draft.kind,
       definitionKey: state.draft.key,
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
+      latestRelease: latest?.published ?? null,
     });
-    if (anchor !== null) {
-      let after: number | null = null;
-      while (after !== anchor) {
-        const pageRows = await this.transaction.query`
-          select vortex_definition.read_publication_history_page(
-            ${rootId}, ${anchor}, ${after}, ${100}
-          ) as publication_history_page
-        `;
-        const pageRow = parseOneRow(pageRows, publicationHistoryPageRowSchema);
-        const page = publicationHistoryPageSchema.safeParse(pageRow.publication_history_page);
-        if (!page.success || page.data.anchorReleaseRevision !== anchor)
-          return invalidStorage("readCandidate found inconsistent stored evidence");
-        let previous: number | null = after;
-        for (const entry of page.data.entries) {
-          const item = this.materializeHistory(
-            [entry.release],
-            state.draft.kind,
-            state.draft.key,
-            state.draft.rootId,
-          );
-          const release = item.history[0];
-          if (
-            release === undefined ||
-            entry.previousReleaseRevision !== previous ||
-            release.publication.revision <= (previous ?? 0) ||
-            release.publication.revision > anchor
-          )
-            return invalidStorage("readCandidate found inconsistent stored evidence");
-          try {
-            foldDefinitionPublicationHistoryRelease(fold, {
-              previousReleaseRevision: entry.previousReleaseRevision,
-              release,
-            });
-          } catch {
-            return invalidStorage("readCandidate found inconsistent stored evidence");
-          }
-          previous = release.publication.revision;
-        }
-        if (page.data.nextAfterReleaseRevision === null) {
-          if (previous !== anchor)
-            return invalidStorage("readCandidate found inconsistent stored evidence");
-          after = anchor;
-        } else {
-          if (
-            page.data.nextAfterReleaseRevision !== previous ||
-            previous === null ||
-            previous >= anchor
-          )
-            return invalidStorage("readCandidate found inconsistent stored evidence");
-          after = previous;
-        }
-      }
-    }
-    let historyEvidence;
-    try {
-      historyEvidence = completeDefinitionPublicationHistoryFold(fold);
-    } catch {
-      return invalidStorage("readCandidate found inconsistent stored evidence");
-    }
+    if (!historyEvidence.success) return invalidStorage(historyEvidence.error);
     return {
       draft: state.draft,
       identities: state.identities,
-      historyEvidence,
+      historyEvidence: historyEvidence.data,
+      savedConditionHistory:
+        state.draft.kind === "module" ? await this.readSavedConditionHistory(rootId) : [],
     };
+  }
+
+  /**
+   * Releases are immutable and the database orders and anchors them, so the latest release is
+   * the only one a publication read needs. The page selector asks for exactly the anchor release.
+   */
+  private async readLatestRelease(
+    rootId: string,
+    anchor: number,
+    kind: "module" | "application",
+    key: string,
+    draftRootId: string,
+  ): Promise<{
+    stored: StoredHistoryRelease;
+    published: PublishedDefinitionHistory["history"][number];
+  }> {
+    const rows = await this.transaction.query`
+      select vortex_definition.read_publication_history_page(
+        ${rootId}, ${anchor}, ${anchor - 1}, ${1}
+      ) as publication_history_page
+    `;
+    const row = parseOneRow(rows, publicationHistoryPageRowSchema);
+    const page = publicationHistoryPageSchema.safeParse(row.publication_history_page);
+    if (!page.success) return invalidStorage(page.error);
+    const entry = page.data.entries[0];
+    if (
+      page.data.anchorReleaseRevision !== anchor ||
+      page.data.entries.length !== 1 ||
+      entry === undefined ||
+      page.data.nextAfterReleaseRevision !== null
+    )
+      return invalidStorage("readLatestRelease found inconsistent stored evidence");
+    const published = this.materializeHistory([entry.release], kind, key, draftRootId).history[0];
+    if (
+      published === undefined ||
+      published.publication.revision !== anchor ||
+      (entry.previousReleaseRevision ?? 0) >= anchor ||
+      (entry.previousReleaseRevision === null && published.publication.releaseVersion !== "1.0.0")
+    )
+      return invalidStorage("readLatestRelease found inconsistent stored evidence");
+    return { stored: entry.release, published };
+  }
+
+  /** One query: each saved condition's most recent published form across the Module's releases. */
+  private async readSavedConditionHistory(
+    rootId: string,
+  ): Promise<readonly z.infer<typeof savedSharingConditionSchema>[]> {
+    const rows = await this.transaction.query`
+      select vortex_definition.read_saved_condition_history(${rootId}) as saved_condition_history
+    `;
+    const row = parseOneRow(rows, savedConditionHistoryRowSchema);
+    const parsed = z.array(savedSharingConditionSchema).safeParse(row.saved_condition_history);
+    if (!parsed.success) return invalidStorage(parsed.error);
+    return parsed.data;
   }
 
   async readModuleReleasePage(
@@ -541,9 +548,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   }
 
   /**
-   * Returns one exact Application release only after the ordinary candidate reader has
-   * authenticated and folded the complete anchored history. The selected raw row is passed
-   * through the same immutable-release verifier used by that fold.
+   * Returns the current Application release: the ordinary candidate reader has read and
+   * checked it, and it is the only release page adoption compares against.
    */
   async readApplicationPageAdoptionRelease(
     rootId: string,
@@ -563,67 +569,15 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
       );
-
-    let after: number | null = null;
-    let previous: number | null = null;
-    let selected: StoredHistoryRelease | undefined;
-    while (after !== expectedAnchorReleaseRevision) {
-      const rows = await this.transaction.query`
-        select vortex_definition.read_publication_history_page(
-          ${rootId}, ${expectedAnchorReleaseRevision}, ${after}, ${100}
-        ) as publication_history_page
-      `;
-      const row = parseOneRow(rows, publicationHistoryPageRowSchema);
-      const page = publicationHistoryPageSchema.safeParse(row.publication_history_page);
-      if (!page.success || page.data.anchorReleaseRevision !== expectedAnchorReleaseRevision)
-        return invalidStorage(
-          "readApplicationPageAdoptionRelease found inconsistent stored evidence",
-        );
-      for (const entry of page.data.entries) {
-        const materialized = this.materializeHistory(
-          [entry.release],
-          "application",
-          candidate.draft.key,
-          String(candidate.draft.rootId),
-        );
-        const release = materialized.kind === "application" ? materialized.history[0] : undefined;
-        if (
-          release === undefined ||
-          entry.previousReleaseRevision !== previous ||
-          release.publication.revision <= (previous ?? 0) ||
-          release.publication.revision > expectedAnchorReleaseRevision
-        )
-          return invalidStorage(
-            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
-          );
-        previous = release.publication.revision;
-        if (release.publication.revision === releaseRevision) {
-          if (selected !== undefined)
-            return invalidStorage(
-              "readApplicationPageAdoptionRelease found inconsistent stored evidence",
-            );
-          selected = entry.release;
-        }
-      }
-      if (page.data.nextAfterReleaseRevision === null) {
-        if (previous !== expectedAnchorReleaseRevision)
-          return invalidStorage(
-            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
-          );
-        after = expectedAnchorReleaseRevision;
-      } else {
-        if (
-          page.data.nextAfterReleaseRevision !== previous ||
-          previous === null ||
-          previous >= expectedAnchorReleaseRevision
-        )
-          return invalidStorage(
-            "readApplicationPageAdoptionRelease found inconsistent stored evidence",
-          );
-        after = previous;
-      }
-    }
-    if (selected === undefined) return undefined;
+    const selected = (
+      await this.readLatestRelease(
+        rootId,
+        expectedAnchorReleaseRevision,
+        "application",
+        candidate.draft.key,
+        String(candidate.draft.rootId),
+      )
+    ).stored;
     const evidence = selected.evidence;
     if (
       evidence.authoredSource.kind !== "application" ||

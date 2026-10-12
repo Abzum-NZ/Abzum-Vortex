@@ -472,16 +472,10 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
 
 const historyEvidenceCommon = {
   definitionKey: namespacedKeySchema,
-  releaseCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   anchorReleaseRevision: revisionSchema.nullable(),
-  validationContractVersions: z.array(semanticVersionSchema).max(3),
 };
 
-/**
- * Compact result of auditing immutable publication history. The runtime keeps
- * authenticity separately; this contract deliberately carries evidence facts,
- * not a caller-controlled `validated` flag or a fabricated one-row history.
- */
+/** The latest immutable release of one definition, which the database anchors as current. */
 export const definitionPublicationHistoryEvidenceSchema = z
   .discriminatedUnion("kind", [
     z
@@ -502,14 +496,10 @@ export const definitionPublicationHistoryEvidenceSchema = z
       .strict(),
   ])
   .superRefine((value, context) => {
-    const empty = value.releaseCount === 0;
-    if (
-      empty !== (value.anchorReleaseRevision === null) ||
-      empty !== (value.latestRelease === null)
-    )
+    if ((value.anchorReleaseRevision === null) !== (value.latestRelease === null))
       context.addIssue({
         code: "custom",
-        message: "History evidence emptiness, anchor and latest release must agree",
+        message: "History evidence anchor and latest release must agree",
       });
     if (
       value.latestRelease !== null &&
