@@ -10,7 +10,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 /**
- * Bounded operational runner for the #612 concurrent field-index build.
+ * Bounded operational runner for concurrent field-index builds.
  *
  * It mirrors `@vortex/workflow`'s deadline dispatcher: it never derives an
  * identity, statement or authority itself. Each iteration

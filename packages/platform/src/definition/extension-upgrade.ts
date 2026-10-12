@@ -18,7 +18,7 @@ import { canonicalJson } from "../schema";
  * activation. It is pure: it reads no storage, no permission and no database,
  * it provisions nothing, it changes no live contribution and it does not touch
  * the Definition comparison. Given the current installed exact releases, the
- * exact releases the adoption would leave installed, and the #717 resolved
+ * exact releases the adoption would leave installed, and the resolved
  * bindings, it returns one deterministic compatible upgrade plan or one
  * refusal naming the safe dependency locations a builder needs.
  *
@@ -86,7 +86,7 @@ export type ModuleUpgradeReleaseContent = Readonly<{
   }>[];
   /**
    * The release's own declared contributions. Absent means none, exactly as the
-   * #717 resolver reads it, so an upgraded contributor that no longer declares
+   * extension resolver reads it, so an upgraded contributor that no longer declares
    * an installed contribution withdraws it rather than keeping it attached.
    */
   contributions?: readonly Readonly<{
@@ -125,7 +125,7 @@ type InstalledExtensionBindingBase = Readonly<{
 }>;
 
 /**
- * One installed contribution exactly as the #717 resolver emitted it. The
+ * One installed contribution exactly as the extension resolver emitted it. The
  * shape is structural and mirrors that resolver's single-kind shape, so the
  * definition tier's `ResolvedAdditiveContribution` and the storage tier's
  * `ResolvedContributionBinding` are both assignable without either tier
@@ -199,8 +199,8 @@ export type ModuleExtensionUpgradeReleaseTransition = Readonly<{
 
 /**
  * One installed contribution the adoption keeps, restated against the exact
- * releases the adopted set selects. It is the input #718 needs to re-attach the
- * contribution after the upgrade; it is not itself a provision command.
+ * releases the adopted set selects. The upgrade plan can then re-attach the
+ * contribution; it is not itself a provision command.
  */
 export type PreservedExtensionBinding =
   | (InstalledExtensionBindingBase &
@@ -796,7 +796,7 @@ export const planModuleExtensionUpgrade = (
 
     const nextContributor = adoptedByRootId.get(binding.contributorModuleRootId);
     // An uninstalled contributor is not a broken upgrade: retention keeps its
-    // values, so its binding leaves the installation and #718 detaches it.
+    // values, so its binding leaves the installation and is detached.
     if (nextContributor === undefined) {
       retiredBindingIds.push(binding.contributionId);
       continue;
@@ -806,7 +806,7 @@ export const planModuleExtensionUpgrade = (
     // contributor that does not declare it contradicts the installed evidence;
     // an upgraded contributor that no longer declares it at the same point has
     // withdrawn it, which retires it exactly like an uninstall. Any new
-    // declaration is the #717 resolver's to bind, never this plan's.
+    // declaration is resolved from the contributor, never by this plan.
     const declared = nextContributor.content.contributions?.find((contribution) =>
       sameIdentity(contribution.contributionId, binding.contributionId),
     );

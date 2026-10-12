@@ -13,21 +13,7 @@ import {
 } from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
-/**
- * The executable form of a `BeforeSave` flow.
- *
- * A save rule is authored as a flow (architecture decision 3): a `BeforeSave` trigger, `transaction`
- * execution, and a nested task list of If, Require field, Warn, Refuse save and Stop tasks. The
- * database read that hands a save its rules and the before-save evaluator still read a rule graph,
- * so until the flow interpreter replaces them (#1007) every `BeforeSave` flow is lowered here to
- * the one rule graph that runs the same checks in the same order with the same outcome. The
- * lowering is pure and total over what it understands; everything else is refused with the task
- * that cannot be lowered, so a rule is never compiled into something that quietly does less than
- * its flow says.
- *
- * Node aliases are derived from the flow's own task ids, so the identities the graph needs can be
- * listed from the source alone (`source-identities.ts`).
- */
+/** Lowers each `BeforeSave` flow to the save rule graph and refuses unsupported tasks. */
 
 type Path = (string | number)[];
 

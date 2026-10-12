@@ -15,42 +15,9 @@ import type {
 } from "./component-event-dispatch";
 import type { FlowOrchestratorResponse } from "./flow-orchestrator";
 
-/**
- * #585: the viewer-safe result state of one data component. A data component owns one view, and
- * #584 (`component-event-dispatch.ts`) is the only way that view changes. This module sits beside
- * it and keeps the three facts a surface needs once a dispatch returns, without fetching,
- * resolving or executing anything itself:
- *
- * - **A viewer-safe projection.** Every dispatch result becomes exactly one closed display
- *   outcome — `completed`, `empty`, `refused`, `partial` or `unavailable`. The projection carries
- *   only what the viewer may already see: the engine's own permitted page and the shared safe
- *   result descriptor. Flow outputs, intents, unavailable notices and raw failure detail are
- *   never projected, so a result the viewer may not read can never be presented as empty data or
- *   as success (specification, frontend-rule-designer.md: "Errors, permission refusal and partial
- *   flow failure are distinct from an empty table").
- *
- * - **A reducer with an obsolete-response guard.** An invocation is tracked by its invocation id,
- *   its cause, the selected row it belongs to and a per-component request generation. A response
- *   whose generation is older than the component's current generation, or that belongs to a
- *   selection the component has moved past, is discarded: a late response can never replace newer
- *   rows or restore revoked content. A confirmed write is recorded whenever its response arrives,
- *   even when that response is too late to change the display, and is never removed (specification,
- *   frontend-rule-designer.md: "Discard obsolete display responses without pretending that a
- *   committed write was cancelled").
- *
- * - **A write-triggered refresh that cannot write.** `refreshComponentAfterSave` re-reads a
- *   component's dataset through a callback whose result type carries no flow, so the action that
- *   made the saved change can never run again. Each confirmed write refreshes at most once, and the
- *   re-read is accepted through the same generation guard, so a slow refresh can never replace a
- *   newer result (specification, frontend-rule-designer.md: "A write's own invalidation
- *   refreshes affected read results without recursively rerunning its originating write path").
- *
- * The module is pure apart from that read callback: it reads no identity, authority, organisation
- * or record from its inputs. The dispatch result it receives is already the viewer's permitted
- * projection, and the read callback is the composition's read-only query path.
- */
+/** Keeps component results viewer-safe and preserves committed writes across stale responses. */
 
-/** The five closed display outcomes of one component result (issue #585). */
+/** The five closed display outcomes of one component result. */
 export const componentDisplayOutcomeKinds = [
   "completed",
   "empty",
@@ -182,7 +149,7 @@ const projectDispatchRefusal = (code: string): ComponentDisplayOutcome => {
 };
 
 /**
- * Projects one #584 dispatch result into exactly one viewer-safe display outcome.
+ * Projects one component dispatch result into exactly one viewer-safe display outcome.
  *
  * A confirmed protected effect is never masked by a stale or empty read: a committed flow is
  * `completed` and a failure that preserved commits is `partial`. A plain completed flow defers to

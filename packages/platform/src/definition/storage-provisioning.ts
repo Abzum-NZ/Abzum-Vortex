@@ -86,8 +86,8 @@ const mapFailure = (error: unknown): ModuleInstallationStorageError => {
 
 /**
  * One resolved additive contribution binding, exactly as the definition tier's
- * #717 resolver emits it. The storage tier consumes an already-resolved binding
- * and re-validates it in the database; it never invents an identity from input.
+ * resolver emits it. The storage tier consumes an already-resolved binding and re-validates it in
+ * the database; it never invents an identity from input.
  */
 export type ResolvedContributionBinding = Readonly<{
   contributionId: string;

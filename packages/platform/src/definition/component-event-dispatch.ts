@@ -40,7 +40,7 @@ import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestrator";
 
 /**
- * Dispatches one component semantic event to its bound flow and its data query (issue #584).
+ * Dispatches one component semantic event to its bound flow and its data query.
  *
  * A data component owns one view: the page of permitted rows its bound query returns. The semantic
  * events that change that view — `load`, `refresh`, `filter_changed`, `search_changed`,
@@ -51,7 +51,7 @@ import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestr
  *
  * The two responsibilities this module keeps apart:
  * - A **dataset query** is the only way row membership, order or the cursor change. It resolves its
- *   typed inputs through the #583 component-context-resolver from the trusted context, so browser
+ *   typed inputs through the component context resolver from the trusted context, so browser
  *   values can never stand in for record identity, and it calls the Query engine exactly once.
  * - A **local display filter** narrows only the page the Query engine already returned. The result
  *   then reports `rowsScope: "local_page"` and `locallyFiltered: true`, keeps the engine's own page
@@ -64,7 +64,7 @@ import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestr
  * never runs a half-resolved flow or query.
  */
 
-/** The `ComponentSemanticEventKind`s that cause a new dataset page (issue #584). */
+/** The `ComponentSemanticEventKind`s that cause a new dataset page. */
 export const componentDatasetViewEvents = [
   "load",
   "refresh",
@@ -78,7 +78,7 @@ const datasetViewEventSet: ReadonlySet<ComponentSemanticEventKind> = new Set(
   componentDatasetViewEvents,
 );
 
-/** Codes this dispatcher adds to the #583 resolver's own mismatch codes. */
+/** Codes this dispatcher adds to the context resolver's mismatch codes. */
 export const componentEventDispatchRefusalCodes = [
   "invalid_request",
   "invalid_context",
@@ -218,7 +218,7 @@ export type ComponentEventDispatchResult =
 
 export type ComponentEventDispatchDependencies = Readonly<{
   /**
-   * Runs the exact protected Module query once (#572). The composition supplies the protected query
+   * Runs the exact protected Module query once. The composition supplies the protected query
    * service's own `run`, which authorises the viewer's current authority and owns its transaction.
    */
   runQuery: (
@@ -226,7 +226,7 @@ export type ComponentEventDispatchDependencies = Readonly<{
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryCommand,
   ) => Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
-  /** Starts the flow the component event is bound to (#579). */
+  /** Starts the flow the component event is bound to. */
   flow: Pick<FlowOrchestrator, "start">;
   /**
    * The flow release key of the exact installed release this context was assembled from, in the
@@ -289,8 +289,8 @@ const readDeclaredDataContract = (
 };
 
 /**
- * Builds the exact #572 command for one view event. The Module query, typed inputs and page
- * parameters come from the #583 resolution; the requested fields, page size and allow-lists come
+ * Builds the protected query command for one view event. The Module query, typed inputs and page
+ * parameters come from context resolution; requested fields, page size and allow-lists come
  * only from the trusted installed release's declared contract, and the viewer's sort, filter and
  * search are passed through so the engine can intersect them with its own bounds. Returns undefined
  * when the command is not one the engine accepts, so the event is refused before any read.

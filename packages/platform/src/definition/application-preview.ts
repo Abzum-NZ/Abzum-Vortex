@@ -24,22 +24,7 @@ import {
   type DefinitionPublicationFailureCode,
 } from "./definition-publication";
 
-/**
- * Exact-draft Application preview (#597).
- *
- * Preview renders one exact Application draft revision through the shared #580 renderer. It never
- * adopts or installs a release and never reads an installation: the preview service compiles the
- * caller organisation's current draft at the requested revision through the Definition
- * publication chain, and the materialiser proves the request, the draft identity and the rendered
- * page agree before it emits an artifact.
- *
- * The emitted artifact is deliberately inert. Every effectful flow task (a read, a change, a form
- * display or a background flow start) is replaced by an explicit, labelled simulation, and
- * the artifact carries no executor, permission or installation state. The browser hook that
- * consumes the artifact therefore has nothing that can commit a record, change access or start
- * durable work. Unavailable application-owned flows and unbound sample values are reported as
- * preview outcomes instead of being silently substituted.
- */
+/** Compiles an exact Application draft into an inert preview artifact. */
 
 export const applicationPreviewBreakpoints = ["desktop", "tablet", "phone"] as const;
 export type ApplicationPreviewBreakpoint = (typeof applicationPreviewBreakpoints)[number];
@@ -90,7 +75,7 @@ type ApplicationPreviewPage = Readonly<{
   steps?: readonly Readonly<{ id: string; name: string; summary: boolean }>[];
 }>;
 
-/** The renderer input for #580: the requested page of the compiled draft, with its shells. */
+/** The requested compiled draft page and its shells for the preview renderer. */
 export type ApplicationPreviewComposition = Readonly<{
   platformBlockDependencies: ApplicationContent["platformBlockDependencies"];
   shells: ApplicationContent["shells"];

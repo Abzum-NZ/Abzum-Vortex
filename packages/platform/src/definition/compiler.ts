@@ -786,7 +786,7 @@ function permissionFieldPolicyTargets(
 
 /**
  * An interface operation that changes data or starts background work targets an application flow
- * entry point by its source alias, which compiles to that flow's permanent identity (#1097).
+ * entry point by its source alias, which compiles to that flow's permanent identity.
  */
 function isInterfaceOperationFlowTargetPath(source: JsonObject, sourcePath: Path): boolean {
   return (
@@ -1462,7 +1462,7 @@ function isSystemCanonicalPath(path: Path): boolean {
 }
 
 /**
- * A calculation field that does not author its evaluation compiles to a fixed default (#1132):
+ * A calculation field that does not author its evaluation compiles to a fixed default:
  * stored, or read-time for a deadline or a calculation over a read-time field.
  */
 function isCalculationEvaluationDefaultPath(source: JsonObject, path: Path): boolean {
@@ -2942,9 +2942,9 @@ function fieldSettings(
 }
 
 /**
- * The task version every compiled named-action flow pins. A named action is compiled to a
- * `transaction` flow (#1062); until #1063 runs it through the flow runner, the action's own
- * execution path is unchanged and this flow is the compile-time home of its behaviour
+ * The task version every compiled named-action flow pins. The record service executes the
+ * `transaction` flow inside its transaction; this flow is the compile-time home of the action's
+ * behaviour
  * (architecture decision 1, 08 §Actions).
  */
 const ACTION_FLOW_TASK_VERSION = "1.0.0" as const;
@@ -3068,7 +3068,7 @@ function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowF
 }
 
 /**
- * Compiles one Module named action to its `transaction` flow (#1062): the action's own permanent
+ * Compiles one Module named action to its `transaction` flow: the action's own permanent
  * identity, typed inputs (plus the implicit subject record input) and invocation permission. The
  * precondition becomes an If task whose otherwise branch refuses, as the action refuses, and the
  * ordered tasks become the registry record, event and change tasks.
@@ -3078,9 +3078,9 @@ function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowF
  * `record.changes` and `record.delete` out of transactions, because architecture decision 1 lets a
  * transaction flow change only the record being saved and every BeforeSave rule shares that run
  * location. A named action's other-record changes are one apply record changes call (decision
- * "Every record task calls one protected operation"), so how the registry admits them for action
- * flows alone is #1063's, with execution. Likewise the flow validator accepts `trigger.record`
- * reads only in a flow with a record trigger, while an action starts through its binding with its
+ * "Every record task calls one protected operation"), so the record service controls how the
+ * registry admits those operations for action flows. Likewise the flow validator accepts
+ * `trigger.record` reads only in a flow with a record trigger, while an action starts through its binding with its
  * subject as the record being saved. These flows are therefore not passed through the flow
  * validator yet; `flowSchema` still validates them.
  */
@@ -3484,7 +3484,7 @@ function compileModule(
       }),
     };
   });
-  // Every record-task Module named action also compiles to one `transaction` flow (#1062). A
+  // Every record-task Module named action also compiles to one `transaction` flow. A
   // protected-operation action instead targets one registered platform-service operation that
   // takes the subject row's identity and expected revision automatically. Its execution is not
   // built yet, so it compiles to no flow here, and the record runtime refuses to prepare it
@@ -3518,7 +3518,7 @@ function compileModule(
         definitionKey,
         subjectFieldKeyById,
         // An action with permission alternatives has no single invocation permission; a flow holds
-        // exactly one, so its binding keeps checking the alternatives (#1063).
+        // exactly one, so its binding keeps checking the alternatives.
         canonicalAction.permissionKey === undefined
           ? undefined
           : (resolution.permission(
@@ -5531,7 +5531,7 @@ function compileApplicationInternal(
 }
 
 /**
- * Compiles the flows a module or application owns to permanent identities (#984), refusing an
+ * Compiles the flows a module or application owns to permanent identities, refusing an
  * unresolved alias, an unregistered task or a reference outside the declared dependencies. The
  * canonical flows go into the definition's content and their provenance into its provenance; the
  * dependency manifest contribution only ever names definitions the source already declares, so

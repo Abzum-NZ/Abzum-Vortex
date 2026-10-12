@@ -19,7 +19,7 @@ import { createApplicationInstallationLifecycleRepository } from "./installation
 import { createModuleInstallationStorageRepository } from "./storage-provisioning";
 
 /**
- * The closed, lossless conversion set approved for #625. It mirrors the exact
+ * The closed, lossless record storage conversion set. It mirrors the exact
  * catalogue constraint in
  * supabase/migrations/20260924430000_record_storage_conversion_preparation.sql,
  * so the client can only ask for a conversion the database already allows.

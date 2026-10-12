@@ -374,7 +374,7 @@ const applicationReleaseAdoptionReleaseSetCommandSchema = z
   .strict();
 
 /**
- * The installation-management release-set read (#610): the same exact bound Application and Module
+ * The installation-management release-set read: the same exact bound Application and Module
  * release set the coordinator's system reader returns, but read by root and revision through the
  * governed human read and gated by platform.organization.applications.manage. It is the read the
  * deliberate release-adoption path uses instead of a server-minted system context.

@@ -544,7 +544,7 @@ export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
 
 /**
  * Safe request to coordinate permanent file object removal.
- * Requires an eligible #657 decision and a stable deletion key; carries no
+ * Requires an eligible file-removal decision and a stable deletion key; carries no
  * private storage paths or credentials, and the service re-evaluates the
  * submitted decision before accepting a new intent.
  */
@@ -911,8 +911,7 @@ export const activityActorKindSchema = z.enum([
  * - `programmatic_interface`: a caller of a published programmatic interface (formerly the
  *   Activity source `interface`).
  * - `connection`: an external system reaching the organisation through an installed connection.
- *   Activity recorded before the wrappers read the context channel (#1094, #1095) also uses it for
- *   connection grant and administration changes.
+ *   Connection grant and administration changes use the context channel.
  * - `federation`: another organisation reaching this one through federation.
  * - `durable_workflow`: a step of a durable workflow run (formerly the Activity source `workflow`).
  * - `system`: platform work with no outside caller, such as scheduled or maintenance work.

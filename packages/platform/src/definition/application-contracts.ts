@@ -622,10 +622,7 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
   "web_address",
 ]);
 
-// Retired page settings (#1011): page-level states and standard page replacement, and
-// list arrangements and calendar mapping, were compiled but never rendered. The compiler
-// no longer emits them. Releases published before their removal still carry them and
-// their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
+// Keep legacy page settings decodable as opaque JSON; compilation ignores them.
 const retiredPageSettingSchema = jsonValueSchema.optional();
 
 /**

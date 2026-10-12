@@ -21,7 +21,7 @@ import type { RequestDatabaseTransaction } from "../db/index";
 /**
  * The application tool bundle of one exact installed release, filtered for one viewer.
  *
- * This is the runtime reader for the bundle compiled into an Application release (#865). It
+ * This is the runtime reader for the bundle compiled into an Application release. It
  * follows the same rules as page capability projection: a tool the viewer may not discover is
  * removed, a tool the viewer may discover but not use is described as unavailable and is never
  * callable, and missing, refused or unprovable evidence fails the whole projection closed rather

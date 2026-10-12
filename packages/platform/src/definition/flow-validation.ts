@@ -33,7 +33,7 @@ import {
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 /**
- * The one flow validator (issue #985). It replaces the free-graph validators (rule graphs,
+ * The one flow validator. It replaces the free-graph validators (rule graphs,
  * frontend flow routing, workflow reachability and the Kestra compiler's repeats) for the single
  * flow language. A flow is a nested task list, so scope is the nesting itself: no cycle,
  * dominator or reachability analysis exists here or is needed.

@@ -27,7 +27,7 @@ import {
 
 /**
  * Resolves a component's page, related-record, row or selection context into the exact typed
- * inputs a bound flow and its bound query declare (issue #583).
+ * inputs a bound flow and its bound query declare.
  *
  * The split this module enforces is the one the specification states in the data-context section:
  * a component event supplies only what the surface itself owns, while record identity, revision
@@ -36,7 +36,7 @@ import {
  * filled only from the trusted context, and a supplied browser value can never stand in for it.
  *
  * The resolver is pure and total: every failure is the explicit `mismatch` result with a stable
- * code, so the event dispatch layer (#584) can refuse or reload instead of running a half-filled
+ * code, so the event dispatch layer can refuse or reload instead of running a half-filled
  * flow. Event dispatch, result freshness and presentation remain outside this module.
  */
 
