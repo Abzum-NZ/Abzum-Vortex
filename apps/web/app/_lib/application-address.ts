@@ -9,11 +9,9 @@ import {
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@web/platform-server";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/platform/schema";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 
 type ApplicationAddressResult =
   | Readonly<{
@@ -56,10 +54,6 @@ const loadAddressedApplicationAtAddress = async (
     organizationShortName,
     authorityId,
     applicationKey,
-    (transaction) => createDatabaseApplicationBoundReleaseSetService(
-      installedReleaseCatalogue,
-      transaction,
-    ),
   );
   return { read: addressed.read, experiences: addressed.experiences };
 };

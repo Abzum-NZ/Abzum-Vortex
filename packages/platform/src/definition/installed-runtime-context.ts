@@ -184,7 +184,7 @@ export const createInstalledRuntimeContextLoader = (
       }
       return assembleContext(
         installation.data,
-        releaseSetCandidate,
+        parseReleaseSet(releaseSetCandidate),
         systemContext.organizationId,
         systemContext.correlationId,
         (releaseSet) =>
@@ -218,74 +218,93 @@ export type HumanInstalledRuntimeContextDependencies = Readonly<{
   scope: Readonly<{ organizationId: string; applicationRootId: string }>;
 }>;
 
+/** Reads the active installation and proves it belongs to the organisation and application the request resolved. */
+export const readHumanActiveInstallation = async (
+  dependencies: Pick<HumanInstalledRuntimeContextDependencies, "activeInstallationReader" | "scope">,
+): Promise<ActiveApplicationInstallationEvidence> => {
+  let installationCandidate: unknown;
+  try {
+    installationCandidate = await dependencies.activeInstallationReader.readCurrent();
+  } catch (error) {
+    throw installationFailure(error);
+  }
+  const installation =
+    activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
+  if (!installation.success)
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+  if (
+    !sameId(installation.data.organizationId, dependencies.scope.organizationId) ||
+    !sameId(installation.data.applicationRootId, dependencies.scope.applicationRootId)
+  )
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+  return installation.data;
+};
+
+/** Assembles the human-request context from an installation and an already validated release set. */
+export const assembleHumanInstalledRuntimeContext = (
+  installation: ActiveApplicationInstallationEvidence,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+  scope: HumanInstalledRuntimeContextDependencies["scope"],
+): InstalledRuntimeContext =>
+  assembleContext(
+    installation,
+    releaseSet,
+    scope.organizationId,
+    undefined,
+    (validated) =>
+      prepareApplicationPermissionRegistrationForHumanRequest(
+        scope.organizationId,
+        {
+          applicationRootId: installation.applicationRootId,
+          releaseRevision: installation.applicationReleaseRevision,
+        },
+        validated,
+      ),
+  );
+
 export const createHumanInstalledRuntimeContextLoader = (
   dependencies: HumanInstalledRuntimeContextDependencies,
 ) =>
   Object.freeze({
     async load(): Promise<InstalledRuntimeContext> {
-      let installationCandidate: unknown;
-      try {
-        installationCandidate = await dependencies.activeInstallationReader.readCurrent();
-      } catch (error) {
-        throw installationFailure(error);
-      }
-      const installation =
-        activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
-      if (!installation.success)
-        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-      if (
-        !sameId(installation.data.organizationId, dependencies.scope.organizationId) ||
-        !sameId(installation.data.applicationRootId, dependencies.scope.applicationRootId)
-      )
-        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-
+      const installation = await readHumanActiveInstallation(dependencies);
       let releaseSetCandidate: unknown;
       try {
         releaseSetCandidate = await dependencies.releaseSetReader.read({
-          applicationReleaseRevision: installation.data.applicationReleaseRevision,
+          applicationReleaseRevision: installation.applicationReleaseRevision,
         });
       } catch (error) {
         throw definitionFailure(error);
       }
-      return assembleContext(
-        installation.data,
-        releaseSetCandidate,
-        dependencies.scope.organizationId,
-        undefined,
-        (releaseSet) =>
-          prepareApplicationPermissionRegistrationForHumanRequest(
-            dependencies.scope.organizationId,
-            {
-              applicationRootId: installation.data.applicationRootId,
-              releaseRevision: installation.data.applicationReleaseRevision,
-            },
-            releaseSet,
-          ),
+      return assembleHumanInstalledRuntimeContext(
+        installation,
+        parseReleaseSet(releaseSetCandidate),
+        dependencies.scope,
       );
     },
   });
 
+// Parsed into a fresh value so the context never aliases the reader's own result.
+const parseReleaseSet = (candidate: unknown): SystemApplicationBoundReleaseSetResult => {
+  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
+  if (!parsed.success) throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+  return parsed.data;
+};
+
 /**
- * Verifies that the release set matches the installation and assembles the one trusted context.
+ * Verifies that the validated release set matches the installation and assembles the one trusted context.
  * `expectedCorrelationId` is the system correlation when one exists; a human request has none and
  * relies on the release set's own single correlation being shared by every release in it.
  */
 const assembleContext = (
   installation: ActiveApplicationInstallationEvidence,
-  releaseSetCandidate: unknown,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
   organizationId: string,
   expectedCorrelationId: string | undefined,
   prepareRegistration: (
     releaseSet: SystemApplicationBoundReleaseSetResult,
   ) => PreparedApplicationPermissionRegistration,
 ): InstalledRuntimeContext => {
-  // Parsed into a fresh value so the context never aliases the reader's own result.
-  const parsedReleaseSet =
-    systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
-  if (!parsedReleaseSet.success)
-    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-  const releaseSet = parsedReleaseSet.data;
-
   const application = releaseSet.application;
   if (
     !sameId(application.organizationId, organizationId) ||

@@ -87,9 +87,7 @@ import {
   type ReferenceChoiceSelectionEvidence,
   recordLinkValueSchema,
 } from "@vortex/platform/schema";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createSqlFileReadRepository, decideFileRead } from "@web/platform-server";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";
 import { getQueryContinuationKey } from "./query-continuation-key";
@@ -1522,10 +1520,6 @@ const loadInstalledContext = (
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-          installedReleaseCatalogue,
-          transaction,
-        ),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
       }).load();
     },
@@ -1797,7 +1791,6 @@ const loadApplicationPageInternal = async (
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
       });
     },

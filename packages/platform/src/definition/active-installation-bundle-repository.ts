@@ -1,18 +1,12 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import {
   activeApplicationInstallationEvidenceSchema,
-  canonicalJson,
   correlationIdSchema,
   fingerprintSchema,
   installationRuntimeBundleIndexSchema,
   installationRuntimeBundleKeySchema,
-  installationRuntimeBundleMaximumPartBytes,
-  installationRuntimeBundlePartSchema,
-  installationRuntimeBundleSourceManifestSchema,
   installationRuntimeBundleSections,
-  installationRuntimeBundleWriteCommandSchema,
   jsonValueSchema,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -22,11 +16,7 @@ import {
   semanticVersionSchema,
   namespacedKeySchema,
   type ActiveApplicationInstallationEvidence,
-  type InstallationRuntimeBundleIndex,
-  type InstallationRuntimeBundleKey,
-  type InstallationRuntimeBundlePart,
   type InstallationRuntimeBundleSection,
-  type InstallationRuntimeBundleWriteCommand,
   type JsonValue,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
@@ -113,7 +103,6 @@ export const activeInstallationBundleStateSchema = z.object({
 export type ActiveInstallationBundleState = z.infer<typeof activeInstallationBundleStateSchema>;
 
 type StateRow = DatabaseRow & { readonly bundle_state: unknown };
-type RepairRow = DatabaseRow & { readonly bundle_index: unknown };
 
 export const activeInstallationBundleErrorCodes = [
   "ACTIVE_INSTALLATION_BUNDLE_REFUSED",
@@ -139,57 +128,15 @@ const failure = (error: unknown): DefinitionError<ActiveInstallationBundleErrorC
   );
 };
 
-const sha256 = (content: string): string =>
-  `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
-
-const splitSection = (
-  section: InstallationRuntimeBundleSection,
-  serialized: string,
-): InstallationRuntimeBundlePart[] => {
-  const result: InstallationRuntimeBundlePart[] = [];
-  let content = "";
-  let byteSize = 0;
-  let ordinal = 0;
-  const save = (): void => {
-    if (content.length === 0) return;
-    result.push({ section, ordinal, byteSize, sha256: sha256(content), content });
-    ordinal += 1;
-    content = "";
-    byteSize = 0;
-  };
-  for (const character of serialized) {
-    const characterBytes = Buffer.byteLength(character, "utf8");
-    if (byteSize + characterBytes > installationRuntimeBundleMaximumPartBytes) save();
-    content += character;
-    byteSize += characterBytes;
-  }
-  save();
-  return result;
-};
-
-const prepareParts = (command: InstallationRuntimeBundleWriteCommand): InstallationRuntimeBundlePart[] => {
-  const parts = installationRuntimeBundleSections.flatMap((section) =>
-    splitSection(section, canonicalJson(command.sections[section])),
-  );
-  if (parts.some((part) => !installationRuntimeBundlePartSchema.safeParse(part).success))
-    throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-  return parts;
-};
-
 export interface ActiveInstallationBundleRepository {
   readCurrentState(): Promise<ActiveInstallationBundleState>;
   readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
   readSections(
     state: ActiveInstallationBundleState,
-    expectedIndex?: InstallationRuntimeBundleIndex,
   ): Promise<Readonly<Partial<Record<InstallationRuntimeBundleSection, JsonValue>>>>;
-  repair(
-    state: ActiveInstallationBundleState,
-    commandCandidate: InstallationRuntimeBundleWriteCommand,
-  ): Promise<InstallationRuntimeBundleIndex>;
 }
 
-/** Reads and repairs only the active format-2 bundle under the verified HUMAN request transaction. */
+/** Reads only the active format-2 bundle under the verified HUMAN request transaction. */
 export const createActiveInstallationBundleRepository = (
   transaction: RequestDatabaseTransaction,
 ): ActiveInstallationBundleRepository => {
@@ -255,21 +202,10 @@ export const createActiveInstallationBundleRepository = (
         );
       return installation.data;
     },
-    async readSections(
-      state: ActiveInstallationBundleState,
-      expectedIndexCandidate?: InstallationRuntimeBundleIndex,
-    ) {
-      const expectedIndex = expectedIndexCandidate ?? state.bundleIndex;
-      if (expectedIndex === null)
+    async readSections(state: ActiveInstallationBundleState) {
+      if (state.bundleIndex === null)
         throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
       try {
-        if (
-          expectedIndex.organizationId !== state.identity.organizationId ||
-          expectedIndex.applicationRootId !== state.identity.applicationRootId ||
-          expectedIndex.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
-          expectedIndex.pinFingerprint !== state.identity.pinFingerprint
-        )
-          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
         const keyCandidate = installationRuntimeBundleKeySchema.safeParse({
           applicationRootId: state.identity.applicationRootId,
           applicationReleaseRevision: state.identity.applicationReleaseRevision,
@@ -281,65 +217,7 @@ export const createActiveInstallationBundleRepository = (
             keyCandidate.error,
             "active-installation-bundle-repository",
           );
-        const key: InstallationRuntimeBundleKey = {
-          applicationRootId: keyCandidate.data.applicationRootId,
-          applicationReleaseRevision: keyCandidate.data.applicationReleaseRevision,
-          bundleFormatVersion: keyCandidate.data.bundleFormatVersion,
-        };
-        const index = await bundles.readIndex(key);
-        if (canonicalJson(index) !== canonicalJson(expectedIndex))
-          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-        const sections = await bundles.readSections(key, installationRuntimeBundleSections);
-        for (const section of installationRuntimeBundleSections)
-          if (!jsonValueSchema.safeParse(sections[section]).success)
-            throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-        return sections;
-      } catch (error) {
-        throw failure(error);
-      }
-    },
-    async repair(
-      state: ActiveInstallationBundleState,
-      commandCandidate: InstallationRuntimeBundleWriteCommand,
-    ) {
-      if (!state.repairNeeded || state.coldSource === null)
-        throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
-      const parsedCommand = installationRuntimeBundleWriteCommandSchema.safeParse(commandCandidate);
-      if (!parsedCommand.success ||
-        parsedCommand.data.applicationRootId !== state.identity.applicationRootId ||
-        parsedCommand.data.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
-        parsedCommand.data.pinFingerprint !== state.identity.pinFingerprint
-      )
-        throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-      const parts = prepareParts(parsedCommand.data);
-      const coldSource = z.object({
-        sourceManifest: installationRuntimeBundleSourceManifestSchema,
-      }).passthrough().safeParse(state.coldSource);
-      if (!coldSource.success)
-        throw unexpectedDefinitionFailure(
-          "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
-          coldSource.error,
-          "active-installation-bundle-repository",
-        );
-      try {
-        const rows = await transaction.query<RepairRow>`
-          select vortex_module.repair_active_installation_runtime_bundle_internal(
-            ${JSON.stringify(state.identity)}::text::jsonb,
-            ${JSON.stringify(parts)}::text::jsonb
-          ) as bundle_index
-        `;
-        if (rows.length !== 1 || rows[0] === undefined)
-          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED");
-        const index = installationRuntimeBundleIndexSchema.safeParse(rows[0].bundle_index);
-        if (!index.success ||
-          index.data.organizationId !== state.identity.organizationId ||
-          index.data.applicationRootId !== state.identity.applicationRootId ||
-          index.data.applicationReleaseRevision !== state.identity.applicationReleaseRevision ||
-          index.data.pinFingerprint !== state.identity.pinFingerprint ||
-          canonicalJson(index.data.sourceManifest) !== canonicalJson(coldSource.data.sourceManifest)
-        )
-          throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-        return index.data;
+        return await bundles.readSections(keyCandidate.data, installationRuntimeBundleSections);
       } catch (error) {
         throw failure(error);
       }

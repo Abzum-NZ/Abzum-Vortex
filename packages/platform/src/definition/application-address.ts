@@ -34,13 +34,11 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RequestDatabaseTransaction,
 } from "../db/index";
 import { z } from "zod";
 import {
   createHumanInstalledPageBundleContextLoader,
   matchesInstalledPageBundleIdentity,
-  type HumanInstalledPageBundleContextDependencies,
 } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 
@@ -232,10 +230,6 @@ const describeApplicationAddressFailure = (error: unknown): string => {
   }
   return parts.join(" <- ");
 };
-
-export type AddressedBundleDefinitionReaderFactory = (
-  transaction: RequestDatabaseTransaction,
-) => HumanInstalledPageBundleContextDependencies["releaseSetReader"];
 
 type AddressRow = Readonly<{ address: unknown }>;
 type OrganizationLauncherRow = DatabaseRow & Readonly<{
@@ -582,7 +576,6 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate: string,
-  releaseSetReaderForTransaction: AddressedBundleDefinitionReaderFactory,
 ): Promise<AddressedApplicationBundleRead> => {
   const unavailable = (): AddressedApplicationBundleRead => ({
     read: { kind: "unavailable" },
@@ -626,7 +619,6 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           return undefined;
         const context = await createHumanInstalledPageBundleContextLoader({
           transaction,
-          releaseSetReader: releaseSetReaderForTransaction(transaction),
           scope: {
             organizationId: scope.organizationId,
             applicationRootId: scope.applicationRootId,
