@@ -109,6 +109,8 @@ const databaseCode = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { code?: unknown }).code)
     : undefined;
+// A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
+export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {
   switch (databaseCode(error)) {
     case "V3001":
@@ -127,7 +129,8 @@ const mutationCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
-      console.error(`[identity] tenant governance operation failed: ${describeFailure(error)}`);
+      if (!(error instanceof Error && error.name === transactionPoisonErrorName))
+        console.error(`[identity] tenant governance operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };

@@ -17,7 +17,10 @@ import {
   type RequestDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
 } from "../db/index";
-import { createTenantGovernanceService } from "./tenant-governance-identity";
+import {
+  createTenantGovernanceService,
+  transactionPoisonErrorName,
+} from "./tenant-governance-identity";
 
 type TenantGovernanceMethod =
   | "createOrganization"
@@ -135,7 +138,10 @@ export const createRequestBoundTenantGovernanceService = (
   const state = invocationStateFor(transaction);
 
   const poison = (code: string, cause?: unknown): Error => {
-    state.poisonedTransaction ??= failure(code, cause);
+    if (state.poisonedTransaction === undefined) {
+      state.poisonedTransaction = failure(code, cause);
+      state.poisonedTransaction.name = transactionPoisonErrorName;
+    }
     return state.poisonedTransaction;
   };
 
