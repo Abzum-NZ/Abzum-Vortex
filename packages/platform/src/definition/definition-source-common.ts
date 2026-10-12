@@ -91,7 +91,7 @@ export const assertSourceProvenanceCoverage = (roots: readonly z.core.$ZodType[]
     throw new TypeError(`Source provenance annotations missing: ${missing.join(", ")}`);
 };
 
-/** Portable aliases exist only in authored definitions. #15 resolves them to platform identifiers. */
+/** Portable aliases exist only in authored definitions; compilation resolves them to platform identifiers. */
 export const sourceAliasSchema = z
   .string()
   .min(1)

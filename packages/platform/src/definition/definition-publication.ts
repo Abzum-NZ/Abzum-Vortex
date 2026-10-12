@@ -27,7 +27,7 @@ import {
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
-  storedModuleCompilationOutputSchema,
+  moduleCompilationOutputSchema,
   recordTypeIdSchema,
   fieldIdSchema,
   type DefinitionCompilationOutput,
@@ -783,7 +783,7 @@ const verifyHistoricalModuleRelease = (
     candidate,
     expectedKey,
     release,
-    storedModuleCompilationOutputSchema.safeParse(release.compilationOutput),
+    moduleCompilationOutputSchema.safeParse(release.compilationOutput),
   );
 
 const sameModuleReleaseLocator = (
@@ -3031,7 +3031,7 @@ export const createDefinitionPublicationService = (
   /**
    * Compiles the caller organisation's current Application draft at the expected revision through
    * the same candidate validation, exact dependency resolution and compilation as preparation. It
-   * is a read for exact-draft preview (#597): it assigns no version, produces no confirmation and
+   * is a read for exact-draft preview: it assigns no version, produces no confirmation and
    * writes nothing, and a draft identical to its current release still compiles.
    */
   compileApplicationDraft: async (

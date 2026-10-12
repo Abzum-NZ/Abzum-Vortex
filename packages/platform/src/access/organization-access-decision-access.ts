@@ -83,7 +83,7 @@ const parseEligibility = (rows: readonly EligibilityRow[]): OrganizationPermissi
     throw unavailableError(unavailableCode);
 
   const parsed = organizationPermissionEligibilitySchema.safeParse(candidate);
-  if (!parsed.success) throw unavailableError(unavailableCode);
+  if (!parsed.success) throw unavailableError(unavailableCode, undefined, parsed.error);
   return parsed.data;
 };
 
@@ -126,8 +126,8 @@ export const runOrganizationAccessOperation = async <Result>(
         ${JSON.stringify(declaration.data)}::text::jsonb
       )
     `;
-  } catch {
-    throw unavailableError(unavailableCode);
+  } catch (error) {
+    throw unavailableError(unavailableCode, undefined, error);
   }
 
   const eligibility = parseEligibility(rows);
@@ -147,9 +147,5 @@ export const runOrganizationAccessOperation = async <Result>(
   });
   if (!decision.success || decision.data.outcome !== "allowed")
     throw unavailableError(unavailableCode);
-  try {
-    return { outcome: "completed", value: await operation(decision.data) };
-  } catch {
-    throw unavailableError(unavailableCode);
-  }
+  return { outcome: "completed", value: await operation(decision.data) };
 };

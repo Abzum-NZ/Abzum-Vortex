@@ -255,7 +255,9 @@ export class RequestOwnedSocketFactory {
     if (this.stopped) throw requestDatabaseError("DATABASE_REQUEST_STOPPED");
     const lookup = this.owner.createOwnedLookup();
     const attempt: SocketAttempt = {
-      physical: new Set(), closures: [], writes: [],
+      physical: new Set(),
+      closures: [],
+      writes: [],
       ...(lookup === undefined ? {} : { lookup }),
     };
     this.attempts.add(attempt);
@@ -292,13 +294,13 @@ export class RequestOwnedSocketFactory {
       attempt.bridge = bridge;
       if (this.stopped || this.owner.stopped) bridge.stop();
       return bridge;
-    } catch {
+    } catch (error) {
       attempt.lookup?.stop();
       for (const socket of attempt.physical) socket.destroy();
       if (!this.owner.stopped) this.owner.stop("abort");
       await Promise.all(attempt.closures);
       await Promise.all(attempt.writes);
-      throw requestDatabaseError("DATABASE_OWNED_CONNECTION_UNAVAILABLE");
+      throw requestDatabaseError("DATABASE_OWNED_CONNECTION_UNAVAILABLE", error);
     }
   }
 
@@ -307,42 +309,46 @@ export class RequestOwnedSocketFactory {
     event: "connect" | "secureConnect",
     start: () => void,
   ): Promise<void> {
-    return this.owner.track(this.phase(socket, (complete, fail) => {
-      const ready = () => complete();
-      socket.once(event, ready);
-      try {
-        start();
-      } catch {
-        fail();
-      }
-      return () => socket.removeListener(event, ready);
-    }));
+    return this.owner.track(
+      this.phase(socket, (complete, fail) => {
+        const ready = () => complete();
+        socket.once(event, ready);
+        try {
+          start();
+        } catch {
+          fail();
+        }
+        return () => socket.removeListener(event, ready);
+      }),
+    );
   }
 
   private negotiateTls(attempt: SocketAttempt, socket: Socket): Promise<void> {
-    return this.owner.track(this.phase(socket, (complete, fail) => {
-      const response = (bytes: Buffer) => {
-        // SSLRequest response must be exactly S. No plaintext fallback or speculative startup.
-        if (bytes.length === 1 && bytes[0] === 83) complete();
-        else fail();
-      };
-      socket.once("data", response);
-      const request = Buffer.alloc(8);
-      request.writeInt32BE(8, 0);
-      request.writeInt32BE(80877103, 4);
-      const written = deferred<void>();
-      attempt.writes.push(written.promise);
-      try {
-        socket.write(request, (error) => {
-          if (error) fail();
+    return this.owner.track(
+      this.phase(socket, (complete, fail) => {
+        const response = (bytes: Buffer) => {
+          // SSLRequest response must be exactly S. No plaintext fallback or speculative startup.
+          if (bytes.length === 1 && bytes[0] === 83) complete();
+          else fail();
+        };
+        socket.once("data", response);
+        const request = Buffer.alloc(8);
+        request.writeInt32BE(8, 0);
+        request.writeInt32BE(80877103, 4);
+        const written = deferred<void>();
+        attempt.writes.push(written.promise);
+        try {
+          socket.write(request, (error) => {
+            if (error) fail();
+            written.resolve();
+          });
+        } catch {
+          fail();
           written.resolve();
-        });
-      } catch {
-        fail();
-        written.resolve();
-      }
-      return () => socket.removeListener("data", response);
-    }));
+        }
+        return () => socket.removeListener("data", response);
+      }),
+    );
   }
 
   private phase(

@@ -622,10 +622,7 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
   "web_address",
 ]);
 
-// Retired page settings (#1011): page-level states and standard page replacement, and
-// list arrangements and calendar mapping, were compiled but never rendered. The compiler
-// no longer emits them. Releases published before their removal still carry them and
-// their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
+// Keep legacy page settings decodable as opaque JSON; compilation ignores them.
 const retiredPageSettingSchema = jsonValueSchema.optional();
 
 /**
@@ -636,7 +633,6 @@ const retiredPageSettingSchema = jsonValueSchema.optional();
 export const applicationExperienceSchema = z
   .object({ state: applicationExperienceStateSchema, pageId: pageIdSchema })
   .strict();
-export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
 
 /** Placement bindings that gate, condition or load data; none may appear on an experience page. */
 const experienceGatedPlacementKeys = [
@@ -1230,14 +1226,6 @@ export const applicationDraftSchema = z
   .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentSchema })
   .strict();
 
-/** Standalone  canonical content is decoded only with its explicit validation version. */
-export const applicationCanonicalDocumentSchema = z
-  .object({
-    validationContractVersion: z.literal("2.0.0"),
-    canonical: applicationDraftSchema,
-  })
-  .strict();
-
 export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
@@ -1266,18 +1254,11 @@ export const publishedApplicationDefinitionSchema = z
 
 /** The sole immutable Application release representation Definition consumers decode. */
 
-export type QueryDefinition = z.infer<typeof queryDefinitionSchema>;
-export type Sort = z.infer<typeof sortSchema>;
-export type Aggregate = z.infer<typeof aggregateSchema>;
-export type ModuleBinding = z.infer<typeof moduleBindingSchema>;
 export type NavigationItem = z.infer<typeof navigationItemSchema>;
 export type CalendarMapping = z.infer<typeof calendarMappingSchema>;
 export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
 export type ApplicationContent = z.infer<typeof applicationContentSchema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
-export type ApplicationCanonicalDocument = z.infer<typeof applicationCanonicalDocumentSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
-export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;
-export type PublicAddress = z.infer<typeof publicAddressSchema>;

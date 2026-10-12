@@ -58,7 +58,7 @@ const objectValue = (value: unknown): SourceObject | undefined =>
 /**
  * Derives every permanent identity owner and authentic alias shared by the Module vocabulary.
  * Source `id` values are owners; mutable keys and paths are aliases of that owner. A connection
- * type contributes only its root; an Application uses the  extractor below.
+ * type contributes only its root; an Application uses the application identity extractor below.
  */
 export function extractSourceIdentityRequirements(
   source: DefinitionSourceDocument | ModuleSourceDocument,

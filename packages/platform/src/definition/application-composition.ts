@@ -44,7 +44,6 @@ import {
 import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
 
 export {
-  richTextBlockSchema,
   richTextDocumentSchema,
   richTextElementKindSchema,
 } from "../records/rich-text";
@@ -1658,28 +1657,6 @@ export const immutablePlatformBlockCatalogueSchema = z
     }
   });
 
-export const platformBlockDependenciesSchemaForCatalogue = (catalogueInput: unknown) => {
-  const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
-  const releases = new Map(
-    catalogue.releases.map((release) => [
-      `${release.blockId}:${release.releaseVersion}`,
-      `${release.contentFingerprint}:${release.catalogueFingerprint}`,
-    ]),
-  );
-  return platformBlockDependenciesSchema.superRefine((dependencies, context) => {
-    for (const [index, dependency] of dependencies.entries()) {
-      const expected = releases.get(`${dependency.blockId}:${dependency.releaseVersion}`);
-      const actual = `${dependency.contentFingerprint}:${dependency.catalogueFingerprint}`;
-      if (expected !== actual)
-        context.addIssue({
-          code: "custom",
-          path: [index],
-          message: "A platform-block dependency must match one exact immutable catalogue release",
-        });
-    }
-  });
-};
-
 export const platformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
@@ -2021,8 +1998,8 @@ export const sourceExactPlatformThemeDependencySchema = z
   .strict();
 
 /**
- * One option id from the generated shadcn/create theme catalogue (contracts/src/catalogue/
- * shadcn-create-theme-catalogue.generated.json, imported by the #1274 importer). Option ids are
+ * One option id from the generated shadcn/create theme catalogue
+ * (`../catalogue/catalogue/shadcn-create-theme-catalogue.generated.json`). Option ids are
  * lowercase kebab-case, for example `default-translucent`, and are matched against the catalogue
  * exactly.
  */
@@ -2033,17 +2010,17 @@ export const themeCatalogueOptionIdSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 /**
- * One catalogue option id per shadcn/create dimension that #1274 publishes. A selection is
+ * One catalogue option id per shadcn/create dimension. A selection is
  * strict: every dimension appears exactly once and no other key is admitted. Runtime/theme
  * resolves the selected options into the complete token set and the style id, refusing an unknown
  * id, a refused option or a missing dimension.
  *
- * The icon library (#1278) names one of the shadcn/create icon libraries
- * (contracts/src/shadcn-icon-libraries.ts). It is optional so selections recorded before the icon
+ * The icon library names one of the shadcn/create icon libraries
+ * (`../pages/shadcn-icon-libraries.ts`). It is optional so selections recorded before the icon
  * catalogue keep their meaning: an absent icon library is the catalogue default.
  *
- * The body and heading fonts (#1277) name fonts of the shadcn/create font catalogue
- * (contracts/src/shadcn-font-catalogue.ts); the heading font may also be `inherit`, which paints
+ * The body and heading fonts name fonts of the shadcn/create font catalogue
+ * (`../theme/shadcn-font-catalogue.ts`); the heading font may also be `inherit`, which paints
  * headings in the body font. They are optional so selections recorded before the font catalogue
  * keep their meaning: an absent font is the catalogue's default.
  */
@@ -2878,7 +2855,6 @@ export const sourceGuidedFormPageCompositionSchema = z.discriminatedUnion("shell
 
 export type PlatformBlockRelease = z.infer<typeof platformBlockReleaseSchema>;
 export type ComponentStateOperationKind = z.infer<typeof componentStateOperationKindSchema>;
-export type PlatformBlockDependency = z.infer<typeof platformBlockDependencySchema>;
 export type PlatformThemeRelease = z.infer<typeof platformThemeReleaseSchema>;
 export type ApplicationCompositionPolicy = z.infer<typeof applicationCompositionPolicySchema>;
 export type ImmutablePlatformBlockCatalogue = z.infer<typeof immutablePlatformBlockCatalogueSchema>;

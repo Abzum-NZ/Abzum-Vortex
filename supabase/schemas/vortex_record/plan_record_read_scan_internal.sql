@@ -60,10 +60,13 @@ declare
   access_parameters_accum jsonb := '[]'::jsonb;
   access_predicate_value text := 'true';
   access_parameters_value jsonb := '[]'::jsonb;
+  failure_sqlstate text;
+  failure_message text;
 begin
-  -- Narrowing only. Any refusal or failure here leaves the scan unrestricted,
-  -- so the exact per-row decision, which raises or refuses for the same cause,
-  -- is the only thing that decides what a caller reads.
+  -- Narrowing only. A refusal or unsupported condition named below leaves the
+  -- scan less selective, so the exact per-row decision is still what decides
+  -- what a caller reads. Any other failure propagates with its cause: it is
+  -- never turned into an unrestricted scan.
   if p_record_type_id is null or p_record_type_id = nil_uuid then
     raise exception using errcode = '22023',
       message = 'Record adapter selector is invalid';
@@ -118,7 +121,7 @@ begin
 
   if required_permissions is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], null::text, '[]'::jsonb;
+      array[]::text[], 'true'::text, '[]'::jsonb;
     return;
   end if;
 
@@ -148,12 +151,17 @@ begin
   ) as routes;
 
   -- The fields this reader is guaranteed to see on every record the read
-  -- decision admits. Any failure yields no fields, so the scan pushes neither
-  -- an order nor a filter on a value it cannot prove is visible.
+  -- decision admits. A refused access context yields no fields, so the scan
+  -- pushes neither an order nor a filter on a value it cannot prove is visible;
+  -- any other failure propagates.
   begin
     field_bounds := vortex_access.resolve_record_read_field_bounds_internal(declaration);
   exception
-    when others then
+    when sqlstate '42501' then
+      get stacked diagnostics failure_sqlstate = returned_sqlstate,
+        failure_message = message_text;
+      raise warning 'Record read scan field bounds were refused: SQLSTATE %, %',
+        failure_sqlstate, failure_message;
       field_bounds := '{}'::jsonb;
   end;
 
@@ -401,7 +409,14 @@ begin
               condition_sql := compiled ->> 'predicate';
               condition_params := coalesce(compiled -> 'parameters', '[]'::jsonb);
             exception
-              when others then
+              -- 22023 is the compiler's refusal of a condition it cannot express
+              -- exactly; the condition is then left as true. Any other failure
+              -- propagates.
+              when sqlstate '22023' then
+                get stacked diagnostics failure_sqlstate = returned_sqlstate,
+                  failure_message = message_text;
+                raise warning 'Record read scan condition was not pushed: SQLSTATE %, %',
+                  failure_sqlstate, failure_message;
                 condition_sql := null;
                 condition_params := '[]'::jsonb;
             end;
@@ -443,11 +458,6 @@ begin
     access_predicate_value,
     access_parameters_value;
   return;
-exception
-  when others then
-    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], null::text, '[]'::jsonb;
-    return;
 end
 $function$;
 

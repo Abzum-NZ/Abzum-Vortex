@@ -41,18 +41,6 @@ export const saveDefinitionDraftCommandSchema = z
   })
   .strict();
 
-export const createModuleRootCommandSchema = z
-  .object({ source: moduleSourceDocumentSchema })
-  .strict();
-
-export const saveModuleDraftCommandSchema = z
-  .object({
-    rootId: moduleRootIdSchema,
-    expectedDraftRevision: revisionSchema,
-    source: moduleSourceDocumentSchema,
-  })
-  .strict();
-
 const storedDraftMetadata = {
   organizationId: organizationIdSchema,
   key: namespacedKeySchema,
@@ -309,12 +297,8 @@ export const publishDefinitionResultSchema = z
 
 export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCommandSchema>;
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
-export type CreateModuleRootCommand = z.infer<typeof createModuleRootCommandSchema>;
-export type SaveModuleDraftCommand = z.infer<typeof saveModuleDraftCommandSchema>;
 export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
-export type StoredModuleSourceDocument = z.infer<typeof storedModuleSourceDocumentSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;
-export type StoredModuleDefinitionDraft = z.infer<typeof storedModuleDefinitionDraftSchema>;
 export type ExactDefinitionDependency = z.infer<typeof exactDefinitionDependencySchema>;
 export type PrepareDefinitionPublicationCommand = z.infer<
   typeof prepareDefinitionPublicationCommandSchema

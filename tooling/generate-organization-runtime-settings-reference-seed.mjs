@@ -6,7 +6,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const contractPath = path.join(repositoryRoot, "packages/platform/src/access/identity-access.ts");
 const initialMigrationPath = path.join(
   repositoryRoot,
-  "supabase/migrations/20261001193000_organization_settings_cleanup.sql",
+  "supabase/migrations/20261014000400_baseline_system_data_and_storage.sql",
 );
 const beginMarker = "-- BEGIN GENERATED: organization settings reference seed";
 const endMarker = "-- END GENERATED: organization settings reference seed";

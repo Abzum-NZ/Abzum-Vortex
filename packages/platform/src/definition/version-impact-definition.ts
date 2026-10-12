@@ -1,30 +1,4 @@
-import {
-  applicationContentSchema,
-  applicationVersionImpactPolicyVersion,
-  applicationVersionImpactRequestSchema,
-  definitionPublicationHistoryEvidenceSchema,
-  moduleContentSchema,
-  storedModuleContentSchema,
-  moduleVersionImpactPolicyVersion,
-  moduleVersionImpactRequestSchema,
-  publishedDefinitionHistorySchema,
-  unresolvedRecordTypeReferencePaths,
-  definitionVersionConfirmationSchema,
-  definitionVersionImpactRequestSchema,
-  definitionVersionImpactResultSchema,
-  stableDefinitionReleaseVersionSchema,
-  type DefinitionVersionConfirmation,
-  type DefinitionPublicationHistoryEvidence,
-  type DefinitionVersionImpactRequest,
-  type DefinitionVersionImpactResult,
-  type DefinitionVersionSubject,
-  type ApplicationVersionImpactRequest,
-  type ModuleVersionImpactRequest,
-  type PublishedApplicationDefinition,
-  type PublishedDefinitionHistory,
-  type SavedConditionRevisionAssignment,
-  type VersionImpact,
-} from "../schema";
+import { applicationContentSchema, applicationVersionImpactPolicyVersion, applicationVersionImpactRequestSchema, definitionPublicationHistoryEvidenceSchema, moduleContentSchema, moduleVersionImpactPolicyVersion, moduleVersionImpactRequestSchema, unresolvedRecordTypeReferencePaths, definitionVersionImpactRequestSchema, definitionVersionImpactResultSchema, stableDefinitionReleaseVersionSchema, type DefinitionPublicationHistoryEvidence, type DefinitionVersionImpactRequest, type DefinitionVersionImpactResult, type DefinitionVersionSubject, type ApplicationVersionImpactRequest, type ModuleVersionImpactRequest, type PublishedApplicationDefinition, type SavedConditionRevisionAssignment, type VersionImpact } from "../schema";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertUnambiguousApplicationContent,
@@ -95,7 +69,7 @@ const assertHistoryRelease = (
   if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
     refuseVersionImpact("content_fingerprint_mismatch");
   if (kind === "module") {
-    if (unresolvedRecordTypeReferencePaths(storedModuleContentSchema, release.content).length > 0)
+    if (unresolvedRecordTypeReferencePaths(moduleContentSchema, release.content).length > 0)
       refuseVersionImpact("invalid_history");
     assertUnambiguousModuleContent(release.content);
   } else {
@@ -250,28 +224,6 @@ export const deriveSavedConditionRevisionsFromHistoryEvidence = (
   return deriveSavedConditionRevisions({ rootId, conditions, history: [], fold });
 };
 
-/** Converts the existing bounded public array contract into the same verified fold. */
-export const verifyPublishedDefinitionHistory = (
-  history: PublishedDefinitionHistory,
-  rootId: string,
-  anchorReleaseRevision: number | null,
-): DefinitionPublicationHistoryEvidence => {
-  const parsed = publishedDefinitionHistorySchema.safeParse(history);
-  if (!parsed.success) return refuseVersionImpact("invalid_history");
-  const fold = createDefinitionPublicationHistoryFold({
-    kind: parsed.data.kind,
-    definitionKey: parsed.data.definitionKey,
-    rootId,
-    anchorReleaseRevision,
-  });
-  let previousReleaseRevision: number | null = null;
-  for (const release of parsed.data.history) {
-    foldDefinitionPublicationHistoryRelease(fold, { previousReleaseRevision, release });
-    previousReleaseRevision = release.publication.revision;
-  }
-  return completeDefinitionPublicationHistoryFold(fold);
-};
-
 const comparisonFingerprint = (
   subject: DefinitionVersionSubject,
   latest: SupportedVersionImpactRequest["history"][number] | undefined,
@@ -385,7 +337,7 @@ const compareParsedDefinitionVersionImpact = (
   let reasons: DefinitionVersionImpactResult["reasons"];
   if (request.kind === "module") {
     const latestModule = latest!;
-    const latestContent = storedModuleContentSchema.parse(latestModule.content);
+    const latestContent = moduleContentSchema.parse(latestModule.content);
     const comparablePrevious = normaliseModuleContent(latestContent);
     const comparableCandidate = normaliseModuleContent(request.candidate.content);
     normalisedPrevious = comparablePrevious;
@@ -486,36 +438,3 @@ export const compareDefinitionVersionImpactWithEvidence = (
   );
 };
 
-/** Recomputes the decision so a stale or altered confirmation cannot be used. */
-export const confirmDefinitionVersionImpact = (
-  input: unknown,
-  confirmationInput: unknown,
-): ConfirmableDefinitionVersionImpactResult => {
-  const confirmation = definitionVersionConfirmationSchema.safeParse(confirmationInput);
-  if (!confirmation.success) return refuseVersionImpact("confirmation_mismatch");
-  const result = compareDefinitionVersionImpact(input);
-  if (result.outcome === "no_change") return refuseVersionImpact("no_release_to_confirm");
-  const confirmable = result as ConfirmableDefinitionVersionImpactResult;
-  assertConfirmationMatches(confirmable, confirmation.data);
-  return confirmable;
-};
-
-type ConfirmableDefinitionVersionImpactResult = Extract<
-  DefinitionVersionImpactResult,
-  { outcome: "initial_release" | "release_required" }
->;
-
-const assertConfirmationMatches = (
-  result: ConfirmableDefinitionVersionImpactResult,
-  confirmation: DefinitionVersionConfirmation,
-): void => {
-  if (
-    !sameSubject(result.subject, confirmation.subject) ||
-    result.comparisonFingerprint !== confirmation.comparisonFingerprint ||
-    result.assignedVersion !== confirmation.assignedVersion
-  )
-    refuseVersionImpact("confirmation_mismatch");
-};
-
-const sameSubject = (left: DefinitionVersionSubject, right: DefinitionVersionSubject): boolean =>
-  left.definitionKind === right.definitionKind && left.rootId === right.rootId;

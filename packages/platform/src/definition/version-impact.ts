@@ -15,7 +15,7 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleDraftSchema, storedModuleContentSchema } from "./module-contracts";
+import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const applicationVersionImpactPolicyVersion = "2.0.0" as const;
@@ -191,13 +191,13 @@ export const moduleVersionImpactHistoryEntrySchema = z
     publication: publishedModuleReferenceSchema.extend({
       validationContractVersion: z.literal("3.0.0"),
     }),
-    content: storedModuleContentSchema,
+    content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(storedModuleContentSchema, value.content, context, ["content"]),
+    requireResolvedRecordTypeReferences(moduleContentSchema, value.content, context, ["content"]),
   );
 
 export const moduleVersionImpactRequestSchema = z
@@ -289,14 +289,6 @@ export const definitionVersionImpactResultSchema = z.discriminatedUnion("outcome
   requiredDefinitionReleaseResultSchema,
 ]);
 
-export const definitionVersionConfirmationSchema = z
-  .object({
-    subject: definitionVersionSubjectSchema,
-    comparisonFingerprint: fingerprintSchema,
-    assignedVersion: stableDefinitionReleaseVersionSchema,
-  })
-  .strict();
-
 export type VersionImpact = z.infer<typeof versionImpactSchema>;
 export type VersionImpactReason = z.infer<typeof versionImpactReasonSchema>;
 export type DefinitionVersionSubject = z.infer<typeof definitionVersionSubjectSchema>;
@@ -312,4 +304,3 @@ export type ModuleVersionImpactHistoryEntry = z.infer<
   typeof moduleVersionImpactHistoryEntrySchema
 >;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
-export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

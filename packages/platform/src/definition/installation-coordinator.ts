@@ -239,7 +239,7 @@ export type InstallationReleaseTarget = Readonly<{
 /**
  * The Definition evidence for one installation operation, read under the installer's own verified
  * human request instead of a server-minted system context. A deployment that cannot mint a system
- * context (see #610) supplies this; the protected Definition reads still run through governed
+ * context supplies this; the protected Definition reads still run through governed
  * database functions under the human's own authority. When supplied it replaces the system-context
  * reader for every release read.
  */
@@ -1841,6 +1841,3 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   });
 };
 
-export type ApplicationInstallationCoordinator<InstalledEvents = never> = ReturnType<
-  typeof createApplicationInstallationCoordinator<InstalledEvents>
->;

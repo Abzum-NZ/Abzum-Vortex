@@ -17,7 +17,10 @@ import {
   type RequestDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
 } from "../db/index";
-import { createTenantGovernanceService } from "./tenant-governance-identity";
+import {
+  createTenantGovernanceService,
+  transactionPoisonErrorName,
+} from "./tenant-governance-identity";
 
 type TenantGovernanceMethod =
   | "createOrganization"
@@ -68,7 +71,8 @@ const invocationStateFor = (transaction: RequestDatabaseTransaction) => {
   return created;
 };
 
-const failure = (code: string) => new Error(code);
+const failure = (code: string, cause?: unknown) =>
+  new Error(code, cause === undefined ? undefined : { cause });
 
 class TypedMethodRefusalRollback extends Error {
   constructor(readonly result: unknown) {
@@ -133,8 +137,11 @@ export const createRequestBoundTenantGovernanceService = (
   const parentTransaction = requireRequestSavepoint(transaction);
   const state = invocationStateFor(transaction);
 
-  const poison = (code: string): Error => {
-    state.poisonedTransaction ??= failure(code);
+  const poison = (code: string, cause?: unknown): Error => {
+    if (state.poisonedTransaction === undefined) {
+      state.poisonedTransaction = failure(code, cause);
+      state.poisonedTransaction.name = transactionPoisonErrorName;
+    }
     return state.poisonedTransaction;
   };
 
@@ -228,14 +235,14 @@ export const createRequestBoundTenantGovernanceService = (
 
     try {
       await assertBoundHumanContext(invocationTransaction, boundRequest);
-    } catch {
-      throw poison("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");
+    } catch (error) {
+      throw poison("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE", error);
     }
 
     let identitySqlFailureObserved = false;
     let identitySqlFailure: unknown;
     try {
-      return await invocationTransaction.withSavepoint(async identityTransactionScope => {
+      return await invocationTransaction.withSavepoint(async (identityTransactionScope) => {
         await identityTransactionScope.query`set local role vortex_runtime`;
 
         const identityTransaction: RequestDatabaseTransaction = {
@@ -264,8 +271,7 @@ export const createRequestBoundTenantGovernanceService = (
         };
 
         const result = await operation(identityTransaction);
-        if (!state.identityQueryUsed)
-          throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+        if (!state.identityQueryUsed) throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
 
         // Restore and verify the least-privileged request role before the exact-call child settles.
         await identityTransactionScope.query`set local role vortex_request`;
@@ -277,8 +283,8 @@ export const createRequestBoundTenantGovernanceService = (
         // The native exact-call child has now settled. Its rollback must leave the parent request
         // role, actor context and trusted channel intact before a known SQL refusal is mapped.
         await assertBoundHumanContext(invocationTransaction, boundRequest);
-      } catch {
-        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
+      } catch (recoveryError) {
+        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED", recoveryError);
       }
 
       if (state.poisonedTransaction !== undefined) throw state.poisonedTransaction;
@@ -291,7 +297,7 @@ export const createRequestBoundTenantGovernanceService = (
 
       // Do not let rollback, role restoration, boundary or unknown transport errors become the
       // Identity service's broad safe-refusal mapping. invoke() observes this poison and aborts.
-      throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
+      throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED", error);
     }
   };
 
@@ -316,7 +322,7 @@ export const createRequestBoundTenantGovernanceService = (
       state.identityQueryUsed = false;
       state.boundRequest = boundRequest;
       try {
-        const result = await parentTransaction.withSavepoint(async invocationTransaction => {
+        const result = await parentTransaction.withSavepoint(async (invocationTransaction) => {
           state.invocationTransaction = invocationTransaction;
           try {
             const methodResult = await operation();
@@ -341,15 +347,15 @@ export const createRequestBoundTenantGovernanceService = (
           try {
             // The error can reach here only after the native invocation child rolled back.
             await assertBoundHumanContext(parentTransaction, boundRequest);
-          } catch {
-            throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
+          } catch (recoveryError) {
+            throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED", recoveryError);
           }
           return error.result as Result;
         }
 
         // Any other child settlement failure (including unknown transport/rollback outcomes)
         // poisons this parent so the durable callback/effect transaction cannot commit.
-        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED");
+        throw poison("TENANT_GOVERNANCE_SAVEPOINT_RECOVERY_FAILED", error);
       } finally {
         delete state.activeMethod;
         delete state.invocationTransaction;
@@ -363,13 +369,11 @@ export const createRequestBoundTenantGovernanceService = (
     createOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.createOrganization>[1],
-    ) =>
-      invoke("createOrganization", session, () => service.createOrganization(session, command)),
+    ) => invoke("createOrganization", session, () => service.createOrganization(session, command)),
     renameOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.renameOrganization>[1],
-    ) =>
-      invoke("renameOrganization", session, () => service.renameOrganization(session, command)),
+    ) => invoke("renameOrganization", session, () => service.renameOrganization(session, command)),
     reparentOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.reparentOrganization>[1],

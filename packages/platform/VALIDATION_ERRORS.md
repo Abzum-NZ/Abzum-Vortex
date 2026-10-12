@@ -1,160 +1,35 @@
-# Definition validation error author guide
+# Definition validation errors
 
-[Contract index](README.md) · [Data-contract specification](../../docs/specification/appendices/data-contracts.md#definition-validation-errors) · [Issue #13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13)
+[Platform package guide](README.md) | [Data-contract specification](../../docs/specification/appendices/data-contracts.md#definition-validation-errors)
 
-This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed. The snake-case documents below are exercised through the exported production authored-source schema and contain only author-controlled values.
+`src/catalogue/validation-errors.ts` defines the public validation result, the versioned error catalogue and the translators for schema and rule failures. The current catalogue version is `1.1.0`. Supported document kinds are `module`, `application` and `connection_type`.
 
-## Public flow
+## Public result
 
-```mermaid
-flowchart LR
-    INPUT[Definition input] --> SCHEMA[Strict shape check]
-    INPUT --> RULES[Published rule checks]
-    SCHEMA --> TRANSLATOR[Safe translator]
-    RULES --> TRANSLATOR
-    TRANSLATOR --> CATALOGUE[Versioned public catalogue]
-    TRANSLATOR -. same correlation identifier .-> PROTECTED[Protected diagnostic destination]
-    CATALOGUE --> AUTHOR[Builder-visible errors]
-```
+A result carries the catalogue version, a correlation identifier and one or more errors. Each error has a stable code, catalogue-owned message and guidance, the same correlation identifier, and an optional safe location. A location contains a document kind and key with up to 12 segments. The public schemas reject unknown properties.
 
-The public response contains only:
+The public error codes are:
 
-- catalogue version;
-- stable error code;
-- catalogue-owned plain message and guidance;
-- correlation identifier;
-- optional safe location made from definition kind and builder-visible keys supplied by the caller.
+- `definition_required_value`, `definition_invalid_value`, `definition_unsupported_choice`, `definition_unknown_property`
+- `definition_too_few_items`, `definition_too_many_items`, `definition_duplicate_key`
+- `definition_broken_reference`, `definition_unresolved_reference`, `definition_scope_conflict`, `definition_incompatible_version`, `definition_dependency_cycle`
+- `definition_unsafe_content`, `definition_incompatible_change`
+- `definition_more_errors`, `definition_validation_failed`
 
-It never copies a schema message, submitted value, display label, raw object path, internal identifier, stack, query, credential, or protected diagnostic.
+Messages and guidance come from the catalogue; callers do not supply public text. The result contains no submitted values, schema messages, raw object paths or protected diagnostics.
 
-## Translating strict schema failures
+## Translating failures
 
-Pass the original `ZodError` to `translateDefinitionSchemaError`. Supply the correlation identifier, a safe root location, and only the explicit raw-path-to-safe-location mappings the builder is allowed to see. An unmapped raw path resolves to the safe document root; the translator never guesses a builder key from a raw path.
+`translateDefinitionSchemaError` maps Zod issues to the closed public codes. Supply a correlation identifier, safe root location, and explicit raw-path-to-safe-location mappings. An unmapped path resolves to the root location. When a strict schema uses the same `invalid_type` issue for a missing and a wrong-typed value, list known missing source paths in `requiredPaths` so the translator can use `definition_required_value` for those paths.
 
-If a strict schema uses `invalid_type` for both absent and wrong-typed values, list known required source paths in `requiredPaths`. The translator then emits `definition_required_value` for those paths without parsing Zod's human-readable message. Other `invalid_type` issues become `definition_invalid_value`.
+`translateDefinitionRuleFailures` accepts rule failures containing a namespaced rule code, a closed failure family and an optional safe location. The translator maps each family to its public error code and uses the root location when a rule failure has no location.
 
-## Translating rule failures
+Both translators remove duplicate errors at the same location, order the result by location and catalogue order, and cap it at 200 errors. When errors are omitted, the final entry uses `definition_more_errors`. An empty or malformed translation result becomes `definition_validation_failed` when a valid correlation identifier is available; a missing or invalid correlation identifier is rejected.
 
-The validator owned by [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) emits `DefinitionRuleFailure` values. Each value contains only a namespaced internal rule code, one closed failure family, and an optional already-safe location. Pass the values to `translateDefinitionRuleFailures`; do not create public messages in a rule runner.
+An optional diagnostic sink receives the original schema or rule detail separately from the public result. A sink failure does not change translation. Keep diagnostic handling protected; never copy its detail into a builder-visible error.
 
-Several internal rules may produce the same public error at the same safe location. The translator removes those duplicates and orders the remaining errors deterministically by location and catalogue order.
+## Updating the catalogue
 
-## Author example
+When adding or changing a public code, keep the code list, catalogue entry, message, guidance and ordering together in `src/catalogue/validation-errors.ts`. Add or update a closed rule-failure family and its mapping when rule validation needs to emit the code. Keep public messages generic and rely on safe locations to direct an authorised builder to the relevant part of a definition.
 
-This complete source document has one deliberate error: it omits the required `allowed_hosts` value.
-
-```json
-{
-  "source_contract_version": "1.0.0",
-  "kind": "connection_type",
-  "root_alias": "example_connection",
-  "key": "example.connection",
-  "body": {
-    "name": "Example connection",
-    "purpose": "Submit a typed request to an approved example provider.",
-    "provider": "Example provider",
-    "authentication": {
-      "kind": "signed_secret",
-      "secret_fields": ["signing_secret"],
-      "algorithm": "hmac_sha256"
-    },
-    "allow_redirects": false,
-    "shapes": [
-      { "key": "request", "fields": [{ "key": "value", "type": "text", "required": true }] },
-      { "key": "receipt", "fields": [{ "key": "accepted", "type": "boolean", "required": true }] }
-    ],
-    "operations": [
-      {
-        "key": "submit",
-        "method": "POST",
-        "path": "/submit",
-        "input": "request",
-        "output": "receipt",
-        "timeout_seconds": 10,
-        "max_attempts": 2,
-        "maximum_response_bytes": 1000000
-      }
-    ],
-    "incoming_messages": []
-  }
-}
-```
-
-After the caller maps the schema location to an authorised builder-visible location, the public result is:
-
-```json
-{
-  "catalogueVersion": "1.1.0",
-  "correlationId": "00000000-0000-4000-8000-000000000013",
-  "errors": [
-    {
-      "catalogueVersion": "1.1.0",
-      "code": "definition_required_value",
-      "message": "A required value is missing.",
-      "guidance": "Provide the required value and validate the definition again.",
-      "correlationId": "00000000-0000-4000-8000-000000000013",
-      "location": {
-        "documentKind": "connection_type",
-        "documentKey": "example.connection",
-        "segments": [{ "kind": "setting", "key": "allowed_hosts" }]
-      }
-    }
-  ]
-}
-```
-
-The corrected document adds the required value and passes the strict production authored-source schema:
-
-```json
-{
-  "source_contract_version": "1.0.0",
-  "kind": "connection_type",
-  "root_alias": "example_connection",
-  "key": "example.connection",
-  "body": {
-    "name": "Example connection",
-    "purpose": "Submit a typed request to an approved example provider.",
-    "provider": "Example provider",
-    "authentication": {
-      "kind": "signed_secret",
-      "secret_fields": ["signing_secret"],
-      "algorithm": "hmac_sha256"
-    },
-    "allowed_hosts": ["api.example.test"],
-    "allow_redirects": false,
-    "shapes": [
-      { "key": "request", "fields": [{ "key": "value", "type": "text", "required": true }] },
-      { "key": "receipt", "fields": [{ "key": "accepted", "type": "boolean", "required": true }] }
-    ],
-    "operations": [
-      {
-        "key": "submit",
-        "method": "POST",
-        "path": "/submit",
-        "input": "request",
-        "output": "receipt",
-        "timeout_seconds": 10,
-        "max_attempts": 2,
-        "maximum_response_bytes": 1000000
-      }
-    ],
-    "incoming_messages": []
-  }
-}
-```
-
-The example key is illustrative caller data. It is not a built-in definition name and the translator never supplies it.
-
-## Adding or changing an error
-
-1. Confirm the failure cannot use an existing public code without losing useful author guidance.
-2. Add the code, catalogue entry, order, message, and guidance together in `src/catalogue/validation-errors.ts`.
-3. Add the matching closed rule-failure family only when a rule runner must emit it.
-4. Add representative, adversarial, order, duplicate, and information-exposure tests.
-5. Treat changed public wording or meaning as a versioned contract change; never silently rewrite an existing catalogue version.
-
-Do not include a submitted value or a resource-specific noun in catalogue text. The safe location tells an authorised builder where to look; the protected diagnostic destination keeps deeper evidence under the same correlation identifier for authorised support.
-
-## Failure behaviour
-
-An unknown future schema issue and a malformed rule handoff return `definition_validation_failed`. A protected diagnostic destination may receive the raw failure, but an unavailable or throwing destination cannot change the public result. Translation itself has no database, browser, Supabase, Kestra, or network dependency.
+Translation is implemented with the shared schemas and pure helpers. It does not authenticate the caller, grant access or perform a database operation; those decisions belong to the protected caller and storage path.

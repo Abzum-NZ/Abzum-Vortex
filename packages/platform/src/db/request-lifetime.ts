@@ -39,8 +39,8 @@ export interface RequestDatabaseLifetimeOptions {
   readonly createOwnedLookup?: () => RequestDatabaseLookupOwner;
 }
 
-export const requestDatabaseError = (code: string): Error => {
-  const error = new Error(code);
+export const requestDatabaseError = (code: string, cause?: unknown): Error => {
+  const error = new Error(code, cause === undefined ? undefined : { cause });
   error.name = "VortexDatabaseError";
   return error;
 };
@@ -94,8 +94,7 @@ export class RequestDatabaseLifetimeOwner implements RequestDatabaseLifetime {
     this.tighten(options);
   }
 
-  readonly createOwnedLookup = (): RequestDatabaseLookupOwner | undefined =>
-    this.lookupFactory?.();
+  readonly createOwnedLookup = (): RequestDatabaseLookupOwner | undefined => this.lookupFactory?.();
 
   private lookupFactory: (() => RequestDatabaseLookupOwner) | undefined;
 
@@ -120,8 +119,10 @@ export class RequestDatabaseLifetimeOwner implements RequestDatabaseLifetime {
   /** Nested scopes retain the same owner and may only shorten its lifetime. */
   tighten(options: RequestDatabaseLifetimeOptions): void {
     if (options.createOwnedLookup !== undefined) {
-      if ((this.lookupFactory !== undefined || this.resources.size > 0) &&
-          this.lookupFactory !== options.createOwnedLookup)
+      if (
+        (this.lookupFactory !== undefined || this.resources.size > 0) &&
+        this.lookupFactory !== options.createOwnedLookup
+      )
         throw requestDatabaseError("DATABASE_LOOKUP_OWNER_MISMATCH");
       this.lookupFactory = options.createOwnedLookup;
     }
@@ -186,8 +187,9 @@ export class RequestDatabaseLifetimeOwner implements RequestDatabaseLifetime {
     this.timer = undefined;
     for (const remove of this.signalRemovers) remove();
     this.signalRemovers.length = 0;
-    if (resources.some((result) => result.status === "rejected"))
-      throw requestDatabaseError("DATABASE_RESOURCE_SETTLEMENT_FAILED");
+    const failed = resources.find((result) => result.status === "rejected");
+    if (failed !== undefined)
+      throw requestDatabaseError("DATABASE_RESOURCE_SETTLEMENT_FAILED", failed.reason);
     const settledAt = Date.now();
     if (settledAt > this.finalDeadline)
       throw requestDatabaseError("DATABASE_CLEANUP_DEADLINE_EXCEEDED");

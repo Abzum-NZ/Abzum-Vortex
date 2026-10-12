@@ -244,7 +244,7 @@ export type ProtectedOperationExecutorDependencies = ProtectedOperationServices 
     transaction: RequestDatabaseTransaction,
     scope: DurableActorRequestScope,
   ) => ProtectedOperationServices;
-  /** The #663 Access boundary used to re-resolve the durable run actor and current grants. */
+  /** Access service used to re-resolve the durable run actor and current grants. */
   durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
 }>;
 
@@ -1254,7 +1254,7 @@ export const createProtectedOperationExecutor = (
 
     /**
      * Runs a registered platform-service operation from one verified durable actor context. The
-     * context is re-resolved through #663 before the operation, and a durable callback never gets
+     * context is re-resolved through Access before the operation, and a durable callback never gets
      * to provide an IdentitySession or an organisation selection. Platform-service operations
      * remain person-owned; a system actor is refused rather than converted into a person.
      */
