@@ -1059,7 +1059,9 @@ const resolveDependencies = async (
     const release = moduleReleases[index];
     if (release === undefined)
       return refuse(
-        pinned === undefined ? "DEFINITION_DEPENDENCY_MISSING" : "DEFINITION_DEPENDENCY_SUBSTITUTED",
+        pinned === undefined
+          ? "DEFINITION_DEPENDENCY_MISSING"
+          : "DEFINITION_DEPENDENCY_SUBSTITUTED",
       );
     verifyModuleRelease(candidate, key, release);
     return release;
