@@ -27,9 +27,11 @@
     "knip": "knip",
     "build": "turbo run build",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
-    "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs"
+    "catalogue:fingerprints": "node --conditions=react-server --import tsx tooling/generate-catalogue-fingerprints.mjs"
   },
   "devDependencies": {
+    "@vortex/modules": "workspace:*",
+    "@vortex/platform": "workspace:*",
     "@eslint/js": "9.39.5",
     "@types/node": "24.13.6",
     "eslint": "9.39.5",
@@ -39,6 +41,7 @@
     "supabase": "catalog:",
     "turbo": "2.11.2",
     "typescript": "5.9.3",
+    "tsx": "catalog:",
     "typescript-eslint": "8.70.0"
   }
 }

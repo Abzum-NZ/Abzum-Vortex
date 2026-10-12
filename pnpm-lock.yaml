@@ -232,6 +232,12 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:modules
+      '@vortex/platform':
+        specifier: workspace:*
+        version: link:packages/platform
       eslint:
         specifier: 9.39.5
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
@@ -247,6 +253,9 @@ importers:
       supabase:
         specifier: 'catalog:'
         version: 2.117.0
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
       turbo:
         specifier: 2.11.2
         version: 2.11.2
@@ -265,60 +274,18 @@ importers:
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../../runtime/access
-      '@vortex/app':
-        specifier: workspace:*
-        version: link:../../runtime/app
-      '@vortex/connection':
-        specifier: workspace:*
-        version: link:../../runtime/connection
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/definition':
-        specifier: workspace:*
-        version: link:../../runtime/definition
-      '@vortex/event':
-        specifier: workspace:*
-        version: link:../../runtime/event
-      '@vortex/file':
-        specifier: workspace:*
-        version: link:../../runtime/file
-      '@vortex/identity':
-        specifier: workspace:*
-        version: link:../../runtime/identity
-      '@vortex/module':
-        specifier: workspace:*
-        version: link:../../runtime/module
       '@vortex/modules':
         specifier: workspace:*
         version: link:../../modules
-      '@vortex/page':
+      '@vortex/platform':
         specifier: workspace:*
-        version: link:../../runtime/page
-      '@vortex/query':
-        specifier: workspace:*
-        version: link:../../runtime/query
-      '@vortex/record':
-        specifier: workspace:*
-        version: link:../../runtime/record
-      '@vortex/search':
-        specifier: workspace:*
-        version: link:../../runtime/search
+        version: link:../../packages/platform
       '@vortex/studio':
         specifier: workspace:*
         version: link:../../studio
       '@vortex/ui':
         specifier: workspace:*
         version: link:../../ui
-      '@vortex/workflow':
-        specifier: workspace:*
-        version: link:../../runtime/workflow
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -357,325 +324,48 @@ importers:
         specifier: 'catalog:'
         version: 4.23.15
 
-  contracts:
-    dependencies:
-      semver:
-        specifier: 'catalog:'
-        version: 7.8.5
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-    devDependencies:
-      '@types/semver':
-        specifier: 'catalog:'
-        version: 7.8.0
-
-  db:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      postgres:
-        specifier: 'catalog:'
-        version: 3.4.9
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
   modules:
     dependencies:
-      '@vortex/contracts':
+      '@vortex/platform':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../packages/platform
 
-  runtime/access:
+  packages/platform:
     dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/definition':
-        specifier: workspace:*
-        version: link:../definition
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../../modules
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/app:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/module':
-        specifier: workspace:*
-        version: link:../module
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../../modules
-      '@vortex/query':
-        specifier: workspace:*
-        version: link:../query
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../rule
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/connection:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
-  runtime/definition:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../../modules
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../rule
-      '@vortex/theme':
-        specifier: workspace:*
-        version: link:../theme
-      semver:
+      '@js-temporal/polyfill':
         specifier: 'catalog:'
-        version: 7.8.5
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-    devDependencies:
-      '@types/semver':
-        specifier: 'catalog:'
-        version: 7.8.0
-
-  runtime/event:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/definition':
-        specifier: workspace:*
-        version: link:../definition
-      '@vortex/module':
-        specifier: workspace:*
-        version: link:../module
-      '@vortex/record':
-        specifier: workspace:*
-        version: link:../record
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
-  runtime/file:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/identity:
-    dependencies:
+        version: 0.5.1
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
-  runtime/module:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/page:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
-      '@vortex/app':
-        specifier: workspace:*
-        version: link:../app
-      '@vortex/connection':
-        specifier: workspace:*
-        version: link:../connection
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../../modules
-      '@vortex/query':
-        specifier: workspace:*
-        version: link:../query
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../rule
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/query:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/module':
-        specifier: workspace:*
-        version: link:../module
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-      zod:
-        specifier: 4.6.5
-        version: 4.6.5
-
-  runtime/record:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../rule
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
-  runtime/rule:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-
-  runtime/search:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-
-  runtime/theme:
-    dependencies:
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
+      postgres:
+        specifier: 'catalog:'
+        version: 3.4.9
+      semver:
+        specifier: 'catalog:'
+        version: 7.8.5
       server-only:
         specifier: 0.0.1
         version: 0.0.1
       shadcn:
         specifier: 4.21.0
         version: 4.21.0(supports-color@7.2.0)(typescript@5.9.3)
-
-  runtime/workflow:
-    dependencies:
-      '@js-temporal/polyfill':
-        specifier: 'catalog:'
-        version: 0.5.1
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../../contracts
-      '@vortex/db':
-        specifier: workspace:*
-        version: link:../../db
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../rule
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.8.0
 
   studio:
     dependencies:
       '@puckeditor/core':
         specifier: 'catalog:'
         version: 0.23.0(@floating-ui/dom@1.8.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
-      '@vortex/contracts':
+      '@vortex/platform':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../packages/platform
       '@vortex/ui':
         specifier: workspace:*
         version: link:../ui
@@ -710,12 +400,9 @@ importers:
       '@tabler/icons-react':
         specifier: 3.48.0
         version: 3.48.0(react@19.3.0)
-      '@vortex/contracts':
+      '@vortex/platform':
         specifier: workspace:*
-        version: link:../contracts
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../runtime/rule
+        version: link:../packages/platform
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1

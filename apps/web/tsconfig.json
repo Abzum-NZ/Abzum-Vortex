@@ -3,7 +3,9 @@
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
     "allowJs": false,
-    "incremental": true
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": { "@web/platform-server": ["./app/_lib/platform-server.ts"] }
   },
   "include": [".next/types/**/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]

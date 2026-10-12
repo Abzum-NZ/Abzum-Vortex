@@ -159,7 +159,7 @@ tasks use the declaration when checking their own accepted targets. Historical
 canonical inputs that omitted this metadata use the owning field's targets.
 These type declarations never grant access to the referenced records.
 
-The [Rule package](../../runtime/rule/package.json) is a shared, contracts-only package below Definition and Access in the enforced dependency graph. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Record visibility still requires the same semantics in publication, protected reads and database enforcement.
+The [rules domain](../../packages/platform/src/rules) is shared by Definition and Access in the platform package. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Record visibility still requires the same semantics in publication, protected reads and database enforcement.
 
 ## Events
 

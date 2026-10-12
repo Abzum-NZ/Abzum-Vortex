@@ -10,9 +10,7 @@ enforced by the platform and the database.
 | Path | Contents |
 | --- | --- |
 | `apps/web` | Next.js application and local development setup |
-| `contracts` | Shared types, schemas and platform catalogues |
-| `runtime/*` | Server-side engines (access, identity, definition, record, page, rule, ...) |
-| `db` | Database access layer |
+| `packages/platform` | Domain schemas, server operations and database access |
 | `ui`, `studio` | Shared components and the designer |
 | `modules` | Shipped application and module definitions |
 | `supabase` | Config, `schemas/` (canonical function files), `migrations/`, seed |

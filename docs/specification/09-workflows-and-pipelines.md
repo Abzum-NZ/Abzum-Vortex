@@ -119,7 +119,7 @@ Post-commit dispatch scopes the hand-off duplicate key to the source event or st
 
 ## Task types in the shared registry
 
-A durable flow uses the same task types as every other flow. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../contracts/src/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, how it compiles for Kestra, and:
+A durable flow uses the same task types as every other flow. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, how it compiles for Kestra, and:
 
 - its run locations: **browser**; **server**, a protected operation in its own short transaction; **transaction**, only inside the owning record save; **durable**, on Kestra;
 - its effect class: **pure**, **read**, **change**, **background start** or **interface**.

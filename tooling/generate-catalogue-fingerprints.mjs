@@ -6,13 +6,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 /**
  * Generates every platform catalogue release fingerprint from the one catalogue source.
  *
- * The catalogue source files under contracts/src/catalogue/ hold each release's content and
+ * The catalogue source files under packages/platform/src/catalogue/catalogue/ hold each release's content and
  * identity but never a fingerprint. This script derives the content and catalogue fingerprints
- * with runtime/definition/src/catalogue-release-fingerprints.ts, the same canonical-JSON SHA-256
+ * with packages/platform/src/definition/catalogue-release-fingerprints.ts, the same canonical-JSON SHA-256
  * derivation the publication catalogue uses to materialise and verify releases, and writes them to
  * catalogue-fingerprints.generated.json, keyed by exact release identity (the identity the
  * publication catalogue resolves: block or theme id and release version, or service, operation and
- * release version). The contracts catalogues merge that file in by the same identity, so no
+ * release version). The platform schema catalogues merge that file in by the same identity, so no
  * fingerprint is ever typed by hand and a new release version never reuses another's values. Run
  * it after any catalogue source change:
  *
@@ -20,18 +20,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
  *   pnpm catalogue:fingerprints --check   fail when the generated file is stale
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const catalogueDirectory = path.join(root, "contracts", "src", "catalogue");
+const catalogueDirectory = path.join(root, "packages", "platform", "src", "catalogue", "catalogue");
 const generatedFile = path.join(catalogueDirectory, "catalogue-fingerprints.generated.json");
 
 // The shared derivation is TypeScript that imports its siblings without a file extension, as the
 // workspace's bundler resolution allows. Resolve those the same way for this script. Its only
-// runtime use of @vortex/contracts is the canonical JSON helper; resolve that to the narrow source
+// runtime use of @vortex/platform/schema is the canonical JSON helper; resolve that to the narrow source
 // module so Node does not load unrelated catalogue JSON through the package barrel.
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === "@vortex/contracts") {
+    if (specifier === "../schema" && context.parentURL?.endsWith("/definition/canonical-json-definition.ts")) {
       return nextResolve(
-        pathToFileURL(path.join(root, "contracts", "src", "canonical-json.ts")).href,
+        pathToFileURL(path.join(root, "packages", "platform", "src", "definition", "canonical-json.ts")).href,
         context,
       );
     }
@@ -50,7 +50,7 @@ const {
   platformConnectionTypeReleaseFingerprints,
   platformServiceOperationReleaseFingerprints,
   platformThemeReleaseFingerprints,
-} = await import("../runtime/definition/src/catalogue-release-fingerprints.ts");
+} = await import("@vortex/platform/server");
 
 const readSource = async (name) =>
   JSON.parse(await readFile(path.join(catalogueDirectory, name), "utf8"));
@@ -114,7 +114,7 @@ if (process.argv.includes("--check")) {
   const current = (await readFile(generatedFile, "utf8").catch(() => "")).replace(/\r\n/g, "\n");
   if (current !== output) {
     console.error(
-      "contracts/src/catalogue/catalogue-fingerprints.generated.json is stale; run pnpm catalogue:fingerprints",
+      "packages/platform/src/catalogue/catalogue/catalogue-fingerprints.generated.json is stale; run pnpm catalogue:fingerprints",
     );
     process.exitCode = 1;
   }

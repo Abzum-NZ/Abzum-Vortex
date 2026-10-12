@@ -7,21 +7,10 @@ const nextConfig: NextConfig = {
     tsconfigPath: "tsconfig.build.json",
   },
   transpilePackages: [
-    "@vortex/contracts",
+    "@vortex/platform",
     "@vortex/modules",
     "@vortex/studio",
     "@vortex/ui",
-    "@vortex/access",
-    "@vortex/app",
-    "@vortex/definition",
-    "@vortex/event",
-    "@vortex/file",
-    "@vortex/identity",
-    "@vortex/module",
-    "@vortex/page",
-    "@vortex/query",
-    "@vortex/record",
-    "@vortex/workflow",
   ],
   // No other origin may frame a Vortex page or response (clickjacking); same-origin framing stays
   // allowed. The component host under /api/components/ is excluded: it answers on the dedicated

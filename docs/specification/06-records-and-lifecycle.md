@@ -155,7 +155,7 @@ not a reason to invent a System context in an ordinary-human save.
 One command describes every record write, so one engine can own validation,
 ordered mutation, announced Events, one receipt and all-or-nothing commit. The
 command is `recordChangeCommandV2Schema` in the
-[Record contracts](../../contracts/src/records.ts); its result is
+[Record contracts](../../packages/platform/src/records/records.ts); its result is
 `recordChangeResultV2Schema` and its single receipt is
 `recordChangeReceiptSchema`. It is the request to the one protected "apply
 record changes" operation of

@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vortex/contracts": "workspace:*"
+    "@vortex/platform": "workspace:*"
   },
   "vortex": {
     "tier": 1,

@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@puckeditor/core": "catalog:",
-    "@vortex/contracts": "workspace:*",
     "@vortex/ui": "workspace:*",
-    "react": "19.3.0"
+    "react": "19.3.0",
+    "@vortex/platform": "workspace:*"
   },
   "vortex": {
     "tier": 11,

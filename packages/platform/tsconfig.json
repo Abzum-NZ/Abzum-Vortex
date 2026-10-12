@@ -1,4 +1,4 @@
 {
   "extends": "../../tooling/typescript/server.json",
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -6,7 +6,7 @@
 
 Vortex assigns the version of every module and application publication. A builder can confirm the assigned result or cancel publication, but cannot choose a lower or different version.
 
-The comparison is pure and database-free. It compares one canonical draft with the latest immutable history supplied by the [Definition service](../../../runtime/definition), and it contains no knowledge of any installed application or business domain.
+The comparison is pure and database-free. It compares one canonical draft with the latest immutable history supplied by the [definition domain](../../../packages/platform/src/definition), and it contains no knowledge of any installed application or business domain.
 
 ```mermaid
 flowchart LR

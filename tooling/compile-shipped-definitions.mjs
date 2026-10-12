@@ -33,14 +33,28 @@ if (!process.argv.includes("--worker")) {
   process.stdout.write(result.stdout);
   process.exitCode = result.status ?? 1;
 } else {
-  const { compileDefinitionWithContext } = await import("../runtime/definition/src/compiler.ts");
+  const platform = await import("@vortex/platform/server");
+  const { installPlatformPermissionSource } = platform;
+  const {
+    platformPermissionDeclarations,
+    platformPermissionFor,
+    platformPermissionOwnerId,
+    isPlatformPermissionKey,
+  } = await import("@vortex/modules");
+  installPlatformPermissionSource({
+    ownerId: platformPermissionOwnerId,
+    declarations: platformPermissionDeclarations,
+    forKey: platformPermissionFor,
+    hasKey: isPlatformPermissionKey,
+  });
+  const { compileDefinitionWithContext } = platform;
   const { canonicalJson, fingerprintCanonicalValue } =
-    await import("../runtime/definition/src/canonical-json.ts");
+    platform;
   const {
     extractApplicationSourceIdentityRequirementsV2,
     extractModuleSourceIdentityRequirementsV3,
     extractSourceIdentityRequirements,
-  } = await import("../runtime/definition/src/source-identities.ts");
+  } = platform;
   const {
     applicationCompilationRequestV2Schema,
     DEFAULT_PLATFORM_THEME_RELEASE_V2,
@@ -53,9 +67,9 @@ if (!process.argv.includes("--worker")) {
     applicationSourceDocumentV2Schema,
     connectionTypeSourceDocumentSchema,
     PLATFORM_CONNECTION_TYPE_RELEASES,
-  } = await import("../contracts/src/index.ts");
+  } = await import("@vortex/platform/schema");
   const { compare: compareVersions } = createRequire(
-    path.join(root, "runtime", "definition", "package.json"),
+    path.join(root, "packages", "platform", "package.json"),
   )("semver");
 
   if (process.argv.includes("--audit")) {
@@ -158,7 +172,7 @@ if (!process.argv.includes("--worker")) {
       }
     }
   }
-  const connectionPath = "contracts/src/catalogue/platform-connection-type-catalogue.source.json";
+  const connectionPath = "packages/platform/src/catalogue/catalogue/platform-connection-type-catalogue.source.json";
   const currentConnections = new Map();
   for (const release of PLATFORM_CONNECTION_TYPE_RELEASES) {
     const current = currentConnections.get(release.source.key);

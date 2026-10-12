@@ -1,6 +1,6 @@
 # Definition validation error author guide
 
-[Contract index](README.md) · [Data-contract specification](../docs/specification/appendices/data-contracts.md#definition-validation-errors) · [Issue #13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13)
+[Contract index](README.md) · [Data-contract specification](../../docs/specification/appendices/data-contracts.md#definition-validation-errors) · [Issue #13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13)
 
 This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed. The snake-case documents below are exercised through the exported production authored-source schema and contain only author-controlled values.
 
@@ -148,7 +148,7 @@ The example key is illustrative caller data. It is not a built-in definition nam
 ## Adding or changing an error
 
 1. Confirm the failure cannot use an existing public code without losing useful author guidance.
-2. Add the code, catalogue entry, order, message, and guidance together in `validation-errors.ts`.
+2. Add the code, catalogue entry, order, message, and guidance together in `src/catalogue/validation-errors.ts`.
 3. Add the matching closed rule-failure family only when a rule runner must emit it.
 4. Add representative, adversarial, order, duplicate, and information-exposure tests.
 5. Treat changed public wording or meaning as a versioned contract change; never silently rewrite an existing catalogue version.

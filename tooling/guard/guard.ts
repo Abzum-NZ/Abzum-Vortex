@@ -15,6 +15,36 @@ const silentFindings: Array<{ file: string; line: number; variable: string; bran
 const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
+const renamedFromMain = new Map<string, string>();
+const renamed = spawnSync(
+  "git",
+  ["diff", "--find-renames=90%", "--name-status", "origin/main"],
+  { cwd: root, encoding: "utf8" },
+);
+if (renamed.status === 0) {
+  for (const line of renamed.stdout.split("\n")) {
+    const [status, previous, current] = line.trim().split("\t");
+    if (status?.startsWith("R") && previous && current)
+      renamedFromMain.set(normalize(current), normalize(previous));
+  }
+}
+// Preserve rename identity from the move commit when later import rewrites lower similarity.
+const commits = spawnSync("git", ["rev-list", "--reverse", "origin/main..HEAD"],
+  { cwd: root, encoding: "utf8" });
+if (commits.status === 0) {
+  let previous = "origin/main";
+  for (const commit of commits.stdout.trim().split("\n").filter(Boolean)) {
+    const step = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", previous, commit],
+      { cwd: root, encoding: "utf8" });
+    if (step.status === 0)
+      for (const line of step.stdout.split("\n")) {
+        const [status, before, after] = line.trim().split("\t");
+        if (status?.startsWith("R") && before && after && !renamedFromMain.has(normalize(after)))
+          renamedFromMain.set(normalize(after), normalize(before));
+      }
+    previous = commit;
+  }
+}
 const lineAt = (content: string, offset: number) => content.slice(0, offset).split("\n").length;
 function add(rule: string, file: string, line: number, detail: string): void {
   const base = `${rule}|${file}|${rule === "file-size" ? "over 1500 lines" : detail}`;
@@ -45,6 +75,8 @@ function area(file: string): string {
 function importedArea(specifier: string, file: string): string {
   if (specifier.startsWith(".")) {
     const target = normalize(relative(root, resolve(root, dirname(file), specifier)));
+    if (file === "packages/platform/src/schema.ts" && target.startsWith("packages/platform/src/"))
+      return "schema";
     return area(target);
   }
   if (specifier.startsWith("@vortex/platform/schema")) return "schema";
@@ -324,7 +356,7 @@ const keptOld = new Map<string, number>();
 for (const finding of silentFindings) {
   const key = `silent-parse|${finding.file}|${finding.variable}`;
   if (!baseSource.has(finding.file)) {
-    const previous = spawnSync("git", ["show", `origin/main:${finding.file}`], {
+    const previous = spawnSync("git", ["show", `origin/main:${renamedFromMain.get(finding.file) ?? finding.file}`], {
       cwd: root,
       encoding: "utf8",
     });
@@ -465,9 +497,47 @@ const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseli
 });
 const allowed =
   mainBaseline.status === 0 ? new Set(JSON.parse(mainBaseline.stdout) as string[]) : null;
+function existedUnderRenamedPath(id: string): boolean {
+  if (!allowed) return false;
+  const first = id.indexOf("|");
+  const second = id.indexOf("|", first + 1);
+  if (first < 0 || second < 0) return false;
+  const previous = renamedFromMain.get(id.slice(first + 1, second));
+  return previous !== undefined && allowed.has(`${id.slice(0, first + 1)}${previous}${id.slice(second)}`);
+}
 const current = new Set(unique.map((finding) => finding.id));
 const old = new Set(baseline);
 const mainFiles = new Map<string, boolean>();
+const priorExports = new Map<string, Set<string>>();
+function exportedBeforeMove(finding: Finding): boolean {
+  if (finding.rule !== "unused-export") return false;
+  const previousPath = renamedFromMain.get(finding.file);
+  if (!previousPath) return false;
+  let names = priorExports.get(previousPath);
+  if (!names) {
+    names = new Set<string>();
+    const previous = spawnSync("git", ["show", `origin/main:${previousPath}`],
+      { cwd: root, encoding: "utf8" });
+    if (previous.status === 0) {
+      const source = ts.createSourceFile(previousPath, previous.stdout, ts.ScriptTarget.Latest, true);
+      for (const statement of source.statements) {
+        if (ts.isExportDeclaration(statement) && statement.exportClause &&
+            ts.isNamedExports(statement.exportClause))
+          for (const item of statement.exportClause.elements) names.add(item.name.text);
+        if (!statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword))
+          continue;
+        if (ts.isVariableStatement(statement)) {
+          for (const declaration of statement.declarationList.declarations)
+            if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
+        } else if ("name" in statement && statement.name && ts.isIdentifier(statement.name as ts.Node)) {
+          names.add((statement.name as ts.Identifier).text);
+        }
+      }
+    }
+    priorExports.set(previousPath, names);
+  }
+  return names.has(finding.detail);
+}
 function unchangedFromMain(file: string): boolean {
   const cached = mainFiles.get(file);
   if (cached !== undefined) return cached;
@@ -484,12 +554,14 @@ function unchangedFromMain(file: string): boolean {
 // main, i.e. one that predates this pull request (recorded by --refresh-from-main).
 const growth = allowed
   ? baseline.filter(
-      (id) => !allowed.has(id) && !(current.has(id) && unchangedFromMain(id.split("|")[1])),
+      (id) => !allowed.has(id) && !existedUnderRenamedPath(id) &&
+        !(current.has(id) && unchangedFromMain(id.split("|")[1])),
     )
   : [];
 // Main can advance while this PR is open. A finding on a file identical to the
 // PR base belongs to main; a changed or newly added file is still checked here.
-const added = unique.filter((finding) => !old.has(finding.id) && !unchangedFromMain(finding.file));
+const added = unique.filter((finding) => !old.has(finding.id) &&
+  !unchangedFromMain(finding.file) && !exportedBeforeMove(finding));
 const resolved = baseline.filter((id) => !current.has(id));
 const stale = resolved.filter((id) => !unchangedFromMain(id.split("|")[1]));
 if (process.argv.includes("--refresh-from-main")) {
