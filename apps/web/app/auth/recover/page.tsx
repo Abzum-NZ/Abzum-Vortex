@@ -18,9 +18,14 @@ export default async function RecoverPage({ searchParams }: RecoverPageProps) {
       title="Reset your password"
       description="Enter your email address. If it is connected to an account, a one-time recovery code and instructions will be sent."
       footer={
-        <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
-          Return to sign in
-        </Link>
+        <div className="text-center text-sm">
+          <Link
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
+            href="/auth/sign-in"
+          >
+            Return to sign in
+          </Link>
+        </div>
       }
     >
       <StatusMessage status={status} />
