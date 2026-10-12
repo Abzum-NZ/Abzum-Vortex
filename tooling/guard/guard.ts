@@ -1,14 +1,21 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, relative, extname, basename, dirname } from "node:path";
 import ts from "typescript";
-import { packageAreas, paths } from "./config.ts";
+import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
 
 type Finding = { rule: string; file: string; line: number; detail: string; id: string };
 const root = resolve(import.meta.dirname, "../..");
 const baselinePath = resolve(import.meta.dirname, "baseline.json");
 const hasBaseline = existsSync(baselinePath);
-const baseline = hasBaseline ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]) : [];
+const ruleTier = (rule: string) =>
+  (guardRules as Record<string, { tier: "blocking" | "warning" }>)[rule]?.tier ?? "warning";
+const isBlocking = (rule: string) => ruleTier(rule) === "blocking";
+const baseline = hasBaseline
+  ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]).filter((id) =>
+      isBlocking(id.split("|")[0]),
+    )
+  : [];
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".sql"]);
 const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
@@ -16,11 +23,10 @@ const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
-const renamed = spawnSync(
-  "git",
-  ["diff", "--find-renames=90%", "--name-status", "origin/main"],
-  { cwd: root, encoding: "utf8" },
-);
+const renamed = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", "origin/main"], {
+  cwd: root,
+  encoding: "utf8",
+});
 if (renamed.status === 0) {
   for (const line of renamed.stdout.split("\n")) {
     const [status, previous, current] = line.trim().split("\t");
@@ -29,13 +35,18 @@ if (renamed.status === 0) {
   }
 }
 // Preserve rename identity from the move commit when later import rewrites lower similarity.
-const commits = spawnSync("git", ["rev-list", "--reverse", "origin/main..HEAD"],
-  { cwd: root, encoding: "utf8" });
+const commits = spawnSync("git", ["rev-list", "--reverse", "origin/main..HEAD"], {
+  cwd: root,
+  encoding: "utf8",
+});
 if (commits.status === 0) {
   let previous = "origin/main";
   for (const commit of commits.stdout.trim().split("\n").filter(Boolean)) {
-    const step = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", previous, commit],
-      { cwd: root, encoding: "utf8" });
+    const step = spawnSync(
+      "git",
+      ["diff", "--find-renames=90%", "--name-status", previous, commit],
+      { cwd: root, encoding: "utf8" },
+    );
     if (step.status === 0)
       for (const line of step.stdout.split("\n")) {
         const [status, before, after] = line.trim().split("\t");
@@ -356,10 +367,14 @@ const keptOld = new Map<string, number>();
 for (const finding of silentFindings) {
   const key = `silent-parse|${finding.file}|${finding.variable}`;
   if (!baseSource.has(finding.file)) {
-    const previous = spawnSync("git", ["show", `origin/main:${renamedFromMain.get(finding.file) ?? finding.file}`], {
-      cwd: root,
-      encoding: "utf8",
-    });
+    const previous = spawnSync(
+      "git",
+      ["show", `origin/main:${renamedFromMain.get(finding.file) ?? finding.file}`],
+      {
+        cwd: root,
+        encoding: "utf8",
+      },
+    );
     baseSource.set(finding.file, previous.status === 0 ? previous.stdout.replace(/\s+/g, " ") : "");
   }
   const signature = `${finding.file}|${finding.variable}|${finding.branch}`;
@@ -488,108 +503,222 @@ for (const issue of report.issues ?? []) {
   for (const item of issue.dependencies ?? [])
     add("unused-dependency", normalize(issue.file), item.line ?? 1, item.name);
 }
-const unique = [...new Map(findings.map((finding) => [finding.id, finding])).values()].sort(
+type Allowance = { file: string; line: number; rule: string; reason: string; used: boolean };
+const allowances: Allowance[] = [];
+for (const file of codeFiles) {
+  for (const [index, line] of read(file).split("\n").entries()) {
+    const comment = /(?:\/\/|--|\/\*|\*)\s*guard-allow:\s*(.*?)(?:\*\/|$)/.exec(line);
+    if (!comment) continue;
+    const directive = comment[1].trim();
+    const match = /^([^\s]+)(?:\s+([\s\S]*))?$/.exec(directive);
+    const lineNumber = index + 1;
+    const rule = match?.[1];
+    const reason = match?.[2]?.trim() ?? "";
+    if (!rule || !scannedRuleIds.has(rule)) {
+      add(
+        "invalid-guard-allow",
+        file,
+        lineNumber,
+        rule ? `unknown rule ${rule}` : "expected a rule id and reason",
+      );
+      continue;
+    }
+    if (reason.length < 10) {
+      add("invalid-guard-allow", file, lineNumber, "reason must contain at least 10 characters");
+      continue;
+    }
+    allowances.push({ file, line: lineNumber, rule, reason, used: false });
+  }
+}
+
+const waived = new Set<string>();
+const usedAllowances: Allowance[] = [];
+const scannedUnique = [...new Map(findings.map((finding) => [finding.id, finding])).values()].sort(
   (a, b) => a.id.localeCompare(b.id),
 );
+for (const finding of scannedUnique) {
+  const allowance = allowances.find(
+    (candidate) =>
+      !candidate.used &&
+      candidate.file === finding.file &&
+      candidate.rule === finding.rule &&
+      candidate.line <= finding.line &&
+      finding.line - candidate.line <= 1,
+  );
+  if (!allowance) continue;
+  allowance.used = true;
+  waived.add(finding.id);
+  usedAllowances.push(allowance);
+}
+for (const allowance of allowances) {
+  if (!allowance.used)
+    add(
+      "unused-guard-allow",
+      allowance.file,
+      allowance.line,
+      `${allowance.rule}: ${allowance.reason}`,
+    );
+}
+
+const unique = [
+  ...new Map(
+    findings.filter((finding) => !waived.has(finding.id)).map((finding) => [finding.id, finding]),
+  ).values(),
+].sort((a, b) => a.id.localeCompare(b.id));
 const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseline.json"], {
   cwd: root,
   encoding: "utf8",
 });
 const allowed =
-  mainBaseline.status === 0 ? new Set(JSON.parse(mainBaseline.stdout) as string[]) : null;
+  mainBaseline.status === 0
+    ? new Set(
+        (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
+      )
+    : null;
 function existedUnderRenamedPath(id: string): boolean {
   if (!allowed) return false;
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return false;
   const previous = renamedFromMain.get(id.slice(first + 1, second));
-  return previous !== undefined && allowed.has(`${id.slice(0, first + 1)}${previous}${id.slice(second)}`);
+  return (
+    previous !== undefined && allowed.has(`${id.slice(0, first + 1)}${previous}${id.slice(second)}`)
+  );
 }
 const current = new Set(unique.map((finding) => finding.id));
 const old = new Set(baseline);
 const mainFiles = new Map<string, boolean>();
-const priorExports = new Map<string, Set<string>>();
-function exportedBeforeMove(finding: Finding): boolean {
-  if (finding.rule !== "unused-export") return false;
-  const previousPath = renamedFromMain.get(finding.file);
-  if (!previousPath) return false;
-  let names = priorExports.get(previousPath);
-  if (!names) {
-    names = new Set<string>();
-    const previous = spawnSync("git", ["show", `origin/main:${previousPath}`],
-      { cwd: root, encoding: "utf8" });
-    if (previous.status === 0) {
-      const source = ts.createSourceFile(previousPath, previous.stdout, ts.ScriptTarget.Latest, true);
-      for (const statement of source.statements) {
-        if (ts.isExportDeclaration(statement) && statement.exportClause &&
-            ts.isNamedExports(statement.exportClause))
-          for (const item of statement.exportClause.elements) names.add(item.name.text);
-        if (!statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword))
-          continue;
-        if (ts.isVariableStatement(statement)) {
-          for (const declaration of statement.declarationList.declarations)
-            if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
-        } else if ("name" in statement && statement.name && ts.isIdentifier(statement.name as ts.Node)) {
-          names.add((statement.name as ts.Identifier).text);
-        }
-      }
-    }
-    priorExports.set(previousPath, names);
-  }
-  return names.has(finding.detail);
-}
 function unchangedFromMain(file: string): boolean {
   const cached = mainFiles.get(file);
   if (cached !== undefined) return cached;
   const present = existsSync(resolve(root, file));
-  const previous = spawnSync("git", ["show", `origin/main:${file}`],
-    { cwd: root, encoding: "utf8" });
-  const unchanged = previous.status === 0
-    ? present && previous.stdout.replaceAll("\r\n", "\n") === read(file)
-    : !present;
+  const previous = spawnSync("git", ["show", `origin/main:${file}`], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const unchanged =
+    previous.status === 0
+      ? present && previous.stdout.replaceAll("\r\n", "\n") === read(file)
+      : !present;
   mainFiles.set(file, unchanged);
   return unchanged;
 }
-// A new baseline entry is allowed only for a finding that exists now in a file identical to
-// main, i.e. one that predates this pull request (recorded by --refresh-from-main).
+// Only blocking findings belong in the baseline. New baseline entries must describe
+// violations already present in an unchanged main file; stale entries only warn.
 const growth = allowed
   ? baseline.filter(
-      (id) => !allowed.has(id) && !existedUnderRenamedPath(id) &&
+      (id) =>
+        !allowed.has(id) &&
+        !existedUnderRenamedPath(id) &&
         !(current.has(id) && unchangedFromMain(id.split("|")[1])),
     )
   : [];
-// Main can advance while this PR is open. A finding on a file identical to the
-// PR base belongs to main; a changed or newly added file is still checked here.
-const added = unique.filter((finding) => !old.has(finding.id) &&
-  !unchangedFromMain(finding.file) && !exportedBeforeMove(finding));
-const resolved = baseline.filter((id) => !current.has(id));
-const stale = resolved.filter((id) => !unchangedFromMain(id.split("|")[1]));
+const added = unique.filter(
+  (finding) => isBlocking(finding.rule) && !old.has(finding.id) && !unchangedFromMain(finding.file),
+);
+const warnings = unique.filter((finding) => !isBlocking(finding.rule));
+const stale = baseline.filter((id) => !current.has(id));
+const today = new Date().toISOString().slice(0, 10);
+const reviewNotices = Object.entries(guardRules).filter(([, rule]) => today > rule.reviewBy);
+
+for (const finding of warnings)
+  console.warn(`${finding.file}:${finding.line}: warning ${finding.rule}: ${finding.detail}`);
+for (const id of stale)
+  console.warn(`tooling/guard/baseline.json:1: warning stale-baseline: ${id}`);
+for (const [ruleId, rule] of reviewNotices)
+  console.log(
+    `Guard review notice: ${ruleId} is past review-by ${rule.reviewBy} (owner: ${rule.owner})${"reviewNote" in rule && rule.reviewNote ? `; ${rule.reviewNote}` : ""}.`,
+  );
+for (const allowance of usedAllowances)
+  console.log(
+    `Guard allowance used: ${allowance.file}:${allowance.line}: ${allowance.rule}: ${allowance.reason}`,
+  );
+
+const blocking = added.filter((finding) => isBlocking(finding.rule));
+for (const id of growth)
+  console.error(`tooling/guard/baseline.json:1: blocking baseline-growth: ${id}`);
+for (const finding of blocking)
+  console.error(`${finding.file}:${finding.line}: blocking ${finding.rule}: ${finding.detail}`);
+
+const warningCounts = new Map<string, number>();
+for (const finding of warnings)
+  warningCounts.set(finding.rule, (warningCounts.get(finding.rule) ?? 0) + 1);
+const summary = [
+  "## Guard summary",
+  "",
+  `- New blocking findings: ${blocking.length + growth.length}`,
+  `- Warning findings: ${warnings.length + stale.length}`,
+  `- Used allowances: ${usedAllowances.length}`,
+  "",
+  ...(warningCounts.size
+    ? [
+        "| Warning rule | Findings |",
+        "| --- | ---: |",
+        ...[...warningCounts].map(([rule, count]) => `| ${rule} | ${count} |`),
+        "",
+      ]
+    : []),
+  ...(stale.length
+    ? [`Stale blocking baseline entries: ${stale.length}. They do not fail the guard.`, ""]
+    : []),
+  ...(reviewNotices.length
+    ? [
+        "### Review dates passed",
+        ...reviewNotices.map(
+          ([ruleId, rule]) =>
+            `- ${ruleId}: owner ${rule.owner}; review-by ${rule.reviewBy}${"reviewNote" in rule && rule.reviewNote ? ` (${rule.reviewNote})` : ""}`,
+        ),
+        "",
+      ]
+    : []),
+  ...(usedAllowances.length
+    ? [
+        "### Guard allowances used",
+        ...usedAllowances.map(
+          (allowance) =>
+            `- ${allowance.file}:${allowance.line}: \`${allowance.rule}\` — ${allowance.reason}`,
+        ),
+        "",
+      ]
+    : []),
+];
+const summaryText = `${summary.join("\n")}\n`;
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryText);
+else console.log(summaryText);
+
 if (process.argv.includes("--refresh-from-main")) {
-  // Records main's complete current findings. Allowed only on a tree identical to origin/main,
-  // so a pull request can never use it to enlarge the baseline.
-  const diff = spawnSync("git", ["diff", "--quiet", "origin/main", "--", ".", ":(exclude)tooling/guard"], { cwd: root });
-  if (diff.status !== 0) throw new Error("--refresh-from-main requires a tree identical to origin/main");
-  writeFileSync(baselinePath, `${JSON.stringify(unique.map((finding) => finding.id), null, 2)}
-`);
-  console.log(`Baseline refreshed from main: ${unique.length} findings.`);
+  const diff = spawnSync(
+    "git",
+    ["diff", "--quiet", "origin/main", "--", ".", ":(exclude)tooling/guard"],
+    { cwd: root },
+  );
+  if (diff.status !== 0)
+    throw new Error("--refresh-from-main requires a tree identical to origin/main");
+  const blockingFindings = unique.filter((finding) => isBlocking(finding.rule));
+  writeFileSync(
+    baselinePath,
+    `${JSON.stringify(
+      blockingFindings.map((finding) => finding.id),
+      null,
+      2,
+    )}\n`,
+  );
+  console.log(`Blocking baseline refreshed from main: ${blockingFindings.length} findings.`);
 } else if (process.argv.includes("--update-baseline")) {
-  if (growth.length) throw new Error(`Baseline cannot grow: ${growth[0]}`);
-  if (hasBaseline && added.length)
+  if (growth.length) throw new Error(`Blocking baseline cannot grow: ${growth[0]}`);
+  if (hasBaseline && blocking.length)
     throw new Error(
-      `Baseline cannot grow: ${added[0].file}:${added[0].line} ${added[0].rule} ${added[0].detail}`,
+      `Blocking baseline cannot grow: ${blocking[0].file}:${blocking[0].line} ${blocking[0].rule} ${blocking[0].detail}`,
     );
   writeFileSync(
     baselinePath,
-    `${JSON.stringify(hasBaseline ? baseline.filter((id) => current.has(id)) : unique.map((finding) => finding.id), null, 2)}\n`,
+    `${JSON.stringify(hasBaseline ? baseline.filter((id) => current.has(id)) : unique.filter((finding) => isBlocking(finding.rule)).map((finding) => finding.id), null, 2)}\n`,
   );
   console.log(
-    `Baseline contains ${baseline.length ? baseline.length - resolved.length : unique.length} findings.`,
+    `Blocking baseline contains ${hasBaseline ? baseline.length - stale.length : blocking.length} findings.`,
   );
+} else if (blocking.length || growth.length) {
+  process.exitCode = 1;
 } else {
-  for (const id of growth) console.error(`baseline.json:1: baseline grew: ${id}`);
-  for (const finding of added)
-    console.error(`${finding.file}:${finding.line}: ${finding.rule}: ${finding.detail}`);
-  for (const id of stale) console.error(`baseline.json:1: stale baseline entry: ${id}`);
-  if (added.length || stale.length || growth.length) process.exitCode = 1;
-  else console.log(`Guard passed (${baseline.length} baseline entries).`);
+  console.log(`Guard passed (${baseline.length} blocking baseline entries).`);
 }
