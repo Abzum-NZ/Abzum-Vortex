@@ -116,7 +116,10 @@ function NavigationList({
           const id = headingId(item.id);
           return (
             <Item key={item.id} data-vortex-navigation-item-id={item.id}>
-              <SidebarGroupLabel render={<span id={id} />}>{item.label}</SidebarGroupLabel>
+              <SidebarGroupLabel render={<span id={id} />}>
+                <Icon name={item.icon} aria-hidden="true" />
+                <span data-vortex-navigation-label="">{item.label}</span>
+              </SidebarGroupLabel>
               <NavigationList
                 items={item.children}
                 depth={depth + 1}
@@ -143,7 +146,8 @@ function NavigationList({
                   aria-label={`${item.label} (external)`}
                 />,
                 <>
-                  <span className="min-w-0 truncate underline underline-offset-4">{item.label}</span>
+                  <Icon name={item.icon} aria-hidden="true" />
+                  <span data-vortex-navigation-label="" className="min-w-0 truncate underline underline-offset-4">{item.label}</span>
                   <span className="ms-auto shrink-0 text-xs text-muted-foreground">External</span>
                 </>,
                 false,
@@ -159,13 +163,16 @@ function NavigationList({
             data-vortex-navigation-item-type="page"
           >
             {renderLink(
-              <a
-                href={resolvePageHref(item.pageId)}
-                aria-label={item.label}
+                <a
+                  href={resolvePageHref(item.pageId)}
+                  aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
                 onClick={(event) => onNavigate?.(item.pageId, event)}
-              />,
-              <span>{item.label}</span>,
+                />,
+              <>
+                <Icon name={item.icon} aria-hidden="true" />
+                <span data-vortex-navigation-label="">{item.label}</span>
+              </>,
               current,
             )}
           </Item>
@@ -215,11 +222,12 @@ export function ApplicationNavigation({
   return (
     <nav
       aria-label={label}
+      data-vortex-shell-navigation=""
       data-vortex-navigation-open={open ? "true" : "false"}
       {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
       className={cn("w-full min-w-0", className)}
     >
-      <Sidebar className="h-auto w-full">
+      <Sidebar className="min-h-svh">
         <SidebarContent>
           <SidebarGroup>
             {navigation.length === 0 ? (

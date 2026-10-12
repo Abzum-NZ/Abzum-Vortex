@@ -11,13 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
-import type { PlatformBlockRenderProps } from "../registry";
-
 /** Current account facts and platform actions, supplied by the signed-in route. */
 export type ApplicationAccountActions = Readonly<{
   organizationName: string;
   chooseOrganization: () => void | Promise<void>;
   signOut: () => void | Promise<void>;
+  openApplication: (href: string) => void | Promise<void>;
 }>;
 
 const AccountActionsContext = createContext<ApplicationAccountActions | null>(null);
@@ -31,9 +30,45 @@ export function ApplicationAccountActionsProvider({
   );
 }
 
+export function useApplicationAccountActions(): ApplicationAccountActions | null {
+  return useContext(AccountActionsContext);
+}
+
+/** Account actions placed in the application definition's configured top bar. */
+export function ApplicationAccountMenu(): ReactElement {
+  const actions = useApplicationAccountActions();
+  const organizationName = actions?.organizationName ?? "Account";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        disabled={actions === null}
+        aria-label="Account menu"
+        className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+      >
+        <Avatar>
+          <AvatarFallback>{organizationName.slice(0, 2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.chooseOrganization()}>
+          Choose organisation
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.signOut()}>
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** The shell chooses this block's placement; the route supplies only current account data. */
-export function ApplicationAccountActionsBlock(_props: PlatformBlockRenderProps): ReactElement {
-  const actions = useContext(AccountActionsContext);
+export function ApplicationAccountActionsBlock(): ReactElement {
+  const actions = useApplicationAccountActions();
   const organizationName = actions?.organizationName ?? "Organisation";
 
   return (
@@ -45,27 +80,7 @@ export function ApplicationAccountActionsBlock(_props: PlatformBlockRenderProps)
       <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
         {organizationName}
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          disabled={actions === null}
-          aria-label="Account and organisation menu"
-          className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
-        >
-          <Avatar>
-            <AvatarFallback>{organizationName.slice(0, 2).toUpperCase()}</AvatarFallback>
-          </Avatar>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-48">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void actions?.chooseOrganization()}>
-            Choose organisation
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void actions?.signOut()}>Sign out</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ApplicationAccountMenu />
     </nav>
   );
 }

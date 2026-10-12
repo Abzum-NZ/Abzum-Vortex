@@ -27,6 +27,7 @@ import {
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,
   type ApplicationAccountActions,
+  type ApplicationShellRuntime,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
@@ -767,11 +768,13 @@ export function ApplicationPageView({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   return (
@@ -780,6 +783,7 @@ export function ApplicationPageView({
         model={model}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}
+        applicationToolbar={applicationToolbar}
         pageFeedback={pageFeedback}
       />
     </UnsavedWorkProvider>
@@ -790,11 +794,13 @@ function ApplicationPageViewContent({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   const router = useRouter();
@@ -2750,10 +2756,26 @@ function ApplicationPageViewContent({
       if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
       router.push("/signed-in");
     },
+    openApplication: async (href: string) => {
+      if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
+      router.push(href);
+    },
     signOut: async () => {
       if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
       await signOut();
     },
+  };
+  const applicationShellRuntime: ApplicationShellRuntime = {
+    applicationName: model.applicationName,
+    applicationHref: `${basePath}/${encodeURIComponent(model.applicationHomePageKey)}`,
+    organizationName: application.organizationShortName,
+    pageName: model.pageName,
+    ...(applicationToolbar === undefined ? {} : { toolbarContent: applicationToolbar }),
+    applications: model.availableApplications.map((candidate) => ({
+      key: candidate.key,
+      name: candidate.name,
+      href: `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
+    })),
   };
 
   return (
@@ -2788,6 +2810,8 @@ function ApplicationPageViewContent({
         composition={model.page as unknown as ProjectedPageCapability}
         registry={platformComponentRegistry}
         shells={model.shells}
+        {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
+        applicationShellRuntime={applicationShellRuntime}
         pageId={model.pageId}
         theme={model.theme}
         projectedNavigation={model.navigation}

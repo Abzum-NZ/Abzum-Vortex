@@ -39,6 +39,7 @@ export type GuidedFormCompositionV2 = GuidedFormPageCompositionV2;
  */
 export type ProjectedPageCapability = Readonly<{
   pageId?: string;
+  shellId?: string;
   type?: string;
   steps?: readonly Readonly<{ id: string; name?: string; summary?: boolean }>[];
   composition:
@@ -296,6 +297,7 @@ export function resolveRootPlacementSlot(options: {
 type ResolvedRootPlacementSlot = Readonly<{
   slot: PlacementSlotV2;
   permissionProjected: boolean;
+  shell?: ApplicationShellV2;
 }>;
 
 const hasCanonicalShellKind = (
@@ -331,6 +333,15 @@ const requireUniqueShell = (
   }
   return matches[0];
 };
+
+const shellForComposition = (
+  composition: PageCompositionV2 | GuidedFormPageCompositionV2,
+  shells: readonly ApplicationShellV2[],
+  pageId?: string,
+): ApplicationShellV2 | undefined =>
+  composition.shellKind === "application"
+    ? requireUniqueShell(shells, composition.shellId, pageId)
+    : undefined;
 
 const resolveGuidedStepId = (
   stepMap: Readonly<Record<string, unknown>>,
@@ -446,6 +457,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
       );
     }
 
+    const shell = shellForComposition(targetPage.composition, composition.shells, targetPage.pageId);
     return {
       slot: resolvePageCompositionSlot({
         composition: targetPage.composition,
@@ -457,11 +469,13 @@ export const resolveRootPlacementSlotWithContext = (options: {
         ...(registry === undefined ? {} : { registry }),
       }),
       permissionProjected: false,
+      ...(shell === undefined ? {} : { shell }),
     };
   }
 
   // Case 2: PageDefinitionV2
   if (isCanonicalPageDefinition(composition)) {
+    const shell = shellForComposition(composition.composition, availableShells, composition.pageId);
     return {
       slot: resolvePageCompositionSlot({
         composition: composition.composition,
@@ -472,14 +486,23 @@ export const resolveRootPlacementSlotWithContext = (options: {
         ...(registry === undefined ? {} : { registry }),
       }),
       permissionProjected: false,
+      ...(shell === undefined ? {} : { shell }),
     };
   }
 
   // Case 3: ProjectedPageCapability
   if ("composition" in composition) {
     const projectedComp = composition.composition;
+    const shell =
+      composition.shellId === undefined
+        ? undefined
+        : requireUniqueShell(availableShells, composition.shellId, composition.pageId);
     if ("main" in projectedComp) {
-      return { slot: projectedComp.main, permissionProjected: true };
+      return {
+        slot: projectedComp.main,
+        permissionProjected: true,
+        ...(shell === undefined ? {} : { shell }),
+      };
     }
     if ("stepContent" in projectedComp) {
       const stepMap = projectedComp.stepContent;
@@ -497,7 +520,11 @@ export const resolveRootPlacementSlotWithContext = (options: {
           { stepId },
         );
       }
-      return { slot: projectedStep, permissionProjected: true };
+      return {
+        slot: projectedStep,
+        permissionProjected: true,
+        ...(shell === undefined ? {} : { shell }),
+      };
     }
   }
 
@@ -508,6 +535,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
       "Unrecognised page composition structure",
       pageId === undefined ? {} : { pageId },
     );
+  const shell = shellForComposition(composition, availableShells, pageId);
   return {
     slot: resolvePageCompositionSlot({
       composition,
@@ -517,6 +545,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
       ...(registry === undefined ? {} : { registry }),
     }),
     permissionProjected: false,
+    ...(shell === undefined ? {} : { shell }),
   };
 };
 

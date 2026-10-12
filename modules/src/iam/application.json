@@ -275,6 +275,7 @@
         "id": "nav_iam_overview",
         "type": "page",
         "label": "Overview",
+        "icon":  "grid",
         "page": "iam_overview",
         "permission": "platform.organization.permissions.read"
       },
@@ -282,11 +283,13 @@
         "id": "nav_iam_profile_heading",
         "type": "heading",
         "label": "Your profile",
+        "icon":  "grid",
         "children": [
           {
             "id": "nav_iam_profile",
             "type": "page",
             "label": "My profile",
+            "icon":  "grid",
             "page": "iam_profile",
             "permission": "application.iam.open"
           }
@@ -296,11 +299,13 @@
         "id": "nav_iam_people_heading",
         "type": "heading",
         "label": "People",
+        "icon":  "users",
         "children": [
           {
             "id": "nav_iam_people",
             "type": "page",
             "label": "People",
+            "icon":  "users",
             "page": "iam_people",
             "permission": "platform.organization.accounts.read"
           }
@@ -310,11 +315,13 @@
         "id": "nav_iam_roles_heading",
         "type": "heading",
         "label": "Roles and Groups",
+        "icon":  "sliders-horizontal",
         "children": [
           {
             "id": "nav_iam_roles",
             "type": "page",
             "label": "Roles and Groups",
+            "icon":  "sliders-horizontal",
             "page": "iam_roles_groups",
             "permission": "platform.organization.roles.read"
           },
@@ -322,6 +329,7 @@
             "id": "nav_iam_manage_roles_groups",
             "type": "page",
             "label": "Manage roles and Groups",
+            "icon":  "sliders-horizontal",
             "page": "iam_manage_roles_groups",
             "permission": "platform.organization.roles.manage"
           },
@@ -329,6 +337,7 @@
             "id": "nav_iam_assignments",
             "type": "page",
             "label": "Assignments",
+            "icon":  "grid",
             "page": "iam_assignments",
             "permission": "platform.organization.assignments.read"
           },
@@ -336,6 +345,7 @@
             "id": "nav_iam_manage_assignments",
             "type": "page",
             "label": "Manage assignments",
+            "icon":  "grid",
             "page": "iam_manage_assignments",
             "permission": "platform.organization.assignments.manage"
           }
@@ -345,11 +355,13 @@
         "id": "nav_iam_access_heading",
         "type": "heading",
         "label": "Access",
+        "icon":  "grid",
         "children": [
           {
             "id": "nav_iam_requests",
             "type": "page",
             "label": "Access Requests",
+            "icon":  "life-buoy",
             "page": "iam_access_requests",
             "permission": "application.iam.open"
           }
@@ -359,11 +371,13 @@
         "id": "nav_iam_privileged_heading",
         "type": "heading",
         "label": "Privileged access",
+        "icon":  "grid",
         "children": [
           {
             "id": "nav_iam_eligible",
             "type": "page",
             "label": "Eligible roles",
+            "icon":  "sliders-horizontal",
             "page": "iam_privileged_eligible",
             "permission": "platform.organization.roles.read"
           },
@@ -371,6 +385,7 @@
             "id": "nav_iam_active",
             "type": "page",
             "label": "Active roles",
+            "icon":  "sliders-horizontal",
             "page": "iam_privileged_active",
             "permission": "platform.organization.roles.read"
           }
@@ -524,6 +539,18 @@
         "id": "shell_iam",
         "key": "iam_shell",
         "name": "IAM shell",
+        "presentation":  {
+            "sidebar":  {
+                "collapsible":  "icon",
+                "default_collapsed":  false
+            },
+            "top_bar":  {
+                "breadcrumbs":  true,
+                "organization_switcher":  true,
+                "application_switcher":  true,
+                "account_menu":  true
+            }
+        },
         "layout": {
           "placements": {
             "shell_root": {
@@ -562,65 +589,7 @@
                 }
               },
               "slots": {
-                "header": {
-                  "placements": {
-                    "shell_heading": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {
-                        "text": {
-                          "kind": "text",
-                          "value": "IAM"
-                        },
-                        "level": {
-                          "kind": "choice",
-                          "value": "one"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    },
-                    "shell_account": {
-                      "block": {
-                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {},
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    }
-                  },
-                  "order": {
-                    "desktop": [
-                      "shell_heading",
-                      "shell_account"
-                    ]
-                  }
-                },
+                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                 "content": {
                   "placements": {
                     "shell_body": {

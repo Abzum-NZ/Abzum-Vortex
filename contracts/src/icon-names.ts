@@ -1,0 +1,32 @@
+import { z } from "zod";
+
+/** Semantic icons available to definitions and the shadcn icon adapters. */
+export const VORTEX_ICON_NAMES = [
+  "arrow-down",
+  "arrow-up",
+  "calendar",
+  "check",
+  "chevron-down",
+  "chevron-left",
+  "chevron-right",
+  "chevron-up",
+  "circle",
+  "close",
+  "loader",
+  "menu",
+  "minus",
+  "more-horizontal",
+  "more-vertical",
+  "panel-left",
+  "plus",
+  "search",
+  "grid",
+  "contact-round",
+  "users",
+  "sliders-horizontal",
+  "life-buoy",
+  "building-2",
+] as const;
+
+export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);
+export type VortexIconName = (typeof VORTEX_ICON_NAMES)[number];

@@ -359,11 +359,14 @@ export {
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
+  ApplicationAccountMenu,
+  useApplicationAccountActions,
   type ApplicationAccountActions,
   NAVIGATION_BLOCK_RELEASES,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,
 } from "./navigation";
+export { ApplicationShellRoot, type ApplicationShellRuntime } from "./navigation";
 
 // Full Platform Component Registry (Display + Controls + Launcher + Layout + Navigation)
 export {

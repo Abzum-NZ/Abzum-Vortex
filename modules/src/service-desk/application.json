@@ -330,6 +330,7 @@
                                         "id":  "nav_sd_home",
                                         "type":  "page",
                                         "label":  "Overview",
+                                        "icon":  "life-buoy",
                                         "page":  "service_desk_overview",
                                         "permission":  "application.service_desk.open"
                                     },
@@ -337,11 +338,13 @@
                                         "id":  "nav_sd_cases",
                                         "type":  "heading",
                                         "label":  "Cases",
+                                        "icon":  "life-buoy",
                                         "children":  [
                                                          {
                                                              "id":  "nav_sd_queue",
                                                              "type":  "page",
                                                              "label":  "Case queue",
+                                                             "icon":  "life-buoy",
                                                              "page":  "service_desk_cases",
                                                              "permission":  "application.service_desk.case.read"
                                                          },
@@ -349,6 +352,7 @@
                                                              "id":  "nav_sd_new",
                                                              "type":  "page",
                                                              "label":  "New case",
+                                                             "icon":  "life-buoy",
                                                              "page":  "service_desk_new_case",
                                                              "permission":  "application.service_desk.case.create"
                                                          }
@@ -358,11 +362,13 @@
                                         "id":  "nav_sd_customers",
                                         "type":  "heading",
                                         "label":  "Customers",
+                                        "icon":  "grid",
                                         "children":  [
                                                          {
                                                              "id":  "nav_sd_companies",
                                                              "type":  "page",
                                                              "label":  "Companies",
+                                                             "icon":  "building-2",
                                                              "page":  "service_desk_customers",
                                                              "permission":  "application.service_desk.company.read"
                                                          },
@@ -370,6 +376,7 @@
                                                              "id":  "nav_sd_requesters",
                                                              "type":  "page",
                                                              "label":  "Requesters",
+                                                             "icon":  "life-buoy",
                                                              "page":  "service_desk_requesters",
                                                              "permission":  "application.service_desk.contact.read"
                                                          }
@@ -379,6 +386,7 @@
                                         "id":  "nav_sd_knowledge",
                                         "type":  "page",
                                         "label":  "Knowledge",
+                                        "icon":  "life-buoy",
                                         "page":  "service_desk_knowledge",
                                         "permission":  "application.service_desk.article.read"
                                     },
@@ -386,11 +394,13 @@
                                         "id":  "nav_sd_admin",
                                         "type":  "heading",
                                         "label":  "Settings",
+                                        "icon":  "sliders-horizontal",
                                         "children":  [
                                                          {
                                                              "id":  "nav_sd_sla",
                                                              "type":  "page",
                                                              "label":  "Service levels",
+                                                             "icon":  "life-buoy",
                                                              "page":  "service_desk_service_levels",
                                                              "permission":  "application.service_desk.service_level.read"
                                                          },
@@ -398,6 +408,7 @@
                                                            "id": "nav_sd_new_business_calendar",
                                                            "type": "page",
                                                            "label": "New business calendar",
+                                                           "icon":  "life-buoy",
                                                            "page": "service_desk_new_business_calendar",
                                                            "permission": "application.service_desk.business_calendar.create"
                                                          },
@@ -405,6 +416,7 @@
                                                            "id": "nav_sd_new_service_level",
                                                            "type": "page",
                                                            "label": "New service level",
+                                                           "icon":  "life-buoy",
                                                            "page": "service_desk_new_service_level",
                                                            "permission": "application.service_desk.service_level.create"
                                                          }
@@ -3631,6 +3643,18 @@
                      "id": "shell_service_desk",
                      "key": "service_desk_shell",
                      "name": "Service Desk shell",
+                     "presentation":  {
+                         "sidebar":  {
+                             "collapsible":  "icon",
+                             "default_collapsed":  false
+                         },
+                         "top_bar":  {
+                             "breadcrumbs":  true,
+                             "organization_switcher":  true,
+                             "application_switcher":  true,
+                             "account_menu":  true
+                         }
+                     },
                      "layout": {
                        "placements": {
                          "shell_root": {
@@ -3669,124 +3693,7 @@
                              }
                            },
                            "slots": {
-                             "header": {
-                                 "placements": {
-                                     "shell_header_frame": {
-                                         "block": {
-                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                             "release_version": "1.3.0"
-                                         },
-                                         "settings": {
-                                             "direction": {
-                                                 "kind": "choice",
-                                                 "value": "row"
-                                             },
-                                             "gap": {
-                                                 "kind": "choice",
-                                                 "value": "large"
-                                             },
-                                             "phone_direction": {
-                                                 "kind": "choice",
-                                                 "value": "column"
-                                             },
-                                             "padding": {
-                                                 "kind": "choice",
-                                                 "value": "none"
-                                             },
-                                             "content_width": {
-                                                 "kind": "choice",
-                                                 "value": "fill"
-                                             }
-                                         },
-                                         "theme_overrides": {},
-                                         "responsive": {
-                                             "desktop": {
-                                                 "visible": true,
-                                                 "width": {
-                                                     "kind": "fill"
-                                                 },
-                                                 "height": {
-                                                     "kind": "content"
-                                                 }
-                                             }
-                                         },
-                                         "slots": {
-                                             "header": {
-                                                 "placements": {
-                                                     "shell_heading": {
-                                                         "block": {
-                                                             "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                                             "release_version": "1.0.0"
-                                                         },
-                                                         "settings": {
-                                                             "text": {
-                                                                 "kind": "text",
-                                                                 "value": "Service Desk"
-                                                             },
-                                                             "level": {
-                                                                 "kind": "choice",
-                                                                 "value": "one"
-                                                             }
-                                                         },
-                                                         "theme_overrides": {},
-                                                         "responsive": {
-                                                             "desktop": {
-                                                                 "visible": true,
-                                                                 "width": {
-                                                                     "kind": "fill"
-                                                                 },
-                                                                 "height": {
-                                                                     "kind": "content"
-                                                                 }
-                                                             }
-                                                         },
-                                                         "slots": {}
-                                                     }
-                                                 },
-                                                 "order": {
-                                                     "desktop": [
-                                                         "shell_heading"
-                                                     ]
-                                                 }
-                                             },
-                                             "content": {
-                                                 "placements": {
-                                                     "shell_account": {
-                                                         "block": {
-                                                             "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                                                             "release_version": "1.0.0"
-                                                         },
-                                                         "settings": {},
-                                                         "theme_overrides": {},
-                                                         "responsive": {
-                                                             "desktop": {
-                                                                 "visible": true,
-                                                                 "width": {
-                                                                     "kind": "fill"
-                                                                 },
-                                                                 "height": {
-                                                                     "kind": "content"
-                                                                 }
-                                                             }
-                                                         },
-                                                         "slots": {}
-                                                     }
-                                                 },
-                                                 "order": {
-                                                     "desktop": [
-                                                         "shell_account"
-                                                     ]
-                                                 }
-                                             }
-                                         }
-                                     }
-                                 },
-                                 "order": {
-                                     "desktop": [
-                                         "shell_header_frame"
-                                     ]
-                                 }
-                             },
+                             "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                              "content": {
                                "placements": {
                                  "shell_body": {
@@ -3923,6 +3830,18 @@
                      "id": "shell_service_desk_public",
                      "key": "service_desk_public_shell",
                      "name": "Service Desk public shell",
+                     "presentation":  {
+                         "sidebar":  {
+                             "collapsible":  "none",
+                             "default_collapsed":  false
+                         },
+                         "top_bar":  {
+                             "breadcrumbs":  true,
+                             "organization_switcher":  false,
+                             "application_switcher":  false,
+                             "account_menu":  false
+                         }
+                     },
                      "layout": {
                        "placements": {
                          "shell_public_root": {

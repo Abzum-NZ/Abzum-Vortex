@@ -2593,6 +2593,61 @@ export const sourceShellContentSlotV2Schema = z
   })
   .strict();
 
+export const applicationShellPresentationV2Schema = z
+  .object({
+    sidebar: z
+      .object({
+        collapsible: z.enum(["none", "icon"]),
+        defaultCollapsed: z.boolean(),
+      })
+      .strict(),
+    topBar: z
+      .object({
+        breadcrumbs: z.boolean(),
+        organizationSwitcher: z.boolean(),
+        applicationSwitcher: z.boolean(),
+        accountMenu: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const applicationPuckRootShellV2Schema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("default") }).strict(),
+  z
+    .object({
+      kind: z.literal("application"),
+      shellId: sourceProvenanceUnchanged(shellIdSchema),
+      key: sourceProvenanceUnchanged(builderKeySchema),
+      name: sourceProvenanceUnchanged(labelSchema),
+      presentation: sourceProvenanceUnchanged(applicationShellPresentationV2Schema),
+    })
+    .strict(),
+]);
+
+export const sourceApplicationShellPresentationV2Schema = z
+  .object({
+    sidebar: sourceProvenanceUnchanged(
+      z
+        .object({
+          collapsible: sourceProvenanceUnchanged(z.enum(["none", "icon"])),
+          default_collapsed: sourceProvenanceUnchanged(z.boolean()),
+        })
+        .strict(),
+    ),
+    top_bar: sourceProvenanceUnchanged(
+      z
+        .object({
+          breadcrumbs: sourceProvenanceUnchanged(z.boolean()),
+          organization_switcher: sourceProvenanceUnchanged(z.boolean()),
+          application_switcher: sourceProvenanceUnchanged(z.boolean()),
+          account_menu: sourceProvenanceUnchanged(z.boolean()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 const collectCanonicalPlacementSlots = (
   slot: PlacementSlotV2,
   result = new Map<string, Record<string, PlacementSlotV2>>(),
@@ -2643,6 +2698,7 @@ export const applicationShellV2Schema = z
     shellId: sourceProvenanceUnchanged(shellIdSchema),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
+    presentation: sourceProvenanceUnchanged(applicationShellPresentationV2Schema),
     layout: sourceProvenanceUnchanged(placementSlotV2Schema),
     contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotV2Schema).min(1)),
   })
@@ -2699,6 +2755,7 @@ export const sourceApplicationShellV2Schema = z
     id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
+    presentation: sourceProvenanceUnchanged(sourceApplicationShellPresentationV2Schema),
     layout: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
     content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotV2Schema).min(1)),
   })
@@ -2841,6 +2898,7 @@ export type ApplicationCompositionCatalogueSnapshotV2 = z.infer<
 >;
 export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
+export type ApplicationPuckRootShellV2 = z.infer<typeof applicationPuckRootShellV2Schema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
 export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
 

@@ -1,12 +1,10 @@
 import {
-  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_2_0,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
-  HEADING_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_INPUT_BLOCK_RELEASE,
   defaultSaveFlowSource,
@@ -71,6 +69,15 @@ const shell = {
   id: "shell_tasks",
   key: "tasks_shell",
   name: "Tasks shell",
+  presentation: {
+    sidebar: { collapsible: "icon", default_collapsed: false },
+    top_bar: {
+      breadcrumbs: true,
+      organization_switcher: true,
+      application_switcher: true,
+      account_menu: true,
+    },
+  },
   layout: slot({
     shell_root: placement(
       CONTAINER_BLOCK_RELEASE,
@@ -79,13 +86,7 @@ const shell = {
         gap: { kind: "choice", value: "medium" },
       },
       {
-        header: slot({
-          shell_heading: placement(HEADING_BLOCK_RELEASE, {
-            text: { kind: "text", value: "Tasks" },
-            level: { kind: "choice", value: "one" },
-          }),
-          shell_account: placement(APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE),
-        }),
+        header: slot({}),
         content: slot({
           shell_body: placement(
             CONTAINER_BLOCK_RELEASE_1_2_0,
@@ -182,11 +183,12 @@ export const tasksApplication: ApplicationSourceDocumentV2 = loadApplicationSour
         },
       ],
       navigation: [
-        { id: "nav_tasks_list", type: "page", label: "Tasks", page: "tasks", permission: readPage },
+        { id: "nav_tasks_list", type: "page", label: "Tasks", icon: "check", page: "tasks", permission: readPage },
         {
           id: "nav_tasks_create",
           type: "page",
           label: "Create task",
+          icon: "plus",
           page: "new_task",
           permission: createPage,
         },

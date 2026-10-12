@@ -9,6 +9,8 @@ import {
   type ContainedComponentId,
   type NavigationItem,
   type PageId,
+  type VortexIconName,
+  vortexIconNameSchema,
 } from "@vortex/contracts";
 
 /**
@@ -17,8 +19,8 @@ import {
  * canonical tree through the same revision-checked draft operation that saves every other Studio
  * edit, so the adapter never reads, stores or advances a revision. Menu permission filtering stays
  * on the server (`runtime/page`); this surface only refuses an item the platform itself would
- * reject. Both directions are lossless: identity, order, labels, permission requirements and
- * targets survive a full round trip unchanged.
+ * reject. Both directions are lossless: identity, order, labels, icons, permission requirements
+ * and targets survive a full round trip unchanged.
  */
 
 /**
@@ -32,12 +34,14 @@ export type StudioNavigationItem =
       id: ContainedComponentId;
       type: "heading";
       label: string;
+      icon: VortexIconName;
       children: readonly StudioNavigationItem[];
     }>
   | Readonly<{
       id: ContainedComponentId;
       type: "page";
       label: string;
+      icon: VortexIconName;
       page: string;
       permission: string;
     }>
@@ -45,6 +49,7 @@ export type StudioNavigationItem =
       id: ContainedComponentId;
       type: "external";
       label: string;
+      icon: VortexIconName;
       address: string;
       permission: string;
     }>;
@@ -149,6 +154,7 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
           id,
           type: "heading",
           label: item.label,
+          icon: item.icon,
           children: item.children.map((child, index) =>
             toEditorItem(child, `${at}.children[${index}]`, seen),
           ),
@@ -163,6 +169,7 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
           id,
           type: "page",
           label: item.label,
+          icon: item.icon,
           page: key,
           permission: item.permissionKey,
         };
@@ -172,6 +179,7 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
           id,
           type: "external",
           label: item.label,
+          icon: item.icon,
           address: item.address,
           permission: item.permissionKey,
         };
@@ -192,14 +200,16 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
       throw new VortexNavigationAdapterError(`Duplicate navigation item identity ${id}`);
     seen.add(id);
     const label = validated(() => labelSchema.parse(node.label), `${at}.label`);
+    const icon = validated(() => vortexIconNameSchema.parse(node.icon), `${at}.icon`);
     if (node.type === "heading") {
-      exact(node, ["id", "type", "label", "children"], at);
+      exact(node, ["id", "type", "label", "icon", "children"], at);
       const children = asArray(node.children, `${at}.children`);
       requiredChild(children, `${at}.children`);
       const assembled: NavigationItem = {
         id,
         type: "heading",
         label,
+        icon,
         children: children.map((child, index) =>
           fromEditorItem(child, `${at}.children[${index}]`, seen),
         ),
@@ -207,7 +217,7 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
       return validated(() => navigationItemSchema.parse(assembled), at);
     }
     if (node.type === "page") {
-      exact(node, ["id", "type", "label", "page", "permission"], at);
+      exact(node, ["id", "type", "label", "icon", "page", "permission"], at);
       const key = validated(() => builderKeySchema.parse(node.page), `${at}.page`);
       const permissionKey = validated(
         () => namespacedKeySchema.parse(node.permission),
@@ -220,19 +230,20 @@ export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavig
         id,
         type: "page",
         label,
+        icon,
         pageId,
         permissionKey,
       };
       return validated(() => navigationItemSchema.parse(assembled), at);
     }
     if (node.type === "external") {
-      exact(node, ["id", "type", "label", "address", "permission"], at);
+      exact(node, ["id", "type", "label", "icon", "address", "permission"], at);
       const address = validated(() => safeHttpsUrlSchema.parse(node.address), `${at}.address`);
       const permissionKey = validated(
         () => namespacedKeySchema.parse(node.permission),
         `${at}.permission`,
       );
-      const assembled: NavigationItem = { id, type: "external", label, address, permissionKey };
+      const assembled: NavigationItem = { id, type: "external", label, icon, address, permissionKey };
       return validated(() => navigationItemSchema.parse(assembled), at);
     }
     throw new VortexNavigationAdapterError(`Invalid navigation item type at ${at}`);

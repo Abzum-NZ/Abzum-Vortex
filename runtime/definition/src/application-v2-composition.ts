@@ -957,6 +957,18 @@ export const materialiseApplicationCompositionV2 = (
       shellId: resolution.identity("shell", shell.id, "content"),
       key: shell.key,
       name: shell.name,
+      presentation: {
+        sidebar: {
+          collapsible: shell.presentation.sidebar.collapsible,
+          defaultCollapsed: shell.presentation.sidebar.default_collapsed,
+        },
+        topBar: {
+          breadcrumbs: shell.presentation.top_bar.breadcrumbs,
+          organizationSwitcher: shell.presentation.top_bar.organization_switcher,
+          applicationSwitcher: shell.presentation.top_bar.application_switcher,
+          accountMenu: shell.presentation.top_bar.account_menu,
+        },
+      },
       layout,
       contentSlots: canonicalSlots,
     });

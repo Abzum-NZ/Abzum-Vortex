@@ -120,11 +120,13 @@
         "id": "nav_tenant",
         "type": "heading",
         "label": "Tenant",
+        "icon":  "building-2",
         "children": [
           {
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
+            "icon":  "building-2",
             "page": "tenant_overview",
             "permission": "application.tenant_administration.open"
           },
@@ -132,6 +134,7 @@
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
+            "icon":  "building-2",
             "page": "tenant_structure",
             "permission": "application.tenant_administration.open"
           }
@@ -141,11 +144,13 @@
         "id": "nav_access",
         "type": "heading",
         "label": "Access",
+        "icon":  "grid",
         "children": [
           {
             "id": "nav_administrators",
             "type": "page",
             "label": "Tenant administrators",
+            "icon":  "building-2",
             "page": "tenant_administrators",
             "permission": "application.tenant_administration.open"
           }
@@ -215,6 +220,18 @@
         "id": "shell_tenant_administration",
         "key": "tenant_administration_shell",
         "name": "Tenant administration shell",
+        "presentation":  {
+            "sidebar":  {
+                "collapsible":  "icon",
+                "default_collapsed":  false
+            },
+            "top_bar":  {
+                "breadcrumbs":  true,
+                "organization_switcher":  true,
+                "application_switcher":  true,
+                "account_menu":  true
+            }
+        },
         "layout": {
           "placements": {
             "shell_root": {
@@ -253,65 +270,7 @@
                 }
               },
               "slots": {
-                "header": {
-                  "placements": {
-                    "shell_heading": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {
-                        "text": {
-                          "kind": "text",
-                          "value": "Tenant Administration"
-                        },
-                        "level": {
-                          "kind": "choice",
-                          "value": "one"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    },
-                    "shell_account": {
-                      "block": {
-                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {},
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    }
-                  },
-                  "order": {
-                    "desktop": [
-                      "shell_heading",
-                      "shell_account"
-                    ]
-                  }
-                },
+                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                 "content": {
                   "placements": {
                     "shell_body": {
