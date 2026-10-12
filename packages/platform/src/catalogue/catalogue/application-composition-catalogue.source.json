@@ -4313,7 +4313,8 @@
         "help": "Projected cell key whose text labels each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "label" }
       },
       {
         "kind": "text",
@@ -4322,7 +4323,8 @@
         "help": "Projected cell key carrying each tile's safe HTTPS address",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "address" }
       },
       {
         "kind": "text",
@@ -4331,7 +4333,8 @@
         "help": "Projected cell key whose text describes each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "description" }
       }
     ],
     "slots": [
@@ -4386,7 +4389,8 @@
         "help": "Projected cell key whose text labels each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "label" }
       },
       {
         "kind": "text",
@@ -4395,7 +4399,8 @@
         "help": "Projected cell key carrying each tile's safe HTTPS address",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "address" }
       },
       {
         "kind": "text",
@@ -4404,7 +4409,8 @@
         "help": "Projected cell key whose text describes each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "description" }
       },
       {
         "kind": "text",
@@ -4549,7 +4555,8 @@
         "help": "Projected cell key whose text labels each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "label" }
       },
       {
         "kind": "text",
@@ -4558,7 +4565,8 @@
         "help": "Projected cell key carrying each tile's safe HTTPS address",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "address" }
       },
       {
         "kind": "text",
@@ -4567,7 +4575,8 @@
         "help": "Projected cell key whose text describes each tile",
         "required": false,
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "defaultValue": { "kind": "text", "value": "description" }
       },
       {
         "kind": "text",
