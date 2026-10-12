@@ -9,7 +9,7 @@ import { Separator } from "./separator";
 
 /*
  * The shadcn Sidebar parts of the pinned shadcn 4.21.0 Base UI registry, carrying the same cn-*
- * style slot classes, so every shadcn/create style paints them from its own stylesheet.
+ * style slot classes so the shared component stylesheet can paint them from the application theme.
  *
  * Vortex places navigation as a block inside an application shell whose geometry the definition
  * declares, so the sidebar is the registry's static (`collapsible="none"`) form: it fills the
@@ -23,10 +23,7 @@ function Sidebar({ className, children, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="sidebar"
-      className={cn(
-        "flex h-full w-full flex-col bg-sidebar text-sidebar-foreground",
-        className,
-      )}
+      className={cn("flex h-full w-full flex-col bg-sidebar text-sidebar-foreground", className)}
       {...props}
     >
       {children}

@@ -6,7 +6,6 @@ import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   ApplicationLauncher,
   createThemeRootProps,
-  VortexFontStylesheets,
   type DisplayRow,
   type DisplaySemanticEvent,
   type ListPayload,
@@ -119,7 +118,6 @@ export default async function SignedInPage() {
         className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
         {...createThemeRootProps(undefined)}
       >
-        <VortexFontStylesheets />
         <style href="vortex-ui-styles" precedence="default">
           {ALL_UI_STYLES_CSS}
         </style>
@@ -160,7 +158,6 @@ export default async function SignedInPage() {
         className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
         {...createThemeRootProps(undefined)}
       >
-        <VortexFontStylesheets />
         <style href="vortex-ui-styles" precedence="default">
           {ALL_UI_STYLES_CSS}
         </style>
@@ -201,7 +198,6 @@ export default async function SignedInPage() {
       className="flex min-h-svh w-full flex-col bg-background text-foreground"
       {...createThemeRootProps(undefined)}
     >
-      <VortexFontStylesheets />
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>

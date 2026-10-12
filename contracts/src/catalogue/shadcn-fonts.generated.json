@@ -17,9 +17,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/inter",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "inter/font.css",
-      "preload": "inter/inter-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "noto-sans",
@@ -28,9 +26,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/noto-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "noto-sans/font.css",
-      "preload": "noto-sans/noto-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "nunito-sans",
@@ -39,9 +35,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/nunito-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "nunito-sans/font.css",
-      "preload": "nunito-sans/nunito-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "figtree",
@@ -50,9 +44,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/figtree",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "figtree/font.css",
-      "preload": "figtree/figtree-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "roboto",
@@ -61,9 +53,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/roboto",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "roboto/font.css",
-      "preload": "roboto/roboto-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "raleway",
@@ -72,9 +62,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/raleway",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "raleway/font.css",
-      "preload": "raleway/raleway-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "dm-sans",
@@ -83,9 +71,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/dm-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "dm-sans/font.css",
-      "preload": "dm-sans/dm-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "public-sans",
@@ -94,9 +80,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/public-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "public-sans/font.css",
-      "preload": "public-sans/public-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "outfit",
@@ -105,9 +89,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/outfit",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "outfit/font.css",
-      "preload": "outfit/outfit-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "jetbrains-mono",
@@ -116,9 +98,7 @@
       "category": "monospace",
       "package": "@fontsource-variable/jetbrains-mono",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "jetbrains-mono/font.css",
-      "preload": "jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "geist",
@@ -127,9 +107,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/geist",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "geist/font.css",
-      "preload": "geist/geist-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "geist-mono",
@@ -138,9 +116,7 @@
       "category": "monospace",
       "package": "@fontsource-variable/geist-mono",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "geist-mono/font.css",
-      "preload": "geist-mono/geist-mono-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "lora",
@@ -149,9 +125,7 @@
       "category": "serif",
       "package": "@fontsource-variable/lora",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "lora/font.css",
-      "preload": "lora/lora-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "merriweather",
@@ -160,9 +134,7 @@
       "category": "serif",
       "package": "@fontsource-variable/merriweather",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "merriweather/font.css",
-      "preload": "merriweather/merriweather-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "playfair-display",
@@ -171,9 +143,7 @@
       "category": "serif",
       "package": "@fontsource-variable/playfair-display",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "playfair-display/font.css",
-      "preload": "playfair-display/playfair-display-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "noto-serif",
@@ -182,9 +152,7 @@
       "category": "serif",
       "package": "@fontsource-variable/noto-serif",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "noto-serif/font.css",
-      "preload": "noto-serif/noto-serif-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "roboto-slab",
@@ -193,9 +161,7 @@
       "category": "serif",
       "package": "@fontsource-variable/roboto-slab",
       "packageVersion": "5.3.0",
-      "licence": "Apache-2.0",
-      "stylesheet": "roboto-slab/font.css",
-      "preload": "roboto-slab/roboto-slab-latin-wght-normal.woff2"
+      "licence": "Apache-2.0"
     },
     {
       "id": "oxanium",
@@ -204,9 +170,7 @@
       "category": "display",
       "package": "@fontsource-variable/oxanium",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "oxanium/font.css",
-      "preload": "oxanium/oxanium-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "manrope",
@@ -215,9 +179,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/manrope",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "manrope/font.css",
-      "preload": "manrope/manrope-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "space-grotesk",
@@ -226,9 +188,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/space-grotesk",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "space-grotesk/font.css",
-      "preload": "space-grotesk/space-grotesk-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "montserrat",
@@ -237,9 +197,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/montserrat",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "montserrat/font.css",
-      "preload": "montserrat/montserrat-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "ibm-plex-sans",
@@ -248,9 +206,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/ibm-plex-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "ibm-plex-sans/font.css",
-      "preload": "ibm-plex-sans/ibm-plex-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "source-sans-3",
@@ -259,9 +215,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/source-sans-3",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "source-sans-3/font.css",
-      "preload": "source-sans-3/source-sans-3-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "instrument-sans",
@@ -270,9 +224,7 @@
       "category": "sans-serif",
       "package": "@fontsource-variable/instrument-sans",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "instrument-sans/font.css",
-      "preload": "instrument-sans/instrument-sans-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "eb-garamond",
@@ -281,9 +233,7 @@
       "category": "serif",
       "package": "@fontsource-variable/eb-garamond",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "eb-garamond/font.css",
-      "preload": "eb-garamond/eb-garamond-latin-wght-normal.woff2"
+      "licence": "OFL-1.1"
     },
     {
       "id": "instrument-serif",
@@ -292,9 +242,7 @@
       "category": "serif",
       "package": "@fontsource/instrument-serif",
       "packageVersion": "5.3.0",
-      "licence": "OFL-1.1",
-      "stylesheet": "instrument-serif/font.css",
-      "preload": "instrument-serif/instrument-serif-latin-400-normal.woff2"
+      "licence": "OFL-1.1"
     }
   ]
 }

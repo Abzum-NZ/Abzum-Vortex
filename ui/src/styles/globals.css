@@ -5,26 +5,56 @@
  * their own stylesheets and would change under it. It joins this file when the screens migrate
  * to the shadcn components (#1280-#1287). The theme layer and the utilities are loaded as usual.
  *
- * `vortex-style-default` and `vortex-style` are deliberate. The platform default's component rules
- * are imported below into the first, and the resolved style's stylesheet (linked by the layout
- * renderer, one file per shadcn style) declares its rules in the second, so an application that
- * resolved a style of its own always paints with that style and the default only fills what nothing
- * else has. Both sit between `components` and `utilities`: a style owns the properties the shared
- * components leave to it, while a utility a caller passes through `className` still outranks it.
- * The components therefore keep only structural classes that no style rule sets, so no component
- * class and no style rule declare the same property and this order decides every conflict.
+ * The shared component reset and component rules sit between `components` and `utilities`, while
+ * theme variables on each application root supply the selected style's values.
  */
-@layer theme, base, components, vortex-style-default, vortex-style, utilities;
+@layer theme, base, components, vortex-components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Shared shadcn component reset, scoped to every application style root. */
+@import "./base-components.css";
 
-/* Every shadcn style, each scoped to [data-vortex-style="<style>"]. */
-@import "./base-nova.css";
+/* Shared component rules use the theme variables resolved on each application root. */
+@import "./shared-components.css" layer(vortex-components);
+@import "./style-variants.css" layer(vortex-components);
 
-/* The platform default style's component rules, for the screens that resolve no style of their own. */
-@import "./base-nova-components.css" layer(vortex-style-default);
+/* Document defaults shared by the application and its account pages. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--vortex-surface);
+  color: var(--vortex-text);
+}
+
+body {
+  font-family: var(--vortex-font-family);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer base {
+  a {
+    color: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
 
 /* Class names used by components in these workspaces generate utilities. */
 @source "../..";
@@ -49,9 +79,9 @@
 }
 
 /*
- * The exact negation of the dark variant above, which the catalogue's luma and rhea style assets
- * apply as `not-dark:`. An element is not dark when it is outside every dark-mode container and
- * either the browser prefers light or it sits inside a light-mode themed container, so the two
+ * The exact negation of the dark variant above. An element is not dark when it is outside every
+ * dark-mode container and either the browser prefers light or it sits inside a light-mode themed
+ * container, so the two
  * preference branches are nested inside the one container test: a `@slot` in either of them
  * matches only outside a dark container.
  */
@@ -132,6 +162,7 @@
 }
 
 @theme inline {
+  --spacing: var(--vortex-component-spacing, 0.25rem);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
