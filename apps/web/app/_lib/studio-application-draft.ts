@@ -7,6 +7,8 @@ import {
   sessionContextSchema,
   sameId,
   canonicalJson,
+  placementSlotV2Schema,
+  sourcePlacementSlotV2Schema,
   type OrganizationId,
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
@@ -38,9 +40,111 @@ const isExpectedBuilderRefusal = (error: unknown): boolean =>
     error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED");
 
 export type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
+
+type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
+type CompiledSlot = ReturnType<typeof placementSlotV2Schema.parse>;
+type AuthoredSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+
+/** Exact compiled page slots keyed by their authored page aliases. */
+export type StudioApplicationCompiledPageSlots = Readonly<Record<string, CompiledSlot>>;
+
+const editableSourceSlot = (page: SourcePage): Readonly<{ key: string; slot: unknown }> | undefined => {
+  const composition = page.composition;
+  if ("main" in composition) return { key: "main", slot: composition.main };
+  if ("content" in composition) {
+    const entries = Object.entries(composition.content);
+    if (entries.length === 1) return { key: entries[0]![0], slot: entries[0]![1] };
+  }
+  return undefined;
+};
+
+const compiledPageSlot = (
+  source: StoredApplicationDefinitionDraft["source"],
+  page: SourcePage,
+  content: unknown,
+  compiledPage: unknown,
+): CompiledSlot | undefined => {
+  const sourceComposition = page.composition;
+  const compiled = compiledPage as {
+    composition?: { main?: unknown; shellId?: unknown; content?: Record<string, unknown> };
+  };
+  if ("main" in sourceComposition && compiled.composition?.main !== undefined)
+    return placementSlotV2Schema.parse(compiled.composition.main);
+  if (!("content" in sourceComposition) || compiled.composition?.content === undefined)
+    return undefined;
+  const entries = Object.entries(sourceComposition.content);
+  if (entries.length !== 1 || compiled.composition.shellId === undefined) return undefined;
+  const sourceShell = source.body.shells.find((candidate) => candidate.id === sourceComposition.shell);
+  const sourceSlot = sourceShell?.content_slots.find((candidate) => candidate.id === entries[0]![0]);
+  const canonical = content as {
+    shells?: readonly {
+      shellId: unknown;
+      contentSlots: readonly { slotId: unknown; key: string }[];
+    }[];
+  };
+  const shells = canonical.shells?.filter(
+    (candidate) => String(candidate.shellId) === String(compiled.composition?.shellId),
+  ) ?? [];
+  const contentSlots = shells[0]?.contentSlots.filter(
+    (candidate) => candidate.key === sourceSlot?.key,
+  ) ?? [];
+  if (sourceSlot === undefined || shells.length !== 1 || contentSlots.length !== 1)
+    return undefined;
+  const runtimeSlot = compiled.composition.content[String(contentSlots[0]!.slotId)];
+  return runtimeSlot === undefined ? undefined : placementSlotV2Schema.parse(runtimeSlot);
+};
+
+const assertCompiledSlotMatches = (
+  authored: unknown,
+  compiled: CompiledSlot,
+): void => {
+  const sourceSlot: AuthoredSlot = sourcePlacementSlotV2Schema.parse(authored);
+  const sourceIds = sourceSlot.order.desktop;
+  const compiledIds = compiled.order.desktop;
+  if (sourceIds.length !== compiledIds.length)
+    throw new Error("Studio authored and compiled page placements do not match");
+  for (const [index, alias] of sourceIds.entries()) {
+    const sourcePlacement = sourceSlot.placements[alias];
+    const compiledPlacement = compiled.placements[compiledIds[index]!];
+    if (sourcePlacement === undefined || compiledPlacement === undefined)
+      throw new Error("Studio authored and compiled page placements do not match");
+    const sourceSlotKeys = Object.keys(sourcePlacement.slots);
+    const compiledSlotKeys = Object.keys(compiledPlacement.slots);
+    if (sourceSlotKeys.length !== compiledSlotKeys.length ||
+      sourceSlotKeys.some((key) => !Object.hasOwn(compiledPlacement.slots, key)))
+      throw new Error("Studio authored and compiled page slots do not match");
+    for (const key of sourceSlotKeys)
+      assertCompiledSlotMatches(sourcePlacement.slots[key], compiledPlacement.slots[key]!);
+  }
+};
+
+const pageCompiledSlotsFor = (
+  source: StoredApplicationDefinitionDraft["source"],
+  canonical: unknown,
+): StudioApplicationCompiledPageSlots => {
+  const content = canonical as {
+    pages?: readonly unknown[];
+  };
+  if (content.pages === undefined || content.pages.length !== source.body.pages.length)
+    throw new Error("Studio compiled page list does not match its authored draft");
+  const result: Record<string, CompiledSlot> = {};
+  source.body.pages.forEach((page, index) => {
+    const compiledPage = content.pages![index] as { key?: unknown; type?: unknown } | undefined;
+    if (compiledPage === undefined || compiledPage.key !== page.key || compiledPage.type !== page.type)
+      throw new Error("Studio compiled page does not match its authored draft");
+    const authoredSlot = editableSourceSlot(page);
+    const runtimeSlot = compiledPageSlot(source, page, canonical, content.pages![index]);
+    if (authoredSlot === undefined) return;
+    if (runtimeSlot === undefined)
+      throw new Error("Studio compiled page slot does not match its authored draft");
+    assertCompiledSlotMatches(authoredSlot.slot, runtimeSlot);
+    result[page.id] = runtimeSlot;
+  });
+  return result;
+};
 
 /** Protected choices are response metadata, never part of the persisted authored draft. */
 export type StudioApplicationSearchMetadata = Readonly<{
@@ -141,6 +245,7 @@ export const loadStudioApplicationDraft = async (
         organizationId: OrganizationId;
         draft: StoredApplicationDefinitionDraft;
         searchMetadata: StudioApplicationSearchMetadata | null;
+        pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
       }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts });
         try {
@@ -151,6 +256,7 @@ export const loadStudioApplicationDraft = async (
         }
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
         let searchMetadata: StudioApplicationSearchMetadata | null = null;
+        let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
         try {
           const readContext = async () => {
             const contextRows = await transaction.query<DatabaseRow>`select vortex_access.validated_human_request_context() as context`;
@@ -188,6 +294,7 @@ export const loadStudioApplicationDraft = async (
               compiled.compilation.artifact.contentFingerprint !== fingerprintCanonicalValue(compiled.compilation.canonical.content) ||
               compiled.compilation.artifact.resolutionFingerprint !== compiled.compilation.resolutionFingerprint)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+          pageCompiledSlots = pageCompiledSlotsFor(draft.source, compiled.compilation.canonical.content);
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
           const modules = new Map<string, StudioApplicationSearchMetadata["modules"][number]>();
           await createDatabaseDefinitionPublicationRepository(transaction).read(context, async (reader) => {
@@ -260,11 +367,12 @@ export const loadStudioApplicationDraft = async (
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
             sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(draft.source.body.module_bindings),
             resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
-        } catch {
+        } catch (error) {
           // A failed metadata refresh never makes old choices authoritative or changes the draft.
+          console.error("Failed to compile Studio application page settings", error);
           searchMetadata = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots } };
       },
     );
     return result.kind === "available"

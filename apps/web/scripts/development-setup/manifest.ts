@@ -65,6 +65,13 @@ export const developmentSetupManifestSchema = z
         roleAssignmentId: roleAssignmentIdSchema,
       })
       .strict(),
+    definitionRole: z
+      .object({
+        roleKey: z.string(),
+        roleId: roleIdSchema,
+        roleAssignmentId: roleAssignmentIdSchema,
+      })
+      .strict(),
   })
   .strict();
 
@@ -131,6 +138,15 @@ export const developmentSetupManifestFor = (
       roleAssignmentId: defaultOrganization
         ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d09"
         : setupUuid(`${targetKey}/installer-assignment`),
+    },
+    definitionRole: {
+      roleKey: "definition_author_publisher",
+      roleId: defaultOrganization
+        ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0a"
+        : setupUuid(`${targetKey}/definition-role`),
+      roleAssignmentId: defaultOrganization
+        ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d0b"
+        : setupUuid(`${targetKey}/definition-assignment`),
     },
   });
 };

@@ -4,10 +4,7 @@ import {
   prepareOrganizationRoleChangeEvidence,
 } from "@vortex/access";
 import { fingerprintCanonicalValue } from "@vortex/definition";
-import {
-  platformPermissionDeclarations,
-  platformPermissionOwnerId,
-} from "@vortex/modules";
+import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -40,9 +37,7 @@ const currentPlatformPermissionCatalogueFingerprint = fingerprintCanonicalValue(
   ownerKind: "platform",
   ownerId: platformPermissionOwnerId,
   permissions: platformPermissionDeclarations.map((permission) =>
-    Object.fromEntries(
-      Object.entries(permission).filter(([key]) => !sourceMetadataKeys.has(key)),
-    ),
+    Object.fromEntries(Object.entries(permission).filter(([key]) => !sourceMetadataKeys.has(key))),
   ),
 });
 
@@ -55,71 +50,69 @@ export type InstallerAccessFacts = Readonly<{
   state: SetupState;
 }>;
 
-/** Creates and assigns the installer role once; a re-run finds it recorded and does nothing. */
-export const grantStewardInstallerRole = async (
-  facts: InstallerAccessFacts,
-  log: (message: string) => void,
-): Promise<void> => {
-  if (facts.state.installerRoleGranted) return;
-  const { installerRole } = facts.manifest;
-  const declaration = platformPermissionDeclarations.find(
-    (permission) => permission.key === installPermissionKey,
-  );
-  if (declaration === undefined)
-    throw new Error(`Platform permission ${installPermissionKey} is not shipped`);
+type SetupRole = Readonly<{ roleKey: string; roleId: string; roleAssignmentId: string }>;
 
+const createAndAssignPlatformRole = async (
+  facts: InstallerAccessFacts,
+  role: SetupRole,
+  label: string,
+  description: string,
+  permissionKeys: readonly string[],
+): Promise<void> => {
+  const permissions = permissionKeys.map((key) => {
+    const declaration = platformPermissionDeclarations.find((permission) => permission.key === key);
+    if (declaration === undefined) throw new Error(`Platform permission ${key} is not shipped`);
+    return {
+      kind: "exact" as const,
+      ownerKind: "platform" as const,
+      ownerId: platformPermissionOwnerId,
+      permissionId: declaration.permissionId,
+      acceptedRegistrationRevision: currentPlatformRegistrationRevision,
+      catalogueFingerprint: currentPlatformPermissionCatalogueFingerprint,
+      continuityRevision: 1,
+      meaningFingerprint: fingerprintPermissionMeaning(
+        "platform",
+        platformPermissionOwnerId,
+        declaration,
+      ),
+    };
+  });
   const administration = createOrganizationAccessAdministrationService({
     identityAuthorityId: facts.identityAuthorityId,
-    roleAssignmentId: () => installerRole.roleAssignmentId,
+    roleAssignmentId: () => role.roleAssignmentId,
   });
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: facts.organizationId,
   });
-
-  const evidence = prepareOrganizationRoleChangeEvidence(
+  const preparedAuthorization = prepareOrganizationRoleChangeEvidence(
     organizationRoleChangePreparationSchema.parse({
       candidate: {
         operation: "create_custom",
         organizationId: facts.organizationId,
-        roleId: installerRole.roleId,
-        key: installerRole.roleKey,
-        label: "Application installer",
-        description:
-          "Installs and upgrades applications. Granted to the first owner by the local development setup.",
+        roleId: role.roleId,
+        key: role.roleKey,
+        label,
+        description,
         privilegeClassification: "privileged",
         assignmentPolicy: { kind: "standing" },
-        permissions: [
-          {
-            kind: "exact",
-            ownerKind: "platform",
-            ownerId: platformPermissionOwnerId,
-            permissionId: declaration.permissionId,
-            acceptedRegistrationRevision: currentPlatformRegistrationRevision,
-            catalogueFingerprint: currentPlatformPermissionCatalogueFingerprint,
-            continuityRevision: 1,
-            meaningFingerprint: fingerprintPermissionMeaning(
-              "platform",
-              platformPermissionOwnerId,
-              declaration,
-            ),
-          },
-        ],
+        permissions,
       },
     }),
   );
   const created = await administration.createCustomRole(
     nominatedOwnerSession(facts.stewardIdentityId),
     selection,
-    changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence }),
+    changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({
+      evidence: preparedAuthorization,
+    }),
   );
   if (created.kind !== "available")
-    throw new Error(`The installer role could not be created (${created.kind})`);
-
+    throw new Error(`The ${role.roleKey} role could not be created (${created.kind})`);
   const assigned = await administration.assignRoleAssignment(
     nominatedOwnerSession(facts.stewardIdentityId),
     selection,
     assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
-      roleId: installerRole.roleId,
+      roleId: role.roleId,
       expectedRoleRevision: created.value.role.liveRevision,
       assigneeKind: "organization_account",
       organizationAccountId: facts.stewardOrganizationAccountId,
@@ -128,9 +121,46 @@ export const grantStewardInstallerRole = async (
     }),
   );
   if (assigned.kind !== "available")
-    throw new Error(`The installer role could not be assigned (${assigned.kind})`);
+    throw new Error(`The ${role.roleKey} role could not be assigned (${assigned.kind})`);
+};
 
+/** Creates and assigns the installer role once; a re-run finds it recorded and does nothing. */
+export const grantStewardInstallerRole = async (
+  facts: InstallerAccessFacts,
+  log: (message: string) => void,
+): Promise<void> => {
+  if (facts.state.installerRoleGranted) return;
+  const role = facts.manifest.installerRole;
+  await createAndAssignPlatformRole(
+    facts,
+    role,
+    "Application installer",
+    "Installs and upgrades applications. Granted to the first owner by the local development setup.",
+    [installPermissionKey],
+  );
   facts.state.installerRoleGranted = true;
   facts.state.save();
-  log(`granted the ${installerRole.roleKey} role to the first owner`);
+  log(`granted the ${role.roleKey} role to the first owner`);
+};
+
+/** Lets the nominated steward edit drafts and publish releases through the protected Studio APIs. */
+export const grantStewardDefinitionRole = async (
+  facts: InstallerAccessFacts,
+  log: (message: string) => void,
+): Promise<void> => {
+  if (facts.state.definitionRoleGranted) return;
+  const role = facts.manifest.definitionRole;
+  await createAndAssignPlatformRole(
+    facts,
+    role,
+    "Definition author and publisher",
+    "Creates and changes application and module drafts and publishes immutable definition releases.",
+    [
+      "platform.organization.definition_drafts.manage",
+      "platform.organization.definition_releases.manage",
+    ],
+  );
+  facts.state.definitionRoleGranted = true;
+  facts.state.save();
+  log(`granted the ${role.roleKey} role to the first owner`);
 };

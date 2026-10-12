@@ -164,6 +164,22 @@ export const requireLocalDevelopmentEnvironment = (
 type LocalSupabaseStatus = Readonly<{ API_URL: string; SECRET_KEY: string }>;
 
 const readLocalSupabaseStatus = (): LocalSupabaseStatus => {
+  const configuredUrl = process.env.VORTEX_SUPABASE_URL;
+  const configuredSecret = process.env.VORTEX_DEV_SERVICE_ROLE_KEY;
+  if (configuredUrl !== undefined && configuredSecret !== undefined) {
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throw new DevelopmentSetupRefusal("VORTEX_SUPABASE_URL is not a valid URL.");
+    }
+    if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname) || url.port !== "54321")
+      throw new DevelopmentSetupRefusal(
+        "The configured Supabase API must use loopback port 54321 over HTTP.",
+      );
+    return { API_URL: configuredUrl, SECRET_KEY: configuredSecret };
+  }
+
   const root = findRepositoryRoot();
   const binary = join(
     root,
