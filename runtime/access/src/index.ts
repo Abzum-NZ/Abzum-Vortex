@@ -296,11 +296,6 @@ export {
   type OrganizationRecordPermissionAvailability,
 } from "./organization-record-permission-availability";
 
-export const AccessService = Object.freeze({
-  key: "access",
-  boundary: "@vortex/access",
-});
-
 export {
   createHumanApplicationPublisher,
   type HumanApplicationPublicationPreparationResult,

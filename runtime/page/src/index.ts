@@ -174,11 +174,6 @@ export {
   type ConnectionInstanceStatusView,
 } from "./connection-administration";
 
-export const PageService = Object.freeze({
-  key: "page",
-  boundary: "@vortex/page",
-});
-
 export {
   buildQueryNoticeQueryBinding,
   createQueryNoticeQueryResolver,

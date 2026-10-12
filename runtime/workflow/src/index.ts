@@ -116,8 +116,3 @@ export {
 } from "./protected-node-execution";
 
 export { createDatabaseProtectedNodeRunStore, createDatabaseProtectedNodeEffectLedger } from "./protected-node-store";
-
-export const WorkflowService = Object.freeze({
-  key: "workflow",
-  boundary: "@vortex/workflow",
-});

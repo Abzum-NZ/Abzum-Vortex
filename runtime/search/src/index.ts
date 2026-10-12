@@ -1,11 +1,6 @@
 import "server-only";
 export { searchConfiguredApplication, type ApplicationSearchRecord, type ApplicationSearchMatch, type ApplicationSearchResult } from "./application-search";
 
-export const SearchService = Object.freeze({
-  key: "search",
-  boundary: "@vortex/search",
-});
-
 export {
   buildSearchDocument,
   searchableFieldConfigurationFor,

@@ -14,8 +14,3 @@ export * from "./action-record-port";
 export * from "./record-lifecycle-policy";
 export * from "./lifecycle-hold-scope";
 export * from "./delete-record";
-
-export const RecordService = Object.freeze({
-  key: "record",
-  boundary: "@vortex/record",
-});

@@ -11,8 +11,3 @@ export * from "./active-installation-bundle-repository";
 export * from "./runtime-bundle-cleanup";
 export * from "./index-build-runner";
 export * from "./index-status";
-
-export const ModuleService = Object.freeze({
-  key: "module",
-  boundary: "@vortex/module",
-});
