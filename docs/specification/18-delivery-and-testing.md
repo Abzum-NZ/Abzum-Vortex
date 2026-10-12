@@ -1,6 +1,6 @@
 # 18. Development delivery and environment boundaries
 
-[Specification index](README.md) · [Code-review acceptance](20-quality-and-acceptance.md) · [Fleet policy](../build-plan/agent-coordination.md)
+[Specification index](README.md) · [Code-review acceptance](20-quality-and-acceptance.md)
 
 ## Current development policy
 

@@ -4,15 +4,11 @@ Vortex builds business applications from versioned definitions: modules, record 
 
 The project is under active development. The current priority is a usable definition-led application before the visual App Designer. A specification or contract does not mean the feature is implemented; the [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status.
 
-Development is carried out by an orchestrated fleet of autonomous coding agents rather than a continuous team: one orchestrator plans, dispatches, reconciles and reports, implementers deliver bounded work in isolated worktrees, and independent reviewers fix their own findings and integrate the reviewed change.
-
 ## Start here
 
 | Document | Purpose |
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Entry point for every provider |
-| [Agent coordination](docs/build-plan/agent-coordination.md) | Current roles, development acceptance and ownership |
-| [Fleet operations](docs/build-plan/agent-fleet.md) | Dependency-ready pickup, bounded assignment, model routing, board updates and recovery |
 | [Roadmap](docs/build-plan/README.md) | Phase order and Phase 6 visible-application objective |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, Pickup Order and status |
 | [Platform specification](docs/specification/README.md) | Product functionality and architecture |
@@ -49,12 +45,11 @@ Application workflow steps use protected Vortex operations. Kestra's operational
 | `ui/`, `studio/` | Shared UI components and the later designer |
 | `modules/` | Ordinary shipped application and module definitions |
 | `supabase/` | Database configuration, schema, migrations and seed |
-| `testing/` | Shared fixtures and existing cross-package utilities |
 | `workflows/kestra/` | Operational flows, scripts and delivery documentation |
 | `tooling/` | Workspace checks and development tools |
-| `docs/` | Specification, roadmap, fleet policy and architecture decisions |
+| `docs/` | Specification, roadmap and architecture decisions |
 
-A Vortex module is an application definition; a workspace package is source code. Packages use each other's public interfaces and nothing depends upward; the workspace [boundary checker](tooling/boundaries/check.mjs) records those dependency and environment rules.
+A Vortex module is an application definition; a workspace package is source code. Packages use each other's public interfaces and nothing depends upward; each package's `package.json` declares its dependencies and environment.
 
 ## Development
 
@@ -108,7 +103,7 @@ CRM and Service Desk bind the platform-owned email, calendar and webhook connect
 
 An interrupted run resumes: provisioning replays by its fixed key and the steps recorded in `supabase/.temp/development-setup-state.json` are skipped. Once every step has completed, the command is disabled: running it again only calls the initial operating-role grant with the original receipt and the same manifest, which replays the stored result. A different nominated account is refused. `pnpm db:reset` starts over.
 
-Existing developer utilities (`pnpm verify` and `pnpm db:verify`) remain in the workspace for local use. They are not fleet completion requirements, and the current development workflow does not run them or treat their output as acceptance.
+`pnpm verify` runs format check, lint, typecheck and build. There are no tests in this project.
 
 ### Local environment variables
 
@@ -143,7 +138,7 @@ The custom-component and file pages read additional variables and report a confi
 - Work from a GitHub issue with clear scope, dependencies and functional acceptance. Keep its description and roadmap status current.
 - Use the existing engine boundaries and official framework conventions. Update the specification and build plan when agreed behaviour or sequencing changes.
 - Keep changes focused. Preserve organisation isolation, current permission checks, atomic writes, revision checks and safe errors without introducing unnecessary abstractions.
-- Use issue branches from `origin/main`, obtain an independent code review, and merge the reviewed implementation into `main`. Implementation plus that review is the completion criterion.
+- Work on a branch from `origin/main` and open a pull request to `main`; never push to `main` directly.
 - Hosted delivery and Production are outside this development pass.
-- Follow [agent coordination](docs/build-plan/agent-coordination.md) and the [delivery specification](docs/specification/18-delivery-and-testing.md) for the current development policy. Historical handovers do not add requirements.
+- Follow the [delivery specification](docs/specification/18-delivery-and-testing.md) and [AGENTS.md](AGENTS.md).
 - Manage secrets through the documented Doppler configuration. Keep credentials out of source, browser bundles, agent prompts and logs.

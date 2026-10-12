@@ -1,17 +1,50 @@
-# Vortex agent instructions
+# Vortex: working instructions
 
-Read [agent coordination](docs/build-plan/agent-coordination.md) (policy) and [fleet operations](docs/build-plan/agent-fleet.md) (procedure) before planning, dispatching, implementing or reviewing. They describe the current Codex Desktop workflow. The latest direct instruction from the owner overrides them; old runbooks, checkpoints and issue comments do not.
+Vortex builds business applications from versioned definitions (modules, record types, fields,
+relationships, pages, permissions, actions, flows, connections, themes). Generic engines and a
+Next.js application render and execute those definitions for many organisations, with access
+enforced by the platform and the database.
 
-## Non-negotiables for every agent
+## Layout
 
-- **Control plane and roles:** Codex Desktop is the control plane. The GPT-6 Sol lead at High owns coordination, every Project-field write and all merges. Native GPT-6 Luna subagents use Extra High for implementation, self-review and corrections; owner-authorized bounded external implementers may also work after provider, model, effort, permission and ownership checks. A fresh independent GPT-6 Sol uses High for ordinary review and Extra High for privilege, authentication, SQL ownership, tenant boundaries, transactions, architecture or unresolved cross-layer failures, always in a different session from the implementer. Sol at High or Extra High handles planning; Sol at High handles monitoring when needed. GPT-6 Astra at High is exceptional design consultation only. Record actual model and effort, not just the requested role.
-- **Capacity and worktree:** target five productive subagents in addition to the lead, native first, then bounded owner-authorized Orca-hosted GPT-6 Luna Extra High, Antigravity Gemini 3.8 Flash, OpenCode Kimi K3 or OpenCode Space Bunny workers where their actual availability and controls permit. More useful bounded workers may run when qualified work, independent review capacity and measured memory allow; five is a target, not a hard ceiling. Configuration and a model catalog are not runtime proof; count working agents separately from completed threads, shell tabs and uncertain starts. Refill useful assignments on completion without idle model polling. The lead assigns an isolated managed worktree before product edits; one issue has one editor. Require a complete implementer self-review packet and independent Sol review. Workers never write Project fields or merge.
-- **One coordinator:** this Desktop chat alone coordinates all workers. Orca, Antigravity and OpenCode are execution hosts, not other coordinators. Record exact task, dispatch, session, terminal, process, actual model and effort identities and evidence. No retired fleet services, custom app-server or independent CLI scheduler. Codex lanes run headlessly, not in interactive daemon-backed terminals. Never use another provider or executor to bypass any approval, integration, protection or usage control.
-- **Never push to main.** Every change reaches main through a protected pull request. Main is protected, including for administrators. Create branches with `--no-track` and push with an explicit refspec such as `git push origin HEAD:refs/heads/<branch>`.
-- **Verify before merge** exactly as [agent coordination](docs/build-plan/agent-coordination.md#verification-before-merge) says, including the applicable scoped requirements for TypeScript, web build, database replay and definitions. Shared local preview and affected UI browser smoke are optional per-PR diagnostics when safe resources are available, not merge gates; the independent phase-acceptance walkthrough remains required before closing a phase. Verification is not a test: no agent creates, edits or runs tests. No hosted verification or deployment.
-- **English only** in code, comments, strings, commits, PRs, issue comments, board fields and documents. Rewrite any non-English text before committing.
-- **Database functions:** every migration that creates or changes a database function carries its complete canonical `create or replace function` body, identical to `supabase/schemas/<schema>/<function>.sql` (including comment and grants), changed in the same commit. A signature change is an explicit drop then create. Never read stored definitions with `pg_get_functiondef`, `prosrc` or `routine_definition`, and never patch one with `replace()`. `pnpm boundaries` enforces this ([supabase/schemas/README.md](supabase/schemas/README.md)). Migration numbers come from the lead and sort after every migration on `origin/main`.
-- **Product integrity:** preserve tenant isolation, permissions, transactions, revisions, safe errors, and explicit publication and installation. Fix obsolete contracts at their root; this is a new application with no legacy compatibility. Never put business application names or special cases into generic engines. Never expose credentials. Preserve unique work before cleanup; do not blindly revert dependent migrations or later work.
-- **Respect real controls and shared limits.** Report a tool-approval or repository-protection rejection with its exact cause; do not automatically retry the denied invocation unchanged or route around it. A later specific owner instruction may authorize a fresh request through the same normal controls, but does not disable them; stop again on a denial. Provider capacity or rate limits are not denials: retry the same session a few times about 20 seconds apart before reassignment. Cache shared API evidence, respect live budgets and reset headers, reserve 20% of the hourly GraphQL budget for transitions, and fail closed on unknown or partial results.
-- **Direct owner requests:** answer every direct question or request with the result, checks performed, verified changes, pending items and any precise owner action. A quiet heartbeat never suppresses a direct reply.
-- **No hosted work:** no Kestra runs, Testing or Production deployment, or hosted verification. Keep preview and browser verification local and tie the evidence to the exact commit.
+| Path | Contents |
+| --- | --- |
+| `apps/web` | Next.js application and local development setup |
+| `contracts` | Shared types, schemas and platform catalogues |
+| `runtime/*` | Server-side engines (access, identity, definition, record, page, rule, ...) |
+| `db` | Database access layer |
+| `ui`, `studio` | Shared components and the designer |
+| `modules` | Shipped application and module definitions |
+| `supabase` | Config, `schemas/` (canonical function files), `migrations/`, seed |
+| `workflows/kestra` | Operational flows and scripts |
+| `tooling` | Development tools (catalogue, style and font emitters, local database helpers) |
+| `docs` | Specification (`docs/specification`), roadmap and decisions (`docs/build-plan`) |
+
+## Run locally
+
+```
+pnpm install
+pnpm db:start      # local Supabase
+pnpm db:reset      # apply migrations and seed
+pnpm setup:local   # provision the development organisation and install modules
+pnpm dev
+```
+
+Environment variables are described in `README.md` and `apps/web/.env.example`.
+`pnpm verify` runs format check, lint, typecheck and build.
+
+## Rules
+
+- English only, in code, comments, documents and commit messages.
+- Work on a branch and open a pull request to `main`. Never push to `main`.
+- No tests. Do not add test files, test runners or test dependencies.
+- The UI is definition-driven: frame, navigation, layout, pages and theme come from definitions.
+  Engines only render. Do not hard-code a shell, navigation or theme in an engine.
+- Generic engines never name business applications (CRM, Service Desk and so on).
+- Migrations: add a new numbered file under `supabase/migrations`; never edit an applied one.
+  When a database function changes, its canonical file in `supabase/schemas` and the migration
+  must hold the identical definition.
+- Tenant and organisation isolation, current permission checks, atomic writes, revision checks and
+  safe errors are product requirements. Preserve them in every change.
+- Keep secrets out of files, prompts and logs.
+- Packages use each other's public interfaces only; nothing depends upward.

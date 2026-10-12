@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-> Development acceptance and fleet roles follow [agent coordination](../build-plan/agent-coordination.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Pick bounded, dependency-ready leaves across the [roadmap](../build-plan/README.md); phase and Pickup Order are reporting metadata, not dispatch gates.
+> Development acceptance and fleet roles follow [AGENTS.md](../../AGENTS.md). Specification scenarios describe functionality to implement, not instructions to run tests or hosted proof. Pick bounded, dependency-ready leaves across the [roadmap](../build-plan/README.md); phase and Pickup Order are reporting metadata, not dispatch gates.
 
 The [architecture decisions](../build-plan/architecture-decisions-2026-09-25.md) govern the one flow definition, engine and protected operations. Current-person flow execution supports the Phase 6 application before the later [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). That task is a prerequisite only for specified-account and System execution. The [Frontend Rule Designer specification](appendices/frontend-rule-designer.md) describes authoring and execution; specification text does not itself establish delivered runtime functionality.
 

@@ -2,7 +2,7 @@
 
 Roadmap phases and numeric Pickup Order are planning and reporting metadata: they describe sequence and progress, not dispatch permission. Dependency-ready bounded leaves are dispatched in parallel across phases. The first objective is a visible definition-led application by the end of Phase 6: an authorized user navigates installed pages, browses/opens records, creates/edits a record, invokes declared actions and sees the installed theme. Generic engines render ordinary definitions; application names and business policies are not hardcoded.
 
-[GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Agent coordination](agent-coordination.md) · [Fleet procedure](agent-fleet.md) · [Architecture decisions](architecture-decisions-2026-09-25.md) · [Authority ledgers design record](authority-ledgers-design-2026-09-25.md) · [Product specification](../specification/README.md)
+[GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) · [Architecture decisions](architecture-decisions-2026-09-25.md) · [Authority ledgers design record](authority-ledgers-design-2026-09-25.md) · [Product specification](../specification/README.md)
 
 The GitHub project roadmap is the execution plan. Issue bodies and native dependencies define bounded work. This page explains the phases; it does not duplicate live owner, status or estimate records. The [21 September architecture review](architecture-review-2026-09-21.md) records what was actually present on main at `e4cd4375958b91c55a5bd93b00c86656b98a8d13`.
 
@@ -44,7 +44,7 @@ The [architecture decisions](architecture-decisions-2026-09-25.md) govern all re
 
 ## Pickup and phase completion
 
-Select any unfinished leaf whose real dependencies are complete, preferring lower Pickup Order only to break ties between equally ready leaves, and keep several independent leaves moving at once. Parent/phase epics summarize their children and are not additional implementation assignments. Neither phase nor Pickup Order gates dispatch, so a blocked or missing number never idles Ready work; renumbering is a reporting correction, not a prerequisite. A forward dependency or cycle requires an explicit ordering correction against source and specification. Follow the [ready-work dispatch algorithm](agent-fleet.md#ready-work-dispatch-algorithm).
+Select any unfinished leaf whose real dependencies are complete, preferring lower Pickup Order only to break ties between equally ready leaves, and keep several independent leaves moving at once. Parent/phase epics summarize their children and are not additional implementation assignments. Neither phase nor Pickup Order gates dispatch, so a blocked or missing number never idles Ready work; renumbering is a reporting correction, not a prerequisite. A forward dependency or cycle requires an explicit ordering correction against source and specification.
 
 A phase label does not replace a dependency. Confirm each selected leaf's real Blocked by issues and prerequisite child scopes are complete before dispatch.
 
@@ -72,13 +72,11 @@ The board holds live ownership, status and current estimate rollups; this docume
 
 ## Historical plans
 
-Earlier architecture notes, evidence and handoffs remain design and history references. Their test, deployment, proof, fixed-model and promotion instructions are superseded by [agent coordination](agent-coordination.md). Preserve relevant product requirements; do not import historical fleet procedures into new briefs.
+Earlier architecture notes, evidence and handoffs remain design and history references. Their test, deployment, proof and fleet instructions no longer apply. Preserve relevant product requirements; do not import historical fleet procedures into new briefs.
 
 The old fleet is archived at `C:/Users/vijay/orca/archives/vortex-20260922-reset`. Read its `SALVAGE.md` and `archive-manifest.json` before dispatch; use new sessions and selectively import useful product code. In particular, #49 has a stopped reviewed candidate, #50 has an uncommitted draft, and #407 contains only the merged inventory portion. Read their current issue metadata and existing worktrees before assigning remaining work.
 
 ## Working guidance
 
-- [Agent coordination](agent-coordination.md)
-- [Fleet operations and estimate checkpoints](agent-fleet.md)
 - [Definition-led application delivery](engine-first-application-delivery.md)
 - [Specification](../specification/README.md)
