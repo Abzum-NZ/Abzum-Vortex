@@ -1,0 +1,182 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+import {
+  applicationRootIdSchema,
+  actorIdSchema,
+  recordTypeDefinitionSchema,
+  revisionSchema,
+  sessionContextSchema,
+  tenantIdSchema,
+  type EventOccurrenceEnvelope,
+  type SessionContext,
+} from "../schema";
+import {
+  withResolvedRequestTransaction,
+  withRuntimeTransaction,
+  type DatabaseRow,
+  type RequestDatabaseTransaction,
+} from "../db/index";
+import type {
+  SearchIndexOccurrenceDependencies,
+  SearchIndexRecordType,
+} from "./event-consumer";
+import type {
+  SearchDocumentStoreCommand,
+  SearchDocumentStoreOutcome,
+  SearchRecordSnapshot,
+} from "./document-store";
+
+/**
+ * Database-backed dependencies of the search event consumer (#644).
+ *
+ * Indexing runs inside event dispatch, which has no human caller. Each step
+ * runs under a short-lived system context for the occurrence's organisation
+ * and Application: the tenant, access version and system actor come from
+ * `vortex_access.resolve_search_index_scope`, never from the occurrence.
+ * `vortex_record.read_search_snapshot` answers only to that system context, so
+ * no request-bound read can reach it, and `vortex_search.put_document` writes
+ * into the context organisation only.
+ *
+ * Event delivery is also the backfill: a consumer registered after records were
+ * created has no progress, so storage offers it every earlier occurrence in
+ * order, and its own progress rows are the checkpoint.
+ */
+
+const systemContextLifetimeMs = 60_000;
+
+/**
+ * No organisation privacy policy is stored yet, so personal fields stay out of
+ * the index (specification 10: personal fields are indexed only when the
+ * organisation privacy policy permits it).
+ */
+const indexPolicy = Object.freeze({ personalDataPermitted: false });
+
+type IndexFacts = Readonly<{
+  recordType: SearchIndexRecordType;
+  snapshot: SearchRecordSnapshot | undefined;
+}>;
+
+const objectOf = (value: unknown, what: string): Readonly<Record<string, unknown>> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new Error(`SEARCH_INDEX_${what}_INVALID`);
+  return value as Readonly<Record<string, unknown>>;
+};
+
+const inSystemScope = async <Result>(
+  organizationId: string,
+  applicationRootId: string,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+): Promise<Result> => {
+  const scopes = await withRuntimeTransaction((transaction) =>
+    transaction.query<DatabaseRow>`
+      select system_actor_id, tenant_id, access_version
+      from vortex_access.resolve_search_index_scope(${organizationId}::uuid, ${applicationRootId}::uuid)
+    `,
+  );
+  const scope = scopes[0];
+  if (scopes.length !== 1 || scope === undefined) throw new Error("SEARCH_INDEX_SCOPE_UNAVAILABLE");
+  const now = Date.now();
+  const context: SessionContext = sessionContextSchema.parse({
+    callerKind: "system",
+    tenantId: tenantIdSchema.parse(scope.tenant_id),
+    organizationId,
+    applicationRootId: applicationRootIdSchema.parse(applicationRootId),
+    systemActorId: actorIdSchema.parse(scope.system_actor_id),
+    sessionId: randomUUID(),
+    authenticationStrength: "service",
+    issuedAt: new Date(now - 1_000).toISOString(),
+    expiresAt: new Date(now + systemContextLifetimeMs).toISOString(),
+    accessVersion: revisionSchema.parse(Number(scope.access_version)),
+    correlationId: randomUUID(),
+  });
+  return withResolvedRequestTransaction(
+    async () => ({ context, channel: "system" as const, scope: undefined }),
+    (transaction) => operation(transaction),
+  );
+};
+
+const readFacts = async (occurrence: EventOccurrenceEnvelope): Promise<IndexFacts | undefined> =>
+  inSystemScope(
+    occurrence.organizationId,
+    occurrence.installation.applicationRootId,
+    async (transaction) => {
+      const rows = await transaction.query<DatabaseRow>`
+        select vortex_record.read_search_snapshot(
+          ${occurrence.descriptor.recordTypeId}::uuid, ${occurrence.recordId}::uuid
+        ) as snapshot
+      `;
+      const result = objectOf(rows[0]?.snapshot, "SNAPSHOT");
+      if (result.outcome === "record_type_unavailable") return undefined;
+      if (result.outcome !== "loaded" && result.outcome !== "record_unavailable")
+        throw new Error("SEARCH_INDEX_SNAPSHOT_INVALID");
+      if (result.outcome === "record_unavailable") return undefined;
+
+      const recordType = recordTypeDefinitionSchema.parse(result.recordType);
+      const record = objectOf(result.record, "RECORD");
+      const stored = objectOf(record.fieldValues, "FIELD_VALUES");
+      const storedByName = new Map(Object.entries(stored).map(([key, value]) => [key.toLowerCase(), value]));
+      const fieldValues = Object.fromEntries(
+        recordType.fields.flatMap((field) =>
+          storedByName.has(field.fieldId.toLowerCase())
+            ? [[field.fieldId, storedByName.get(field.fieldId.toLowerCase())]]
+            : [],
+        ),
+      );
+      const applicationRootId =
+        typeof record.applicationRootId === "string"
+          ? record.applicationRootId
+          : occurrence.installation.applicationRootId;
+      return {
+        recordType,
+        snapshot: {
+          indexOrganisationId: occurrence.organizationId,
+          ownerOrganisationId: String(record.ownerOrganizationId),
+          applicationRootId,
+          recordTypeId: occurrence.descriptor.recordTypeId,
+          recordId: occurrence.recordId,
+          recordVersion: Number(record.concurrencyNumber),
+          lifecycle: record.lifecycleState === "active" ? "active" : "deleted",
+          fieldValues,
+        },
+      };
+    },
+  );
+
+/**
+ * The consumer asks for the record type, the policy and the snapshot of one
+ * occurrence in turn; they are read once, in one transaction, per occurrence.
+ */
+export const createSearchIndexDependencies = (): SearchIndexOccurrenceDependencies => {
+  const facts = new WeakMap<EventOccurrenceEnvelope, Promise<IndexFacts | undefined>>();
+  const factsFor = (occurrence: EventOccurrenceEnvelope): Promise<IndexFacts | undefined> => {
+    let read = facts.get(occurrence);
+    if (read === undefined) {
+      read = readFacts(occurrence);
+      facts.set(occurrence, read);
+    }
+    return read;
+  };
+  return Object.freeze({
+    loadRecordType: async (occurrence) => (await factsFor(occurrence))?.recordType,
+    loadPolicy: async () => indexPolicy,
+    loadRecordSnapshot: async (occurrence) => (await factsFor(occurrence))?.snapshot,
+    storeDocument: async (command: SearchDocumentStoreCommand) => {
+      if (command.applicationRootId === null) throw new Error("SEARCH_INDEX_SCOPE_UNAVAILABLE");
+      const rows = await inSystemScope(
+        command.organizationId,
+        command.applicationRootId,
+        (transaction) =>
+          transaction.query<DatabaseRow>`
+            select outcome from vortex_search.put_document(
+              ${command.organizationId}::uuid, ${command.recordTypeId}::uuid,
+              ${command.recordId}::uuid, ${command.applicationRootId}::uuid,
+              ${command.sourceRecordVersion}::bigint, ${command.deleted}::boolean,
+              ${command.entriesJson}::text::jsonb, ${command.contentFingerprint}::text
+            )
+          `,
+      );
+      return String(rows[0]?.outcome) as SearchDocumentStoreOutcome;
+    },
+  });
+};
