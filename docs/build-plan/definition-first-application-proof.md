@@ -1,6 +1,6 @@
 # First visible definition-led application
 
-Task: [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327). Phase 6. Follow current issue/subissue scope and native dependencies; the filename is retained for existing links and does not require a proof exercise. The former proof-only programme is retired. The delivery sequence is [definition-led application delivery](engine-first-application-delivery.md).
+Historical feature scope for [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327), retained under its existing filename. Current architecture and delivery requirements are in the [target architecture](target-architecture.md); product sequencing is described in [definition-led application delivery](engine-first-application-delivery.md).
 
 ## Outcome
 
@@ -22,5 +22,3 @@ Use the current GitHub issue as the bounded implementation contract. Already del
 ## Acceptance
 
 The reviewer can trace the user entry point through installed definitions, access decisions, query/record calls, form/action handlers and UI output. All named functionality is implemented with its required states; placeholder methods and hardcoded demo data do not satisfy the scope.
-
-A fresh GPT-6 Sol (Extra High) reviewer fixes findings itself and re-reviews before permitted source integration and issue closure; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. No tests, screenshot, walkthrough, database/hosted review, Testing deployment or Kestra receipt is required. The orchestrator records completion, unblocks dependency-ready work and cleans the completed worktree.

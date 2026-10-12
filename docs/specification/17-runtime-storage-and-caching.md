@@ -618,4 +618,4 @@ Realtime channel admission must use credentials accepted by the destination clus
 
 ## Storage HTTP identity handoff
 
-Storage requests use the [File gateway's destination-signed, exact-object and operation scoped JWT](11-files-and-attachments.md), including when Identity Authority and storage are on different clusters. This is a narrow Storage credential, not a broad service role or access to private Vortex schemas. The File gateway rechecks live Access before issuing the credential; Storage independently restricts its signed scope. Hosted proof belongs to [#92](https://github.com/Abzum-NZ/Abzum-Vortex/issues/92).
+Storage requests use the [File gateway's destination-signed, exact-object and operation scoped JWT](11-files-and-attachments.md), including when Identity Authority and storage are on different clusters. This is a narrow Storage credential, not a broad service role or access to private Vortex schemas. The File gateway rechecks live Access before issuing the credential; Storage independently restricts its signed scope.

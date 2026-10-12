@@ -8,7 +8,7 @@ Scoped flow execution identities are admitted only as the minimum security primi
 
 Core Vortex contracts may describe only capabilities required to define, validate, publish, secure and execute arbitrary [Vortex applications](../03-composition-and-publication.md). Business-domain functionality — including Abzum's own operational applications — must be implemented using those same Vortex primitives unless a documented platform-level invariant makes that impossible.
 
-This rule applies to [contracts](../../../contracts/README.md), runtime services, database schemas, workflow nodes, system interfaces, Studio tools and GitHub delivery tasks. Example applications may use business language inside [testing fixtures](../../../testing/fixtures), but their names and outcomes must never decide core behaviour.
+This rule applies to runtime services, database schemas, workflow nodes, system interfaces, Studio tools and shipped definitions. Business language belongs in application definitions; it never decides generic core behaviour.
 
 ```mermaid
 flowchart TB
@@ -40,11 +40,11 @@ If any answer is no, the concept is an ordinary application capability. A delive
 
 Use the smallest implementation that satisfies the documented behaviour. A new counter, fingerprint, state or abstraction needs a concrete failure case that existing identities, revisions and transactions cannot handle. Reuse existing mechanisms; do not build speculative frameworks or turn every failure case into a separate domain concept. Reviewers must identify unnecessary machinery as well as missing safeguards. Correct the current contract and its consumers together instead of retaining obsolete representation compatibility layers.
 
-Fix defects at their cause rather than layering compensating guards around broken behaviour, and keep unrelated maintenance outside the current feature. The current fleet implements bounded source changes and uses independent GPT-6 Sol (Extra High) review with reviewer-owned fixes; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Code review assesses the required outcomes and relevant failure handling, and this development pass adds no tests or separate hosted/database proof gate. If a correction changes unresolved business behaviour, pause only the affected work and ask the product owner for the exact missing decision; an unresolved product decision or real prerequisite blocks only its dependent work. The architect makes technical implementation decisions and records material reasoning. Touching IAM, Access, permissions or migrations does not itself create another product approval requirement. Existing product permission and transaction safeguards still apply, and development completion authorises no Production action. Follow [agent coordination](../../build-plan/agent-coordination.md) for ownership, dependency-ready pickup and development completion.
+Changes to IAM, Access, permissions and migrations preserve existing authorisation and transaction safeguards. A technical change does not itself create another product approval requirement.
 
 For [role changes](groups-and-privileged-access.md#editing-a-role-versus-accepting-permissions), preserve three guarantees: changes are atomic and revision-checked; broadened or restored authority requires explicit fresh acceptance; competing role and assignment changes serialize or refuse as stale without partial effects. Supporting evidence is an implementation detail, not another user-facing approval process. Retain separate continuity checks only where they protect distinct behaviour; merge duplicates, not different safeguards merely because their names sound similar.
 
-The [Access version](data-contracts.md#permission-and-role-contracts) orders access changes. Its change timestamp is observation metadata, not an additional ordering or authorisation decision. Local clock faults belong to environment verification, not new permission semantics; genuine start and expiry checks still use current trusted time.
+The [Access version](data-contracts.md#permission-and-role-contracts) orders access changes. Its change timestamp is observation metadata, not an additional ordering or authorisation decision. Start and expiry checks use current trusted time.
 
 ## Core inventory
 
@@ -129,6 +129,6 @@ flowchart LR
 
 ## Source and runtime separation
 
-The production [definition-source boundary](data-contracts.md#runtime-and-definition-source-layers) uses readable builder keys and is capability-complete for modules, applications and platform connection types. The pure [definition compiler](../../../packages/platform/src/definition/compiler.ts) resolves that source to the branded stable identifiers used by runtime contracts without semantic loss. The schemas and compiler are shipping generic platform code; acceptance scenarios, expected example outcomes and storage demonstrations remain test-only evidence in the non-shipping test surface.
+The production [definition-source boundary](data-contracts.md#runtime-and-definition-source-layers) uses readable builder keys and is capability-complete for modules, applications and platform connection types. The pure [definition compiler](../../../packages/platform/src/definition/compiler.ts) resolves that source to the stable identifiers used by runtime contracts without semantic loss. The schemas and compiler are generic platform code; shipped application and module definitions live in `packages/definitions`.
 
 Core source must not contain an example application's name, module name, record type, field, workflow or connection key. Automated source guards enforce this rule. Test fixtures may assert example-specific outcomes because they are consumers of the generic platform, not inputs to its semantics.

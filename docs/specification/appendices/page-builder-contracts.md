@@ -198,7 +198,7 @@ Correct development data and checked-in definitions at the same owning boundary 
 
 Typed placement visibility and query selection remain first-class properties. Richer data/form/flow bindings belong to [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). No setting bag or editor-specific JSON may replace these semantics.
 
-Review the implementation against [code-review acceptance](../20-quality-and-acceptance.md). No compatibility conversion, database proof or hosted verification is required for development completion.
+Visible behaviour follows the local application walkthrough in [quality and acceptance](../20-quality-and-acceptance.md), with screenshots included in pull requests.
 
 ## HR example policy
 
