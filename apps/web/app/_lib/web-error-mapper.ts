@@ -1,5 +1,7 @@
 import "server-only";
 
+import { ZodError } from "zod";
+
 type WebErrorMapping<Result> = Readonly<{
   route: string;
   operation: string;
@@ -33,8 +35,33 @@ const safeText = (value: unknown): string | undefined => {
     .slice(0, 300);
 };
 
-const safeCause = (error: unknown): readonly Readonly<Record<string, string>>[] => {
-  const causes: Readonly<Record<string, string>>[] = [];
+type SafeZodIssue = Readonly<{
+  code: string;
+  path: readonly (string | number)[];
+}>;
+
+const safeIssuePathSegment = (value: unknown): string | number => {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  const text = safeText(value);
+  return typeof text === "string" && /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/.test(text)
+    ? text
+    : "[redacted]";
+};
+
+const safeZodIssues = (error: ZodError): readonly SafeZodIssue[] => {
+  const issues = readDataProperty(error, "issues");
+  if (!Array.isArray(issues)) return [];
+  return issues.slice(0, 32).flatMap((issue): SafeZodIssue[] => {
+    const rawCode = readDataProperty(issue, "code");
+    if (typeof rawCode !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(rawCode)) return [];
+    const rawPath = readDataProperty(issue, "path");
+    const path = Array.isArray(rawPath) ? rawPath.slice(0, 16).map(safeIssuePathSegment) : [];
+    return [{ code: rawCode, path }];
+  });
+};
+
+const safeCause = (error: unknown): readonly Readonly<Record<string, unknown>>[] => {
+  const causes: Readonly<Record<string, unknown>>[] = [];
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
     let isError = false;
@@ -50,10 +77,17 @@ const safeCause = (error: unknown): readonly Readonly<Record<string, string>>[] 
     const code =
       typeof rawCode === "string" && /^[A-Z0-9_]{3,64}$/.test(rawCode) ? rawCode : undefined;
     const message = safeText(readDataProperty(current, "message"));
+    let issues: readonly SafeZodIssue[] | undefined = undefined;
+    try {
+      if (current instanceof ZodError) issues = safeZodIssues(current);
+    } catch {
+      // Error inspection is best-effort; logging must not change the neutral response.
+    }
     causes.push({
       name,
       ...(code === undefined ? {} : { code }),
       ...(message === undefined ? {} : { message }),
+      ...(issues === undefined ? {} : { issues }),
     });
     current = readDataProperty(current, "cause");
   }
