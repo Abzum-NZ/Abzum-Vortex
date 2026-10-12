@@ -28,6 +28,9 @@ declare
   target_scope text;
   target_module_root_id uuid;
   target_release_revision bigint;
+  target_release_content jsonb;
+  target_record_type_definition jsonb;
+  target_is_system_projection boolean;
   records_by_id jsonb := '{}'::jsonb;
   candidate_edges jsonb := '[]'::jsonb;
   load_contracts uuid[] := array[]::uuid[];
@@ -99,6 +102,33 @@ begin
   target_scope := target_meta ->> 'storageScope';
   target_module_root_id := (target_meta ->> 'moduleRootId')::uuid;
   target_release_revision := (target_meta ->> 'releaseRevision')::bigint;
+
+  -- Read the record type from the exact immutable Module release already pinned
+  -- by the trusted installation access plan. Never infer its kind from the
+  -- current shared view or the latest published release.
+  select release.compilation_output #> '{canonical,content}'
+  into strict target_release_content
+  from vortex_definition.releases as release
+  where release.root_id = target_module_root_id
+    and release.release_revision = target_release_revision;
+
+  if pg_catalog.jsonb_typeof(target_release_content -> 'recordTypes')
+    is distinct from 'array' then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  end if;
+
+  select item.value
+  into strict target_record_type_definition
+  from pg_catalog.jsonb_array_elements(target_release_content -> 'recordTypes') as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId')
+    = pg_catalog.lower(p_record_type_id::text);
+
+  if pg_catalog.jsonb_typeof(target_record_type_definition) is distinct from 'object' then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  end if;
+  target_is_system_projection := target_record_type_definition ? 'systemProjection';
 
   -- Step 4: the declaration. Every record-scoped permission of this action
   -- kind declared for this exact record type, owned by the context Application
@@ -197,6 +227,13 @@ begin
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'concurrencyNumber', target_concurrency_number
     );
+  end if;
+
+  -- A compatible reprovision can advance the shared projection view while an
+  -- older release remains installed. Report that exact projection definition;
+  -- generated records keep their persisted last-written definition revision.
+  if target_is_system_projection then
+    target_definition_revision := target_release_revision;
   end if;
 
   records_by_id := pg_catalog.jsonb_build_object(
