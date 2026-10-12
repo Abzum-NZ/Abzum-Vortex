@@ -357,19 +357,6 @@ export default async function ApplicationAddressPage({
         ),
       );
 
-    const landingZone = resolved.read.applications.find(
-      (application) => application.key === "vortex.app.landing_zone",
-    );
-    if (landingZone)
-      redirect(
-        addressPath(
-          tenantShortName,
-          organizationShortName,
-          landingZone.key,
-          landingZone.homePageKey,
-        ),
-      );
-
     const currentOrganizationAccount = await loadCurrentOrganizationAccount(
       identity.session,
       resolved.read.organizationId,
