@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import type { ApplicationPuckRootShellV2 } from "@vortex/contracts";
+import type { ApplicationPuckRootShell } from "@vortex/contracts";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -161,7 +161,7 @@ export function ApplicationShellRoot({
   editing = false,
   children,
 }: Readonly<{
-  shell: ApplicationPuckRootShellV2;
+  shell: ApplicationPuckRootShell;
   runtime: ApplicationShellRuntime | undefined;
   contentStyle: CSSProperties;
   editing?: boolean;

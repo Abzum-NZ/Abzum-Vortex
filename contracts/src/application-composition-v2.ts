@@ -2593,7 +2593,7 @@ export const sourceShellContentSlotV2Schema = z
   })
   .strict();
 
-export const applicationShellPresentationV2Schema = z
+const applicationShellPresentationSchema = z
   .object({
     sidebar: z
       .object({
@@ -2612,7 +2612,7 @@ export const applicationShellPresentationV2Schema = z
   })
   .strict();
 
-export const applicationPuckRootShellV2Schema = z.discriminatedUnion("kind", [
+export const applicationPuckRootShellSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("default") }).strict(),
   z
     .object({
@@ -2620,12 +2620,12 @@ export const applicationPuckRootShellV2Schema = z.discriminatedUnion("kind", [
       shellId: sourceProvenanceUnchanged(shellIdSchema),
       key: sourceProvenanceUnchanged(builderKeySchema),
       name: sourceProvenanceUnchanged(labelSchema),
-      presentation: sourceProvenanceUnchanged(applicationShellPresentationV2Schema),
+      presentation: sourceProvenanceUnchanged(applicationShellPresentationSchema),
     })
     .strict(),
 ]);
 
-export const sourceApplicationShellPresentationV2Schema = z
+const sourceApplicationShellPresentationSchema = z
   .object({
     sidebar: sourceProvenanceUnchanged(
       z
@@ -2698,7 +2698,7 @@ export const applicationShellV2Schema = z
     shellId: sourceProvenanceUnchanged(shellIdSchema),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
-    presentation: sourceProvenanceUnchanged(applicationShellPresentationV2Schema),
+    presentation: sourceProvenanceUnchanged(applicationShellPresentationSchema),
     layout: sourceProvenanceUnchanged(placementSlotV2Schema),
     contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotV2Schema).min(1)),
   })
@@ -2755,7 +2755,7 @@ export const sourceApplicationShellV2Schema = z
     id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
-    presentation: sourceProvenanceUnchanged(sourceApplicationShellPresentationV2Schema),
+    presentation: sourceProvenanceUnchanged(sourceApplicationShellPresentationSchema),
     layout: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
     content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotV2Schema).min(1)),
   })
@@ -2898,7 +2898,7 @@ export type ApplicationCompositionCatalogueSnapshotV2 = z.infer<
 >;
 export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
-export type ApplicationPuckRootShellV2 = z.infer<typeof applicationPuckRootShellV2Schema>;
+export type ApplicationPuckRootShell = z.infer<typeof applicationPuckRootShellSchema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
 export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
 

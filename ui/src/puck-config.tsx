@@ -67,7 +67,7 @@ import {
   type BlockPlacementV2Contract,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
-  type ApplicationPuckRootShellV2,
+  type ApplicationPuckRootShell,
   type PlatformBlockReleaseV2,
   type ProjectedNavigation,
 } from "@vortex/contracts";
@@ -852,7 +852,7 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
         puck: PuckContext;
         gap: SlotGapName;
         padding: SlotGapName;
-        applicationShell: ApplicationPuckRootShellV2;
+        applicationShell: ApplicationPuckRootShell;
       }) => (
         <ApplicationShellRoot
           shell={applicationShell}

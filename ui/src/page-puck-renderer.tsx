@@ -2,7 +2,7 @@ import { Render } from "@puckeditor/core";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type {
   ApplicationShellV2,
-  ApplicationPuckRootShellV2,
+  ApplicationPuckRootShell,
   PageDefinitionV2,
   PageCompositionV2,
   ProjectedNavigation,
@@ -176,15 +176,16 @@ export function PagePuckRenderer({
   validateProjectedAvailabilityTree(slot, location);
   if (runtimeInputs !== undefined)
     assertRuntimeInputKeysArePlacements(collectPlacementIds(slot), runtimeInputs, location);
-  const rootShell: ApplicationPuckRootShellV2 = shell === undefined
-    ? { kind: "default" }
-    : {
-        kind: "application",
-        shellId: shell.shellId,
-        key: shell.key,
-        name: shell.name,
-        presentation: shell.presentation,
-      };
+  const rootShell: ApplicationPuckRootShell =
+    shell === undefined
+      ? { kind: "default" }
+      : {
+          kind: "application",
+          shellId: shell.shellId,
+          key: shell.key,
+          name: shell.name,
+          presentation: shell.presentation,
+        };
   const data = adapterFor(registry).toPuckData(slot, breakpoint, rootShell);
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
