@@ -608,12 +608,18 @@ export const createSearchEventConsumer = (
       try {
         result = await indexOccurrence(occurrence.data, dependencies);
       } catch (error) {
-        const cause = error as { code?: unknown; message?: unknown };
+        const code = (error as { code?: unknown } | null)?.code;
         console.error("Search event delivery interrupted", {
           consumer: searchEventConsumerKey,
           operation: "indexOccurrence",
-          code: typeof cause?.code === "string" ? cause.code : undefined,
-          message: typeof cause?.message === "string" ? cause.message : String(error),
+          cause:
+            typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)
+              ? code
+              : error instanceof TypeError
+                ? "TypeError"
+                : error instanceof Error
+                  ? "Error"
+                  : typeof error,
         });
         return { outcome: "retryable_failure", failureCode: "transient_dependency_unavailable" };
       }
