@@ -8,8 +8,11 @@ import {
   sameId,
   canonicalJson,
   placementSlotSchema,
+  sourcePageSlotAddresses,
+  sourcePageSlotAt,
   sourcePlacementSlotSchema,
   type OrganizationId,
+  type PageSlotAddress,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@web/platform-server";
@@ -48,37 +51,47 @@ type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][nu
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
 type AuthoredSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 
-/** Exact compiled page slots keyed by their authored page aliases. */
-export type StudioApplicationCompiledPageSlots = Readonly<Record<string, CompiledSlot>>;
-
-const editableSourceSlot = (page: SourcePage): Readonly<{ key: string; slot: unknown }> | undefined => {
-  const composition = page.composition;
-  if ("main" in composition) return { key: "main", slot: composition.main };
-  if ("content" in composition) {
-    const entries = Object.entries(composition.content);
-    if (entries.length === 1) return { key: entries[0]![0], slot: entries[0]![1] };
-  }
-  return undefined;
-};
+/** Exact compiled page slots keyed by authored page alias, then by page slot address key. */
+export type StudioApplicationCompiledPageSlots = Readonly<
+  Record<string, Readonly<Record<string, CompiledSlot>>>
+>;
 
 const compiledPageSlot = (
   source: StoredApplicationDefinitionDraft["source"],
   page: SourcePage,
   content: unknown,
   compiledPage: unknown,
+  at: PageSlotAddress,
 ): CompiledSlot | undefined => {
   const sourceComposition = page.composition;
   const compiled = compiledPage as {
-    composition?: { main?: unknown; shellId?: unknown; content?: Record<string, unknown> };
+    composition?: {
+      main?: unknown;
+      shellId?: unknown;
+      content?: Record<string, unknown>;
+      stepContent?: Record<string, unknown>;
+    };
+    steps?: readonly { id: unknown }[];
   };
-  if ("main" in sourceComposition && compiled.composition?.main !== undefined)
-    return placementSlotSchema.parse(compiled.composition.main);
-  if (!("content" in sourceComposition) || compiled.composition?.content === undefined)
+  const composition = compiled.composition;
+  if (composition === undefined) return undefined;
+  if ("main" in sourceComposition)
+    return composition.main === undefined ? undefined : placementSlotSchema.parse(composition.main);
+
+  let stepContent: unknown = undefined;
+  if ("step_content" in sourceComposition) {
+    const stepIndex = "steps" in page ? page.steps.findIndex((step) => step.id === at.step) : -1;
+    const compiledStepId = compiled.steps?.[stepIndex]?.id;
+    if (compiledStepId === undefined || composition.stepContent === undefined) return undefined;
+    stepContent = composition.stepContent[String(compiledStepId)];
+    if (sourceComposition.shell_kind === "default")
+      return stepContent === undefined ? undefined : placementSlotSchema.parse(stepContent);
+  }
+
+  if (!("shell" in sourceComposition) || composition.shellId === undefined || at.slot === undefined)
     return undefined;
-  const entries = Object.entries(sourceComposition.content);
-  if (entries.length !== 1 || compiled.composition.shellId === undefined) return undefined;
   const sourceShell = source.body.shells.find((candidate) => candidate.id === sourceComposition.shell);
-  const sourceSlot = sourceShell?.content_slots.find((candidate) => candidate.id === entries[0]![0]);
+  const sourceSlot = sourceShell?.content_slots.find((candidate) => candidate.id === at.slot);
   const canonical = content as {
     shells?: readonly {
       shellId: unknown;
@@ -86,14 +99,19 @@ const compiledPageSlot = (
     }[];
   };
   const shells = canonical.shells?.filter(
-    (candidate) => String(candidate.shellId) === String(compiled.composition?.shellId),
+    (candidate) => String(candidate.shellId) === String(composition.shellId),
   ) ?? [];
   const contentSlots = shells[0]?.contentSlots.filter(
     (candidate) => candidate.key === sourceSlot?.key,
   ) ?? [];
   if (sourceSlot === undefined || shells.length !== 1 || contentSlots.length !== 1)
     return undefined;
-  const runtimeSlot = compiled.composition.content[String(contentSlots[0]!.slotId)];
+  const slotId = String(contentSlots[0]!.slotId);
+  const runtimeSlot = (
+    "step_content" in sourceComposition
+      ? (stepContent as Record<string, unknown> | undefined)
+      : composition.content
+  )?.[slotId];
   return runtimeSlot === undefined ? undefined : placementSlotSchema.parse(runtimeSlot);
 };
 
@@ -130,18 +148,20 @@ const pageCompiledSlotsFor = (
   };
   if (content.pages === undefined || content.pages.length !== source.body.pages.length)
     throw new Error("Studio compiled page list does not match its authored draft");
-  const result: Record<string, CompiledSlot> = {};
+  const result: Record<string, Record<string, CompiledSlot>> = {};
   source.body.pages.forEach((page, index) => {
     const compiledPage = content.pages![index] as { key?: unknown; type?: unknown } | undefined;
     if (compiledPage === undefined || compiledPage.key !== page.key || compiledPage.type !== page.type)
       throw new Error("Studio compiled page does not match its authored draft");
-    const authoredSlot = editableSourceSlot(page);
-    const runtimeSlot = compiledPageSlot(source, page, canonical, content.pages![index]);
-    if (authoredSlot === undefined) return;
-    if (runtimeSlot === undefined)
-      throw new Error("Studio compiled page slot does not match its authored draft");
-    assertCompiledSlotMatches(authoredSlot.slot, runtimeSlot);
-    result[page.id] = runtimeSlot;
+    const slots: Record<string, CompiledSlot> = {};
+    for (const at of sourcePageSlotAddresses(page)) {
+      const runtimeSlot = compiledPageSlot(source, page, canonical, content.pages![index], at);
+      if (runtimeSlot === undefined)
+        throw new Error("Studio compiled page slot does not match its authored draft");
+      assertCompiledSlotMatches(sourcePageSlotAt(page, at), runtimeSlot);
+      slots[at.key] = runtimeSlot;
+    }
+    result[page.id] = slots;
   });
   return result;
 };

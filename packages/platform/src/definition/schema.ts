@@ -21,3 +21,4 @@ export {
 } from "./module-source-contracts";
 export * from "./version-impact";
 export * from "./platform-compatibility";
+export * from "./application-page-slots";

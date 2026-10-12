@@ -4,8 +4,12 @@ import { Puck, type Data } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import {
   applicationSourceDocumentSchema,
+  setSourcePageSlot,
+  sourcePageSlotAddresses,
+  sourcePageSlotAt,
   sourcePlacementSlotSchema,
   type ApplicationSourceDocument,
+  type PageSlotAddress,
 } from "@vortex/platform/schema";
 import type { placementSlotSchema } from "@vortex/platform/schema";
 import {
@@ -14,29 +18,15 @@ import {
   getVortexPuckConfig,
 } from "@vortex/ui";
 import { useMemo, useRef, useState } from "react";
+import { Label } from "../components/label";
+import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
 
 const registry = createFullPlatformComponentRegistry();
 const config = getVortexPuckConfig(registry);
 const adapter = createVortexAuthoredPuckAdapter(registry.toPlatformBlockCatalogue());
 const runtimeAdapter = createVortexPuckAdapter(registry.toPlatformBlockCatalogue());
-type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
-type EditablePageSlot = Readonly<{
-  key: string;
-  slot: ReturnType<typeof sourcePlacementSlotSchema.parse>;
-}>;
-
-const editablePageSlot = (page: SourcePage): EditablePageSlot | undefined => {
-  const composition = page.composition;
-  if ("main" in composition) return { key: "main", slot: composition.main };
-  if ("content" in composition) {
-    const entries = Object.entries(composition.content);
-    if (entries.length === 1) return { key: entries[0]![0], slot: entries[0]![1] };
-  }
-  return undefined;
-};
-
 const record = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("Compiled Puck page data is invalid.");
@@ -79,7 +69,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   source: ApplicationSourceDocument;
   compiledSource: ApplicationSourceDocument;
   pageAlias: string;
-  compiledSlot?: CompiledSlot | undefined;
+  /** The compiled slots of this page keyed by page slot address key. */
+  compiledSlots?: Readonly<Record<string, CompiledSlot>> | undefined;
   disabled: boolean;
   onChange: (
     expectedSource: ApplicationSourceDocument,
@@ -87,22 +78,55 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   ) => void;
 }>;
 
-export function ApplicationPagePuckEditor({
+/** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
+export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
+  const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
+  const addresses = page === undefined ? [] : sourcePageSlotAddresses(page);
+  const [selectedKey, setSelectedKey] = useState("");
+  const at = addresses.find((candidate) => candidate.key === selectedKey) ?? addresses[0];
+  const selectorId = `puck-slot-${props.pageAlias}`;
+  if (at === undefined)
+    return <p role="status">This page has no content slot to edit visually.</p>;
+  return (
+    <div className="space-y-3">
+      {addresses.length < 2 ? null : (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={selectorId}>Content slot</Label>
+          <NativeSelect
+            id={selectorId}
+            value={at.key}
+            onChange={(event) => setSelectedKey(event.target.value)}
+          >
+            {addresses.map((candidate) => (
+              <NativeSelectOption key={candidate.key} value={candidate.key}>
+                {candidate.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+      <ApplicationPageSlotPuckEditor key={`${props.pageAlias}:${at.key}`} {...props} at={at} />
+    </div>
+  );
+}
+
+function ApplicationPageSlotPuckEditor({
   source,
   compiledSource,
   pageAlias,
-  compiledSlot,
+  compiledSlots,
+  at,
   disabled,
   onChange,
-}: ApplicationPagePuckEditorProps) {
+}: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
+  const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
-  const pageSlot = page === undefined ? undefined : editablePageSlot(page);
-  const slot = pageSlot?.slot;
+  const slot = page === undefined ? undefined : sourcePageSlotAt(page, at);
   const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
-  const originalSlot = originalPage === undefined ? undefined : editablePageSlot(originalPage)?.slot;
+  const originalSlot = originalPage === undefined ? undefined : sourcePageSlotAt(originalPage, at);
   const runtimeSettings = useMemo(() => {
     if (originalSlot === undefined || compiledSlot === undefined) return undefined;
     const authoredData = adapter.toPuckData(originalSlot);
@@ -119,25 +143,17 @@ export function ApplicationPagePuckEditor({
       const current = sourceRef.current;
       const matches = current.body.pages.filter((item) => item.id === pageAlias);
       const target = matches[0];
-      const targetSlot = target === undefined ? undefined : editablePageSlot(target);
-      if (
-        matches.length !== 1 ||
-        target === undefined ||
-        pageSlot === undefined ||
-        targetSlot?.key !== pageSlot.key
-      )
+      const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
+      if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const editedSlot = adapter.fromPuckData(targetSlot.slot, candidate);
+      const editedSlot = adapter.fromPuckData(targetSlot, candidate);
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
-      const nextPageSlot = nextPage === undefined ? undefined : editablePageSlot(nextPage);
-      if (nextPage === undefined || nextPageSlot?.key !== pageSlot.key)
+      if (
+        nextPage === undefined ||
+        !setSourcePageSlot(nextPage, at, sourcePlacementSlotSchema.parse(editedSlot))
+      )
         throw new TypeError("The selected page is unavailable.");
-      const parsedSlot = sourcePlacementSlotSchema.parse(editedSlot);
-      if ("main" in nextPage.composition) nextPage.composition.main = parsedSlot;
-      else if ("content" in nextPage.composition)
-        nextPage.composition.content[pageSlot.key] = parsedSlot;
-      else throw new TypeError("The selected page is unavailable.");
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
       setMessage("");
@@ -151,7 +167,7 @@ export function ApplicationPagePuckEditor({
   };
 
   if (page === undefined || slot === undefined)
-    return <p role="status">Visual editing is available for pages with one page content slot.</p>;
+    return <p role="status">This page content slot is unavailable.</p>;
   if (data === undefined)
     return <p role="status">This page needs a current compiled version before visual editing is available.</p>;
 

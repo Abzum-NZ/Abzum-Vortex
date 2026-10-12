@@ -63,6 +63,81 @@ const adapterFor = (registry: PlatformComponentRegistry) => {
   return adapter;
 };
 
+type ResolvedPageInputs = Readonly<{
+  composition: PagePuckRendererProps["composition"];
+  shells: PagePuckRendererProps["shells"];
+  selectedShell: PagePuckRendererProps["shell"];
+  registry: PlatformComponentRegistry;
+  pageId: string | undefined;
+  activeStepId: string | undefined;
+  breakpoint: Breakpoint | undefined;
+}>;
+
+type ResolvedPageData = Readonly<{
+  slot: PlacementSlot;
+  data: ReturnType<ReturnType<typeof createVortexPuckAdapter>["toPuckData"]>;
+}>;
+
+const resolvedPages = new WeakMap<
+  object,
+  { inputs: ResolvedPageInputs; resolved: ResolvedPageData }[]
+>();
+
+/**
+ * The resolved, validated Puck data of one page. It depends only on the immutable definition
+ * inputs (composition, shells, registry, page, step and breakpoint), so it is computed once per
+ * distinct set of them; runtime inputs reach the blocks through Puck metadata and never repeat it.
+ */
+const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
+  const { composition, shells, selectedShell, registry, pageId, activeStepId, breakpoint } = inputs;
+  const entries = resolvedPages.get(composition) ?? [];
+  const cached = entries.find(
+    (entry) =>
+      entry.inputs.shells === shells &&
+      entry.inputs.selectedShell === selectedShell &&
+      entry.inputs.registry === registry &&
+      entry.inputs.pageId === pageId &&
+      entry.inputs.activeStepId === activeStepId &&
+      entry.inputs.breakpoint === breakpoint,
+  );
+  if (cached !== undefined) return cached.resolved;
+  const resolved = resolveRootPlacementSlotWithContext({
+    composition,
+    shells: shells ?? [],
+    registry,
+    ...(pageId === undefined ? {} : { pageId }),
+    ...(activeStepId === undefined ? {} : { activeStepId }),
+  });
+  const { slot, permissionProjected } = resolved;
+  const shell = selectedShell ?? resolved.shell;
+  const location = {
+    ...(pageId === undefined ? {} : { pageId }),
+    ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
+    ...(breakpoint === undefined ? {} : { breakpoint }),
+  };
+  if ("pages" in composition && Array.isArray(composition.pages))
+    validatePlacementDependencies(slot, composition.platformBlockDependencies, location);
+  validatePlacementTree(slot, registry, location, { allowEmptyRequiredSlots: permissionProjected });
+  validateProjectedAvailabilityTree(slot, location);
+  const rootShell: ApplicationPuckRootShell =
+    shell === undefined
+      ? { kind: "default" }
+      : {
+          kind: "application",
+          shellId: shell.shellId,
+          key: shell.key,
+          name: shell.name,
+          presentation: shell.presentation,
+        };
+  const result: ResolvedPageData = {
+    slot,
+    data: adapterFor(registry).toPuckData(slot, breakpoint, rootShell),
+  };
+  entries.push({ inputs, resolved: result });
+  resolvedPages.set(composition, entries);
+  return result;
+};
+
 export type PagePuckRendererProps = Readonly<{
   composition:
     | MaterialisedApplicationComposition
@@ -138,7 +213,7 @@ export function PagePuckRenderer({
   composition,
   breakpoint,
   registry,
-  shells = [],
+  shells,
   shell: selectedShell,
   pageId,
   activeStepId,
@@ -162,37 +237,22 @@ export function PagePuckRenderer({
   applicationSearchPageSubject,
   componentBundleOrigin,
 }: PagePuckRendererProps): ReactElement {
-  const resolved = resolveRootPlacementSlotWithContext({
+  const { slot, data } = resolvedPageData({
     composition,
     shells,
+    selectedShell,
     registry,
-    ...(pageId === undefined ? {} : { pageId }),
-    ...(activeStepId === undefined ? {} : { activeStepId }),
+    pageId,
+    activeStepId,
+    breakpoint,
   });
-  const { slot, permissionProjected } = resolved;
-  const shell = selectedShell ?? resolved.shell;
   const location = {
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
     ...(breakpoint === undefined ? {} : { breakpoint }),
   };
-  if ("pages" in composition && Array.isArray(composition.pages))
-    validatePlacementDependencies(slot, composition.platformBlockDependencies, location);
-  validatePlacementTree(slot, registry, location, { allowEmptyRequiredSlots: permissionProjected });
-  validateProjectedAvailabilityTree(slot, location);
   if (runtimeInputs !== undefined)
     assertRuntimeInputKeysArePlacements(collectPlacementIds(slot), runtimeInputs, location);
-  const rootShell: ApplicationPuckRootShell =
-    shell === undefined
-      ? { kind: "default" }
-      : {
-          kind: "application",
-          shellId: shell.shellId,
-          key: shell.key,
-          name: shell.name,
-          presentation: shell.presentation,
-        };
-  const data = adapterFor(registry).toPuckData(slot, breakpoint, rootShell);
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);

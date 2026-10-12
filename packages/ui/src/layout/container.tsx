@@ -86,9 +86,7 @@ export function Container(props: ContainerProps): ReactElement {
   const readWidth = (key: string): number | undefined =>
     declared.has(key) ? settings.number(key) : undefined;
   // Geometry a release does not declare does not exist. Every declared one is written explicitly
-  // by the component config, except the tablet and phone overrides, whose absence means "inherit".
-  const readChoice = <Value extends string>(key: string, fallback: Value): Value =>
-    declared.has(key) ? settings.choice(key, fallback) : fallback;
+  // into the placement from its property's default value.
   const readExplicit = <Value extends string>(key: string): Value | undefined =>
     declared.has(key) ? settings.explicitChoice<Value>(key) : undefined;
   const padding = readExplicit<ContainerGap>("padding");
@@ -98,15 +96,15 @@ export function Container(props: ContainerProps): ReactElement {
     menuWidth: readWidth("menu_width"),
     menuPlacement: readExplicit<MenuPlacement>("menu_placement") ?? "flow",
   };
-  const tabletDirection = readChoice<ContainerDirection | "inherit">("tablet_direction", "inherit");
-  const tabletPlacement = readChoice<MenuPlacement | "inherit">("tablet_menu_placement", "inherit");
+  const tabletDirection = readExplicit<ContainerDirection | "inherit">("tablet_direction") ?? "inherit";
+  const tabletPlacement = readExplicit<MenuPlacement | "inherit">("tablet_menu_placement") ?? "inherit";
   const tablet: ContainerGeometry = {
     direction: tabletDirection === "inherit" ? desktop.direction : tabletDirection,
     menuWidth: readWidth("tablet_menu_width") ?? desktop.menuWidth,
     menuPlacement: tabletPlacement === "inherit" ? desktop.menuPlacement : tabletPlacement,
   };
-  const phoneDirection = readChoice<ContainerDirection | "inherit">("phone_direction", "inherit");
-  const phonePlacement = readChoice<MenuPlacement | "inherit">("phone_menu_placement", "inherit");
+  const phoneDirection = readExplicit<ContainerDirection | "inherit">("phone_direction") ?? "inherit";
+  const phonePlacement = readExplicit<MenuPlacement | "inherit">("phone_menu_placement") ?? "inherit";
   const phone: ContainerGeometry = {
     direction: phoneDirection === "inherit" ? tablet.direction : phoneDirection,
     menuWidth: readWidth("phone_menu_width") ?? tablet.menuWidth,

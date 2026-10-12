@@ -2867,6 +2867,28 @@ export type ApplicationPuckRootShell = z.infer<typeof applicationPuckRootShellSc
 export type PageComposition = z.infer<typeof pageCompositionSchema>;
 export type GuidedFormPageComposition = z.infer<typeof guidedFormPageCompositionSchema>;
 
+/** The compiled composition one renderer input carries: dependencies, shells, pages and theme. */
+export const materialisedApplicationCompositionSchema = z
+  .object({
+    platformBlockDependencies: platformBlockDependenciesSchema,
+    shells: z.array(applicationShellSchema),
+    pages: z.array(
+      z
+        .object({
+          pageId: z.string().min(1),
+          composition: z.union([pageCompositionSchema, guidedFormPageCompositionSchema]),
+          steps: z
+            .array(
+              z.object({ id: z.string().min(1), name: z.string(), summary: z.boolean() }).strict(),
+            )
+            .optional(),
+        })
+        .strict(),
+    ),
+    theme: applicationThemeSchema,
+  })
+  .strict();
+
 /*
  * Studio discovery projection. It republishes the declarations of one immutable platform block
  * catalogue, the same catalogue save and publish validation judge, so Studio offers only what that

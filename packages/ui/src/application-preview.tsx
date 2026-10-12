@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement } from "react";
 import {
   componentSemanticEventKindSchema,
   flowEffectKindSchema,
+  materialisedApplicationCompositionSchema,
   type ComponentSemanticEventKind,
   type FlowEffectKind,
 } from "@vortex/platform/schema";
@@ -212,14 +213,11 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   const currentReleaseRevision = record.currentReleaseRevision;
   if (currentReleaseRevision !== null && typeof currentReleaseRevision !== "number")
     fail("A preview artifact requires its current release revision or null");
-  const composition = requireObject(record.composition, "A preview artifact requires a composition");
-  requireArray(composition.pages, "A preview composition requires its pages");
-  requireArray(composition.shells, "A preview composition requires its shells");
-  requireArray(
-    composition.platformBlockDependencies,
-    "A preview composition requires its platform-block dependencies",
-  );
-  requireObject(composition.theme, "A preview composition requires its theme");
+  const composition = materialisedApplicationCompositionSchema.safeParse(record.composition);
+  if (!composition.success)
+    fail(
+      `A preview artifact has an invalid composition at '${composition.error.issues[0]?.path.join(".") ?? ""}': ${composition.error.issues[0]?.message ?? "invalid"}`,
+    );
   const activeStepId = record.activeStepId;
   return Object.freeze({
     kind: "application_preview",
@@ -235,7 +233,7 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
       : { activeStepId: requireString(activeStepId, "A preview active step identity is invalid") }),
     breakpoint,
     interactionMode: "simulation",
-    composition: composition as unknown as MaterialisedApplicationComposition,
+    composition: composition.data as unknown as MaterialisedApplicationComposition,
     interactions: Object.freeze(
       requireArray(record.interactions, "A preview artifact requires its interactions").map(parseInteraction),
     ),
@@ -332,15 +330,21 @@ const validatePreviewRuntimeInputs = (
   }
 };
 
-const onlyKnownPlacements = (
-  values: Readonly<Record<string, unknown>>,
+/** Refuses sample data keyed by a placement the resolved page does not contain. */
+const validateSamplePlacementKeys = (
+  sampleData: Readonly<Record<string, unknown>>,
+  kind: "display" | "control",
   placementIds: ReadonlySet<string>,
-): Readonly<Record<string, unknown>> =>
-  Object.freeze(
-    Object.fromEntries(
-      Object.entries(values).filter(([placementId]) => placementIds.has(placementId)),
-    ),
-  );
+  location: DefinitionRenderErrorLocation,
+): void => {
+  for (const placementId of Object.keys(sampleData))
+    if (!placementIds.has(placementId))
+      throw new DefinitionRenderError(
+        "INVALID_COMPOSITION",
+        `Preview ${kind} sample data names placement '${placementId}', which the page does not contain`,
+        { ...location, placementId },
+      );
+};
 
 export type ApplicationPreviewProps = Readonly<{
   artifact: ApplicationPreviewArtifact;
@@ -454,13 +458,23 @@ export function ApplicationPreview({
   }
 
   try {
-    for (const [placementId, data] of Object.entries(
-      onlyKnownPlacements(artifact.displaySampleDataByPlacement, availablePlacementIds),
-    ))
+    if (resolvedSlot !== undefined) {
+      validateSamplePlacementKeys(
+        artifact.displaySampleDataByPlacement,
+        "display",
+        availablePlacementIds,
+        location,
+      );
+      validateSamplePlacementKeys(
+        artifact.controlSampleDataByPlacement,
+        "control",
+        availablePlacementIds,
+        location,
+      );
+    }
+    for (const [placementId, data] of Object.entries(artifact.displaySampleDataByPlacement))
       supply(placementId, "data", data);
-    for (const [placementId, data] of Object.entries(
-      onlyKnownPlacements(artifact.controlSampleDataByPlacement, availablePlacementIds),
-    ))
+    for (const [placementId, data] of Object.entries(artifact.controlSampleDataByPlacement))
       supply(placementId, "data", data);
     for (const [placementId, events] of displayHandlers) supply(placementId, "events", events);
     for (const [placementId, events] of controlHandlers) supply(placementId, "events", events);
