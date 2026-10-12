@@ -1,11 +1,12 @@
-import type { JsonValue } from "@vortex/platform/schema";
 import {
+  describeFailure,
   resumeFlowRun,
   startFlowRun,
   type FlowFailure,
   type FlowInterfaceIntent,
   type FlowLibrary,
   type FlowRunStep,
+  type JsonValue,
 } from "@vortex/platform/schema";
 import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import {
@@ -45,6 +46,8 @@ const toIntent = (intent: FlowInterfaceIntent): FlowIntent => ({
 });
 
 const maximumSuspensions = 50;
+const isSurfaceCancellation = (error: unknown): boolean =>
+  error instanceof Error && error.name === "AbortError";
 
 /**
  * Runs a browser-only flow entirely in the page with the shared pure interpreter. The page carries
@@ -57,12 +60,13 @@ export async function runBrowserFlow(
   library: FlowLibrary,
   host: FlowIntentHost,
 ): Promise<BrowserFlowResult> {
-  if (!flowRunsOnlyInBrowser(request.flowId, library)) return { kind: "not_browser_only" };
-  let step: FlowRunStep = startFlowRun(
-    { runId: request.runId, flowId: request.flowId, inputs: request.inputs, now: request.now },
-    library,
-  );
+  let awaitingSurface = false;
   try {
+    if (!flowRunsOnlyInBrowser(request.flowId, library)) return { kind: "not_browser_only" };
+    let step: FlowRunStep = startFlowRun(
+      { runId: request.runId, flowId: request.flowId, inputs: request.inputs, now: request.now },
+      library,
+    );
     for (let suspensions = 0; suspensions <= maximumSuspensions; suspensions += 1) {
       const intents = step.kind === "protected_task" ? [] : step.intents.map(toIntent);
       const waiting = step.kind === "interface" ? intents.at(-1) : undefined;
@@ -89,25 +93,27 @@ export async function runBrowserFlow(
         const form = waiting?.kind === "show_form" ? readFormIntent(waiting) : undefined;
         if (form === undefined)
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
+        awaitingSurface = true;
         const answer = await host.showForm(form);
-        step = resumeFlowRun(
-          step.state,
-          answer,
-          library,
-        );
+        awaitingSurface = false;
+        step = resumeFlowRun(step.state, answer, library);
       } else {
         const confirmation = waiting?.kind === "confirm" ? readConfirmIntent(waiting) : undefined;
         if (confirmation === undefined)
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
-        step = resumeFlowRun(
-          step.state,
-          { kind: "confirm", confirmed: await host.confirm(confirmation) },
-          library,
-        );
+        awaitingSurface = true;
+        const confirmed = await host.confirm(confirmation);
+        awaitingSurface = false;
+        step = resumeFlowRun(step.state, { kind: "confirm", confirmed }, library);
       }
     }
     return { kind: "failed", failure: { outcome: "failed", code: "step_limit" } };
-  } catch {
-    return { kind: "abandoned" };
+  } catch (error) {
+    if (awaitingSurface && isSurfaceCancellation(error)) return { kind: "abandoned" };
+    console.error(`[flow] browser execution failed: ${describeFailure(error)}`);
+    return {
+      kind: "failed",
+      failure: { outcome: "failed", code: "flow_unavailable" },
+    };
   }
 }

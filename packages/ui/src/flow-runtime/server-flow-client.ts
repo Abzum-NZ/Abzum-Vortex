@@ -1,4 +1,5 @@
 import {
+  describeFailure,
   flowBindingInvocationSchema,
   flowRefusalFeedbackSchema,
   formContinuationReceiptSchema,
@@ -91,6 +92,10 @@ export type FlowInvokeClientOptions = Readonly<{
 
 const unavailable: ServerFlowResponse = Object.freeze({ kind: "unavailable" });
 const refused: ServerFlowResponse = Object.freeze({ kind: "refused" });
+const invalidServerResponse = (cause: unknown = new TypeError("FLOW_SERVER_RESPONSE_INVALID")) => {
+  console.error(`[flow] server response invalid: ${describeFailure(cause)}`);
+  return unavailable;
+};
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
@@ -100,7 +105,7 @@ const parseIntents = (candidate: unknown): readonly FlowIntent[] | undefined =>
 
 /** Fails closed: anything that is not exactly one of the endpoint's answers is `unavailable`. */
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
-  if (!isRecord(candidate)) return unavailable;
+  if (!isRecord(candidate)) return invalidServerResponse();
   switch (candidate.kind) {
     case "refused":
       return refused;
@@ -109,15 +114,17 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
     case "reload":
       return typeof candidate.installationRevision === "number"
         ? { kind: "reload", installationRevision: candidate.installationRevision }
-        : unavailable;
+        : invalidServerResponse();
     case "intent": {
       const intents = parseIntents(candidate.intents);
-      const target = candidate.target === undefined
-        ? undefined
-        : formContinuationTargetSchema.safeParse(candidate.target);
-      const receipt = candidate.receipt === undefined
-        ? undefined
-        : formContinuationReceiptSchema.safeParse(candidate.receipt);
+      const target =
+        candidate.target === undefined
+          ? undefined
+          : formContinuationTargetSchema.safeParse(candidate.target);
+      const receipt =
+        candidate.receipt === undefined
+          ? undefined
+          : formContinuationReceiptSchema.safeParse(candidate.receipt);
       if (
         intents === undefined ||
         target?.success === false ||
@@ -127,7 +134,13 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof candidate.continuation !== "string" ||
         typeof candidate.expiresAt !== "string"
       )
-        return unavailable;
+        return invalidServerResponse(
+          target?.success === false
+            ? target.error
+            : receipt?.success === false
+              ? receipt.error
+              : undefined,
+        );
       return {
         kind: "intent",
         runId: candidate.runId,
@@ -152,10 +165,10 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof descriptor.recovery !== "string" ||
         !isRecord(candidate.outputs)
       )
-        return unavailable;
+        return invalidServerResponse();
       const failure = candidate.failure;
       let acceptedFailure: Extract<ServerFlowResponse, { kind: "result" }>["failure"];
-      if (failure !== undefined && !isRecord(failure)) return unavailable;
+      if (failure !== undefined && !isRecord(failure)) return invalidServerResponse();
       if (isRecord(failure)) {
         const allowedFailureKeys = new Set(["code", "taskId", "diagnostic"]);
         if (
@@ -163,11 +176,15 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
           typeof failure.code !== "string" ||
           (failure.taskId !== undefined && typeof failure.taskId !== "string")
         )
-          return unavailable;
+          return invalidServerResponse();
         let diagnostic: FlowRefusalFeedback | undefined;
         if (failure.diagnostic !== undefined) {
           const parsed = flowRefusalFeedbackSchema.safeParse(failure.diagnostic);
-          if (!parsed.success || parsed.data.operationInput !== undefined) return unavailable;
+          if (!parsed.success) return invalidServerResponse(parsed.error);
+          if (parsed.data.operationInput !== undefined)
+            return invalidServerResponse(
+              new TypeError("FLOW_SERVER_DIAGNOSTIC_CONTAINS_OPERATION_INPUT"),
+            );
           diagnostic = parsed.data;
         }
         acceptedFailure = {
@@ -191,7 +208,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       };
     }
     default:
-      return unavailable;
+      return invalidServerResponse();
   }
 };
 
@@ -224,7 +241,8 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       if (response.status === 401 || response.status === 403 || response.status === 413)
         return refused;
       return parseServerFlowResponse(await response.json());
-    } catch {
+    } catch (error) {
+      console.error(`[flow] invoke request failed: ${describeFailure(error)}`);
       return unavailable;
     }
   };
