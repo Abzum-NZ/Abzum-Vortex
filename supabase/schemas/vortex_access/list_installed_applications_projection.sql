@@ -18,8 +18,6 @@ declare
   visible_organization_id uuid;
   actor_identity_id uuid;
   default_application_root_id uuid;
-  application_row record;
-  authorised boolean;
 begin
   -- The projection keeps today's row visibility inside itself and neither the
   -- organisation nor the application is ever an input. An installed application is
@@ -47,15 +45,28 @@ begin
     or not vortex_context.is_non_nil_uuid(actor_identity_id::text) then
     return;
   end if;
+  begin
+    perform 1
+    from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    ) as scope;
+  exception
+    when sqlstate '42501' or sqlstate 'P0002' then
+      return;
+  end;
   select settings.default_application_root_id into default_application_root_id
   from vortex_identity.organization_runtime_settings as settings
   where settings.organization_id = visible_organization_id;
-  for application_row in
+  return query
     select
+      visible_organization_id,
       root.root_id,
-      root.key as application_key,
-      registration.revision as registration_revision,
-      registration.source_revision as release_revision
+      registration.revision,
+      pg_catalog.jsonb_build_object(
+        'key', root.key,
+        'release_revision', registration.source_revision,
+        'is_default', root.root_id is not distinct from default_application_root_id
+      )
     from vortex_access.permission_registrations as registration
     join vortex_definition.roots as root
       on root.root_id = registration.registration_owner_id
@@ -79,32 +90,7 @@ begin
           and binding.application_release_revision = registration.source_revision
           and binding.state = 'active'
       )
-    order by root.key collate "C", root.root_id
-  loop
-    authorised := false;
-    begin
-      perform 1
-      from vortex_access.resolve_human_application_scope(
-        actor_identity_id, visible_organization_id, application_row.root_id
-      ) as scope;
-      authorised := true;
-    exception
-      when sqlstate '42501' or sqlstate 'P0002' then
-        authorised := false;
-    end;
-    if authorised then
-      return query select
-        visible_organization_id,
-        application_row.root_id,
-        application_row.registration_revision,
-        pg_catalog.jsonb_build_object(
-          'key', application_row.application_key,
-          'release_revision', application_row.release_revision,
-          'is_default', application_row.root_id
-            is not distinct from default_application_root_id
-        );
-    end if;
-  end loop;
+    order by root.key collate "C", root.root_id;
 end
 $function$;
 

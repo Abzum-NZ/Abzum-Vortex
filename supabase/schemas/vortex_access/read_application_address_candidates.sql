@@ -17,6 +17,7 @@ declare
   experience_values jsonb;
   role_values jsonb;
   permission_values jsonb;
+  permissions_by_application jsonb;
   home_page_key text;
 begin
   if p_identity_id is null
@@ -59,9 +60,39 @@ begin
       return pg_catalog.jsonb_build_object('kind', 'unavailable');
   end;
 
+  -- The organisation scope above is the viewer's only scope check: every
+  -- candidate below is already an active registration of this organisation.
+  -- Permission entries of every candidate application are aggregated once.
+  select coalesce(pg_catalog.jsonb_object_agg(grouped.application_root_id, grouped.entries), '{}'::jsonb)
+  into permissions_by_application
+  from (
+    select entry.registration_owner_id as application_root_id,
+      pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', entry.permission_key,
+          'applicationRootId', entry.application_root_id,
+          'ownerKind', entry.owner_kind,
+          'ownerId', entry.owner_id,
+          'permissionId', entry.permission_id,
+          'actionKind', entry.action_kind,
+          'namedAction', entry.named_action
+        ) order by entry.permission_key collate "C", entry.permission_id
+      ) as entries
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = addressed_organization.organization_id
+      and entry.registration_kind = 'application'
+      and entry.application_root_id = entry.registration_owner_id
+    group by entry.registration_owner_id
+  ) as grouped;
+
   for application_row in
     select root.root_id, root.key as application_key, release.compilation_output,
-      registration.revision as registration_revision,
       registration.source_revision as release_revision
     from vortex_access.permission_registrations as registration
     join vortex_definition.roots as root
@@ -87,18 +118,6 @@ begin
       and release.compilation_output ->> 'kind' = 'application'
     order by root.key collate "C", root.root_id
   loop
-    begin
-      perform 1
-      from vortex_access.resolve_human_application_scope(
-        p_identity_id,
-        addressed_organization.organization_id,
-        application_row.root_id
-      ) as scope;
-    exception
-      when sqlstate '42501' or sqlstate 'P0002' then
-        continue;
-    end;
-
     -- Published release data is platform-produced: a malformed field is a
     -- defect of that application's release, so it fails loudly with the
     -- application named instead of dropping the application from the list.
@@ -142,23 +161,7 @@ begin
           'Published application %s has malformed roles', application_row.application_key);
     end if;
 
-    select pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'key', entry.permission_key,
-        'applicationRootId', entry.application_root_id,
-        'ownerKind', entry.owner_kind,
-        'ownerId', entry.owner_id,
-        'permissionId', entry.permission_id,
-        'actionKind', entry.action_kind,
-        'namedAction', entry.named_action
-      ) order by entry.permission_key collate "C", entry.permission_id
-    ) into permission_values
-    from vortex_access.permission_catalogue_entries as entry
-    where entry.organization_id = addressed_organization.organization_id
-      and entry.registration_kind = 'application'
-      and entry.registration_owner_id = application_row.root_id
-      and entry.registration_revision = application_row.registration_revision
-      and entry.application_root_id = application_row.root_id;
+    permission_values := permissions_by_application -> (application_row.root_id::text);
 
     application_values := application_values || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(

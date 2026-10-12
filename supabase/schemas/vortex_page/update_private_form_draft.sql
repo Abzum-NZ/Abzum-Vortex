@@ -76,8 +76,6 @@ begin
   where draft.draft_id = p_draft_id
   returning * into stored;
 
-  perform vortex_page.private_form_draft_purge_internal(scope.organization_id, 100);
-
   return query select 'updated'::text,
     vortex_page.private_form_draft_to_json_internal(stored, 'active');
 end

@@ -64,6 +64,7 @@ declare
   sort_key_terms text[] := array[]::text[];
   order_by_sql text;
   scan_sql text;
+  read_row record;
   readable_field_ids text[] := array[]::text[];
   access_sql text;
   access_parameters jsonb := '[]'::jsonb;
@@ -872,7 +873,11 @@ begin
     end if;
 
     if passes then
-      projection := vortex_record.read_record(record_type_id_value, scan_record.record_id);
+      select row_read.* into read_row
+      from vortex_record.read_record_projection_internal(
+        record_type_id_value, scan_record.record_id
+      ) as row_read;
+      projection := read_row.projection;
       if projection ->> 'outcome' = 'allowed' then
         readable_values := projection -> 'values';
         if not exists (
@@ -962,8 +967,9 @@ begin
           -- The capabilities are computed only for a returned row; a row whose
           -- capabilities cannot be computed is withheld rather than exposed
           -- without them.
-          row_capabilities := vortex_record.read_record_capabilities(
-            record_type_id_value, scan_record.record_id
+          row_capabilities := vortex_record.read_record_capabilities_internal(
+            record_type_id_value, scan_record.record_id,
+            read_row.read_facts, read_row.read_bounds
           );
           if row_capabilities is not null then
             rows_value := rows_value || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
