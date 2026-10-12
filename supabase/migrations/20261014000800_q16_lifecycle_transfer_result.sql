@@ -1,3 +1,5 @@
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.apply_lifecycle_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -66,3 +68,5 @@ comment on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
   'The request role''s closed entry to the terminal delete, restore and ownership-transfer record-change writes: it refuses any other operation and delegates once to the one protected apply_record_changes operation.';
+
+reset role;
