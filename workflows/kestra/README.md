@@ -12,21 +12,20 @@ Preserve runtime access controls, tenant isolation, atomic changes, protected cr
 
 Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
 operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
-It runs durable application workflows and reviewed operational jobs such as database migration,
-verification, backup, and recovery.
+The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. Customer-authored
+durable workflows run in the separate application instance.
 
 No application user sees it. The Vortex Workflow service operates customer-authored workflows
 through the [protected-operation boundary](../../docs/specification/09-workflows-and-pipelines.md#protected-operation-contract).
-Operational flows remain separate and use their own narrow credentials.
+The two operations flows use only their protected route credentials.
 
 ## What is here
 
 | File | Holds |
 |---|---|
-| `Dockerfile` | The pinned Kestra operations image with checksum-verified Supabase and Doppler command-line tools |
+| `Dockerfile` | The pinned Kestra operations image with the reviewed flow definitions |
 | `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
-| `flows/` | Reviewed operational flows. Operational database delivery is separate from the roadmap; application workflow execution is scheduled in phase 9. |
-| `scripts/` | Reviewed commands called by operational flows; these are not available as application workflow nodes |
+| `flows/` | Scheduled event-dispatch recovery and runtime-bundle cleanup |
 
 ## How it is deployed
 
@@ -34,20 +33,12 @@ Coolify deploys this directory from the repository rather than from a compose fi
 interface, so the stack is reviewed and versioned like anything else, and a change to it arrives by
 pull request.
 
-The `flows/` directory and operational scripts are copied into the pinned Kestra image at build time,
-and the flow directory is passed to Kestra's official `--flow-path` startup option. Baking them into
-the image is required because Coolify removes its temporary checkout after deployment; a relative
-runtime bind mount would become an empty host directory. Every reviewed Coolify deployment therefore
-validates and creates or updates these flows in Kestra's PostgreSQL repository. Removing an
-operational flow is an explicit reviewed deletion; a missing file is not silently interpreted as
-permission to erase stored operational state.
-
-The one-time delivery-engine bootstrap pins Coolify to the exact commit SHA approved in the pull
-request and disables automatic branch redeployment. It does not point the operated service at a
-moving feature or Testing branch. After that exact commit merges to `testing`, the protected event is
-replayed against the pinned engine and must produce successful Testing evidence. Only then is the
-same revision promoted to `main`; Coolify returns to the protected `main` source at that commit and
-normal automatic deployment begins. The bootstrap never authorises a Production database change.
+The `flows/` directory is copied into the pinned Kestra image at build time, and the flow directory
+is passed to Kestra's official `--flow-path` startup option. Baking it into the image is required
+because Coolify removes its temporary checkout after deployment; a relative runtime bind mount would
+become an empty host directory. A reviewed Coolify deployment loads these flows into Kestra's
+PostgreSQL repository. Removing an operational flow is an explicit reviewed deletion; a missing file
+is not silently interpreted as permission to erase stored operational state.
 
 ## Secrets
 
@@ -59,18 +50,14 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_BASIC_AUTH_USERNAME` | The account the API and interface demand |
 | `KESTRA_BASIC_AUTH_PASSWORD` | Its password |
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
-| `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
-| `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
-| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the read-only service token limited to `abzum-vortex` / `ops_stg` |
-| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate read-only service token limited to `abzum-vortex` / `ops_prd` |
 | `VORTEX_EVENT_DISPATCH_WAKEUP_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
 | `VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, the same value whose SHA-256 digest is configured in Vercel and whose raw value is a database server setting |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64` | Base64 encoding of the protected Vercel runtime-bundle cleanup route address |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64` | Base64 encoding of the cleanup route bearer credential; its SHA-256 digest is configured on the Vercel route |
 
-These Kestra bootstrap values are stored as protected Coolify runtime variables. Doppler
-remains the source of record for the database values that the two service tokens can read. The
-Kestra API credential is also provided to the web application so it can reach the engine.
+These values are stored as protected Coolify runtime variables. The operations instance receives
+only the route URL and credential for each scheduled flow; it has no database-delivery credentials.
+The Kestra API credential is also provided to the web application so it can reach the engine.
 
 `event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
 schedule trigger calls the protected Vercel dispatch route every five minutes, so an event
@@ -104,50 +91,11 @@ the compose file maps them to Kestra's required names and each flow reads them w
 is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
 execution logs.
 
-Webhook keys authenticate only GitHub-to-Kestra delivery endpoints; they do not authorize Doppler
-or database access and do not replace the branch, repository,
-commit, migration-set, or approval checks performed by the flow. The two Doppler tokens are runtime
-bootstrap credentials. The delivery process asks Doppler only for the existing database connection
-and password plus the Supabase root certificate.
-
-Database delivery uses the unsynced `ops_stg` and `ops_prd` configs under the `abzum-vortex`
-project's separate `Operations` environment. The `Operations` root contains only the three Testing
-migration values; `ops_stg` inherits them, while `ops_prd` overrides the Production URL and password
-and inherits the common Supabase certificate. The `stg` and `prd` roots continue to sync restricted
-application-runtime values to Vercel; no Operations config has an external sync. Keeping Operations
-separate is required because Doppler branch configs inherit every root secret. The
-delivery script retrieves only `VORTEX_MIGRATION_DATABASE_URL`,
-`VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT`. The migration URL contains
-the project-owner username, session-pooler host, port, and database but deliberately contains no
-password; the separate password value remains raw so reserved characters require no URL encoding.
-The script accepts only
-Supabase's IPv4 session pooler on port 5432,
-the `postgres.<project-ref>` owner and the `postgres` database. Each reviewed flow also carries the
-exact non-secret Supabase project reference for its environment, so swapping the `stg` and `prd`
-database addresses is refused before any connection is opened. It confirms that the separately read
-credential-free URL names the approved owner, project, host, session-mode port, and database, then
-adds `sslmode=verify-full`. The separate raw password travels through `PGPASSWORD`, not a command
-argument or logged address. The certificate is the project Server root certificate downloaded from
-Supabase Database Settings. Backup, restore, web, and connection-provider secrets remain in other
-environments or projects, so a
-migration process cannot receive them accidentally.
-
-The config-scoped read-only service token reaches Doppler through the process environment, not a
-command argument. Every secret request still supplies the reviewed project and config explicitly;
-the token is removed from the delivery process before any database command runs.
-
-Rotate one environment at a time under a recorded change: create the replacement Doppler token or
-webhook key, update only the matching Coolify runtime variable and GitHub webhook, redeploy Kestra,
-prove delivery from the matching protected branch, then revoke the previous value. Never reuse a
-Testing value in Production. A periodic inventory check must reconcile the two active Coolify token
-copies with the two active read-only Doppler tokens and confirm that Preview and build-time scopes
-cannot receive them.
-
-The Kestra environment makes these operational bootstrap values available to reviewed flow
-definitions. Vortex builders cannot upload Kestra YAML, choose a Process runner, interpolate Kestra
-environment values, or invoke an operational script. Application workflows are compiled from the
-published generic node catalogue and call protected Vortex operations; adding any raw command node
-would be a separate security decision and is refused by the current specification.
+These two scheduled flows use the Kestra HTTP task and need no database client, delivery CLI, or
+repository checkout at runtime. Vortex builders cannot upload Kestra YAML, choose a Process runner,
+or interpolate Kestra environment values. Application workflows are compiled from the published
+generic node catalogue and call protected Vortex operations; adding any raw command node would be a
+separate security decision and is refused by the current specification.
 
 ## The application instance holds only the callback key
 
@@ -156,21 +104,20 @@ instance with Vortex's operational secrets. Two separate instances exist:
 
 | Instance | Directory | Holds |
 |---|---|---|
-| Operations (this directory) | `workflows/kestra/` | Vortex's own reviewed delivery flows and their operational bootstrap secrets |
+| Operations (this directory) | `workflows/kestra/` | Event-dispatch recovery and runtime-bundle cleanup route credentials |
 | Application | `workflows/kestra/application/` | Customer durable flows and exactly one flow secret, the callback signing key |
 
 The application instance's environment holds exactly one flow secret,
 `VORTEX_WORKFLOW_CALLBACK_KEY`. The application image is the pinned Kestra image with the
 reviewed `ProtectedCallback` plugin bundled from `application/plugin/`. It also receives the
 non-secret `VORTEX_PROTECTED_CALLBACK_URL`, which names only the fixed Vortex callback route and
-is read by the plugin code rather than exposed to flow templates. The instance holds no delivery,
-database or provider secret: the delivery webhook keys, the Testing and Production Doppler tokens
-and the event-dispatch credential above exist only in this operations instance. Its own PostgreSQL
+is read by the plugin code rather than exposed to flow templates. It does not receive the operations
+instance's route credentials or any database-delivery or provider secret. Its own PostgreSQL
 password and interface basic-auth password are engine bootstrap values supplied by the deployment
 environment through `KESTRA_CONFIGURATION`. They are not flow secrets and no instance variable
-carries the `ENV_` prefix,
-so neither Kestra's secret lookup nor its environment variables expose them to a flow definition.
-The application instance bakes no operational flow or script and starts with no `--flow-path`.
+carries the `ENV_` prefix, so neither Kestra's secret lookup nor its environment variables expose
+them to a flow definition. The application instance bakes no operational flow and starts with no
+`--flow-path`.
 
 That protection covers flow definitions, not code running inside the Kestra container. A Process
 runner script or command task would run as `root` beside the engine, inherit its environment and
@@ -192,9 +139,11 @@ secret. The application's server environment therefore needs no operations-insta
 application instance's environment, and no Workflow adapter may be pointed at this operations
 instance.
 
-## Database delivery
+## Retired database delivery
 
-The receipt-verified Testing/Production database delivery flows were removed during the takeover reset (#2209). Database delivery will be redesigned against the squashed migration baseline (#2236).
+The Testing and Production database-delivery flows were removed during the takeover reset (#2209).
+This operations image has no database-delivery flows or credentials. Any replacement will be
+designed against the squashed migration baseline (#2236).
 
 ## Three deliberate departures from Kestra's published compose file
 
@@ -215,19 +164,19 @@ verified. Kestra's current [release policy](https://kestra.io/docs/releases) ide
 current LTS and states that 1.0 support ends in September 2026; its
 [changelog](https://kestra.io/docs/changelog) also records `v1.0.58` after this pin. The required
 forward upgrade and state-database compatibility rehearsal belong to
-[#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198), rather than an unreviewed tag change in
-the database-delivery task. A first attempt used `v1.3.35` because it appeared in the release list,
-but no image was published under that tag at the time. Confirm the registry artifact and digest before
-changing any pin.
+[#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198), rather than an unreviewed tag change.
+A first attempt used `v1.3.35` because it appeared in the release list, but no image was published
+under that tag at the time. Confirm the registry artifact and digest before changing any pin.
 
 A fresh disposable startup with the pinned PostgreSQL 18.4 image succeeds, applies all Kestra
 migrations and loads the two reviewed operational flows. Its bundled Flyway nevertheless warns that
-PostgreSQL 18 is newer than its tested maximum of 17. Operational database delivery can use this
-verified combination. Application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76)
-must validate its generated flows, execution and restart behaviour against the existing pinned
-runtime; a real compatibility failure is not waived. The user has deferred engine upgrades and
-backup work for now. [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) governs a later
-forward upgrade, not a mandatory engine-version change before core workflow implementation.
+PostgreSQL 18 is newer than its tested maximum of 17. The two scheduled operational flows use the
+Kestra HTTP task and no database client. Application-workflow execution
+[#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76) must validate its generated flows,
+execution and restart behaviour against the existing pinned runtime; a real compatibility failure
+is not waived. Engine upgrades and backup work are deferred. [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198)
+governs a later forward upgrade, not a mandatory engine-version change before core workflow
+implementation.
 The existing PostgreSQL 18 data directory must never be opened by PostgreSQL 17.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
@@ -263,49 +212,6 @@ that survives the server is the one in R2. The full backup and restore procedure
 and row counts from a rehearsal, is written out on
 [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132).
 
-## Checking that the backup still restores
-
-A backup nobody has restored is a guess. `verify-restore.sh` turns that guess into a fact: it pulls
-the newest archive from Cloudflare R2, restores it into a throwaway database beside the live one,
-checks the flow definitions came back, and drops it again. It fails loudly at every step, so a run
-that reports success is a backup that genuinely restores.
-
-It verifies a backup. It does not recover one. Replacing the live database is a decision a person
-makes after working out what went wrong, so that stays manual.
-
-### Where the settings live
-
-Doppler project **`abzum-kestra`**, config **`prd`**. That project exists to keep server-side secrets
-apart from `abzum-vortex`, whose `dev`, `stg` and `prd` configs all sync to Vercel. Nothing here is
-wanted by the web application, and a secret placed in `abzum-vortex` would be pushed to every Vercel
-build and function for no reason.
-
-Four of the six values are already there and are not secret: `R2_ENDPOINT`, `R2_BUCKET`, `R2_PREFIX`
-and `PG_CONTAINER`. The two credentials, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, are added by
-hand.
-
-Doppler has no Coolify sync — its catalogue covers Vercel, Netlify, Render, Fly.io and the rest, but
-not Coolify — so the values do not arrive on the server on their own. Install the Doppler CLI there,
-give it a service token scoped to `abzum-kestra` / `prd`, and let the script read them at run time:
-
-```
-doppler run --project abzum-kestra --config prd -- ./verify-restore.sh
-```
-
-Reading them at run time is what keeps the promise that a credential is changed in one place. Copying
-the values into Coolify's own environment variables would work today and drift tomorrow, because
-rotating the R2 key would then mean remembering to change it twice.
-
-Run it as a weekly Coolify scheduled task on the Kestra resource. Weekly, not nightly — enough to
-catch a backup that has quietly stopped restoring while the older copies are still inside the
-seven-day retention window.
-
-### The token this needs
-
-Create an R2 API token in Cloudflare with **Object Read only**, scoped to the `abzum-console-backups`
-bucket, and put its Access Key ID and Secret Access Key into Doppler under `abzum-kestra` / `prd`.
-
-Read-only is not caution for its own sake. This token sits on the same server as the thing it backs
-up. A token that could also write or delete would let anyone who took the server destroy the offsite
-copies too, which is the single thing an offsite copy exists to survive. Read-only means the worst
-they can do is read backups they already have the database for.
+The current backup and restore procedure, including its rehearsal record, is maintained on
+[#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132). This repository does not ship a backup
+verification script or backup credentials in the Kestra image.

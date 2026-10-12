@@ -17,7 +17,7 @@ import {
   storageContractIdSchema,
 } from "../catalogue/identifiers";
 import { recordLinkValueSchema } from "./module-field-values";
-import { safeErrorResponseSchema } from "../definition/operation-contracts";
+import { safeErrorResponseSchema } from "./safe-error-contracts";
 
 const previewRecordInstallationIdSchema = z
   .uuid()

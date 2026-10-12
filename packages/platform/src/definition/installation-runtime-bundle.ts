@@ -39,7 +39,6 @@ import { savedSharingConditionSchema } from "./module-contracts";
 
 export {
   resolvePageComposition,
-  type PlacementSlot,
   type ResolvedPageComposition,
 } from "../pages/runtime-bundle-page-composition";
 export const installationRuntimeBundleFormatVersion = 2 as const;

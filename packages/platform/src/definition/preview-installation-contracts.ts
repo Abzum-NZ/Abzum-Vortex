@@ -102,12 +102,6 @@ export type PreviewInstallationCreateRequest = z.infer<
   typeof previewInstallationCreateRequestSchema
 >;
 export type PreviewInstallationAddress = z.infer<typeof previewInstallationAddressSchema>;
-export type PreviewInstallationStorageIdentity = z.infer<
-  typeof previewInstallationStorageIdentitySchema
->;
-export type PreviewInstallationResolvedModule = z.infer<
-  typeof previewInstallationResolvedModuleSchema
->;
 export type PreviewInstallation = z.infer<typeof previewInstallationSchema>;
 export type PreviewInstallationExpiryRequest = z.input<
   typeof previewInstallationExpiryRequestSchema

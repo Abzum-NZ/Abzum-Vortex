@@ -1,13 +1,5 @@
 import "server-only";
 
-import { contrastRatio, relativeLuminance, validateThemeContrast } from "./contrast";
-import { validateFocusVisibility } from "./focus";
-import { validatePublicPlatformAssets } from "./assets";
-import { validateComponentThemeOverrides } from "./overrides";
-import { resolveTheme, resolveThemeTokens, validateApplicationTheme } from "./resolver";
-import { draftShadcnPresetImport } from "./preset-import";
-import { resolveThemeSelection, validateThemeSelectionOptions } from "./selection";
-
 export {
   contrastRatio,
   relativeLuminance,
@@ -72,20 +64,3 @@ export type {
   ThemeSelectionResolution,
   ThemeSelectionResolutionInput,
 } from "./selection";
-
-export const ThemeService = Object.freeze({
-  key: "theme",
-  boundary: "./index",
-  draftShadcnPresetImport,
-  resolveTheme,
-  resolveThemeTokens,
-  validateApplicationTheme,
-  resolveThemeSelection,
-  validateThemeSelectionOptions,
-  validateThemeContrast,
-  validateFocusVisibility,
-  validatePublicPlatformAssets,
-  validateComponentThemeOverrides,
-  contrastRatio,
-  relativeLuminance,
-});

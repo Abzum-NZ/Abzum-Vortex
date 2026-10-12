@@ -87,7 +87,6 @@ export const definitionValidationCatalogueSchema = z.record(
 export type DefinitionValidationCatalogueEntry = z.infer<
   typeof definitionValidationCatalogueEntrySchema
 >;
-export type DefinitionValidationCatalogue = z.infer<typeof definitionValidationCatalogueSchema>;
 
 const definitionValidationErrorCatalogueSource = {
   definition_required_value: {
@@ -268,7 +267,6 @@ export const definitionValidationTranslationContextSchema = z
   })
   .strict();
 
-export type DefinitionDocumentKind = z.infer<typeof definitionDocumentKindSchema>;
 export type DefinitionValidationLocation = z.infer<typeof definitionValidationLocationSchema>;
 export type DefinitionValidationErrorCode = z.infer<typeof definitionValidationErrorCodeSchema>;
 export type PublicDefinitionValidationError = z.infer<typeof publicDefinitionValidationErrorSchema>;

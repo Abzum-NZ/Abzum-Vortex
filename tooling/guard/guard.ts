@@ -48,6 +48,12 @@ const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
+const baselineMigrationFiles = new Map([
+  ["supabase/migrations/20261014000100_baseline_roles_and_extensions.sql", 168],
+  ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
+  ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
+  ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
+]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
 const renamed = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", mainRef], {
@@ -158,8 +164,12 @@ const businessPattern = new RegExp(
 
 for (const file of codeFiles) {
   const content = read(file);
-  if (content.split("\n").length > 1500)
-    add("file-size", file, 1501, `${content.split("\n").length} lines`);
+  const lineCount = content.split("\n").length;
+  const baselineLineCount = baselineMigrationFiles.get(file);
+  if (baselineLineCount !== undefined && lineCount > baselineLineCount)
+    throw new Error(`Generated baseline migration grew: ${file}`);
+  if (lineCount > 1500 && baselineLineCount === undefined)
+    add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
   if (
@@ -170,7 +180,10 @@ for (const file of codeFiles) {
       add("business-name", file, lineAt(content, match.index), match[0].toLowerCase());
   }
   if (file.endsWith(".sql")) {
-    if (file.startsWith(paths.canonical) || file.startsWith(paths.migrations)) {
+    if (
+      file.startsWith(paths.canonical) ||
+      (file.startsWith(paths.migrations) && !baselineMigrationFiles.has(file))
+    ) {
       for (const match of content.matchAll(
         /\bcreate\s+(?:or\s+replace\s+)?(?:table|function|view|materialized\s+view|index|type|sequence|trigger)\s+(?:if\s+not\s+exists\s+)?(?:[\w"]+\.)?[\w"]*(?:receipt|fingerprint|continuity|evidence)[\w"]*/gi,
       )) {
@@ -390,15 +403,142 @@ for (const finding of silentFindings)
 
 const uuidPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const functionPattern = /\bcreate\s+(?:or\s+replace\s+)?function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gi;
+const dropFunctionPattern =
+  /^\s*drop\s+function\s+(?:if\s+exists\s+)?(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
+const renameFunctionPattern = /^\s*alter\s+function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
+const functionNamePattern = /\bfunction\s+((?:"?\w+"?\.)?"?\w+"?)\s*\(/i;
+const typeHeadPattern =
+  /^(?:smallint|int2|int|integer|int4|bigint|int8|numeric|decimal|real|float4|float8|double\s+precision|smallserial|serial|bigserial|money|character\s+varying|character|varchar|text|bytea|timestamp|timestamptz|time|date|interval|bool|boolean|uuid|json|jsonb|xml|record|void|trigger|event_trigger|anyarray|anyelement|anyenum|anynonarray|anyrange|name|oid|regclass|regtype|inet|cidr|macaddr|tsvector|tsquery|pg_lsn|bit|varbit|vector|geometry|geography)\b/i;
+function closingParenthesis(content: string, open: number): number {
+  let depth = 0;
+  let singleQuoted = false;
+  let doubleQuoted = false;
+  for (let index = open; index < content.length; index++) {
+    const character = content[index];
+    const next = content[index + 1];
+    if (singleQuoted) {
+      if (character === "'" && next === "'") index++;
+      else if (character === "'") singleQuoted = false;
+      continue;
+    }
+    if (doubleQuoted) {
+      if (character === '"' && next === '"') index++;
+      else if (character === '"') doubleQuoted = false;
+      continue;
+    }
+    if (character === "'") singleQuoted = true;
+    else if (character === '"') doubleQuoted = true;
+    else if (character === "(") depth++;
+    else if (character === ")" && --depth === 0) return index;
+  }
+  return -1;
+}
+function splitArguments(value: string): string[] {
+  const result: string[] = [];
+  let start = 0;
+  let parentheses = 0;
+  let brackets = 0;
+  let singleQuoted = false;
+  let doubleQuoted = false;
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    const next = value[index + 1];
+    if (singleQuoted) {
+      if (character === "'" && next === "'") index++;
+      else if (character === "'") singleQuoted = false;
+      continue;
+    }
+    if (doubleQuoted) {
+      if (character === '"' && next === '"') index++;
+      else if (character === '"') doubleQuoted = false;
+      continue;
+    }
+    if (character === "'") singleQuoted = true;
+    else if (character === '"') doubleQuoted = true;
+    else if (character === "(") parentheses++;
+    else if (character === ")") parentheses--;
+    else if (character === "[") brackets++;
+    else if (character === "]") brackets--;
+    else if (character === "," && parentheses === 0 && brackets === 0) {
+      result.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  const last = value.slice(start).trim();
+  if (last) result.push(last);
+  return result;
+}
+function normalizedType(value: string): string {
+  return value
+    .replaceAll('"', "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),.]|\[|\])\s*/g, "$1")
+    .toLowerCase();
+}
+function argumentType(argument: string): string | undefined {
+  const mode = /^(inout|in|out|variadic)\b\s*/i.exec(argument.trim())?.[1]?.toLowerCase();
+  if (mode === "out") return undefined;
+  let value = argument.trim().replace(/^(?:inout|in|out|variadic)\b\s*/i, "");
+  let parentheses = 0;
+  let brackets = 0;
+  let singleQuoted = false;
+  let doubleQuoted = false;
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    const next = value[index + 1];
+    if (singleQuoted) {
+      if (character === "'" && next === "'") index++;
+      else if (character === "'") singleQuoted = false;
+      continue;
+    }
+    if (doubleQuoted) {
+      if (character === '"' && next === '"') index++;
+      else if (character === '"') doubleQuoted = false;
+      continue;
+    }
+    if (character === "'") singleQuoted = true;
+    else if (character === '"') doubleQuoted = true;
+    else if (character === "(") parentheses++;
+    else if (character === ")") parentheses--;
+    else if (character === "[") brackets++;
+    else if (character === "]") brackets--;
+    else if (parentheses === 0 && brackets === 0 && character === "=") {
+      value = value.slice(0, index).trim();
+      break;
+    } else if (
+      parentheses === 0 &&
+      brackets === 0 &&
+      /^default\b/i.test(value.slice(index)) &&
+      (index === 0 || /\s/.test(value[index - 1]))
+    ) {
+      value = value.slice(0, index).trim();
+      break;
+    }
+  }
+  const firstToken = /^"?([\w$]+)"?/.exec(value)?.[1] ?? "";
+  const rest = value.slice(firstToken.length).trim();
+  if (rest && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
+  return normalizedType(value);
+}
 function functions(
   content: string,
-): Map<string, { definition: string; offset: number; body: string }> {
-  const result = new Map<string, { definition: string; offset: number; body: string }>();
+): Map<string, { definition: string; offset: number; body: string; identity: string }> {
+  const result = new Map<
+    string,
+    { definition: string; offset: number; body: string; identity: string }
+  >();
   for (const match of content.matchAll(functionPattern)) {
     const start = match.index;
-    const headerEnd = content.indexOf(")", start) + 1;
-    if (!headerEnd) continue;
+    const open = content.indexOf("(", start);
+    const close = closingParenthesis(content, open);
+    if (close < 0) continue;
+    const headerEnd = close + 1;
     const header = content.slice(start, headerEnd).replace(/\s+/g, " ").toLowerCase();
+    const name = functionNamePattern.exec(header)?.[1]?.replaceAll('"', "").toLowerCase();
+    if (!name) continue;
+    const argumentTypes = splitArguments(header.slice(header.indexOf("(") + 1, -1))
+      .map(argumentType)
+      .filter((argument): argument is string => argument !== undefined);
     const tag = /\bas\s+(\$[\w]*\$)/i.exec(content.slice(headerEnd, headerEnd + 1000));
     if (!tag) continue;
     const bodyStart = content.indexOf(tag[1], headerEnd) + tag[1].length;
@@ -410,27 +550,111 @@ function functions(
       definition: content.slice(start, end + 1).trim(),
       offset: start,
       body: content.slice(bodyStart, bodyEnd),
+      identity: `${name}(${argumentTypes.join(",")})`,
     });
   }
   return result;
 }
-const latest = new Map<string, { definition: string; file: string }>();
-for (const file of files
+const migrationFiles = files
   .filter((file) => file.startsWith(paths.migrations) && file.endsWith(".sql"))
-  .sort()) {
-  for (const [key, value] of functions(read(file)))
+  .sort();
+const latest = new Map<string, { definition: string; file: string }>();
+const latestLive = new Map<string, { file: string; line: number; key: string }>();
+for (const file of migrationFiles) {
+  const content = read(file);
+  const migrationFunctions = functions(content);
+  for (const [key, value] of migrationFunctions)
     latest.set(key, { definition: value.definition, file });
+  const events: Array<
+    | {
+        kind: "create";
+        offset: number;
+        key: string;
+        value: ReturnType<typeof functions> extends Map<string, infer T> ? T : never;
+      }
+    | { kind: "drop"; offset: number; identity: string }
+    | {
+        kind: "rename";
+        offset: number;
+        fromIdentity: string;
+        toIdentity: string;
+        toName: string;
+      }
+  > = [];
+  for (const [key, value] of migrationFunctions)
+    events.push({ kind: "create", offset: value.offset, key, value });
+  for (const match of content.matchAll(dropFunctionPattern)) {
+    const start = match.index + match[0].toLowerCase().indexOf("drop");
+    const open = content.indexOf("(", start);
+    const close = closingParenthesis(content, open);
+    const name = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
+    if (close < 0 || !name) continue;
+    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
+    events.push({ kind: "drop", offset: start, identity: `${name}(${argumentTypes.join(",")})` });
+  }
+  for (const match of content.matchAll(renameFunctionPattern)) {
+    const start = match.index + match[0].toLowerCase().indexOf("alter");
+    const open = content.indexOf("(", start);
+    const close = closingParenthesis(content, open);
+    const oldName = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
+    if (close < 0 || !oldName) continue;
+    const statementEnd = content.indexOf(";", close + 1);
+    const statement = content.slice(close + 1, statementEnd < 0 ? undefined : statementEnd);
+    const renamedTo = /\brename\s+to\s+("?\w+"?)/i
+      .exec(statement)?.[1]
+      ?.replaceAll('"', "")
+      .toLowerCase();
+    if (!renamedTo) continue;
+    const schema = oldName.includes(".") ? `${oldName.slice(0, oldName.lastIndexOf("."))}.` : "";
+    const newName = `${schema}${renamedTo}`;
+    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
+    events.push({
+      kind: "rename",
+      offset: start,
+      fromIdentity: `${oldName}(${argumentTypes.join(",")})`,
+      toIdentity: `${newName}(${argumentTypes.join(",")})`,
+      toName: newName,
+    });
+  }
+  events.sort((left, right) => left.offset - right.offset);
+  for (const event of events) {
+    if (event.kind === "drop") {
+      latestLive.delete(event.identity);
+      continue;
+    }
+    if (event.kind === "rename") {
+      const previous = latestLive.get(event.fromIdentity);
+      if (previous) {
+        latestLive.delete(event.fromIdentity);
+        latestLive.set(event.toIdentity, {
+          file,
+          line: lineAt(content, event.offset),
+          key: previous.key.replace(functionNamePattern, `function ${event.toName}(`),
+        });
+      }
+      continue;
+    }
+    latestLive.delete(event.value.identity);
+    latestLive.set(event.value.identity, {
+      file,
+      line: lineAt(content, event.value.offset),
+      key: event.key,
+    });
+  }
 }
+const canonicalFunctions = new Set<string>();
 for (const file of files.filter(
   (file) => file.startsWith(paths.canonical) && file.endsWith(".sql"),
 )) {
   const content = read(file);
   for (const [key, value] of functions(content)) {
+    canonicalFunctions.add(value.identity);
     const migration = latest.get(key);
-    if (
-      !migration ||
-      migration.definition.replace(/\s+/g, " ") !== value.definition.replace(/\s+/g, " ")
-    ) {
+    const matchesMigration =
+      migration !== undefined &&
+      migration.definition.replace(/\s+/g, " ") ===
+        value.definition.replace(/\s+/g, " ");
+    if (!matchesMigration) {
       add(
         "migration-mismatch",
         file,
@@ -438,6 +662,8 @@ for (const file of files.filter(
         `${key} vs ${migration?.file ?? "missing migration"}`,
       );
     }
+    // The generated baseline is a fixed snapshot; its unchanged function UUIDs are legacy data.
+    if (migration && matchesMigration && baselineMigrationFiles.has(migration.file)) continue;
     for (const match of value.body.matchAll(uuidPattern))
       if (match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000") {
         add(
@@ -449,9 +675,13 @@ for (const file of files.filter(
       }
   }
 }
+for (const [identity, migration] of latestLive)
+  if (!canonicalFunctions.has(identity))
+    add("migration-orphan", migration.file, migration.line, migration.key);
 for (const file of files.filter(
   (file) => file.startsWith(paths.migrations) && file.endsWith(".sql"),
 )) {
+  if (baselineMigrationFiles.has(file)) continue;
   const content = read(file);
   for (const value of functions(content).values())
     for (const match of value.body.matchAll(uuidPattern)) {

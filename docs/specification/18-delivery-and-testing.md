@@ -2,17 +2,9 @@
 
 [Specification index](README.md) · [Code-review acceptance](20-quality-and-acceptance.md)
 
-## Current development policy
+## Development acceptance
 
-Develop bounded, dependency-ready functionality across independent lanes and complete each issue through independent source code review. The reviewer fixes findings itself, re-reviews, integrates its permitted PR into main, updates/closes the assigned issue and reports to the orchestrator. The orchestrator reconciles project status, dependencies and cleanup, then refills available lanes from eligible work across phases.
-
-No tests are created or run. No database review/execution, hosted verification, proof receipts, screenshots, benchmarks or deployment are acceptance requirements. Kestra is not a fleet dependency or a completion gate. Do not deploy to Testing or Production, promote branches, trigger delivery or re-enable delivery hooks. Historical operational tooling remains outside this development sequence.
-
-## Branch flow
-
-Issue worktrees start from current `origin/main`. Reviewed PRs target `main`. The `testing` branch and hosted environments are outside this development sequence, and the actual effect of a push depends on the separately configured hosting and delivery triggers. A reviewer confirms integration before closing the issue completed. A reviewed but unmerged candidate remains In review with its exact integration blocker. Do not add another planner/reviewer, a missing authority-file condition or a release phase to close development work.
-
-Actual repository protections and permission controls remain in force. If one rejects integration, report the concrete rule and supported resolution rather than bypassing it. This is an external operational block, not permission to invent testing work.
+Every behaviour change is walked through in the running app on a freshly reset local database before merge. The walkthrough covers sign-in and the affected application pages; pull requests that change what users see include screenshots.
 
 ## Repository layout convention
 
@@ -41,15 +33,11 @@ Database behavior preserves these product invariants:
 - Definition-driven record storage retains organisation and application scope, exact published-definition identity and current access enforcement independently of physical table names.
 - Index recommendations and performance observations can propose ordinary source changes, but no adviser directly changes Production and performance pressure cannot weaken access, integrity or privacy.
 
-These are source and runtime design requirements. They do not authorize the current fleet to open a database, execute a migration, invoke a hosted flow or collect a receipt.
-
 ## Environments
 
 Local, Testing and Production are separate product environments with separate addresses, secrets, databases, files, queues, connections and runtime settings. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters). Identity, trust, credentials, federation routes, cached authority and business data never cross an environment boundary.
 
-Application workflow execution is a product capability owned by [Workflows and pipelines](09-workflows-and-pipelines.md). When operated, each environment has explicit namespaces, flow identities, webhook authentication, configuration and least-privilege credentials. A workflow for one environment cannot read another environment's database, file store, queue, workflow state, cache or secrets. This product topology does not make Kestra part of fleet coordination or development completion.
-
-Environment setup, hosted operation and deployment require separately scoped work. Development completion makes no claim of deployment, customer availability or production readiness.
+Application workflow execution is a product capability owned by [Workflows and pipelines](09-workflows-and-pipelines.md). Each environment has explicit namespaces, flow identities, webhook authentication, configuration and least-privilege credentials. A workflow for one environment cannot read another environment's database, file store, queue, workflow state, cache or secrets.
 
 ## Release and recovery behavior
 

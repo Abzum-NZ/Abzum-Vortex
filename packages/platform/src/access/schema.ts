@@ -15,3 +15,4 @@ export * from "./organization-stewardship";
 export * from "./permissions";
 export * from "./permission-registry";
 export * from "./super-administrator-governance";
+export * from "./metering-contracts";

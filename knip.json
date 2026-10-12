@@ -5,7 +5,11 @@
   "workspaces": {
     ".": {
       "includeEntryExports": false,
-      "entry": ["tooling/**/*.{js,mjs,ts}"],
+      "entry": [
+        "tooling/guard/guard.ts",
+        "tooling/generate-catalogue-fingerprints.mjs",
+        "tooling/supabase/ensure-local-signing-key.mjs"
+      ],
       "project": ["tooling/**/*.{js,mjs,ts}"]
     },
     "apps/web": {
@@ -19,7 +23,7 @@
       "project": ["**/*.{js,jsx,mjs,ts,tsx}"]
     },
     "packages/platform": {
-      "entry": ["src/*/schema.ts", "src/*/index.ts", "src/definition/*-index.ts", "src/definition/compiler-api.ts"]
+      "entry": ["src/schema.ts", "src/server.ts"]
     },
     "packages/definitions": {
       "includeEntryExports": false,

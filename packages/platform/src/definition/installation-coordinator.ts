@@ -1841,6 +1841,3 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   });
 };
 
-export type ApplicationInstallationCoordinator<InstalledEvents = never> = ReturnType<
-  typeof createApplicationInstallationCoordinator<InstalledEvents>
->;

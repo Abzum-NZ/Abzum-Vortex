@@ -1,5 +1,7 @@
 # Authority ledgers and role continuity — design record (25 September 2026)
 
+> Historical design record. The current [product specification](../specification/README.md) and [target architecture](target-architecture.md) supersede conflicting decisions and working guidance below. This record is retained as history.
+
 **Status:** Decision record for the product owner. Document only: this issue adds no code, SQL or migration. The [architecture freeze and owner decisions of 24–25 September](architecture-decisions-2026-09-25.md) apply.
 
 **Issue:** [#1072](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1072). It compares role continuity evidence and the five authority ledgers with a target of ordinary roles, role-carried delegation and tenant powers, and one assignment ledger. It then lists what can be removed without weakening any check.

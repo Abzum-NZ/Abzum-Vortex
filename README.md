@@ -10,17 +10,17 @@ The project is under active development. The current priority is a usable defini
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Entry point for every provider |
 | [Roadmap](docs/build-plan/README.md) | Phase order and Phase 6 visible-application objective |
-| [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, Pickup Order and status |
+| [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, dependencies and status |
 | [Platform specification](docs/specification/README.md) | Product functionality and architecture |
 | [Definition-led application delivery](docs/build-plan/engine-first-application-delivery.md) | Path to a usable application before the designer |
-| [Architecture review — 21 September 2026](docs/build-plan/architecture-review-2026-09-21.md) | Main-branch findings and revised implementation order |
+| [Target architecture](docs/build-plan/target-architecture.md) | Current architecture and delivery order |
 | [Open decisions](docs/specification/appendices/decisions.md) | Unresolved product choices requiring the owner's input |
 
 ## Development workflow
 
-One Claude Opus 5.5 session orchestrates planning and architecture, with GPT-6 Sol as its handover. It selects bounded, dependency-ready leaves across phases and fills independent implementation lanes with GPT-6 Luna (Extra High) by default. Space Bunny, DeepSeek 4.1 Flash and Claude Sonnet 5 High are overflow choices when Codex capacity is short. A separate GPT-6 Sol (Extra High) session reviews, fixes findings, re-reviews, integrates the reviewed change through permitted repository operations, updates/closes its assigned issue and reports. Claude Opus 5.5 (Medium) reviews only when Codex is capacity-limited. The orchestrator reconciles the board and dependencies, releases settled agents, safely cleans completed worktrees and refills available lanes.
+Working instructions are in [AGENTS.md](AGENTS.md), and the [target architecture](docs/build-plan/target-architecture.md) defines the current technical direction.
 
-No tests, database review/execution, hosted verification, proof receipts, Kestra orchestration or Testing/Production deployment is part of this development workflow. Existing tooling and archived runbooks do not introduce extra gates. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
+Every behaviour change is walked through in the running app on a freshly reset local database before merge. Pull requests that change visible behaviour include screenshots. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ No tests, database review/execution, hosted verification, proof receipts, Kestra
 
 Core contracts describe the capabilities needed to define, validate, publish, secure and execute arbitrary applications. Business applications, including Abzum's own, use those same primitives. Application names and business-specific rules belong in definitions and fixtures, not in generic engines.
 
-Application workflow steps use protected Vortex operations. Kestra's operational database credentials are separate from application workflow execution. See the [runtime boundaries](docs/specification/17-runtime-storage-and-caching.md) and [workflow specification](docs/specification/09-workflows-and-pipelines.md). Kestra is product capability; it is not part of fleet management or development acceptance.
+Application workflow steps use protected Vortex operations. Kestra's operational database credentials are separate from application workflow execution. See the [runtime boundaries](docs/specification/17-runtime-storage-and-caching.md) and [workflow specification](docs/specification/09-workflows-and-pipelines.md).
 
 ## Repository
 
@@ -109,7 +109,7 @@ CRM and Service Desk bind the platform-owned email, calendar and webhook connect
 
 An interrupted `pnpm setup:local` run resumes from the identifiers recorded in `supabase/.temp/development-setup-state.json`; provisioning and record saves replay by their stable idempotency keys. Re-running setup for the same organisation reuses its published releases, installations and role assignments. A different nominated account is refused. `pnpm demo:setup` deliberately resets the local database before starting a fresh demo.
 
-`pnpm verify` runs format check, lint, typecheck and build. There are no tests in this project.
+`pnpm verify` runs format check, lint, typecheck and build.
 
 ### Local environment variables
 
@@ -151,6 +151,6 @@ The custom-component and file pages read additional variables and report a confi
 - Use the existing engine boundaries and official framework conventions. Update the specification and build plan when agreed behaviour or sequencing changes.
 - Keep changes focused. Preserve organisation isolation, current permission checks, atomic writes, revision checks and safe errors without introducing unnecessary abstractions.
 - Work on a branch from `origin/main` and open a pull request to `main`; never push to `main` directly.
-- Hosted delivery and Production are outside this development pass.
-- Follow the [delivery specification](docs/specification/18-delivery-and-testing.md) and [AGENTS.md](AGENTS.md).
+- Before merge, walk every behaviour change through the running app on a freshly reset local database; include screenshots for visible changes.
+- Follow the [AGENTS.md](AGENTS.md) and [target architecture](docs/build-plan/target-architecture.md).
 - Manage secrets through the documented Doppler configuration. Keep credentials out of source, browser bundles, agent prompts and logs.

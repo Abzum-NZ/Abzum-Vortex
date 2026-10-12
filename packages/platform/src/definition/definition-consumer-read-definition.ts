@@ -1,26 +1,6 @@
 import "server-only";
 
-import {
-  storedDefinitionCompilationOutputSchema,
-  definitionConsumerReadCommandSchema,
-  definitionConsumerReadDependencyManifestSchema,
-  definitionConsumerReadResultSchema,
-  definitionResolutionSnapshotSchema,
-  fingerprintSchema,
-  moduleRootIdSchema,
-  organizationIdSchema,
-  platformIdSchema,
-  revisionSchema,
-  assertModuleContractPair,
-  selectApplicationContractPair,
-  semanticVersionSchema,
-  sessionContextSchema,
-  stableDefinitionReleaseVersionSchema,
-  type DefinitionConsumerReadCommand,
-  type DefinitionConsumerReadResult,
-  type ExactDefinitionDependency,
-  type SessionContext,
-} from "../schema";
+import { storedDefinitionCompilationOutputSchema, definitionConsumerReadDependencyManifestSchema, definitionConsumerReadResultSchema, definitionResolutionSnapshotSchema, fingerprintSchema, moduleRootIdSchema, organizationIdSchema, platformIdSchema, revisionSchema, assertModuleContractPair, selectApplicationContractPair, semanticVersionSchema, stableDefinitionReleaseVersionSchema, type DefinitionConsumerReadResult, type ExactDefinitionDependency, type SessionContext } from "../schema";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import {
@@ -84,14 +64,6 @@ export const storedConsumerReleaseEvidenceSchema = z
  * It is deliberately not re-exported from the Definition package boundary.
  */
 export type StoredConsumerReleaseEvidence = z.infer<typeof storedConsumerReleaseEvidenceSchema>;
-
-/** Internal persistence boundary. It is intentionally not exported from the package root. */
-export interface DefinitionConsumerReadRepository {
-  read(
-    context: SessionContext,
-    command: DefinitionConsumerReadCommand,
-  ): Promise<unknown | undefined>;
-}
 
 const selectReleaseContract = (candidate: unknown): void => {
   if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return;
@@ -360,43 +332,3 @@ export const projectStoredConsumerRelease = async (
   return result.data;
 };
 
-export const createDefinitionConsumerReadService = (
-  repository: DefinitionConsumerReadRepository,
-  catalogue: DefinitionPublicationCatalogue,
-) => ({
-  async read(
-    contextCandidate: SessionContext,
-    commandCandidate: unknown,
-  ): Promise<DefinitionConsumerReadResult> {
-    const command = definitionConsumerReadCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
-    const context = sessionContextSchema.safeParse(contextCandidate);
-    if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
-
-    let candidate: unknown | undefined;
-    try {
-      candidate = await repository.read(context.data, command.data);
-    } catch (error) {
-      throw new DefinitionConsumerReadError(
-        isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
-      );
-    }
-    if (candidate === undefined)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
-
-    return projectStoredConsumerRelease(
-      candidate,
-      {
-        kind: command.data.kind,
-        rootId: command.data.rootId,
-        organizationId: context.data.organizationId,
-        ...(command.data.selector.selection === "revision"
-          ? { releaseRevision: command.data.selector.releaseRevision }
-          : {}),
-      },
-      context.data.correlationId,
-      catalogue,
-    );
-  },
-});

@@ -48,6 +48,7 @@ export {
 
 export {
   literalSearchLimits,
+  literalSearchRequiredTokens,
   literalSearchRefusalReasonCodes,
   matchLiteralSearch,
   type LiteralSearchCompleted,

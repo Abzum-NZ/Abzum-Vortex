@@ -1,23 +1,7 @@
 import "server-only";
 
-import {
-  applicationContentSchema,
-  applicationRootIdSchema,
-  canonicalPlacementEntries,
-  flowTaskChildLists,
-  flowTaskRegistry,
-  revisionSchema,
-  sessionContextSchema,
-  type ApplicationContent,
-  type ComponentFlowBinding,
-  type ComponentSemanticEventKind,
-  type FlowDefinition,
-  type FlowEffectKind,
-  type FlowTask,
-  type SessionContext,
-} from "../schema";
+import { applicationContentSchema, applicationRootIdSchema, canonicalPlacementEntries, flowTaskChildLists, flowTaskRegistry, revisionSchema, type ApplicationContent, type ComponentFlowBinding, type ComponentSemanticEventKind, type FlowDefinition, type FlowEffectKind, type FlowTask, type SessionContext } from "../schema";
 import { z } from "zod";
-import { isLiveDefinitionSystemContext } from "./definition-consumer-read-definition";
 import {
   DefinitionPublicationError,
   type ApplicationDraftCompilation,
@@ -45,7 +29,6 @@ export const applicationPreviewBreakpoints = ["desktop", "tablet", "phone"] as c
 export type ApplicationPreviewBreakpoint = (typeof applicationPreviewBreakpoints)[number];
 
 export const applicationPreviewDataSurfaces = ["display", "control"] as const;
-export type ApplicationPreviewDataSurface = (typeof applicationPreviewDataSurfaces)[number];
 
 const previewDataEntrySchema = z
   .object({
@@ -491,13 +474,6 @@ export const materialiseApplicationPreview = (
   };
 };
 
-export const parseApplicationPreviewRequest = (
-  candidate: unknown,
-): ApplicationPreviewRequest | undefined => {
-  const parsed = applicationPreviewRequestSchema.safeParse(candidate);
-  return parsed.success ? parsed.data : undefined;
-};
-
 /**
  * Builds the exact preview draft from one compiled current draft. Identities come from the
  * compilation itself, never from the preview request.
@@ -508,14 +484,6 @@ export const applicationPreviewDraftFromCompilation = (
   rootId: String(compiled.compilation.artifact.rootId),
   draftRevision: compiled.compilation.canonical.envelope.draftRevision,
   content: compiled.compilation.canonical.content,
-  currentReleaseRevision: compiled.currentReleaseRevision,
-});
-
-/** The compiled application content stored in an ephemeral preview installation. */
-export const applicationPreviewCandidateFromCompilation = (
-  compiled: ApplicationDraftCompilation,
-) => ({
-  compilation: compiled.compilation,
   currentReleaseRevision: compiled.currentReleaseRevision,
 });
 
@@ -598,27 +566,3 @@ export const compileApplicationPreviewDraft = async (
   };
 };
 
-/**
- * The preview service. It requires a live system context, compiles the caller organisation's
- * current Application draft at the exact requested revision and materialises it. It exposes no
- * install, publish, save or restore operation, so preview can never change an installation or a
- * draft. A draft that is not the current revision is refused rather than substituted.
- */
-export const createApplicationPreviewService = (drafts: ApplicationPreviewDraftCompiler) => ({
-  async preview(
-    contextCandidate: SessionContext,
-    candidate: unknown,
-  ): Promise<ApplicationPreviewResult> {
-    const context = sessionContextSchema.safeParse(contextCandidate);
-    if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      return refuse("context_refused", refusalDetail.context_refused);
-    const request = parseApplicationPreviewRequest(candidate);
-    if (request === undefined) return refuse("invalid_request", refusalDetail.invalid_request);
-    const compiled = await compileApplicationPreviewDraft(drafts, context.data, request);
-    if (compiled.status === "refused") return compiled;
-    return materialiseApplicationPreview({
-      request,
-      draft: compiled.draft,
-    });
-  },
-});

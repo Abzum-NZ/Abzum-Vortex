@@ -31,9 +31,6 @@ const uuidTextPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 export const isUuidText = (value: unknown): value is string =>
   typeof value === "string" && uuidTextPattern.test(value);
 
-export const uuidText = (value: unknown): string | undefined =>
-  isUuidText(value) ? value : undefined;
-
 export const isNonNilUuidText = (value: unknown): value is string =>
   isUuidText(value) && value.toLowerCase() !== "00000000-0000-0000-0000-000000000000";
 
