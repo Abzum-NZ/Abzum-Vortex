@@ -24,7 +24,7 @@ import { flowIssueLocation, validateFlow, validateFlowSet } from "./flow-validat
 
 /**
  * Compiles the flows one module or application owns from readable aliases to permanent
- * identities (issue #984). The function is pure and deterministic: the same source, resolver and
+ * identities. The function is pure and deterministic: the same source, resolver and
  * declared dependencies always give the same canonical flows, in ascending permanent flow
  * identity, so recompiling unchanged source gives an identical result.
  *
@@ -35,7 +35,7 @@ import { flowIssueLocation, validateFlow, validateFlowSet } from "./flow-validat
  *
  * Release evidence appears once. The result lists each other definition the flows reach in one
  * dependency manifest contribution; no flow, task or reference carries a release, version or
- * fingerprint. The one flow validator (`flow-validation.ts`, #985) checks every flow's structure,
+ * fingerprint. `flow-validation.ts` checks every flow's structure,
  * run locations, typed references, outputs and error handling before it is resolved, and the
  * resolved set's calls between flows after; the first issue is refused with its located node.
  */

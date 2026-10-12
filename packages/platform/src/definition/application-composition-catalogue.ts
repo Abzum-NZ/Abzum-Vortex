@@ -125,9 +125,9 @@ export const TABLE_BLOCK_RELEASE_1_3_0: PlatformBlockRelease = release(
 );
 
 /**
- * Release 1.4.0 of the Records table adds the interactive controls (#1131): a `filter_changed`
+ * Release 1.4.0 of the Records table adds the interactive controls: a `filter_changed`
  * event for each configured filterable field and a `search_changed` event for the search box, so
- * sorting, filtering, searching and paging all reach the Query engine as data events (#584)
+ * sorting, filtering, searching and paging all reach the Query engine as data events
  * instead of being applied to the returned page. A declared row or bulk action may also name the
  * record action capability it needs (update, delete or restore), so the renderer hides a row
  * command the row's own per-row capabilities refuse. Earlier releases stay published unchanged.
