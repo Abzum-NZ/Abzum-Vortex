@@ -782,7 +782,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           // Registration-candidate preparation reads only immutable Definition evidence; the live
           // registry is read and locked by the Access coordinator inside the installer's transaction.
           permissionRegistryFacts: {
-            lookup: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
+            lookupMany: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
             readApplicationSnapshot: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
           },
         });
