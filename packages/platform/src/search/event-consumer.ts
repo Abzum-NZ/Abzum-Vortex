@@ -104,9 +104,7 @@ export type SearchIndexOccurrenceDependencies = Readonly<{
 }>;
 
 export type SearchOccurrenceSkipReason =
-  | "not_indexable_event"
-  | "record_type_unavailable"
-  | "record_unavailable";
+  "not_indexable_event" | "record_type_unavailable" | "record_unavailable";
 
 export type SearchIndexOccurrenceOutcome =
   | Readonly<{ kind: "skipped"; reason: SearchOccurrenceSkipReason }>
@@ -609,7 +607,14 @@ export const createSearchEventConsumer = (
       let result: SearchIndexOccurrenceResult;
       try {
         result = await indexOccurrence(occurrence.data, dependencies);
-      } catch {
+      } catch (error) {
+        const cause = error as { code?: unknown; message?: unknown };
+        console.error("Search event delivery interrupted", {
+          consumer: searchEventConsumerKey,
+          operation: "indexOccurrence",
+          code: typeof cause?.code === "string" ? cause.code : undefined,
+          message: typeof cause?.message === "string" ? cause.message : String(error),
+        });
         return { outcome: "retryable_failure", failureCode: "transient_dependency_unavailable" };
       }
 
