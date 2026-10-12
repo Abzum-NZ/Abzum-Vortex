@@ -12,7 +12,7 @@ import {
   studioAppearanceValueKey,
   type StudioAppearanceResult,
   type StudioThemeTokenValue,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 import { validateStudioApplicationAppearance } from "../actions";
 
 type AvailableAppearance = Extract<StudioAppearanceResult, { kind: "available" }>;

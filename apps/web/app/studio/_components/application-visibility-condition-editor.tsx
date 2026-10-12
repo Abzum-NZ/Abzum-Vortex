@@ -10,7 +10,7 @@ import {
   studioSemanticSelectionKey, type StudioApplicationConditionContext, type StudioCompositionContext,
   type StudioConditionValidation, type StudioSemanticSelection, type StudioStoredApplicationDraft,
   type StudioVisibilityCommandResult,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 import { resolveStudioApplicationConditionContext } from "../actions";
 
 export type StudioVisibilityWorkspaceSnapshot = Readonly<{ context: StudioCompositionContext;

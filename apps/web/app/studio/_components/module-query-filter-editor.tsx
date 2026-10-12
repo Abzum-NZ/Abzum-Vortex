@@ -12,7 +12,7 @@ import {
   StudioConditionControls,
   validateStudioCondition,
   type StudioConditionValidation,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from "@web/platform-server";
 import type {
   StudioModuleQueryFilterResult,

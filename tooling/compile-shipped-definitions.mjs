@@ -40,7 +40,7 @@ if (!process.argv.includes("--worker")) {
     platformPermissionFor,
     platformPermissionOwnerId,
     isPlatformPermissionKey,
-  } = await import("@vortex/modules");
+  } = await import("@vortex/definitions");
   installPlatformPermissionSource({
     ownerId: platformPermissionOwnerId,
     declarations: platformPermissionDeclarations,

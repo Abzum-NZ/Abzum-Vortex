@@ -19,12 +19,12 @@ import {
   type StudioAppearanceFailure,
   type StudioAppearanceResult,
   type StudioThemeTokenValue,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
-import type { StudioApplicationConditionContextResult } from "@vortex/studio";
+import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { prepareHumanApplicationPublication, publishHumanApplication } from "../_lib/definition-publication";
 import {
   maximumApplicationSourceImportBytes,

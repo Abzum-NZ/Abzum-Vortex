@@ -18,7 +18,7 @@ export const packageAreas: Record<string, string> = {
   "@vortex/platform": "platform",
   "@vortex/definitions": "definitions",
   "@vortex/ui": "ui",
-  "@vortex/studio": "ui",
-  "@vortex/modules": "definitions",
+  "@vortex/ui/studio": "ui",
+  "@vortex/definitions": "definitions",
   "@vortex/web": "web",
 };
