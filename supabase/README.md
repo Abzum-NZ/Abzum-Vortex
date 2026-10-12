@@ -20,7 +20,6 @@ workspace package and not an application data model.
 | `migrations/` | Immutable timestamped changes created with `pnpm db:new <name>`. |
 | `schemas/` | One canonical source file per function, under `<schema>/<function>.sql`. |
 | `seed.sql` | Synthetic Local and Testing data only. Production never applies it. |
-| `tests/` | pgTAP tests run with `pnpm db:test`. |
 
 ## Canonical database-function source
 
@@ -28,38 +27,8 @@ The complete migration and canonical-function rule is in [schemas/README.md](sch
 
 ## Optional local database operations
 
-A Docker-compatible container runtime must be running. From the repository root:
-
-```text
-pnpm db:verify
-```
-
-`db:test`, `db:concurrency`, `db:lint` and `db:verify` each verify against their own fresh,
-database-only Postgres cluster: a disposable `vortex-verify-<id>` container and Docker network,
-started from the pinned Supabase Postgres image (the same image the Local stack and hosted
-Testing/Production use), migrated and seeded from the current working tree, and removed once the
-run finishes. The container and the network both carry a `vortex.verify.worktree=<absolute path>`
-label naming the exact worktree that started them, plus a `vortex.verify.run=<id>` label, and the
-cluster's name is printed as soon as it exists — `verification cluster: vortex-verify-<id> (network
-vortex-verify-<id>-net)` — so its owner never has to guess it from timing. `db:verify` runs pgTAP,
-the concurrency proofs and lint against that one cluster and no longer begins with `pnpm db:reset`.
-None of the four touch the Local stack (`supabase_db_*`) or any other worktree's cluster, so
-independent worktrees — and independent agents — can run any of them at the same time without
-sequencing. A cluster is kept, unremoved, only when its run fails, so its container can be inspected
-for diagnosis; the failure output names the kept cluster and its owner label. Run `pnpm db:clean`
-from the same worktree to remove every cluster it left behind: it selects strictly by that
-worktree's own `vortex.verify.worktree` label, never by container or network name, so it can never
-remove another worktree's — or another agent's — cluster; it prints each container and network it
-removes, and says plainly when there is nothing to remove.
-Because each run starts from a fresh cluster, `db:verify` proves tenant hierarchy, invitation
-acceptance, Access-version increments, organisation-context suspension/version races, lifecycle and
-Definition publication races through two real database connections on a database only this run has
-touched, and fails on a database lint error. It is separate from `pnpm verify`: Vercel previews and
-ordinary pull-request checks remain database-free.
-
-The Local stack (`pnpm db:start` / `pnpm db:stop` / `pnpm db:reset`) is unrelated to `db:verify` and
-still exists for interactive local development and the local auth proof below; it is never reset or
-otherwise touched by verification.
+Use pnpm db:start, pnpm db:stop and pnpm db:reset for interactive development with the Local
+Supabase stack.
 
 `pnpm db:start` first prepares a Local-only P-256 `ES256` signing key through the pinned Supabase
 CLI. The key is generated once per checkout and reused: it is kept in the ignored `supabase/.temp`
