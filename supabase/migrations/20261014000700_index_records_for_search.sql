@@ -1,33 +1,3 @@
-create or replace function vortex_module.read_current_system_installation()
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $function$
-declare
-  checked_context jsonb;
-begin
-  checked_context := vortex_definition.validated_system_context();
-  if not checked_context ? 'applicationRootId' then
-    raise exception using errcode = '22023', message = 'Active Application context is required';
-  end if;
-  return vortex_module.read_active_installation_for_scope_internal(
-    (checked_context ->> 'organizationId')::uuid,
-    (checked_context ->> 'applicationRootId')::uuid
-  );
-end
-$function$;
-
-revoke all on function vortex_module.read_current_system_installation()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
-grant execute on function vortex_module.read_current_system_installation()
-  to vortex_record_adapter;
-
-comment on function vortex_module.read_current_system_installation() is
-  'Returns the complete exact active Module binding set selected from the validated system context Application, for the Record adapter''s system-only search snapshot read.';
-
 create or replace function vortex_access.resolve_search_index_scope(
   p_organization_id uuid,
   p_application_root_id uuid
@@ -99,6 +69,13 @@ grant execute on function vortex_access.resolve_search_index_scope(uuid, uuid)
 comment on function vortex_access.resolve_search_index_scope(uuid, uuid) is
   'Resolves the tenant, access version and the event dispatcher''s system actor for one active organisation Application, so the search consumer can read a record under a system context. Refuses for an inactive organisation, a foreign Application or a missing or ambiguous dispatcher grant. Runtime-only.';
 
+set local role vortex_module_owner;
+
+grant execute on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
+  to vortex_record_adapter;
+
+reset role;
+
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_search_snapshot(
@@ -137,7 +114,9 @@ begin
   context_organization_id := (context_value ->> 'organizationId')::uuid;
 
   plan := vortex_record.resolve_installation_access_plan_internal(
-    vortex_module.read_current_system_installation()
+    vortex_module.read_active_installation_for_scope_internal(
+      context_organization_id, (context_value ->> 'applicationRootId')::uuid
+    )
   );
   if (plan ->> 'organizationId')::uuid is distinct from context_organization_id
     or (plan ->> 'applicationRootId')::uuid

@@ -34,7 +34,9 @@ begin
   context_organization_id := (context_value ->> 'organizationId')::uuid;
 
   plan := vortex_record.resolve_installation_access_plan_internal(
-    vortex_module.read_current_system_installation()
+    vortex_module.read_active_installation_for_scope_internal(
+      context_organization_id, (context_value ->> 'applicationRootId')::uuid
+    )
   );
   if (plan ->> 'organizationId')::uuid is distinct from context_organization_id
     or (plan ->> 'applicationRootId')::uuid

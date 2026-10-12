@@ -139,11 +139,11 @@ export const loadApplicationSearch = async (
                 and record_type_id = ${recordTypeId}::uuid and not deleted
                 and record_id > ${after}::uuid
                 and not exists (
-                  select 1 from pg_catalog.jsonb_array_elements_text(${JSON.stringify(requiredTokens)}::jsonb) as required(token)
+                  select 1 from pg_catalog.jsonb_array_elements_text(${JSON.stringify(requiredTokens)}::text::jsonb) as required(token)
                   where not exists (
                     select 1 from pg_catalog.jsonb_array_elements(documents.entries) as indexed(value)
                     where required.token = any (pg_catalog.regexp_split_to_array(pg_catalog.lower(indexed.value ->> 'text'),
-                      ${whitespaceSeparator}::text)))
+                      ${whitespaceSeparator}::text))))
               order by record_id limit ${candidateBatchSize}
             `;
             if (rows.length === 0) return;
@@ -216,7 +216,7 @@ export const loadApplicationSearch = async (
                 (select vortex_record.read_record(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as record,
                 (select vortex_record.read_record_capabilities(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as capabilities
               from active_installation
-              cross join pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::jsonb) as requested(record_id)
+              cross join pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::text::jsonb) as requested(record_id)
             `;
             const allowedFields = new Set(
               [
