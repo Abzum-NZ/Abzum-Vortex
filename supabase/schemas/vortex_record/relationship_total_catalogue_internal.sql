@@ -12,6 +12,7 @@ declare
   record_types jsonb := '[]'::jsonb;
   relationships jsonb := '[]'::jsonb;
   has_installed_rules boolean := false;
+  rule_subject_record_type_ids jsonb := '[]'::jsonb;
   record_type jsonb;
 begin
   installation := vortex_module.read_current_active_installation();
@@ -29,6 +30,11 @@ begin
     end if;
     has_installed_rules := has_installed_rules or
       pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
+    rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
+      select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+      from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+      where rule.value ->> 'profile' = 'before_save'
+    ), '[]'::jsonb);
     record_types := record_types || coalesce((
       select pg_catalog.jsonb_agg(
         item.value || pg_catalog.jsonb_build_object(
@@ -50,10 +56,16 @@ begin
     and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
   has_installed_rules := has_installed_rules or
     pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
+  rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
+    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+    where rule.value ->> 'profile' = 'before_save'
+  ), '[]'::jsonb);
   return pg_catalog.jsonb_build_object(
     'recordTypes', record_types,
     'relationships', relationships,
-    'hasInstalledRules', has_installed_rules
+    'hasInstalledRules', has_installed_rules,
+    'ruleSubjectRecordTypeIds', rule_subject_record_type_ids
   );
 end
 $function$;
