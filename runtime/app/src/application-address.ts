@@ -448,7 +448,7 @@ const permittedApplication = async (
         ) return null;
 
         const contextRows = await transaction.query<AddressCompletionContextRow>`
-          select vortex_access.validated_human_request_context() as request_context
+          select vortex_access.validated_human_request_context() - 'channel' as request_context
         `;
         if (contextRows.length !== 1 || contextRows[0] === undefined) return null;
         const current = sessionContextSchema.safeParse(contextRows[0].request_context);
