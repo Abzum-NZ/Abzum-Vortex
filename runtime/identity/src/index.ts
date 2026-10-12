@@ -127,8 +127,3 @@ export {
   createRequestBoundTenantGovernanceService,
   type RequestBoundTenantGovernanceService,
 } from "./tenant-governance-request-bound";
-
-export const IdentityService = Object.freeze({
-  key: "identity",
-  boundary: "@vortex/identity",
-});

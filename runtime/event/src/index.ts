@@ -8,8 +8,3 @@ export * from "./dispatcher";
 export * from "./dispatcher-wakeup";
 export * from "./invalidation-channel";
 export * from "./invalidation-subscriber";
-
-export const EventService = Object.freeze({
-  key: "event",
-  boundary: "@vortex/event",
-});

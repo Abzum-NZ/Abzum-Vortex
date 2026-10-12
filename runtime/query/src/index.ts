@@ -211,8 +211,3 @@ export {
   type QueryCacheState,
   type SharedCacheStore,
 } from "./shared-cache-adapter";
-
-export const QueryService = Object.freeze({
-  key: "query",
-  boundary: "@vortex/query",
-});

@@ -1,8 +1,3 @@
-export const RuleService = Object.freeze({
-  key: "rule",
-  boundary: "@vortex/rule",
-});
-
 export * from "./action-flow-run";
 export * from "./before-save-rule-graphs";
 export * from "./draft-feedback";
