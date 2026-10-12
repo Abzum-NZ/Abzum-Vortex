@@ -43,8 +43,7 @@
     "@types/ws": "catalog:",
     "postcss": "8.5.28",
     "tailwindcss": "catalog:",
-    "tsx": "catalog:",
-    "vitest": "catalog:"
+    "tsx": "catalog:"
   },
   "vortex": {
     "tier": 12,

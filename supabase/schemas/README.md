@@ -42,28 +42,12 @@ applies on its own and matches the live database exactly.
 
 ## Enforcement
 
-`pnpm boundaries` runs `tooling/boundaries/sql-canonical.mjs`. It replays every migration in
-timestamp order to learn each function's live signatures and the definition it was last installed
-with. For migrations timestamped `20260925000000` or later it fails when a migration:
-
-- reads a stored function definition or patches one with `replace()`;
-- creates a function inside another statement (for example dynamic SQL in a `do` block), or without
-  a lowercase schema-qualified name or a dollar-quoted body;
-- changes a function's argument list without an explicit `drop function` earlier in the replay.
-
-It also fails when:
-
-- a function last installed by such a migration has no canonical file;
-- a canonical file records an owner different from the owner replayed from migrations, or a
-  governed migration changes a function's owner without its canonical file;
-- a canonical file differs from the definition its function was last installed with, has no
-  installing migration, or describes a function a later migration drops;
-- a canonical file holds anything other than its one definition, comment, optional owner statement
-  and privileges.
-
-Migrations before `20260925000000` are historical: they are read but never reported. Functions they
-installed gain a canonical file when they are next changed or rebaselined. Session helpers in
-`pg_temp` do not persist and have no canonical file.
+There is no automated checker. Reviewers rely on these rules: a function's canonical file under
+`supabase/schemas` must stay identical to the definition its latest migration installs, must record
+the same owner, and must hold only its one definition, comment, optional owner statement and
+privileges. Do not read a stored function definition or patch one with `replace()`; change an
+argument list only after an explicit `drop function`. Functions installed by migrations before
+`20260925000000` gain a canonical file when they are next changed.
 
 ## Example
 

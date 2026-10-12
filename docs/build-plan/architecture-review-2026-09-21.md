@@ -205,7 +205,7 @@ The resulting plan contains 228 remaining implementation leaves. Source inspecti
 
 Each task and child issue has a functional summary, bounded architectural build points, specification/source references, current dependencies, code-reviewable acceptance, planned agent, active-work estimate, pickup number and issue-based worktree/branch metadata.
 
-Current model routing is in [fleet operations](agent-fleet.md): GPT-6 Luna (Extra High) implements by default; Space Bunny, DeepSeek 4.1 Flash and Sonnet 5 High are overflow. A separate GPT-6 Sol (Extra High) session owns review, fixes, final re-review and closure; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Planned model assignment is not evidence that a worker is running.
+Historical model routing (fleet operations are no longer maintained): GPT-6 Luna (Extra High) implements by default; Space Bunny, DeepSeek 4.1 Flash and Sonnet 5 High are overflow. A separate GPT-6 Sol (Extra High) session owns review, fixes, final re-review and closure; Opus 5.5 (Medium) reviews only when Codex is capacity-limited. Planned model assignment is not evidence that a worker is running.
 
 Estimates cover active implementation and code-review corrections. At the estimate, the coordinator inspects actual progress, the remaining change and any blocker. A progressing worker continues; elapsed time alone never discards a draft or triggers a duplicate worker.
 

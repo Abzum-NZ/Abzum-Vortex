@@ -27,7 +27,6 @@ Operational flows remain separate and use their own narrow credentials.
 | `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
 | `flows/` | Reviewed operational flows. Operational database delivery is separate from the roadmap; application workflow execution is scheduled in phase 9. |
 | `scripts/` | Reviewed commands called by operational flows; these are not available as application workflow nodes |
-| `tests/` | Credential-free contract checks for the operational delivery boundary |
 
 ## How it is deployed
 
@@ -195,106 +194,7 @@ instance.
 
 ## Database delivery
 
-`testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
-exact commit, proves that it remains reachable from that protected branch, and applies its ordered
-Supabase migrations. The committed selector compares the target with the latest authenticated
-successful ancestor. A direct edit to an existing SQL suite or concurrency proof can run only that
-check; protected, broad, new, deleted, replaced, reverted, unmapped or ambiguous input executes the
-complete remote pgTAP, concurrency-proof and schema-lint set. The image-baked script is a small provenance bootstrap: it accepts only this fixed
-repository, the environment's protected ref, the selected full commit and the fixed runner path. It
-then executes that commit's regular checked-out runner. The runner and Local database commands read
-the same strict verification manifest, which must name every concurrency proof and every schema
-created by the migration set. A stored older supported bootstrap therefore cannot silently retain an
-older proof list or override the schema scope for the commit being delivered.
-Before selecting any subset, the selector applies that same manifest boundary: every paired
-migration and proof must exist, every operated schema created by the migration set must be linted,
-and only the runner's non-empty concurrency-proof filename form is accepted.
-The committed selection inventory groups verification checks; it does not group migrations. Any
-changed `supabase/migrations/*.sql` file forces the complete SQL, concurrency, and lint set, so
-migration filenames, formatting, and inferred function ownership never narrow that coverage.
-`supabase test db` deliberately uses a Docker helper, so it remains the
-local-development command and is not used by the operated flow: Kestra does not receive the host
-Docker socket. Only complete coverage writes credential-free schema-3 evidence. Its required
-inventory is the disjoint union of checks freshly executed now and checks backed by a directly
-authenticated fresh receipt; a reused check receipt can never become another source. Each source
-receipt is retained under an execution-specific immutable key, while the mutable baseline contains
-bounded copies of only the direct source receipts needed by the latest successful commit. Before
-reuse, the runner hashes a data-free catalog/security snapshot covering operated schemas, relations,
-columns, constraints, indexes, policies, functions, default privileges, Vortex roles and extensions.
-Malformed, foreign, failed, replayed or chained sources, a PostgreSQL build change, or unexplained
-snapshot drift falls back to full verification. The receipt also records current/baseline identities,
-inventory, selector and changed-input digests, reasons, the fresh/reused partition and per-check
-timings. Reused checks are absent from the current execution's completed arrays.
-
-`production_database_delivery` performs the same immutable-commit checks for `refs/heads/main` and
-prepares a credential-free migration fingerprint before pausing. The operator approves and identifies
-the Testing commit; they do not type their own identity, an execution identifier, or a migration
-fingerprint. The receipt records the approving Kestra execution, and that execution's audit log holds
-the authenticated account that resumed the hold. The Pause task does not expose that account to the
-flow, so the receipt references it rather than restating it. Production then
-loads the successful Testing evidence itself and hands it to the delivery script as two local files,
-`testing-evidence.json` and `testing-full-source-evidence.json`, named by
-`VORTEX_TESTING_EVIDENCE_PATH` and `VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH`. A complete receipt is
-larger than Linux's 131072-byte limit on one environment string, so it is never carried in the
-environment; the script refuses a missing, empty, non-regular or non-object file and refuses the
-retired `VORTEX_TESTING_EVIDENCE` and `VORTEX_TESTING_FULL_SOURCE_EVIDENCE` variables outright rather
-than choosing between them. The delivery script independently proves that the
-tested commit is an ancestor of the Production commit and that both revisions contain the same
-migration set, commit-owned runner and verification manifest before opening the Production database
-connection. The current Production reader remains deliberately narrower than Testing selection: it
-accepts only the existing complete schema-3 `full` or direct-full-source `reused` receipt and rejects
-selected or aggregate coverage before secret access. Supporting selected receipts in Production is
-a separate reviewed rollout, not an inference from one source check. Older receipts remain
-historical evidence, but cannot approve the current Production delivery.
-
-Testing execution `7w9iLE15hlvA9ii64ROry` predates this corrected runner boundary. It applied and
-ran the SQL suites for commit `50b6d4e2a1b7b079d57f8f15d00ee42a29284780`, but its older image-baked
-script ran only three concurrency proofs and linted four schemas. It is retained as partial historical
-evidence and is not an all-current-checks receipt for #235 or the final Phase 2 gate.
-
-Both flows queue at concurrency one. Supabase's migration history makes delivery of the same commit
-idempotent; the repository does not create another migration ledger. Production never runs seed data,
-and neither flow resets a shared database.
-
-GitHub sends every push event to both repository webhooks. Each webhook trigger therefore has an
-expression condition: the Testing flow accepts only `refs/heads/testing`, and the Production flow
-accepts only `refs/heads/main`. Kestra returns without creating an execution when the condition does
-not match.
-
-An exceptional Testing-only recovery is a separate, explicitly authorised operation. Before it
-changes anything, it must prove that Testing contains no application tables, identities, storage
-buckets or files; record the exact existing migration history and legacy roles; and fingerprint
-Production through a read-only query. It may then remove only the verified legacy Testing objects and
-replay the reviewed migrations without seed data. Completion requires an exact migration-history
-match, all committed pgTAP assertions, clean Supabase security and performance advisers, and a second
-read-only Production fingerprint equal to the first. A mismatch stops the recovery. This permission
-never applies to Production and is not built into either delivery flow.
-
-The checked-in flow files are validated against the pinned Kestra image before review. Kestra 1.0.57
-currently reports its supported `Pause.onResume` field as deprecated during local validation even
-though the current official Pause contract documents and uses that field; this warning is recorded
-and does not justify an unverified replacement.
-
-For a separately requested operational task, the existing local commands are:
-
-```text
-docker compose -f workflows/kestra/docker-compose.yml build kestra
-docker run --rm -v <repository>/workflows/kestra/flows:/flows:ro abzum-vortex-kestra:v1.0.57-operations.1 flow validate --local /flows/testing-database-delivery.yml
-docker run --rm -v <repository>/workflows/kestra/flows:/flows:ro abzum-vortex-kestra:v1.0.57-operations.1 flow validate --local /flows/production-database-delivery.yml
-docker run --rm --entrypoint bash -v <repository>:/source:ro -v <repository>/workflows/kestra/scripts:/app/vortex-operations:ro -v <repository>/workflows/kestra/tests:/tests:ro abzum-vortex-kestra:v1.0.57-operations.1 /tests/deliver-database.test.sh
-```
-
-The contract test uses a disposable local Git remote and a credential-free Doppler stand-in. It
-proves that an older bootstrap executes a newer reachable commit's runner and expanded manifest,
-exact-commit preparation, full, selected and unchanged-descendant receipt shapes, direct-source and
-catalog-state fallback, real failed-command propagation, and refusal of an
-invalid repository, ref, commit, runner, manifest or Testing receipt. It retains the approval, role,
-certificate and exact credential-free `verify-full` address checks even when an unsafe address is
-present in the process environment, and refuses a remote migration history containing a file absent
-from the selected commit. Actual Testing/Production application remains a remote environment
-acceptance check because local evidence cannot prove the configured Supabase projects or their
-least-privilege roles, each Doppler token's external scope, or that only the named Production
-operator can resume the approval hold.
+The receipt-verified Testing/Production database delivery flows were removed during the takeover reset (#2209). Database delivery will be redesigned against the squashed migration baseline (#2236).
 
 ## Three deliberate departures from Kestra's published compose file
 

@@ -18,8 +18,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/semver": "catalog:",
-    "vitest": "catalog:"
+    "@types/semver": "catalog:"
   },
   "vortex": {
     "tier": 0,

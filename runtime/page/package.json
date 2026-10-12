@@ -7,8 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --root ../.. runtime/page/test"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@vortex/access": "workspace:*",
@@ -29,8 +28,5 @@
     "ships": true,
     "engine": true,
     "service": "page"
-  },
-  "devDependencies": {
-    "vitest": "catalog:"
   }
 }

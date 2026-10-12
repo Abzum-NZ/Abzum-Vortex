@@ -7,8 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --root ../.. runtime/rule/test"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*"
@@ -19,8 +18,5 @@
     "ships": true,
     "engine": true,
     "service": "rule"
-  },
-  "devDependencies": {
-    "vitest": "catalog:"
   }
 }

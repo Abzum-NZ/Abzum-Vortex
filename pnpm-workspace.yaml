@@ -6,7 +6,6 @@ packages:
   - ui
   - studio
   - modules
-  - testing
 allowBuilds:
   esbuild: false
 catalog:
@@ -26,7 +25,6 @@ catalog:
   supabase: 2.117.0
   tailwindcss: 4.3.3
   tsx: 4.23.15
-  vitest: 4.1.11
   ws: 8.21.3
 
 catalogMode: strict

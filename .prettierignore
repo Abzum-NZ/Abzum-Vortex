@@ -9,7 +9,6 @@ apps/web/public/styles/
 apps/web/public/fonts/
 supabase/.temp/
 docs/
-testing/fixtures/
 workflows/
 README.md
 vercel.json
