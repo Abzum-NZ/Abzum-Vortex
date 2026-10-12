@@ -19,6 +19,5 @@ export {
   modulePlatformPermissionDeclarationSchema,
   type ModulePlatformPermissionDeclaration,
 } from "./module-source-contracts";
-export * from "./operation-contracts";
 export * from "./version-impact";
 export * from "./platform-compatibility";

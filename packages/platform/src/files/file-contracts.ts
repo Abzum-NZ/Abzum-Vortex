@@ -2,171 +2,27 @@ import { z } from "zod";
 import {
   correlationIdSchema,
   duplicateProtectionKeySchema,
-  jsonValueSchema,
   secretReferenceSchema,
 } from "../catalogue/common";
-import { actorIdSchema, applicationRootIdSchema, builderKeySchema, eventIdSchema, eventOccurrenceIdSchema, fieldIdSchema, fileIdSchema, fingerprintSchema, identityIdSchema, meteringEventIdSchema, moduleRootIdSchema, namespacedKeySchema, organizationAccountIdSchema, organizationIdSchema, platformIdSchema, recordIdSchema, recordTypeIdSchema, retentionPolicyIdSchema, revisionSchema, semanticVersionSchema, tenantIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { installedEventDescriptorSchema } from "./module-foundation-contracts";
-import type { StandardInstalledEventKind } from "./module-foundation-contracts";
+import {
+  actorIdSchema,
+  applicationRootIdSchema,
+  fieldIdSchema,
+  fileIdSchema,
+  fingerprintSchema,
+  identityIdSchema,
+  organizationAccountIdSchema,
+  organizationIdSchema,
+  platformIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
+  retentionPolicyIdSchema,
+  revisionSchema,
+  tenantIdSchema,
+  timestampSchema,
+} from "../catalogue/identifiers";
 
-const eventOccurrenceDefinitionReleaseSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("application"),
-      rootId: applicationRootIdSchema,
-      releaseRevision: revisionSchema,
-      releaseVersion: semanticVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      releaseRevision: revisionSchema,
-      releaseVersion: semanticVersionSchema,
-      contentFingerprint: fingerprintSchema,
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict(),
-]);
-
-const canonicalFieldIdsSchema = z
-  .array(fieldIdSchema)
-  .min(1)
-  .max(500)
-  .superRefine((fieldIds, context) => {
-    if (new Set(fieldIds).size !== fieldIds.length)
-      context.addIssue({ code: "custom", message: "Field identities must be unique" });
-    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
-      context.addIssue({ code: "custom", message: "Field identities must use canonical order" });
-  });
-
-const emptyStandardOccurrencePayload = (
-  kind: Exclude<StandardInstalledEventKind, "changed" | "state_changed">,
-) => z.object({ kind: z.literal(kind) }).strict();
-
-const standardEventOccurrencePayloadSchema = z.discriminatedUnion("kind", [
-  emptyStandardOccurrencePayload("created"),
-  z.object({ kind: z.literal("changed"), changedFieldIds: canonicalFieldIdsSchema }).strict(),
-  emptyStandardOccurrencePayload("deleted"),
-  emptyStandardOccurrencePayload("linked"),
-  emptyStandardOccurrencePayload("unlinked"),
-  emptyStandardOccurrencePayload("reassigned"),
-  z
-    .object({
-      kind: z.literal("state_changed"),
-      fieldId: fieldIdSchema,
-      previousValue: jsonValueSchema.optional(),
-      newValue: jsonValueSchema.optional(),
-    })
-    .strict(),
-]);
-
-const declaredEventOccurrencePayloadSchema = z
-  .object({ kind: z.literal("declared"), carriedValues: z.record(fieldIdSchema, jsonValueSchema) })
-  .strict();
-
-/**
- * Versioned occurrence data. It preserves the historical V1 envelope and keeps
- * the occurrence identity distinct from the reusable declaration identity.
- * Definition-backed payload privacy and field-type checks are intentionally
- * performed by Event using Record's field semantics, not claimed by this shape alone.
- */
-export const eventOccurrenceEnvelopeSchema = z
-  .object({
-    contractVersion: z.literal("2.0.0"),
-    occurrenceId: eventOccurrenceIdSchema,
-    organizationId: organizationIdSchema,
-    installation: z
-      .object({
-        applicationRootId: applicationRootIdSchema,
-        applicationReleaseRevision: revisionSchema,
-        moduleBinding: z
-          .object({
-            moduleRootId: moduleRootIdSchema,
-            moduleReleaseRevision: revisionSchema,
-            bindingRevision: revisionSchema,
-          })
-          .strict(),
-      })
-      .strict(),
-    descriptor: installedEventDescriptorSchema,
-    definitionRelease: eventOccurrenceDefinitionReleaseSchema,
-    recordId: recordIdSchema,
-    occurredAt: timestampSchema,
-    actorId: actorIdSchema,
-    correlationId: correlationIdSchema,
-    causationId: platformIdSchema.optional(),
-    recordSequence: revisionSchema,
-    payload: z.union([
-      standardEventOccurrencePayloadSchema,
-      declaredEventOccurrencePayloadSchema,
-    ]),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const expectedPayloadKind =
-      value.descriptor.kind === "standard" ? value.descriptor.eventKind : "declared";
-    if (value.payload.kind !== expectedPayloadKind)
-      context.addIssue({
-        code: "custom",
-        path: ["payload", "kind"],
-        message: "Occurrence payload kind must match its installed event descriptor",
-      });
-    if (value.descriptor.kind === "declared") {
-      const ownerRootId =
-        value.descriptor.owner.kind === "application"
-          ? value.descriptor.owner.applicationRootId
-          : value.descriptor.owner.moduleRootId;
-      if (
-        value.definitionRelease.kind !== value.descriptor.owner.kind ||
-        value.definitionRelease.rootId !== ownerRootId
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["definitionRelease"],
-          message: "Declared occurrence release must match its declaration owner",
-        });
-      if (
-        (value.descriptor.owner.kind === "application" &&
-          value.installation.applicationRootId !== value.descriptor.owner.applicationRootId) ||
-        (value.descriptor.owner.kind === "module" &&
-          value.installation.moduleBinding.moduleRootId !== value.descriptor.owner.moduleRootId)
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["installation"],
-          message: "Declared occurrence installation must contain its declaration owner",
-        });
-    } else if (
-      value.definitionRelease.kind !== "module" ||
-      value.definitionRelease.rootId !== value.installation.moduleBinding.moduleRootId
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["definitionRelease"],
-        message: "A standard occurrence belongs to its record type's Module release",
-      });
-  });
-export const liveInvalidationSchema = z
-  .object({
-    contractVersion: semanticVersionSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    recordId: recordIdSchema.optional(),
-    changeKind: z.enum(["created", "changed", "deleted", "restored", "access_changed"]),
-    dataVersion: revisionSchema,
-    recordVersion: revisionSchema.optional(),
-    sequence: revisionSchema,
-    occurredAt: timestampSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const fileLifecycleStateSchema = z.enum([
+const fileLifecycleStateSchema = z.enum([
   "pending",
   "uploaded",
   "scanning",
@@ -200,11 +56,13 @@ export const verifiedFileActorSchema = z.discriminatedUnion("kind", [
 
 /** Business files live only in the private bucket; published public assets are a separate variant. */
 export const PRIVATE_FILE_BUCKET = "private_files";
-export const privateFileBucketSchema = z.literal(PRIVATE_FILE_BUCKET);
+
+const privateFileBucketSchema = z.literal(PRIVATE_FILE_BUCKET);
 
 /** A private object path is `<organizationId>/<fileId>/<128 bits of hexadecimal entropy>`. */
 const privateFilePathSegment =
   "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+
 export const privateFileObjectPathSchema = z
   .string()
   .max(1_000)
@@ -213,7 +71,7 @@ export const privateFileObjectPathSchema = z
     "A private object path is organisation-scoped, unguessable and never carries the original file name",
   );
 
-export const fileStorageOperationSchema = z.enum(["upload", "read", "delete"]);
+const fileStorageOperationSchema = z.enum(["upload", "read", "delete"]);
 
 /** The Storage credential bridge mints operation claims valid for at most 60 seconds. */
 export const MAXIMUM_FILE_STORAGE_OPERATION_SECONDS = 60;
@@ -262,18 +120,19 @@ export const fileStorageOperationClaimsSchema = z
  * eligibility must be authoritatively evaluated by the resolver-backed File service
  * against active protected organisation legal holds and retention policies.
  */
-export const fileLegalHoldProjectionSchema = z
+const fileLegalHoldProjectionSchema = z
   .object({
     isHeld: z.boolean(),
   })
   .strict();
+
 export type FileLegalHoldProjection = z.infer<typeof fileLegalHoldProjectionSchema>;
 
 /**
  * Versioned scope of a protected legal hold under Specification 14.
  * A legal hold protects only data matching its authorised, versioned scope.
  */
-export const protectedLegalHoldScopeSchema = z.discriminatedUnion("kind", [
+const protectedLegalHoldScopeSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("all_organization_data"),
@@ -310,7 +169,7 @@ export const protectedLegalHoldScopeSchema = z.discriminatedUnion("kind", [
  * Exact protected legal hold reference binding organisation ownership, hold identity,
  * lifecycle status and versioned scope.
  */
-export const protectedLegalHoldReferenceSchema = z
+const protectedLegalHoldReferenceSchema = z
   .object({
     tenantId: tenantIdSchema,
     holdId: platformIdSchema,
@@ -321,9 +180,10 @@ export const protectedLegalHoldReferenceSchema = z
     scopeRevision: revisionSchema,
   })
   .strict();
+
 export type ProtectedLegalHoldReference = z.infer<typeof protectedLegalHoldReferenceSchema>;
 
-export const fileRemovalOwnerBindingSchema = z
+const fileRemovalOwnerBindingSchema = z
   .object({
     sourceOrganizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema.optional(),
@@ -333,9 +193,10 @@ export const fileRemovalOwnerBindingSchema = z
     recordRevision: revisionSchema,
   })
   .strict();
+
 export type FileRemovalOwnerBinding = z.infer<typeof fileRemovalOwnerBindingSchema>;
 
-export const activeFileAttachmentReferenceSchema = z
+const activeFileAttachmentReferenceSchema = z
   .object({
     referenceId: platformIdSchema,
     sourceOrganizationId: organizationIdSchema,
@@ -344,7 +205,7 @@ export const activeFileAttachmentReferenceSchema = z
   })
   .strict();
 
-export const activeFileShareReferenceSchema = z
+const activeFileShareReferenceSchema = z
   .object({
     referenceId: platformIdSchema,
     sourceOrganizationId: organizationIdSchema,
@@ -361,7 +222,7 @@ export const activeFileShareReferenceSchema = z
     },
   );
 
-export const activeFileSourceResponsibilityReferenceSchema = z
+const activeFileSourceResponsibilityReferenceSchema = z
   .object({
     referenceId: platformIdSchema,
     sourceOrganizationId: organizationIdSchema,
@@ -369,7 +230,7 @@ export const activeFileSourceResponsibilityReferenceSchema = z
   })
   .strict();
 
-export const fileRemovalRecoveryPolicySnapshotSchema = z
+const fileRemovalRecoveryPolicySnapshotSchema = z
   .object({
     tenantId: tenantIdSchema,
     organizationId: organizationIdSchema,
@@ -384,7 +245,7 @@ export const fileRemovalRecoveryPolicySnapshotSchema = z
   })
   .strict();
 
-export const fileRemovalHoldAuthoritySnapshotSchema = z
+const fileRemovalHoldAuthoritySnapshotSchema = z
   .object({
     tenantId: tenantIdSchema,
     organizationId: organizationIdSchema,
@@ -399,7 +260,7 @@ export const fileRemovalHoldAuthoritySnapshotSchema = z
  * No reason contains protected content, provider details, hold identifiers or
  * foreign organisation identifiers.
  */
-export const fileRemovalRefusalReasonSchema = z.enum([
+const fileRemovalRefusalReasonSchema = z.enum([
   "authority_unavailable",
   "authority_stale",
   "ownership_mismatch",
@@ -413,6 +274,7 @@ export const fileRemovalRefusalReasonSchema = z.enum([
   "unavailable_governing_policy",
   "malformed_input",
 ]);
+
 export type FileRemovalRefusalReason = z.infer<typeof fileRemovalRefusalReasonSchema>;
 
 /** The public request selects a file; it carries no eligibility or policy facts. */
@@ -421,6 +283,7 @@ export const fileRemovalEligibilityRequestSchema = z
     fileId: fileIdSchema,
   })
   .strict();
+
 export type FileRemovalEligibilityRequest = z.infer<typeof fileRemovalEligibilityRequestSchema>;
 
 /**
@@ -455,9 +318,10 @@ export const fileRemovalAuthoritySnapshotSchema = z
     validUntil: timestampSchema,
   })
   .strict();
+
 export type FileRemovalAuthoritySnapshot = z.infer<typeof fileRemovalAuthoritySnapshotSchema>;
 
-export const fileRemovalEligibilityBindingSchema = z
+const fileRemovalEligibilityBindingSchema = z
   .object({
     authorityFingerprint: fingerprintSchema,
     fileRevision: revisionSchema,
@@ -467,7 +331,7 @@ export const fileRemovalEligibilityBindingSchema = z
   })
   .strict();
 
-export const fileRemovalEligibleDecisionSchema = z
+const fileRemovalEligibleDecisionSchema = z
   .object({
     eligible: z.literal(true),
     status: z.literal("eligible"),
@@ -476,9 +340,10 @@ export const fileRemovalEligibleDecisionSchema = z
     decidedAt: timestampSchema,
   })
   .strict();
+
 export type FileRemovalEligibleDecision = z.infer<typeof fileRemovalEligibleDecisionSchema>;
 
-export const fileRemovalRefusedDecisionSchema = z
+const fileRemovalRefusedDecisionSchema = z
   .object({
     eligible: z.literal(false),
     status: z.literal("refused"),
@@ -491,6 +356,7 @@ export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligib
   fileRemovalEligibleDecisionSchema,
   fileRemovalRefusedDecisionSchema,
 ]);
+
 export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibilityDecisionSchema>;
 
 /**
@@ -498,7 +364,8 @@ export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibili
  * Previews and active derived copies are cleaned, the private storage object is
  * deleted, and the file metadata is transitioned to its terminal tombstone.
  */
-export const fileRemovalStageSchema = z.enum(["previews", "storage_object", "metadata"]);
+const fileRemovalStageSchema = z.enum(["previews", "storage_object", "metadata"]);
+
 export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
 
 /**
@@ -515,6 +382,7 @@ export const fileObjectRemovalRequestSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
+
 export type FileObjectRemovalRequest = z.infer<typeof fileObjectRemovalRequestSchema>;
 
 /**
@@ -549,6 +417,7 @@ export const fileObjectRemovalPartialStateSchema = z
         message: "Completed removal stages must be the canonical prefix before the current stage",
       });
   });
+
 export type FileObjectRemovalPartialState = z.infer<typeof fileObjectRemovalPartialStateSchema>;
 
 /**
@@ -588,6 +457,7 @@ export const fileObjectRemovalReceiptSchema = z
         message: "The terminal receipt commits at the same instant as the file tombstone",
       });
   });
+
 export type FileObjectRemovalReceipt = z.infer<typeof fileObjectRemovalReceiptSchema>;
 
 export const fileRecordSchema = z
@@ -723,6 +593,7 @@ const transferGrantBase = {
   fieldId: fieldIdSchema,
   expiresAt: timestampSchema,
 };
+
 export const uploadGrantSchema = z
   .object({
     ...transferGrantBase,
@@ -732,6 +603,7 @@ export const uploadGrantSchema = z
     oneTimeId: platformIdSchema,
   })
   .strict();
+
 export const downloadGrantSchema = z
   .object({
     ...transferGrantBase,
@@ -755,6 +627,7 @@ export const trustedFileInspectionSchema = z
     checksum: fingerprintSchema,
   })
   .strict();
+
 export type TrustedFileInspection = z.infer<typeof trustedFileInspectionSchema>;
 
 /** The outcome of the isolated safety scanner for one uploaded object. */
@@ -765,6 +638,7 @@ export const fileUploadScanOutcomeSchema = z
     scannerResult: z.enum(["clean", "quarantined", "refused"]),
   })
   .strict();
+
 export type FileUploadScanOutcome = z.infer<typeof fileUploadScanOutcomeSchema>;
 
 export const fileUploadAdmissionRefusalReasonSchema = z.enum([
@@ -778,6 +652,7 @@ export const fileUploadAdmissionRefusalReasonSchema = z.enum([
   "replacement_file_not_found",
   "malformed_request",
 ]);
+
 export type FileUploadAdmissionRefusalReason = z.infer<
   typeof fileUploadAdmissionRefusalReasonSchema
 >;
@@ -791,6 +666,7 @@ export const fileUploadRenewalRefusalReasonSchema = z.enum([
   "upload_expired",
   "malformed_request",
 ]);
+
 export type FileUploadRenewalRefusalReason = z.infer<typeof fileUploadRenewalRefusalReasonSchema>;
 
 export const fileUploadCompletionRefusalReasonSchema = z.enum([
@@ -802,6 +678,7 @@ export const fileUploadCompletionRefusalReasonSchema = z.enum([
   "upload_expired",
   "revision_conflict",
 ]);
+
 export type FileUploadCompletionRefusalReason = z.infer<
   typeof fileUploadCompletionRefusalReasonSchema
 >;
@@ -816,272 +693,21 @@ export const fileUploadActivationRefusalReasonSchema = z.enum([
   "upload_expired",
   "revision_conflict",
 ]);
+
 export type FileUploadActivationRefusalReason = z.infer<
   typeof fileUploadActivationRefusalReasonSchema
 >;
 
-export const activityActorKindSchema = z.enum([
-  "identity",
-  "organization_account",
-  "system",
-  "public_session",
-]);
-
-/**
- * The one channel vocabulary. It is the channel through which a protected operation, and the flow
- * surface that invoked it, was reached. The trusted server entry point sets the channel in the
- * request context; a caller never supplies it, and a context without one means `web`. Activity
- * source and flow execution binding surface are the same list, so a recorded source and a permitted
- * surface always agree.
- *
- * - `web`: a signed-in person using the Vortex web application.
- * - `mcp`: an MCP client acting through the Vortex MCP surface.
- * - `programmatic_interface`: a caller of a published programmatic interface (formerly the
- *   Activity source `interface`).
- * - `connection`: an external system reaching the organisation through an installed connection.
- *   Activity recorded before the wrappers read the context channel (#1094, #1095) also uses it for
- *   connection grant and administration changes.
- * - `federation`: another organisation reaching this one through federation.
- * - `durable_workflow`: a step of a durable workflow run (formerly the Activity source `workflow`).
- * - `system`: platform work with no outside caller, such as scheduled or maintenance work.
- */
-export const protectedOperationChannelSchema = z.enum([
-  "web",
-  "mcp",
-  "programmatic_interface",
-  "connection",
-  "federation",
-  "durable_workflow",
-  "system",
-]);
-
-export const activitySourceSchema = protectedOperationChannelSchema;
-
-export const activityOutcomeSchema = z.enum(["completed", "refused", "failed"]);
-
-/**
- * The two protected Activity projections. Every caller may read the activity
- * they performed (`own`); the organisation-wide `audit` projection additionally
- * requires the organisation's access-administration read authority, so a plain
- * account never enumerates another account's activity.
- */
-export const activityProjectionSchema = z.enum(["own", "audit"]);
-
-/** Bounded Activity filters. Every filter is optional and combined conjunctively. */
-export const activityHistoryFilterSchema = z
-  .object({
-    occurredFrom: timestampSchema.optional(),
-    occurredTo: timestampSchema.optional(),
-    actorKind: activityActorKindSchema.optional(),
-    actorId: actorIdSchema.optional(),
-    action: builderKeySchema.optional(),
-    correlationId: correlationIdSchema.optional(),
-    outcome: activityOutcomeSchema.optional(),
-    source: activitySourceSchema.optional(),
-  })
-  .strict()
-  .refine(
-    (filter) =>
-      filter.occurredFrom === undefined ||
-      filter.occurredTo === undefined ||
-      Date.parse(filter.occurredFrom) <= Date.parse(filter.occurredTo),
-    { message: "An Activity window cannot start after it ends" },
-  );
-
-/** The bounded dimension one Activity aggregate may group by. */
-export const activityAggregateDimensionSchema = z.enum([
-  "action",
-  "actorKind",
-  "source",
-  "outcome",
-]);
-
-export const entitlementCheckRequestSchema = z
-  .object({
-    tenantId: tenantIdSchema,
-    organizationId: organizationIdSchema.optional(),
-    capabilityKey: namespacedKeySchema,
-    requestedQuantity: z.number().positive().finite(),
-    unit: builderKeySchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-/** Route that produced a metering event; federation is the only cross-cluster route. */
-export const meteringEventSourceSchema = z.enum([
-  "web",
-  "workflow",
-  "interface",
-  "connection",
-  "federation",
-  "system",
-]);
-/**
- * The single party an accepted quantity is allocated to. Local consumption is
- * owned by the local organisation; federated consumption is owned by exactly one
- * of the source or recipient organisation, so a linked pair is never counted twice.
- */
-export const meteringAllocationOwnerSchema = z.enum([
-  "local",
-  "federated_source",
-  "federated_recipient",
-]);
-/**
- * A correction is a later event linked to one original event of the same scope,
- * capability and unit. Its positive quantity is added to or removed from the
- * original; the original is never rewritten.
- */
-export const meteringCorrectionDirectionSchema = z.enum(["increase", "decrease"]);
-/**
- * Dimension-name words that would describe commercial or credential state. Metering
- * is generic evidence, so such a dimension is refused rather than stored.
- */
-export const meteringForbiddenDimensionWords = Object.freeze([
-  "amount",
-  "billing",
-  "charge",
-  "chargeable",
-  "cost",
-  "credential",
-  "currency",
-  "customer",
-  "invoice",
-  "password",
-  "payment",
-  "plan",
-  "price",
-  "pricing",
-  "secret",
-  "subscription",
-] as const);
-const forbiddenMeteringDimensionWords: ReadonlySet<string> = new Set<string>(
-  meteringForbiddenDimensionWords,
-);
-export const meteringDimensionKeySchema = builderKeySchema.refine(
-  (key) => key.split("_").every((word) => !forbiddenMeteringDimensionWords.has(word)),
-  { message: "Metering dimensions cannot describe commercial or credential state" },
-);
-/**
- * One bounded, non-secret dimension value available for later permitted grouping:
- * a lowercase identifier token (never free text, addresses or mixed-case
- * credentials), a boolean or a safe integer.
- */
-export const meteringDimensionValueSchema = z.union([
-  z
-    .string()
-    .min(1)
-    .max(120)
-    .regex(
-      /^[a-z0-9](?:[a-z0-9_.:-]*[a-z0-9])?$/,
-      "Use a lowercase identifier token as a dimension value",
-    ),
-  z.boolean(),
-  z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-]);
-export const meteringEventDimensionsSchema = z
-  .record(meteringDimensionKeySchema, meteringDimensionValueSchema)
-  .refine((value) => Object.keys(value).length <= 16, {
-    message: "A metering event accepts at most 16 bounded dimensions",
-  });
-const meteringEventFields = {
-  /** Final committed operation identity; one original event per capability and unit. */
-  operationId: platformIdSchema,
-  tenantId: tenantIdSchema,
-  organizationId: organizationIdSchema.optional(),
-  allocationOwner: meteringAllocationOwnerSchema,
-  capabilityKey: namespacedKeySchema,
-  quantity: z.number().positive().finite().max(Number.MAX_SAFE_INTEGER),
-  unit: builderKeySchema,
-  occurredAt: timestampSchema,
-  source: meteringEventSourceSchema,
-  sourceEventId: eventIdSchema.optional(),
-  dimensions: meteringEventDimensionsSchema,
-  /** Unique per tenant; a repeated key replays the one stored event. */
-  duplicateProtectionKey: duplicateProtectionKeySchema,
-  correlationId: correlationIdSchema,
-  correctsMeteringEventId: meteringEventIdSchema.optional(),
-  correctionDirection: meteringCorrectionDirectionSchema.optional(),
-};
-type MeteringEventShape = {
-  readonly source: z.infer<typeof meteringEventSourceSchema>;
-  readonly allocationOwner: z.infer<typeof meteringAllocationOwnerSchema>;
-  readonly correctsMeteringEventId?: unknown;
-  readonly correctionDirection?: unknown;
-};
-const meteringAllocationMatchesRoute = (value: MeteringEventShape): boolean =>
-  value.source === "federation"
-    ? value.allocationOwner !== "local"
-    : value.allocationOwner === "local";
-const meteringCorrectionIsComplete = (value: MeteringEventShape): boolean =>
-  (value.correctsMeteringEventId === undefined) === (value.correctionDirection === undefined);
-const meteringAllocationMessage =
-  "Federated consumption has one federated allocation owner and local consumption one local owner";
-const meteringCorrectionMessage = "A correction names both the corrected event and its direction";
-export const meteringEventSchema = z
-  .object({
-    meteringEventId: meteringEventIdSchema,
-    ...meteringEventFields,
-    acceptedAt: timestampSchema,
-  })
-  .strict()
-  .refine(meteringAllocationMatchesRoute, {
-    path: ["allocationOwner"],
-    message: meteringAllocationMessage,
-  })
-  .refine(meteringCorrectionIsComplete, {
-    path: ["correctionDirection"],
-    message: meteringCorrectionMessage,
-  });
-/** The final committed operation supplies immutable metering input exactly once. */
-export const recordMeteringEventCommandSchema = z
-  .object(meteringEventFields)
-  .strict()
-  .refine(meteringAllocationMatchesRoute, {
-    path: ["allocationOwner"],
-    message: meteringAllocationMessage,
-  })
-  .refine(meteringCorrectionIsComplete, {
-    path: ["correctionDirection"],
-    message: meteringCorrectionMessage,
-  });
-export const safeOperationErrorCatalogue = Object.freeze({
-  invalid_request: "errors.invalid_request",
-  not_found: "errors.not_found",
-  operation_refused: "errors.operation_refused",
-  conflict: "errors.conflict",
-  rate_limited: "errors.rate_limited",
-  temporarily_unavailable: "errors.temporarily_unavailable",
-  operation_failed: "errors.operation_failed",
-} as const);
-
-const safeErrorVariant = <Code extends keyof typeof safeOperationErrorCatalogue>(code: Code) =>
-  z
-    .object({
-      code: z.literal(code),
-      messageKey: z.literal(safeOperationErrorCatalogue[code]),
-      correlationId: correlationIdSchema,
-    })
-    .strict();
-
-export const safeErrorResponseSchema = z.discriminatedUnion("code", [
-  safeErrorVariant("invalid_request"),
-  safeErrorVariant("not_found"),
-  safeErrorVariant("operation_refused"),
-  safeErrorVariant("conflict"),
-  safeErrorVariant("rate_limited"),
-  safeErrorVariant("temporarily_unavailable"),
-  safeErrorVariant("operation_failed"),
-]);
-
-export type EventOccurrenceEnvelope = z.infer<typeof eventOccurrenceEnvelopeSchema>;
-export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
+
 export type VerifiedFileActor = z.infer<typeof verifiedFileActorSchema>;
+
 export type FileStorageOperation = z.infer<typeof fileStorageOperationSchema>;
+
 export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClaimsSchema>;
+
 export type FileRecord = z.infer<typeof fileRecordSchema>;
+
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
+
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
-export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
-export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
-export type MeteringEvent = z.infer<typeof meteringEventSchema>;
-export type RecordMeteringEventCommand = z.infer<typeof recordMeteringEventCommandSchema>;
