@@ -206,18 +206,6 @@ export function contrastRatio(
 }
 
 /**
- * Whether a theme's catalogue declares any colour role. Every materialised theme comes from a
- * platform release that declares the shared vocabulary's roles, so readability is judged only
- * by those declarations and never by token names. A theme that declares no roles, or declares
- * one other than the vocabulary's, is refused by `validateThemeContrast`.
- */
-export function declaresColorRoles(tokens: Readonly<Record<string, ThemeTokenValueV2>>): boolean {
-  return Object.values(tokens).some(
-    (token) => token.kind === "color_pair" && token.role !== undefined,
-  );
-}
-
-/**
  * The surface a theme paints text and brand colours on: the colour pair the shared vocabulary
  * declares with the `background` role. The priority order only settles which declared
  * background role wins; token names never decide whether a colour is a surface.
