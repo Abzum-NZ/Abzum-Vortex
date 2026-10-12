@@ -16,3 +16,4 @@ Pages exercised on a freshly reset local database (sign-in, then each affected p
 - [ ] Organisation isolation, current permission checks, atomic writes and revision checks preserved.
 - [ ] Schema changes ship as a new migration; changed functions keep the `supabase/schemas` file identical to the migration.
 - [ ] `pnpm guard` and `pnpm typecheck` pass.
+- [ ] No new guardrail finding; existing baseline entries only shrink.
