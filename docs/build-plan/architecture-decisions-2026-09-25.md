@@ -1,5 +1,7 @@
 # Architecture decisions — flows, applications, packages and caching (25 September 2026)
 
+> Historical design record. The [target architecture](target-architecture.md), approved 12 October 2026, supersedes conflicting technical direction and delivery guidance in this document. The original decisions below are retained for history.
+
 **Status:** Approved direction from the product owner on 24–25 September 2026, reviewed independently by Claude Opus 5.5.
 
 **Goal:** Vortex is an application builder in which everything a customer uses is a definition that generic engines render or execute. This includes Vortex's own administration, identity and access applications. A person with the right permissions, or an agent acting for them through the API or MCP, can create, change, install and uninstall a complete application without code changes or redeployment.

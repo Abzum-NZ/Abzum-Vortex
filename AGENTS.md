@@ -38,7 +38,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 
 - English only, in code, comments, documents and commit messages.
 - Work on a branch and open a pull request to `main`. Never push to `main`.
-- No tests. Do not add test files, test runners or test dependencies.
+- No automated tests are written or run (owner decision). Do not add test files, test runners or test dependencies.
 - The UI is definition-driven: frame, navigation, layout, pages and theme come from definitions.
   Engines only render. Do not hard-code a shell, navigation or theme in an engine.
 - Generic engines never name business applications (CRM, Service Desk and so on).
@@ -59,7 +59,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
   `null`/"unavailable"; log the cause.
 - No layers without two implementations; no source file over 1,500 lines.
 - Every behaviour change is walked through in the running app on a freshly reset local database
-  before merge.
+  before merge; visible changes include screenshots in the pull request.
 
 ## Guardrails
 

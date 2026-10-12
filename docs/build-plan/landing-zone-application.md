@@ -1,6 +1,6 @@
 # Landing Zone application
 
-[Current roadmap](README.md) · [Architecture review](architecture-review-2026-09-21.md). Current issue descriptions own scope and pickup order. Completion is implementation plus independent code review; no tests, database review, hosted proof or compatibility work is required.
+[Roadmap archive](README.md) · [Target architecture](target-architecture.md)
 
 Tasks: [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) blocks,
 [#377](https://github.com/Abzum-NZ/Abzum-Vortex/issues/377) application,
@@ -128,5 +128,5 @@ The Landing Zone follows the phase-6 application and consumes Application runtim
 registered blocks and page permission projection. #376 supplies generic blocks,
 #377 supplies the definition-led application and default installation, #378 supplies
 viewer-safe record links, and #379 adds the later Workflow Inbox placement.
-The current roadmap records their exact dependencies and pickup order. Landing
-Zone authoring introduces no requirement to delay the first visible application.
+The original roadmap recorded their dependencies. Landing Zone authoring introduces
+no product dependency for the first visible application.

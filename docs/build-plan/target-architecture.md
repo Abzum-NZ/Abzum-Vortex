@@ -162,7 +162,7 @@ Static checks run in CI on every pull request and locally with `pnpm guard`. The
 
 ### Running app as the gate
 
-Every pull request that changes behaviour states which pages were exercised on a freshly reset local database (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a PR that changes what users see includes screenshots.
+Every pull request that changes behaviour states which pages were exercised on a freshly reset local database (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
 
 ### Review checklist (pull request template)
 
@@ -179,5 +179,3 @@ Every pull request that changes behaviour states which pages were exercised on a
 3. R2.1 #2230, then R2.2 #2231, then R2.3 #2232, then R2.4 #2233, then R2.5 #2234, then R2.6 #2235: consolidation, done one PR at a time on a quiet `main`.
 4. R3.1 #2236, then R3.2 #2237, then R3.3 #2238, R3.4 #2239, R3.5 #2240 and R3.6 #2241: database.
 5. Feature phases resume on the simplified base.
-
-The lead (Claude Opus 5.5) signs off every R2/R3 pull request against this document before merge.

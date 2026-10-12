@@ -1,6 +1,6 @@
 # 9. Workflows and process pipelines
 
-> Product flow-engine specification. It does not authorize agents to operate Kestra, deploy, run hosted checks or require delivery receipts. [AGENTS.md](../../AGENTS.md) governs development; historical operational statements below are not fleet instructions.
+This chapter specifies the product's workflow engine and process pipelines.
 
 [Previous: Forms, actions, rules and events](08-forms-actions-rules-and-events.md) · [Specification index](README.md) · Next: [Queries, reports, search and live updates](10-queries-reports-search.md)
 
@@ -237,4 +237,4 @@ The record's current stage is Vortex business data. Stage movement is a named [a
 
 ## External outcome uncertainty
 
-A local duplicate key cannot prove that an external provider did not act before a timeout. Use provider-supported idempotency keys where available. Otherwise record an unknown outcome and reconcile or obtain an explicit authorised resolution before retrying a possibly completed side effect. Never promise exactly-once third-party execution from a local receipt alone. [Connection execution #100](https://github.com/Abzum-NZ/Abzum-Vortex/issues/100) tests both cases.
+A local duplicate key cannot prove that an external provider did not act before a timeout. Use provider-supported idempotency keys where available. Otherwise record an unknown outcome and reconcile or obtain an explicit authorised resolution before retrying a possibly completed side effect. Never promise exactly-once third-party execution from a local receipt alone. [Connection execution #100](https://github.com/Abzum-NZ/Abzum-Vortex/issues/100) covers both cases.

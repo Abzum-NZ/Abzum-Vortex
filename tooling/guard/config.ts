@@ -40,6 +40,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Canonical SQL functions that differ from their latest migration",
   },
+  "migration-orphan": {
+    tier: "warning",
+    owner: "lead",
+    reviewBy: "2026-11-15",
+    reviewNote: "Decide canonical coverage after the migration baseline review",
+    description: "Latest migrated SQL functions without canonical definitions",
+  },
   "function-uuid": {
     tier: "blocking",
     owner: "lead",
@@ -129,6 +136,7 @@ export const scannedRuleIds = new Set([
   "business-name",
   "layering",
   "migration-mismatch",
+  "migration-orphan",
   "function-uuid",
   "versioned-export",
   "versioned-file",
