@@ -48,6 +48,12 @@ const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
+const baselineMigrationFiles = new Map([
+  ["supabase/migrations/20261014000100_baseline_roles_and_extensions.sql", 168],
+  ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
+  ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
+  ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
+]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
 const renamed = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", mainRef], {
@@ -158,8 +164,12 @@ const businessPattern = new RegExp(
 
 for (const file of codeFiles) {
   const content = read(file);
-  if (content.split("\n").length > 1500)
-    add("file-size", file, 1501, `${content.split("\n").length} lines`);
+  const lineCount = content.split("\n").length;
+  const baselineLineCount = baselineMigrationFiles.get(file);
+  if (baselineLineCount !== undefined && lineCount > baselineLineCount)
+    throw new Error(`Generated baseline migration grew: ${file}`);
+  if (lineCount > 1500 && baselineLineCount === undefined)
+    add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
   if (
@@ -170,7 +180,10 @@ for (const file of codeFiles) {
       add("business-name", file, lineAt(content, match.index), match[0].toLowerCase());
   }
   if (file.endsWith(".sql")) {
-    if (file.startsWith(paths.canonical) || file.startsWith(paths.migrations)) {
+    if (
+      file.startsWith(paths.canonical) ||
+      (file.startsWith(paths.migrations) && !baselineMigrationFiles.has(file))
+    ) {
       for (const match of content.matchAll(
         /\bcreate\s+(?:or\s+replace\s+)?(?:table|function|view|materialized\s+view|index|type|sequence|trigger)\s+(?:if\s+not\s+exists\s+)?(?:[\w"]+\.)?[\w"]*(?:receipt|fingerprint|continuity|evidence)[\w"]*/gi,
       )) {
@@ -637,10 +650,11 @@ for (const file of files.filter(
   for (const [key, value] of functions(content)) {
     canonicalFunctions.add(value.identity);
     const migration = latest.get(key);
-    if (
-      !migration ||
-      migration.definition.replace(/\s+/g, " ") !== value.definition.replace(/\s+/g, " ")
-    ) {
+    const matchesMigration =
+      migration !== undefined &&
+      migration.definition.replace(/\s+/g, " ") ===
+        value.definition.replace(/\s+/g, " ");
+    if (!matchesMigration) {
       add(
         "migration-mismatch",
         file,
@@ -648,6 +662,8 @@ for (const file of files.filter(
         `${key} vs ${migration?.file ?? "missing migration"}`,
       );
     }
+    // The generated baseline is a fixed snapshot; its unchanged function UUIDs are legacy data.
+    if (migration && matchesMigration && baselineMigrationFiles.has(migration.file)) continue;
     for (const match of value.body.matchAll(uuidPattern))
       if (match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000") {
         add(
@@ -665,6 +681,7 @@ for (const [identity, migration] of latestLive)
 for (const file of files.filter(
   (file) => file.startsWith(paths.migrations) && file.endsWith(".sql"),
 )) {
+  if (baselineMigrationFiles.has(file)) continue;
   const content = read(file);
   for (const value of functions(content).values())
     for (const match of value.body.matchAll(uuidPattern)) {
