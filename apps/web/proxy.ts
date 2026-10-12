@@ -91,13 +91,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // The component bundle host on the dedicated component domain is public,
-  // content-addressed and immutable, so it must not receive the session
-  // proxy's private no-store response. The emitted style stylesheets (public/styles/<style>.css)
-  // and self-hosted fonts (public/fonts/<font>/<file>) are public build output too; only those
-  // exact file shapes are excluded, because a tenant may be named "styles" or "fonts" and an
-  // organisation short name never contains a dot.
+  // Static Next assets, immutable component bundles and images bypass the session proxy; keep
+  // application paths covered even when a tenant is named "api".
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/components/|styles/[a-z]+\\.css$|fonts/[a-z0-9-]+/(?:[a-z0-9-]+\\.(?:css|woff2)|LICENSE\\.txt)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/components/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

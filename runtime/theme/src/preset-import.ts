@@ -49,7 +49,6 @@ export type ShadcnPresetImportFailure = Readonly<{
     | "UNKNOWN_THEME_OPTION"
     | "REFUSED_THEME_OPTION"
     | "MISSING_THEME_RELEASE"
-    | "MISSING_STYLE_ASSET"
     | "INVALID_THEME_SELECTION";
   dimension?: ShadcnThemeCatalogueDimensionKey | "iconLibrary" | "bodyFont" | "headingFont" | undefined;
   value?: string | undefined;
@@ -242,16 +241,6 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
       });
       continue;
     }
-    if (dimension === "style" && option.asset === undefined) {
-      failures.push({
-        code: "MISSING_STYLE_ASSET",
-        dimension,
-        value,
-        message: `The preset style value "${value}" has no stylesheet in the pinned catalogue.`,
-      });
-      continue;
-    }
-
     selectedOptions[dimension] = option.id;
   }
 

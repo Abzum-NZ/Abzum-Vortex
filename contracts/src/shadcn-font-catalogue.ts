@@ -1,17 +1,17 @@
 import catalogue from "./catalogue/shadcn-fonts.generated.json";
 
 /**
- * The shadcn/create font catalogue `tooling/emit-font-assets.mjs` generated from the pinned shadcn
- * preset: every font shadcn/create offers, each self-hosted from the Vortex origin with its licence.
- * Application theme selections name a body font and a heading font from it; the theme resolution
- * writes the selected fonts into the `body` and `heading` typography tokens, and the renderer links
- * only the stylesheets of the fonts those tokens name.
+ * The shadcn/create font catalogue: every font shadcn/create offers at the pinned version, with
+ * the pinned package and licence each one came from. Application theme selections name a body
+ * font and a heading font from it; the theme resolution writes the selected fonts into the `body`
+ * and `heading` typography tokens, and the theme bridge (ui/src/theme/theme-variables.ts) turns
+ * the family a token names into a CSS variable for the renderer to paint with.
  */
 export type ShadcnFont = Readonly<{
   /** The shadcn/create font id, for example `inter` or `source-sans-3`. */
   id: string;
   label: string;
-  /** The CSS family name the font's stylesheet declares. */
+  /** The CSS family name the font's own stylesheet declares. */
   family: string;
   /** The Fontsource category: `sans-serif`, `serif`, `monospace`, `display` or `handwriting`. */
   category: string;
@@ -19,10 +19,6 @@ export type ShadcnFont = Readonly<{
   package: string;
   packageVersion: string;
   licence: string;
-  /** The font's stylesheet, relative to where the application serves fonts. */
-  stylesheet: string;
-  /** The Latin face a page preloads, relative to where the application serves fonts. */
-  preload: string;
 }>;
 
 export type ShadcnFontCatalogue = Readonly<{
@@ -79,8 +75,8 @@ const SANS_FALLBACK =
   'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 /**
- * The CSS font-family stack for one catalogue font: its self-hosted family first, then local
- * system fonts of the same category while it loads or when a glyph is outside its subsets.
+ * The CSS font-family stack for one catalogue font: its declared family first, then local system
+ * fonts of the same category when the family is not available.
  */
 export const shadcnFontStack = (font: ShadcnFont): string =>
   `"${font.family}", ${CATEGORY_FALLBACKS[font.category] ?? SANS_FALLBACK}`;

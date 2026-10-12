@@ -12,7 +12,6 @@ import {
   createThemeRootProps,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
-  VortexFontStylesheets,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
@@ -377,7 +376,6 @@ export default async function ApplicationAddressPage({
         className="flex min-h-svh w-full flex-col bg-background text-foreground"
         {...createThemeRootProps(undefined)}
       >
-        <VortexFontStylesheets />
         <style href="vortex-ui-styles" precedence="default">
           {ALL_UI_STYLES_CSS}
         </style>
