@@ -3383,6 +3383,7 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "column" },
         "options": [
           {
             "key": "column",
@@ -3400,6 +3401,7 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "medium" },
         "options": [
           {
             "key": "none",
@@ -3490,6 +3492,7 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "column" },
         "options": [
           {
             "key": "column",
@@ -3507,6 +3510,7 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "medium" },
         "options": [
           {
             "key": "none",
@@ -3542,6 +3546,7 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "flow" },
         "options": [
           {
             "key": "flow",
@@ -3563,6 +3568,7 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -3594,6 +3600,7 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -3619,6 +3626,7 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -3650,6 +3658,7 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -3749,6 +3758,7 @@
         "label": "Level",
         "help": "Heading importance: one is the most important, four is the least",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "two" },
         "options": [
           {
             "key": "one",
@@ -5390,6 +5400,7 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "column" },
         "options": [
           {
             "key": "column",
@@ -5407,6 +5418,7 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "medium" },
         "options": [
           {
             "key": "none",
@@ -5442,6 +5454,7 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "flow" },
         "options": [
           {
             "key": "flow",
@@ -5463,6 +5476,7 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -5494,6 +5508,7 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -5519,6 +5534,7 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -5550,6 +5566,7 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -5904,6 +5921,7 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "column" },
         "options": [
           {
             "key": "column",
@@ -5921,6 +5939,7 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "medium" },
         "options": [
           {
             "key": "none",
@@ -5956,6 +5975,7 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "flow" },
         "options": [
           {
             "key": "flow",
@@ -5977,6 +5997,7 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -6008,6 +6029,7 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -6033,6 +6055,7 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -6064,6 +6087,7 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "inherit" },
         "options": [
           {
             "key": "inherit",
@@ -6092,6 +6116,7 @@
       },
       {
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "none" },
         "help": "Inset all container regions using the active style spacing scale",
         "options": [
           {
@@ -6117,6 +6142,7 @@
       },
       {
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "fill" },
         "help": "Keep this container full width or bound it to a readable centered frame",
         "options": [
           {

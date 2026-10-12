@@ -9,9 +9,9 @@
  *   bound to a placement. The same render functions serve `<Render>` and the `<Puck>` editor.
  *
  * Layout and spacing are explicit component fields: every container gap, padding, direction and
- * content width is a setting written into the placement (`LAYOUT_DEFAULTS` is what an inserted or
- * legacy placement receives), and nothing below the config changes layout because a setting is
- * absent.
+ * content width is a setting written into the placement (each release property's `defaultValue`
+ * is what an inserted placement receives and what materialisation writes), and nothing below the
+ * config changes layout because a setting is absent.
  *
  * Page-runtime context (queries, forms, actions, flow runtime) reaches a render function through
  * Puck's `metadata` as `VortexPuckMetadata`; the registry's per-block payload parsers validate it.
@@ -21,6 +21,7 @@ import {
   createContext,
   useContext,
   useRef,
+  useState,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
@@ -77,7 +78,12 @@ import { Input } from "./components/input";
 import { Label } from "./components/label";
 import { NativeSelect, NativeSelectOption } from "./components/native-select";
 import { Textarea } from "./components/textarea";
-import { DefinitionRenderError, validateAccessibleName, type Breakpoint } from "./definition-error";
+import {
+  DefinitionRenderError,
+  validateAccessibleName,
+  type Breakpoint,
+  type DefinitionRenderErrorLocation,
+} from "./definition-error";
 import {
   computePlacementClassName,
   computePlacementStyle,
@@ -288,77 +294,37 @@ const implementationFor = (release: PlatformBlockRelease): PlatformComponentRend
 // Explicit layout and spacing
 // ---------------------------------------------------------------------------------------------
 
-const choice = (value: string): BlockPropertyValueContract => ({ kind: "choice", value });
-
-/**
- * The layout and spacing a placement receives when it is inserted, and when a stored placement
- * predates a declared property. Each entry applies only to a release that declares the property
- * and the option, and is written into the placement's settings, so a render function always reads
- * an explicit value.
- */
-const LAYOUT_DEFAULTS: ReadonlyMap<string, Readonly<Record<string, string>>> = new Map([
-  [
-    CONTAINER_BLOCK_RELEASE.rendererKey,
-    {
-      direction: "column",
-      gap: "medium",
-      padding: "none",
-      content_width: "fill",
-      menu_placement: "flow",
-    },
-  ],
-  [HEADING_BLOCK_RELEASE.rendererKey, { level: "two" }],
-]);
-
-/** The gap between slot children of a block whose release declares no `gap` property of its own. */
-const UNDECLARED_SLOT_GAP: SlotGapName = "medium";
+/** The settings a block receives when it is inserted: each declared property's own default. */
+const defaultSettingsFor = (release: PlatformBlockRelease): PlacementSettings => {
+  const defaults: Record<string, BlockPropertyValueContract> = {};
+  for (const property of release.properties)
+    if (property.defaultValue !== undefined) defaults[property.key] = property.defaultValue;
+  return defaults;
+};
 
 const isSlotGapName = (value: string): value is SlotGapName =>
   value === "none" || value === "small" || value === "medium" || value === "large";
 
-/** The explicit layout settings a release declares, as a placement's default settings. */
-const defaultSettingsFor = (release: PlatformBlockRelease): PlacementSettings => {
-  const defaults: Record<string, BlockPropertyValueContract> = {};
-  const layout = LAYOUT_DEFAULTS.get(release.rendererKey) ?? {};
-  for (const property of release.properties) {
-    if (property.defaultValue !== undefined) defaults[property.key] = property.defaultValue;
-    const value = layout[property.key];
-    if (
-      value !== undefined &&
-      property.kind === "choice" &&
-      property.options.some((option) => option.key === value)
-    )
-      defaults[property.key] = choice(value);
-  }
-  return defaults;
-};
-
-/** A placement's settings with the config's explicit defaults beneath the authored values. */
-export const resolveEffectiveSettings = (
-  release: PlatformBlockRelease,
-  settings: PlacementSettings,
-): PlacementSettings => {
-  const effective: Record<string, BlockPropertyValueContract> = {
-    ...defaultSettingsFor(release),
-  };
-  // The editor lists every declared property, so an unset one can arrive as an explicit undefined.
-  for (const [key, value] of Object.entries(settings))
-    if (value !== undefined) effective[key] = value;
-  return effective;
-};
-
 /**
  * The gap between the children of one of this placement's slots: the placement's own declared
- * `gap` setting, or the config's constant for blocks that declare none.
+ * `gap` setting, or, for a block that declares none, the page root's gap carried in the
+ * `--vortex-slot-gap` variable.
  */
-export const resolveSlotGap = (
+const slotGapFor = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
-): SlotGapName => {
-  if (!release.properties.some((property) => property.key === "gap")) return UNDECLARED_SLOT_GAP;
+  location: DefinitionRenderErrorLocation,
+): string => {
+  if (!release.properties.some((property) => property.key === "gap"))
+    return "var(--vortex-slot-gap)";
   const value = settings.gap;
-  if (value?.kind === "choice" && isSlotGapName(value.value)) return value.value;
-  return UNDECLARED_SLOT_GAP;
+  if (value?.kind !== "choice" || !isSlotGapName(value.value))
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      `Block '${release.key}' needs an explicit gap setting`,
+      { ...location, propertyPath: ["gap"] },
+    );
+  return slotGapLength(value.value);
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -370,7 +336,11 @@ type TaggedValue = BlockPropertyValueContract | undefined;
 const jsonText = (value: TaggedValue): string =>
   value === undefined ? "" : JSON.stringify(value, null, 2);
 
-/** Edits a value whose kind has no dedicated control as its canonical, kind-tagged JSON. */
+/**
+ * Edits a value whose kind has no dedicated control as its canonical, kind-tagged JSON. The text
+ * follows the incoming value (undo, redo, an external change) until the person edits it; their
+ * in-progress text is then kept until it is committed or discarded on blur.
+ */
 function JsonValueEditor(props: {
   id: string;
   name: string;
@@ -378,21 +348,35 @@ function JsonValueEditor(props: {
   readOnly: boolean | undefined;
   onChange: (value: TaggedValue) => void;
 }): ReactElement {
+  const canonical = jsonText(props.value);
+  const [text, setText] = useState(canonical);
+  const [seen, setSeen] = useState(canonical);
+  const [editing, setEditing] = useState(false);
+  if (canonical !== seen) {
+    setSeen(canonical);
+    if (!editing) setText(canonical);
+  }
   return (
     <Textarea
       id={props.id}
       name={props.name}
       disabled={props.readOnly}
-      defaultValue={jsonText(props.value)}
+      value={text}
       spellCheck={false}
       className="font-mono text-xs"
-      onBlur={(event) => {
-        const text = event.currentTarget.value.trim();
-        if (text.length === 0) return props.onChange(undefined);
+      onChange={(event) => {
+        setText(event.currentTarget.value);
+        setEditing(true);
+      }}
+      onBlur={() => {
+        if (!editing) return;
+        setEditing(false);
+        const trimmed = text.trim();
+        if (trimmed.length === 0) return props.onChange(undefined);
         try {
-          props.onChange(JSON.parse(text) as BlockPropertyValueContract);
+          props.onChange(JSON.parse(trimmed) as BlockPropertyValueContract);
         } catch {
-          event.currentTarget.value = jsonText(props.value);
+          setText(canonical);
         }
       }}
     />
@@ -508,7 +492,9 @@ const renderPropertyEditor = (
             )
           }
         >
-          <NativeSelectOption value="">Not set</NativeSelectOption>
+          {property.defaultValue === undefined ? (
+            <NativeSelectOption value="">Not set</NativeSelectOption>
+          ) : null}
           {property.options.map((option) => (
             <NativeSelectOption key={option.key} value={option.key}>
               {option.label}
@@ -584,7 +570,7 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  const settings = resolveEffectiveSettings(release, componentProps.settings ?? {});
+  const settings = componentProps.settings ?? {};
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -608,7 +594,7 @@ function PlacementBlock(props: {
   // also a theme root, so its surface, text and typography repaint from its own variables.
   const placementTheme = resolvePlacementTheme(inheritedScope, vortex.themeOverrides);
 
-  const slotStyle: CSSProperties = { gap: slotGapLength(resolveSlotGap(release, settings)) };
+  const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, location) };
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
@@ -816,10 +802,7 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
       ...(hasRepeatableSlot
         ? {
             resolveFields: (data: { props: Record<string, unknown> }) =>
-              buildFields(
-                release,
-                resolveEffectiveSettings(release, (data.props.settings ?? {}) as PlacementSettings),
-              ),
+              buildFields(release, (data.props.settings ?? {}) as PlacementSettings),
           }
         : {}),
       render: (componentProps) => (
@@ -873,7 +856,13 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
         <ApplicationShellRoot
           shell={applicationShell}
           runtime={(puck.metadata as VortexPuckMetadata | undefined)?.applicationShellRuntime}
-          contentStyle={{ gap: slotGapLength(gap), padding: slotGapLength(padding) }}
+          contentStyle={
+            {
+              gap: slotGapLength(gap),
+              padding: slotGapLength(padding),
+              "--vortex-slot-gap": slotGapLength(gap),
+            } as CSSProperties
+          }
           {...(puck.isEditing ? { editing: true } : {})}
         >
           {children}

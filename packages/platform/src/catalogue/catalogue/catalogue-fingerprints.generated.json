@@ -1,20 +1,20 @@
 {
   "platformBlocks": {
     "11d1a889-531f-4880-a1a4-5dda5289e5ff:1.0.0": {
-      "contentFingerprint": "sha256:87ad3a9f09aea303fea52278a2b15a2cd94f8fd778ef83ae53ec2b4c8a78fb57",
-      "catalogueFingerprint": "sha256:b2dfb51dca9296f53102a251a880a74d3b2c15797a19597b6ee16df5e7c88d0c"
+      "contentFingerprint": "sha256:a8799e0bd99130d83d4f73478bb6dd765ebbf254406b9125c655158f86de7638",
+      "catalogueFingerprint": "sha256:89704fd35233109ad35c0e2dd1a0f2068f4bac60fb9dee19e6b7e315fb44df25"
     },
     "11d1a889-531f-4880-a1a4-5dda5289e5ff:1.1.0": {
-      "contentFingerprint": "sha256:a037ae7de71c4a342ea23ab394bb59b3541b2f77f52d4416395a0b151cacfef3",
-      "catalogueFingerprint": "sha256:cdc84ff01a15e9487a30362d114d816c9de55e0289fcefe8c75585ac8a061a00"
+      "contentFingerprint": "sha256:d3098a371011996eab0717e8eda3d15797914f412d75184a1b08e7553e7e8468",
+      "catalogueFingerprint": "sha256:ee1d95dc2d473561ed7816bee5cedbf8f0e486b6e78176121f2b7dc8fd99224a"
     },
     "11d1a889-531f-4880-a1a4-5dda5289e5ff:1.2.0": {
-      "contentFingerprint": "sha256:3f4f5743c2e8e2bebe30751c9f9fce130e53fe38b7e08959449c34bfd552b8ea",
-      "catalogueFingerprint": "sha256:2a317bd96172e81e08c1465a5e9285890803a239e6be2ffe27626f653ed3f174"
+      "contentFingerprint": "sha256:d00ae934e01db386d3683194a58ad99104748f74c5c52e909c4df53628988b09",
+      "catalogueFingerprint": "sha256:92e9e47fdccf2817159749ee4b411fb8be87d60fef21ac66c1b31b0850d82573"
     },
     "11d1a889-531f-4880-a1a4-5dda5289e5ff:1.3.0": {
-      "contentFingerprint": "sha256:5480a49219c636d99e56b2683189d3b42c966a7c0e17105b9f61fd1605af1cc4",
-      "catalogueFingerprint": "sha256:811d3aa951a38cfdd81f045c4293e6d7c99a2b5acdad32e4f7b0ba3b0816c9b2"
+      "contentFingerprint": "sha256:37bc30d90939ec1026bc63ca79afb488adc18f1df20480ae233c1058dd79a2b3",
+      "catalogueFingerprint": "sha256:3ebf3b1fbe5ed112213a932b460c3740a57c2b7d8ce11031f6d7e341efe2d1fb"
     },
     "148f420f-f7db-4145-80f4-3d3fa036096b:1.0.0": {
       "contentFingerprint": "sha256:467d05800b26b6030b0a6a85d4f66c467083773ec478e2bc5e827bbc84707ef1",
@@ -105,8 +105,8 @@
       "catalogueFingerprint": "sha256:876ca64b165ecda23f3e300561352f50c2c12d3a5a6b4eb4e1117060476232e2"
     },
     "78bfeead-a38d-424a-81b9-7cd553b92bcc:1.0.0": {
-      "contentFingerprint": "sha256:ba087207751d4f15f047d10187585dfaa41a6174b7d5c294a0ef94df3d02e790",
-      "catalogueFingerprint": "sha256:ddfccfe68cfce2fa54194a8a467cb2df67b8539554b291cdc37a7e463b50c0a5"
+      "contentFingerprint": "sha256:2ca22e5c89baa960feaedef3d2349d61d2a555d1caab220b886dec9b6ac6439d",
+      "catalogueFingerprint": "sha256:9f3d2bc2f3a81bc69247edb63779bc4c0c1b9d470a04eb794720553476763531"
     },
     "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94:1.0.0": {
       "contentFingerprint": "sha256:21efadc956d6b115fb29fb8e689c390bfe83c1373686491c29df3d21a2fecb56",

@@ -50,8 +50,6 @@ export {
 export {
   createVortexPuckConfig,
   getVortexPuckConfig,
-  resolveEffectiveSettings,
-  resolveSlotGap,
   type VortexPlacementMeta,
   type VortexPuckComponentProps,
   type VortexPuckMetadata,
