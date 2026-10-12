@@ -4050,7 +4050,46 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           if (!fieldKeys.has(key) || seenFields.has(key)) inputMismatch = true;
           seenFields.add(key);
         }
-        if (forms.size === 0 || flowIds.size !== 1 || inputMismatch)
+        // The runtime completes a guided form only through exactly one form on the summary step,
+        // bound to the page's single completion flow.
+        const summaryStep = array(page.steps).find((step) => step.summary === true);
+        const composition = object(page.composition);
+        const summaryContent = summaryStep
+          ? object(composition.stepContent)[String(summaryStep.id)]
+          : undefined;
+        const summaryPlacements = summaryStep
+          ? [
+              ...(composition.shellKind === "application"
+                ? Object.values(object(summaryContent)).flatMap((slotValue) =>
+                    collectPlacementEntriesV2(slotValue),
+                  )
+                : collectPlacementEntriesV2(summaryContent)),
+              ...pageShellPlacementEntriesV2(page),
+            ]
+          : [];
+        const summaryForms = new Set(
+          summaryPlacements
+            .filter(
+              ([, placement]) =>
+                String(object(placement.block).blockId) ===
+                String(FORM_CONTAINER_BLOCK_RELEASE.blockId),
+            )
+            .map(([id]) => id.toLowerCase()),
+        );
+        const summaryFlowIds = new Set(
+          array(content.flowBindings)
+            .filter(
+              (binding) =>
+                binding.event === "form_submit" &&
+                summaryForms.has(String(binding.controlId).toLowerCase()),
+            )
+            .map((binding) => String(object(binding.flow).flowId)),
+        );
+        const summaryBindingValid =
+          summaryForms.size === 1 &&
+          summaryFlowIds.size === 1 &&
+          flowIds.has([...summaryFlowIds][0]!);
+        if (forms.size === 0 || flowIds.size !== 1 || !summaryBindingValid || inputMismatch)
           failures.push(
             failure(output, "vortex.definition.application_page_references", "broken_reference", {
               kind: "page",

@@ -266,7 +266,12 @@ export const createDefinitionStore = (
       createRoot(candidate, { kind: "trusted_application", applicationOriginKind }),
 
     async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
-      const rootId = saveDefinitionDraftCommandSchema.safeParse(candidate);
+      const rootId = saveDefinitionDraftCommandSchema.pick({ rootId: true }).safeParse({
+        rootId:
+          typeof candidate === "object" && candidate !== null
+            ? (candidate as { rootId?: unknown }).rootId
+            : undefined,
+      });
       if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
       await requireBuilderAuthority(authority, {
         kind: "draft_change",
