@@ -79,6 +79,7 @@ const refusalResponse = (
 
 type ProtectedRead =
   | Readonly<{ outcome: "not_found" }>
+  | Readonly<{ outcome: "storage_unavailable" }>
   | Readonly<{ outcome: "read"; result: FileReadResult }>;
 
 export type FileRouteParameters = Readonly<{ organizationId: string; fileId: string }>;
@@ -136,14 +137,6 @@ export const handleFileReadRequest = async (
   }
   const applicationRootId = located.value.applicationRootId;
 
-  // Refuse a foreign organisation or missing file before inspecting Storage configuration.
-  let signing: StorageSigningConfiguration;
-  try {
-    signing = storageSigningConfiguration();
-  } catch {
-    return refusalResponse("storage_unavailable");
-  }
-
   const rangeHeader = request.headers.get("range");
   const ifRangeHeader = request.headers.get("if-range");
   // An opened upstream body is cancelled if the protected transaction then
@@ -160,6 +153,15 @@ export const handleFileReadRequest = async (
         decision.applicationRootId !== scope.applicationRootId
       ) {
         return { outcome: "not_found" };
+      }
+
+      // Storage configuration is inspected only once the read is allowed, so its absence
+      // cannot reveal whether an unreadable file exists.
+      let signing: StorageSigningConfiguration;
+      try {
+        signing = storageSigningConfiguration();
+      } catch {
+        return { outcome: "storage_unavailable" };
       }
 
       // The grant store and the bridge's read resolver are bound to this
@@ -218,6 +220,8 @@ export const handleFileReadRequest = async (
     );
   }
   if (protectedRead.value.outcome === "not_found") return refusalResponse("file_not_found");
+  if (protectedRead.value.outcome === "storage_unavailable")
+    return refusalResponse("storage_unavailable");
   const result = protectedRead.value.result;
   if (result.outcome === "refused") return refusalResponse(result.reason, result.headers);
   return new Response(result.stream, {
