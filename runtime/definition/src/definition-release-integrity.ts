@@ -1,8 +1,6 @@
 import {
   assertModuleContractPair,
   selectApplicationContractPair,
-  projectStoredApplicationDraftBeforeShellPresentation,
-  storedApplicationCompilationOutputBeforeShellPresentationSchema,
   storedApplicationCompilationOutputSchema,
   type StoredDefinitionCompilationOutput,
   type ApplicationDraftV2,
@@ -28,14 +26,9 @@ type CustomerDefinitionResolution =
 export const applicationDraftFromStoredRelease = (
   output: Extract<StoredDefinitionCompilationOutput, { kind: "application" }>,
 ): ApplicationDraftV2 => {
-  const current = storedApplicationCompilationOutputSchema.safeParse(output);
-  if (current.success) return current.data.canonical;
-  const historical = storedApplicationCompilationOutputBeforeShellPresentationSchema.safeParse(
-    output,
-  );
-  if (historical.success)
-    return projectStoredApplicationDraftBeforeShellPresentation(historical.data.canonical);
-  throw new TypeError("Stored Application compilation output has no supported stored shape");
+  // No compatibility decoding: there is no released product, so stored releases always use the
+  // current contract (target architecture rule 6). Reset local databases after contract changes.
+  return storedApplicationCompilationOutputSchema.parse(output).canonical;
 };
 
 type StoredCustomerDefinitionReleaseEvidence = Readonly<{

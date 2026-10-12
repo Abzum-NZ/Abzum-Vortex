@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   applicationDraftV2Schema,
-  storedApplicationDraftBeforeShellPresentationSchema,
 } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
 import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
@@ -468,12 +467,6 @@ export const storedApplicationCompilationOutputSchema = z
       });
   });
 
-/** Stored Application releases published before shell presentation and navigation icons existed. */
-export const storedApplicationCompilationOutputBeforeShellPresentationSchema =
-  storedApplicationCompilationOutputSchema.extend({
-    canonical: storedApplicationDraftBeforeShellPresentationSchema,
-  });
-
 const createModuleCompilationOutputV3Schema = (canonicalSchema: typeof moduleDraftV3Schema) =>
   z
   .object({
@@ -520,10 +513,7 @@ export const definitionCompilationOutputSchema = createDefinitionCompilationOutp
 /** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
 export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
   storedModuleCompilationOutputV3Schema,
-  z.union([
-    storedApplicationCompilationOutputSchema,
-    storedApplicationCompilationOutputBeforeShellPresentationSchema,
-  ]),
+  storedApplicationCompilationOutputSchema,
 );
 export type StoredDefinitionCompilationOutput = z.infer<
   typeof storedDefinitionCompilationOutputSchema
