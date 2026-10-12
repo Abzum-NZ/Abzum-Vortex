@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict EOTnIJPdLGsO7vEIpggzOsUSTrFbZDRufazaQrBvCEvzqOrLzn1utDHVfaalsg5
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -105718,4 +105717,3 @@ GRANT SELECT(accepted_at) ON TABLE vortex_workflow.flow_start_intents TO vortex_
 -- PostgreSQL database dump complete
 --
 
-\unrestrict EOTnIJPdLGsO7vEIpggzOsUSTrFbZDRufazaQrBvCEvzqOrLzn1utDHVfaalsg5

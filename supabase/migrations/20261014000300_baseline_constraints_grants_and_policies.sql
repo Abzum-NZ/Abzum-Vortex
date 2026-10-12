@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict kbb3gZNGJSQYdTRfY7mZIP21zmtpcIHbmEV64jLk44RtW5JMXdiEZy5lhIZAyxH
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -5235,4 +5234,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE vortex_record_owner IN SCHEMA record_data GRAN
 -- PostgreSQL database dump complete
 --
 
-\unrestrict kbb3gZNGJSQYdTRfY7mZIP21zmtpcIHbmEV64jLk44RtW5JMXdiEZy5lhIZAyxH
