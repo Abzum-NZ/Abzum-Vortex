@@ -125,7 +125,6 @@ export const guardRules = {
   },
 } as const;
 
-export type GuardRuleId = keyof typeof guardRules;
 export const scannedRuleIds = new Set([
   "business-name",
   "layering",

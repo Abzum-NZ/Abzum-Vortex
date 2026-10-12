@@ -98,6 +98,20 @@ function importedArea(specifier: string, file: string): string {
   }
   return "other";
 }
+function violatesLayering(file: string, specifier: string): boolean {
+  const fileArea = area(file);
+  const target = importedArea(specifier, file);
+  return (
+    (target === "web" && fileArea !== "web") ||
+    (fileArea === "platform" && (target === "ui" || target === "definitions")) ||
+    (fileArea === "schema" && target !== "schema" && target !== "other") ||
+    ((fileArea === "ui" || fileArea === "definitions") &&
+      (target === "platform" ||
+        target === "web" ||
+        (target === "definitions" && fileArea === "ui") ||
+        (target === "ui" && fileArea === "definitions")))
+  );
+}
 const applicationFiles = files.filter(
   (file) => file.startsWith(paths.applicationSources) && /\/application\.json$/.test(file),
 );
@@ -209,17 +223,8 @@ for (const file of codeFiles) {
     ts.forEachChild(node, visit);
   }
   function checkImport(specifier: string, offset: number): void {
-    const target = importedArea(specifier, file);
-    const invalid =
-      (target === "web" && fileArea !== "web") ||
-      (fileArea === "platform" && (target === "ui" || target === "definitions")) ||
-      (fileArea === "schema" && target !== "schema" && target !== "other") ||
-      ((fileArea === "ui" || fileArea === "definitions") &&
-        (target === "platform" ||
-          target === "web" ||
-          (target === "definitions" && fileArea === "ui") ||
-          (target === "ui" && fileArea === "definitions")));
-    if (invalid) add("layering", file, lineAt(content, offset), specifier);
+    if (violatesLayering(file, specifier))
+      add("layering", file, lineAt(content, offset), specifier);
   }
   function parseVariable(node: ts.Node): string | undefined {
     if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || !node.initializer)
@@ -353,46 +358,8 @@ for (const file of codeFiles) {
   visit(source);
 }
 
-// The first baseline predates the AST check. Preserve its entries and compare the
-// newly visible cases with main, so older branches do not enlarge the baseline.
-const oldSilentCounts = new Map<string, number>();
-for (const id of baseline) {
-  if (!id.startsWith("silent-parse|")) continue;
-  const key = id.slice(0, id.lastIndexOf("|"));
-  oldSilentCounts.set(key, (oldSilentCounts.get(key) ?? 0) + 1);
-}
-const baseSource = new Map<string, string>();
-const seenBranch = new Map<string, number>();
-const keptOld = new Map<string, number>();
-for (const finding of silentFindings) {
-  const key = `silent-parse|${finding.file}|${finding.variable}`;
-  if (!baseSource.has(finding.file)) {
-    const previous = spawnSync(
-      "git",
-      ["show", `origin/main:${renamedFromMain.get(finding.file) ?? finding.file}`],
-      {
-        cwd: root,
-        encoding: "utf8",
-      },
-    );
-    baseSource.set(finding.file, previous.status === 0 ? previous.stdout.replace(/\s+/g, " ") : "");
-  }
-  const signature = `${finding.file}|${finding.variable}|${finding.branch}`;
-  const occurrence = (seenBranch.get(signature) ?? 0) + 1;
-  seenBranch.set(signature, occurrence);
-  const baseCount = baseSource.get(finding.file)!.split(finding.branch).length - 1;
-  if (occurrence <= baseCount) {
-    const kept = keptOld.get(key) ?? 0;
-    if (kept < (oldSilentCounts.get(key) ?? 0)) {
-      add("silent-parse", finding.file, finding.line, finding.variable);
-      keptOld.set(key, kept + 1);
-    }
-  } else {
-    // Reserve the historical identifiers even when a new branch sorts first.
-    occurrences.set(key, Math.max(occurrences.get(key) ?? 0, oldSilentCounts.get(key) ?? 0));
-    add("silent-parse", finding.file, finding.line, finding.variable);
-  }
-}
+for (const finding of silentFindings)
+  add("silent-parse", finding.file, finding.line, finding.variable);
 
 const uuidPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const functionPattern = /\bcreate\s+(?:or\s+replace\s+)?function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gi;
@@ -586,22 +553,195 @@ function existedUnderRenamedPath(id: string): boolean {
   );
 }
 const current = new Set(unique.map((finding) => finding.id));
-const old = new Set(baseline);
 const mainFiles = new Map<string, boolean>();
-function unchangedFromMain(file: string): boolean {
-  const cached = mainFiles.get(file);
-  if (cached !== undefined) return cached;
-  const present = existsSync(resolve(root, file));
+const mainSourceCache = new Map<string, string | undefined>();
+function sourceFromMain(file: string): string | undefined {
+  if (mainSourceCache.has(file)) return mainSourceCache.get(file);
   const previous = spawnSync("git", ["show", `origin/main:${file}`], {
     cwd: root,
     encoding: "utf8",
   });
-  const unchanged =
-    previous.status === 0
-      ? present && previous.stdout.replaceAll("\r\n", "\n") === read(file)
-      : !present;
+  const source = previous.status === 0 ? previous.stdout.replaceAll("\r\n", "\n") : undefined;
+  mainSourceCache.set(file, source);
+  return source;
+}
+function unchangedFromMain(file: string): boolean {
+  const cached = mainFiles.get(file);
+  if (cached !== undefined) return cached;
+  const present = existsSync(resolve(root, file));
+  const previous = sourceFromMain(file);
+  const unchanged = previous !== undefined ? present && previous === read(file) : !present;
   mainFiles.set(file, unchanged);
   return unchanged;
+}
+function mainNames(): Set<string> {
+  const result = new Set<string>();
+  const listing = spawnSync(
+    "git",
+    ["ls-tree", "-r", "--name-only", "origin/main", "--", paths.applicationSources],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (listing.status !== 0)
+    throw new Error(`Cannot list origin/main application definitions: ${listing.stderr}`);
+  for (const file of listing.stdout
+    .split("\n")
+    .filter((entry) => /\/application\.json$/.test(entry))) {
+    const content = sourceFromMain(file);
+    if (content === undefined)
+      throw new Error(`Cannot read origin/main application definition: ${file}`);
+    const source = JSON.parse(content) as { key?: string; body?: { name?: string } };
+    if (source.key) result.add(source.key);
+    if (source.body?.name) result.add(source.body.name);
+  }
+  return result;
+}
+let mainBusinessPattern: RegExp | undefined;
+function businessPatternOnMain(): RegExp {
+  if (!mainBusinessPattern) {
+    const namesOnMain = mainNames();
+    mainBusinessPattern = new RegExp(
+      `(?<![\\w])(?:${[...namesOnMain]
+        .sort((a, b) => b.length - a.length)
+        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|")})(?![\\w])`,
+      "gi",
+    );
+  }
+  return mainBusinessPattern;
+}
+let mainLatestFunctions: Map<string, { definition: string; file: string }> | undefined;
+function latestFunctionsOnMain(): Map<string, { definition: string; file: string }> {
+  if (mainLatestFunctions) return mainLatestFunctions;
+  const listing = spawnSync(
+    "git",
+    ["ls-tree", "-r", "--name-only", "origin/main", "--", paths.migrations],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (listing.status !== 0)
+    throw new Error(`Cannot list origin/main migrations: ${listing.stderr}`);
+  mainLatestFunctions = new Map();
+  for (const file of listing.stdout
+    .split("\n")
+    .filter((entry) => entry.endsWith(".sql"))
+    .sort()) {
+    const content = sourceFromMain(file);
+    if (content === undefined) throw new Error(`Cannot read origin/main migration: ${file}`);
+    for (const [key, value] of functions(content))
+      mainLatestFunctions.set(key, { definition: value.definition, file });
+  }
+  return mainLatestFunctions;
+}
+function mainFindingCount(rule: string, file: string, detail: string): number {
+  const content = sourceFromMain(file);
+  if (content === undefined) return 0;
+  if (rule === "business-name")
+    return [...content.matchAll(businessPatternOnMain())].filter(
+      (match) => match[0].toLowerCase() === detail.toLowerCase(),
+    ).length;
+  if (rule === "layering") {
+    let count = 0;
+    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    function visit(node: ts.Node): void {
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+        const specifier = node.moduleSpecifier;
+        if (
+          specifier &&
+          ts.isStringLiteral(specifier) &&
+          specifier.text === detail &&
+          violatesLayering(file, detail)
+        )
+          count += 1;
+      }
+      if (
+        ts.isCallExpression(node) &&
+        node.arguments.length &&
+        ts.isStringLiteral(node.arguments[0]) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          node.expression.getText(source) === "require") &&
+        node.arguments[0].text === detail &&
+        violatesLayering(file, detail)
+      )
+        count += 1;
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+    return count;
+  }
+  if (rule === "versioned-file")
+    return /-v[2-9]\d*(?=\.)/i.test(basename(file)) && basename(file) === detail ? 1 : 0;
+  if (rule === "versioned-export") {
+    let count = 0;
+    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    function visit(node: ts.Node): void {
+      if (
+        (ts.isVariableStatement(node) ||
+          ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isEnumDeclaration(node)) &&
+        node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        const namesToCheck = ts.isVariableStatement(node)
+          ? node.declarationList.declarations.map((declaration) => declaration.name)
+          : [node.name];
+        for (const name of namesToCheck)
+          if (name && name.getText(source) === detail && /V[2-9]\d*$/.test(detail)) count += 1;
+      }
+      if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause))
+        for (const element of node.exportClause.elements)
+          if (element.name.text === detail && /V[2-9]\d*$/.test(detail)) count += 1;
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+    return count;
+  }
+  if (rule === "function-uuid") {
+    let count = 0;
+    for (const value of functions(content).values())
+      for (const match of value.body.matchAll(uuidPattern))
+        if (
+          match[0].toLowerCase() === detail.toLowerCase() &&
+          match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000"
+        )
+          count += 1;
+    return count;
+  }
+  if (rule === "migration-mismatch") {
+    const separator = detail.lastIndexOf(" vs ");
+    if (separator < 0) return 0;
+    const key = detail.slice(0, separator);
+    const canonical = functions(content).get(key);
+    if (!canonical) return 0;
+    const migration = latestFunctionsOnMain().get(key);
+    const mismatch =
+      !migration ||
+      migration.definition.replace(/\s+/g, " ") !== canonical.definition.replace(/\s+/g, " ");
+    const actualDetail = `${key} vs ${migration?.file ?? "missing migration"}`;
+    return mismatch && actualDetail === detail ? 1 : 0;
+  }
+  return 0;
+}
+function presentOnMain(id: string): boolean {
+  const last = id.lastIndexOf("|");
+  const occurrence = Number(id.slice(last + 1));
+  const first = id.indexOf("|");
+  const second = id.indexOf("|", first + 1);
+  if (first < 0 || second < 0 || !Number.isInteger(occurrence) || occurrence < 1) return false;
+  const rule = id.slice(0, first);
+  const file = id.slice(first + 1, second);
+  const detail = id.slice(second + 1, last);
+  return mainFindingCount(rule, file, detail) >= occurrence;
+}
+function mainBaselineId(id: string): string | undefined {
+  if (allowed?.has(id)) return id;
+  const first = id.indexOf("|");
+  const second = id.indexOf("|", first + 1);
+  if (first < 0 || second < 0) return undefined;
+  const previous = renamedFromMain.get(id.slice(first + 1, second));
+  if (!previous) return undefined;
+  const previousId = `${id.slice(0, first + 1)}${previous}${id.slice(second)}`;
+  return allowed?.has(previousId) ? previousId : undefined;
 }
 // Only blocking findings belong in the baseline. New baseline entries must describe
 // violations already present in an unchanged main file; stale entries only warn.
@@ -613,9 +753,11 @@ const growth = allowed
         !(current.has(id) && unchangedFromMain(id.split("|")[1])),
     )
   : [];
-const added = unique.filter(
-  (finding) => isBlocking(finding.rule) && !old.has(finding.id) && !unchangedFromMain(finding.file),
-);
+const added = unique.filter((finding) => {
+  if (!isBlocking(finding.rule) || unchangedFromMain(finding.file)) return false;
+  const baselineId = mainBaselineId(finding.id);
+  return !baselineId || !presentOnMain(baselineId);
+});
 const warnings = unique.filter((finding) => !isBlocking(finding.rule));
 const stale = baseline.filter((id) => !current.has(id));
 const today = new Date().toISOString().slice(0, 10);
