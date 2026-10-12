@@ -241,9 +241,6 @@ importers:
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      postgres:
-        specifier: 'catalog:'
-        version: 3.4.9
       prettier:
         specifier: 3.9.8
         version: 3.9.8
@@ -631,15 +628,9 @@ importers:
 
   runtime/search:
     dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
-      '@vortex/record':
-        specifier: workspace:*
-        version: link:../record
       server-only:
         specifier: 0.0.1
         version: 0.0.1
@@ -667,12 +658,6 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
-      '@vortex/event':
-        specifier: workspace:*
-        version: link:../event
-      '@vortex/record':
-        specifier: workspace:*
-        version: link:../record
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
