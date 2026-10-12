@@ -17,8 +17,6 @@ declare
   context_value jsonb;
   visible_organization_id uuid;
   actor_identity_id uuid;
-  application_row record;
-  authorised boolean;
 begin
   -- Row visibility matches the installed-application projection: the viewer's
   -- validated human request context selects the organisation and identity; only
@@ -43,13 +41,25 @@ begin
     or not vortex_context.is_non_nil_uuid(actor_identity_id::text) then
     return;
   end if;
-  for application_row in
+  begin
+    perform 1
+    from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    ) as scope;
+  exception
+    when sqlstate '42501' or sqlstate 'P0002' then
+      return;
+  end;
+  return query
     select
+      visible_organization_id,
       root.root_id,
-      root.key as application_key,
-      registration.revision as registration_revision,
-      release.compilation_output #>> '{canonical,content,name}' as application_name,
-      release.compilation_output #>> '{canonical,content,icon}' as application_icon
+      registration.revision,
+      pg_catalog.jsonb_build_object(
+        'key', root.key,
+        'name', release.compilation_output #>> '{canonical,content,name}',
+        'icon', release.compilation_output #>> '{canonical,content,icon}'
+      )
     from vortex_access.permission_registrations as registration
     join vortex_definition.roots as root
       on root.root_id = registration.registration_owner_id
@@ -73,31 +83,7 @@ begin
           and binding.application_release_revision = registration.source_revision
           and binding.state = 'active'
       )
-    order by root.key collate "C", root.root_id
-  loop
-    authorised := false;
-    begin
-      perform 1
-      from vortex_access.resolve_human_application_scope(
-        actor_identity_id, visible_organization_id, application_row.root_id
-      ) as scope;
-      authorised := true;
-    exception
-      when sqlstate '42501' or sqlstate 'P0002' then
-        authorised := false;
-    end;
-    if authorised then
-      return query select
-        visible_organization_id,
-        application_row.root_id,
-        application_row.registration_revision,
-        pg_catalog.jsonb_build_object(
-          'key', application_row.application_key,
-          'name', application_row.application_name,
-          'icon', application_row.application_icon
-        );
-    end if;
-  end loop;
+    order by root.key collate "C", root.root_id;
 end
 $function$;
 

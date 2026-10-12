@@ -43,8 +43,6 @@ begin
     and draft.subject_record_id is not distinct from p_subject_record_id
     and draft.expires_at <= pg_catalog.clock_timestamp();
 
-  perform vortex_page.private_form_draft_purge_internal(scope.organization_id, 100);
-
   perform 1
   from vortex_page.form_drafts as draft
   where draft.organization_id = scope.organization_id
