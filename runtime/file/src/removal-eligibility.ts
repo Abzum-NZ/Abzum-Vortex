@@ -3,18 +3,9 @@ import "server-only";
 import { createHash } from "node:crypto";
 import {
   sameId,
-  activeFileAttachmentReferenceSchema,
-  activeFileShareReferenceSchema,
-  activeFileSourceResponsibilityReferenceSchema,
-  fileLegalHoldProjectionSchema,
   fileRemovalAuthoritySnapshotSchema,
-  fileRemovalEligibilityBindingSchema,
   fileRemovalEligibilityDecisionSchema,
   fileRemovalEligibilityRequestSchema,
-  fileRemovalHoldAuthoritySnapshotSchema,
-  fileRemovalRecoveryPolicySnapshotSchema,
-  protectedLegalHoldReferenceSchema,
-  protectedLegalHoldScopeSchema,
   type FileRemovalAuthoritySnapshot,
   type FileRemovalEligibilityDecision,
   type FileRemovalEligibilityRequest,
