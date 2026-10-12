@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  applicationCompilationOutputV2Schema,
+  applicationCompilationOutputSchema,
 } from "./definition-compilation-contracts";
 import {
   applicationRootIdSchema,
@@ -20,7 +20,7 @@ const previewInstallationIdSchema = z
 
 export const previewInstallationCandidateSchema = z
   .object({
-    compilation: applicationCompilationOutputV2Schema,
+    compilation: applicationCompilationOutputSchema,
     currentReleaseRevision: revisionSchema.nullable(),
   })
   .strict();

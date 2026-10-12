@@ -23,7 +23,7 @@ const protectedDownloadHrefSchema = z.string().max(96).superRefine((value, conte
 });
 
 /** Safe metadata for one attachment that passed the current protected File read decision. */
-export const attachmentListItemV2Schema = z
+export const attachmentListItemSchema = z
   .object({
     displayName: safeDisplayNameSchema,
     mediaType: verifiedMediaTypeSchema,
@@ -33,10 +33,10 @@ export const attachmentListItemV2Schema = z
   .strict();
 
 /** The strict values consumed by the registered read-only attachment display release. */
-export const attachmentListPayloadV2Schema = z
+export const attachmentListPayloadSchema = z
   .object({
     kind: z.literal("attachment_list"),
-    files: z.array(attachmentListItemV2Schema).max(100),
+    files: z.array(attachmentListItemSchema).max(100),
   })
   .strict()
   .superRefine((value, context) => {
@@ -48,5 +48,5 @@ export const attachmentListPayloadV2Schema = z
     });
   });
 
-export type AttachmentListItemV2 = z.infer<typeof attachmentListItemV2Schema>;
-export type AttachmentListPayloadV2 = z.infer<typeof attachmentListPayloadV2Schema>;
+export type AttachmentListItem = z.infer<typeof attachmentListItemSchema>;
+export type AttachmentListPayload = z.infer<typeof attachmentListPayloadSchema>;

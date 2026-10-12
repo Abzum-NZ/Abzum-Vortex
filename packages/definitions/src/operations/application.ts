@@ -1,11 +1,11 @@
 import {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_2_0,
   CONTAINER_BLOCK_RELEASE_1_3_0,
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
   PLATFORM_BLOCK_RELEASES,
@@ -16,9 +16,9 @@ import {
   TEXT_INPUT_BLOCK_RELEASE,
   defaultOperationFlowSource,
   defaultSaveFlowSource,
-  type ApplicationSourceDocumentV2,
-  type PlatformBlockReleaseV2,
-  type SourceBlockPropertyValueV2Contract,
+  type ApplicationSourceDocument,
+  type PlatformBlockRelease,
+  type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import {
   operationsRunbooks,
@@ -111,10 +111,10 @@ const placementLayout = {
   height: { kind: "content" as const },
 };
 
-/** Authored V2 block placement: exact block release, typed settings and named child slots. */
+/** Authored  block placement: exact block release, typed settings and named child slots. */
 const placement = (
-  release: PlatformBlockReleaseV2,
-  settings: Record<string, SourceBlockPropertyValueV2Contract> = {},
+  release: PlatformBlockRelease,
+  settings: Record<string, SourceBlockPropertyValueContract> = {},
   slots: Record<string, unknown> = {},
 ) => ({
   block: { block_id: release.blockId, release_version: release.releaseVersion },
@@ -465,7 +465,7 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
   return result;
 };
 
-const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
+const releasesByKey = new Map<string, PlatformBlockRelease>(
   PLATFORM_BLOCK_RELEASES.map((release) => [
     `${String(release.blockId)}@${release.releaseVersion}`,
     release,
@@ -489,10 +489,10 @@ const platformBlockDependencies = [
 const theme = {
   base: {
     kind: "platform_theme" as const,
-    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueThemeId),
-    release_version: DEFAULT_PLATFORM_THEME_RELEASE_V2.releaseVersion,
-    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
-    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
+    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE.catalogueThemeId),
+    release_version: DEFAULT_PLATFORM_THEME_RELEASE.releaseVersion,
+    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint,
+    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.catalogueFingerprint,
   },
   selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   token_overrides: {},
@@ -511,8 +511,8 @@ const theme = {
  * model exposes them yet, so the open-signals page is honest text rather than an unbound table. No
  * page or action grants customer-content access, and no action approves itself.
  */
-export const operationsApplication: ApplicationSourceDocumentV2 =
-  applicationSourceDocumentV2Schema.parse({
+export const operationsApplication: ApplicationSourceDocument =
+  applicationSourceDocumentSchema.parse({
     source_contract_version: "2.0.0",
     root_alias: "app_operations",
     key: "vortex.app.operations",

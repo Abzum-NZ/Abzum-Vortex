@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { recordTypeDefinitionV3Schema } from "../schema";
+import type { recordTypeDefinitionSchema } from "../schema";
 import type { JsonValue } from "../schema";
 import {
   applyBeforeSaveRules,
@@ -9,18 +9,18 @@ import {
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import { evaluateRecordCalculations } from "./calculations";
-import { isDateDeadlineDueFieldV2 } from "./deadline-transitions";
+import { isDateDeadlineDueField } from "./deadline-transitions";
 import {
-  finalizeRecordFieldCandidateV2,
-  prepareInitialRecordFieldCandidateV2,
-  type PrepareRecordFieldValuesV2Result,
-  type RecordFieldValueRequirementV2,
+  finalizeRecordFieldCandidate,
+  prepareInitialRecordFieldCandidate,
+  type PrepareRecordFieldValuesResult,
+  type RecordFieldValueRequirement,
 } from "./field-values";
 
 type CalculateAndFinalizeInput = Readonly<{
   operation: "create" | "update";
   submittedValues: Readonly<Record<string, unknown>>;
-  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
+  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>;
   existingValues?: Readonly<Record<string, unknown>>;
   issuedAt: string;
   organizationCurrency?: string | undefined;
@@ -50,7 +50,7 @@ const localDate = (instant: string, timeZone: string): string | undefined => {
 };
 
 type CalculatedFieldValues =
-  | PrepareRecordFieldValuesV2Result
+  | PrepareRecordFieldValuesResult
   | Readonly<{
       success: false;
       issues: ReadonlyArray<
@@ -80,7 +80,7 @@ export const calculateAndFinalize = ({
   timeZone,
   rules,
 }: CalculateAndFinalizeInput): CalculatedFieldValues => {
-  const initial = prepareInitialRecordFieldCandidateV2({
+  const initial = prepareInitialRecordFieldCandidate({
     operation,
     recordType,
     submittedValues,
@@ -92,7 +92,7 @@ export const calculateAndFinalize = ({
   // Every applicable compiled rule runs exactly once here, before calculations
   // and final field policy, so rule effects are revalidated like any other value.
   let ruleCandidateValues: Readonly<Record<string, JsonValue>> = initial.candidate.candidateValues;
-  let requirements: readonly RecordFieldValueRequirementV2[] = [];
+  let requirements: readonly RecordFieldValueRequirement[] = [];
   if (rules !== undefined) {
     const applied = applyBeforeSaveRules({
       execution: rules,
@@ -121,7 +121,7 @@ export const calculateAndFinalize = ({
     .filter((field) => field.type === "calculation")
     .map((field) => field.fieldId);
   if (calculationFieldIds.length === 0)
-    return finalizeRecordFieldCandidateV2({
+    return finalizeRecordFieldCandidate({
       recordType,
       initialCandidate: initial.candidate,
       candidateValues: ruleCandidateValues,
@@ -140,7 +140,7 @@ export const calculateAndFinalize = ({
     const dueField = recordType.fields.find(
       (candidate) => candidate.fieldId === expression.dueFieldId,
     );
-    return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
+    return dueField !== undefined && isDateDeadlineDueField(dueField);
   });
   const organizationLocalDate = needsOrganizationLocalDate
     ? timeZone === undefined
@@ -165,7 +165,7 @@ export const calculateAndFinalize = ({
     ...calculations.setValues,
   };
   for (const fieldId of calculations.clearFieldIds) delete candidateValues[fieldId];
-  return finalizeRecordFieldCandidateV2({
+  return finalizeRecordFieldCandidate({
     recordType,
     initialCandidate: initial.candidate,
     candidateValues,
@@ -177,7 +177,7 @@ export const calculateAndFinalize = ({
 
 /** @internal Shared by ordinary Record saves and named-action candidate composition. */
 export const operationClock = (
-  recordTypes: readonly ReturnType<typeof recordTypeDefinitionV3Schema.parse>[],
+  recordTypes: readonly ReturnType<typeof recordTypeDefinitionSchema.parse>[],
   issuedAt: string,
   timeZone: string | undefined,
 ): Readonly<{ instant: string; organizationLocalDate: string }> | undefined => {
@@ -189,7 +189,7 @@ export const operationClock = (
       const dueField = recordType.fields.find(
         (candidate) => candidate.fieldId === expression.dueFieldId,
       );
-      return dueField !== undefined && isDateDeadlineDueFieldV2(dueField);
+      return dueField !== undefined && isDateDeadlineDueField(dueField);
     }),
   );
   const organizationLocalDate = needsOrganizationLocalDate

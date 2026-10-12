@@ -1,9 +1,9 @@
 import {
-  moduleFieldValueV2Schemas,
+  moduleFieldValueSchemas,
   ruleGraphSchema,
   type DefinitionRuleFailureFamily,
-  type ModuleFieldV3,
-  type RecordTypeDefinitionV3,
+  type ModuleField,
+  type RecordTypeDefinition,
   type RuleGraph,
   type RuleGraphCondition,
   type RuleGraphOperand,
@@ -37,7 +37,7 @@ type RuleGraphValidationIssue = Readonly<{
 
 type RuleGraphValidationInput = Readonly<{
   graph: RuleGraph;
-  subjectRecordType: RecordTypeDefinitionV3;
+  subjectRecordType: RecordTypeDefinition;
   /** Subject and exact dependency record types available to this published Module. */
   availableRecordTypeIds: ReadonlySet<string>;
 }>;
@@ -46,7 +46,7 @@ type ValueDeclaration = Readonly<{
   type: RuleGraphValueType | "reference_number";
   recordTypeIds?: readonly string[] | undefined;
   columns?: readonly RuleTableColumn[] | undefined;
-  field?: ModuleFieldV3 | undefined;
+  field?: ModuleField | undefined;
 }>;
 
 type Availability = ReadonlySet<string>;
@@ -60,7 +60,7 @@ const issue = (
   path: readonly (string | number)[],
 ): RuleGraphValidationIssue => ({ ruleCode, family, path });
 
-const fieldRecordTypeIds = (field: ModuleFieldV3): readonly string[] | undefined => {
+const fieldRecordTypeIds = (field: ModuleField): readonly string[] | undefined => {
   if (field.type === "link")
     return field.settings.target.state === "resolved" ? [field.settings.target.recordTypeId] : [];
   if (field.type === "link_to_one_of_several")
@@ -70,7 +70,7 @@ const fieldRecordTypeIds = (field: ModuleFieldV3): readonly string[] | undefined
   return undefined;
 };
 
-const fieldColumns = (field: ModuleFieldV3): readonly RuleTableColumn[] | undefined =>
+const fieldColumns = (field: ModuleField): readonly RuleTableColumn[] | undefined =>
   field.type === "table"
     ? field.settings.columns.map((column) => ({
         key: column.key,
@@ -79,12 +79,12 @@ const fieldColumns = (field: ModuleFieldV3): readonly RuleTableColumn[] | undefi
       }))
     : undefined;
 
-const fieldValueType = (field: ModuleFieldV3): ValueDeclaration["type"] => {
+const fieldValueType = (field: ModuleField): ValueDeclaration["type"] => {
   if (field.type === "calculation" || field.type === "total") return field.settings.resultType;
   return field.type;
 };
 
-const declarationForField = (field: ModuleFieldV3): ValueDeclaration => ({
+const declarationForField = (field: ModuleField): ValueDeclaration => ({
   type: fieldValueType(field),
   field,
   ...(fieldRecordTypeIds(field) ? { recordTypeIds: fieldRecordTypeIds(field) } : {}),
@@ -546,7 +546,7 @@ export const validateRuleGraph = ({
         ]);
         const targetValueSchema =
           target && !["reference_number", "calculation", "total"].includes(target.type)
-            ? moduleFieldValueV2Schemas[target.type as keyof typeof moduleFieldValueV2Schemas]
+            ? moduleFieldValueSchemas[target.type as keyof typeof moduleFieldValueSchemas]
             : undefined;
         if (
           actual?.field === undefined &&

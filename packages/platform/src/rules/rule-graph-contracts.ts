@@ -8,7 +8,7 @@ import {
   recordTypeIdSchema,
   ruleIdSchema,
 } from "../catalogue/identifiers";
-import { moduleFieldValueV2Schemas } from "../records/module-field-values-v2";
+import { moduleFieldValueSchemas } from "../records/module-field-values";
 import {
   maximumRuleTableRows,
   ruleTableColumnsMatch,
@@ -66,8 +66,8 @@ const typedValueBranches = ruleGraphValueTypeKeys.map((type) =>
       type: z.literal(type),
       value:
         type === "table"
-          ? moduleFieldValueV2Schemas.table.max(maximumRuleTableRows)
-          : moduleFieldValueV2Schemas[type],
+          ? moduleFieldValueSchemas.table.max(maximumRuleTableRows)
+          : moduleFieldValueSchemas[type],
       columns: type === "table" ? ruleTableColumnsSchema : z.never().optional(),
     })
     .strict()

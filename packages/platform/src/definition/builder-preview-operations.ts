@@ -19,7 +19,7 @@ import {
   previewInstallationDiscardResultSchema,
   previewInstallationSchema,
 } from "./preview-installation-contracts";
-import { saveRecordCommandV2Schema, saveRecordResultV2Schema } from "../records/records";
+import { saveRecordCommandSchema, saveRecordResultSchema } from "../records/records";
 import { publicDefinitionValidationErrorSchema } from "../catalogue/validation-errors";
 
 export const builderPreviewOperationLocationSchema = z.discriminatedUnion("kind", [
@@ -121,7 +121,7 @@ export const builderPreviewSaveRecordRequestSchema = z
       .uuid()
       .refine((value) => value !== "00000000-0000-0000-0000-000000000000"),
     expectedDraftRevision: revisionSchema,
-    command: saveRecordCommandV2Schema,
+    command: saveRecordCommandSchema,
   })
   .strict()
   .superRefine((request, context) => {
@@ -170,7 +170,7 @@ export const builderPreviewSaveRecordResultSchema = z.union([
   z
     .object({
       kind: z.literal("completed"),
-      result: saveRecordResultV2Schema.refine((result) => result.outcome !== "refused", {
+      result: saveRecordResultSchema.refine((result) => result.outcome !== "refused", {
         message: "A refused record save must be returned as a located refusal",
       }),
     })

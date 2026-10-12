@@ -1,10 +1,10 @@
 import { Render } from "@puckeditor/core";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type {
-  ApplicationShellV2,
+  ApplicationShell,
   ApplicationPuckRootShell,
-  PageDefinitionV2,
-  PageCompositionV2,
+  PageDefinition,
+  PageComposition,
   ProjectedNavigation,
 } from "@vortex/platform/schema";
 import {
@@ -13,7 +13,7 @@ import {
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
   VortexStyleRoot,
-  type ApplicationThemeV2,
+  type ApplicationTheme,
   type ThemeMode,
 } from "./theme";
 import { IconLibraryProvider } from "./icons";
@@ -31,18 +31,18 @@ import {
   VortexPuckThemeScopeProvider,
   type VortexPuckMetadata,
 } from "./puck-config";
-import { createVortexPuckAdapterV2 } from "./vortex-puck-adapter";
+import { createVortexPuckAdapter } from "./vortex-puck-adapter";
 import {
   resolveRootPlacementSlotWithContext,
   validatePlacementDependencies,
   validateProjectedAvailabilityTree,
-  type GuidedFormCompositionV2,
-  type MaterialisedApplicationCompositionV2,
+  type GuidedFormComposition,
+  type MaterialisedApplicationComposition,
   type ProjectedPageCapability,
-  type PlacementSlotV2,
+  type PlacementSlot,
 } from "./page-composition";
 
-const collectPlacementIds = (slot: PlacementSlotV2, ids: Set<string> = new Set()): Set<string> => {
+const collectPlacementIds = (slot: PlacementSlot, ids: Set<string> = new Set()): Set<string> => {
   for (const [id, placement] of Object.entries(slot.placements)) {
     ids.add(id);
     for (const child of Object.values(placement.slots)) collectPlacementIds(child, ids);
@@ -52,12 +52,12 @@ const collectPlacementIds = (slot: PlacementSlotV2, ids: Set<string> = new Set()
 
 const adapters = new WeakMap<
   PlatformComponentRegistry,
-  ReturnType<typeof createVortexPuckAdapterV2>
+  ReturnType<typeof createVortexPuckAdapter>
 >();
 const adapterFor = (registry: PlatformComponentRegistry) => {
   let adapter = adapters.get(registry);
   if (adapter === undefined) {
-    adapter = createVortexPuckAdapterV2(registry.toPlatformBlockCatalogue());
+    adapter = createVortexPuckAdapter(registry.toPlatformBlockCatalogue());
     adapters.set(registry, adapter);
   }
   return adapter;
@@ -65,10 +65,10 @@ const adapterFor = (registry: PlatformComponentRegistry) => {
 
 export type PagePuckRendererProps = Readonly<{
   composition:
-    | MaterialisedApplicationCompositionV2
-    | PageDefinitionV2
-    | PageCompositionV2
-    | GuidedFormCompositionV2
+    | MaterialisedApplicationComposition
+    | PageDefinition
+    | PageComposition
+    | GuidedFormComposition
     | ProjectedPageCapability;
   /**
    * Explicit breakpoint for preview canvases, rendered with that breakpoint's inline geometry and
@@ -76,9 +76,9 @@ export type PagePuckRendererProps = Readonly<{
    */
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
-  shells?: readonly ApplicationShellV2[];
+  shells?: readonly ApplicationShell[];
   /** The selected definition shell for a page already projected by the server. */
-  shell?: ApplicationShellV2;
+  shell?: ApplicationShell;
   pageId?: string;
   activeStepId?: string;
   guidedStepNavigation?: Readonly<{
@@ -114,7 +114,7 @@ export type PagePuckRendererProps = Readonly<{
    * Resolved #594 application theme. Defaults to the materialised composition's theme;
    * without one the readable platform defaults apply.
    */
-  theme?: ApplicationThemeV2 | undefined;
+  theme?: ApplicationTheme | undefined;
   /** Light, dark or system appearance for the runtime page or preview canvas. */
   themeMode?: ThemeMode | undefined;
   /** Organisation or viewer BCP 47 locale for date presentation. */

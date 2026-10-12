@@ -1,6 +1,6 @@
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   builderKeySchema,
   flowLiteralSchema,
   flowFormulaSchema,
@@ -12,7 +12,7 @@ import {
   parseFlowReference,
   sourceFlowTaskSchema,
   type ApplicationRootId,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
   type FlowFormula,
   type FlowRoundingMode,
   type SourceFlow,
@@ -27,7 +27,7 @@ export type StudioFlowTextContext = Readonly<{
   key: string;
   draftRevision: number;
   localLifetime: number;
-  source: Readonly<ApplicationSourceDocumentV2>;
+  source: Readonly<ApplicationSourceDocument>;
 }>;
 
 export type StudioFlowTextProperty = Readonly<{ key: string; label: string; value: string }>;
@@ -54,7 +54,7 @@ export type StudioFlowTextCommand = Readonly<{
   text: string;
 }>;
 export type StudioFlowTextResult =
-  | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
+  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "stale" | "unsupported" | "invalid" | "no_change" }>;
 
 export type StudioFlowPresentationTaskType = "interface.show_message" | "interface.confirm";
@@ -132,7 +132,7 @@ const validContext = (context: StudioFlowTextContext): boolean =>
   context.key === context.source.key &&
   Number.isSafeInteger(context.draftRevision) && context.draftRevision > 0 &&
   Number.isSafeInteger(context.localLifetime) && context.localLifetime > 0 &&
-  applicationSourceDocumentV2Schema.safeParse(context.source).success;
+  applicationSourceDocumentSchema.safeParse(context.source).success;
 
 const editableProperties = (
   flow: SourceFlow,
@@ -246,7 +246,7 @@ export const applyStudioFlowTextCommand = (
       return { kind: "invalid" };
     if (command.text === property.value) return { kind: "no_change" };
 
-    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     const target = detached.entries.find(({ task, path }) => task.id === command.taskId &&
       samePath(path, command.taskPath));
@@ -254,7 +254,7 @@ export const applyStudioFlowTextCommand = (
     const value = target.task.properties[command.property];
     if (value?.kind !== "literal" || value.literal.type !== "text") return { kind: "invalid" };
     value.literal.value = command.text;
-    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
     // The schema validates; its parsed defaults/transforms must not rewrite untouched source.
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
@@ -324,12 +324,12 @@ export const applyStudioFlowPresentationCommand = (
     if (hasTitle && command.taskType === "interface.confirm" && typeof command.title === "string")
       task.properties.title = { kind: "literal", literal: { type: "text", value: command.title } };
     if (!sourceFlowTaskSchema.safeParse(task).success) return { kind: "invalid" };
-    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     detached.flow.tasks.push(task);
     // Recheck shared bounds and full source shape without adopting parsed defaults or transforms.
     outline({ ...current, source: candidate }, expectedSelection);
-    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
 };
@@ -502,7 +502,7 @@ export const applyStudioFlowCalculateCommand = (
       if (JSON.stringify(settings) === JSON.stringify(normalized)) return { kind: "no_change" };
     } else if (original.entries.length >= flowMaximumTaskCount ||
       original.entries.some(({ task }) => task.id === command.taskId)) return { kind: "invalid" };
-    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     if (command.kind === "append_calculate") {
       const task: Extract<SourceFlowTask, { properties: unknown }> = {
@@ -517,7 +517,7 @@ export const applyStudioFlowCalculateCommand = (
       task.properties.formula = { kind: "formula", formula };
     }
     outline({ ...current, source: candidate }, expectedSelection);
-    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
 };
@@ -581,7 +581,7 @@ export const applyStudioFlowPresentationMoveCommand = (
     if (option === undefined) return { kind: "unsupported" };
     if (option.neighborId !== command.neighborId || !samePath(option.neighborPath, command.neighborPath))
       return { kind: "stale" };
-    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     const moved = detached.flow.tasks[index];
     const neighbor = detached.flow.tasks[neighborIndex];
@@ -590,7 +590,7 @@ export const applyStudioFlowPresentationMoveCommand = (
     detached.flow.tasks[index] = neighbor;
     detached.flow.tasks[neighborIndex] = moved;
     outline({ ...current, source: candidate }, expectedSelection);
-    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
 };
@@ -612,7 +612,7 @@ const removableMessageTask = (task: SourceFlowTask): boolean => {
 };
 
 /** Refuse retained references; never turn deletion into an implicit reference repair. */
-const hasRetainedTaskReference = (source: Readonly<ApplicationSourceDocumentV2>, taskId: string): boolean => {
+const hasRetainedTaskReference = (source: Readonly<ApplicationSourceDocument>, taskId: string): boolean => {
   // The whole source has already passed its shared node, depth and cycle bounds in outline.
   const pending: unknown[] = [source];
   const seen = new WeakSet<object>();
@@ -679,12 +679,12 @@ export const applyStudioFlowPresentationRemovalCommand = (
     if (task === undefined || task.id !== command.taskId) return { kind: "stale" };
     if (!presentationRemoval(current, expectedSelection, command.taskId, command.taskPath))
       return { kind: "unsupported" };
-    const candidate: ApplicationSourceDocumentV2 = structuredClone(current.source);
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
     if (detached.flow.tasks[index]?.id !== command.taskId) return { kind: "stale" };
     detached.flow.tasks.splice(index, 1);
     outline({ ...current, source: candidate }, expectedSelection);
-    if (!applicationSourceDocumentV2Schema.safeParse(candidate).success) return { kind: "invalid" };
+    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
     return { kind: "applied", source: candidate };
   } catch { return { kind: "invalid" }; }
 };

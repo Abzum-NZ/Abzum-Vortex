@@ -14,7 +14,7 @@ import {
   selectApplicationContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
-  sourceIdentityAssignmentV3Schema,
+  sourceIdentityAssignmentSchema,
   storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
@@ -66,7 +66,7 @@ export class DefinitionHistoryError extends Error {
   }
 }
 
-const currentIdentityEvidenceSchema = sourceIdentityAssignmentV3Schema
+const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
   .extend({ ownerScope: z.string().min(1).max(500) })
   .strict();
 

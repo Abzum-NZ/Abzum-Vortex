@@ -1,10 +1,10 @@
 import {
-  applicationRootIdSchema, applicationSourceDocumentV2Schema, organizationIdSchema,
+  applicationRootIdSchema, applicationSourceDocumentSchema, organizationIdSchema,
   revisionSchema, fingerprintSchema, timestampSchema,
   sourceQualifiedConditionSchema,
   namespacedKeySchema, moduleRootIdSchema, recordTypeIdSchema, semanticVersionSchema,
-  moduleFieldV3Schema, moduleFieldValueV2Schemas, builderKeySchema,
-  type ApplicationSourceDocumentV2, type ConditionNode, type ModuleFieldV3,
+  moduleFieldSchema, moduleFieldValueSchemas, builderKeySchema,
+  type ApplicationSourceDocument, type ConditionNode, type ModuleField,
 } from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
   type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-controls";
@@ -20,7 +20,7 @@ export type StudioApplicationConditionContext = Readonly<{
   recordReference: string; fieldRecordReference: string; recordTypeId: string;
   module: Readonly<{ organizationId: string; key: string; rootId: string; releaseRevision: number;
     releaseVersion: string; contentFingerprint: string; resolutionFingerprint: string }>;
-  fields: readonly Readonly<{ field: ModuleFieldV3; aliases: readonly string[];
+  fields: readonly Readonly<{ field: ModuleField; aliases: readonly string[];
     preferredAlias: string; componentOwner: string }>[];
 }>;
 export type StudioApplicationConditionContextResult =
@@ -69,7 +69,7 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
       !Array.isArray(item.aliases) || item.aliases.length < 1 || item.aliases.length > 2 ||
       !builderKeySchema.safeParse(item.preferredAlias).success || !sourceAliasValid(item.componentOwner))
       return undefined;
-    const parsed = moduleFieldV3Schema.safeParse(item.field);
+    const parsed = moduleFieldSchema.safeParse(item.field);
     if (!parsed.success || !supportedTypes.has(parsed.data.type) ||
       parsed.data.key !== item.preferredAlias || !item.aliases.includes(item.preferredAlias) ||
       identifiers.has(parsed.data.fieldId) || owners.has(item.componentOwner as string)) return undefined;
@@ -108,15 +108,15 @@ export const sameStudioVisibilityCondition = (left: ConditionNode | undefined, r
   return false;
 };
 
-type SourceSlot = ApplicationSourceDocumentV2["body"]["shells"][number]["layout"];
+type SourceSlot = ApplicationSourceDocument["body"]["shells"][number]["layout"];
 type SourcePlacement = SourceSlot["placements"][string];
 export type StudioVisibilityTarget = Readonly<{ pageAlias: string; recordReference: string;
   placementAlias: string; path: readonly (string | number)[]; placement: SourcePlacement }>;
 
 /** Only a unique, directly page-owned detail placement is editable. */
-export function resolveStudioVisibilityTarget(source: ApplicationSourceDocumentV2,
+export function resolveStudioVisibilityTarget(source: ApplicationSourceDocument,
   selection: StudioSemanticSelection | null): StudioVisibilityTarget | undefined {
-  if (selection?.kind !== "placement" || !applicationSourceDocumentV2Schema.safeParse(source).success) return undefined;
+  if (selection?.kind !== "placement" || !applicationSourceDocumentSchema.safeParse(source).success) return undefined;
   const placementAlias = selection.placementAlias;
   const seen: { placement: SourcePlacement; path: (string | number)[]; pageAlias?: string;
     recordReference?: string; top: boolean }[] = [];
@@ -175,7 +175,7 @@ export function validateStudioVisibilityCondition(condition: ConditionNode | und
       if (reference?.source !== "field" || literal?.source !== "value" || literal.value === null) continue;
       const field = metadata.fields.find((item) => item.field.fieldId === reference.fieldId)?.field;
       if (field === undefined) continue;
-      const leaf = moduleFieldValueV2Schemas[field.type];
+      const leaf = moduleFieldValueSchemas[field.type];
       const collection = side === "right" && (node.operator === "in" || node.operator === "not_in");
       const valid = collection && Array.isArray(literal.value)
         ? literal.value.every((value) => value === null || leaf.safeParse(value).success)
@@ -339,8 +339,8 @@ export function projectStudioVisibilityEditor(context: StudioCompositionContext,
 }
 
 export type StudioVisibilityCommandResult =
-  | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
-  | Readonly<{ kind: "noop"; source: Readonly<ApplicationSourceDocumentV2> }>
+  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
+  | Readonly<{ kind: "noop"; source: Readonly<ApplicationSourceDocument> }>
   | Readonly<{ kind: "stale" | "unsupported" }>
   | Readonly<{ kind: "invalid"; issues: readonly Readonly<{ path: readonly (string | number)[]; message: string }>[] }>;
 
@@ -363,12 +363,12 @@ export function applyStudioVisibilityCondition(expected: StudioCompositionContex
   if (sameStudioVisibilityCondition(model.condition, condition)) return { kind: "noop", source: current.source };
   if (authored !== undefined && !sourceQualifiedConditionSchema.safeParse(authored).success)
     return { kind: "invalid", issues: [{ path: base, message: "The authored condition is invalid." }] };
-  const candidate = structuredClone(current.source) as ApplicationSourceDocumentV2;
+  const candidate = structuredClone(current.source) as ApplicationSourceDocument;
   const target = resolveStudioVisibilityTarget(candidate, selection);
   if (target === undefined) return { kind: "stale" };
   if (authored === undefined) delete target.placement.visibility_condition;
   else target.placement.visibility_condition = authored;
-  const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success) return { kind: "invalid", issues: parsed.error.issues.map((issue) => ({
     path: issue.path.filter((part): part is string | number => typeof part === "string" || typeof part === "number"),
     message: "The application source is invalid at this location.",

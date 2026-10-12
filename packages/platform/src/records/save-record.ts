@@ -8,16 +8,16 @@ import {
   eventOccurrenceIdSchema,
   fieldIdSchema,
   organizationRuntimeSettingsSchema,
-  recordTypeDefinitionV3Schema,
-  saveRecordCommandV2Schema,
-  saveRecordResultV2Schema,
+  recordTypeDefinitionSchema,
+  saveRecordCommandSchema,
+  saveRecordResultSchema,
   writableSystemProjectionRegistrations,
   type IdentitySession,
   type ExecutionAuthorityContext,
   type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
-  type SaveRecordCommandV2,
-  type SaveRecordResultV2,
+  type SaveRecordCommand,
+  type SaveRecordResult,
 } from "../schema";
 import {
   createHumanOrganizationRequestService,
@@ -48,7 +48,7 @@ type SaveRow = DatabaseRow & { readonly result: unknown };
 /** @internal Shared only by the fixed named-action save composition. */
 export type PreparedSave = Readonly<{
   outcome: "prepared";
-  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
+  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>;
   existingValues: Readonly<Record<string, unknown>>;
   readableFieldIds: ReadonlySet<string>;
   correlationId: string;
@@ -58,7 +58,7 @@ export type PreparedSave = Readonly<{
 
 type PreparationOutcome =
   | PreparedSave
-  | Readonly<{ outcome: "replayed"; result: SaveRecordResultV2 }>
+  | Readonly<{ outcome: "replayed"; result: SaveRecordResult }>
   | Readonly<{ outcome: "refused_recorded" }>
   | Readonly<{ outcome: "conflict"; correlationId?: string }>
   | Readonly<{ outcome: "unavailable"; correlationId?: string }>;
@@ -100,7 +100,7 @@ const recordedRefusal = Symbol("recordedRecordSaveRefusal");
 const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 
 const writableSystemProjection = (
-  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
+  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
 ) => {
   const registration =
     writableSystemProjectionRegistrations[
@@ -130,7 +130,7 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   const value = candidate as Record<string, unknown>;
   const correlationId = typeof value.correlationId === "string" ? value.correlationId : undefined;
   if (value.outcome === "saved") {
-    const replay = saveRecordResultV2Schema.safeParse({
+    const replay = saveRecordResultSchema.safeParse({
       contractVersion: "2.0.0",
       outcome: "saved",
       recordId: value.recordId,
@@ -150,7 +150,7 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome !== "prepared")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
-  const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
+  const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
   // A system projection has no ordinary write path. Only an exact entry in the closed protected
   // writer registration can reach its matching protected SQL writer.
   if (
@@ -238,8 +238,8 @@ const correctionsFor = (
 const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
-): SaveRecordResultV2 =>
-  saveRecordResultV2Schema.parse({
+): SaveRecordResult =>
+  saveRecordResultSchema.parse({
     contractVersion: "2.0.0",
     outcome: "refused",
     error: {
@@ -251,7 +251,7 @@ const safeRefusal = (
 
 const prepare = async (
   transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommandV2,
+  command: SaveRecordCommand,
   activityId: string,
 ): Promise<PreparationOutcome> => {
   await transaction.query`set local role vortex_runtime`;
@@ -299,7 +299,7 @@ export const parseRelationshipTotalPreparation = (
     if (typeof candidateRecord !== "object" || candidateRecord === null)
       return { outcome: "refused" };
     const record = candidateRecord as Record<string, unknown>;
-    const recordType = recordTypeDefinitionV3Schema.safeParse(record.recordType);
+    const recordType = recordTypeDefinitionSchema.safeParse(record.recordType);
     const concurrencyNumber =
       record.concurrencyNumber === undefined ? undefined : revision(record.concurrencyNumber);
     if (
@@ -318,7 +318,7 @@ export const parseRelationshipTotalPreparation = (
       if (typeof candidateSource !== "object" || candidateSource === null)
         return { outcome: "refused" };
       const source = candidateSource as Record<string, unknown>;
-      const sourceRecordType = recordTypeDefinitionV3Schema.safeParse(source.sourceRecordType);
+      const sourceRecordType = recordTypeDefinitionSchema.safeParse(source.sourceRecordType);
       if (
         !sourceRecordType.success ||
         typeof source.relationshipId !== "string" ||
@@ -369,7 +369,7 @@ export const parseRelationshipTotalPreparation = (
 
 const prepareRelationshipTotals = async (
   transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommandV2,
+  command: SaveRecordCommand,
   activityId: string,
 ): Promise<RelationshipTotalPreparationOutcome> => {
   await transaction.query`set local role vortex_runtime`;
@@ -390,8 +390,8 @@ const prepareRelationshipTotals = async (
 
 const persist = async (
   transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommandV2,
-  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
+  command: SaveRecordCommand,
+  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
   finalValues: Readonly<Record<string, unknown>>,
   activityId: string,
   occurrenceId: string,
@@ -449,13 +449,13 @@ const persist = async (
 };
 
 const settingsFieldId = (
-  recordType: ReturnType<typeof recordTypeDefinitionV3Schema.parse>,
+  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
   key: string,
 ): string | undefined => recordType.fields.find((field) => field.key === key)?.fieldId;
 
 const invalidSettingsCorrections = (
   prepared: PreparedSave,
-  command: SaveRecordCommandV2,
+  command: SaveRecordCommand,
   finalValues: Readonly<Record<string, unknown>>,
 ): readonly RecordSaveFieldCorrection[] | undefined => {
   if (
@@ -539,7 +539,7 @@ export const readOrganizationRuntimeSettings = async (transaction: RequestDataba
  * The save result plus any before-save rule warnings of a saved attempt. The
  * closed result contract has no warning field, so they travel beside it.
  */
-export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResultV2> &
+export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
 export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies &
@@ -566,7 +566,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       // Do not turn a non-person authority into a person session on this adapter.
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
-      const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
+      const command = saveRecordCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
 
@@ -697,7 +697,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               );
               return corrections === undefined || corrections.length === 0
                 ? safeRefusal(prepared.correlationId, "operation_refused")
-                : saveRecordResultV2Schema.parse({
+                : saveRecordResultSchema.parse({
                     contractVersion: "2.0.0",
                     outcome: "correction_required",
                     correlationId: prepared.correlationId,
@@ -720,7 +720,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 code: "field_refused" as const,
                 fieldId: check.fieldId,
               }));
-              return saveRecordResultV2Schema.parse({
+              return saveRecordResultSchema.parse({
                 contractVersion: "2.0.0",
                 outcome: "correction_required",
                 correlationId: prepared.correlationId,
@@ -750,7 +750,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               if (corrections === undefined)
                 return safeRefusal(prepared.correlationId, "operation_refused");
               if (corrections.length > 0)
-                return saveRecordResultV2Schema.parse({
+                return saveRecordResultSchema.parse({
                   contractVersion: "2.0.0",
                   outcome: "correction_required",
                   correlationId: prepared.correlationId,
@@ -784,7 +784,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               );
             const concurrencyNumber = revision(stored.concurrencyNumber);
             if (concurrencyNumber === undefined) throw new Error("RECORD_SAVE_RESULT_INVALID");
-            return saveRecordResultV2Schema.parse({
+            return saveRecordResultSchema.parse({
               contractVersion: "2.0.0",
               outcome: "saved",
               recordId: stored.recordId,
@@ -799,7 +799,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         if (result.kind !== "available") return result;
         if (result.value === restartRelationshipTotalSave) continue;
         if (result.value === recordedRefusal) return { kind: "unavailable" };
-        const value = result.value as SaveRecordResultV2;
+        const value = result.value as SaveRecordResult;
         return value.outcome === "saved" &&
           attempted.rules !== undefined &&
           attempted.rules.warnings.length > 0

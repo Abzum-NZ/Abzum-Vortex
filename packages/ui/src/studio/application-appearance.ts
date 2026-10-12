@@ -1,13 +1,13 @@
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   isRecord,
   revisionSchema,
-  sourceApplicationThemeV2Schema,
-  type ApplicationSourceDocumentV2,
+  sourceApplicationThemeSchema,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
-export type StudioApplicationTheme = ApplicationSourceDocumentV2["body"]["theme"];
+export type StudioApplicationTheme = ApplicationSourceDocument["body"]["theme"];
 export type StudioThemeTokenValue = StudioApplicationTheme["token_overrides"][string];
 export type StudioAppearanceRequest = Readonly<{
   rootId: string;
@@ -49,7 +49,7 @@ export const parseStudioAppearanceRequest = (candidate: unknown): StudioAppearan
       !Object.hasOwn(candidate, "tokenOverrides")) return undefined;
   const root = applicationRootIdSchema.safeParse(candidate.rootId);
   const revision = revisionSchema.safeParse(candidate.expectedDraftRevision);
-  const overrides = sourceApplicationThemeV2Schema.pick({ token_overrides: true }).strict()
+  const overrides = sourceApplicationThemeSchema.pick({ token_overrides: true }).strict()
     .safeParse({ token_overrides: candidate.tokenOverrides });
   return root.success && revision.success && overrides.success
     ? { rootId: root.data, expectedDraftRevision: revision.data, tokenOverrides: overrides.data.token_overrides }
@@ -69,12 +69,12 @@ export const studioAppearanceValueKey = (value: unknown): string => {
 
 /** A matched valid advisory response changes only overrides; saving still uses the human writer. */
 export const applyStudioAppearance = (
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   rootId: string,
   draftRevision: number,
   submitted: StudioAppearanceRequest,
   response: StudioAppearanceResult,
-): ApplicationSourceDocumentV2 | undefined => {
+): ApplicationSourceDocument | undefined => {
   if (response.kind !== "available" || !response.valid || response.failures.length !== 0 ||
       rootId !== submitted.rootId || rootId !== response.rootId ||
       draftRevision !== submitted.expectedDraftRevision || draftRevision !== response.draftRevision ||
@@ -82,8 +82,8 @@ export const applyStudioAppearance = (
       studioAppearanceValueKey(source.body.theme.base) !== studioAppearanceValueKey(response.theme.base) ||
       studioAppearanceValueKey(source.body.theme.selection) !== studioAppearanceValueKey(response.theme.selection))
     return undefined;
-  const candidate = applicationSourceDocumentV2Schema.parse(structuredClone(source));
+  const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
   candidate.body.theme.token_overrides = structuredClone(response.theme.token_overrides);
-  const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;
 };

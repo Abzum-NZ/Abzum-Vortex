@@ -3,14 +3,14 @@ import "server-only";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   builderKeySchema,
   fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
   sessionContextSchema,
-  type ApplicationCompilationOutputV2,
-  type ApplicationSourceDocumentV2,
+  type ApplicationCompilationOutput,
+  type ApplicationSourceDocument,
   type Fingerprint,
   type IdentitySession,
   type OrganizationId,
@@ -74,7 +74,7 @@ const samePath = (left: readonly (string | number)[] | undefined, right: readonl
 
 /** Bind authored aliases to the compiler's identity evidence, never to a guessed UUID. */
 const hasResolvedIdentity = (
-  output: ApplicationCompilationOutputV2,
+  output: ApplicationCompilationOutput,
   sourcePath: readonly (string | number)[],
   canonicalPath: readonly (string | number)[],
 ): boolean => {
@@ -86,8 +86,8 @@ const hasResolvedIdentity = (
 };
 
 const resolveSavedSelection = (
-  source: ApplicationSourceDocumentV2,
-  output: ApplicationCompilationOutputV2,
+  source: ApplicationSourceDocument,
+  output: ApplicationCompilationOutput,
   selectors: Pick<z.infer<typeof savedHomepageRequestSchema>, "pageKey" | "stepAlias">,
 ): SavedPreviewSelection | undefined => {
   const pageKey = selectors.pageKey ?? source.body.home_page;
@@ -214,7 +214,7 @@ export const previewSavedStudioApplication = async (
           const command = { rootId: request.rootId, expectedDraftRevision: request.draftRevision };
           const initial = await readApplicationDefinitionDraft(transaction, scope, command);
           if (initial.sourceFingerprint !== parsed.data.sourceFingerprint) return { kind: "conflict" };
-          const source = applicationSourceDocumentV2Schema.safeParse(initial.source);
+          const source = applicationSourceDocumentSchema.safeParse(initial.source);
           if (!source.success) return { kind: "refused", reason: "content_invalid" };
           const compiler = createDatabaseDefinitionPublicationService(
             installedReleaseCatalogue, transaction, authority,

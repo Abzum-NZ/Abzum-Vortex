@@ -80,7 +80,7 @@ This sequence defines one protected Record operation, not a transaction around a
 
 ### Private recalculation scope
 
-The existing human `SaveRecordCommandV2` remains the closed input for an
+The existing human `SaveRecordCommand` remains the closed input for an
 ordinary create or update. It deliberately contains no actor, organisation,
 Application, installed binding, row-scope, authority declaration or generated
 parent mutation. Parsing a valid command is therefore not authority to use it:
@@ -166,7 +166,7 @@ contract and the retired-writer list below govern new work.
 The command carries a contract version, command identifier, subject record-type
 identifier, and - only for an existing record - the subject record identifier
 and expected concurrency number. A new record omits both and starts its ordered
-mutation list with `create_subject`. Like `SaveRecordCommandV2`, the command
+mutation list with `create_subject`. Like `SaveRecordCommand`, the command
 carries no actor, organisation, Application, installed binding, invoking flow
 or action, row scope or authority declaration.
 

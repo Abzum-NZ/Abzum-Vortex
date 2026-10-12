@@ -1,6 +1,6 @@
 import "server-only";
 
-import { applicationSearchSchema, moduleFieldValueV2Schemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocumentV2, type SelectedOrganizationScope } from "../schema";
+import { applicationSearchSchema, moduleFieldValueSchemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocument, type SelectedOrganizationScope } from "../schema";
 import { matchLiteralSearch } from "./literal-search";
 import { searchPriorityWeights, type SearchDocument } from "./document-store";
 import type { PermittedSearchCurrentReadRequest } from "./permitted-search";
@@ -30,7 +30,7 @@ const boundedDisplayText = (value: string): string | undefined => {
   return (last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd() || undefined;
 };
 
-type RichTextChildren = Extract<RecordRichTextDocumentV2["blocks"][number], { kind: "paragraph" }>["children"];
+type RichTextChildren = Extract<RecordRichTextDocument["blocks"][number], { kind: "paragraph" }>["children"];
 
 /** The existing strict value parser bounds nesting; only visible inline words are projected. */
 const richInlineText = (children: RichTextChildren): string => children.map((inline) =>
@@ -40,7 +40,7 @@ const scalarDisplayText = (value: unknown): string | undefined => {
   if (typeof value === "string") return value;
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
   if (typeof value === "boolean") return String(value);
-  const money = moduleFieldValueV2Schemas.money.safeParse(value);
+  const money = moduleFieldValueSchemas.money.safeParse(value);
   return money.success ? `${money.data.amount} ${money.data.currency}` : undefined;
 };
 
@@ -49,15 +49,15 @@ const displayValue = (value: JsonValue | undefined): string | undefined => {
   const scalar = scalarDisplayText(value);
   if (scalar !== undefined) return boundedDisplayText(scalar);
   if (Array.isArray(value)) {
-    const choices = moduleFieldValueV2Schemas.several_choices.safeParse(value);
+    const choices = moduleFieldValueSchemas.several_choices.safeParse(value);
     if (choices.success) return boundedDisplayText(choices.data.join(", "));
-    const table = moduleFieldValueV2Schemas.table.safeParse(value);
+    const table = moduleFieldValueSchemas.table.safeParse(value);
     if (!table.success) return undefined;
     // Table cells have the existing closed scalar grammar, not identity-bearing nested values.
     return boundedDisplayText(table.data.map((row) => Object.keys(row).sort()
       .map((key) => scalarDisplayText(row[key])).filter((text) => text !== undefined).join(", ")).join("; "));
   }
-  const document = moduleFieldValueV2Schemas.formatted_text.safeParse(value);
+  const document = moduleFieldValueSchemas.formatted_text.safeParse(value);
   if (!document.success) return undefined;
   const text: string[] = [];
   for (const block of document.data.blocks) {

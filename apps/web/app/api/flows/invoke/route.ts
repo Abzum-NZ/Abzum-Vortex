@@ -25,11 +25,11 @@ import {
   flowReadFieldsTypeMapSchema,
   fieldIdSchema,
   flowBindingInvocationSchema,
-  installedNamedActionReferenceV2Schema,
+  installedNamedActionReferenceSchema,
   recordIdSchema,
   recordTypeIdSchema,
   sameId,
-  type ApplicationContentV2,
+  type ApplicationContent,
   type ExactDefinitionDependency,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
@@ -37,7 +37,7 @@ import {
   type FormContinuationOutcome,
   type FormContinuationRequest,
   type IdentitySession,
-  type ModuleDefinitionConsumerReadResultV3,
+  type ModuleDefinitionConsumerReadResult,
   type OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
 import { createReferenceChoiceService, createViewerSafeRecordLinkReadService } from "@web/platform-server";
@@ -207,7 +207,7 @@ type ModuleDependency = Extract<ExactDefinitionDependency, { kind: "module" }>;
 
 const moduleDependencyMatches = (
   dependency: ModuleDependency,
-  release: ModuleDefinitionConsumerReadResultV3,
+  release: ModuleDefinitionConsumerReadResult,
 ): boolean =>
   sameId(dependency.rootId, release.rootId) &&
   dependency.key === release.definitionKey &&
@@ -219,12 +219,12 @@ const moduleDependencyMatches = (
 /** Resolve only the exact Module closure reachable from the installed Application manifests. */
 const installedModuleClosure = (
   application: Readonly<{
-    content: ApplicationContentV2;
+    content: ApplicationContent;
     dependencyManifest: readonly ExactDefinitionDependency[];
   }>,
-  releases: readonly ModuleDefinitionConsumerReadResultV3[],
-): ReadonlyMap<string, ModuleDefinitionConsumerReadResultV3> | undefined => {
-  const byRoot = new Map<string, ModuleDefinitionConsumerReadResultV3>();
+  releases: readonly ModuleDefinitionConsumerReadResult[],
+): ReadonlyMap<string, ModuleDefinitionConsumerReadResult> | undefined => {
+  const byRoot = new Map<string, ModuleDefinitionConsumerReadResult>();
   for (const release of releases) {
     const root = release.rootId.toLowerCase();
     if (byRoot.has(root)) return undefined;
@@ -244,7 +244,7 @@ const installedModuleClosure = (
     if (matches.length !== 1) return undefined;
   }
 
-  const reachable = new Map<string, ModuleDefinitionConsumerReadResultV3>();
+  const reachable = new Map<string, ModuleDefinitionConsumerReadResult>();
   const pending = [...directDependencies];
   while (pending.length > 0) {
     const dependency = pending.pop();
@@ -266,10 +266,10 @@ const installedModuleClosure = (
 
 const installedSelectedRecordReadContext = (
   application: Readonly<{
-    content: ApplicationContentV2;
+    content: ApplicationContent;
     dependencyManifest: readonly ExactDefinitionDependency[];
   }>,
-  releases: readonly ModuleDefinitionConsumerReadResultV3[],
+  releases: readonly ModuleDefinitionConsumerReadResult[],
 ): InstalledSelectedRecordReadContext | undefined => {
   const modules = installedModuleClosure(application, releases);
   if (modules === undefined) return undefined;
@@ -278,8 +278,8 @@ const installedSelectedRecordReadContext = (
     string,
     Array<
       Readonly<{
-        module: ModuleDefinitionConsumerReadResultV3;
-        recordType: ModuleDefinitionConsumerReadResultV3["content"]["recordTypes"][number];
+        module: ModuleDefinitionConsumerReadResult;
+        recordType: ModuleDefinitionConsumerReadResult["content"]["recordTypes"][number];
       }>
     >
   >();
@@ -1006,7 +1006,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ) => {
           for (const action of actions) {
             const key = String(action.key);
-            const reference = installedNamedActionReferenceV2Schema.safeParse({
+            const reference = installedNamedActionReferenceSchema.safeParse({
               ...owner,
               actionId: action.actionId,
             });

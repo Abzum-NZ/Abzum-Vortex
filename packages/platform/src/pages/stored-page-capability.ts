@@ -27,7 +27,7 @@ import {
   type ConditionNode,
   type JsonValue,
 } from "../schema";
-import { evaluateTypedConditionV2, TypedConditionEvaluationError } from "../rules/index";
+import { evaluateTypedCondition, TypedConditionEvaluationError } from "../rules/index";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -378,11 +378,11 @@ const projectedRoots = (projected: Readonly<Record<string, unknown>>): unknown[]
   return Object.values((composition.stepContent ?? {}) as Record<string, unknown>);
 };
 
-const v2Placements = (slot: unknown): Record<string, unknown>[] => {
+const placementEntries = (slot: unknown): Record<string, unknown>[] => {
   const candidate = slot as { placements: Record<string, Record<string, unknown>> };
   return Object.entries(candidate.placements).flatMap(([placementId, placement]) => [
     { placementId, ...placement },
-    ...Object.values(placement.slots as Record<string, unknown>).flatMap(v2Placements),
+    ...Object.values(placement.slots as Record<string, unknown>).flatMap(placementEntries),
   ]);
 };
 
@@ -446,8 +446,8 @@ export const createStoredPageCapabilityService = (
       resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
       resolved.roots.kind === "page"
-        ? v2Placements(resolved.roots.main)
-        : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
+        ? placementEntries(resolved.roots.main)
+        : Object.values(resolved.roots.stepContent).flatMap(placementEntries);
     return {
       page,
       applicationShells: applicationRelease.content.shells,
@@ -609,7 +609,7 @@ export const createStoredPageCapabilityService = (
         if (unsupported) return refused("UNSUPPORTED_OPERAND");
         try {
           if (fieldIds.size === 0)
-            return supported(evaluateTypedConditionV2({
+            return supported(evaluateTypedCondition({
               condition: parsed.data,
               sourceRecordFields: [],
               declaredFieldIds: [],
@@ -672,7 +672,7 @@ export const createStoredPageCapabilityService = (
               return { kind: "not", condition: canonicalCondition(node.condition) };
             return { kind: node.kind, conditions: node.conditions.map(canonicalCondition) };
           };
-          return supported(evaluateTypedConditionV2({
+          return supported(evaluateTypedCondition({
             condition: canonicalCondition(parsed.data),
             sourceRecordFields: fields,
             declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),

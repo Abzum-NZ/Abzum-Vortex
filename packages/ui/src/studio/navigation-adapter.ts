@@ -122,7 +122,7 @@ const requiredChild = <T>(items: readonly T[], at: string): void => {
  * Creates the pure navigation adapter over the application pages a builder may link to. Each page
  * contributes only its identity and key, so the draft's own page definitions can be passed as-is.
  */
-export const createVortexNavigationAdapterV2 = (pagesInput: readonly StudioNavigationPage[]) => {
+export const createVortexNavigationAdapter = (pagesInput: readonly StudioNavigationPage[]) => {
   const keyByIdentity = new Map<PageId, string>();
   const identityByKey = new Map<string, PageId>();
   for (const [index, raw] of asArray(pagesInput, "pages").entries()) {

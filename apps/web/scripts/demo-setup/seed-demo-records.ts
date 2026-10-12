@@ -5,7 +5,7 @@ import {
   applicationRootIdSchema,
   identityAuthorityIdSchema,
   organizationSelectionCandidateSchema,
-  saveRecordCommandV2Schema,
+  saveRecordCommandSchema,
 } from "@vortex/platform/schema";
 import {
   createHumanOrganizationRequestService,
@@ -364,7 +364,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         organizationId: facts.system.organizationId,
         applicationRootId,
       }),
-      saveRecordCommandV2Schema.parse({
+      saveRecordCommandSchema.parse({
         contractVersion: "2.0.0",
         commandId: stableUuid(
           `${setupKey}/demo-seed/${key.startsWith("contact/") ? "v3" : "v2"}/${key}`,

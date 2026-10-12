@@ -1,14 +1,14 @@
 import {
-  definitionResolutionSnapshotV2Schema,
+  definitionResolutionSnapshotSchema,
   type ConditionNode,
-  type DefinitionResolutionSnapshotV2,
-  type ModuleFieldV3,
+  type DefinitionResolutionSnapshot,
+  type ModuleField,
   type sourceQualifiedConditionSchema,
 } from "../schema";
 import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 
-export type ApplicationCompositionResolutionV2 = Readonly<{
+export type ApplicationCompositionResolution = Readonly<{
   identity(
     kind:
       | "shell"
@@ -70,11 +70,28 @@ export type FieldInputSourceField = Readonly<{
 
 /** Publication can select only existing indexable fields, including safe derived inputs. */
 export const applicationSearchFieldIsSelectable = (
-  fields: readonly ModuleFieldV3[], fieldId: string,
+  fields: readonly ModuleField[],
+  fieldId: string,
 ): boolean => {
-  const indexable = new Set(["text", "long_text", "formatted_text", "whole_number", "decimal_number",
-    "money", "date", "date_time", "choice", "several_choices", "reference_number", "email_address",
-    "phone_number", "web_address", "table", "calculation", "total"]);
+  const indexable = new Set([
+    "text",
+    "long_text",
+    "formatted_text",
+    "whole_number",
+    "decimal_number",
+    "money",
+    "date",
+    "date_time",
+    "choice",
+    "several_choices",
+    "reference_number",
+    "email_address",
+    "phone_number",
+    "web_address",
+    "table",
+    "calculation",
+    "total",
+  ]);
   const byId = new Map(fields.map((field) => [String(field.fieldId).toLowerCase(), field]));
   if (byId.size !== fields.length) return false;
   const visiting = new Set<string>();
@@ -84,16 +101,27 @@ export const applicationSearchFieldIsSelectable = (
     const cached = decided.get(id);
     if (cached !== undefined) return cached;
     const field = byId.get(id);
-    if (field === undefined || visiting.has(id) || (field.personalData !== "none" && field.personalData !== "personal")) return false;
+    if (
+      field === undefined ||
+      visiting.has(id) ||
+      (field.personalData !== "none" && field.personalData !== "personal")
+    )
+      return false;
     visiting.add(id);
     const inputs = new Set<string>();
     const collect = (value: unknown): void => {
-      if (Array.isArray(value)) { value.forEach(collect); return; }
+      if (Array.isArray(value)) {
+        value.forEach(collect);
+        return;
+      }
       if (value === null || typeof value !== "object") return;
       for (const [key, item] of Object.entries(value)) {
-        if ((key === "fieldId" || key.endsWith("FieldId")) && typeof item === "string") inputs.add(item);
+        if ((key === "fieldId" || key.endsWith("FieldId")) && typeof item === "string")
+          inputs.add(item);
         else if (key.endsWith("FieldIds") && Array.isArray(item))
-          item.forEach((entry) => { if (typeof entry === "string") inputs.add(entry); });
+          item.forEach((entry) => {
+            if (typeof entry === "string") inputs.add(entry);
+          });
         else collect(item);
       }
     };
@@ -104,13 +132,19 @@ export const applicationSearchFieldIsSelectable = (
     return allowed;
   };
   const field = byId.get(fieldId.toLowerCase());
-  return field !== undefined && (field.searchPriority === "first" || field.searchPriority === "normal" || field.searchPriority === "last") &&
-    indexable.has(field.type) && safe(fieldId);
+  return (
+    field !== undefined &&
+    (field.searchPriority === "first" ||
+      field.searchPriority === "normal" ||
+      field.searchPriority === "last") &&
+    indexable.has(field.type) &&
+    safe(fieldId)
+  );
 };
 
-type ResolutionEvidenceV2 = Pick<DefinitionResolutionSnapshotV2, "definitions" | "identities">;
+type ResolutionEvidence = Pick<DefinitionResolutionSnapshot, "definitions" | "identities">;
 
-const identityOrder = (identity: DefinitionResolutionSnapshotV2["identities"][number]): string =>
+const identityOrder = (identity: DefinitionResolutionSnapshot["identities"][number]): string =>
   JSON.stringify([
     identity.definitionKey,
     identity.scope,
@@ -120,26 +154,26 @@ const identityOrder = (identity: DefinitionResolutionSnapshotV2["identities"][nu
     identity.identifier,
   ]);
 
-/** Builds exact V2 resolution evidence without making caller-provided array order authoritative. */
-export const createApplicationResolutionSnapshotV2 = (
-  input: ResolutionEvidenceV2,
-): DefinitionResolutionSnapshotV2 => {
+/** Builds exact  resolution evidence without making caller-provided array order authoritative. */
+export const createApplicationResolutionSnapshot = (
+  input: ResolutionEvidence,
+): DefinitionResolutionSnapshot => {
   const definitionKeys = input.definitions.map(({ kind, key }) => `${kind}:${key}`);
   if (new Set(definitionKeys).size !== definitionKeys.length)
-    throw new Error("V2 resolution evidence contains duplicate definition selections");
+    throw new Error(" resolution evidence contains duplicate definition selections");
   const identityKeys = input.identities.map(
     ({ definitionKey, scope, kind, alias }) => `${definitionKey}:${scope}:${kind}:${alias}`,
   );
   if (new Set(identityKeys).size !== identityKeys.length)
-    throw new Error("V2 resolution evidence contains duplicate identity lookup keys");
+    throw new Error(" resolution evidence contains duplicate identity lookup keys");
   const definitions = [...input.definitions].sort((left, right) =>
     compareCanonicalStrings(`${left.kind}:${left.key}`, `${right.kind}:${right.key}`),
   );
   const identities = [...input.identities].sort((left, right) =>
     compareCanonicalStrings(identityOrder(left), identityOrder(right)),
   );
-  const evidence = { contractVersion: "2.0.0" as const, definitions, identities };
-  return definitionResolutionSnapshotV2Schema.parse({
+  const evidence = { contractVersion: "3.0.0" as const, definitions, identities };
+  return definitionResolutionSnapshotSchema.parse({
     ...evidence,
     fingerprint: fingerprintCanonicalValue(evidence),
   });

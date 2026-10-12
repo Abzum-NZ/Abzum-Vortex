@@ -3,12 +3,12 @@ import "server-only";
 import {
   boardBlockSourceIsSupported,
   boardColumnContinuationRequestSchema,
-  exactDecimalTextV2Schema,
-  moneyValueV2Schema,
+  exactDecimalTextSchema,
+  moneyValueSchema,
   readBoardPlacementContract,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   sameId,
-  type BlockPlacementV2Contract,
+  type BlockPlacementContract,
   type BoardColumnSelector,
   type BoardPlacementContract,
   type IdentitySession,
@@ -42,7 +42,7 @@ type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
   "boardMembers" | "boardSummary"
 >;
-type PermissionProjectedPlacement = BlockPlacementV2Contract &
+type PermissionProjectedPlacement = BlockPlacementContract &
   Readonly<{
     availability?: "unavailable";
     unavailableReason?: "operation_unavailable";
@@ -109,11 +109,11 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): DisplayCellVal
         ? { kind: "number", value }
         : undefined;
     case "decimal_number": {
-      const decimal = exactDecimalTextV2Schema.safeParse(value);
+      const decimal = exactDecimalTextSchema.safeParse(value);
       return decimal.success ? { kind: "text", text: decimal.data } : undefined;
     }
     case "money": {
-      const money = moneyValueV2Schema.safeParse(value);
+      const money = moneyValueSchema.safeParse(value);
       return money.success
         ? { kind: "text", text: `${money.data.currency} ${money.data.amount}` }
         : undefined;
@@ -127,7 +127,7 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): DisplayCellVal
     case "web_address":
       return typeof value === "string" ? { kind: "text", text: value } : undefined;
     case "formatted_text": {
-      const document = richTextDocumentV2Schema.safeParse(value);
+      const document = richTextDocumentSchema.safeParse(value);
       return document.success ? { kind: "rich_text", document: document.data } : undefined;
     }
     case "choice": {
@@ -240,15 +240,15 @@ const metricValue = (
       if (typeof result.value === "number" && Number.isSafeInteger(result.value))
         return { kind: "number", value: result.value };
       {
-        const exact = exactDecimalTextV2Schema.safeParse(result.value);
+        const exact = exactDecimalTextSchema.safeParse(result.value);
         return exact.success ? { kind: "text", text: exact.data } : undefined;
       }
     case "decimal_number": {
-      const exact = exactDecimalTextV2Schema.safeParse(result.value);
+      const exact = exactDecimalTextSchema.safeParse(result.value);
       return exact.success ? { kind: "text", text: exact.data } : undefined;
     }
     case "money": {
-      const money = moneyValueV2Schema.safeParse(result.value);
+      const money = moneyValueSchema.safeParse(result.value);
       return money.success
         ? { kind: "text", text: `${money.data.currency} ${money.data.amount}` }
         : undefined;

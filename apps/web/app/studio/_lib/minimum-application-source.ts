@@ -1,7 +1,7 @@
 import {
-  applicationSourceDocumentV2Schema,
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  type ApplicationSourceDocumentV2,
+  applicationSourceDocumentSchema,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
 export type MinimumApplicationInputs = Readonly<{
@@ -17,7 +17,7 @@ export type MinimumApplicationInputs = Readonly<{
 }>;
 
 type MinimumApplicationSourceResult =
-  | Readonly<{ kind: "valid"; source: ApplicationSourceDocumentV2 }>
+  | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "invalid"; message: string }>;
 
 /** Authored aliases are local identities; permanent root identities come only from Definition. */
@@ -26,8 +26,8 @@ export const minimumApplicationSource = (
 ): MinimumApplicationSourceResult => {
   const applicationKey = inputs.key.trim();
   const permissionKey = `${applicationKey}.home.view`;
-  const theme = DEFAULT_PLATFORM_THEME_RELEASE_V2;
-  const parsed = applicationSourceDocumentV2Schema.safeParse({
+  const theme = DEFAULT_PLATFORM_THEME_RELEASE;
+  const parsed = applicationSourceDocumentSchema.safeParse({
     source_contract_version: "2.0.0",
     root_alias: "application_root",
     key: applicationKey,

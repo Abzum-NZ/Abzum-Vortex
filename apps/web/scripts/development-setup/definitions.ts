@@ -1,6 +1,6 @@
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
   platformIdSchema,
@@ -58,8 +58,8 @@ import type { PublishedRelease, SetupState } from "./state";
  */
 export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
   connectionTypeReleases: PLATFORM_CONNECTION_TYPE_RELEASES,
-  applicationCompositionV2: {
-    compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.compositionPolicy,
+  applicationComposition: {
+    compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
       ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => {
         void contentFingerprint;
@@ -73,7 +73,7 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
         void contentFingerprint;
         void catalogueFingerprint;
         return definition;
-      })(DEFAULT_PLATFORM_THEME_RELEASE_V2),
+      })(DEFAULT_PLATFORM_THEME_RELEASE),
     ],
   },
 };

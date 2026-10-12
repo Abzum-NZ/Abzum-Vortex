@@ -6,8 +6,8 @@ import {
   sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
-  applicationShellV2Schema,
-  applicationThemeV2Schema,
+  applicationShellSchema,
+  applicationThemeSchema,
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
@@ -16,7 +16,7 @@ import {
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
-  pageDefinitionV2Schema,
+  pageDefinitionSchema,
   pageIdSchema,
   permissionIdSchema,
   revisionSchema,
@@ -102,14 +102,14 @@ const applicationCandidateSchema = z
         z
           .object({
             state: applicationExperienceStateSchema,
-            page: pageDefinitionV2Schema,
+            page: pageDefinitionSchema,
           })
           .strict(),
       )
       .max(3)
       .optional(),
-    shells: z.array(applicationShellV2Schema).max(100).optional(),
-    theme: applicationThemeV2Schema.optional(),
+    shells: z.array(applicationShellSchema).max(100).optional(),
+    theme: applicationThemeSchema.optional(),
     roles: z
       .array(
         z
@@ -159,9 +159,9 @@ export const permittedApplicationSchema = z
 export const applicationExperienceSchema = z
   .object({
     state: applicationExperienceStateSchema,
-    page: pageDefinitionV2Schema,
-    shells: z.array(applicationShellV2Schema).max(1),
-    theme: applicationThemeV2Schema.optional(),
+    page: pageDefinitionSchema,
+    shells: z.array(applicationShellSchema).max(1),
+    theme: applicationThemeSchema.optional(),
   })
   .strict();
 

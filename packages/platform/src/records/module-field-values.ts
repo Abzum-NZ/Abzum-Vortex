@@ -16,83 +16,81 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
-import { richTextBlockV2Schema, richTextInlineV2Schema, type RichTextInlineV2 } from "./rich-text";
+import { richTextBlockSchema, richTextInlineSchema, type RichTextInline } from "./rich-text";
 
 const exactDecimalMessage = "Use exact base-10 text without exponent notation";
 const normalizedExactDecimalMessage = "Use normalized exact base-10 text";
 
 /** Authored exact text is preserved until compilation normalizes it. */
-export const sourceExactDecimalTextV2Schema = z
+export const sourceExactDecimalTextSchema = z
   .string()
   .refine((value) => parseExactDecimal(value) !== undefined, exactDecimalMessage);
 
 /** Canonical exact text has one representation for each base-10 value. */
-export const exactDecimalTextV2Schema = sourceExactDecimalTextV2Schema.refine(
+export const exactDecimalTextSchema = sourceExactDecimalTextSchema.refine(
   (value) => normalizeExactDecimal(value) === value,
   normalizedExactDecimalMessage,
 );
 
-export const currencyCodeV2Schema = z
-  .string()
-  .regex(/^[A-Z]{3}$/, "Use an uppercase currency code");
+export const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/, "Use an uppercase currency code");
 
-export const sourceMoneyValueV2Schema = z
-  .object({ amount: sourceExactDecimalTextV2Schema, currency: currencyCodeV2Schema })
+export const sourceMoneyValueSchema = z
+  .object({ amount: sourceExactDecimalTextSchema, currency: currencyCodeSchema })
   .strict();
 
-export const moneyValueV2Schema = z
-  .object({ amount: exactDecimalTextV2Schema, currency: currencyCodeV2Schema })
+export const moneyValueSchema = z
+  .object({ amount: exactDecimalTextSchema, currency: currencyCodeSchema })
   .strict();
 
-export const sourceRecordLinkValueV2Schema = z
+export const sourceRecordLinkValueSchema = z
   .object({ record_type: sourceQualifiedRecordTypeSchema, record_id: recordIdSchema })
   .strict();
 
-export const recordLinkValueV2Schema = z
+export const recordLinkValueSchema = z
   .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
   .strict();
 
-export const sourcePersonLinkValueV2Schema = z
+export const sourcePersonLinkValueSchema = z
   .object({ organization_account_id: organizationAccountIdSchema })
   .strict();
 
-export const personLinkValueV2Schema = z
+export const personLinkValueSchema = z
   .object({ organizationAccountId: organizationAccountIdSchema })
   .strict();
 
 /** Attachment order is meaningful for both single-file and multiple-file fields. */
-export const attachmentValueV2Schema = z.array(fileIdSchema);
+export const attachmentValueSchema = z.array(fileIdSchema);
 
-const recordRichTextCellV2Schema = z
-  .object({ children: z.array(richTextInlineV2Schema).min(1) })
+const recordRichTextCellSchema = z
+  .object({ children: z.array(richTextInlineSchema).min(1) })
   .strict();
-const recordRichTextRowV2Schema = z
-  .object({ cells: z.array(recordRichTextCellV2Schema).min(1) })
+const recordRichTextRowSchema = z
+  .object({ cells: z.array(recordRichTextCellSchema).min(1) })
   .strict();
-const recordRichTextTableBlockV2Schema = z
-  .object({ kind: z.literal("table"), rows: z.array(recordRichTextRowV2Schema).min(1) })
+const recordRichTextTableBlockSchema = z
+  .object({ kind: z.literal("table"), rows: z.array(recordRichTextRowSchema).min(1) })
   .strict();
-const recordRichTextFileBlockV2Schema = z
+const recordRichTextFileBlockSchema = z
   .object({ kind: z.literal("file"), fileId: fileIdSchema })
   .strict();
 
 /** Record-only blocks extend, but never mutate, the neutral Page-safe grammar. */
-export const recordRichTextBlockV2Schema = z.union([
-  richTextBlockV2Schema,
-  recordRichTextTableBlockV2Schema,
-  recordRichTextFileBlockV2Schema,
+export const recordRichTextBlockSchema = z.union([
+  richTextBlockSchema,
+  recordRichTextTableBlockSchema,
+  recordRichTextFileBlockSchema,
 ]);
 
-export const recordRichTextDocumentV2Schema = z
-  .object({ blocks: z.array(recordRichTextBlockV2Schema) })
+export const recordRichTextDocumentSchema = z
+  .object({ blocks: z.array(recordRichTextBlockSchema) })
   .strict();
 
-export type RecordRichTextDocumentV2 = z.infer<typeof recordRichTextDocumentV2Schema>;
-export type FormattedTextAllowedBlockV2 =
+export type RecordRichTextDocument = z.infer<typeof recordRichTextDocumentSchema>;
+export type FormattedTextAllowedBlock =
   "paragraph" | "heading" | "list" | "table" | "link" | "attachment";
 
 const inspectInlines = (
-  inlines: readonly RichTextInlineV2[],
+  inlines: readonly RichTextInline[],
 ): { visibleTextLength: number; containsLink: boolean } => {
   let visibleTextLength = 0;
   let containsLink = false;
@@ -107,11 +105,11 @@ const inspectInlines = (
   return { visibleTextLength, containsLink };
 };
 
-export const inspectRecordRichTextV2 = (
-  document: RecordRichTextDocumentV2,
-): { visibleTextLength: number; usedBlocks: ReadonlySet<FormattedTextAllowedBlockV2> } => {
+export const inspectRecordRichText = (
+  document: RecordRichTextDocument,
+): { visibleTextLength: number; usedBlocks: ReadonlySet<FormattedTextAllowedBlock> } => {
   let visibleTextLength = 0;
-  const usedBlocks = new Set<FormattedTextAllowedBlockV2>();
+  const usedBlocks = new Set<FormattedTextAllowedBlock>();
   for (const block of document.blocks) {
     if (block.kind === "file") {
       usedBlocks.add("attachment");
@@ -141,7 +139,7 @@ export const inspectRecordRichTextV2 = (
   return { visibleTextLength, usedBlocks };
 };
 
-export const exactDecimalWithinBoundsV2 = (
+export const exactDecimalWithinBounds = (
   value: ExactDecimal,
   minimum?: ExactDecimal,
   maximum?: ExactDecimal,
@@ -149,7 +147,7 @@ export const exactDecimalWithinBoundsV2 = (
   (minimum === undefined || compareExactDecimals(value, minimum) >= 0) &&
   (maximum === undefined || compareExactDecimals(value, maximum) <= 0);
 
-export const exactDecimalFitsDigitsV2 = (
+export const exactDecimalFitsDigits = (
   value: ExactDecimal,
   digitsBeforeDecimal: number,
   decimalPlaces: number,
@@ -158,79 +156,79 @@ export const exactDecimalFitsDigitsV2 = (
   return counts.digitsBeforeDecimal <= digitsBeforeDecimal && counts.decimalPlaces <= decimalPlaces;
 };
 
-const wholeNumberValueV2Schema = z.number().int();
-export const dateValueV2Schema = z.iso.date();
-const dateTimeValueV2Schema = z.iso.datetime({ offset: true });
-const choiceValueV2Schema = z.string().min(1).max(120);
-const severalChoicesValueV2Schema = z.array(choiceValueV2Schema);
-const referenceNumberValueV2Schema = z.string();
-const emailAddressValueV2Schema = z.email();
-const phoneNumberValueV2Schema = z.string();
-const webAddressValueV2Schema = safeHttpsUrlSchema;
-const sourceTableCellValueV2Schema = z.union([
+const wholeNumberValueSchema = z.number().int();
+export const dateValueSchema = z.iso.date();
+const dateTimeValueSchema = z.iso.datetime({ offset: true });
+const choiceValueSchema = z.string().min(1).max(120);
+const severalChoicesValueSchema = z.array(choiceValueSchema);
+const referenceNumberValueSchema = z.string();
+const emailAddressValueSchema = z.email();
+const phoneNumberValueSchema = z.string();
+const webAddressValueSchema = safeHttpsUrlSchema;
+const sourceTableCellValueSchema = z.union([
   z.string(),
   z.number().int(),
   z.boolean(),
-  sourceExactDecimalTextV2Schema,
-  sourceMoneyValueV2Schema,
+  sourceExactDecimalTextSchema,
+  sourceMoneyValueSchema,
 ]);
-const tableCellValueV2Schema = z.union([
+const tableCellValueSchema = z.union([
   z.string(),
   z.number().int(),
   z.boolean(),
-  exactDecimalTextV2Schema,
-  moneyValueV2Schema,
+  exactDecimalTextSchema,
+  moneyValueSchema,
 ]);
-const sourceTableValueV2Schema = z.array(z.record(builderKeySchema, sourceTableCellValueV2Schema));
-const tableValueV2Schema = z.array(z.record(builderKeySchema, tableCellValueV2Schema));
-const calculatedValueV2Schema = z.union([
+const sourceTableValueSchema = z.array(z.record(builderKeySchema, sourceTableCellValueSchema));
+const tableValueSchema = z.array(z.record(builderKeySchema, tableCellValueSchema));
+const calculatedValueSchema = z.union([
   z.string(),
-  wholeNumberValueV2Schema,
-  exactDecimalTextV2Schema,
-  moneyValueV2Schema,
+  wholeNumberValueSchema,
+  exactDecimalTextSchema,
+  moneyValueSchema,
   z.boolean(),
-  dateValueV2Schema,
-  dateTimeValueV2Schema,
+  dateValueSchema,
+  dateTimeValueSchema,
 ]);
 
 /** Leaf value contracts keyed by all twenty-two field types. */
-export const sourceModuleFieldValueV2Schemas = {
+export const sourceModuleFieldValueSchemas = {
   text: z.string(),
   long_text: z.string(),
-  formatted_text: recordRichTextDocumentV2Schema,
-  whole_number: wholeNumberValueV2Schema,
-  decimal_number: sourceExactDecimalTextV2Schema,
-  money: sourceMoneyValueV2Schema,
+  formatted_text: recordRichTextDocumentSchema,
+  whole_number: wholeNumberValueSchema,
+  decimal_number: sourceExactDecimalTextSchema,
+  money: sourceMoneyValueSchema,
   yes_no: z.boolean(),
-  date: dateValueV2Schema,
-  date_time: dateTimeValueV2Schema,
-  choice: choiceValueV2Schema,
-  several_choices: severalChoicesValueV2Schema,
-  reference_number: referenceNumberValueV2Schema,
-  email_address: emailAddressValueV2Schema,
-  phone_number: phoneNumberValueV2Schema,
-  web_address: webAddressValueV2Schema,
-  table: sourceTableValueV2Schema,
-  link: sourceRecordLinkValueV2Schema,
-  link_to_one_of_several: sourceRecordLinkValueV2Schema,
-  link_to_person: sourcePersonLinkValueV2Schema,
-  calculation: calculatedValueV2Schema,
-  total: calculatedValueV2Schema,
-  attachment: attachmentValueV2Schema,
+  date: dateValueSchema,
+  date_time: dateTimeValueSchema,
+  choice: choiceValueSchema,
+  several_choices: severalChoicesValueSchema,
+  reference_number: referenceNumberValueSchema,
+  email_address: emailAddressValueSchema,
+  phone_number: phoneNumberValueSchema,
+  web_address: webAddressValueSchema,
+  table: sourceTableValueSchema,
+  link: sourceRecordLinkValueSchema,
+  link_to_one_of_several: sourceRecordLinkValueSchema,
+  link_to_person: sourcePersonLinkValueSchema,
+  calculation: calculatedValueSchema,
+  total: calculatedValueSchema,
+  attachment: attachmentValueSchema,
 } as const satisfies Record<(typeof fieldTypeKeys)[number], z.ZodType>;
 
-export const moduleFieldValueV2Schemas = {
-  ...sourceModuleFieldValueV2Schemas,
-  decimal_number: exactDecimalTextV2Schema,
-  money: moneyValueV2Schema,
-  table: tableValueV2Schema,
-  link: recordLinkValueV2Schema,
-  link_to_one_of_several: recordLinkValueV2Schema,
-  link_to_person: personLinkValueV2Schema,
+export const moduleFieldValueSchemas = {
+  ...sourceModuleFieldValueSchemas,
+  decimal_number: exactDecimalTextSchema,
+  money: moneyValueSchema,
+  table: tableValueSchema,
+  link: recordLinkValueSchema,
+  link_to_one_of_several: recordLinkValueSchema,
+  link_to_person: personLinkValueSchema,
 } as const satisfies Record<(typeof fieldTypeKeys)[number], z.ZodType>;
 
-/** Cell types already supported by the V2 table field; values reuse the maps above. */
-export const tableCellTypeKeysV2 = [
+/** Cell types already supported by the  table field; values reuse the maps above. */
+export const tableCellTypeKeys = [
   "text",
   "whole_number",
   "decimal_number",

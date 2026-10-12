@@ -1,7 +1,7 @@
 import "server-only";
 
 import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
+  sourceIdentityAssignmentSchema} from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
@@ -44,7 +44,7 @@ import {
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 
-type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
+type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -158,7 +158,7 @@ const readLatestPageAdoptionRelease = async (
 
 const mapPageId = (
   source: StoredDefinitionSource,
-  identities: readonly SourceIdentityAssignmentV3[],
+  identities: readonly SourceIdentityAssignment[],
   alias: string,
 ): string => {
   if (source.kind !== "application") throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
@@ -202,7 +202,7 @@ export type StudioStandardPageAdoptionLoadResult =
 
 const toChoices = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
+  identities: readonly SourceIdentityAssignment[],
   currentContent: Parameters<typeof buildPageAdoptionPlan>[0]["currentContent"],
   release: NonNullable<Awaited<ReturnType<typeof readLatestPageAdoptionRelease>>>,
 ): ComparisonChoice[] => {

@@ -3,7 +3,7 @@ import "server-only";
 import {
   correlationIdSchema,
   recordIdSchema,
-  type SaveRecordCommandV2,
+  type SaveRecordCommand,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
@@ -229,7 +229,7 @@ const refuseCalculation = (recordId: string, correlationId: string): never => {
 
 // Neither lifecycle operation submits values: every closure record is
 // recalculated from its locked current values and live related records.
-const unchangedSubmission: Pick<SaveRecordCommandV2, "operation" | "submittedValues"> = {
+const unchangedSubmission: Pick<SaveRecordCommand, "operation" | "submittedValues"> = {
   operation: "update",
   submittedValues: {},
 };

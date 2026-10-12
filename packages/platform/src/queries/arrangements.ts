@@ -3,7 +3,7 @@ import "server-only";
 import type { z } from "zod";
 import {
   compareExactDecimals,
-  moduleFieldValueV2Schemas,
+  moduleFieldValueSchemas,
   parseExactDecimal,
   type JsonValue,
 } from "../schema";
@@ -103,7 +103,7 @@ const validateRows = (
     for (const fieldId of declared) {
       const value = supplied.get(fieldId);
       if (value === undefined) continue;
-      const schema: z.ZodType = moduleFieldValueV2Schemas[fieldTypes.get(fieldId)!];
+      const schema: z.ZodType = moduleFieldValueSchemas[fieldTypes.get(fieldId)!];
       if (value !== null && !schema.safeParse(value).success) return undefined;
       values[fieldId] = value;
     }

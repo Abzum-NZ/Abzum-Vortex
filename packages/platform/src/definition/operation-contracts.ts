@@ -33,10 +33,10 @@ import {
   timestampSchema,
   vortexSuperAdministratorAssignmentIdSchema,
 } from "../catalogue/identifiers";
-import { installedEventDescriptorSchema } from "./module-contracts";
-import type { StandardInstalledEventKind } from "./module-contracts";
+import { installedEventDescriptorSchema } from "./module-foundation-contracts";
+import type { StandardInstalledEventKind } from "./module-foundation-contracts";
 
-const eventOccurrenceDefinitionReleaseV2Schema = z.discriminatedUnion("kind", [
+const eventOccurrenceDefinitionReleaseSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("application"),
@@ -74,7 +74,7 @@ const emptyStandardOccurrencePayload = (
   kind: Exclude<StandardInstalledEventKind, "changed" | "state_changed">,
 ) => z.object({ kind: z.literal(kind) }).strict();
 
-const standardEventOccurrencePayloadV2Schema = z.discriminatedUnion("kind", [
+const standardEventOccurrencePayloadSchema = z.discriminatedUnion("kind", [
   emptyStandardOccurrencePayload("created"),
   z.object({ kind: z.literal("changed"), changedFieldIds: canonicalFieldIdsSchema }).strict(),
   emptyStandardOccurrencePayload("deleted"),
@@ -91,7 +91,7 @@ const standardEventOccurrencePayloadV2Schema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-const declaredEventOccurrencePayloadV2Schema = z
+const declaredEventOccurrencePayloadSchema = z
   .object({ kind: z.literal("declared"), carriedValues: z.record(fieldIdSchema, jsonValueSchema) })
   .strict();
 
@@ -101,7 +101,7 @@ const declaredEventOccurrencePayloadV2Schema = z
  * Definition-backed payload privacy and field-type checks are intentionally
  * performed by Event using Record's field semantics, not claimed by this shape alone.
  */
-export const eventOccurrenceEnvelopeV2Schema = z
+export const eventOccurrenceEnvelopeSchema = z
   .object({
     contractVersion: z.literal("2.0.0"),
     occurrenceId: eventOccurrenceIdSchema,
@@ -120,7 +120,7 @@ export const eventOccurrenceEnvelopeV2Schema = z
       })
       .strict(),
     descriptor: installedEventDescriptorSchema,
-    definitionRelease: eventOccurrenceDefinitionReleaseV2Schema,
+    definitionRelease: eventOccurrenceDefinitionReleaseSchema,
     recordId: recordIdSchema,
     occurredAt: timestampSchema,
     actorId: actorIdSchema,
@@ -128,8 +128,8 @@ export const eventOccurrenceEnvelopeV2Schema = z
     causationId: platformIdSchema.optional(),
     recordSequence: revisionSchema,
     payload: z.union([
-      standardEventOccurrencePayloadV2Schema,
-      declaredEventOccurrencePayloadV2Schema,
+      standardEventOccurrencePayloadSchema,
+      declaredEventOccurrencePayloadSchema,
     ]),
   })
   .strict()
@@ -1252,7 +1252,7 @@ export const performanceMeasurementSchema = z
   })
   .strict();
 
-export type EventOccurrenceEnvelopeV2 = z.infer<typeof eventOccurrenceEnvelopeV2Schema>;
+export type EventOccurrenceEnvelope = z.infer<typeof eventOccurrenceEnvelopeSchema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
 export type VerifiedFileActor = z.infer<typeof verifiedFileActorSchema>;

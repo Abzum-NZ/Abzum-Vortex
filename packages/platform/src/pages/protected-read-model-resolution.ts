@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   unavailableResult,
-  protectedReadModelBindingV2Schema,
+  protectedReadModelBindingSchema,
   protectedReadModelDeclarations,
   protectedReadModelPageRequestSchema,
   type IdentitySession,
@@ -153,7 +153,7 @@ export const createProtectedReadModelResolver = (readers: ProtectedReadModelRead
     bindingCandidate: unknown,
     requestCandidate: unknown,
   ): Promise<ProtectedReadModelResolution> {
-    const binding = protectedReadModelBindingV2Schema.safeParse(bindingCandidate);
+    const binding = protectedReadModelBindingSchema.safeParse(bindingCandidate);
     const request = protectedReadModelPageRequestSchema.safeParse(requestCandidate);
     if (!binding.success || !request.success) return refused;
     const model = binding.data.key;

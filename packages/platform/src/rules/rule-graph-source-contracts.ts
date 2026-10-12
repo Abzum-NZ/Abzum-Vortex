@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sourceAliasSchema, sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import { builderKeySchema } from "../catalogue/identifiers";
-import { sourceModuleFieldValueV2Schemas } from "../records/module-field-values-v2";
+import { sourceModuleFieldValueSchemas } from "../records/module-field-values";
 import {
   maximumRuleTableRows,
   ruleTableColumnsMatch,
@@ -33,8 +33,8 @@ const sourceTypedValueBranches = ruleGraphValueTypeKeys.map((type) =>
       type: z.literal(type),
       value:
         type === "table"
-          ? sourceModuleFieldValueV2Schemas.table.max(maximumRuleTableRows)
-          : sourceModuleFieldValueV2Schemas[type],
+          ? sourceModuleFieldValueSchemas.table.max(maximumRuleTableRows)
+          : sourceModuleFieldValueSchemas[type],
       columns: type === "table" ? sourceRuleTableColumnsSchema : z.never().optional(),
     })
     .strict()

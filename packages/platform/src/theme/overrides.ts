@@ -1,29 +1,29 @@
 import "server-only";
 
 import {
-  themeTokenKindV2Schema,
-  themeTokenValueV2Schema,
+  themeTokenKindSchema,
+  themeTokenValueSchema,
   type DefinitionRuleFailure,
 } from "../schema";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import type {
   ComponentThemeOverrideContext,
   ThemeResolutionOptions,
-  ThemeTokenKindV2,
-  ThemeTokenValueV2,
+  ThemeTokenKind,
+  ThemeTokenValue,
   ThemeValidationFailure,
 } from "./types";
 
-const REGISTERED_THEME_TOKEN_KINDS: ReadonlySet<ThemeTokenKindV2> = new Set(
-  themeTokenKindV2Schema.options,
+const REGISTERED_THEME_TOKEN_KINDS: ReadonlySet<ThemeTokenKind> = new Set(
+  themeTokenKindSchema.options,
 );
 
 export function validateComponentThemeOverrides(
-  baseTokens: Readonly<Record<string, ThemeTokenValueV2>>,
+  baseTokens: Readonly<Record<string, ThemeTokenValue>>,
   context: ComponentThemeOverrideContext,
   options?: ThemeResolutionOptions | undefined,
 ): {
-  effectiveOverrides: Record<string, ThemeTokenValueV2>;
+  effectiveOverrides: Record<string, ThemeTokenValue>;
   failures: ThemeValidationFailure[];
   ruleFailures: DefinitionRuleFailure[];
 } {
@@ -31,9 +31,9 @@ export function validateComponentThemeOverrides(
   const ruleFailures: DefinitionRuleFailure[] = [];
 
   const rawOverrides = context.overrides ?? {};
-  const effectiveOverrides: Record<string, ThemeTokenValueV2> = {};
+  const effectiveOverrides: Record<string, ThemeTokenValue> = {};
 
-  const permittedSet: ReadonlySet<ThemeTokenKindV2> | undefined =
+  const permittedSet: ReadonlySet<ThemeTokenKind> | undefined =
     context.permittedTokenKinds !== undefined ? new Set(context.permittedTokenKinds) : undefined;
 
   const extraSegments = [
@@ -87,7 +87,7 @@ export function validateComponentThemeOverrides(
     const candidateKind = (rawValue as { kind?: unknown })?.kind;
     if (
       typeof candidateKind !== "string" ||
-      !REGISTERED_THEME_TOKEN_KINDS.has(candidateKind as ThemeTokenKindV2)
+      !REGISTERED_THEME_TOKEN_KINDS.has(candidateKind as ThemeTokenKind)
     ) {
       addFailure({
         code: "INVALID_TOKEN_KIND",
@@ -98,7 +98,7 @@ export function validateComponentThemeOverrides(
       continue;
     }
 
-    const tokenKind = candidateKind as ThemeTokenKindV2;
+    const tokenKind = candidateKind as ThemeTokenKind;
 
     // 2. Check if token kind is permitted for this component
     if (permittedSet !== undefined && !permittedSet.has(tokenKind)) {
@@ -135,7 +135,7 @@ export function validateComponentThemeOverrides(
     }
 
     // 5. Schema validation of the override value
-    const parsed = themeTokenValueV2Schema.safeParse(rawValue);
+    const parsed = themeTokenValueSchema.safeParse(rawValue);
     if (!parsed.success) {
       addFailure({
         code: "INVALID_TOKEN_VALUE",

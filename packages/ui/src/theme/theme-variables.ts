@@ -1,23 +1,23 @@
 import type { CSSProperties } from "react";
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   findShadcnFontByFamilyKey,
   resolveShadcnFontSelection,
   shadcnFontStack,
-  type ApplicationContentV2,
-  type PlatformThemeTokenRoleKeyV2,
+  type ApplicationContent,
+  type PlatformThemeTokenRoleKey,
   type ShadcnFont,
 } from "@vortex/platform/schema";
 
 /** Resolved #594 application theme, as materialised in application content. */
-export type ApplicationThemeV2 = ApplicationContentV2["theme"];
-type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
+export type ApplicationTheme = ApplicationContent["theme"];
+type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
 /** Appearance selection. `system` follows the person's browser colour-scheme preference. */
 export type ThemeMode = "light" | "dark" | "system";
 
 /** Resolved, validated #594 theme tokens keyed by builder key. */
-type ThemeTokens = Readonly<Record<string, ThemeTokenValueV2>>;
+type ThemeTokens = Readonly<Record<string, ThemeTokenValue>>;
 
 /**
  * The only CSS custom properties the shared component stylesheet reads. Names are fixed
@@ -133,10 +133,10 @@ const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_backgro
  * read from here, so the renderer holds no second palette: the shared vocabulary and the
  * registered release are its only source of default colours, type, spacing and shape.
  */
-const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE_V2.tokens;
+const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE.tokens;
 
 /** The registered release's value for one shared colour role, or a loud failure if absent. */
-function platformColor(role: PlatformThemeTokenRoleKeyV2): ColorPair {
+function platformColor(role: PlatformThemeTokenRoleKey): ColorPair {
   const pair = colorPair(PLATFORM_TOKENS, role);
   if (pair === undefined)
     throw new Error(`Platform theme release is missing colour role "${role}"`);
@@ -159,9 +159,9 @@ const DEFAULT_SURFACE: ColorPair = platformColor("background");
 const DEFAULT_TEXT: ColorPair = platformColor("text");
 
 /** The registered release's focus colour role, so the renderer never assumes it by name. */
-const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKeyV2 =
+const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKey =
   PLATFORM_TOKENS.focus?.kind === "focus"
-    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKeyV2)
+    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKey)
     : "primary";
 
 /** Platform fallbacks, each read from the registered release's matching vocabulary role. */
@@ -269,13 +269,13 @@ function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
     : undefined;
 }
 
-function tokenOfKind<Kind extends ThemeTokenValueV2["kind"]>(
+function tokenOfKind<Kind extends ThemeTokenValue["kind"]>(
   tokens: ThemeTokens,
   key: string,
   kind: Kind,
-): Extract<ThemeTokenValueV2, { kind: Kind }> | undefined {
+): Extract<ThemeTokenValue, { kind: Kind }> | undefined {
   const token = tokens[key];
-  return token?.kind === kind ? (token as Extract<ThemeTokenValueV2, { kind: Kind }>) : undefined;
+  return token?.kind === kind ? (token as Extract<ThemeTokenValue, { kind: Kind }>) : undefined;
 }
 
 /**
@@ -389,7 +389,7 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
 
   // Every shadcn colour comes from the resolved theme when the role is present and well formed,
   // otherwise from the registered platform release, so the bridge holds no second palette.
-  const shadcnColour = (role: PlatformThemeTokenRoleKeyV2): string =>
+  const shadcnColour = (role: PlatformThemeTokenRoleKey): string =>
     colorValue(colorPair(tokens, role) ?? platformColor(role));
   // A fill and its #594-validated foreground change together, so a foreground is never painted on
   // a fill it was not judged against.
@@ -511,7 +511,7 @@ export type ThemeRootProps = Readonly<{
  * component stylesheet is scoped to `[data-vortex-theme]`.
  */
 export function createThemeRootProps(
-  theme: ApplicationThemeV2 | undefined,
+  theme: ApplicationTheme | undefined,
   mode: ThemeMode = "light",
 ): ThemeRootProps {
   const style: CSSProperties & ThemeCssVariables = {

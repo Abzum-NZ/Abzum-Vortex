@@ -21,8 +21,8 @@ import {
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
-  type ApplicationContentV2,
-  type ModuleDefinitionConsumerReadResultV3,
+  type ApplicationContent,
+  type ModuleDefinitionConsumerReadResult,
   type FlowBindingInvocation,
   type FlowDefinition,
   type FlowRefusalFeedback,
@@ -97,8 +97,8 @@ export type InstalledFlowBindings = Readonly<{
   /** The release's named actions by key, for a Call protected operation task that names one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
   /** The exact active Application and Module definitions used to verify authored form values. */
-  applicationContent?: ApplicationContentV2;
-  modules?: readonly ModuleDefinitionConsumerReadResultV3[];
+  applicationContent?: ApplicationContent;
+  modules?: readonly ModuleDefinitionConsumerReadResult[];
   /** Compiler-owned selected-record projections derived from the exact installed releases. */
   selectedRecordReadProjections?: FlowRelease["selectedRecordReadProjections"];
   /** Flow input name to exact selected record type, keyed by lower-case flow identity. */

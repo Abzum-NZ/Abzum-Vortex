@@ -1,8 +1,8 @@
 import {
-  platformThemeReleaseV2Schema,
-  type PlatformThemeReleaseV2,
-  type PlatformThemeTokenRoleKeyV2,
-} from "../definition/application-composition-v2";
+  platformThemeReleaseSchema,
+  type PlatformThemeRelease,
+  type PlatformThemeTokenRoleKey,
+} from "../definition/application-composition";
 import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
 import source from "../catalogue/catalogue/platform-theme-catalogue.source.json";
 
@@ -14,11 +14,11 @@ const deepFreeze = <Value>(value: Value): Value => {
 
 /**
  * The current release's token values live in catalogue/platform-theme-catalogue.source.json, keyed
- * by the shared token-role vocabulary (`platformThemeTokenRolesV2`). Assigning them to a record
+ * by the shared token-role vocabulary (`platformThemeTokenRoles`). Assigning them to a record
  * over that vocabulary makes a role that the vocabulary adds without a value there a compile-time
  * error, so the registered release always maps every role, including every shadcn role.
  */
-const currentTokens: Record<PlatformThemeTokenRoleKeyV2, unknown> =
+const currentTokens: Record<PlatformThemeTokenRoleKey, unknown> =
   source.PLATFORM_THEME_RELEASE_3_0_0.tokens;
 
 /**
@@ -31,9 +31,9 @@ const release = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
-}): PlatformThemeReleaseV2 =>
+}): PlatformThemeRelease =>
   deepFreeze(
-    platformThemeReleaseV2Schema.parse({
+    platformThemeReleaseSchema.parse({
       catalogueThemeId: definition.catalogueThemeId,
       releaseVersion: definition.releaseVersion,
       ...generatedReleaseFingerprints(
@@ -48,7 +48,7 @@ const release = (definition: {
  * The 2.0.0 release stays published unchanged, so an application pinned to it keeps its exact
  * published theme and only the new shadcn roles fall back to the registered release at render time.
  */
-export const PLATFORM_THEME_RELEASE_2_0_0: PlatformThemeReleaseV2 = release(
+export const PLATFORM_THEME_RELEASE_2_0_0: PlatformThemeRelease = release(
   source.PLATFORM_THEME_RELEASE_2_0_0,
 );
 
@@ -57,7 +57,7 @@ export const PLATFORM_THEME_RELEASE_2_0_0: PlatformThemeReleaseV2 = release(
  * shadcn base-nova neutral values. Its colour pairs declare their foreground/background roles so
  * readability is judged by declared role rather than by token name.
  */
-export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeReleaseV2 = release({
+export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeRelease = release({
   catalogueThemeId: source.PLATFORM_THEME_RELEASE_3_0_0.catalogueThemeId,
   releaseVersion: source.PLATFORM_THEME_RELEASE_3_0_0.releaseVersion,
   tokens: currentTokens,
@@ -68,4 +68,4 @@ export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeReleaseV2 = release({
  * authored definitions and for the renderer. Shipped definitions pin this release, so moving it
  * moves every shipped theme pin together.
  */
-export const DEFAULT_PLATFORM_THEME_RELEASE_V2: PlatformThemeReleaseV2 = PLATFORM_THEME_RELEASE_3_0_0;
+export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease = PLATFORM_THEME_RELEASE_3_0_0;

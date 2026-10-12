@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { correlationIdSchema } from "../catalogue/common";
-import { applicationSourceDocumentV2Schema, moduleSourceDocumentSchema } from "./definition-source";
+import { applicationSourceDocumentSchema, moduleSourceDocumentSchema } from "./definition-source";
 import { flowTargetDependencySchema } from "./application-flow-bindings";
 import {
   actorIdSchema,
@@ -22,7 +22,7 @@ import {
   versionImpactSchema,
 } from "./version-impact";
 
-export const storedApplicationSourceDocumentSchema = applicationSourceDocumentV2Schema;
+export const storedApplicationSourceDocumentSchema = applicationSourceDocumentSchema;
 export const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;
 export const storedDefinitionSourceSchema = z.union([
   storedModuleSourceDocumentSchema,

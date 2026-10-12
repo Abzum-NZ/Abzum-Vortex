@@ -1,13 +1,13 @@
 import { z } from "zod";
 import {
-  applicationSourceDocumentV2Schema,
-  sourceApplicationBodyV2Schema,
-  sourcePageDefinitionV2Schema,
+  applicationSourceDocumentSchema,
+  sourceApplicationBodySchema,
+  sourcePageDefinitionSchema,
 } from "./application-source-contracts";
 import type {
-  ApplicationSourceDocumentV2,
-  SourceApplicationBodyV2,
-  SourcePageDefinitionV2,
+  ApplicationSourceDocument,
+  SourceApplicationBody,
+  SourcePageDefinition,
 } from "./application-source-contracts";
 import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import {
@@ -15,7 +15,7 @@ import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
 } from "./module-source-contracts";
-import { moduleValidationContractVersionV3 } from "./module-contracts-v3";
+import { moduleValidationContractVersion } from "./module-contracts";
 import {
   assertSourceProvenanceCoverage,
   sourceConditionSchema,
@@ -29,7 +29,7 @@ import type { SourceProvenanceAnnotation } from "./definition-source-common";
 /** The one current Module source/validation contract pair and exact release identity. */
 export const moduleContractPair = {
   sourceContractVersion: moduleSourceContractVersion,
-  validationContractVersion: moduleValidationContractVersionV3,
+  validationContractVersion: moduleValidationContractVersion,
 } as const;
 
 export type ModuleContractPair = typeof moduleContractPair;
@@ -47,11 +47,11 @@ export const assertModuleContractPair = (
 };
 
 export {
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   connectionTypeSourceDocumentSchema,
   moduleSourceDocumentSchema,
-  sourceApplicationBodyV2Schema,
-  sourcePageDefinitionV2Schema,
+  sourceApplicationBodySchema,
+  sourcePageDefinitionSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
   sourceProvenanceRegistry,
@@ -61,23 +61,22 @@ export {
 
 export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
   moduleSourceDocumentSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   connectionTypeSourceDocumentSchema,
 ]);
 
 assertSourceProvenanceCoverage([
   moduleSourceDocumentSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   connectionTypeSourceDocumentSchema,
 ]);
 
-export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentV2Schema>;
 export type ConnectionTypeSourceDocument = z.infer<typeof connectionTypeSourceDocumentSchema>;
 export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSchema>;
 export type {
-  ApplicationSourceDocumentV2,
+  ApplicationSourceDocument,
   ModuleSourceDocument,
   SourceProvenanceAnnotation,
-  SourceApplicationBodyV2,
-  SourcePageDefinitionV2,
+  SourceApplicationBody,
+  SourcePageDefinition,
 };

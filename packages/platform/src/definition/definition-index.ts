@@ -13,8 +13,8 @@ export {
 } from "./compiler";
 export * from "./flow-compilation";
 export * from "./flow-validation";
-export * from "./application-v2-composition";
-export * from "./application-v2-resolution";
+export * from "./application-materialisation";
+export * from "./application-resolution";
 export * from "./extension-contributions";
 export * from "./application-preview";
 export * from "./application-preview-composition";
