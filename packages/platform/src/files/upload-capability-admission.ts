@@ -253,6 +253,7 @@ export const runUploadCapabilityAdmission = async <Result>(
       error instanceof Error && error.message === "CAPABILITY_CONSUMPTION_DUPLICATE_CONFLICTS"
         ? "UPLOAD_CAPABILITY_CONSUMPTION_CONFLICTS"
         : "UPLOAD_CAPABILITY_CONSUMPTION_UNAVAILABLE",
+      { cause: error },
     );
   }
   if (!isConsumptionOf(consumption, reservation)) {

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { z } from "zod";
+
 import {
   applicationRootIdSchema,
   correlationIdSchema,
@@ -46,6 +48,33 @@ const asObject = (value: unknown): Readonly<Record<string, unknown>> | null =>
     ? (value as Readonly<Record<string, unknown>>)
     : null;
 
+const fileApplicationLocationSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("located"), applicationRootId: applicationRootIdSchema }).strict(),
+  z.object({ outcome: z.literal("refused") }).strict(),
+]);
+
+const fileReadDecisionSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("allowed"),
+      organizationId: organizationIdSchema,
+      applicationRootId: applicationRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      recordId: recordIdSchema,
+      fieldId: fieldIdSchema,
+    })
+    .strict(),
+  z.object({ outcome: z.literal("refused") }).strict(),
+]);
+
+const claimedDownloadGrantSchema = z
+  .object({
+    grant: downloadGrantSchema,
+    fileRecord: fileRecordSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
 export type FileApplicationLocation =
   | Readonly<{ outcome: "located"; applicationRootId: ApplicationRootId }>
   | Readonly<{ outcome: "refused" }>;
@@ -59,17 +88,13 @@ export const locateFileApplication = async (
   transaction: FileReadSqlTransaction,
   fileId: FileId,
 ): Promise<FileApplicationLocation> => {
-  const result = asObject(
+  return fileApplicationLocationSchema.parse(
     singleResult(
       await transaction.query<ResultRow>`
         select vortex_file.read_file_application(${fileId}::uuid) as result
       `,
     ),
   );
-  const applicationRootId = applicationRootIdSchema.safeParse(result?.applicationRootId);
-  return result?.outcome === "located" && applicationRootId.success
-    ? { outcome: "located", applicationRootId: applicationRootId.data }
-    : { outcome: "refused" };
 };
 
 export type FileReadDecision =
@@ -91,36 +116,13 @@ export const decideFileRead = async (
   transaction: FileReadSqlTransaction,
   fileId: FileId,
 ): Promise<FileReadDecision> => {
-  const result = asObject(
+  return fileReadDecisionSchema.parse(
     singleResult(
       await transaction.query<ResultRow>`
         select vortex_file.decide_file_read(${fileId}::uuid) as result
       `,
     ),
   );
-  if (result?.outcome !== "allowed") return { outcome: "refused" };
-  const organizationId = organizationIdSchema.safeParse(result.organizationId);
-  const applicationRootId = applicationRootIdSchema.safeParse(result.applicationRootId);
-  const recordTypeId = recordTypeIdSchema.safeParse(result.recordTypeId);
-  const recordId = recordIdSchema.safeParse(result.recordId);
-  const fieldId = fieldIdSchema.safeParse(result.fieldId);
-  if (
-    !organizationId.success ||
-    !applicationRootId.success ||
-    !recordTypeId.success ||
-    !recordId.success ||
-    !fieldId.success
-  ) {
-    return { outcome: "refused" };
-  }
-  return {
-    outcome: "allowed",
-    organizationId: organizationId.data,
-    applicationRootId: applicationRootId.data,
-    recordTypeId: recordTypeId.data,
-    recordId: recordId.data,
-    fieldId: fieldId.data,
-  };
 };
 
 /**
@@ -161,23 +163,13 @@ export const createSqlFileReadRepository = (
       if (result?.outcome !== "recorded") throw new Error("FILE_READ_GRANT_REFUSED");
     },
     claimDownloadGrant: async (oneTimeId): Promise<ClaimedDownloadGrant | null> => {
-      const result = asObject(
-        singleResult(
-          await transaction.query<ResultRow>`
+      const result = singleResult(
+        await transaction.query<ResultRow>`
             select vortex_file.claim_file_download_grant(${oneTimeId}::uuid) as result
           `,
-        ),
       );
       if (result === null) return null;
-      const grant = downloadGrantSchema.safeParse(result.grant);
-      const fileRecord = fileRecordSchema.safeParse(result.fileRecord);
-      const correlationId = correlationIdSchema.safeParse(result.correlationId);
-      if (!grant.success || !fileRecord.success || !correlationId.success) return null;
-      return {
-        grant: grant.data,
-        fileRecord: fileRecord.data,
-        correlationId: correlationId.data,
-      };
+      return claimedDownloadGrantSchema.parse(result);
     },
   };
   return Object.freeze(repository);
