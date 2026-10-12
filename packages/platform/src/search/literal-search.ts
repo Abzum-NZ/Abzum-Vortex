@@ -183,6 +183,19 @@ const parseExpression = (
   });
 };
 
+/**
+ * The distinct tokens a literal expression requires. A record can only match
+ * when every one of them occurs in its indexed text, so the index may select
+ * candidates by these tokens before the exact match; `undefined` is an
+ * expression the matcher refuses.
+ */
+export const literalSearchRequiredTokens = (expression: string): readonly string[] | undefined => {
+  if (expression.length > literalSearchLimits.expressionLength) return undefined;
+  const parsed = parseExpression(expression, "literal");
+  if (!parsed.success) return undefined;
+  return Object.freeze([...new Set(parsed.terms.flatMap((term) => term.tokens))]);
+};
+
 /** Builds a token-level Aho-Corasick matcher for all bounded terms. */
 const createTokenMatcher = (terms: readonly LiteralSearchTerm[]): readonly TokenMatcherNode[] => {
   const nodes: TokenMatcherNode[] = [{ next: new Map(), failure: 0, termIndices: [] }];

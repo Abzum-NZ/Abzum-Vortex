@@ -114,11 +114,12 @@ export type PermittedSearchCurrentRead =
     }>
   | Readonly<{ outcome: "refused" }>;
 
+/** One bounded batch of records of one record type, read under one current authority. */
 export type PermittedSearchCurrentReadRequest = Readonly<{
   organizationId: string;
   applicationRootId: string;
   recordTypeId: string;
-  recordId: string;
+  recordIds: readonly string[];
 }>;
 
 export type PermittedSearchInput = Readonly<{
@@ -139,12 +140,13 @@ export type PermittedSearchInput = Readonly<{
 export type PermittedSearchDependencies = Readonly<{
   /**
    * The caller's own current fixed record read adapter, bound to this request's
-   * transaction and authority. It returns `undefined` when the record cannot be
-   * checked at all, which is treated as a refusal for that candidate.
+   * transaction and authority, applied to a bounded batch. The result is keyed
+   * by lower-case record identity; a record the adapter could not check at all
+   * is absent, which is treated as a refusal for that candidate.
    */
-  readCurrentRecord: (
+  readCurrentRecords: (
     input: PermittedSearchCurrentReadRequest,
-  ) => Promise<PermittedSearchCurrentRead | undefined>;
+  ) => Promise<ReadonlyMap<string, PermittedSearchCurrentRead>>;
   /**
    * The caller's own current grant capability read for Shared result groups,
    * bound to the same transaction and authority. Without it every shared group
@@ -416,6 +418,7 @@ export const permittedSearchCandidates = async (
   const candidates: PermittedSearchCandidate[] = [];
   const seenRecords = new Set<string>();
 
+  const documents: (SearchDocument & { applicationRootId: string })[] = [];
   for (const rawCandidate of input.candidates) {
     const document = parseCandidateDocument(rawCandidate);
     if (document === undefined) return refusal("candidate_document_invalid");
@@ -430,14 +433,21 @@ export const permittedSearchCandidates = async (
       !sameId(document.recordTypeId, request.recordTypeId)
     )
       continue;
-    const applicationRootId = document.applicationRootId;
+    documents.push({ ...document, applicationRootId: document.applicationRootId });
+  }
 
-    const currentCandidate = await dependencies.readCurrentRecord({
-      organizationId: access.data.organizationId,
-      applicationRootId,
-      recordTypeId: request.recordTypeId,
-      recordId: document.recordId,
-    });
+  const currentReads =
+    documents.length === 0
+      ? new Map<string, PermittedSearchCurrentRead>()
+      : await dependencies.readCurrentRecords({
+          organizationId: access.data.organizationId,
+          applicationRootId: request.applicationRootId,
+          recordTypeId: request.recordTypeId,
+          recordIds: documents.map((document) => document.recordId),
+        });
+
+  for (const document of documents) {
+    const currentCandidate = currentReads.get(lower(document.recordId));
     if (currentCandidate === undefined) continue;
     const current = parseCurrentRead(currentCandidate);
     if (current === undefined || current.outcome === "refused") continue;
@@ -460,7 +470,7 @@ export const permittedSearchCandidates = async (
       Object.freeze({
         recordId: document.recordId,
         recordTypeId: document.recordTypeId,
-        applicationRootId,
+        applicationRootId: document.applicationRootId,
         sourceRecordVersion: document.sourceRecordVersion,
         concurrencyNumber: current.concurrencyNumber,
         entries: Object.freeze(entries),
