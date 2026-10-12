@@ -16,14 +16,12 @@ import {
   type ApplicationInstallationActivationResult,
   type HumanInstallationDefinitionAccess,
 } from "@vortex/app";
+import type {
+  connectionInstanceIdSchema} from "@vortex/contracts";
 import {
   activityIdSchema,
   applicationRootIdSchema,
-  archiveDestinationReferenceSchema,
-  connectionInstanceIdSchema,
   canonicalJson,
-  connectionTypeIdSchema,
-  databaseRevision,
   databaseTimestamp,
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
@@ -44,8 +42,6 @@ import {
   timestampSchema,
   workflowIdSchema,
   type ActiveApplicationInstallationEvidence,
-  type ApplicationRootId,
-  type ArchiveDestinationReference,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
   type OrganizationAccessDeclaration,
@@ -82,6 +78,9 @@ import {
   inspectStudioApplicationReleaseHistory,
   loadStudioApplicationHistoryAccess,
 } from "./studio-application-history";
+import type {
+  studioApplicationFirstInstallPolicyInputSchema,
+  studioApplicationFirstInstallTargetSchema} from "./studio-application-installation-contracts";
 import {
   studioApplicationInstallationCommandResultSchema,
   studioApplicationInstallationCommandSchema,
@@ -94,13 +93,11 @@ import {
   studioApplicationFirstInstallActivateCommandSchema,
   studioApplicationFirstInstallCommandResultSchema,
   studioApplicationFirstInstallLoadResultSchema,
-  studioApplicationFirstInstallPolicyInputSchema,
   studioApplicationFirstInstallPrepareCommandSchema,
   studioApplicationFirstInstallSaveCommandSchema,
   studioApplicationFirstInstallSelectorSchema,
   studioApplicationFirstInstallSetupSchema,
   studioApplicationFirstInstallSnapshotSchema,
-  studioApplicationFirstInstallTargetSchema,
   type StudioApplicationArchiveOptionsResult,
   type StudioApplicationFirstInstallCommandResult,
   type StudioApplicationFirstInstallLoadResult,

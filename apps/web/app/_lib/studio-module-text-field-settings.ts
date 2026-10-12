@@ -1,8 +1,9 @@
 import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import type { correlationIdSchema} from "@vortex/contracts";
 import {
-  canonicalJson, correlationIdSchema, databaseRevision, databaseTimestamp, fingerprintSchema,
+  canonicalJson, databaseRevision, databaseTimestamp, fingerprintSchema,
   moduleRootIdSchema, moduleSourceDocumentSchema, organizationAccessDeclarationSchema,
   organizationIdSchema, organizationPermissionEligibilitySchema, platformIdSchema, revisionSchema, sameId,
   sessionContextSchema, storedModuleDefinitionDraftSchema, timestampSchema,

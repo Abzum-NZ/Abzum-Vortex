@@ -1,10 +1,7 @@
 import "server-only";
 
-import { type IdentitySession, type OrganizationLauncherResolution } from "@vortex/contracts";
-import {
-  readPermittedApplicationsAtAddress,
-  type PermittedApplicationsRead,
-} from "@vortex/app";
+import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/contracts";
+import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@vortex/app";
 import { createOrganizationLauncherService } from "@vortex/identity";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 
@@ -26,6 +23,9 @@ export const loadPermittedApplicationsAtAddress = async (
     return { kind: "temporarily_unavailable" };
   }
   return readPermittedApplicationsAtAddress(
-    session, tenantShortName, organizationShortName, authorityId,
+    session,
+    tenantShortName,
+    organizationShortName,
+    authorityId,
   );
 };

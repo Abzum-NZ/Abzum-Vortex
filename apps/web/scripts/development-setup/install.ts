@@ -47,7 +47,7 @@ export type InstallFacts = Readonly<{
   state: SetupState;
 }>;
 
-const definitionReader = (facts: InstallFacts): PermissionRegistryDefinitionSetReader => ({
+const definitionReader = (_facts: InstallFacts): PermissionRegistryDefinitionSetReader => ({
   read: (context, command) =>
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
@@ -170,4 +170,3 @@ export const installApplications = async (
   facts.state.setupCompleted = true;
   facts.state.save();
 };
-

@@ -24,8 +24,6 @@ import { useFormField } from "./form-context";
 
 export type TextInputProps = ControlRenderProps<TextInputPayload>;
 
-const INPUT_TYPES = ["text", "email", "password", "tel", "url"] as const;
-
 /**
  * Single-line or multi-line text field. Emits only its declared `field_changed` event with a
  * typed string value and publishes that value to its enclosing form.
@@ -41,7 +39,10 @@ export function TextInput(props: TextInputProps): ReactElement {
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
   const multiline = settings.boolean("multiline");
-  const inputType = settings.choice<(typeof INPUT_TYPES)[number]>("input_type", "text");
+  const inputType = settings.choice<"text" | "email" | "password" | "tel" | "url">(
+    "input_type",
+    "text",
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
@@ -116,7 +117,11 @@ export function TextInput(props: TextInputProps): ReactElement {
       <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
-      {multiline ? <Textarea {...controlProps} /> : <Input {...controlProps} ref={inputRef} type={inputType} />}
+      {multiline ? (
+        <Textarea {...controlProps} />
+      ) : (
+        <Input {...controlProps} ref={inputRef} type={inputType} />
+      )}
       <FieldMessages
         ids={ids}
         help={help}

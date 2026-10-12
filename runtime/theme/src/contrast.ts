@@ -2,14 +2,10 @@ import "server-only";
 
 import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "@vortex/contracts";
 import { createLocatedFailure } from "./errors";
-import type {
-  ThemeResolutionOptions,
-  ThemeTokenValueV2,
-  ThemeValidationFailure,
-} from "./types";
+import type { ThemeResolutionOptions, ThemeTokenValueV2, ThemeValidationFailure } from "./types";
 
-export const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
-export const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
+const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
+const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
 export const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
 
 /** The vocabulary's brand fill, which the renderer also paints on the surface as the accent. */
@@ -36,9 +32,7 @@ function parseHex(hex: string): RgbaColor {
   if (!/^(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(clean))
     throw new Error(`Invalid hex color: "${hex}"`);
   const expanded =
-    clean.length <= 4
-      ? [...clean].map((character) => character + character).join("")
-      : clean;
+    clean.length <= 4 ? [...clean].map((character) => character + character).join("") : clean;
   return {
     r: parseInt(expanded.slice(0, 2), 16),
     g: parseInt(expanded.slice(2, 4), 16),
@@ -182,11 +176,7 @@ function channelLuminance(channel: number): number {
 }
 
 function colorLuminance({ r, g, b }: RgbaColor): number {
-  return (
-    0.2126 * channelLuminance(r) +
-    0.7152 * channelLuminance(g) +
-    0.0722 * channelLuminance(b)
-  );
+  return 0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
 }
 
 /** Calculates luminance after composing a translucent color over an opaque background. */
@@ -243,7 +233,14 @@ export function findThemeSurface(
         ? [[key, token] as const]
         : [];
     });
-  const exactPriority = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+  const exactPriority = [
+    "background",
+    "canvas",
+    "surface",
+    "bg",
+    "page_background",
+    "app_background",
+  ];
   const selected =
     exactPriority.flatMap((candidate) =>
       backgrounds.filter(([key]) => key.toLowerCase() === candidate),

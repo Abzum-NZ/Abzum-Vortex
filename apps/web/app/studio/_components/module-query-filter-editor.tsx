@@ -3,10 +3,10 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  type ConditionNode,
-  type DefinitionValidationLocation,
-  type DefinitionValidationResult,
+import type {
+  ConditionNode,
+  DefinitionValidationLocation,
+  DefinitionValidationResult,
 } from "@vortex/contracts";
 import {
   StudioConditionControls,

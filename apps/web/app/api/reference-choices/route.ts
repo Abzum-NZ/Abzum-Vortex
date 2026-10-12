@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import {
   builderKeySchema,
   containedComponentIdSchema,
@@ -9,9 +10,7 @@ import { z } from "zod";
 import { resolveApplicationAddress } from "../../_lib/application-address";
 import { loadReferenceChoicePage } from "../../_lib/application-page";
 import { readBoundedRequestText } from "../_lib/bounded-request-body";
-import {
-  getIdentityJourneyConfiguration,
-} from "../../auth/_lib/authority-configuration";
+import { getIdentityJourneyConfiguration } from "../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../_lib/private-response";
 
@@ -33,10 +32,13 @@ const requestSchema = z
     continuationToken: z.string().min(1).max(65_536).optional(),
     selectedKey: builderKeySchema.optional(),
     selectedEvidence: referenceChoiceSelectionEvidenceSchema.optional(),
-    dependencyChoice: z.object({
-      key: builderKeySchema,
-      evidence: referenceChoiceSelectionEvidenceSchema,
-    }).strict().optional(),
+    dependencyChoice: z
+      .object({
+        key: builderKeySchema,
+        evidence: referenceChoiceSelectionEvidenceSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -83,24 +85,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
     if (address.kind !== "application_page") return refusedResponse();
 
-    const result = await loadReferenceChoicePage(
-      identity.session,
-      address,
-      {
-        placementId: body.placementId,
-        installationRevision: body.installationRevision,
-        releaseKey: body.releaseKey,
-        ...(body.search === undefined ? {} : { search: body.search }),
-        ...(body.continuationToken === undefined
-          ? {}
-          : { continuationToken: body.continuationToken }),
-        ...(body.selectedKey === undefined ? {} : { selectedKey: body.selectedKey }),
-        ...(body.selectedEvidence === undefined
-          ? {}
-          : { selectedEvidence: body.selectedEvidence }),
-        ...(body.dependencyChoice === undefined ? {} : { dependencyChoice: body.dependencyChoice }),
-      },
-    );
+    const result = await loadReferenceChoicePage(identity.session, address, {
+      placementId: body.placementId,
+      installationRevision: body.installationRevision,
+      releaseKey: body.releaseKey,
+      ...(body.search === undefined ? {} : { search: body.search }),
+      ...(body.continuationToken === undefined
+        ? {}
+        : { continuationToken: body.continuationToken }),
+      ...(body.selectedKey === undefined ? {} : { selectedKey: body.selectedKey }),
+      ...(body.selectedEvidence === undefined ? {} : { selectedEvidence: body.selectedEvidence }),
+      ...(body.dependencyChoice === undefined ? {} : { dependencyChoice: body.dependencyChoice }),
+    });
     switch (result.kind) {
       case "completed":
         return privateResponse({ kind: "completed", values: result.values }, 200);

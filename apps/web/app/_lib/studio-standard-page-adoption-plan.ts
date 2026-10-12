@@ -1,11 +1,12 @@
 import "server-only";
 
+import type {
+  sourceIdentityAssignmentV3Schema} from "@vortex/contracts";
 import {
   applicationRootIdSchema,
   canonicalJson,
   pageIdSchema,
   platformIdSchema,
-  sourceIdentityAssignmentV3Schema,
   sameId,
   type ApplicationContentV2,
   type ApplicationSourceDocumentV2,
@@ -82,7 +83,7 @@ const maxPageDifferenceFacts = 160;
 const maxDisplayedPageDifferences = 32;
 const maxDifferenceLabelLength = 112;
 const sensitiveLabelPattern =
-  /(?:bearer\s+[a-z0-9._~+\/=\-]{12,}|(?:password|secret|api[_ -]?key|access[_ -]?token|credential)\s*[:=]\s*\S{4,}|(?:sk|pk|ghp|gho|github_pat|xox[baprs])_[a-z0-9_-]{16,}|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i;
+  /(?:bearer\s+[a-z0-9._~+/=-]{12,}|(?:password|secret|api[_ -]?key|access[_ -]?token|credential)\s*[:=]\s*\S{4,}|(?:sk|pk|ghp|gho|github_pat|xox[baprs])_[a-z0-9_-]{16,}|https?:\/\/[^/\s:@]+:[^/\s@]+@)/i;
 
 const safeDifferenceLabel = (value: string): string => {
   if (sensitiveLabelPattern.test(value)) return "Sensitive text omitted";

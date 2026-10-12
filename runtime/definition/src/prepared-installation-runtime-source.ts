@@ -6,7 +6,6 @@ import {
   correlationIdSchema,
   fieldIdSchema,
   fingerprintSchema,
-  jsonValueSchema,
   installationPreparedRecordAccessPlanSchema,
   installationRuntimeBundleSourceManifestSchema,
   moduleRootIdSchema,
@@ -319,7 +318,6 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
     },
   });
 };
-
 
 
 

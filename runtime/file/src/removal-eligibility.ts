@@ -28,14 +28,17 @@ export {
   activeFileShareReferenceSchema,
   activeFileSourceResponsibilityReferenceSchema,
   fileLegalHoldProjectionSchema,
-  fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityBindingSchema,
-  fileRemovalEligibilityDecisionSchema,
-  fileRemovalEligibilityRequestSchema,
   fileRemovalHoldAuthoritySnapshotSchema,
   fileRemovalRecoveryPolicySnapshotSchema,
   protectedLegalHoldReferenceSchema,
   protectedLegalHoldScopeSchema,
+};
+
+export {
+  fileRemovalAuthoritySnapshotSchema,
+  fileRemovalEligibilityDecisionSchema,
+  fileRemovalEligibilityRequestSchema,
   type ActiveFileAttachmentReference,
   type ActiveFileShareReference,
   type ActiveFileSourceResponsibilityReference,

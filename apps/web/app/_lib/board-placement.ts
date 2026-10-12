@@ -16,9 +16,9 @@ import {
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
+import type { createProtectedQueryService } from "@vortex/query";
 import {
   arrangeProtectedBoard,
-  createProtectedQueryService,
   type ProtectedBoardArrangementPage,
   type ProtectedBoardArrangementResult,
   type ProtectedQueryPageRow,

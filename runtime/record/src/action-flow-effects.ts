@@ -258,7 +258,9 @@ export const actionFlowSeed = (
       field.key,
       flowRuntimeValueOf(
         field.type,
-        hasOwn(prepared.existingValues, field.fieldId) ? prepared.existingValues[field.fieldId] : null,
+        hasOwn(prepared.existingValues, field.fieldId)
+          ? prepared.existingValues[field.fieldId]
+          : null,
       ),
     ]),
   ),
@@ -350,8 +352,14 @@ const textProperty = (call: FlowProtectedTaskCall, property: string): string | u
 
 const sameKeys = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length &&
-  [...left].map((key) => key.toLowerCase()).sort().join("|") ===
-    [...right].map((key) => key.toLowerCase()).sort().join("|");
+  [...left]
+    .map((key) => key.toLowerCase())
+    .sort()
+    .join("|") ===
+    [...right]
+      .map((key) => key.toLowerCase())
+      .sort()
+      .join("|");
 
 /**
  * Resolves one authored relationship copy against the subject. The target is read through the
@@ -531,7 +539,7 @@ export const composeFlowEffects = (
     const authoredValues = task.properties.values;
     if (authored === undefined || !sameKeys(Object.keys(authored), Object.keys(authoredValues)))
       return undefined;
-    for (const [fieldId, source] of Object.entries(authoredValues)) {
+    for (const fieldId of Object.keys(authoredValues)) {
       setFieldIds.add(fieldId.toLowerCase());
       const field = fields.get(fieldId);
       if (field === undefined) return undefined;

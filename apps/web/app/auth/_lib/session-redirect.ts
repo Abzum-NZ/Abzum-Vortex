@@ -15,9 +15,7 @@ import { identitySessionProxyHeader } from "./session-request-state";
 export const SESSION_ENDED_PATH = "/auth/session-ended";
 const sessionEndedDestination = "/auth/sign-in?status=session-ended";
 
-const directSignInDestination = (
-  applicationHome?: ApplicationHomeContinuation,
-): string => {
+const directSignInDestination = (applicationHome?: ApplicationHomeContinuation): string => {
   if (applicationHome === undefined) return sessionEndedDestination;
   const query = new URLSearchParams({ status: "session-ended" });
   query.set("applicationHome", serializeApplicationHomeContinuation(applicationHome));
@@ -36,7 +34,9 @@ export const redirectToSessionEnd = async (
     const siteUrl = getIdentityJourneyConfiguration().siteUrl;
     const sessionCookies = (await cookies()).getAll().map(({ name, value }) => ({ name, value }));
     proof = issueSessionCleanupProof(sessionCookies, siteUrl);
-  } catch {}
+  } catch {
+    /* Session cleanup can proceed without a proof. */
+  }
   if (proof !== undefined) {
     const query = new URLSearchParams({ proof });
     if (applicationHome !== undefined)

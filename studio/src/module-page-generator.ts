@@ -1,3 +1,4 @@
+import type { sourcePlacementSlotV2Schema } from "@vortex/contracts";
 import {
   flowContractVersion,
   flowTaskRegistry,
@@ -10,7 +11,6 @@ import {
   sourceFlowSchema,
   sourcePageDefinitionV2Schema,
   sourcePlacementEntriesV2,
-  sourcePlacementSlotV2Schema,
   sourcePlatformBlockDependenciesV2Schema,
   type ImmutablePlatformBlockCatalogueV2,
   type ModuleDraftV3,
@@ -45,7 +45,9 @@ export type ModulePageGeneratorInput = Readonly<{
   /** Placements retained in the target Application outside these four replacement pages. */
   retainedApplicationPlacementCount: number;
   /** Replacements keep the generated page identity and each form's bound submit control. */
-  authoredPageOverrides?: Readonly<Partial<Record<ModuleGeneratedPageKind, SourcePageDefinitionV2>>>;
+  authoredPageOverrides?: Readonly<
+    Partial<Record<ModuleGeneratedPageKind, SourcePageDefinitionV2>>
+  >;
 }>;
 
 type ParsedFlowBinding = ReturnType<typeof sourceComponentFlowBindingSchema.parse>;
@@ -122,10 +124,7 @@ const sourceIdentity = (
 const builderIdentity = (identity: string, suffix: string): string => {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < identity.length; index += 1) {
-    hash = BigInt.asUintN(
-      64,
-      (hash ^ BigInt(identity.charCodeAt(index))) * 0x100000001b3n,
-    );
+    hash = BigInt.asUintN(64, (hash ^ BigInt(identity.charCodeAt(index))) * 0x100000001b3n);
   }
   return `generated_${hash.toString(16).padStart(16, "0")}_${suffix}`;
 };
@@ -171,10 +170,7 @@ const compareReleaseVersions = (left: string, right: string): number => {
   return compareText(a.build ?? "", b.build ?? "");
 };
 
-const latestRelease = (
-  catalogue: ImmutablePlatformBlockCatalogueV2,
-  key: string,
-) => {
+const latestRelease = (catalogue: ImmutablePlatformBlockCatalogueV2, key: string) => {
   const matches = catalogue.releases.filter((release) => release.key === key);
   if (matches.length === 0)
     throw new ModulePageGeneratorError(
@@ -198,8 +194,7 @@ const matchesRecordType = (
     return (
       String(reference.moduleRootId).toLowerCase() ===
         String(module.envelope.rootId).toLowerCase() &&
-      String(reference.recordTypeId).toLowerCase() ===
-        String(recordType.recordTypeId).toLowerCase()
+      String(reference.recordTypeId).toLowerCase() === String(recordType.recordTypeId).toLowerCase()
     );
   return reference.qualifiedKey === `${module.envelope.key}:${recordType.key}`;
 };
@@ -266,11 +261,7 @@ const withAuthoredPageOverride = (
   if (authored === undefined) return generated;
   const parsed = sourcePageDefinitionV2Schema.parse(authored);
   const expectedType = kind === "list" || kind === "detail" ? kind : "form";
-  if (
-    parsed.id !== generated.id ||
-    parsed.key !== generated.key ||
-    parsed.type !== expectedType
-  )
+  if (parsed.id !== generated.id || parsed.key !== generated.key || parsed.type !== expectedType)
     throw new ModulePageGeneratorError(
       "authored_page_identity_changed",
       `The authored '${kind}' page override must retain generated id '${generated.id}', key '${generated.key}', and type '${expectedType}'`,
@@ -358,7 +349,8 @@ export const generateModulePageFragments = (
   };
 
   const recordType = module.content.recordTypes.find(
-    (candidate) => String(candidate.recordTypeId).toLowerCase() === String(recordTypeId).toLowerCase(),
+    (candidate) =>
+      String(candidate.recordTypeId).toLowerCase() === String(recordTypeId).toLowerCase(),
   );
   if (recordType === undefined)
     throw new ModulePageGeneratorError(
@@ -508,7 +500,11 @@ export const generateModulePageFragments = (
     const formPlacementId = sourceIdentity(module, recordType, `${kind}_form`);
     const submitButtonId = sourceIdentity(module, recordType, `${kind}_submit_button`);
     const fieldPlacements = supportedFields.map((field) => {
-      const id = sourceIdentity(module, recordType, `${kind}_field_${compactId(String(field.fieldId))}`);
+      const id = sourceIdentity(
+        module,
+        recordType,
+        `${kind}_field_${compactId(String(field.fieldId))}`,
+      );
       return [
         id,
         placement(fieldInputRelease, {
@@ -575,9 +571,7 @@ export const generateModulePageFragments = (
             }
           : {}),
         values: { type: "json", required: true },
-        ...(groupOwnedCreate
-          ? { selected_owner_group_id: { type: "text", required: true } }
-          : {}),
+        ...(groupOwnedCreate ? { selected_owner_group_id: { type: "text", required: true } } : {}),
       },
       variables: {},
       triggers: [],

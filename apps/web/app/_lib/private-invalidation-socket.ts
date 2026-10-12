@@ -294,7 +294,7 @@ export class PrivateInvalidationTransportOwner {
       readonly url: string;
       private readonly socket: WebSocket;
       private sends = 0;
-      binaryType: "arraybuffer" = "arraybuffer";
+      binaryType = "arraybuffer" as const;
       onopen: ((event: Event) => void) | null = null;
       onmessage: ((event: MessageEvent) => void) | null = null;
       onclose: ((event: CloseEvent) => void) | null = null;

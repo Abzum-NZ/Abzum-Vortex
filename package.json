@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "turbo run typecheck",
+    "guard": "node tooling/guard/guard.ts",
     "build": "turbo run build",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
     "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs"
@@ -28,6 +29,7 @@
     "@eslint/js": "9.39.5",
     "@types/node": "24.13.6",
     "eslint": "9.39.5",
+    "knip": "catalog:",
     "next": "16.3.5",
     "postgres": "catalog:",
     "prettier": "3.9.8",

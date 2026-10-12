@@ -32,6 +32,7 @@ pnpm dev
 
 Environment variables are described in `README.md` and `apps/web/.env.example`.
 `pnpm verify` runs format check, lint, typecheck and build.
+`pnpm guard` checks target-architecture rules against the shrinking baseline.
 
 ## Rules
 

@@ -48,7 +48,6 @@ const maxCandidateBytes = 256;
 const maxDefinitionBytes = 256 * 1024;
 const maxReadableValuesBytes = 64 * 1024;
 const maxResultBytes = 5 * 1024 * 1024;
-const nilUuid = "00000000-0000-0000-0000-000000000000";
 const generatedFieldTypes = new Set(["reference_number", "calculation", "total"]);
 
 export type RecordImportUpdateTargetInput = Readonly<{
