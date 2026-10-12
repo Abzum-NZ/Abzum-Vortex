@@ -11,9 +11,7 @@ import {
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
-  VortexFontStylesheets,
   VortexStyleRoot,
-  VortexStyleStylesheet,
   type ApplicationThemeV2,
   type ThemeMode,
 } from "./theme";
@@ -172,6 +170,8 @@ export function PagePuckRenderer({
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
+  const themeRootProps = createThemeRootProps(applicationTheme, themeMode);
+  const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
   const metadata: VortexPuckMetadata = {
     ...(breakpoint === undefined ? {} : { breakpoint }),
     ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
@@ -189,12 +189,11 @@ export function PagePuckRenderer({
   const step = stepIndex < 0 ? undefined : guidedSteps?.[stepIndex];
   return (
     <VortexStyleRoot
-      {...createThemeRootProps(applicationTheme, themeMode)}
-      {...createVortexStyleRootProps(vortexStyle)}
+      {...themeRootProps}
+      {...vortexStyleProps}
+      style={{ ...themeRootProps.style, ...vortexStyleProps.style }}
       {...(applicationSurface ? { "data-vortex-application-surface": "" } : {})}
     >
-      <VortexStyleStylesheet style={vortexStyle.style} />
-      <VortexFontStylesheets tokens={tokens} />
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>

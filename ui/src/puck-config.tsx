@@ -94,7 +94,7 @@ import {
   type PlatformComponentRenderer,
   type RuntimeInputsByPlacement,
 } from "./registry";
-import { resolvePlacementTheme, VortexFontStylesheets, type PlacementThemeScope } from "./theme";
+import { resolvePlacementTheme, type PlacementThemeScope } from "./theme";
 import { ApplicationLauncher } from "./launcher/application-launcher";
 import { LinkTiles } from "./launcher/link-tiles";
 import { ViewFilter } from "./launcher/view-filter";
@@ -664,10 +664,6 @@ function PlacementBlock(props: {
         style={wrapperStyle}
       >
         {ownCss === undefined ? null : <style>{ownCss}</style>}
-        {/* A re-themed placement may paint another font; its links join the application's. */}
-        {placementTheme.style === undefined ? null : (
-          <VortexFontStylesheets tokens={placementTheme.scope.inherited} />
-        )}
         {visible ? (
           <Implementation
             {...parsedInputs}
