@@ -62,9 +62,12 @@ begin
       'bindingRevision',binding.binding_revision,'state',binding.state) order by binding.module_root_id),
     pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
-      'contentFingerprint',binding.content_fingerprint,
-      'resolutionFingerprint',binding.resolution_fingerprint) order by binding.module_root_id)
+      'contentFingerprint',module_release.content_fingerprint,
+      'resolutionFingerprint',module_release.resolution_fingerprint) order by binding.module_root_id)
   into bindings,pin_facts from vortex_module.installation_bindings as binding
+  join vortex_definition.releases as module_release
+    on module_release.root_id=binding.module_root_id
+    and module_release.release_revision=binding.module_release_revision
   where binding.organization_id=selected_org and binding.application_root_id=selected_app
     and binding.state='active';
   if exists(select 1 from pg_catalog.jsonb_array_elements(pin_facts) as pin(value)
@@ -200,9 +203,12 @@ begin
       'bindingRevision',binding.binding_revision,'state',binding.state) order by binding.module_root_id),
     pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
-      'contentFingerprint',binding.content_fingerprint,
-      'resolutionFingerprint',binding.resolution_fingerprint) order by binding.module_root_id)
+      'contentFingerprint',module_release.content_fingerprint,
+      'resolutionFingerprint',module_release.resolution_fingerprint) order by binding.module_root_id)
   into bindings,pin_facts from vortex_module.installation_bindings as binding
+  join vortex_definition.releases as module_release
+    on module_release.root_id=binding.module_root_id
+    and module_release.release_revision=binding.module_release_revision
   where binding.organization_id=selected_org and binding.application_root_id=selected_app
     and binding.state='active';
   if exists(select 1 from pg_catalog.jsonb_array_elements(pin_facts) as pin(value)
