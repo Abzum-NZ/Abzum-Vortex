@@ -158,11 +158,10 @@ begin
   into record_fact
   using context_organization_id, p_record_id;
 
-  if record_fact is null then
-    return pg_catalog.jsonb_build_object('outcome', 'record_unavailable');
-  end if;
+  -- A record type that is a system projection has no stored row to read; the
+  -- caller still receives its definition to see that nothing is searchable.
   return pg_catalog.jsonb_build_object(
-    'outcome', 'loaded',
+    'outcome', case when record_fact is null then 'record_unavailable' else 'loaded' end,
     'recordType', record_type_definition,
     'record', record_fact
   );

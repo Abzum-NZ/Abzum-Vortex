@@ -108,9 +108,9 @@ const readFacts = async (occurrence: EventOccurrenceEnvelope): Promise<IndexFact
       if (result.outcome === "record_type_unavailable") return undefined;
       if (result.outcome !== "loaded" && result.outcome !== "record_unavailable")
         throw new Error("SEARCH_INDEX_SNAPSHOT_INVALID");
-      if (result.outcome === "record_unavailable") return undefined;
 
       const recordType = recordTypeDefinitionSchema.parse(result.recordType);
+      if (result.outcome === "record_unavailable") return { recordType, snapshot: undefined };
       const record = objectOf(result.record, "RECORD");
       const stored = objectOf(record.fieldValues, "FIELD_VALUES");
       const storedByName = new Map(
