@@ -465,7 +465,6 @@ const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseli
 });
 const allowed =
   mainBaseline.status === 0 ? new Set(JSON.parse(mainBaseline.stdout) as string[]) : null;
-const growth = allowed ? baseline.filter((id) => !allowed.has(id)) : [];
 const current = new Set(unique.map((finding) => finding.id));
 const old = new Set(baseline);
 const mainFiles = new Map<string, boolean>();
@@ -481,12 +480,27 @@ function unchangedFromMain(file: string): boolean {
   mainFiles.set(file, unchanged);
   return unchanged;
 }
+// A new baseline entry is allowed only for a finding that exists now in a file identical to
+// main, i.e. one that predates this pull request (recorded by --refresh-from-main).
+const growth = allowed
+  ? baseline.filter(
+      (id) => !allowed.has(id) && !(current.has(id) && unchangedFromMain(id.split("|")[1])),
+    )
+  : [];
 // Main can advance while this PR is open. A finding on a file identical to the
 // PR base belongs to main; a changed or newly added file is still checked here.
 const added = unique.filter((finding) => !old.has(finding.id) && !unchangedFromMain(finding.file));
 const resolved = baseline.filter((id) => !current.has(id));
 const stale = resolved.filter((id) => !unchangedFromMain(id.split("|")[1]));
-if (process.argv.includes("--update-baseline")) {
+if (process.argv.includes("--refresh-from-main")) {
+  // Records main's complete current findings. Allowed only on a tree identical to origin/main,
+  // so a pull request can never use it to enlarge the baseline.
+  const diff = spawnSync("git", ["diff", "--quiet", "origin/main", "--", ".", ":(exclude)tooling/guard"], { cwd: root });
+  if (diff.status !== 0) throw new Error("--refresh-from-main requires a tree identical to origin/main");
+  writeFileSync(baselinePath, `${JSON.stringify(unique.map((finding) => finding.id), null, 2)}
+`);
+  console.log(`Baseline refreshed from main: ${unique.length} findings.`);
+} else if (process.argv.includes("--update-baseline")) {
   if (growth.length) throw new Error(`Baseline cannot grow: ${growth[0]}`);
   if (hasBaseline && added.length)
     throw new Error(
