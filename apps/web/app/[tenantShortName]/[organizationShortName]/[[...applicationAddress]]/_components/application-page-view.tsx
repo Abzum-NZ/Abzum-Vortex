@@ -22,6 +22,7 @@ import {
   parseBoardPayload,
   FORM_CONTAINER_BLOCK_RELEASE,
   PagePuckRenderer,
+  type PagePuckRendererProps,
   UnsavedWorkProvider,
   useFlowIntentHost,
   useUnsavedWorkGuard,
@@ -58,6 +59,7 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
+
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Toaster, toast } from "@vortex/ui/components/sonner";
@@ -95,6 +97,8 @@ import type {
   GuidedFormStepActionResult,
   GuidedFormStepRequest,
 } from "../../../../_lib/guided-form-steps";
+
+type ApplicationShellRuntime = NonNullable<PagePuckRendererProps["applicationShellRuntime"]>;
 
 type GuidedFormActions = Readonly<{
   advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;
@@ -767,11 +771,15 @@ export function ApplicationPageView({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationSwitcherState,
+  applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
+  applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   return (
@@ -780,6 +788,8 @@ export function ApplicationPageView({
         model={model}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}
+        applicationSwitcherState={applicationSwitcherState}
+        applicationToolbar={applicationToolbar}
         pageFeedback={pageFeedback}
       />
     </UnsavedWorkProvider>
@@ -790,11 +800,15 @@ function ApplicationPageViewContent({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationSwitcherState,
+  applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
+  applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   const router = useRouter();
@@ -2750,10 +2764,27 @@ function ApplicationPageViewContent({
       if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
       router.push("/signed-in");
     },
+    openApplication: async (href: string) => {
+      if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
+      router.push(href);
+    },
     signOut: async () => {
       if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
       await signOut();
     },
+  };
+  const applicationShellRuntime: ApplicationShellRuntime = {
+    applicationName: model.applicationName,
+    applicationHref: `${basePath}/${encodeURIComponent(model.applicationHomePageKey)}`,
+    organizationName: application.organizationShortName,
+    pageName: model.pageName,
+    applicationSwitcherState,
+    ...(applicationToolbar === undefined ? {} : { toolbarContent: applicationToolbar }),
+    applications: model.availableApplications.map((candidate) => ({
+      key: candidate.key,
+      name: candidate.name,
+      href: `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
+    })),
   };
 
   return (
@@ -2788,6 +2819,8 @@ function ApplicationPageViewContent({
         composition={model.page as unknown as ProjectedPageCapability}
         registry={platformComponentRegistry}
         shells={model.shells}
+        {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
+        applicationShellRuntime={applicationShellRuntime}
         pageId={model.pageId}
         theme={model.theme}
         projectedNavigation={model.navigation}

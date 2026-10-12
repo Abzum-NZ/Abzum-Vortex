@@ -34,6 +34,7 @@ import { AuthShell } from "../../../auth/_components/auth-shell";
 import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
@@ -496,6 +497,38 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
   if (page.kind === "unavailable") notFound();
+  const applicationSwitcherRead =
+    page.model.applicationShell?.presentation.topBar.applicationSwitcher === true
+      ? await loadPermittedApplicationsAtAddress(
+          identity.session,
+          tenantShortName,
+          organizationShortName,
+        )
+      : undefined;
+  if (applicationSwitcherRead?.kind === "temporarily_unavailable")
+    console.error(
+      `[application-shell] permitted applications unavailable: cause=${applicationSwitcherRead.cause ?? "cause_not_provided"}`,
+    );
+  const applicationSwitcherState =
+    applicationSwitcherRead === undefined || applicationSwitcherRead.kind === "available"
+      ? "available"
+      : applicationSwitcherRead.kind === "temporarily_unavailable"
+        ? "temporarily_unavailable"
+        : "unavailable";
+  const applicationSwitcherApplications =
+    applicationSwitcherRead?.kind === "available"
+      ? applicationSwitcherRead.applications.map((candidate) => ({
+          key: candidate.key,
+          name: candidate.name,
+          homePageKey: candidate.homePageKey,
+        }))
+      : applicationSwitcherRead === undefined
+        ? page.model.availableApplications
+        : [];
+  const applicationModel = {
+    ...page.model,
+    availableApplications: applicationSwitcherApplications,
+  };
   const search = await loadApplicationSearch(identity.session, {
     tenantShortName, organizationShortName, applicationKey: resolved.application.key,
   }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
@@ -512,26 +545,19 @@ export default async function ApplicationAddressPage({
         : parameters.adoption === "refused"
           ? "The release could not be adopted. The current release is still in use."
           : undefined;
-  const currentOrganizationAccount = await loadCurrentOrganizationAccount(
-    identity.session,
-    resolved.read.organizationId,
-  );
   return (
     <ApplicationPageView
-      model={page.model}
+      model={applicationModel}
       onOpenApplication={openApplication}
+      applicationSwitcherState={applicationSwitcherState}
+      applicationToolbar={
+        <ApplicationSearch
+          view={search}
+          pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined}
+        />
+      }
       pageFeedback={
         <>
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b bg-card px-4 py-2 text-card-foreground">
-            <ApplicationSearch view={search} pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined} />
-            <AccountDetails
-              account={
-                currentOrganizationAccount.kind === "available"
-                  ? currentOrganizationAccount.value
-                  : undefined
-              }
-            />
-          </div>
           {projectionResponseEvidence === undefined ? null : (
             <span
               hidden

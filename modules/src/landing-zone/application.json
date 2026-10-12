@@ -48,6 +48,7 @@
         "id": "nav_landing_home",
         "type": "page",
         "label": "Home",
+        "icon":  "grid",
         "page": "home",
         "permission": "application.landing_zone.open"
       },
@@ -55,6 +56,7 @@
         "id": "nav_landing_favourites",
         "type": "page",
         "label": "Favourites",
+        "icon":  "grid",
         "page": "favourites",
         "permission": "application.landing_zone.open"
       },
@@ -62,6 +64,7 @@
         "id": "nav_landing_bookmarks",
         "type": "page",
         "label": "Bookmarks",
+        "icon":  "grid",
         "page": "bookmarks",
         "permission": "application.landing_zone.open"
       },
@@ -69,6 +72,7 @@
         "id": "nav_landing_add_bookmark",
         "type": "page",
         "label": "Add bookmark",
+        "icon":  "grid",
         "page": "bookmark_entry",
         "permission": "application.landing_zone.open"
       },
@@ -76,6 +80,7 @@
         "id": "nav_landing_all_applications",
         "type": "page",
         "label": "All applications",
+        "icon":  "grid",
         "page": "all_applications",
         "permission": "application.landing_zone.open"
       },
@@ -83,6 +88,7 @@
         "id": "nav_landing_manage_saved_tiles",
         "type": "page",
         "label": "Manage saved tiles",
+        "icon":  "grid",
         "page": "manage_saved_tiles",
         "permission": "application.landing_zone.open"
       }
@@ -157,6 +163,18 @@
         "id": "shell_landing_zone",
         "key": "landing_zone_shell",
         "name": "Landing Zone shell",
+        "presentation":  {
+            "sidebar":  {
+                "collapsible":  "icon",
+                "default_collapsed":  false
+            },
+            "top_bar":  {
+                "breadcrumbs":  true,
+                "organization_switcher":  true,
+                "application_switcher":  true,
+                "account_menu":  true
+            }
+        },
         "layout": {
           "placements": {
             "shell_root": {
@@ -179,65 +197,7 @@
                 }
               },
               "slots": {
-                "header": {
-                  "placements": {
-                    "shell_heading": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {
-                        "text": {
-                          "kind": "text",
-                          "value": "Landing Zone"
-                        },
-                        "level": {
-                          "kind": "choice",
-                          "value": "one"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    },
-                    "shell_account": {
-                      "block": {
-                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {},
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    }
-                  },
-                  "order": {
-                    "desktop": [
-                      "shell_heading",
-                      "shell_account"
-                    ]
-                  }
-                },
+                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                 "content": {
                   "placements": {
                     "shell_body": {

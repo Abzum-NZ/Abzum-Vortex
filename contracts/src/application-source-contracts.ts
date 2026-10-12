@@ -32,6 +32,7 @@ import {
 } from "./application-composition-v2";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "./flow-source-contracts";
+import { vortexIconNameSchema } from "./icon-names";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -156,9 +157,9 @@ const declaresGatedSourcePlacement = (value: unknown): boolean => {
   return Object.values(record).some(declaresGatedSourcePlacement);
 };
 type SourceNavigation =
-  | { id: string; type: "heading"; label: string; children: SourceNavigation[] }
-  | { id: string; type: "page"; label: string; page: string; permission: string }
-  | { id: string; type: "external"; label: string; address: string; permission: string };
+  | { id: string; type: "heading"; label: string; icon: z.infer<typeof vortexIconNameSchema>; children: SourceNavigation[] }
+  | { id: string; type: "page"; label: string; icon: z.infer<typeof vortexIconNameSchema>; page: string; permission: string }
+  | { id: string; type: "external"; label: string; icon: z.infer<typeof vortexIconNameSchema>; address: string; permission: string };
 const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z
@@ -166,6 +167,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
         id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
         type: sourceProvenanceUnchanged(z.literal("heading")),
         label: sourceProvenanceUnchanged(labelSchema),
+        icon: sourceProvenanceUnchanged(vortexIconNameSchema),
         children: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).min(1).max(100)),
       })
       .strict(),
@@ -174,6 +176,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
         id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
         type: sourceProvenanceUnchanged(z.literal("page")),
         label: sourceProvenanceUnchanged(labelSchema),
+        icon: sourceProvenanceUnchanged(vortexIconNameSchema),
         page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
         permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
@@ -183,6 +186,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
         id: sourceProvenanceUnchanged(sourceAliasSchema),
         type: sourceProvenanceUnchanged(z.literal("external")),
         label: sourceProvenanceUnchanged(labelSchema),
+        icon: sourceProvenanceUnchanged(vortexIconNameSchema),
         address: sourceProvenanceUnchanged(z.string().url().startsWith("https://")),
         permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })

@@ -4050,6 +4050,7 @@ function compileApplication(
             id: resolution.id(definitionKey, "navigation_item", String(item.id)),
             type: "heading",
             label: item.label,
+            icon: item.icon,
             children: (item.children as JsonObject[]).map(visit),
           };
         if (item.type === "external")
@@ -4057,6 +4058,7 @@ function compileApplication(
             id: resolution.id(definitionKey, "navigation_item", String(item.id)),
             type: "external",
             label: item.label,
+            icon: item.icon,
             address: item.address,
             permissionKey: item.permission,
           };
@@ -4064,6 +4066,7 @@ function compileApplication(
           id: resolution.id(definitionKey, "navigation_item", String(item.id)),
           type: "page",
           label: item.label,
+          icon: item.icon,
           pageId: pageId(String(item.page)),
           permissionKey: item.permission,
         };
@@ -4898,6 +4901,14 @@ function v2SpecialSourceTargets(
     const shell = source.body.shells[sourcePath[2]];
     if (shell === undefined) return undefined;
     const shellRoot: Path = ["content", "shells", sourcePath[2]];
+    if (sourcePath[3] === "presentation")
+      return [
+        [
+          ...shellRoot,
+          "presentation",
+          ...sourcePath.slice(4).map((segment) => camelCase(String(segment))),
+        ],
+      ];
     if (sourcePath[3] === "layout")
       return v2SlotSourceTargets(
         source,

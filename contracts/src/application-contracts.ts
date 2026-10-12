@@ -47,6 +47,7 @@ import {
 } from "./application-composition-v2";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { flowSchema } from "./flow-contracts";
+import { vortexIconNameSchema } from "./icon-names";
 
 /** The typed inputs and shape of one Application-owned action. */
 const actionInputBase = {
@@ -258,12 +259,14 @@ type NavigationItemValue =
       id: z.output<typeof containedComponentIdSchema>;
       type: "heading";
       label: string;
+      icon: z.infer<typeof vortexIconNameSchema>;
       children: NavigationItemValue[];
     }
   | {
       id: z.output<typeof containedComponentIdSchema>;
       type: "page";
       label: string;
+      icon: z.infer<typeof vortexIconNameSchema>;
       pageId: z.output<typeof pageIdSchema>;
       permissionKey: string;
     }
@@ -271,6 +274,7 @@ type NavigationItemValue =
       id: z.output<typeof containedComponentIdSchema>;
       type: "external";
       label: string;
+      icon: z.infer<typeof vortexIconNameSchema>;
       address: string;
       permissionKey: string;
     };
@@ -281,6 +285,7 @@ export const navigationItemSchema: z.ZodType<NavigationItemValue> = z.lazy(() =>
         id: containedComponentIdSchema,
         type: z.literal("heading"),
         label: labelSchema,
+        icon: vortexIconNameSchema,
         children: z.array(navigationItemSchema).min(1),
       })
       .strict(),
@@ -289,6 +294,7 @@ export const navigationItemSchema: z.ZodType<NavigationItemValue> = z.lazy(() =>
         id: containedComponentIdSchema,
         type: z.literal("page"),
         label: labelSchema,
+        icon: vortexIconNameSchema,
         pageId: pageIdSchema,
         permissionKey: namespacedKeySchema,
       })
@@ -298,6 +304,7 @@ export const navigationItemSchema: z.ZodType<NavigationItemValue> = z.lazy(() =>
         id: containedComponentIdSchema,
         type: z.literal("external"),
         label: labelSchema,
+        icon: vortexIconNameSchema,
         address: safeHttpsUrlSchema,
         permissionKey: namespacedKeySchema,
       })

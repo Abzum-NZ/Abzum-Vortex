@@ -38,6 +38,7 @@ export * from "./definition-consumer-read";
 export * from "./definition-history-contracts";
 export * from "./definition-store-contracts";
 export * from "./identifiers";
+export * from "./icon-names";
 export * from "./identity-access";
 export * from "./index-readiness";
 export * from "./integration-contracts";

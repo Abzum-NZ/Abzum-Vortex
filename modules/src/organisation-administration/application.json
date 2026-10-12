@@ -149,11 +149,13 @@
         "id": "nav_organisation",
         "type": "heading",
         "label": "Organisation",
+        "icon":  "building-2",
         "children": [
           {
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
+            "icon":  "building-2",
             "page": "organisation_overview",
             "permission": "platform.organization.accounts.read"
           },
@@ -161,6 +163,7 @@
             "id": "nav_accounts",
             "type": "page",
             "label": "Organisation accounts",
+            "icon":  "building-2",
             "page": "organisation_accounts",
             "permission": "application.organisation_administration.open"
           },
@@ -168,6 +171,7 @@
             "id": "nav_invitations",
             "type": "page",
             "label": "Invitations",
+            "icon":  "building-2",
             "page": "organisation_invitations",
             "permission": "platform.organization.invitations.read"
           },
@@ -175,6 +179,7 @@
             "id": "nav_runtime_settings",
             "type": "page",
             "label": "Runtime settings",
+            "icon":  "building-2",
             "page": "organisation_runtime_settings",
             "permission": "platform.organization.runtime_settings.read"
           }
@@ -184,11 +189,13 @@
         "id": "nav_content",
         "type": "heading",
         "label": "Organisation content",
+        "icon":  "building-2",
         "children": [
           {
             "id": "nav_notices",
             "type": "page",
             "label": "Notices",
+            "icon":  "building-2",
             "page": "organisation_notices",
             "permission": "application.organisation_administration.organisation_notice.read"
           },
@@ -196,6 +203,7 @@
             "id": "nav_record_notice",
             "type": "page",
             "label": "Record notice",
+            "icon":  "building-2",
             "page": "record_organisation_notice",
             "permission": "application.organisation_administration.organisation_notice.record_notice"
           },
@@ -203,6 +211,7 @@
             "id": "nav_privacy_cases",
             "type": "page",
             "label": "Privacy request cases",
+            "icon":  "life-buoy",
             "page": "privacy_request_cases",
             "permission": "application.organisation_administration.privacy_request_case.read"
           },
@@ -210,6 +219,7 @@
             "id": "nav_record_privacy_request",
             "type": "page",
             "label": "Record privacy request",
+            "icon":  "life-buoy",
             "page": "record_privacy_request_case",
             "permission": "application.organisation_administration.privacy_request_case.record_privacy_request"
           }
@@ -307,6 +317,18 @@
         "id": "shell_organisation_administration",
         "key": "organisation_administration_shell",
         "name": "Organisation administration shell",
+        "presentation":  {
+            "sidebar":  {
+                "collapsible":  "icon",
+                "default_collapsed":  false
+            },
+            "top_bar":  {
+                "breadcrumbs":  true,
+                "organization_switcher":  true,
+                "application_switcher":  true,
+                "account_menu":  true
+            }
+        },
         "layout": {
           "placements": {
             "shell_root": {
@@ -345,65 +367,7 @@
                 }
               },
               "slots": {
-                "header": {
-                  "placements": {
-                    "shell_heading": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {
-                        "text": {
-                          "kind": "text",
-                          "value": "Organisation Administration"
-                        },
-                        "level": {
-                          "kind": "choice",
-                          "value": "one"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    },
-                    "shell_account": {
-                      "block": {
-                        "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                        "release_version": "1.0.0"
-                      },
-                      "settings": {},
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {}
-                    }
-                  },
-                  "order": {
-                    "desktop": [
-                      "shell_heading",
-                      "shell_account"
-                    ]
-                  }
-                },
+                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                 "content": {
                   "placements": {
                     "shell_body": {

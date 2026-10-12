@@ -393,6 +393,7 @@
                                         "id":  "nav_crm_home",
                                         "type":  "page",
                                         "label":  "Overview",
+                                        "icon":  "grid",
                                         "page":  "crm_dashboard",
                                         "permission":  "application.crm.open"
                                     },
@@ -400,11 +401,13 @@
                                         "id":  "nav_crm_customers",
                                         "type":  "heading",
                                         "label":  "Customers",
+                                        "icon":  "grid",
                                         "children":  [
                                                          {
                                                              "id":  "nav_crm_companies",
                                                              "type":  "page",
                                                              "label":  "Companies",
+                                                             "icon":  "building-2",
                                                              "page":  "crm_companies",
                                                              "permission":  "application.crm.company.read"
                                                          },
@@ -412,6 +415,7 @@
                                                              "id":  "nav_crm_contacts",
                                                              "type":  "page",
                                                              "label":  "Contacts",
+                                                             "icon":  "users",
                                                              "page":  "crm_contacts",
                                                              "permission":  "application.crm.contact.read"
                                                          },
@@ -419,6 +423,7 @@
                                                              "id":  "nav_crm_leads",
                                                              "type":  "page",
                                                              "label":  "Leads",
+                                                             "icon":  "grid",
                                                              "page":  "crm_leads",
                                                              "permission":  "application.crm.lead.read"
                                                          }
@@ -428,11 +433,13 @@
                                         "id":  "nav_crm_work",
                                         "type":  "heading",
                                         "label":  "Work",
+                                        "icon":  "grid",
                                         "children":  [
                                                          {
                                                              "id":  "nav_crm_opportunities",
                                                              "type":  "page",
                                                              "label":  "Opportunities",
+                                                             "icon":  "grid",
                                                              "page":  "crm_opportunities",
                                                              "permission":  "application.crm.opportunity.read"
                                                          },
@@ -440,6 +447,7 @@
                                                              "id":  "nav_crm_activities",
                                                              "type":  "page",
                                                              "label":  "Activities",
+                                                             "icon":  "grid",
                                                              "page":  "crm_activities",
                                                              "permission":  "application.crm.activity.read"
                                                          },
@@ -447,6 +455,7 @@
                                                              "id":  "nav_crm_cases",
                                                              "type":  "page",
                                                              "label":  "Shared cases",
+                                                             "icon":  "life-buoy",
                                                              "page":  "crm_shared_cases",
                                                              "permission":  "application.crm.shared_cases.read"
                                                          }
@@ -5075,6 +5084,18 @@
                      "id": "shell_crm",
                      "key": "crm_shell",
                      "name": "CRM shell",
+                     "presentation":  {
+                         "sidebar":  {
+                             "collapsible":  "icon",
+                             "default_collapsed":  false
+                         },
+                         "top_bar":  {
+                             "breadcrumbs":  true,
+                             "organization_switcher":  true,
+                             "application_switcher":  true,
+                             "account_menu":  true
+                         }
+                     },
                      "layout": {
                        "placements": {
                          "shell_root": {
@@ -5113,124 +5134,7 @@
                              }
                            },
                            "slots": {
-                             "header": {
-                                 "placements": {
-                                     "shell_header_frame": {
-                                         "block": {
-                                             "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                                             "release_version": "1.3.0"
-                                         },
-                                         "settings": {
-                                             "direction": {
-                                                 "kind": "choice",
-                                                 "value": "row"
-                                             },
-                                             "gap": {
-                                                 "kind": "choice",
-                                                 "value": "large"
-                                             },
-                                             "phone_direction": {
-                                                 "kind": "choice",
-                                                 "value": "column"
-                                             },
-                                             "padding": {
-                                                 "kind": "choice",
-                                                 "value": "none"
-                                             },
-                                             "content_width": {
-                                                 "kind": "choice",
-                                                 "value": "fill"
-                                             }
-                                         },
-                                         "theme_overrides": {},
-                                         "responsive": {
-                                             "desktop": {
-                                                 "visible": true,
-                                                 "width": {
-                                                     "kind": "fill"
-                                                 },
-                                                 "height": {
-                                                     "kind": "content"
-                                                 }
-                                             }
-                                         },
-                                         "slots": {
-                                             "header": {
-                                                 "placements": {
-                                                     "shell_heading": {
-                                                         "block": {
-                                                             "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                                                             "release_version": "1.0.0"
-                                                         },
-                                                         "settings": {
-                                                             "text": {
-                                                                 "kind": "text",
-                                                                 "value": "CRM"
-                                                             },
-                                                             "level": {
-                                                                 "kind": "choice",
-                                                                 "value": "one"
-                                                             }
-                                                         },
-                                                         "theme_overrides": {},
-                                                         "responsive": {
-                                                             "desktop": {
-                                                                 "visible": true,
-                                                                 "width": {
-                                                                     "kind": "fill"
-                                                                 },
-                                                                 "height": {
-                                                                     "kind": "content"
-                                                                 }
-                                                             }
-                                                         },
-                                                         "slots": {}
-                                                     }
-                                                 },
-                                                 "order": {
-                                                     "desktop": [
-                                                         "shell_heading"
-                                                     ]
-                                                 }
-                                             },
-                                             "content": {
-                                                 "placements": {
-                                                     "shell_account": {
-                                                         "block": {
-                                                             "block_id": "9f8eaf39-8d16-47ef-9ef6-f22b1c9a5421",
-                                                             "release_version": "1.0.0"
-                                                         },
-                                                         "settings": {},
-                                                         "theme_overrides": {},
-                                                         "responsive": {
-                                                             "desktop": {
-                                                                 "visible": true,
-                                                                 "width": {
-                                                                     "kind": "fill"
-                                                                 },
-                                                                 "height": {
-                                                                     "kind": "content"
-                                                                 }
-                                                             }
-                                                         },
-                                                         "slots": {}
-                                                     }
-                                                 },
-                                                 "order": {
-                                                     "desktop": [
-                                                         "shell_account"
-                                                     ]
-                                                 }
-                                             }
-                                         }
-                                     }
-                                 },
-                                 "order": {
-                                     "desktop": [
-                                         "shell_header_frame"
-                                     ]
-                                 }
-                             },
+                             "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
                              "content": {
                                "placements": {
                                  "shell_body": {

@@ -159,7 +159,12 @@ export type PlacementFlowBinding = Readonly<{
 export type ApplicationPageModel = Readonly<{
   page: Readonly<Record<string, unknown>>;
   pageId: string;
+  pageName: string;
   shells: readonly ApplicationShellV2[];
+  applicationShell?: ApplicationShellV2;
+  applicationName: string;
+  applicationHomePageKey: string;
+  availableApplications: readonly Readonly<{ key: string; name: string; homePageKey: string }>[];
   theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
   navigation: ProjectedNavigation;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
@@ -3896,11 +3901,28 @@ const loadApplicationPageInternal = async (
 
   if (subjectUnreadable) return { kind: "unavailable" };
   const permittedKeys = new Set(address.application.pageKeys);
+  const applicationShellId = "shellId" in pageDefinition.composition
+    ? pageDefinition.composition.shellId
+    : undefined;
+  const applicationShell = applicationShellId === undefined
+    ? undefined
+    : application.content.shells.find((candidate) => sameId(candidate.shellId, applicationShellId));
+  if (applicationShellId !== undefined && applicationShell === undefined)
+    throw new Error(`Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`);
   observeComposition?.("PAGE_MODEL", "AVAILABLE", page, data);
   const model: ApplicationPageModel = {
       page,
       pageId: pageDefinition.pageId,
+      pageName: pageDefinition.name,
       shells: application.content.shells,
+      ...(applicationShell === undefined ? {} : { applicationShell }),
+      applicationName: address.application.name,
+      applicationHomePageKey: address.application.homePageKey,
+      availableApplications: address.read.applications.map((candidate) => ({
+        key: candidate.key,
+        name: candidate.name,
+        homePageKey: candidate.homePageKey,
+      })),
       theme: application.content.theme,
       navigation: navigation.value,
       ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),

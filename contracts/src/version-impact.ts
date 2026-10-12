@@ -101,6 +101,8 @@ export const versionImpactProperties = [
   "version_requirement",
   "address",
   "theme",
+  "icon",
+  "presentation",
 ] as const;
 export const versionImpactPropertySchema = z.enum(versionImpactProperties);
 

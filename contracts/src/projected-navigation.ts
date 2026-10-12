@@ -1,3 +1,5 @@
+import type { VortexIconName } from "./icon-names";
+
 /**
  * The navigation tree projected for one viewer. It is the compiled contract shape without
  * permission keys: the server already removed every item the viewer may not use and every heading
@@ -9,9 +11,10 @@ export type ProjectedNavigationItem =
       type: "heading";
       id: string;
       label: string;
+      icon: VortexIconName;
       children: readonly ProjectedNavigationItem[];
     }>
-  | Readonly<{ type: "page"; id: string; label: string; pageId: string }>
-  | Readonly<{ type: "external"; id: string; label: string; address: string }>;
+  | Readonly<{ type: "page"; id: string; label: string; icon: VortexIconName; pageId: string }>
+  | Readonly<{ type: "external"; id: string; label: string; icon: VortexIconName; address: string }>;
 
 export type ProjectedNavigation = readonly ProjectedNavigationItem[];

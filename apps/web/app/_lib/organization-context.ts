@@ -7,6 +7,15 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 
 const organizationLauncherService = createOrganizationLauncherService();
 
+const describeFailure = (error: unknown): string => {
+  const name = error instanceof Error ? error.name : typeof error;
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { readonly code?: unknown }).code)
+      : undefined;
+  return code === undefined ? name : `${name}(${code})`;
+};
+
 export const loadOrganizationLauncher = async (
   session: IdentitySession,
 ): Promise<OrganizationLauncherResolution> => organizationLauncherService.list(session);
@@ -19,8 +28,8 @@ export const loadPermittedApplicationsAtAddress = async (
   let authorityId;
   try {
     authorityId = getIdentityAuthorityConfiguration().authorityId;
-  } catch {
-    return { kind: "temporarily_unavailable" };
+  } catch (error) {
+    return { kind: "temporarily_unavailable", cause: describeFailure(error) };
   }
   return readPermittedApplicationsAtAddress(
     session,

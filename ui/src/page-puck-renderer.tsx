@@ -2,6 +2,7 @@ import { Render } from "@puckeditor/core";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type {
   ApplicationShellV2,
+  ApplicationPuckRootShell,
   PageDefinitionV2,
   PageCompositionV2,
   ProjectedNavigation,
@@ -16,6 +17,7 @@ import {
   type ThemeMode,
 } from "./theme";
 import { IconLibraryProvider } from "./icons";
+import type { ApplicationShellRuntime } from "./navigation/application-shell";
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
 import { validatePlacementTree, type Breakpoint } from "./definition-error";
@@ -75,6 +77,8 @@ export type PagePuckRendererProps = Readonly<{
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
   shells?: readonly ApplicationShellV2[];
+  /** The selected definition shell for a page already projected by the server. */
+  shell?: ApplicationShellV2;
   pageId?: string;
   activeStepId?: string;
   guidedStepNavigation?: Readonly<{
@@ -117,6 +121,8 @@ export type PagePuckRendererProps = Readonly<{
   locale?: string | undefined;
   /** Organisation or viewer IANA time zone for timestamp presentation. */
   timeZone?: string | undefined;
+  /** Runtime labels and permitted application links for the application shell root. */
+  applicationShellRuntime?: ApplicationShellRuntime | undefined;
   /**
    * The configured dedicated component origin. A page that places a custom component passes it so
    * the sandboxed host can frame the Vortex-owned bootstrap document on that origin.
@@ -129,6 +135,7 @@ export function PagePuckRenderer({
   breakpoint,
   registry,
   shells = [],
+  shell: selectedShell,
   pageId,
   activeStepId,
   guidedStepNavigation,
@@ -146,15 +153,18 @@ export function PagePuckRenderer({
   themeMode,
   locale,
   timeZone,
+  applicationShellRuntime,
   componentBundleOrigin,
 }: PagePuckRendererProps): ReactElement {
-  const { slot, permissionProjected } = resolveRootPlacementSlotWithContext({
+  const resolved = resolveRootPlacementSlotWithContext({
     composition,
     shells,
     registry,
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { activeStepId }),
   });
+  const { slot, permissionProjected } = resolved;
+  const shell = selectedShell ?? resolved.shell;
   const location = {
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
@@ -166,7 +176,17 @@ export function PagePuckRenderer({
   validateProjectedAvailabilityTree(slot, location);
   if (runtimeInputs !== undefined)
     assertRuntimeInputKeysArePlacements(collectPlacementIds(slot), runtimeInputs, location);
-  const data = adapterFor(registry).toPuckData(slot, breakpoint);
+  const rootShell: ApplicationPuckRootShell =
+    shell === undefined
+      ? { kind: "default" }
+      : {
+          kind: "application",
+          shellId: shell.shellId,
+          key: shell.key,
+          name: shell.name,
+          presentation: shell.presentation,
+        };
+  const data = adapterFor(registry).toPuckData(slot, breakpoint, rootShell);
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
@@ -179,6 +199,7 @@ export function PagePuckRenderer({
     ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
     ...(currentPageId === undefined ? {} : { currentPageId }),
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
+    ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
   };
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;

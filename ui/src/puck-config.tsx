@@ -67,6 +67,7 @@ import {
   type BlockPlacementV2Contract,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
+  type ApplicationPuckRootShell,
   type PlatformBlockReleaseV2,
   type ProjectedNavigation,
 } from "@vortex/contracts";
@@ -129,6 +130,7 @@ import { TextInput } from "./controls/text-input";
 import { ValidationMessage } from "./controls/validation-message";
 import { SearchAttachmentDisplay } from "./search-attachment-blocks";
 import { CustomComponentHost } from "./custom-component/custom-component-host";
+import { ApplicationShellRoot, type ApplicationShellRuntime } from "./navigation/application-shell";
 
 // ---------------------------------------------------------------------------------------------
 // Page-runtime context
@@ -161,6 +163,8 @@ export type VortexPuckMetadata = Readonly<{
   currentPageId?: string | undefined;
   /** Configured dedicated component origin, for the sandboxed custom-component host. */
   componentBundleOrigin?: string | undefined;
+  /** Runtime names and permitted links used by the definition-selected root shell. */
+  applicationShellRuntime?: ApplicationShellRuntime | undefined;
 }>;
 
 /**
@@ -820,7 +824,11 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
     ),
     components,
     root: {
-      defaultProps: { gap: "medium", padding: "medium" },
+      defaultProps: {
+        gap: "medium",
+        padding: "medium",
+        applicationShell: { kind: "default" },
+      },
       fields: {
         gap: {
           type: "select",
@@ -838,20 +846,22 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
         puck,
         gap,
         padding,
+        applicationShell,
       }: {
         children: ReactNode;
         puck: PuckContext;
         gap: SlotGapName;
         padding: SlotGapName;
+        applicationShell: ApplicationPuckRootShell;
       }) => (
-        <div
-          data-vortex-puck-root=""
-          className="vortex-puck-slot"
-          style={{ gap: slotGapLength(gap), padding: slotGapLength(padding) }}
-          {...(puck.isEditing ? { "data-vortex-editing": "" } : {})}
+        <ApplicationShellRoot
+          shell={applicationShell}
+          runtime={(puck.metadata as VortexPuckMetadata | undefined)?.applicationShellRuntime}
+          contentStyle={{ gap: slotGapLength(gap), padding: slotGapLength(padding) }}
+          {...(puck.isEditing ? { editing: true } : {})}
         >
           {children}
-        </div>
+        </ApplicationShellRoot>
       ),
     },
   } as unknown as Config;

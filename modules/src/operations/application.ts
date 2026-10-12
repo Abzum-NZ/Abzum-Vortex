@@ -1,5 +1,4 @@
 import {
-  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   applicationSourceDocumentV2Schema,
   BUTTON_BLOCK_RELEASE,
@@ -9,7 +8,6 @@ import {
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
-  HEADING_BLOCK_RELEASE,
   PLATFORM_BLOCK_RELEASES,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
@@ -377,6 +375,15 @@ const applicationShell = {
   id: "shell_operations",
   key: "operations_shell",
   name: "Operations shell",
+  presentation: {
+    sidebar: { collapsible: "icon", default_collapsed: false },
+    top_bar: {
+      breadcrumbs: true,
+      organization_switcher: true,
+      application_switcher: true,
+      account_menu: true,
+    },
+  },
   layout: slot({
     shell_root: placement(
       CONTAINER_BLOCK_RELEASE_1_3_0,
@@ -387,13 +394,7 @@ const applicationShell = {
         content_width: { kind: "choice", value: "fill" },
       },
       {
-        header: slot({
-          shell_heading: placement(HEADING_BLOCK_RELEASE, {
-            text: { kind: "text", value: "Operations" },
-            level: { kind: "choice", value: "one" },
-          }),
-          shell_account: placement(APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE),
-        }),
+        header: slot({}),
         content: slot({
           shell_body: placement(
             CONTAINER_BLOCK_RELEASE_1_2_0,
@@ -606,11 +607,13 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           id: "nav_operations",
           type: "heading",
           label: "Operations",
+          icon: "grid",
           children: [
             {
               id: "nav_operations_signals",
               type: "page",
               label: "Open signals",
+              icon: "life-buoy",
               page: "operations_signals",
               permission: "application.operations.open",
             },
@@ -618,6 +621,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               id: "nav_operations_incidents",
               type: "page",
               label: "Incidents",
+              icon: "life-buoy",
               page: "operations_incidents",
               permission: readIncidentsPage,
             },
@@ -625,6 +629,7 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
               id: "nav_operations_new_incident",
               type: "page",
               label: "Create incident",
+              icon: "plus",
               page: "operations_new_incident",
               permission: createIncidentPage,
             },
@@ -634,10 +639,12 @@ export const operationsApplication: ApplicationSourceDocumentV2 =
           id: "nav_operations_runbooks",
           type: "heading",
           label: "Runbooks",
+          icon: "sliders-horizontal",
           children: operationsRunbooks.map((runbook) => ({
             id: `nav_operations_${runbookPageKey(runbook)}`,
             type: "page",
             label: runbook.title,
+            icon: "life-buoy",
             page: runbookPageKey(runbook),
             permission: "application.operations.open",
           })),

@@ -26,6 +26,7 @@ import {
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import {
+  applicationDraftFromStoredRelease,
   hasAuthenticStoredCustomerDefinitionRelease,
   releaseManifestMatchesCanonicalContent,
 } from "./definition-release-integrity";
@@ -335,6 +336,10 @@ export const projectStoredConsumerRelease = async (
   if (catalogueVerification === "invalid")
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
+  const content =
+    output.kind === "application"
+      ? applicationDraftFromStoredRelease(output).content
+      : output.canonical.content;
   const platformCompatibilityVersion =
     release.kind === "application" && output.kind === "application"
       ? output.platformCompatibilityVersion
@@ -349,7 +354,7 @@ export const projectStoredConsumerRelease = async (
     validationContractVersion: release.validationContractVersion,
     contentFingerprint: release.contentFingerprint,
     resolutionFingerprint: release.resolutionFingerprint,
-    content: output.canonical.content,
+    content,
     ...(release.kind === "application" && output.kind === "application"
       ? { toolBundle: output.toolBundle }
       : {}),

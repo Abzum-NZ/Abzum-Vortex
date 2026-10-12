@@ -4417,7 +4417,6 @@
   "unused-export|contracts/src/application-composition-v2.ts|sourceExactPlatformThemeDependencyV2Schema|1",
   "unused-export|contracts/src/application-composition-v2.ts|sourcePlatformBlockDependencyV2Schema|1",
   "unused-export|contracts/src/application-composition-v2.ts|sourcePlatformBlockReferenceV2Schema|1",
-  "unused-export|contracts/src/application-composition-v2.ts|sourceResponsivePlacementV2Schema|1",
   "unused-export|contracts/src/application-composition-v2.ts|sourceShellContentSlotV2Schema|1",
   "unused-export|contracts/src/application-composition-v2.ts|themeCatalogueOptionIdSchema|1",
   "unused-export|contracts/src/application-composition-v2.ts|themeColorRoleSchema|1",

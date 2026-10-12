@@ -37,6 +37,7 @@ export function ApplicationExperiencePage({
         organizationName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,
+        openApplication: (href) => router.push(href),
       }}
     >
       <PagePuckRenderer

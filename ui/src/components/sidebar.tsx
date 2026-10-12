@@ -6,6 +6,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 import { Separator } from "./separator";
+import { Icon } from "../icons/icon";
 
 /*
  * The shadcn Sidebar parts of the pinned shadcn 4.21.0 Base UI registry, carrying the same cn-*
@@ -19,11 +20,74 @@ import { Separator } from "./separator";
  * own compact phone disclosure over the same menu.
  */
 
+type SidebarContextValue = Readonly<{
+  open: boolean;
+  collapsible: "none" | "icon";
+  toggle: () => void;
+}>;
+
+const SidebarContext = React.createContext<SidebarContextValue | null>(null);
+
+function SidebarProvider({
+  defaultCollapsed,
+  collapsible,
+  children,
+}: React.PropsWithChildren<Readonly<{ defaultCollapsed: boolean; collapsible: "none" | "icon" }>>) {
+  const [open, setOpen] = React.useState(!defaultCollapsed);
+  const value = React.useMemo(
+    () => ({
+      open: collapsible === "none" ? true : open,
+      collapsible,
+      toggle: () => setOpen((current) => !current),
+    }),
+    [collapsible, open],
+  );
+  return (
+    <SidebarContext.Provider value={value}>
+      <div
+        data-sidebar-provider=""
+        data-vortex-sidebar-state={value.open ? "expanded" : "collapsed"}
+        className="group/sidebar-provider flex min-h-svh w-full min-w-0 flex-col"
+        style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" } as React.CSSProperties}
+      >
+        {children}
+      </div>
+    </SidebarContext.Provider>
+  );
+}
+
+function SidebarTrigger({ className, ...props }: React.ComponentProps<"button">) {
+  const context = React.useContext(SidebarContext);
+  return (
+    <button
+      type="button"
+      data-sidebar="trigger"
+      aria-label={context?.open === false ? "Expand sidebar" : "Collapse sidebar"}
+      aria-pressed={context?.open === false}
+      disabled={context === null || context.collapsible === "none"}
+      onClick={context?.toggle}
+      className={cn(
+        "inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      <Icon name="panel-left" aria-hidden="true" />
+    </button>
+  );
+}
+
 function Sidebar({ className, children, ...props }: React.ComponentProps<"div">) {
+  const context = React.useContext(SidebarContext);
   return (
     <div
       data-slot="sidebar"
-      className={cn("flex h-full w-full flex-col bg-sidebar text-sidebar-foreground", className)}
+      data-state={context?.open === false ? "collapsed" : "expanded"}
+      data-collapsible={context?.collapsible ?? "none"}
+      className={cn(
+        "group/sidebar flex h-full w-full flex-col bg-sidebar text-sidebar-foreground",
+        className,
+      )}
       {...props}
     >
       {children}
@@ -277,4 +341,6 @@ export {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarSeparator,
+  SidebarProvider,
+  SidebarTrigger,
 };

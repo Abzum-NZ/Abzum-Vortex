@@ -44,11 +44,11 @@ const projectNavigationItem = (
   switch (item.type) {
     case "page":
       return held(decisions, item.permissionKey)
-        ? { type: "page", id: item.id, label: item.label, pageId: item.pageId }
+        ? { type: "page", id: item.id, label: item.label, icon: item.icon, pageId: item.pageId }
         : undefined;
     case "external":
       return held(decisions, item.permissionKey)
-        ? { type: "external", id: item.id, label: item.label, address: item.address }
+        ? { type: "external", id: item.id, label: item.label, icon: item.icon, address: item.address }
         : undefined;
     case "heading": {
       const children = item.children.flatMap((child) => {
@@ -58,7 +58,7 @@ const projectNavigationItem = (
       // An empty heading is not a navigation item: it disappears with its children.
       return children.length === 0
         ? undefined
-        : { type: "heading", id: item.id, label: item.label, children };
+        : { type: "heading", id: item.id, label: item.label, icon: item.icon, children };
     }
   }
 };

@@ -1,5 +1,6 @@
 import type { ComponentData, Content, Data } from "@puckeditor/core";
 import {
+  applicationPuckRootShellSchema,
   applicationShellV2Schema,
   blockPropertyValueV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
@@ -9,6 +10,7 @@ import {
   repeatableSlotKeyV2,
   validateComponentSettings,
   type ApplicationShellV2,
+  type ApplicationPuckRootShell,
   type BlockPropertySchemaV2Contract,
   type BlockPropertyValueV2Contract,
   type ComponentSettingFailure,
@@ -421,8 +423,14 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     }
   };
 
-  const toPuckData = (slot: unknown, breakpoint?: keyof VortexSlot["order"]): Data => ({
-    root: { props: { gap: "medium", padding: "medium" } } as unknown as Data["root"],
+  const toPuckData = (
+    slot: unknown,
+    breakpoint: keyof VortexSlot["order"] | undefined,
+    applicationShell: ApplicationPuckRootShell,
+  ): Data => ({
+    root: {
+      props: { gap: "medium", padding: "medium", applicationShell },
+    } as unknown as Data["root"],
     content: toContent(slot, breakpoint),
     zones: {},
   });
@@ -432,13 +440,21 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       const data = exact(input, ["root", "content", "zones"], "data");
       const root = exact(data.root, ["props"], "data.root");
       if (root.props !== undefined) {
-        const props = exact(root.props, ["gap", "padding"], "data.root.props");
+        const props = exact(root.props, ["gap", "padding", "applicationShell"], "data.root.props");
         for (const key of ["gap", "padding"])
           if (
             props[key] !== undefined &&
             !["none", "small", "medium", "large"].includes(String(props[key]))
           )
             throw new VortexPuckAdapterError(`Invalid page root ${key}`);
+      }
+      const rootProps = asObject(root.props, "data.root.props");
+      try {
+        applicationPuckRootShellSchema.parse(rootProps.applicationShell);
+      } catch (error) {
+        throw new VortexPuckAdapterError("Invalid application shell Puck root settings", {
+          cause: error,
+        });
       }
       if (data.zones === undefined || Object.keys(asObject(data.zones, "data.zones")).length)
         throw new VortexPuckAdapterError("Invalid Puck adapter zones");
@@ -459,8 +475,16 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       throw new VortexPuckAdapterError("Invalid application shell input", { cause: error });
     }
     const layout = fromPuckData(data);
+    const root = exact(asObject(data, "data"), ["root", "content", "zones"], "data").root;
+    const rootProps = exact(asObject(root, "data.root"), ["props"], "data.root").props;
+    const rootShell = applicationPuckRootShellSchema.parse(
+      asObject(rootProps, "data.root.props").applicationShell,
+    );
+    if (rootShell.kind !== "application" || rootShell.shellId !== parsedShell.shellId)
+      throw new VortexPuckAdapterError("Inbound Puck root does not match the application shell");
     const assembled: ApplicationShellV2 = {
       ...parsedShell,
+      presentation: rootShell.presentation,
       layout,
     };
     try {
@@ -473,8 +497,16 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
   return Object.freeze({
     toPuckData,
     fromPuckData,
-    toPuckShell: (shell: ApplicationShellV2): Data =>
-      toPuckData(applicationShellV2Schema.parse(shell).layout),
+    toPuckShell: (shell: ApplicationShellV2): Data => {
+      const parsed = applicationShellV2Schema.parse(shell);
+      return toPuckData(parsed.layout, undefined, {
+        kind: "application",
+        shellId: parsed.shellId,
+        key: parsed.key,
+        name: parsed.name,
+        presentation: parsed.presentation,
+      });
+    },
     fromPuckShell,
   });
 };

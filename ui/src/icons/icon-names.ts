@@ -1,4 +1,5 @@
 import type { ComponentProps, ComponentType } from "react";
+import { VORTEX_ICON_NAMES, type VortexIconName } from "@vortex/contracts";
 
 /**
  * The semantic icon set every shared component and platform block asks for. A component names the
@@ -6,34 +7,7 @@ import type { ComponentProps, ComponentType } from "react";
  * draws it. Adding a name means adding it to every adapter in ./adapters; the adapter types refuse a
  * library that does not map every name, so no library can render a blank icon.
  */
-export const VORTEX_ICON_NAMES = [
-  "arrow-down",
-  "arrow-up",
-  "calendar",
-  "check",
-  "chevron-down",
-  "chevron-left",
-  "chevron-right",
-  "chevron-up",
-  "circle",
-  "close",
-  "loader",
-  "menu",
-  "minus",
-  "more-horizontal",
-  "more-vertical",
-  "panel-left",
-  "plus",
-  "search",
-  "grid",
-  "contact-round",
-  "users",
-  "sliders-horizontal",
-  "life-buoy",
-  "building-2",
-] as const;
-
-export type VortexIconName = (typeof VORTEX_ICON_NAMES)[number];
+export { VORTEX_ICON_NAMES, type VortexIconName };
 
 /** Resolve only declared semantic names; unknown source text has no exact glyph mapping. */
 export const resolveVortexIconName = (value: string): VortexIconName | undefined =>

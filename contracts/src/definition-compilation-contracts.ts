@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { applicationDraftV2Schema } from "./application-contracts";
+import {
+  applicationDraftV2Schema,
+} from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
 import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
 import {
@@ -442,7 +444,7 @@ export const applicationCompilationOutputV2Schema = z
  * Persisted Application releases can predate platform compatibility metadata. New compilation
  * uses the required-field schema above; immutable historical output remains readable as stored.
  */
-const storedApplicationCompilationOutputV2Schema = z
+export const storedApplicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
@@ -484,12 +486,13 @@ export const storedModuleCompilationOutputV3Schema = createModuleCompilationOutp
   storedModuleDraftV3Schema,
 );
 
-const createDefinitionCompilationOutputSchema = (
+const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.ZodTypeAny>(
   moduleSchema: typeof moduleCompilationOutputV3Schema,
+  applicationSchema: ApplicationSchema,
 ) =>
   z.union([
     moduleSchema,
-    storedApplicationCompilationOutputV2Schema,
+    applicationSchema,
     z
       .object({
         kind: z.literal("connection_type"),
@@ -505,11 +508,16 @@ const createDefinitionCompilationOutputSchema = (
 
 export const definitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
   moduleCompilationOutputV3Schema,
+  applicationCompilationOutputV2Schema,
 );
 /** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
 export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
   storedModuleCompilationOutputV3Schema,
+  storedApplicationCompilationOutputSchema,
 );
+export type StoredDefinitionCompilationOutput = z.infer<
+  typeof storedDefinitionCompilationOutputSchema
+>;
 
 const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntryV3Schema;
 

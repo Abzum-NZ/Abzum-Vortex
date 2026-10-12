@@ -41,7 +41,7 @@ type ChangePreparation = (
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
   | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
+  | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
 
 type OrganizationScopeResolutionResult =
   | HumanOrganizationRequestResult<SelectedOrganizationScope>
@@ -168,8 +168,8 @@ export const createHumanOrganizationRequestService = (
       startedAtMs = now.valueOf();
       issuedAt = now.toISOString();
       correlationId = correlationIdSchema.parse(newCorrelationId());
-    } catch {
-      return { kind: "temporarily_unavailable" };
+    } catch (error) {
+      return { kind: "temporarily_unavailable", cause: describeFailure(error) };
     }
     if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
       appendTelemetry(correlationId, "refused", startedAtMs);
@@ -288,18 +288,17 @@ export const createHumanOrganizationRequestService = (
         return suspendedAccountResult();
       }
       const refused = databaseCode(error) === "42501";
+      const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
       // not a failure of the platform. Every other cause is logged in full.
       const abandoned =
         error instanceof Error &&
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
-      if (abandoned)
-        console.info(`[access] human organisation request stopped: ${describeFailure(error)}`);
-      else if (!refused)
-        console.error(`[access] human organisation request failed: ${describeFailure(error)}`);
+      if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
+      else if (!refused) console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
-      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
+      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
     }
   };
 
