@@ -99,22 +99,26 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
 
     @Override
     public Output run(RunContext runContext) throws Exception {
+        String[] failureStage = {"callback_configuration"};
         try {
-            return sendCallback(runContext);
+            return sendCallback(runContext, failureStage);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+            logFailure(runContext, failureStage[0], interrupted);
             throw refused();
         } catch (Exception error) {
+            logFailure(runContext, failureStage[0], error);
             throw refused();
         }
     }
 
-    private Output sendCallback(RunContext runContext) throws Exception {
+    private Output sendCallback(RunContext runContext, String[] failureStage) throws Exception {
         String rawEnvelope = renderRequired(runContext, envelope, String.class);
         String signingKey = renderRequired(runContext, callbackKey, String.class);
         String vortexRunId = requireUuid(renderRequired(runContext, runId, String.class));
         Integer currentAttempt = renderRequired(runContext, attempt, Integer.class);
         String duplicateKey = renderRequired(runContext, duplicateProtectionKey, String.class);
+        failureStage[0] = "callback_request_validation";
         if (currentAttempt < 1 || duplicateKey.length() < 16 || duplicateKey.length() > 200) {
             throw refused();
         }
@@ -128,28 +132,54 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         request.put("issuedAt", issuedAt.toString());
         request.put("expiresAt", issuedAt.plus(CALLBACK_LIFETIME).toString());
         request.put("duplicateProtectionKey", duplicateKey);
+        failureStage[0] = "callback_signing";
         request.put("signedCallerProof", sign(request, signingKey));
 
+        failureStage[0] = "callback_request_validation";
         byte[] requestBody = OBJECT_MAPPER.writeValueAsBytes(request);
         if (requestBody.length > MAXIMUM_BODY_LENGTH) {
             throw refused();
         }
 
+        failureStage[0] = "callback_configuration";
         HttpRequest httpRequest = HttpRequest.newBuilder(callbackUri())
             .timeout(Duration.ofSeconds(30))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
             .build();
+        failureStage[0] = "callback_transport";
         HttpResponse<InputStream> response = HTTP_CLIENT.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        failureStage[0] = "callback_response_read";
         byte[] responseBody;
         try (InputStream body = response.body()) {
             responseBody = body.readNBytes(MAXIMUM_BODY_LENGTH + 1);
         }
         if (response.statusCode() != 200 || responseBody.length > MAXIMUM_BODY_LENGTH) {
+            failureStage[0] = "callback_response_refusal";
             throw refused();
         }
+        failureStage[0] = "callback_response_validation";
         return successfulOutput(OBJECT_MAPPER.readTree(responseBody), request);
+    }
+
+    private static void logFailure(RunContext runContext, String stage, Throwable failure) {
+        runContext.logger().error(
+            "Vortex protected callback failed: stage={} cause={}",
+            stage,
+            describeCause(failure)
+        );
+    }
+
+    private static String describeCause(Throwable failure) {
+        StringBuilder description = new StringBuilder();
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (description.length() > 0) {
+                description.append(" <- ");
+            }
+            description.append(current.getClass().getName());
+        }
+        return description.toString();
     }
 
     private static ObjectNode parseStaticBinding(String rawEnvelope) throws Exception {
@@ -364,7 +394,7 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         }
     }
 
-    private static <T> T renderRequired(RunContext runContext, Property<T> property, Class<T> type) {
+    private static <T> T renderRequired(RunContext runContext, Property<T> property, Class<T> type) throws Exception {
         if (property == null) {
             throw refused();
         }

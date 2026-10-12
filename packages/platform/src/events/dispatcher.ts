@@ -535,6 +535,21 @@ export const createEventDispatcher = (
     operation: (repository: EventDeliveryRecoveryRepository) => Promise<Result>,
   ): Promise<Result> =>
     run((transaction) => operation(createEventDeliveryRecoveryRepository(transaction)));
+  const logDeliveryError = (consumer: RegisteredConsumer, operation: string, error: unknown) => {
+    const code = (error as { code?: unknown } | null)?.code;
+    console.error("Event delivery interrupted", {
+      consumer: consumer.consumerKey,
+      operation,
+      cause:
+        typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)
+          ? code
+          : error instanceof TypeError
+            ? "TypeError"
+            : error instanceof Error
+              ? "Error"
+              : typeof error,
+    });
+  };
 
   const renew = async (
     consumer: RegisteredConsumer,
@@ -551,7 +566,8 @@ export const createEventDispatcher = (
         }),
       );
       return renewal.outcome === "renewed" ? renewal.leaseExpiresAt : undefined;
-    } catch {
+    } catch (error) {
+      logDeliveryError(consumer, "renewLease", error);
       return undefined;
     }
   };
@@ -592,7 +608,12 @@ export const createEventDispatcher = (
         default:
           return "interrupted";
       }
-    } catch {
+    } catch (error) {
+      logDeliveryError(
+        consumer,
+        outcome.kind === "completed" ? "acknowledge" : "reportFailure",
+        error,
+      );
       // Unsettled work keeps its lease, which lapses into an ordinary reclaim.
       return "interrupted";
     }
@@ -617,7 +638,8 @@ export const createEventDispatcher = (
     let outcome: ConsumerOutcome;
     try {
       outcome = parseConsumerOutcome(await consumer.deliver(delivery));
-    } catch {
+    } catch (error) {
+      logDeliveryError(consumer, "deliver", error);
       outcome = unsafeOutcome;
     }
     return settle(consumer, ackCursor, occurrenceId, outcome);
@@ -637,7 +659,8 @@ export const createEventDispatcher = (
           leaseSeconds: consumer.policy.leaseSeconds,
         }),
       );
-    } catch {
+    } catch (error) {
+      logDeliveryError(consumer, "claim", error);
       tally.consumersUnavailable += 1;
       return;
     }

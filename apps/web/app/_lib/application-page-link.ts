@@ -42,7 +42,9 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
       try {
         const selector = applicationPageLinkSelectorSchema.safeParse(candidate);
         const tenantShortName = builderKeySchema.safeParse(boundAddress.tenantShortName);
-        const organizationShortName = builderKeySchema.safeParse(boundAddress.organizationShortName);
+        const organizationShortName = builderKeySchema.safeParse(
+          boundAddress.organizationShortName,
+        );
         if (!selector.success || !tenantShortName.success || !organizationShortName.success)
           return unavailable;
 
@@ -53,10 +55,8 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           organizationShortName.data,
           dependencies.identityAuthorityId,
           selector.data.applicationKey,
-          (transaction) => createDatabaseApplicationBoundReleaseSetService(
-            installedReleaseCatalogue,
-            transaction,
-          ),
+          (transaction) =>
+            createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         );
         const { read, context, identity: addressIdentity } = addressed;
         if (
@@ -157,9 +157,11 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           tenantShortName: read.tenantShortName,
           organizationShortName: read.organizationShortName,
         });
-        return result.success ? result.data : unavailable;
-      } catch {
-        return unavailable;
+        if (!result.success)
+          throw new Error("APPLICATION_PAGE_LINK_PROJECTION_INVALID", { cause: result.error });
+        return result.data;
+      } catch (error) {
+        throw new Error("APPLICATION_PAGE_LINK_TARGET_READ_FAILED", { cause: error });
       }
     },
   });

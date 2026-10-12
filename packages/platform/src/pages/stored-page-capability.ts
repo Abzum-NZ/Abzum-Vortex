@@ -4,6 +4,7 @@ import "server-only";
 import {
   databaseTimestamp,
   sameId,
+  describeFailure,
   conditionNodeSchema,
   applicationRootIdSchema,
   organizationRecordAccessDeclarationSchema,
@@ -52,6 +53,7 @@ import {
 } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
 import { readPageSubjectInTransaction, type PageSubjectReadResult } from "./page-subject-read";
+import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
 import {
   createProtectedReadModelResolver,
   type ProtectedReadModelReaders,
@@ -88,6 +90,16 @@ export type StoredPageReadModelValue = Readonly<{
   /** Exact installed application release revision this value was read under. */
   applicationReleaseRevision: number;
 }>;
+
+class StoredPageCapabilityFailure extends Error {
+  constructor(
+    readonly code: string,
+    options?: ErrorOptions,
+  ) {
+    super(code, options);
+    this.name = "StoredPageCapabilityFailure";
+  }
+}
 
 /**
  * One declared link target the browser asks the server to re-check when a link is activated. It
@@ -176,9 +188,11 @@ const placementPermission = (
   const match = matches[0];
   if (
     !sameId(entry.applicationRootId, applicationRootId) ||
-    matches.length !== 1 || match === undefined ||
+    matches.length !== 1 ||
+    match === undefined ||
     (entry.ownerKind === "module" && !sameId(entry.ownerId, match.module.rootId))
-  ) throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+  )
+    throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
 
   return {
     kind: "record",
@@ -192,12 +206,14 @@ const placementPermission = (
           : { namedAction: entry.permission.namedAction }),
       },
       target: { kind: "application", applicationRootId },
-      requiredPermissions: [{
-        applicationRootId: entry.applicationRootId,
-        ownerKind: entry.ownerKind,
-        ownerId: entry.ownerId,
-        permissionId: entry.permission.permissionId,
-      }],
+      requiredPermissions: [
+        {
+          applicationRootId: entry.applicationRootId,
+          ownerKind: entry.ownerKind,
+          ownerId: entry.ownerId,
+          permissionId: entry.permission.permissionId,
+        },
+      ],
       recordBinding: {
         moduleRootId: match.module.rootId,
         recordTypeId: match.record.recordTypeId,
@@ -439,8 +455,8 @@ export const createStoredPageCapabilityService = (
     const operationBindings = placementOperationBindings(context);
     const pagePermissionBinding = permission(page.accessPermissionKey);
     const resolvedComposition = readInstalledPageComposition(context, page.pageId);
-    const resolved = resolvedComposition ??
-      resolvePageComposition(page, applicationRelease.content.shells);
+    const resolved =
+      resolvedComposition ?? resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
       resolved.roots.kind === "page"
         ? placementEntries(resolved.roots.main)
@@ -478,16 +494,22 @@ export const createStoredPageCapabilityService = (
                 ? {}
                 : {
                     viewPermission: placementPermission(
-                      context, "application.page.placement.view", applicationRootId,
-                      viewPermissionKey, viewBinding,
+                      context,
+                      "application.page.placement.view",
+                      applicationRootId,
+                      viewPermissionKey,
+                      viewBinding,
                     ),
                   }),
               ...(useBinding === undefined || usePermissionKey === undefined
                 ? {}
                 : {
                     usePermission: placementPermission(
-                      context, "application.page.placement.use", applicationRootId,
-                      usePermissionKey, useBinding,
+                      context,
+                      "application.page.placement.use",
+                      applicationRootId,
+                      usePermissionKey,
+                      useBinding,
                     ),
                   }),
               operationRequired: operation?.required === true,
@@ -517,16 +539,25 @@ export const createStoredPageCapabilityService = (
             }>`
               select vortex_module.read_active_installation_bundle_identity() as bundle_state
             `;
+            const bundleState = activeInstallationBundleStateSchema.safeParse(
+              bundleRows[0]?.bundle_state,
+            );
+            if (bundleRows.length === 1 && bundleRows[0] !== undefined && !bundleState.success)
+              throw new StoredPageCapabilityFailure("STORED_PAGE_BUNDLE_IDENTITY_MALFORMED", {
+                cause: bundleState.error,
+              });
             if (
               bundleRows.length !== 1 ||
               bundleRows[0] === undefined ||
+              !bundleState.success ||
               !matchesInstalledPageBundleIdentity(
                 context,
-                bundleRows[0].bundle_state,
+                bundleState.data,
                 scope.accessVersion,
                 scope.organizationAccountId,
               )
-            ) return false;
+            )
+              return false;
           }
 
           const contextRows = await transaction.query<{
@@ -534,21 +565,35 @@ export const createStoredPageCapabilityService = (
           }>`
             select vortex_access.validated_human_request_context() - 'channel' as request_context
           `;
-          if (contextRows.length !== 1 || contextRows[0] === undefined) return false;
+          if (contextRows.length !== 1 || contextRows[0] === undefined)
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_MISSING");
           const current = sessionContextSchema.safeParse(contextRows[0].request_context);
-          if (!current.success || current.data.callerKind !== "human") return false;
+          if (!current.success)
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_INVALID", {
+              cause: current.error,
+            });
+          if (current.data.callerKind !== "human")
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_CALLER_INVALID");
           const clockRows = await transaction.query<{
             readonly observed_at: unknown;
           }>`
             select clock_timestamp() as observed_at
           `;
-          if (clockRows.length !== 1 || clockRows[0] === undefined) return false;
+          if (clockRows.length !== 1 || clockRows[0] === undefined)
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_MISSING");
           const observedAt = databaseTimestamp(clockRows[0].observed_at);
-          if (typeof observedAt !== "string") return false;
+          if (typeof observedAt !== "string")
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_INVALID");
           const observedMilliseconds = Date.parse(observedAt);
-          return Number.isFinite(observedMilliseconds) &&
-            current.data.expiresAt !== undefined &&
-            Date.parse(current.data.expiresAt) > observedMilliseconds &&
+          if (!Number.isFinite(observedMilliseconds))
+            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_INVALID");
+          const expiresAt =
+            current.data.expiresAt === undefined ? Number.NaN : Date.parse(current.data.expiresAt);
+          const validUntilMilliseconds = Date.parse(validUntil);
+          if (!Number.isFinite(expiresAt) || !Number.isFinite(validUntilMilliseconds))
+            throw new StoredPageCapabilityFailure("STORED_PAGE_ACCESS_DEADLINE_INVALID");
+          return (
+            expiresAt > observedMilliseconds &&
             (current.data.delegatedContext === undefined ||
               Date.parse(current.data.delegatedContext.expiresAt) > observedMilliseconds) &&
             (current.data.supportContext === undefined ||
@@ -559,9 +604,13 @@ export const createStoredPageCapabilityService = (
             current.data.applicationRootId !== undefined &&
             sameId(current.data.applicationRootId, scope.applicationRootId) &&
             current.data.accessVersion === scope.accessVersion &&
-            Date.parse(validUntil) > observedMilliseconds;
-        } catch {
-          return false;
+            validUntilMilliseconds > observedMilliseconds
+          );
+        } catch (error) {
+          if (error instanceof StoredPageCapabilityFailure) throw error;
+          throw new StoredPageCapabilityFailure("STORED_PAGE_CAPABILITY_VALIDATION_FAILED", {
+            cause: error,
+          });
         }
       },
       evaluateVisibilityCondition: async (transaction, scope, page, condition) => {
@@ -697,8 +746,14 @@ export const createStoredPageCapabilityService = (
     let fixed: FixedAuthenticatedPageCapability | undefined;
     try {
       fixed = await load(selectedPageId);
-    } catch {
-      return { kind: "temporarily_unavailable" };
+    } catch (error) {
+      const failure =
+        error instanceof StoredPageCapabilityFailure
+          ? error
+          : new StoredPageCapabilityFailure("STORED_PAGE_CAPABILITY_LOAD_FAILED", { cause: error });
+      const cause = describeFailure(failure);
+      console.error(`[page] stored capability load failed: ${cause}`);
+      return { kind: "temporarily_unavailable", cause };
     }
     if (fixed === undefined) return { kind: "unavailable" };
     return projectStored(session, candidate, fixed);
@@ -717,11 +772,19 @@ export const createStoredPageCapabilityService = (
     let fixed: FixedAuthenticatedPageCapability | undefined;
     try {
       fixed = await load(pageId);
-    } catch {
-      return false;
+    } catch (error) {
+      const failure = new StoredPageCapabilityFailure("STORED_PAGE_TARGET_CAPABILITY_LOAD_FAILED", {
+        cause: error,
+      });
+      console.error(`[page] stored page target capability failed: ${describeFailure(failure)}`);
+      throw failure;
     }
     if (fixed === undefined) return false;
     const projected = await projectStored(session, candidate, fixed);
+    if (projected.kind === "temporarily_unavailable")
+      throw new StoredPageCapabilityFailure("STORED_PAGE_TARGET_AUTHORIZATION_FAILED", {
+        cause: new Error(projected.cause ?? "STORED_PAGE_TARGET_AUTHORIZATION_UNAVAILABLE"),
+      });
     return projected.kind === "available" && projected.value !== undefined;
   };
 

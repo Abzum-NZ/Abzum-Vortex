@@ -98,6 +98,8 @@ type StoredResult =
 
 const recordedRefusal = Symbol("recordedRecordSaveRefusal");
 const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
+const contractError = (code: string, cause: unknown): Error =>
+  Object.assign(new Error(code, { cause }), { code });
 
 const writableSystemProjection = (
   recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
@@ -115,9 +117,7 @@ const writableSystemProjection = (
 /** @internal Shared only by the fixed named-action save composition. */
 export const revision = (candidate: unknown): number | undefined => {
   const value = databaseRevision(candidate);
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
-    ? value
-    : undefined;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 };
 
 const one = <Row>(rows: readonly Row[]): Row => {
@@ -126,7 +126,8 @@ const one = <Row>(rows: readonly Row[]): Row => {
 };
 
 const parsePreparation = (candidate: unknown): PreparationOutcome => {
-  if (typeof candidate !== "object" || candidate === null) return { outcome: "unavailable" };
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate))
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", candidate);
   const value = candidate as Record<string, unknown>;
   const correlationId = typeof value.correlationId === "string" ? value.correlationId : undefined;
   if (value.outcome === "saved") {
@@ -139,35 +140,39 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
       correlationId,
       backgroundDelivery: value.backgroundDelivery,
     });
-    return replay.success
-      ? { outcome: "replayed", result: replay.data }
-      : { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+    if (!replay.success) throw contractError("RECORD_SAVE_REPLAY_INVALID", replay.error);
+    return { outcome: "replayed", result: replay.data };
   }
   if (value.outcome === "refused" && value.reasonCode === "command_identity_conflict")
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome === "refused_recorded") return { outcome: "refused_recorded" };
   if (value.outcome === "conflict")
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
-  if (value.outcome !== "prepared")
+  if (value.outcome === "refused")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+  if (value.outcome !== "prepared")
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", value.outcome);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
   // A system projection has no ordinary write path. Only an exact entry in the closed protected
   // writer registration can reach its matching protected SQL writer.
+  if (!recordType.success) throw contractError("RECORD_SAVE_RECORD_TYPE_INVALID", recordType.error);
   if (
-    !recordType.success ||
     (recordType.data.systemProjection !== undefined &&
       writableSystemProjection(recordType.data) === undefined) ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
     Array.isArray(value.existingValues)
   )
-    return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
-  if (correlationId === undefined) return { outcome: "unavailable" };
-  const readableFieldIds = Array.isArray(value.readableFieldIds)
-    ? value.readableFieldIds.map((fieldId) => fieldIdSchema.safeParse(fieldId))
-    : [];
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", "record type or values");
+  if (correlationId === undefined)
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", "missing correlationId");
+  if (!Array.isArray(value.readableFieldIds))
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", "missing readableFieldIds");
+  const readableFieldIds = value.readableFieldIds.map((fieldId) =>
+    fieldIdSchema.safeParse(fieldId),
+  );
   if (readableFieldIds.some((fieldId) => !fieldId.success))
-    return { outcome: "unavailable", correlationId };
+    throw contractError("RECORD_SAVE_PREPARATION_INVALID", "invalid readableFieldIds");
   let existingValues = value.existingValues as Readonly<Record<string, unknown>>;
   if (recordType.data.systemProjection === undefined) {
     // Unset optional SQL columns are absent from the ordinary field candidate.
@@ -496,7 +501,9 @@ const invalidSettingsCorrections = (
       const recordFieldKey =
         typeof schemaKey === "string" ? fieldBySchemaKey[schemaKey] : undefined;
       const fieldId =
-        recordFieldKey === undefined ? undefined : settingsFieldId(prepared.recordType, recordFieldKey);
+        recordFieldKey === undefined
+          ? undefined
+          : settingsFieldId(prepared.recordType, recordFieldKey);
       if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
       corrections.set(fieldId, {
         code: "invalid_value",

@@ -18,10 +18,13 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type TransferRow = DatabaseRow & { readonly result: unknown };
+const contractError = (cause: unknown): Error =>
+  Object.assign(new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID", { cause }), {
+    code: "RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID",
+  });
 
 const one = <Row>(rows: readonly Row[]): Row => {
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined) throw contractError("missing row");
   return rows[0];
 };
 
@@ -40,15 +43,13 @@ const transfer = async (
   command: ReturnType<typeof transferRecordOwnershipCommandSchema.parse>,
   activityId: string,
   occurrenceId: string,
-): Promise<TransferRecordOwnershipResult | "recorded_refusal" | "undisclosed_refusal"> => {
+): Promise<TransferRecordOwnershipResult | "recorded_refusal"> => {
   await transaction.query`set local role vortex_runtime`;
   const targetId =
     command.targetKind === "organization_account"
       ? command.targetOrganizationAccountId
       : command.targetGroupId;
-  const targetMutation = [
-    { kind: "transfer_ownership", targetKind: command.targetKind, targetId },
-  ];
+  const targetMutation = [{ kind: "transfer_ownership", targetKind: command.targetKind, targetId }];
   const rows = await transaction.query<TransferRow>`
     select vortex_record.apply_lifecycle_record_changes(
       ${command.commandId}::uuid,
@@ -62,12 +63,11 @@ const transfer = async (
     ) as result
   `;
   const value = one(rows).result;
-  if (typeof value !== "object" || value === null)
-    throw new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID");
+  if (typeof value !== "object" || value === null) throw contractError("invalid result");
   const candidate = value as Record<string, unknown>;
   if (candidate.outcome === "refused_recorded") return "recorded_refusal";
   if (candidate.outcome === "transferred") {
-    return transferRecordOwnershipResultSchema.parse({
+    const transferred = transferRecordOwnershipResultSchema.safeParse({
       contractVersion: "2.0.0",
       outcome: "transferred",
       recordId: candidate.recordId,
@@ -75,20 +75,19 @@ const transfer = async (
       correlationId: candidate.correlationId,
       replayed: candidate.replayed,
     });
+    if (!transferred.success) throw contractError(transferred.error);
+    return transferred.data;
   }
   if (candidate.outcome === "conflict") {
     const correlationId =
       typeof candidate.correlationId === "string" ? candidate.correlationId : undefined;
-    // SQL has a correlation ID for every post-context outcome.  Keep this
-    // defensive fallback fail-closed: a direct/adversarial SQL response that
-    // omits it must be a safe unavailable result, never a transient error.
-    if (correlationId === undefined) return "undisclosed_refusal";
+    if (correlationId === undefined) throw contractError("missing correlationId");
     return safeRefusal(correlationId, "conflict");
   }
-  if (candidate.outcome !== "refused") throw new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID");
+  if (candidate.outcome !== "refused") throw contractError(candidate.outcome);
   const correlationId =
     typeof candidate.correlationId === "string" ? candidate.correlationId : undefined;
-  if (correlationId === undefined) return "undisclosed_refusal";
+  if (correlationId === undefined) throw contractError("missing correlationId");
   return safeRefusal(correlationId);
 };
 
@@ -123,7 +122,7 @@ export const createRecordOwnershipTransferService = (
         transfer(transaction, command.data, activityId, occurrenceId),
       );
       if (result.kind !== "available") return result;
-      return result.value === "recorded_refusal" || result.value === "undisclosed_refusal"
+      return result.value === "recorded_refusal"
         ? { kind: "unavailable" }
         : { kind: "available", value: result.value };
     },
