@@ -68,7 +68,7 @@ export const loadApplicationSearch = async (
                 select 1 from pg_catalog.jsonb_array_elements_text(${JSON.stringify(requiredTokens)}::jsonb) as required(token)
                 where not exists (
                   select 1 from pg_catalog.jsonb_array_elements(documents.entries) as indexed(value)
-                  where pg_catalog.position(required.token in pg_catalog.lower(indexed.value ->> 'text')) > 0))
+                  where pg_catalog.strpos(pg_catalog.lower(indexed.value ->> 'text'), required.token) > 0))
             order by record_id limit ${1_001 - candidates.length}
           `;
           if (rows.length + candidates.length > 1_000) throw new Error("SEARCH_CANDIDATE_BOUND_EXCEEDED");
