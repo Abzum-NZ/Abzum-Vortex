@@ -794,6 +794,8 @@ export type PageLayoutRendererProps = Readonly<{
   applicationSurface?: boolean;
   /** Host-owned outcomes rendered inside the same application theme as the composition. */
   feedback?: ReactNode;
+  /** Overlays such as toasts, mounted inside the theme root so they use the application theme. */
+  overlay?: ReactNode;
   /**
    * Raw component runtime inputs keyed by stable placement identity. Every key must name a
    * placement in the resolved tree, and each entry is validated fail-closed by that placement's own
@@ -844,6 +846,7 @@ export function PageLayoutRenderer({
   style,
   applicationSurface = false,
   feedback,
+  overlay,
   runtimeInputs,
   projectedNavigation,
   resolvePageHref,
@@ -1016,6 +1019,7 @@ export function PageLayoutRenderer({
           )}
         </DateFormatProvider>
       </IconLibraryProvider>
+      {overlay}
     </VortexStyleRoot>
   );
 }

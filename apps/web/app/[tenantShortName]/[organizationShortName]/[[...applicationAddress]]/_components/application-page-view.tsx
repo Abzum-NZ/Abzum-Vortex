@@ -2761,6 +2761,7 @@ function ApplicationPageViewContent({
       <ApplicationAccountActionsProvider actions={accountActions}>
       <div ref={compositionRootRef} className="contents">
       <PageLayoutRenderer
+        overlay={<Toaster position="bottom-right" />}
         themeMode="system"
         applicationSurface
         feedback={pageFeedback === undefined && (notice === undefined || notice.tone === "info") &&
@@ -2815,7 +2816,6 @@ function ApplicationPageViewContent({
       </div>
       </ApplicationAccountActionsProvider>
       {intentHostElement}
-      <Toaster position="bottom-right" />
       <Dialog
         open={leavePromptOpen}
         disablePointerDismissal
