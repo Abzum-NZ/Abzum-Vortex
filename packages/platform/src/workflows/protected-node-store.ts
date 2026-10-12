@@ -10,6 +10,7 @@ import {
   type ProtectedNodeRegisteredRun,
   type ProtectedNodeRunStore,
   type ProtectedNodeEffectLedger,
+  ProtectedNodeRunStoreError,
 } from "./protected-node-execution";
 
 type RunRecordRow = DatabaseRow & { readonly run_record: unknown };
@@ -71,13 +72,26 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
           ) as run_record
         `,
       );
-      if (rows.length !== 1) return undefined;
+      if (rows.length !== 1)
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_ROW_COUNT_INVALID", {
+          cause: new Error("PROTECTED_WORKFLOW_RUN_ROW_COUNT_INVALID"),
+        });
       const row = rows[0];
-      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(row?.run_record);
-      return registeredRun.success &&
-        registeredRun.data.runRecord.authority.runId.toLowerCase() === parsedRunId.data.toLowerCase()
-        ? registeredRun.data
-        : undefined;
+      if (row === undefined || row.run_record === undefined)
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_VALUE_MISSING", {
+          cause: new Error("PROTECTED_WORKFLOW_RUN_VALUE_MISSING"),
+        });
+      if (row.run_record === null) return undefined;
+      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(row.run_record);
+      if (!registeredRun.success)
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_MALFORMED", {
+          cause: registeredRun.error,
+        });
+      if (registeredRun.data.runRecord.authority.runId.toLowerCase() !== parsedRunId.data.toLowerCase())
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_IDENTITY_MISMATCH", {
+          cause: new Error("PROTECTED_WORKFLOW_RUN_IDENTITY_MISMATCH"),
+        });
+      return registeredRun.data;
     },
 
     async refreshLastKnownState(
@@ -100,8 +114,16 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
           ) as refreshed
         `,
       );
-      const row = rows.length === 1 ? refreshResult.safeParse({ refreshed: rows[0]?.refreshed }) : undefined;
-      if (row?.success !== true || !row.data.refreshed) return;
+      if (rows.length !== 1 || rows[0] === undefined)
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_REFRESH_ROW_INVALID", {
+          cause: new Error("PROTECTED_WORKFLOW_RUN_REFRESH_ROW_INVALID"),
+        });
+      const row = refreshResult.safeParse({ refreshed: rows[0].refreshed });
+      if (!row.success)
+        throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_REFRESH_RESULT_MALFORMED", {
+          cause: row.error,
+        });
+      if (!row.data.refreshed) return;
     },
   });
 

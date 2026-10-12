@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   builderKeySchema,
+  describeFailure,
   findPlatformServiceOperation,
   flowValueSchema,
   flowTaskRegistry,
@@ -181,6 +182,13 @@ export type ProtectedNodeRunStore = Readonly<{
   ) => Promise<void>;
 }>;
 
+export class ProtectedNodeRunStoreError extends Error {
+  constructor(readonly code: string, options?: ErrorOptions) {
+    super(code, options);
+    this.name = "ProtectedNodeRunStoreError";
+  }
+}
+
 export type ProtectedNodeEffectKey = Readonly<{
   runId: string;
   organizationId: string;
@@ -285,6 +293,23 @@ const objectRecord = (value: unknown): Readonly<Record<string, unknown>> | undef
     : undefined;
 
 const sameIdentity = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+const parseRegisteredRun = (
+  candidate: unknown,
+  expectedRunId: string,
+): ProtectedNodeRegisteredRun => {
+  const parsed = protectedNodeRegisteredRunSchema.safeParse(candidate);
+  if (!parsed.success)
+    throw new ProtectedNodeRunStoreError("PROTECTED_WORKFLOW_RUN_MALFORMED", {
+      cause: parsed.error,
+    });
+  if (!sameIdentity(parsed.data.runRecord.authority.runId, expectedRunId))
+    throw new ProtectedNodeRunStoreError(
+      "PROTECTED_WORKFLOW_RUN_IDENTITY_MISMATCH",
+      { cause: new Error("PROTECTED_WORKFLOW_RUN_IDENTITY_MISMATCH") },
+    );
+  return parsed.data;
+};
 
 const unavailableOwnerForTask = (taskType: string): string | undefined => {
   if (taskType.startsWith("record.")) return "#1398";
@@ -467,16 +492,19 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       const envelope = protectedOperationRequestSchema.safeParse(candidate);
       if (!envelope.success) return { outcome: "permanent_refusal", safeCode: "callback_refused" };
 
-      let storedCandidate: unknown;
+      let registeredRun: ProtectedNodeRegisteredRun | undefined;
       try {
-        storedCandidate = await dependencies.runs.read(envelope.data.runId);
-      } catch {
+        const storedCandidate = await dependencies.runs.read(envelope.data.runId);
+        registeredRun = storedCandidate === undefined
+          ? undefined
+          : parseRegisteredRun(storedCandidate, envelope.data.runId);
+      } catch (error) {
+        console.error(`[workflow] protected callback run read failed: ${describeFailure(error)}`);
         return { outcome: "retryable_failure", safeCode: "run_store_unavailable", nextPollAt: nextPollAt(clock()) };
       }
-      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(storedCandidate);
-      if (!registeredRun.success || !sameIdentity(registeredRun.data.runRecord.authority.runId, envelope.data.runId))
+      if (registeredRun === undefined)
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
-      const run = { data: registeredRun.data.runRecord };
+      const run = { data: registeredRun.runRecord };
 
       const contextResolution = resolveDurableActorContext(envelope.data, run.data.authority, {
         callbackKey: dependencies.callbackKey,
@@ -630,24 +658,27 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           availability: "unavailable",
           safeCode: "kestra_status_unavailable",
         };
-      let storedCandidate: unknown;
+      let registeredRun: ProtectedNodeRegisteredRun | undefined;
       try {
-        storedCandidate = await dependencies.runs.read(parsedRunId.data);
-      } catch {
+        const storedCandidate = await dependencies.runs.read(parsedRunId.data);
+        registeredRun = storedCandidate === undefined
+          ? undefined
+          : parseRegisteredRun(storedCandidate, parsedRunId.data);
+      } catch (error) {
+        console.error(`[workflow] protected run status read failed: ${describeFailure(error)}`);
         return {
           availability: "unavailable",
           safeCode: "kestra_status_unavailable",
         };
       }
-      const registeredRun = protectedNodeRegisteredRunSchema.safeParse(storedCandidate);
-      if (!registeredRun.success) {
+      if (registeredRun === undefined) {
         return {
           availability: "unavailable",
           safeCode: "kestra_status_unavailable",
         };
       }
 
-      const run = { data: registeredRun.data.runRecord };
+      const run = { data: registeredRun.runRecord };
 
       const reference = workflowExecutionReferenceSchema.parse(run.data.executionReference);
       if (!sameIdentity(reference.runId, parsedRunId.data))
@@ -664,11 +695,13 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         });
         try {
           await dependencies.runs.refreshLastKnownState?.(reference.runId, state, refreshedAt);
-        } catch {
+        } catch (error) {
           // A failed cache write does not make Kestra's successful live answer stale.
+          console.error(`[workflow] protected run status refresh failed: ${describeFailure(error)}`);
         }
         return { availability: "current", reference: fresh };
-      } catch {
+      } catch (error) {
+        console.error(`[workflow] protected run status update failed: ${describeFailure(error)}`);
         return { availability: "unavailable", reference, safeCode: "kestra_status_unavailable" };
       }
     },

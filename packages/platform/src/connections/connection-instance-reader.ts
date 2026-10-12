@@ -7,6 +7,7 @@ import {
   connectionInstanceIdSchema,
   connectionInstanceStatusSchema,
   connectionTypeIdSchema,
+  describeFailure,
   databaseRevision,
   databaseTimestamp,
   isRecord,
@@ -247,11 +248,9 @@ const verifyConnectionManagement = async (
       ) as eligibility
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
-    if (row === undefined)
-      return { ok: false, reasonCode: "connection_options_unavailable" };
+    if (row === undefined) return { ok: false, reasonCode: "connection_options_unavailable" };
 
-    if (!isRecord(row.request_context))
-      return { ok: false, reasonCode: "not_authorized" };
+    if (!isRecord(row.request_context)) return { ok: false, reasonCode: "not_authorized" };
     const { channel: rawChannel, ...sessionContextCandidate } = row.request_context;
     const channel = protectedOperationChannelSchema.safeParse(rawChannel);
     // This chooser is for the Web HUMAN flow; transport metadata is not SessionContext.
@@ -282,8 +281,7 @@ const verifyConnectionManagement = async (
         ? { validUntil: databaseTimestamp(row.valid_until) }
         : { reasonCode: row.reason_code }),
     });
-    if (!eligibility.success)
-      return { ok: false, reasonCode: "connection_options_unavailable" };
+    if (!eligibility.success) return { ok: false, reasonCode: "connection_options_unavailable" };
     const decision = eligibility.data;
     if (
       decision.outcome !== "eligible" ||
@@ -337,11 +335,7 @@ const validateArchiveOptionPageQuery = (
     if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
       return undefined;
     const value = candidate as Readonly<Record<string, unknown>>;
-    if (
-      Object.keys(value).some(
-        (key) => key !== "afterConnectionInstanceId" && key !== "pageSize",
-      )
-    )
+    if (Object.keys(value).some((key) => key !== "afterConnectionInstanceId" && key !== "pageSize"))
       return undefined;
     if (
       typeof value.pageSize !== "number" ||
@@ -409,6 +403,19 @@ const refusalForFailure = (error: unknown): ConnectionInstanceReaderRefusalCode 
   if (code === "22023" || code === "22003") return "invalid_parameters";
   return "administration_unavailable";
 };
+
+class ConnectionInstanceReadFailure<Code extends string> extends Error {
+  readonly code: Code;
+
+  constructor(
+    readonly reasonCode: Code,
+    cause: unknown,
+  ) {
+    super("Connection instance administration read failed", { cause });
+    this.name = "ConnectionInstanceReadFailure";
+    this.code = reasonCode;
+  }
+}
 
 /** Identifiers are case-insensitive: compare the canonical lower-cased forms. */
 const sameIdentifier = (left: unknown, right: string): boolean =>
@@ -495,16 +502,19 @@ export async function readConnectionInstanceForAdministration(
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) return unavailable("connection_unavailable");
     if (!sameIdentifier(row.organization_id, organization))
-      return unavailable("administration_unavailable");
+      throw new Error("CONNECTION_INSTANCE_READER_ORGANIZATION_MISMATCH");
 
     const parsed = connectionInstanceStatusSchema.safeParse(row.connection_instance);
-    if (!parsed.success) return unavailable("administration_unavailable");
+    if (!parsed.success)
+      throw new Error("CONNECTION_INSTANCE_STATUS_MALFORMED", { cause: parsed.error });
     if (!sameIdentifier(parsed.data.connectionInstanceId, connectionInstance))
-      return unavailable("administration_unavailable");
+      throw new Error("CONNECTION_INSTANCE_STATUS_IDENTITY_MISMATCH");
 
     return Object.freeze({ outcome: "available", instance: parsed.data });
   } catch (error) {
-    return unavailable(refusalForFailure(error));
+    const failure = new ConnectionInstanceReadFailure(refusalForFailure(error), error);
+    console.error(`[connection] administration instance read failed: ${describeFailure(failure)}`);
+    return unavailable(failure.reasonCode);
   }
 }
 
@@ -538,14 +548,16 @@ export async function listConnectionInstancesForAdministration(
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) return unavailable("administration_unavailable");
     if (!sameIdentifier(row.organization_id, organization))
-      return unavailable("administration_unavailable");
-    if (!Array.isArray(row.connection_instances)) return unavailable("administration_unavailable");
+      throw new Error("CONNECTION_INSTANCE_PAGE_ORGANIZATION_MISMATCH");
+    if (!Array.isArray(row.connection_instances))
+      throw new Error("CONNECTION_INSTANCE_PAGE_VALUE_INVALID");
 
     const parsed = connectionInstanceStatusSchema
       .array()
       .max(MAXIMUM_CONNECTION_INSTANCE_PAGE_SIZE)
       .safeParse(row.connection_instances);
-    if (!parsed.success) return unavailable("administration_unavailable");
+    if (!parsed.success)
+      throw new Error("CONNECTION_INSTANCE_PAGE_STATUS_MALFORMED", { cause: parsed.error });
 
     if (
       row.next_after_connection_instance_id === null ||
@@ -554,14 +566,17 @@ export async function listConnectionInstancesForAdministration(
       return Object.freeze({ outcome: "available", instances: Object.freeze([...parsed.data]) });
 
     const next = connectionInstanceIdSchema.safeParse(row.next_after_connection_instance_id);
-    if (!next.success) return unavailable("administration_unavailable");
+    if (!next.success)
+      throw new Error("CONNECTION_INSTANCE_PAGE_CURSOR_MALFORMED", { cause: next.error });
     return Object.freeze({
       outcome: "available",
       instances: Object.freeze([...parsed.data]),
       nextAfterConnectionInstanceId: next.data,
     });
   } catch (error) {
-    return unavailable(refusalForFailure(error));
+    const failure = new ConnectionInstanceReadFailure(refusalForFailure(error), error);
+    console.error(`[connection] administration instance page failed: ${describeFailure(failure)}`);
+    return unavailable(failure.reasonCode);
   }
 }
 
@@ -631,8 +646,7 @@ export async function listEligibleArchiveConnectionsForApplication(
       return unavailableArchiveOptions(mapAdministrationUnavailable(page.reasonCode));
 
     const listed = page.instances;
-    if (listed.length > query.pageSize)
-      return unavailableArchiveOptions("stale_page");
+    if (listed.length > query.pageSize) return unavailableArchiveOptions("stale_page");
     let previousId = query.after?.toLowerCase();
     for (const instance of listed) {
       const currentId = instance.connectionInstanceId.toLowerCase();
@@ -673,7 +687,10 @@ export async function listEligibleArchiveConnectionsForApplication(
 
       let rawEvidence: ActiveConnectionEvidence;
       try {
-        rawEvidence = await readActiveConnectionEvidence(transaction, instance.connectionInstanceId);
+        rawEvidence = await readActiveConnectionEvidence(
+          transaction,
+          instance.connectionInstanceId,
+        );
       } catch {
         // This reader intentionally collapses absence, stale/inactive state and SQL errors.
         // None of those may be silently turned into a partial catalogue.
@@ -681,7 +698,7 @@ export async function listEligibleArchiveConnectionsForApplication(
       }
       const parsedEvidence = activeConnectionEvidenceSchema.safeParse(rawEvidence);
       if (!parsedEvidence.success)
-        return unavailableArchiveOptions("connection_options_unavailable");
+        throw new Error("CONNECTION_OPTION_EVIDENCE_MALFORMED", { cause: parsedEvidence.error });
       const evidence = parsedEvidence.data;
       if (
         !sameId(evidence.connectionInstanceId, instance.connectionInstanceId) ||
@@ -720,7 +737,7 @@ export async function listEligibleArchiveConnectionsForApplication(
       }
       const current = connectionInstanceStatusSchema.safeParse(status.instance);
       if (!current.success)
-        return unavailableArchiveOptions("connection_options_unavailable");
+        throw new Error("CONNECTION_OPTION_STATUS_MALFORMED", { cause: current.error });
       const instance = current.data;
       if (
         !sameId(instance.connectionInstanceId, candidate.listed.connectionInstanceId) ||
@@ -744,9 +761,7 @@ export async function listEligibleArchiveConnectionsForApplication(
         connectionInstanceId: connectionInstanceIdSchema.parse(instance.connectionInstanceId),
         connectionTypeId: connectionTypeIdSchema.parse(instance.connectionTypeId),
         connectionTypeVersion: semanticVersionSchema.parse(instance.connectionTypeVersion),
-        destinationKey: archiveDestinationReferenceSchema.parse(
-          candidate.evidence.destinationKey,
-        ),
+        destinationKey: archiveDestinationReferenceSchema.parse(candidate.evidence.destinationKey),
         expectedRevision: instance.revision,
         destinationFingerprint: fingerprint,
       });
@@ -761,23 +776,40 @@ export async function listEligibleArchiveConnectionsForApplication(
     > = [];
     for (const candidate of optionCandidates) {
       const option = candidate.option;
+      const connectionId = connectionInstanceIdSchema.safeParse(option.connectionInstanceId);
+      const typeId = connectionTypeIdSchema.safeParse(option.connectionTypeId);
+      const typeVersion = semanticVersionSchema.safeParse(option.connectionTypeVersion);
+      const destination = archiveDestinationReferenceSchema.safeParse(option.destinationKey);
       if (
-        !connectionInstanceIdSchema.safeParse(option.connectionInstanceId).success ||
-        !connectionTypeIdSchema.safeParse(option.connectionTypeId).success ||
-        !semanticVersionSchema.safeParse(option.connectionTypeVersion).success ||
-        !archiveDestinationReferenceSchema.safeParse(option.destinationKey).success ||
+        !connectionId.success ||
+        !typeId.success ||
+        !typeVersion.success ||
+        !destination.success ||
         !Number.isSafeInteger(option.expectedRevision) ||
         option.expectedRevision < 1 ||
         !/^[a-f0-9]{64}$/.test(option.destinationFingerprint)
       )
-        return unavailableArchiveOptions("connection_options_unavailable");
+        throw new Error("CONNECTION_OPTION_RESULT_MALFORMED", {
+          cause: !connectionId.success
+            ? connectionId.error
+            : !typeId.success
+              ? typeId.error
+              : !typeVersion.success
+                ? typeVersion.error
+                : !destination.success
+                  ? destination.error
+                  : new Error("CONNECTION_OPTION_REVISION_OR_FINGERPRINT_INVALID"),
+        });
       validatedOptions.push(candidate);
     }
 
     permission = await refreshPermission();
     if (!permission.ok) return unavailableArchiveOptions(permission.reasonCode);
     const options = validatedOptions
-      .filter((candidate) => candidate.expiresAt === null || candidate.expiresAt > permission.value.completedAt)
+      .filter(
+        (candidate) =>
+          candidate.expiresAt === null || candidate.expiresAt > permission.value.completedAt,
+      )
       .map((candidate) => candidate.option);
 
     return Object.freeze({
@@ -787,7 +819,9 @@ export async function listEligibleArchiveConnectionsForApplication(
         ? {}
         : { nextAfterConnectionInstanceId: page.nextAfterConnectionInstanceId }),
     });
-  } catch {
+  } catch (error) {
+    const failure = new ConnectionInstanceReadFailure("connection_options_unavailable", error);
+    console.error(`[connection] eligible archive option read failed: ${describeFailure(failure)}`);
     return unavailableArchiveOptions("connection_options_unavailable");
   }
 }
