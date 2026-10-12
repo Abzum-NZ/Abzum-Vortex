@@ -7,7 +7,7 @@ import {
   type ContainedComponentId,
   type SafeFlowResultDescriptor,
   type SafeFlowResultKind,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import type {
   ComponentEventDataResult,

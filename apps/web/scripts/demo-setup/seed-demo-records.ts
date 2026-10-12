@@ -6,13 +6,13 @@ import {
   identityAuthorityIdSchema,
   organizationSelectionCandidateSchema,
   saveRecordCommandV2Schema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createHumanOrganizationRequestService,
   readCurrentRecordOwnerGroupsAfterAuthorization,
-} from "@vortex/access";
-import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createRecordSaveService } from "@vortex/record";
+} from "@web/platform-server";
+import { createDatabaseSystemApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createRecordSaveService } from "@web/platform-server";
 import { developmentPublicationCatalogue } from "../development-setup/definitions";
 import {
   inSystemTransaction,

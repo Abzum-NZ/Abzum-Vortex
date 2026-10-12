@@ -22,7 +22,7 @@ import {
   TABLE_BLOCK_RELEASE_1_4_0,
   TEXT_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPayloadParser,
   createPlatformComponentRegistry,

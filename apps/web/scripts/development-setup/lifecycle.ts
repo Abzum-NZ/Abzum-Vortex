@@ -1,11 +1,11 @@
 import {
   createOrganizationLifecycleLimitsStore,
   createRecordTypeLifecyclePolicyService,
-} from "@vortex/record";
+} from "@web/platform-server";
 import type {
   IdentityAuthorityId,
   SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { nominatedOwnerSession } from "./development-authority";
 
 /**

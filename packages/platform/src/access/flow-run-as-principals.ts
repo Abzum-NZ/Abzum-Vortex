@@ -17,13 +17,13 @@ import {
   ruleIdSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "@vortex/contracts";
-import type { FlowRunAsPrincipal } from "@vortex/contracts";
+} from "../schema";
+import type { FlowRunAsPrincipal } from "../schema";
 import type {
   DatabaseRow,
   RequestDatabaseTransaction,
   RuntimeDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 const flowRunAsPrincipalScopeShape = {
   organizationId: organizationIdSchema,

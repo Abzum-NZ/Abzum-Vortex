@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -24,18 +25,17 @@ import {
   type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationAccessDeclaration,
-} from "@vortex/contracts";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   runOrganizationAccessOperation,
-} from "@vortex/access";
+} from "../access/index";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 import { z } from "zod";
 import {
   createHumanInstalledPageBundleContextLoader,
@@ -372,7 +372,7 @@ const permittedApplication = async (
         // A page requirement names either a permission from this application's own catalogue or
         // an exact platform administration permission from the shipped platform catalogue. A
         // platform permission is organisation-scoped, so its declaration targets the organisation.
-        const platformDeclaration = platformPermissionFor(page.accessPermissionKey);
+        const platformDeclaration = platformPermissionSource().forKey(page.accessPermissionKey);
         let declaration: OrganizationAccessDeclaration;
         if (platformDeclaration !== undefined) {
           declaration = organizationAccessDeclarationSchema.parse({
@@ -386,7 +386,7 @@ const permittedApplication = async (
             target: { kind: "organization" },
             requiredPermission: {
               ownerKind: "platform",
-              ownerId: platformPermissionOwnerId,
+              ownerId: platformPermissionSource().ownerId,
               permissionId: platformDeclaration.permissionId,
             },
             recentAuthentication: { kind: "none" },

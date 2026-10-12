@@ -4,8 +4,8 @@ import {
   activeApplicationInstallationEvidenceSchema,
   type ActiveApplicationInstallationErrorCode,
   type ActiveApplicationInstallationEvidence,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type ActiveInstallationRow = DatabaseRow & { readonly active_installation: unknown };
 

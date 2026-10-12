@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { workflowValueTypeSchema } from "./catalogues";
+import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import {
   correlationIdSchema,
   conditionMaximumNestingDepth,
@@ -7,9 +7,9 @@ import {
   descriptionSchema,
   jsonValueSchema,
   retryPolicySchema,
-} from "./common";
-import type { JsonValue } from "./common";
-import { parseExactDecimal } from "./exact-decimal";
+} from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
+import { parseExactDecimal } from "../records/exact-decimal";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -24,7 +24,7 @@ import {
   recordTypeIdSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /**
  * The one flow definition every behaviour kind uses: interactive actions, named-action bodies,

@@ -1,4 +1,4 @@
-import type { DefinitionRuleFailureFamily, DefinitionValidationLocation } from "@vortex/contracts";
+import type { DefinitionRuleFailureFamily, DefinitionValidationLocation } from "../schema";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.rule_graph_topology",

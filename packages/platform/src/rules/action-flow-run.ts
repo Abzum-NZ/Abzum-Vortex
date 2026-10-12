@@ -6,7 +6,7 @@ import {
   type FlowFormula,
   type FlowTask,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 import type { FlowRuntimeValue } from "./flow-formula";
 import {
   resumeFlowRun,

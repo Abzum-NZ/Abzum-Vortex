@@ -3,7 +3,7 @@ import {
   recordTypeDefinitionV3Schema,
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
-} from "@vortex/contracts";
+} from "../schema";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
 import type { RelationshipTotalParentMutation } from "./relationship-total-save";
 

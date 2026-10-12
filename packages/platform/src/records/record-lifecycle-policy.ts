@@ -9,7 +9,7 @@ import {
   storageContractIdSchema,
   timestampSchema,
   workflowIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const nonNilUuidSchema = z
   .string()

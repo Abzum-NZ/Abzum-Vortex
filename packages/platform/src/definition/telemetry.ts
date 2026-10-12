@@ -6,7 +6,7 @@ import {
   type AlertRecord,
   type ServiceTelemetryPort,
   type TelemetryInput,
-} from "@vortex/contracts";
+} from "../schema";
 
 export type AppTelemetryCollectorDependencies = Readonly<{
   downstream?: ServiceTelemetryPort;

@@ -6,15 +6,15 @@ import {
   platformIdSchema,
   type SessionContext,
   type StoredDefinitionSource,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
   DefinitionStoreError,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import {
   crmApplication,
   crmModuleSources,

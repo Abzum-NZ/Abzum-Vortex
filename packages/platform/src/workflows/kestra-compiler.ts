@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import type {
-  flowControlTaskTypeKeys} from "@vortex/contracts";
+  flowControlTaskTypeKeys} from "../schema";
 import {
   isRecord,
   applicationRootIdSchema,
@@ -34,7 +34,7 @@ import {
   type ProtectedOperationReference,
   type ProtectedOperationRequest,
   type SemanticVersion,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * The permanent environment a candidate flow is scoped to. The generated

@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactElement } from "react";
 import { Icon } from "../icons/icon";
-import type { RecordsTableActionContract } from "@vortex/contracts";
+import type { RecordsTableActionContract } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import {

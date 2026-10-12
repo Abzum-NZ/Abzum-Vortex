@@ -18,9 +18,9 @@ import {
   type FlowValue,
   type JsonValue,
   type WorkflowExecutionReference,
-} from "@vortex/contracts";
-import { evaluateFlowFormula, type FlowRuntimeValue } from "@vortex/rule";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import { evaluateFlowFormula, type FlowRuntimeValue } from "../rules/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   resolveDurableActorContext,

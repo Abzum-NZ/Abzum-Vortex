@@ -4,8 +4,8 @@ import {
   liveInvalidationSchema,
   namespacedKeySchema,
   organizationIdSchema,
-} from "@vortex/contracts";
-import type { PrivateInvalidationSubscriptionSource } from "@vortex/event/client";
+} from "@vortex/platform/schema";
+import type { PrivateInvalidationSubscriptionSource } from "@vortex/platform/schema";
 import { z } from "zod";
 
 /** Shared, content-free wire contract; this module has no server imports. */

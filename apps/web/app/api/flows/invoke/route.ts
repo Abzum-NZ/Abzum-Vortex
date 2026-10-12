@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
   runOrganizationAccessOperation,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   createDatabaseFlowStores,
   createFlowOrchestrator,
@@ -16,7 +16,7 @@ import {
   type FlowNamedAction,
   type FlowRecordType,
   type FlowRelease,
-} from "@vortex/app";
+} from "@web/platform-server";
 import {
   flowTaskChildLists,
   canonicalJson,
@@ -39,20 +39,20 @@ import {
   type IdentitySession,
   type ModuleDefinitionConsumerReadResultV3,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
-import { createReferenceChoiceService, createViewerSafeRecordLinkReadService } from "@vortex/query";
+} from "@vortex/platform/schema";
+import { createReferenceChoiceService, createViewerSafeRecordLinkReadService } from "@web/platform-server";
 import {
   createDatabaseApplicationBoundReleaseSetService,
   flowReadFieldsScalarTypeForField,
-} from "@vortex/definition";
-import { createRequestBoundTenantGovernanceService } from "@vortex/identity";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+} from "@web/platform-server";
+import { createRequestBoundTenantGovernanceService } from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import {
   createPageFormRequestAdapter,
   createPageSubjectReader,
   createPrivateFormSubmitAdapter,
-} from "@vortex/page";
-import { createNamedActionRecordPort, createRecordSaveService } from "@vortex/record";
+} from "@web/platform-server";
+import { createNamedActionRecordPort, createRecordSaveService } from "@web/platform-server";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";

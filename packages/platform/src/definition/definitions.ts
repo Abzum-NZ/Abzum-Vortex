@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { validRange } from "semver";
-import { jsonValueSchema } from "./common";
+import { jsonValueSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -12,7 +12,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const definitionKindSchema = z.enum(["module", "application"]);
 

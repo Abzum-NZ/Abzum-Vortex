@@ -7,8 +7,8 @@ import {
   revisionSchema,
   semanticVersionSchema,
   timestampSchema,
-} from "./identifiers";
-import { isLoopbackHostname } from "./loopback-hostname";
+} from "../catalogue/identifiers";
+import { isLoopbackHostname } from "../identity/loopback-hostname";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -35,10 +35,10 @@ import {
   sessionIdSchema,
   tenantAdministratorAssignmentIdSchema,
   tenantIdSchema,
-} from "./identifiers";
-import { correlationIdSchema, jsonValueSchema } from "./common";
+} from "../catalogue/identifiers";
+import { correlationIdSchema, jsonValueSchema } from "../catalogue/common";
 import { permissionDeclarationSchema } from "./permissions";
-import { recordScopeSchema } from "./records";
+import { recordScopeSchema } from "../records/records";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
 const accountStateSchema = z.enum(["active", "suspended", "closed"]);

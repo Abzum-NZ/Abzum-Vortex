@@ -7,7 +7,7 @@ import {
   timestampSchema,
   type BlockPropertyValueV2Contract,
   type ReferenceChoiceSelectionEvidence,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
 /** Every event name any control accepts; each block further narrows this to its own declaration. */

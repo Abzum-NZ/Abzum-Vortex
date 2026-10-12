@@ -22,12 +22,12 @@ import {
   type EntitlementCheckRequest,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

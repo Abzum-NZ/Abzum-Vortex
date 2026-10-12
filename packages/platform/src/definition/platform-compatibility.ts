@@ -1,5 +1,5 @@
-import { semanticVersionSchema } from "./identifiers";
-import type { SemanticVersion } from "./identifiers";
+import { semanticVersionSchema } from "../catalogue/identifiers";
+import type { SemanticVersion } from "../catalogue/identifiers";
 
 /** Semantic version schema for the Application package/platform compatibility protocol. */
 export const applicationPlatformCompatibilityVersionSchema = semanticVersionSchema;

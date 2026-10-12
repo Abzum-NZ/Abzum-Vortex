@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   containedComponentIdSchema,
@@ -8,7 +8,7 @@ import {
   revisionSchema,
   roleActivationIdSchema,
   roleIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   roleActivationEligibilitySourceSchema,
   roleActivationSchema,

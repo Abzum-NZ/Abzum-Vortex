@@ -17,13 +17,13 @@ import {
   type InstallationRuntimeBundleSourceManifest,
   type PreparedInstallationRuntimeSource,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   projectStoredConsumerRelease,
   storedConsumerReleaseEvidenceSchema,
-} from "./definition-consumer-read";
+} from "./definition-consumer-read-definition";
 import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,

@@ -10,7 +10,7 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   type AttachmentListPayloadV2,
-} from "@vortex/contracts";
+} from "../schema";
 
 export type ReadOnlyAttachmentOwner = Readonly<{
   organizationId: string;

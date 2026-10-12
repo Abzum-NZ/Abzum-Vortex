@@ -11,7 +11,7 @@ import {
   type SharedRecipientCapability,
   type SharedResultGroup,
   type SharedResultSourceRefusalCode,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   searchDocumentLimits,
   searchPriorityWeights,

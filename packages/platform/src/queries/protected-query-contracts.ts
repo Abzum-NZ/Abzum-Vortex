@@ -15,7 +15,7 @@ import {
   personLinkValueV2Schema,
   recordLinkValueV2Schema,
   sourceExactDecimalTextV2Schema,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   recordSystemValuesSchema,
   supportedRecordSystemFieldKeySchema,

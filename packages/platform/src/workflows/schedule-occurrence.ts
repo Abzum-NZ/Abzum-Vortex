@@ -16,7 +16,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   type FlowDefinition,
   type FlowTrigger,
-} from "@vortex/contracts";
+} from "../schema";
 
 import type { KestraFlowCompilerEnvironment, KestraFlowIdentity } from "./kestra-compiler";
 

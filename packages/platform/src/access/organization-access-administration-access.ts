@@ -135,16 +135,16 @@ import {
   type RevokeOrganizationAdministrationRoleAssignmentCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
-} from "@vortex/contracts";
-import type { DatabaseRow } from "@vortex/db";
-import { fingerprintCanonicalValue } from "@vortex/definition";
+} from "../schema";
+import type { DatabaseRow } from "../db/index";
+import { fingerprintCanonicalValue } from "../definition/definition-index";
 import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
-import { createOrganizationLocalAdministrationService } from "./organization-local-administration";
+import { createOrganizationLocalAdministrationService } from "./organization-local-administration-access";
 import {
   prepareOrganizationRoleChangeEvidence,
   verifyPreparedOrganizationRoleChangeEvidence,

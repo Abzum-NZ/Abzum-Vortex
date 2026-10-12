@@ -3,7 +3,7 @@ import {
   applicationSourceDocumentV2Schema,
   type ApplicationRootId,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 /** The current Application draft, whether supplied by history or a direct source load. */

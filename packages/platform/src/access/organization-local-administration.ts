@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   administrationDuplicateKeySchema,
   invitationIdSchema,
@@ -7,7 +7,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { invitationSchema, organizationRuntimeSettingsSchema } from "./identity-access";
 
 export const organizationAdministrationAccountSummarySchema = z

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { jsonValueSchema, safeHttpsUrlSchema } from "./common";
-import { sourceQualifiedRecordTypeSchema } from "./definition-source-common";
+import { jsonValueSchema, safeHttpsUrlSchema } from "../catalogue/common";
+import { sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -12,7 +12,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /** The exact installed record identity a viewer-safe link read selects. */
 export const viewerSafeRecordLinkIdentitySchema = z

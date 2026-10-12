@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { descriptionSchema, jsonValueSchema, labelSchema } from "./common";
+import { descriptionSchema, jsonValueSchema, labelSchema } from "../catalogue/common";
 import {
   builderKeySchema,
   containedComponentIdSchema,
@@ -9,7 +9,7 @@ import {
   permissionIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const canonicalFieldIdsSchema = z.array(fieldIdSchema).superRefine((fieldIds, context) => {
   const identities = fieldIds.map((fieldId) => fieldId.toLowerCase());

@@ -12,8 +12,8 @@ import {
   type Fingerprint,
   type OrganizationId,
   type SemanticVersion,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   flowOperationNodeDescriptors,
   platformOperationsCalledBy,

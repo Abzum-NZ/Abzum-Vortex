@@ -15,8 +15,8 @@ import {
   type ApplicationToolInputSchema,
   type OrganizationAccessDeclaration,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 
 /**
  * The application tool bundle of one exact installed release, filtered for one viewer.

@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
   organizationIdSchema,
   revisionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { preparedApplicationRoleTemplatesSchema } from "./organization-access-catalogue";
 
 const preparedChangeFields = {

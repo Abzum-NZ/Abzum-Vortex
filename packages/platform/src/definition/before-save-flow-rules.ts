@@ -10,7 +10,7 @@ import {
   type SourceRuleGraphNode,
   type SourceRuleGraphOperand,
   type SourceRuleGraphEdge,
-} from "@vortex/contracts";
+} from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 /**

@@ -2,8 +2,8 @@ import {
   createOrganizationAccessAdministrationService,
   fingerprintPermissionMeaning,
   prepareOrganizationRoleChangeEvidence,
-} from "@vortex/access";
-import { fingerprintCanonicalValue } from "@vortex/definition";
+} from "@web/platform-server";
+import { fingerprintCanonicalValue } from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
@@ -11,7 +11,7 @@ import {
   organizationRoleChangePreparationSchema,
   organizationSelectionCandidateSchema,
   type IdentityAuthorityId,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { nominatedOwnerSession } from "./development-authority";
 import type { DevelopmentSetupManifest } from "./manifest";
 import type { SetupState } from "./state";

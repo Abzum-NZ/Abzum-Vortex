@@ -6,7 +6,7 @@ import {
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
   platformIdSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 

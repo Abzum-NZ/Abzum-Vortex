@@ -16,14 +16,14 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import type { ActionFlowRunner, BeforeSaveRuleWarning } from "@vortex/rule";
+} from "../access/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { ActionFlowRunner, BeforeSaveRuleWarning } from "../rules/index";
 import {
   actionFlowSeed,
   composeFlowEffects,

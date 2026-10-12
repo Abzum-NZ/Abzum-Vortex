@@ -7,7 +7,7 @@ import {
   recordIdSchema,
   revisionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const canonicalFieldIdsSchema = z.array(fieldIdSchema).superRefine((values, context) => {
   const normalized = values.map((value) => value.toLowerCase());

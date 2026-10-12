@@ -18,8 +18,8 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+} from "../schema";
+import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   protectedQueryCommandSchema,
   protectedQuerySortSchema,
@@ -27,7 +27,7 @@ import {
   type ProtectedQueryPage,
   type ProtectedQueryPageRow,
   type ProtectedQueryResult,
-} from "@vortex/query";
+} from "../queries/index";
 import { z } from "zod";
 import {
   componentContextSchema,

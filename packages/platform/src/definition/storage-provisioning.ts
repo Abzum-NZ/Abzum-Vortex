@@ -7,8 +7,8 @@ import {
   type ModuleInstallationStorageCommand,
   type ModuleInstallationStorageErrorCode,
   type ModuleInstallationStorageResult,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 export class ModuleInstallationStorageError extends Error {
   readonly code: ModuleInstallationStorageErrorCode;

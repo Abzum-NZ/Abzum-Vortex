@@ -6,7 +6,7 @@ import {
   pageIdSchema,
   sameId,
   type PageDefinitionV2,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import {
   requireInstalledRuntimeContext,

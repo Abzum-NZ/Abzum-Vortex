@@ -46,11 +46,11 @@ export {
 export {
   createOrganizationLocalAdministrationService,
   type OrganizationLocalAdministrationDependencies,
-} from "./organization-local-administration";
+} from "./organization-local-administration-access";
 export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
-} from "./organization-access-decision";
+} from "./organization-access-decision-access";
 export {
   runOrganizationRecordAccessOperation,
   type FixedOrganizationRecordAccessAdapter,
@@ -69,7 +69,7 @@ export {
 export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
-} from "./organization-access-administration";
+} from "./organization-access-administration-access";
 export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
   organizationDelegationScopeEvidenceErrorCodes,
@@ -103,7 +103,7 @@ export {
   type BuilderConferredPermission,
   type BuilderOperation,
   type BuilderTargetFacts,
-} from "@vortex/definition";
+} from "../definition/definition-index";
 export {
   createBuilderAuthority,
   type BuilderAuthorityDependencies,

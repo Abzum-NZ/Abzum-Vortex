@@ -12,7 +12,7 @@ import {
   searchPrioritySchema,
   selectedOrganizationScopeSchema,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   searchDocumentLimits,
   searchDocumentSchemaVersion,

@@ -6,8 +6,8 @@ import {
   recordMeteringEventCommandSchema,
   type MeteringEvent,
   type RecordMeteringEventCommand,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 /**
  * Exactly one immutable MeteringEvent per accepted command. A replayed duplicate

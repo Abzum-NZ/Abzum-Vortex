@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "./platform-permissions";
 import "server-only";
 
 import { z } from "zod";
@@ -26,8 +27,8 @@ import {
   type IdentitySession,
   type SelectedOrganizationScope,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   BuilderAuthorityError,
   createDefinitionStore,
@@ -37,8 +38,7 @@ import {
   requireBuilderAuthority,
   validateDefinitionSource,
   type StoredApplicationDefinitionDraft,
-} from "@vortex/definition";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+} from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 
@@ -164,7 +164,7 @@ const assertLiveCompletion = async (
   ];
   let deadline = Number.POSITIVE_INFINITY;
   for (const key of keys) {
-    const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
+    const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
     if (permission === undefined) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
     const declaration = organizationAccessDeclarationSchema.parse({
       operationKey: permission.key,
@@ -172,7 +172,7 @@ const assertLiveCompletion = async (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-        ownerId: platformPermissionOwnerId,
+        ownerId: platformPermissionSource().ownerId,
         permissionId: permission.permissionId,
       },
       recentAuthentication: { kind: "none" },

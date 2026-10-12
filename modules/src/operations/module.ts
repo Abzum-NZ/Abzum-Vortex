@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import incidentsSource from "./sources/operations.incidents.json";
 
 /** Current Operations Module sources shipped with the Operations application. */

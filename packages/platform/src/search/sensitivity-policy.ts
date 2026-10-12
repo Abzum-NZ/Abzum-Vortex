@@ -1,6 +1,6 @@
 import "server-only";
 
-import { personalDataClassSchema, type PersonalDataClass } from "@vortex/contracts";
+import { personalDataClassSchema, type PersonalDataClass } from "../schema";
 
 /**
  * Shared derived-data exclusion policy for the organisation search index (#95).

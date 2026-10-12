@@ -1,7 +1,7 @@
 import "server-only";
 
-import { fileIdSchema, fileRecordSchema, revisionSchema } from "@vortex/contracts";
-import type { FileId } from "@vortex/contracts";
+import { fileIdSchema, fileRecordSchema, revisionSchema } from "../schema";
+import type { FileId } from "../schema";
 import { z } from "zod";
 import type { FileRemovalRepository } from "./object-removal";
 import type { FileReadSqlTransaction } from "./read-repository";

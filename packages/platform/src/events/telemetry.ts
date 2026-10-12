@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
-import { builderKeySchema, namespacedKeySchema } from "./identifiers";
+import { correlationIdSchema } from "../catalogue/common";
+import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
 
 /** Service and operation names are identifiers, never free-form log metadata. */
 export const telemetryServiceSchema = builderKeySchema;

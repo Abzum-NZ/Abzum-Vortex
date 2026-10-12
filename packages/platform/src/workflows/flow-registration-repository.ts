@@ -13,8 +13,8 @@ import {
   type ApplicationRootId,
   type OrganizationId,
   type SemanticVersion,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCandidate,

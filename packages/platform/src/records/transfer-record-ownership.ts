@@ -9,13 +9,13 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type TransferRecordOwnershipResultV2,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../access/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type TransferRow = DatabaseRow & { readonly result: unknown };
 

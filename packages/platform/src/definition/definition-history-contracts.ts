@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -9,7 +9,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const definitionHistoryCommandCommon = {

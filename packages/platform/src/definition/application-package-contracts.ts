@@ -9,7 +9,7 @@ import {
 } from "./definition-compilation-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
-import { flowIdSchema } from "./flow-contracts";
+import { flowIdSchema } from "../workflows/flow-contracts";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
 import {
   applicationRootIdSchema,
@@ -23,13 +23,13 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { moduleSystemProjectionV3Schema } from "./module-contracts-v3";
 import {
   permissionDeclarationSchema,
   permissionRecordScopeSchema,
   permissionSavedConditionRestrictionSchema,
-} from "./permissions";
+} from "../access/permissions";
 import {
   customComponentDataContractV2Schema,
   customComponentEventV2Schema,

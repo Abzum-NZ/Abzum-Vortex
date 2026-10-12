@@ -3,8 +3,8 @@ import {
   applicationThemeSelectionV2Schema,
   type SourceApplicationThemeSelectionV2,
   sourceApplicationThemeSelectionV2Schema,
-} from "./application-composition-v2";
-import index from "./catalogue/shadcn-create-theme-catalogue.generated.json";
+} from "../definition/application-composition-v2";
+import index from "../catalogue/catalogue/shadcn-create-theme-catalogue.generated.json";
 
 /**
  * The shadcn/create theme catalogue index #1274 generated, exposed to the application theme

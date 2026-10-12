@@ -1,7 +1,7 @@
 import "server-only";
 
-import { isReservedTenantSegment } from "@vortex/app";
-import { builderKeySchema, namespacedKeySchema } from "@vortex/contracts";
+import { isReservedTenantSegment } from "@web/platform-server";
+import { builderKeySchema, namespacedKeySchema } from "@vortex/platform/schema";
 import { organizationAddressPath } from "../../_lib/address-paths";
 
 const applicationHomeContinuationBrand: unique symbol = Symbol("ApplicationHomeContinuation");

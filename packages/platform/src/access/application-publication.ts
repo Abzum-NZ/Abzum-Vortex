@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "./platform-permissions";
 import "server-only";
 
 import { z } from "zod";
@@ -9,15 +10,14 @@ import {
   publishDefinitionResultSchema, sameId, sessionContextSchema, timestampSchema,
   type IdentitySession, type PrepareDefinitionPublicationResult, type PublishDefinitionResult,
   type SelectedOrganizationScope, type SessionContext,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   BuilderAuthorityError, DefinitionPublicationError, DefinitionStoreError,
   createDatabaseDefinitionPublicationService,
   readApplicationDefinitionDraft, requireBuilderAuthority,
   type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "@vortex/definition";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+} from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 
@@ -100,12 +100,12 @@ const assertLiveCompletion = async (
   let deadline = Date.parse(context.expiresAt);
   for (const key of ["platform.organization.definition_drafts.manage",
     "platform.organization.definition_releases.manage"]) {
-    const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
+    const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
     if (permission === undefined) throw new PublicationContextRefused();
     const declaration = organizationAccessDeclarationSchema.parse({
       operationKey: key, action: { actionKind: permission.actionKind },
       target: { kind: "organization" }, requiredPermission: {
-        ownerKind: "platform", ownerId: platformPermissionOwnerId, permissionId: permission.permissionId,
+        ownerKind: "platform", ownerId: platformPermissionSource().ownerId, permissionId: permission.permissionId,
       }, recentAuthentication: { kind: "none" }, authority: { kind: "permission" },
     });
     const rows = await transaction.query<DatabaseRow>`

@@ -14,8 +14,8 @@ import {
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
-} from "./identifiers";
-import { descriptionSchema, labelSchema } from "./common";
+} from "../catalogue/identifiers";
+import { descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   roleActivationEligibilitySourceSchema,
   rolePrivilegeClassificationSchema,

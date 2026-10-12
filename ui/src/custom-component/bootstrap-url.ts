@@ -1,7 +1,7 @@
 /**
  * Browser-safe construction of the Vortex-owned bootstrap document URL for one custom component
  * bundle. The server route that serves the document lives at the same path and reads the same query
- * parameter names (`runtime/file/src/component-bootstrap-serving.ts`); keep both in sync.
+ * parameter names (`packages/platform/src/files/component-bootstrap-serving.ts`); keep both in sync.
  */
 
 /** The bootstrap document path on the dedicated component origin. */

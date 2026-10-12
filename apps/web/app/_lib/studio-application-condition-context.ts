@@ -1,13 +1,13 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import { applicationRootIdSchema, organizationIdSchema, revisionSchema,
   sessionContextSchema, type IdentitySession, type SelectedOrganizationScope,
-  type SessionContext } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+  type SessionContext } from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import { BuilderAuthorityError, DefinitionStoreError, DefinitionPublicationError,
   createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
-  readApplicationDefinitionDraft, requireBuilderAuthority } from "@vortex/definition";
+  readApplicationDefinitionDraft, requireBuilderAuthority } from "@web/platform-server";
 import type { StudioApplicationConditionContextResult } from "@vortex/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";

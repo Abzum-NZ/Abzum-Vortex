@@ -18,13 +18,13 @@ import {
   workflowRunIdSchema,
   type IdentityAuthorityId,
   type SessionContext,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-} from "@vortex/db";
+} from "../db/index";
 import { z } from "zod";
 
 /**

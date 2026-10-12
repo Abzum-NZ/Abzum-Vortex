@@ -4,12 +4,12 @@ import {
   identityAuthoritySchema,
   isLoopbackHostname,
   type IdentityAuthority,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   localDevelopmentSignInAvailable,
   type IdentityJourneyConfiguration,
   type LocalDevelopmentSignInConfiguration,
-} from "@vortex/identity";
+} from "@web/platform-server";
 import { optionalEnvironmentValue, requiredEnvironmentValue } from "../../_lib/server-configuration";
 
 export const getIdentityJourneyConfiguration = (): IdentityJourneyConfiguration => ({

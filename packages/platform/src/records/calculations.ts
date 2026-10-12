@@ -9,8 +9,8 @@ import {
   type JsonValue,
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
-} from "@vortex/contracts";
-import { evaluateFlowFormula, evaluateTypedConditionV2, type FlowFormulaScope } from "@vortex/rule";
+} from "../schema";
+import { evaluateFlowFormula, evaluateTypedConditionV2, type FlowFormulaScope } from "../rules/index";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationField = Extract<ModuleFieldV3, { type: "calculation" }>;

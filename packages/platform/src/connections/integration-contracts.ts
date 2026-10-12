@@ -6,10 +6,10 @@ import {
   jsonValueSchema,
   safeHttpsUrlSchema,
   secretReferenceSchema,
-} from "./common";
-import { accessGrantSchema, grantConsentDecisionSchema } from "./identity-access";
-import { conditionNodeSchema } from "./module-contracts";
-import { recordScopeSchema } from "./records";
+} from "../catalogue/common";
+import { accessGrantSchema, grantConsentDecisionSchema } from "../access/identity-access";
+import { conditionNodeSchema } from "../definition/module-contracts";
+import { recordScopeSchema } from "../records/records";
 import {
   activityIdSchema,
   applicationRootIdSchema,
@@ -37,7 +37,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
   workflowRunIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
   z

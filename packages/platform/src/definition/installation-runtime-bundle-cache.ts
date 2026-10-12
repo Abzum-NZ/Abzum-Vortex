@@ -7,7 +7,7 @@ import {
   type InstallationRuntimeBundleIndex,
   type InstallationRuntimeBundlePart,
   type InstallationRuntimeBundlePartMetadata,
-} from "@vortex/contracts";
+} from "../schema";
 
 const initialMaximumBytes = 16_777_216;
 const sharedStateSymbol = Symbol.for("@vortex/module/installation-runtime-bundle-cache/v1");

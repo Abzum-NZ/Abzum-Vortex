@@ -8,7 +8,7 @@ import {
   timestampSchema,
   type EventOccurrenceEnvelopeV2,
   type RecordTypeDefinitionV3,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   buildSearchDocument,
   searchDocumentStoreCommand,

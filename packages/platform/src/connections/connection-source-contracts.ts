@@ -1,7 +1,7 @@
-import { sourceProvenanceUnchanged } from "./definition-source-common";
+import { sourceProvenanceUnchanged } from "../definition/definition-source-common";
 import { z } from "zod";
-import { builderKeySchema } from "./identifiers";
-import { authoredSourceBase, sourceProvenanceTarget } from "./definition-source-common";
+import { builderKeySchema } from "../catalogue/identifiers";
+import { authoredSourceBase, sourceProvenanceTarget } from "../definition/definition-source-common";
 
 export const connectionTypeSourceDocumentSchema = z
   .object({

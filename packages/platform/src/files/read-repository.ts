@@ -16,7 +16,7 @@ import {
   type OrganizationId,
   type RecordId,
   type RecordTypeId,
-} from "@vortex/contracts";
+} from "../schema";
 import type { ClaimedDownloadGrant, FileReadRepository } from "./read";
 
 type SqlValue = string | number | boolean | Date | Uint8Array | null;

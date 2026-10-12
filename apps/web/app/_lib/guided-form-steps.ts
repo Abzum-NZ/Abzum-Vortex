@@ -6,7 +6,7 @@ import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   organizationAccessDeclarationSchema,
   FIELD_INPUT_BLOCK_RELEASE,
@@ -27,7 +27,7 @@ import {
   type PageDefinitionV2,
   type RecordTypeDefinitionV3,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPrivateFormDraftService,
   privateFormDraftLimits,
@@ -36,16 +36,16 @@ import {
   type PrivateFormDraftFieldValidation,
   type PrivateFormDraftScope,
   type PrivateFormDraftServiceDependencies,
-} from "@vortex/page";
+} from "@web/platform-server";
 import {
   createHumanInstalledRuntimeContextLoader,
   type InstalledRuntimeContext,
-} from "@vortex/app";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+} from "@web/platform-server";
+import type { RequestDatabaseTransaction } from "@web/platform-server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
-import { prepareRecordFieldValuesV2 } from "@vortex/record";
+import { prepareRecordFieldValuesV2 } from "@web/platform-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { getQueryContinuationKey } from "./query-continuation-key";

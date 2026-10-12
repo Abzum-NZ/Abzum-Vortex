@@ -7,8 +7,8 @@ import {
   type BlockPropertyValueV2Contract,
   type JsonValue,
   type RecordsDisplayFormat,
-} from "@vortex/contracts";
-import type { ProtectedQueryRow } from "@vortex/query";
+} from "../schema";
+import type { ProtectedQueryRow } from "../queries/index";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so

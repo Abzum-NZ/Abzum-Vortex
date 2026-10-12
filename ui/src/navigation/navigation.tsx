@@ -2,7 +2,7 @@
 
 import { useId, useState, type MouseEvent, type ReactElement } from "react";
 import { Icon } from "../icons/icon";
-import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/contracts";
+import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
   Sidebar,

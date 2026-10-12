@@ -7,7 +7,7 @@ import {
   requestRegistration,
   signInWithLocalDevelopmentAccount,
   signInWithPassword,
-} from "@vortex/identity";
+} from "@web/platform-server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {

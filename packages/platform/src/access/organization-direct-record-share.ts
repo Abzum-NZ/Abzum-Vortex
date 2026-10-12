@@ -13,8 +13,8 @@ import {
   type OrganizationSelectionCandidate,
   type RevokeOrganizationDirectRecordShareCommand,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

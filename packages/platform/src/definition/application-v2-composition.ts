@@ -28,8 +28,8 @@ import {
   type PlatformId,
   type ProtectedReadModelKey,
   type SourceBlockPropertyValueV2Contract,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
   isDefinitionCompilerRefusalCode,
@@ -46,7 +46,7 @@ import {
   type ThemeResolutionOptions,
   type ThemeTokenValueV2,
   type ThemeValidationFailure,
-} from "@vortex/theme";
+} from "../theme/index";
 
 type SourceSlot = {
   placements: Record<string, SourcePlacement>;

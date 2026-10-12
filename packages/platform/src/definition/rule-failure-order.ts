@@ -1,5 +1,5 @@
-import type { DefinitionRuleFailure, DefinitionValidationLocation } from "@vortex/contracts";
-import { compareCanonicalStrings } from "./canonical-json";
+import type { DefinitionRuleFailure, DefinitionValidationLocation } from "../schema";
+import { compareCanonicalStrings } from "./canonical-json-definition";
 
 const safeLocationKey = (location: DefinitionValidationLocation | undefined) =>
   location

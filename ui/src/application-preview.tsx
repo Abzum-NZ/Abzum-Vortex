@@ -4,7 +4,7 @@ import {
   flowEffectKindSchema,
   type ComponentSemanticEventKind,
   type FlowEffectKind,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { Alert, AlertDescription, AlertTitle } from "./components/alert";
 import { Badge } from "./components/badge";
 import {

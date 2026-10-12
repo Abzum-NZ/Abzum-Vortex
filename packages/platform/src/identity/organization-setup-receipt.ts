@@ -6,7 +6,7 @@ import {
   organizationAccountIdSchema,
   organizationIdSchema,
   tenantIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   createTenantOrganizationAcceptedResultSchema,
   createTenantOrganizationCommandSchema,

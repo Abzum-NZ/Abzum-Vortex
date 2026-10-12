@@ -30,10 +30,10 @@ import {
   type PlatformThemeTokenRoleV2,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
-} from "@vortex/contracts";
+} from "../schema";
 import { compare } from "semver";
 import { z } from "zod";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   platformBlockReleaseFingerprints,
   platformConnectionTypeReleaseFingerprints,

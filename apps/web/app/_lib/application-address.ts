@@ -8,11 +8,11 @@ import {
   type ApplicationExperience,
   type PermittedApplication,
   type PermittedApplicationsRead,
-} from "@vortex/app";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
+} from "@web/platform-server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import type { IdentitySession } from "@vortex/contracts";
+import type { IdentitySession } from "@vortex/platform/schema";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 
 type ApplicationAddressResult =

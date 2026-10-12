@@ -1,4 +1,4 @@
-import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/contracts";
+import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "@vortex/platform/schema";
 
 const fields = ["title", "notes"] as const;
 const permission = (action: "create" | "read") => ({

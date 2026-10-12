@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { workflowValueTypeSchema } from "./catalogues";
-import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "./common";
-import { definitionProvenanceEntrySchema } from "./definition-provenance";
+import { workflowValueTypeSchema } from "../catalogue/catalogues";
+import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
+import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
 import {
   flowContractVersion,
   flowExecutionKindSchema,
@@ -22,7 +22,7 @@ import {
   namespacedKeySchema,
   recordTypeIdSchema,
   stableDefinitionReleaseVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /**
  * The authored form of a flow inside a module or application source, and the result of compiling

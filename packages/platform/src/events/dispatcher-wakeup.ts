@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { DatabaseRow } from "@vortex/db";
-import { withRuntimeTransaction } from "@vortex/db";
+import type { DatabaseRow } from "../db/index";
+import { withRuntimeTransaction } from "../db/index";
 import {
   createEventDispatcherRoute,
   type EventDispatchResult,

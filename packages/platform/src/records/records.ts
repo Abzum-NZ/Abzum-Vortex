@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema, jsonValueSchema } from "./common";
+import { correlationIdSchema, jsonValueSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -15,9 +15,9 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { recordLinkValueV2Schema } from "./module-field-values-v2";
-import { safeErrorResponseSchema } from "./operation-contracts";
+import { safeErrorResponseSchema } from "../definition/operation-contracts";
 
 const previewRecordInstallationIdSchema = z
   .uuid()

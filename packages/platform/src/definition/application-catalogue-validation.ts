@@ -13,7 +13,7 @@ import {
   type DefinitionValidationLocation,
   type PlatformBlockReleaseV2,
   type SourceBlockPropertyValueV2Contract,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * Located catalogue validation for authored Application documents.

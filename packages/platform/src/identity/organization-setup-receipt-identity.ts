@@ -6,8 +6,8 @@ import {
   organizationSetupReceiptResultSchema,
   organizationSetupReceiptSchema,
   type OrganizationSetupReceiptResult,
-} from "@vortex/contracts";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,

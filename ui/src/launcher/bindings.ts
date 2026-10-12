@@ -5,7 +5,7 @@ import {
   organizationIdSchema,
   safeHttpsUrlSchema,
   type ApplicationModuleQueryBinding,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { DisplayCellValue, DisplayRow, ListPayload } from "../display/projected-data";
 
@@ -118,7 +118,7 @@ export type PermittedApplicationMetadata = Readonly<{
 
 /**
  * Launcher projection of the `PermittedApplicationsRead` returned by
- * `readPermittedApplicationsAtAddress` (runtime/app/src/application-address.ts). The launcher block
+ * `readPermittedApplicationsAtAddress` (packages/platform/src/definition/application-address.ts). The launcher block
  * supplies the organisation-address launcher when no default application resolves.
  */
 export type PermittedApplicationsLauncherProjection =

@@ -9,15 +9,15 @@ import {
   type ProtectedOperationChannel,
   type SessionContext,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   requireRequestSavepoint,
   type DatabaseRow,
   type DatabaseValue,
   type RequestDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
-} from "@vortex/db";
-import { createTenantGovernanceService } from "./tenant-governance";
+} from "../db/index";
+import { createTenantGovernanceService } from "./tenant-governance-identity";
 
 type TenantGovernanceMethod =
   | "createOrganization"

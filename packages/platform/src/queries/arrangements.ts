@@ -6,8 +6,8 @@ import {
   moduleFieldValueV2Schemas,
   parseExactDecimal,
   type JsonValue,
-} from "@vortex/contracts";
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+} from "../schema";
+import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   arrangementCommandSchema,
   arrangementRowLimit,

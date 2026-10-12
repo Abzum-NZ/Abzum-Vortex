@@ -1,4 +1,4 @@
-import { stableDefinitionReleaseVersionSchema, type VersionImpact } from "@vortex/contracts";
+import { stableDefinitionReleaseVersionSchema, type VersionImpact } from "../schema";
 
 type Version = readonly [major: bigint, minor: bigint, patch: bigint];
 

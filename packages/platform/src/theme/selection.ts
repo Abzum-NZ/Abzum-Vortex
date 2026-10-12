@@ -14,8 +14,8 @@ import {
   themeTokenValueV2Schema,
   type ApplicationThemeSelectionV2,
   type DefinitionRuleFailure,
-} from "@vortex/contracts";
-import { findShadcnThemeRelease } from "@vortex/contracts/shadcn-theme-releases";
+} from "../schema";
+import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import { validateFocusVisibility } from "./focus";

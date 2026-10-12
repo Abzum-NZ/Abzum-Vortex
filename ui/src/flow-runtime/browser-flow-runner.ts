@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/contracts";
+import type { JsonValue } from "@vortex/platform/schema";
 import {
   resumeFlowRun,
   startFlowRun,
@@ -6,7 +6,7 @@ import {
   type FlowInterfaceIntent,
   type FlowLibrary,
   type FlowRunStep,
-} from "@vortex/rule";
+} from "@vortex/platform/schema";
 import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import {
   performPresentationIntent,

@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -25,14 +26,13 @@ import {
   type ProtectedReadModelKey,
   type ConditionNode,
   type JsonValue,
-} from "@vortex/contracts";
-import { evaluateTypedConditionV2, TypedConditionEvaluationError } from "@vortex/rule";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
+} from "../schema";
+import { evaluateTypedConditionV2, TypedConditionEvaluationError } from "../rules/index";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "../access/index";
 import {
   isTrustedInstalledPageBundleContext,
   requireInstalledRuntimeContext,
@@ -40,7 +40,7 @@ import {
   readInstalledPageComposition,
   resolveInstalledPageIdentity,
   type InstalledRuntimeContext,
-} from "@vortex/app";
+} from "../definition/app-index";
 import {
   createAuthenticatedPageCapabilityService,
   type AuthenticatedPageCapabilityDependencies,
@@ -129,7 +129,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionOwnerId,
+          ownerId: platformPermissionSource().ownerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },
@@ -432,7 +432,7 @@ export const createStoredPageCapabilityService = (
     // release's prepared registration, or an exact platform administration permission from the
     // shipped platform catalogue. Anything else fails this page closed.
     const permission = (key: string): PagePermissionBinding => {
-      const platform = platformPermissionFor(key);
+      const platform = platformPermissionSource().forKey(key);
       if (platform !== undefined) return { kind: "platform", permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)

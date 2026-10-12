@@ -19,8 +19,8 @@ import {
   type OrganizationSetupSourceManifest,
   type OrganizationSetupSourceManifestResult,
   type StoredDefinitionSource,
-} from "@vortex/contracts";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
 
 export type OrganizationSetupSourceManifestSelection = Readonly<{
   sourceManifestIdentity: string;

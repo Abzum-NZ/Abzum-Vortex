@@ -6,13 +6,13 @@ import {
   type ModuleDefinitionConsumerReadResultV3,
   type RecordTypeDefinitionV3,
   type RuleGraph,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   BeforeSaveRuleGraphEvaluationError,
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRequirement,
   type BeforeSaveRuleWarning,
-} from "@vortex/rule";
+} from "../rules/index";
 import {
   prepareInitialRecordFieldCandidateV2,
   type InitialRecordFieldCandidateV2,

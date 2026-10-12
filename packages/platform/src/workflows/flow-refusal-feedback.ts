@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { builderKeySchema } from "./identifiers";
-import { tenantOrganizationMutationRefusalCodeSchema } from "./tenant-governance";
+import { builderKeySchema } from "../catalogue/identifiers";
+import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-governance";
 
 /** Only these existing public tenant results may supply a confirmed flow refusal reason. */
 export const flowRefusalFeedbackCodeSchema = tenantOrganizationMutationRefusalCodeSchema.extract([

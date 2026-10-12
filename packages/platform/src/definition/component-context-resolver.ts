@@ -18,7 +18,7 @@ import {
   type FlowDefinition,
   type FlowInputDeclaration,
   type ModuleQueryDefinitionV3,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import {
   requireInstalledRuntimeContext,

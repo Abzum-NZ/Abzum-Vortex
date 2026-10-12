@@ -12,7 +12,7 @@ import {
   revisionSchema,
   storageContractIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const previewInstallationIdSchema = z
   .uuid()

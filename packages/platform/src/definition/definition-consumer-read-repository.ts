@@ -1,8 +1,8 @@
 import "server-only";
 
-import type { DefinitionConsumerReadCommand, SessionContext } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import type { DefinitionConsumerReadRepository } from "./definition-consumer-read";
+import type { DefinitionConsumerReadCommand, SessionContext } from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DefinitionConsumerReadRepository } from "./definition-consumer-read-definition";
 
 type ConsumerReleaseRow = DatabaseRow & { consumer_release: unknown };
 

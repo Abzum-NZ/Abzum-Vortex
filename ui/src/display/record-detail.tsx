@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { readRecordDetailContract } from "@vortex/contracts";
+import { readRecordDetailContract } from "@vortex/platform/schema";
 import { Card, CardContent, CardHeader } from "../components/card";
 import { Separator } from "../components/separator";
 import { DisplayCellView } from "./cell";

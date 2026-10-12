@@ -14,8 +14,8 @@ import {
   type JsonValue,
   type SourceFlow,
   type SourceFlowTask,
-} from "@vortex/contracts";
-import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,

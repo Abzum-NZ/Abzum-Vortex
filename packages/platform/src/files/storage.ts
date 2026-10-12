@@ -8,7 +8,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const recordStorageSchemaTokenSchema = z.literal("record_data");
 

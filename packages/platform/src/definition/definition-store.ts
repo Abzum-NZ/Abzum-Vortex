@@ -7,11 +7,11 @@ import {
   type CreateDefinitionRootCommand,
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
+} from "../schema";
 import type { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
-import { fingerprintCanonicalValue } from "./canonical-json";
+import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 

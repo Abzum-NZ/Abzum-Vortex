@@ -31,8 +31,8 @@ import {
   type TrustedFileInspection,
   type UploadGrant,
   type VerifiedFileActor,
-} from "@vortex/contracts";
-import type { CapabilityReservationResult } from "@vortex/access";
+} from "../schema";
+import type { CapabilityReservationResult } from "../access/index";
 import { createUnguessableStorageKey } from "./storage-policy";
 import {
   expectedContentKindsForExtension,

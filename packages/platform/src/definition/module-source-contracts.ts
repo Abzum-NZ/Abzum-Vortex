@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
+import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "../catalogue/catalogues";
 import {
   builderKeySchema,
   fingerprintSchema,
@@ -7,7 +7,7 @@ import {
   organizationAccountIdSchema,
   permissionIdSchema,
   recordTypeIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
@@ -15,7 +15,7 @@ import {
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
-} from "./common";
+} from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
@@ -28,8 +28,8 @@ import {
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
 } from "./definition-source-common";
-import { parseExactDecimal } from "./exact-decimal";
-import { compileTextInputPattern } from "./text-input-pattern";
+import { parseExactDecimal } from "../records/exact-decimal";
+import { compileTextInputPattern } from "../pages/text-input-pattern";
 import {
   currencyCodeV2Schema,
   exactDecimalFitsDigitsV2,
@@ -41,16 +41,16 @@ import {
   sourcePersonLinkValueV2Schema,
   sourceRecordLinkValueV2Schema,
   type FormattedTextAllowedBlockV2,
-} from "./module-field-values-v2";
-import { moduleSourceRecordOwnershipModeSchema } from "./record-ownership-compatibility";
-import { sourceFlowCollectionSchema } from "./flow-source-contracts";
+} from "../records/module-field-values-v2";
+import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import { protectedReadModelKeySchema } from "./application-composition-v2";
-import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import {
   permissionActionKindSchema,
   permissionFieldPolicySchema,
   permissionRecordScopeSchema,
-} from "./permissions";
+} from "../access/permissions";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;

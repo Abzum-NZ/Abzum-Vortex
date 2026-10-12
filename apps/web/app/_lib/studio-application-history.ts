@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   applicationRootIdSchema, canonicalJson, correlationIdSchema, databaseRevision,
   databaseTimestamp, definitionReleaseMetadataSchema, fingerprintSchema, namespacedKeySchema,
@@ -9,10 +9,10 @@ import {
   publishedApplicationReferenceSchema, revisionSchema, sameId, sessionContextSchema, timestampSchema,
   type DefinitionReleaseMetadata, type IdentitySession, type SelectedOrganizationScope,
   type SessionContext, type StoredDefinitionDraft,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import { BuilderAuthorityError, DefinitionStoreError, readApplicationDefinitionDraft,
-  requireBuilderAuthority } from "@vortex/definition";
+  requireBuilderAuthority } from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";

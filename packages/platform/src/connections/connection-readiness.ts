@@ -13,8 +13,8 @@ import {
   type ConnectionInstanceId,
   type ApplicationRootId,
   type OrganizationId,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   assertDestinationFingerprint,
   assertFiniteTokenExpiry,

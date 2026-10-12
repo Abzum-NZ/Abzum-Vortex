@@ -6,8 +6,8 @@ import {
   fieldIdSchema,
   fingerprintSchema,
   storageContractIdSchema,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 /**
  * Bounded operational runner for the #612 concurrent field-index build.

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/contracts";
+import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
 import type { TabsPayload } from "./projected-data";

@@ -6,8 +6,8 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   immutablePlatformBlockCatalogueV2Schema,
 } from "./application-composition-v2";
-import { generatedReleaseFingerprints } from "./catalogue/generated-fingerprints";
-import sources from "./catalogue/application-composition-catalogue.source.json";
+import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import sources from "../catalogue/catalogue/application-composition-catalogue.source.json";
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;

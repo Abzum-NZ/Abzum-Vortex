@@ -14,9 +14,9 @@ import {
   type RecordId,
   type SafeOrganizationAccessRefusal,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import type { DatabaseRow } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow } from "../db/index";
 
 const unavailableCode = "ORGANIZATION_RECORD_ACCESS_DECISION_UNAVAILABLE";
 

@@ -3,15 +3,15 @@ import type {
   ModuleContentV3,
   VersionImpact,
   VersionImpactReason,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   compareExactDecimals,
   parseExactDecimal,
   versionImpactComponentKinds,
   versionImpactProperties,
   versionImpactReasonCodes,
-} from "@vortex/contracts";
-import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import { refuseVersionImpact } from "./version-impact-error";
 
 type RecordValue = Record<string, unknown>;

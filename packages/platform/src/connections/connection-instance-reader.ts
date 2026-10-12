@@ -28,8 +28,8 @@ import {
   type ConnectionTypeId,
   type OrganizationId,
   type SessionContext,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { readActiveConnectionEvidence } from "./connection-readiness";
 
 /**

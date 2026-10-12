@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
   FIELD_INPUT_BLOCK_RELEASE,
@@ -63,22 +64,21 @@ import {
   type PlatformBlockReleaseV2,
   type PublishedDefinitionHistory,
   type VersionRequirement,
-} from "@vortex/contracts";
-import { isPlatformPermissionKey } from "@vortex/modules";
+} from "../schema";
 import type { z } from "zod";
 import {
   evaluateTypedConditionV2,
   TypedConditionEvaluationError,
   type TypedConditionParameterDeclarationV2,
-} from "@vortex/rule";
+} from "../rules/index";
 import { satisfies } from "semver";
 import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   compareDefinitionVersionImpact,
   compareDefinitionVersionImpactWithEvidence,
-} from "./version-impact";
+} from "./version-impact-definition";
 import { createContractValueWalker } from "./contract-value-walker";
 import { validateRuleGraph, ruleGraphValidationCodes } from "./rule-graph-validation";
 import {
@@ -982,7 +982,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           .map((permission) => String(permission.key)),
       );
       const pageGateKnown = (key: unknown) =>
-        applicationPermissionKeys.has(String(key)) || isPlatformPermissionKey(String(key));
+        applicationPermissionKeys.has(String(key)) || platformPermissionSource().hasKey(String(key));
       for (const permission of array(body.permissions)) {
         const scope = permission.record_scope ? object(permission.record_scope) : undefined;
         for (const route of scope ? array(scope.routes) : []) {
@@ -3376,13 +3376,13 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
             permission.key === key &&
             permission.actionKind === "named" &&
             permission.recordTypeId === undefined,
-        ) || isPlatformPermissionKey(key)
+        ) || platformPermissionSource().hasKey(key)
       );
     };
     // A requirement key names exactly one permission, and the runtime reads a platform catalogue
     // key as platform authority. An application or bound-Module permission reusing a platform key
     // would make that reference ambiguous, so it is refused.
-    if ([...permissions].some(isPlatformPermissionKey))
+    if ([...permissions].some((key) => platformPermissionSource().hasKey(key)))
       failures.push(
         failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
       );
@@ -3704,7 +3704,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       // administration permission cannot gate it: the runtime record-access decision refuses
       // platform authority for a record target. The reference is refused here rather than
       // compiled into a release that cannot enforce it.
-      const usesPlatformPermission = actionPermissionKeys(action).some(isPlatformPermissionKey);
+      const usesPlatformPermission = actionPermissionKeys(action).some((key) => platformPermissionSource().hasKey(key));
       if (usesPlatformPermission)
         failures.push(
           failure(output, "vortex.definition.application_action_references", "unsupported_choice"),

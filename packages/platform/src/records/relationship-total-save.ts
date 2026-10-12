@@ -4,7 +4,7 @@ import {
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
   type SaveRecordCommandV2,
-} from "@vortex/contracts";
+} from "../schema";
 import { evaluateRecordCalculations } from "./calculations";
 import {
   finalizeRecordFieldCandidateV2,

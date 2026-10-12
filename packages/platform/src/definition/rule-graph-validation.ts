@@ -10,7 +10,7 @@ import {
   type RuleTableColumn,
   type RuleGraphTypedValue,
   type RuleGraphValueType,
-} from "@vortex/contracts";
+} from "../schema";
 
 // Removal point (#1007): rule-graph validation judges the executable rule graph each `BeforeSave`
 // flow is lowered to (`before-save-flow-rules.ts`). It also checks the value types of the fields the

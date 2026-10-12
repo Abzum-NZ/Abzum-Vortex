@@ -10,7 +10,7 @@ import type {
   PlatformId,
   PlatformThemeReleaseV2 as ContractPlatformThemeReleaseV2,
   ThemeColorRole,
-} from "@vortex/contracts";
+} from "../schema";
 
 export type { ThemeColorRole };
 

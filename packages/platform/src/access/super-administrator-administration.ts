@@ -15,8 +15,8 @@ import {
   type VortexSuperAdministratorAssignmentMutationResult,
   type VortexSuperAdministratorAssignmentPage,
   type VortexSuperAdministratorAssignmentQuery,
-} from "@vortex/contracts";
-import type { DatabaseRow } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow } from "../db/index";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

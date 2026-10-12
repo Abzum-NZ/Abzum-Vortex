@@ -7,12 +7,12 @@ import {
   identityIdSchema,
   isLoopbackHostname,
   platformIdSchema,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 /**
  * The fixed server-only Identity Authority disable/revoke adapter.

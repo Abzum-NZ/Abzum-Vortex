@@ -13,7 +13,7 @@ import {
   type ConnectionOperation,
   type ConnectionType,
   type ExactDefinitionDependency,
-} from "@vortex/contracts";
+} from "../schema";
 
 type ConnectionTypeDependency = Extract<ExactDefinitionDependency, { kind: "connection_type" }>;
 

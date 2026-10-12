@@ -11,7 +11,7 @@ import {
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * What a continuation token carries: the exact actor, installation, query,

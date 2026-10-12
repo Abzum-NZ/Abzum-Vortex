@@ -4,15 +4,15 @@ import type {
   ApplicationBoundReleaseSetCommand,
   ApplicationBoundReleaseSetResult,
   ActiveApplicationInstallationEvidence,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createDatabaseApplicationBoundReleaseSetService,
   projectInstalledEventCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type InstalledEventCatalogue,
-} from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+} from "../definition/definition-index";
+import { createActiveApplicationInstallationRepository } from "../definition/module-index";
 
 export interface InstalledEventDefinitionSetReader {
   read(command: ApplicationBoundReleaseSetCommand): Promise<ApplicationBoundReleaseSetResult>;

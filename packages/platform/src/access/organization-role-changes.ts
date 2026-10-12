@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema, descriptionSchema, labelSchema } from "./common";
+import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   builderKeySchema,
@@ -9,7 +9,7 @@ import {
   revisionSchema,
   roleActivationPolicyIdSchema,
   roleIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   affectedRoleAssignmentManifestSchema,
   affectedRoleAssignmentSchema,

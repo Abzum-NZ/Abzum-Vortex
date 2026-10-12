@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sharingParameterValueTypeV2Schema } from "./catalogues";
+import { sharingParameterValueTypeV2Schema } from "../catalogue/catalogues";
 import {
   boundedRuleGraphConditionInputSchema,
   ruleGraphBinaryConditionOperatorSchema,
@@ -12,9 +12,9 @@ import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   jsonValueSchema,
-} from "./common";
-import { builderKeySchema, containedComponentIdSchema, fieldIdSchema } from "./identifiers";
-import { moduleFieldV3Schema } from "./module-contracts-v3";
+} from "../catalogue/common";
+import { builderKeySchema, containedComponentIdSchema, fieldIdSchema } from "../catalogue/identifiers";
+import { moduleFieldV3Schema } from "../definition/module-contracts-v3";
 
 const conditionReferenceOperandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("module_field"), fieldId: fieldIdSchema }).strict(),

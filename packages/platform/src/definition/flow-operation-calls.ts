@@ -9,7 +9,7 @@ import {
   type PlatformServiceOperationCatalogueEntry,
   type ProtectedOperationReference,
   type SourceFlow,
-} from "@vortex/contracts";
+} from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 /**

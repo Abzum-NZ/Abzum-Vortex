@@ -1,5 +1,5 @@
-import { canonicalJson, type ConditionNode } from "@vortex/contracts";
-import type { ModuleBeforeSaveConditionDraftContext } from "@vortex/definition";
+import { canonicalJson, type ConditionNode } from "@vortex/platform/schema";
+import type { ModuleBeforeSaveConditionDraftContext } from "@web/platform-server";
 import type { StudioConditionControlsContext } from "@vortex/studio";
 
 export const moduleBeforeSaveConditionControlsContext = (

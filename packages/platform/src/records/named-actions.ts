@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema, jsonValueSchema } from "./common";
+import { correlationIdSchema, jsonValueSchema } from "../catalogue/common";
 import {
   actionIdSchema,
   applicationRootIdSchema,
@@ -8,8 +8,8 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-} from "./identifiers";
-import { safeErrorResponseSchema } from "./operation-contracts";
+} from "../catalogue/identifiers";
+import { safeErrorResponseSchema } from "../definition/operation-contracts";
 
 export const installedNamedActionReferenceV2Schema = z.discriminatedUnion("ownerKind", [
   z

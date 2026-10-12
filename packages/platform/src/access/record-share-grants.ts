@@ -21,9 +21,9 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { DatabaseRow } from "@vortex/db";
-import { fingerprintCanonicalValue } from "@vortex/definition";
+} from "../schema";
+import type { DatabaseRow } from "../db/index";
+import { fingerprintCanonicalValue } from "../definition/definition-index";
 import { z } from "zod";
 import {
   createHumanOrganizationRequestService,

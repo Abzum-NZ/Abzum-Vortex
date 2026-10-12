@@ -5,14 +5,14 @@ import type {
   OrganizationAccessDeclaration,
   OrganizationSelectionCandidate,
   SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "../access/index";
 import type { z } from "zod";
 import {
   abandonPrivateFormDraftCommandSchema,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { conditionMaximumNestingDepth, conditionMaximumOperandCount, jsonValueSchema } from "./common";
+import { conditionMaximumNestingDepth, conditionMaximumOperandCount, jsonValueSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -11,9 +11,9 @@ import {
   namespacedKeySchema,
   recordTypeIdSchema,
   semanticVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { recordTypeReferenceSchema, versionRequirementSchema } from "./definitions";
-import { flowValueSchema } from "./flow-contracts";
+import { flowValueSchema } from "../workflows/flow-contracts";
 
 const parentDeleteSchema = z.enum(["refuse", "empty_optional", "soft_delete_dependent"]);
 

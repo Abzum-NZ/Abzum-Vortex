@@ -1,6 +1,6 @@
 import "server-only";
 
-import { applicationSearchSchema, moduleFieldValueV2Schemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocumentV2, type SelectedOrganizationScope } from "@vortex/contracts";
+import { applicationSearchSchema, moduleFieldValueV2Schemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocumentV2, type SelectedOrganizationScope } from "../schema";
 import { matchLiteralSearch } from "./literal-search";
 import { searchPriorityWeights, type SearchDocument } from "./document-store";
 import type { PermittedSearchCurrentReadRequest } from "./permitted-search";

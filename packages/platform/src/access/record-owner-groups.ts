@@ -1,7 +1,7 @@
 import "server-only";
 
-import { groupIdSchema, unavailableError } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import { groupIdSchema, unavailableError } from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type OwnerGroupRow = DatabaseRow & { group_id: unknown; label: unknown };
 

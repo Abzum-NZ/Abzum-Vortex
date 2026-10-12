@@ -5,7 +5,7 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { platformIdSchema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import { platformIdSchema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
 import {
   applyStudioAppearance,
   parseStudioAppearanceRequest,

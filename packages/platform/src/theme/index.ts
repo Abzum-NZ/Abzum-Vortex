@@ -75,7 +75,7 @@ export type {
 
 export const ThemeService = Object.freeze({
   key: "theme",
-  boundary: "@vortex/theme",
+  boundary: "./index",
   draftShadcnPresetImport,
   resolveTheme,
   resolveThemeTokens,

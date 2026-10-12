@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { namespacedKeySchema } from "./identifiers";
+import { namespacedKeySchema } from "../catalogue/identifiers";
 
 /**
  * Where one canonical value came from. It lives apart from the compilation contracts so the

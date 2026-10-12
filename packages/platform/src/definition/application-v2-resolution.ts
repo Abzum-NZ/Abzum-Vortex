@@ -4,9 +4,9 @@ import {
   type DefinitionResolutionSnapshotV2,
   type ModuleFieldV3,
   type sourceQualifiedConditionSchema,
-} from "@vortex/contracts";
+} from "../schema";
 import type { z } from "zod";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 
 export type ApplicationCompositionResolutionV2 = Readonly<{
   identity(

@@ -17,7 +17,7 @@ import {
   timestampSchema,
   workflowNodeIdSchema,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * #587: Page-owned private revisioned form drafts.

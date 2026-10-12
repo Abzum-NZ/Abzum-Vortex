@@ -12,11 +12,11 @@ import {
   tenantAdministratorAssignmentIdSchema,
   tenantIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
-} from "./identity-access";
+} from "../access/identity-access";
 
 const displayNameSchema = z.string().trim().min(1).max(120);
 const runtimeSettingsInputSchema = organizationRuntimeSettingsSchema.omit({

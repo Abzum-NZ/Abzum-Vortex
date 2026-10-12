@@ -1,7 +1,7 @@
 import "server-only";
 
 import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/contracts";
+  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
@@ -12,12 +12,12 @@ import {
   type ApplicationSourceDocumentV2,
   type BlockPropertyValueV2Contract,
   type PageDefinitionV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   fingerprintCanonicalValue,
   type AuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { z } from "zod";
 
 type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;

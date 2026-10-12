@@ -2,7 +2,7 @@
 
 import type { ComponentProps, ReactElement } from "react";
 import { useRouter } from "next/navigation";
-import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/contracts";
+import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   createFullPlatformComponentRegistry,

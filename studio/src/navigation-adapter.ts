@@ -11,7 +11,7 @@ import {
   type PageId,
   type VortexIconName,
   vortexIconNameSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /**
  * The Studio navigation editing surface. It maps an application's canonical navigation tree to the

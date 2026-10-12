@@ -19,7 +19,7 @@ import {
   TABS_BLOCK_RELEASE_2_0_0,
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPayloadParser,
   createPlatformComponentRegistry,

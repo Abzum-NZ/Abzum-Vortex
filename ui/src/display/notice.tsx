@@ -3,7 +3,7 @@ import {
   NOTICE_BLOCK_RELEASE,
   validateComponentSettings,
   type BlockPropertyValueV2Contract,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Notice, type NoticeContentPart, type NoticeSeverity } from "../components/notice";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";

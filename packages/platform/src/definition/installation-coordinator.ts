@@ -28,7 +28,7 @@ import {
   type SelectedOrganizationScope,
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   BuilderAuthorityError,
   createApplicationRoleTemplateAdapter,
@@ -41,7 +41,7 @@ import {
   type BuilderOperation,
   type createHumanOrganizationRequestService,
   type PermissionRegistryDefinitionSetReader,
-} from "@vortex/access";
+} from "../access/index";
 import {
   ApplicationInstallationLifecycleError,
   ModuleInstallationStorageError,
@@ -50,14 +50,14 @@ import {
   createModuleInstallationStorageRepository,
   type InstallationRuntimeBundleRemovalReport,
   type ResolvedContributionBinding,
-} from "@vortex/module";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "./module-index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   assertPreparedInstallationRuntimeBundleMatches,
   writePreparedInstallationRuntimeBundle,
   type PreparedInstallationRuntimeSourceReader,
-} from "./installation-runtime-bundle";
+} from "./installation-runtime-bundle-app";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one

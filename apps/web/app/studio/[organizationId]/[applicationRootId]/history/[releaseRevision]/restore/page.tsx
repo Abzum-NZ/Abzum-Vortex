@@ -1,4 +1,4 @@
-import { revisionSchema } from "@vortex/contracts";
+import { revisionSchema } from "@vortex/platform/schema";
 import { loadStudioApplicationRestore } from "../../../../../../_lib/studio-application-restore";
 import { studioApplicationRestoreSelectorSchema } from "../../../../../../_lib/studio-application-restore-contracts";
 import { ApplicationReleaseRestore } from "../../../../../../studio/_components/application-release-restore";

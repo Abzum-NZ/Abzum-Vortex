@@ -1,4 +1,4 @@
-import { sameId } from "./runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 
 type PageReplacementEndpoint = Readonly<{
   identities: readonly string[];

@@ -1,7 +1,7 @@
 import {
   modulePlatformPermissionDeclarationSchema,
   type ModulePlatformPermissionDeclaration,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /** Platform permissions without a corresponding Organisation Administration system record type. */
 export const systemCorePlatformPermissions: readonly ModulePlatformPermissionDeclaration[] = [

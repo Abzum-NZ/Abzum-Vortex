@@ -98,7 +98,7 @@ export {
   createOrganizationSetupReceiptReader,
   readOrganizationSetupReceipt,
   type OrganizationSetupReceiptReaderDependencies,
-} from "./organization-setup-receipt";
+} from "./organization-setup-receipt-identity";
 export {
   createOrganizationRuntimeSettingsStore,
   initializeOrganizationRuntimeSettings,
@@ -122,7 +122,7 @@ export {
   suspendTenantOrganization,
   revokeTenantAdministrator,
   type TenantGovernanceServiceDependencies,
-} from "./tenant-governance";
+} from "./tenant-governance-identity";
 export {
   createRequestBoundTenantGovernanceService,
   type RequestBoundTenantGovernanceService,

@@ -12,8 +12,8 @@ import {
   type PreviewInstallationDiscardResult,
   type PreviewInstallationExpiryRequest,
   type PreviewInstallationExpiryResult,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 export const previewInstallationRepositoryErrorCodes = [
   "INVALID_PREVIEW_INSTALLATION_COMMAND",

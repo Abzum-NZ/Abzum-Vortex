@@ -6,9 +6,9 @@ import {
   saveRecordCommandV2Schema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { createHumanOrganizationRequestService } from "@vortex/access";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { createHumanOrganizationRequestService } from "../access/index";
 import { createRecordSaveService, type RecordSaveServiceDependencies } from "./save-record";
 
 type ReadRow = DatabaseRow & { readonly result: unknown };

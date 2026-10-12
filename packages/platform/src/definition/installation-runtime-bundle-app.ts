@@ -14,9 +14,9 @@ import {
   type InstallationRuntimeBundleIndex,
   type PreparedInstallationRuntimeSource,
   type InstallationRuntimeBundleWriteCommand,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import { createInstallationRuntimeBundleRepository } from "@vortex/module";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
+import { createInstallationRuntimeBundleRepository } from "./module-index";
 
 
 const compareCanonical = (left: string, right: string): number =>

@@ -23,10 +23,10 @@ import {
   type RestoreDefinitionDraftCommand,
   type SessionContext,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   definitionReleaseManifestMatchesCanonicalContent,
   definitionReleaseModuleTargetsMatch,
@@ -35,7 +35,7 @@ import {
   storedConsumerReleaseEvidenceSchema,
   verifyDefinitionCatalogueDependencies,
   type StoredConsumerReleaseEvidence,
-} from "./definition-consumer-read";
+} from "./definition-consumer-read-definition";
 import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";

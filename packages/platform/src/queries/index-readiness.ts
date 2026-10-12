@@ -6,7 +6,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const nonNilUuidSchema = z
   .uuid()

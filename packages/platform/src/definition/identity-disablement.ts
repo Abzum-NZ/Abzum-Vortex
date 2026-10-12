@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -9,16 +10,12 @@ import {
   platformIdSchema,
   type IdentitySession,
   type OrganizationAccessDeclaration,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
-import {
-  platformPermissionDeclarations,
-  platformPermissionOwnerId,
-} from "@vortex/modules";
+} from "../access/index";
 import { z } from "zod";
 
 /**
@@ -118,15 +115,14 @@ export type IdentityDisablementDependencies = HumanOrganizationRequestDependenci
     identityAuthority: IdentityAuthorityDisabler;
   }>;
 
-const disableIdentitiesPermission = platformPermissionDeclarations.find(
-  (permission) => permission.key === "platform.security.identities.disable",
-);
-
 /**
  * Server-owned declaration. The operator supplies none of it; a permission is
  * never inferred from input.
  */
 const buildDeclaration = (): OrganizationAccessDeclaration => {
+  const disableIdentitiesPermission = platformPermissionSource().declarations.find(
+    (permission) => permission.key === "platform.security.identities.disable",
+  );
   if (disableIdentitiesPermission === undefined)
     throw new Error("The identity disablement permission is not in the platform catalogue");
   return organizationAccessDeclarationSchema.parse({
@@ -135,7 +131,7 @@ const buildDeclaration = (): OrganizationAccessDeclaration => {
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionOwnerId,
+      ownerId: platformPermissionSource().ownerId,
       permissionId: disableIdentitiesPermission.permissionId,
     },
     recentAuthentication: { kind: "primary", maximumAgeSeconds: 900 },

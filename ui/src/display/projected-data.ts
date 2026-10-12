@@ -11,7 +11,7 @@ import {
   type BoardColumnSelector,
   type BlockPropertyValueV2Contract,
   type ComponentSemanticEventKind,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
 /**

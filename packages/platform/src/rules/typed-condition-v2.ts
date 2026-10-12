@@ -9,7 +9,7 @@ import {
   type ConditionNode,
   type JsonValue,
   type ModuleFieldV3,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,

@@ -5,7 +5,7 @@ import {
   namespacedKeySchema, moduleRootIdSchema, recordTypeIdSchema, semanticVersionSchema,
   moduleFieldV3Schema, moduleFieldValueV2Schemas, builderKeySchema,
   type ApplicationSourceDocumentV2, type ConditionNode, type ModuleFieldV3,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
   type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-controls";
 import type { StudioCompositionContext } from "./application-composition-commands";

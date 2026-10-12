@@ -11,12 +11,12 @@ import {
   timestampSchema,
   type AlertRecord,
   type ServiceTelemetryPort,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 import { z } from "zod";
 
 type RuntimeTransactionRunner = <Result>(

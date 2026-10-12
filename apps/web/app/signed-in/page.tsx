@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { OrganizationLauncherEntry } from "@vortex/contracts";
+import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,

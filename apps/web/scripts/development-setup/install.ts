@@ -1,24 +1,24 @@
 import {
   createHumanOrganizationRequestService,
   type PermissionRegistryDefinitionSetReader,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   applicationInstallationActivationRequestSchema,
   ApplicationInstallationCoordinatorError,
   applicationInstallationPreparationRequestSchema,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationCoordinatorDependencies,
-} from "@vortex/app";
+} from "@web/platform-server";
 import {
   applicationRootIdSchema,
   moduleRootIdSchema,
   type IdentityAuthorityId,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createDatabasePreparedInstallationRuntimeSourceService,
   resolveModuleContributions,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
 import { developmentPublicationCatalogue } from "./definitions";
 import {

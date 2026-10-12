@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   administrationDuplicateKeySchema,
   identityIdSchema,
@@ -9,13 +9,13 @@ import {
   tenantAdministratorAssignmentIdSchema,
   tenantIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
   tenantStructuralCapabilitySetSchema,
-} from "./identity-access";
-import type { tenantStructuralCapabilitySchema } from "./identity-access";
+} from "../access/identity-access";
+import type { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
 const pageLimitSchema = z.number().int().min(1).max(100);
 const pageFor = <Cursor extends z.ZodType>(cursor: Cursor) =>

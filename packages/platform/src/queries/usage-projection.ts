@@ -6,12 +6,12 @@ import {
   organizationIdSchema,
   tenantIdSchema,
   type IdentitySession,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 const periodSchema = z
   .object({

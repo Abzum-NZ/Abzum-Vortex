@@ -16,17 +16,17 @@ import {
   type ActiveApplicationInstallationEvidence,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../access/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   ActiveApplicationInstallationError,
   createActiveApplicationInstallationRepository,
-} from "@vortex/module";
+} from "../definition/module-index";
 import {
   decodeQueryContinuationToken,
   encodeQueryContinuationToken,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactElement } from "react";
-import type { BoardColumnSelector } from "@vortex/contracts";
+import type { BoardColumnSelector } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
   Card,

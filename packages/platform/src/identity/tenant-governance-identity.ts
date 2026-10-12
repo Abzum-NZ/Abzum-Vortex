@@ -58,12 +58,12 @@ import {
   type TenantLauncherResult,
   type TenantOrganizationQuery,
   type TenantOrganizationResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 type Runner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,

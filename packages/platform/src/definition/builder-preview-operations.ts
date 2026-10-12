@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { jsonValueSchema } from "./common";
+import { jsonValueSchema } from "../catalogue/common";
 import {
   flowTestRunResultSchema,
   flowTestRunTaskTraceEntrySchema,
-} from "./flow-test-run-contracts";
-import { flowIdSchema } from "./flow-contracts";
-import { formContinuationIntentSchema } from "./form-continuation-contracts";
+} from "../workflows/flow-test-run-contracts";
+import { flowIdSchema } from "../workflows/flow-contracts";
+import { formContinuationIntentSchema } from "../workflows/form-continuation-contracts";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -13,14 +13,14 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   previewInstallationCreateRequestSchema,
   previewInstallationDiscardResultSchema,
   previewInstallationSchema,
 } from "./preview-installation-contracts";
-import { saveRecordCommandV2Schema, saveRecordResultV2Schema } from "./records";
-import { publicDefinitionValidationErrorSchema } from "./validation-errors";
+import { saveRecordCommandV2Schema, saveRecordResultV2Schema } from "../records/records";
+import { publicDefinitionValidationErrorSchema } from "../catalogue/validation-errors";
 
 export const builderPreviewOperationLocationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("request") }).strict(),

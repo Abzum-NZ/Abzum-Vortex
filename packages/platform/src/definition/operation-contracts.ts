@@ -4,7 +4,7 @@ import {
   duplicateProtectionKeySchema,
   jsonValueSchema,
   secretReferenceSchema,
-} from "./common";
+} from "../catalogue/common";
 import {
   activityIdSchema,
   actorIdSchema,
@@ -32,7 +32,7 @@ import {
   tenantIdSchema,
   timestampSchema,
   vortexSuperAdministratorAssignmentIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { installedEventDescriptorSchema } from "./module-contracts";
 import type { StandardInstalledEventKind } from "./module-contracts";
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { safeFlowResultKindSchema } from "./application-flow-bindings";
-import { workflowValueTypeSchema } from "./catalogues";
-import { retryPolicySchema } from "./common";
+import { safeFlowResultKindSchema } from "../definition/application-flow-bindings";
+import { workflowValueTypeSchema } from "../catalogue/catalogues";
+import { retryPolicySchema } from "../catalogue/common";
 import {
   flowControlTaskTypeKeys,
   flowDurableOnlyTaskTypeKeys,
@@ -14,8 +14,8 @@ import {
   builderKeySchema,
   namespacedKeySchema,
   stableDefinitionReleaseVersionSchema,
-} from "./identifiers";
-import type { RuleGraphNode } from "./rule-graph-contracts";
+} from "../catalogue/identifiers";
+import type { RuleGraphNode } from "../rules/rule-graph-contracts";
 
 /*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building

@@ -12,7 +12,7 @@ import {
   type FlowReference,
   type FlowRoundingMode,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 import { flowInstantMicros } from "./flow-instant";
 
 /**

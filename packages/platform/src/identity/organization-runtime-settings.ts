@@ -4,12 +4,12 @@ import {
   databaseRevision,
   organizationRuntimeSettingsSchema,
   type OrganizationRuntimeSettings,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 export const organizationRuntimeSettingsErrorCodes = [
   "INVALID_ORGANIZATION_RUNTIME_SETTINGS",

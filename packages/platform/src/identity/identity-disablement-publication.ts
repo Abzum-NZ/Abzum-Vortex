@@ -1,7 +1,7 @@
 import "server-only";
 
-import { identityIdSchema } from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+import { identityIdSchema } from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 
 /**
  * Live disablement checks for named sensitive operations.

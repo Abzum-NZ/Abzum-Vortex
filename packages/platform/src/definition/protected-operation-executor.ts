@@ -60,15 +60,15 @@ import {
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
   type TenantId,
-} from "@vortex/contracts";
+} from "../schema";
 import type {
   createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
   HumanOrganizationRequestResult,
-} from "@vortex/access";
-import { verifiedDurableActorContextSchema } from "@vortex/access";
-import type { DurableActorRequestScope } from "@vortex/access";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../access/index";
+import { verifiedDurableActorContextSchema } from "../access/index";
+import type { DurableActorRequestScope } from "../access/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 
 /**

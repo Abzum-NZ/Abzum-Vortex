@@ -12,8 +12,8 @@ import {
   type ConnectionInstanceId,
   type ConnectionTypeId,
   type OrganizationId,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { assertDestinationFingerprint, assertSafeIntegerRevision } from "./connection-instance-state";
 
 /**

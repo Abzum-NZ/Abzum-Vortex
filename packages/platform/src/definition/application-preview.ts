@@ -15,9 +15,9 @@ import {
   type FlowEffectKind,
   type FlowTask,
   type SessionContext,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
-import { isLiveDefinitionSystemContext } from "./definition-consumer-read";
+import { isLiveDefinitionSystemContext } from "./definition-consumer-read-definition";
 import {
   DefinitionPublicationError,
   type ApplicationDraftCompilation,

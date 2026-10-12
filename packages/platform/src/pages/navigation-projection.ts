@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -14,16 +15,15 @@ import {
   type ProjectedNavigation,
   type ProjectedNavigationItem,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
+} from "../access/index";
+import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
 
 /**
  * The projected navigation shape is shared with the browser renderer in `@vortex/contracts`: the
@@ -192,7 +192,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionOwnerId,
+          ownerId: platformPermissionSource().ownerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },
@@ -263,7 +263,7 @@ export const createStoredNavigationProjectionService = (
 
   const load = (): FixedAuthenticatedNavigationProjection => {
     const permission = (key: string): NavigationPermissionBindingValue => {
-      const platform = platformPermissionFor(key);
+      const platform = platformPermissionSource().forKey(key);
       if (platform !== undefined) return { kind: "platform", permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)

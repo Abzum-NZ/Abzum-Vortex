@@ -6,7 +6,7 @@ import {
   sessionContextSchema,
   type ProtectedOperationChannel,
   type SessionContext,
-} from "@vortex/contracts";
+} from "../schema";
 import postgres, { type Row, type Sql, type TransactionSql } from "postgres";
 import { AsyncLocalStorage } from "node:async_hooks";
 

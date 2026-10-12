@@ -11,7 +11,7 @@ import {
   recordRichTextDocumentV2Schema,
   type ActionInputDefinitionV3,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 
 export class QueryInputRefusalError extends Error {
   constructor() {

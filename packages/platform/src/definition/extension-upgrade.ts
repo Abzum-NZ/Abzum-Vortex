@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { canonicalJson } from "@vortex/contracts";
+import { canonicalJson } from "../schema";
 
 /**
  * Explicit adoption planning for installed module extensions.

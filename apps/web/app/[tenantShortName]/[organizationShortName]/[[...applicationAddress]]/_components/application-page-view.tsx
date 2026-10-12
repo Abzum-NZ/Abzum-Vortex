@@ -59,7 +59,7 @@ import {
   formContinuationAnswerSchema,
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -81,8 +81,8 @@ import {
   isCurrentComponentRequestGeneration,
   nextComponentRequestGeneration,
   type ComponentRequestGeneration,
-} from "@vortex/app/component-result-state";
-import { containedComponentIdSchema, recordIdSchema } from "@vortex/contracts";
+} from "@vortex/platform/schema";
+import { containedComponentIdSchema, recordIdSchema } from "@vortex/platform/schema";
 import { rereadApplicationPlacements } from "../placement-refresh-action";
 import { signOut } from "../../../../auth/actions";
 import {

@@ -8,12 +8,12 @@ import {
   type DefinitionConsumerReadResult,
   type PreparedApplicationPermissionRegistration,
   type SessionContext,
-} from "@vortex/contracts";
-import { withResolvedRequestTransaction } from "@vortex/db";
+} from "../schema";
+import { withResolvedRequestTransaction } from "../db/index";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "@vortex/definition";
+} from "../definition/definition-index";
 import type { HumanOrganizationRequestDependencies } from "./human-organization-request";
 import { prepareApplicationPermissionRegistrationFromReleaseSet } from "./permission-registry-definition-adapter";
 

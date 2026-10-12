@@ -15,8 +15,8 @@ import {
   type OrganizationPermissionEligibility,
   type SafeOrganizationAccessRefusal,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 const unavailableCode = "ORGANIZATION_ACCESS_DECISION_UNAVAILABLE";
 

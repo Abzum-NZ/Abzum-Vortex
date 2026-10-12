@@ -42,12 +42,12 @@ import {
   type SuspendTenantCommand,
   type SuspendTenantResult,
   type VortexSuperAdministratorAssignmentMutationResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,

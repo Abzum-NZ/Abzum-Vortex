@@ -4,8 +4,8 @@ import {
   isFlowControlTask,
   type FlowDefinition,
   type FlowTask,
-} from "@vortex/contracts";
-import type { FlowLibrary } from "@vortex/rule";
+} from "@vortex/platform/schema";
+import type { FlowLibrary } from "@vortex/platform/schema";
 
 const runsInBrowser = (task: FlowTask, library: FlowLibrary, seen: Set<string>): boolean => {
   const definition = (

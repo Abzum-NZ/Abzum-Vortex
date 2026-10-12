@@ -13,7 +13,7 @@ import {
   queryIdSchema,
   recordIdSchema,
   stableDefinitionReleaseVersionSchema,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   protectedQueryBoardMembersCommandSchema,
   protectedQueryBoardSelectorSchema,

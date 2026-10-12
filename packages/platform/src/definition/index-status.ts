@@ -1,7 +1,7 @@
 import "server-only";
 
-import { uuidText, isRecord, type ActiveApplicationInstallationEvidence } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import { uuidText, isRecord, type ActiveApplicationInstallationEvidence } from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   ActiveApplicationInstallationError,
   createActiveApplicationInstallationRepository,

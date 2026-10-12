@@ -2,12 +2,12 @@ import {
   eventOccurrenceEnvelopeV2Schema,
   type EventOccurrenceEnvelopeV2,
   type InstalledEventDescriptor,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   resolveInstalledEventDefinitionContext,
   type InstalledEventCatalogueInput,
-} from "@vortex/definition";
-import { persistedRecordFieldValueMatches } from "@vortex/record";
+} from "../definition/definition-index";
+import { persistedRecordFieldValueMatches } from "../records/index";
 
 export const installedEventOccurrenceErrorCodes = [
   "INSTALLED_EVENT_OCCURRENCE_INVALID",

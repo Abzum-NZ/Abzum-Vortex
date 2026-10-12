@@ -17,12 +17,12 @@ import {
   type SystemApplicationBoundReleaseSetCommand,
   type SystemApplicationBoundReleaseSetResult,
   systemApplicationBoundReleaseSetResultSchema,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   canonicalJson,
   compareCanonicalStrings,
   fingerprintCanonicalValue,
-} from "@vortex/definition";
+} from "../definition/definition-index";
 import { fingerprintPermissionMeaning } from "./permission-fingerprints";
 import { isLiveSystemContext } from "./private-system-context";
 

@@ -266,7 +266,7 @@ export {
 
 export const AppService = Object.freeze({
   key: "app",
-  boundary: "@vortex/app",
+  boundary: "./app-index",
   createAppTelemetryCollector,
   createOperationsAlertSink,
   readOpenOperationsAlertSignals,

@@ -10,8 +10,8 @@ import {
   type ApplicationPermissionCatalogueSnapshotCommand,
   type PermissionCatalogueLookupCommand,
   type PermissionCatalogueLookupResult,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 export const permissionRegistryRepositoryErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_COMMAND",

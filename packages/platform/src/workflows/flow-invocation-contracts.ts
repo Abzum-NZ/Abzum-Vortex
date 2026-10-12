@@ -5,7 +5,7 @@ import {
   formContinuationTargetSchema,
 } from "./form-continuation-contracts";
 import { flowIdSchema } from "./flow-contracts";
-import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "./identifiers";
+import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const releaseKeySchema = z.string().min(1).max(200);

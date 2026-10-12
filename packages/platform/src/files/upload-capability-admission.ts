@@ -8,7 +8,7 @@ import {
   type CorrelationId,
   type EntitlementCheckRequest,
   type PlatformId,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   capabilityConsumptionResultSchema,
   capabilityPolicyEvidenceSchema,
@@ -19,7 +19,7 @@ import {
   type CapabilityReservationResult,
   type ConsumeCapabilityReservationCommand,
   type ReleaseCapabilityReservationCommand,
-} from "@vortex/access";
+} from "../access/index";
 
 type ReservedCapability = Extract<CapabilityReservationResult, { outcome: "reserved" }>;
 type ConsumedCapability = Extract<CapabilityConsumptionResult, { outcome: "consumed" }>;

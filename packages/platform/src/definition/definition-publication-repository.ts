@@ -37,10 +37,10 @@ import {
   type SessionContext,
   type StoredDefinitionSource,
   type VersionImpactReason,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   applicationDraftFromStoredRelease,
   hasAuthenticResolutionFingerprint,
@@ -63,7 +63,7 @@ import {
   completeDefinitionPublicationHistoryFold,
   createDefinitionPublicationHistoryFold,
   foldDefinitionPublicationHistoryRelease,
-} from "./version-impact";
+} from "./version-impact-definition";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),

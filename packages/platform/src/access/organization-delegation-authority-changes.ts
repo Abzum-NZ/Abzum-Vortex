@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   delegationAuthorityIdSchema,
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   accessAssigneeSchema,
   delegationAuthoritySchema,

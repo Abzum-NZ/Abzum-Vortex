@@ -29,7 +29,7 @@ import {
   type FlowTaskTypeDefinition,
   type FlowValue,
   type SourceFlow,
-} from "@vortex/contracts";
+} from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 /**

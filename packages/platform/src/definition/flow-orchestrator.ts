@@ -53,12 +53,12 @@ import {
   type FlowTriggerOrigin,
   type ViewerSafeRecordPinSelector,
   type ViewerSafeRecordPinAcquisitionResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   readFlowRunAsPrincipalForRun,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import { withRuntimeTransaction } from "@vortex/db";
+} from "../access/index";
+import { withRuntimeTransaction } from "../db/index";
 import {
   collectActionFlowTasks,
   resumeFlowRun,
@@ -75,7 +75,7 @@ import {
   type FlowRunStep,
   type FlowSubject,
   type FlowTaskOutcome,
-} from "@vortex/rule";
+} from "../rules/index";
 import { z } from "zod";
 import type {
   FlowContinuationStore,

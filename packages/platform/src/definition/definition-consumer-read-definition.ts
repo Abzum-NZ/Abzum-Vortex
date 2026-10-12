@@ -22,7 +22,7 @@ import {
   type DefinitionConsumerReadResult,
   type ExactDefinitionDependency,
   type SessionContext,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import {

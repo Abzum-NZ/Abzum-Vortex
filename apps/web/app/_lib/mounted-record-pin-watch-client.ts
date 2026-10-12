@@ -10,11 +10,11 @@ import {
   revisionSchema,
   type MountedRecordPinFrame,
   type MountedRecordPinMembership,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPrivateInvalidationSubscriber,
   type PrivateInvalidationSubscriber,
-} from "@vortex/event/client";
+} from "@vortex/platform/schema";
 import {
   openWebPrivateInvalidationSource,
   type WebPrivateInvalidationSourceResult,

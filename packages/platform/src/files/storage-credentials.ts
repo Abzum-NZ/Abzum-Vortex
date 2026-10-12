@@ -18,7 +18,7 @@ import {
   type OrganizationId,
   type UploadGrant,
   type VerifiedFileActor,
-} from "@vortex/contracts";
+} from "../schema";
 import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
 import {
   evaluateResolvedFileRemovalAuthority,

@@ -6,7 +6,7 @@ import type {
   SourceIdentityKind,
   SourceIdentityKindV2,
   SourceIdentityKindV3,
-} from "@vortex/contracts";
+} from "../schema";
 
 import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
 

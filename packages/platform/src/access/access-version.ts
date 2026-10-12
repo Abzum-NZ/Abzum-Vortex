@@ -12,12 +12,12 @@ import {
   type InvitationAcceptanceWithAccessVersion,
   type OrganizationAccount,
   type VerifiedIdentity,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 export const accessVersionErrorCodes = [
   "INVALID_ACCESS_VERSION_COMMAND",

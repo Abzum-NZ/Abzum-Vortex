@@ -9,7 +9,7 @@ import type {
   SourceApplicationBodyV2,
   SourcePageDefinitionV2,
 } from "./application-source-contracts";
-import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
+import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import {
   moduleSourceContractVersion,
   moduleSourceDocumentSchema,

@@ -1,5 +1,5 @@
-import { applicationInstallAddressSchema } from "@vortex/app";
-import { fingerprintSchema, revisionSchema } from "@vortex/contracts";
+import { applicationInstallAddressSchema } from "@web/platform-server";
+import { fingerprintSchema, revisionSchema } from "@vortex/platform/schema";
 import { loadApplicationInstallMetadata } from "../../../_lib/application-install-metadata";
 
 export const dynamic = "force-dynamic";

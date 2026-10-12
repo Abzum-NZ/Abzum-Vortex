@@ -3,7 +3,7 @@ import {
   protectedOperationDescriptorSchema,
   type PlatformServiceOperationRelease,
   type ProtectedOperationDescriptor,
-} from "./application-flow-bindings";
+} from "../definition/application-flow-bindings";
 import { generatedReleaseFingerprints } from "./catalogue/generated-fingerprints";
 import sources from "./catalogue/platform-service-operation-catalogue.source.json";
 

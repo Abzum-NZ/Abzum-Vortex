@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { builderKeySchema, namespacedKeySchema } from "./identifiers";
+import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
 import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   jsonValueSchema,
-} from "./common";
-import { flowValueSchema } from "./flow-contracts";
+} from "../catalogue/common";
+import { flowValueSchema } from "../workflows/flow-contracts";
 
 export type SourceProvenanceAnnotation = Readonly<{
   /** Canonical path suffixes; use `#` for an array index and `**` for descendant paths. */

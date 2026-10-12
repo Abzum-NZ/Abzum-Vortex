@@ -9,7 +9,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 export const studioApplicationRestoreSelectorSchema = z.object({
   organizationId: organizationIdSchema,

@@ -4,12 +4,12 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import {
   applicationRootIdSchema,
   type ApplicationRootId,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 export const runtimeBundleCleanupLimits = Object.freeze({
   batchSize: 100,

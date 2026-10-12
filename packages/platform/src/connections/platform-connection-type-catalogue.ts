@@ -1,13 +1,13 @@
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
-import { generatedReleaseFingerprints } from "./catalogue/generated-fingerprints";
-import source from "./catalogue/platform-connection-type-catalogue.source.json";
-import type { ConnectionTypeSourceDocument } from "./definition-source";
+import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import source from "../catalogue/catalogue/platform-connection-type-catalogue.source.json";
+import type { ConnectionTypeSourceDocument } from "../definition/definition-source";
 import {
   connectionTypeIdSchema,
   semanticVersionSchema,
   type ConnectionTypeId,
   type SemanticVersion,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;

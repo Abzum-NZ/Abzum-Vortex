@@ -77,8 +77,8 @@ import {
   type ProtectedOperationReference,
   type Revision,
   type SemanticVersion,
-} from "@vortex/contracts";
-import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
+} from "../schema";
+import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import { compare, satisfies } from "semver";
 import { z } from "zod";
 import {
@@ -86,7 +86,7 @@ import {
   type BuilderAuthority,
   type BuilderOperation,
 } from "./builder-authority";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
 import { compileParsedDefinition } from "./compiler";
 import {
@@ -101,7 +101,7 @@ import {
   compareDefinitionVersionImpactWithEvidence,
   deriveSavedConditionRevisionsFromHistoryEvidence,
   isVerifiedDefinitionPublicationHistoryEvidence,
-} from "./version-impact";
+} from "./version-impact-definition";
 import { DefinitionVersionImpactError } from "./version-impact-error";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];

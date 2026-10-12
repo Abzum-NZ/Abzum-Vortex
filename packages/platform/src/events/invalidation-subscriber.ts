@@ -30,7 +30,7 @@ import {
   type LiveInvalidation,
   type RecordId,
   type RecordTypeId,
-} from "@vortex/contracts";
+} from "../schema";
 import type { PrivateInvalidationTopicScope } from "./invalidation-channel";
 
 /**

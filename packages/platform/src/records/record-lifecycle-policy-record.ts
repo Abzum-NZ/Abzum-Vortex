@@ -33,18 +33,18 @@ import {
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
   type RecordTypeLifecyclePolicy,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "../access/index";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 
 /**
  * Common age/count fields shared by every record-type lifecycle policy
@@ -1081,4 +1081,4 @@ export {
   type RecordRecoveryEligibilityInput,
   type RecordRecoveryEligibilityReason,
   type RecordRecoveryPolicy,
-} from "@vortex/contracts";
+} from "../schema";

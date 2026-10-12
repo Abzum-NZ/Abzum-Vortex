@@ -2,9 +2,9 @@ import {
   platformThemeReleaseV2Schema,
   type PlatformThemeReleaseV2,
   type PlatformThemeTokenRoleKeyV2,
-} from "./application-composition-v2";
-import { generatedReleaseFingerprints } from "./catalogue/generated-fingerprints";
-import source from "./catalogue/platform-theme-catalogue.source.json";
+} from "../definition/application-composition-v2";
+import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import source from "../catalogue/catalogue/platform-theme-catalogue.source.json";
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;

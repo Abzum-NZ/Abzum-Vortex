@@ -14,7 +14,7 @@ import {
   moduleRootIdSchema,
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { moduleDraftV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);

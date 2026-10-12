@@ -3,7 +3,7 @@ import "server-only";
 import {
   createHumanApplicationDraftWriter,
   type HumanApplicationDraftWriteResult,
-} from "@vortex/access";
+} from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { compareCanonicalStrings } from "./canonical-json";
-import { storedDefinitionSourceSchema } from "./definition-store-contracts";
+import { compareCanonicalStrings } from "../definition/canonical-json";
+import { storedDefinitionSourceSchema } from "../definition/definition-store-contracts";
 import {
   fingerprintSchema,
   namespacedKeySchema,
   platformIdSchema,
   semanticVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   organizationSetupReceiptCommandSchema,
   organizationSetupReceiptSchema,

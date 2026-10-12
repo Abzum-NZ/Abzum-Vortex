@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -15,18 +16,17 @@ import {
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkResult,
   type ViewerSafeRecordPinAcquisitionResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
+} from "../access/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
-} from "@vortex/query";
+} from "../queries/index";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
@@ -107,7 +107,7 @@ const canOpenDetailPage = async (
   context: InstalledRuntimeContext,
   page: PageDefinitionV2,
 ): Promise<boolean> => {
-  const platform = platformPermissionFor(page.accessPermissionKey);
+  const platform = platformPermissionSource().forKey(page.accessPermissionKey);
   let declaration: OrganizationAccessDeclaration;
   if (platform !== undefined) {
     declaration = {
@@ -116,7 +116,7 @@ const canOpenDetailPage = async (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-        ownerId: platformPermissionOwnerId,
+        ownerId: platformPermissionSource().ownerId,
         permissionId: platform.permissionId,
       },
       recentAuthentication: { kind: "none" },

@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "../access/platform-permissions";
 import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
@@ -63,14 +64,13 @@ import {
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
   type ModuleFieldV3,
-} from "@vortex/contracts";
-import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "@vortex/contracts/platform-compatibility";
-import { isPlatformPermissionKey } from "@vortex/modules";
+} from "../schema";
+import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
   canonicalJson,
   compareCanonicalStrings,
   fingerprintCanonicalValue,
-} from "./canonical-json";
+} from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
@@ -3842,7 +3842,7 @@ function compileApplicationPagesV2(
       // A page keeps its exact access permission key. An application or bound-Module permission is
       // resolved against its owner; a platform administration permission is carried through as its
       // exact catalogue key, which the runtime evaluates against the viewer's platform authority.
-      accessPermissionKey: isPlatformPermissionKey(String(page.permission))
+      accessPermissionKey: platformPermissionSource().hasKey(String(page.permission))
         ? String(page.permission)
         : resolution.exactOwnedReference(
             "permission",

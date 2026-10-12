@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import { applicationSourceDocumentV2Schema, moduleSourceDocumentSchema } from "./definition-source";
 import { flowTargetDependencySchema } from "./application-flow-bindings";
 import {
@@ -15,7 +15,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   stableDefinitionReleaseVersionSchema,
   versionImpactReasonSchema,

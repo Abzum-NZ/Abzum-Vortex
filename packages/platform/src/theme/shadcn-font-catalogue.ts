@@ -1,4 +1,4 @@
-import catalogue from "./catalogue/shadcn-fonts.generated.json";
+import catalogue from "../catalogue/catalogue/shadcn-fonts.generated.json";
 
 /**
  * The shadcn/create font catalogue: every font shadcn/create offers at the pinned version, with

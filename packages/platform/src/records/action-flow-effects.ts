@@ -15,13 +15,13 @@ import {
   recordRichTextDocumentV2Schema,
   timestampSchema,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   flowRuntimeValueOf,
   type ActionFlowOutcome,
   type ActionFlowSeed,
   type FlowProtectedTaskCall,
-} from "@vortex/rule";
+} from "../rules/index";
 
 /**
  * What the record service owns about running a named action as a flow (#1063): checking the action's

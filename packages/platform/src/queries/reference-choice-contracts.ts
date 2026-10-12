@@ -9,7 +9,7 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   recordTypeReferenceSchema,
-} from "@vortex/contracts";
+} from "../schema";
 
 const choiceSearchSchema = z.string().trim().min(1).max(100);
 const choicePageSizeSchema = z.number().int().min(1).max(100).default(50);

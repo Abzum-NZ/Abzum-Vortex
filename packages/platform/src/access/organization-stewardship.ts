@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema, descriptionSchema, labelSchema } from "./common";
+import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   builderKeySchema,
@@ -10,7 +10,7 @@ import {
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const representsSameInstant = (left: string, right: string): boolean =>
   Date.parse(left) === Date.parse(right);

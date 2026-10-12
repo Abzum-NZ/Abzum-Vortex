@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/contracts";
+import type { JsonValue } from "../schema";
 
 export type ResolvedTypedConditionOperand<TType extends string> = Readonly<{
   type?: TType;

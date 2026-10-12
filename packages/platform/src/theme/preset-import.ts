@@ -9,8 +9,8 @@ import {
   sourceApplicationThemeSelectionV2Schema,
   type ShadcnThemeCatalogueDimensionKey,
   type SourceApplicationThemeSelectionV2,
-} from "@vortex/contracts";
-import { findShadcnThemeRelease } from "@vortex/contracts/shadcn-theme-releases";
+} from "../schema";
+import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import {
   decodePreset,
   encodePreset,

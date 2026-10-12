@@ -3,7 +3,7 @@ import {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   APPLICATION_SEARCH_BLOCK_RELEASE,
   NAVIGATION_BLOCK_RELEASES,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPlatformComponentRegistry,
   noRuntimeInputs,

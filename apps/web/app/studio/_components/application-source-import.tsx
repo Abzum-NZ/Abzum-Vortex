@@ -4,7 +4,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { canonicalJson, sameId, type ApplicationSourceDocumentV2,
-  type DefinitionValidationResult } from "@vortex/contracts";
+  type DefinitionValidationResult } from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
   maximumApplicationSourceImportBytes,

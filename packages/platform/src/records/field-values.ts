@@ -17,7 +17,7 @@ import {
   type ModuleFieldV3,
   type PermissionId,
   type RecordTypeDefinitionV3,
-} from "@vortex/contracts";
+} from "../schema";
 
 type ValueMap = Readonly<Record<string, unknown>>;
 type ValuePath = readonly (string | number)[];

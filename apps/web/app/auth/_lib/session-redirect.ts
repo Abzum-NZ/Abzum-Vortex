@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { IdentitySessionResolution } from "@vortex/contracts";
+import type { IdentitySessionResolution } from "@vortex/platform/schema";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getIdentityJourneyConfiguration } from "./authority-configuration";

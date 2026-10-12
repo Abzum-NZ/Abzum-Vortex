@@ -8,17 +8,17 @@ import {
   revisionSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../access/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
   type ProtectedQueryRow,
-} from "@vortex/query";
+} from "../queries/index";
 
 /**
  * What a detail placement reads for its page subject: the one record the page is about, addressed

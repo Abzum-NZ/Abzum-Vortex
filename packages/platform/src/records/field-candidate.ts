@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { recordTypeDefinitionV3Schema } from "@vortex/contracts";
-import type { JsonValue } from "@vortex/contracts";
+import type { recordTypeDefinitionV3Schema } from "../schema";
+import type { JsonValue } from "../schema";
 import {
   applyBeforeSaveRules,
   beforeSaveRuleRefusedIssueCode,

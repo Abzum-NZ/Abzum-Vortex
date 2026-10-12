@@ -2,18 +2,18 @@ import { z } from "zod";
 import {
   safeFlowResultDescriptorSchema,
   safeFlowResultKindSchema,
-} from "./application-flow-bindings";
-import { jsonValueSchema } from "./common";
+} from "../definition/application-flow-bindings";
+import { jsonValueSchema } from "../catalogue/common";
 import { flowIdSchema } from "./flow-contracts";
 import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
-import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import {
   applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   platformIdSchema,
   revisionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /**
  * The web-independent form request and continuation contract of an interactive flow (#544).

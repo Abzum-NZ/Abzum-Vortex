@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { safeHttpsUrlSchema } from "./common";
+import { safeHttpsUrlSchema } from "../catalogue/common";
 
 export const richTextElementKindV2Schema = z.enum([
   "paragraph",

@@ -18,8 +18,8 @@ import {
   type PreparedApplicationRoleTemplate,
   type PreparedApplicationRoleTemplates,
   type SessionContext,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "@vortex/definition";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
 import {
   PermissionRegistryPreparationError,
   prepareApplicationPermissionRegistrationForHumanRequest,

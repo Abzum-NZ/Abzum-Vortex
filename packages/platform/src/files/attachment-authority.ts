@@ -5,7 +5,7 @@ import type {
   OrganizationId,
   SessionContext,
   VerifiedFileActor,
-} from "@vortex/contracts";
+} from "../schema";
 
 export type ResolveVerifiedFileActorResult =
   | Readonly<{ authorized: true; actor: VerifiedFileActor }>

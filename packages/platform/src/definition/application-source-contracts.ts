@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { applicationExperienceStateSchema } from "./catalogues";
-import { inspectApplicationPageReplacements } from "./application-page-replacement";
+import { applicationExperienceStateSchema } from "../catalogue/catalogues";
+import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
-import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "./identifiers";
-import { jsonValueSchema, labelSchema } from "./common";
+import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "../catalogue/identifiers";
+import { jsonValueSchema, labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
   refineActionTaskIds,
@@ -21,7 +21,7 @@ import {
   moduleSourcePermissionRecordScopeSchema,
   sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
-import { applicationRolePermissionKeysSchema } from "./permissions";
+import { applicationRolePermissionKeysSchema } from "../access/permissions";
 import {
   sourceGuidedFormPageCompositionV2Schema,
   sourceApplicationShellV2Schema,
@@ -31,8 +31,8 @@ import {
   sourcePlatformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
-import { flowAliasSchema, sourceFlowCollectionSchema } from "./flow-source-contracts";
-import { vortexIconNameSchema } from "./icon-names";
+import { flowAliasSchema, sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
+import { vortexIconNameSchema } from "../catalogue/icon-names";
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;

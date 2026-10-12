@@ -1,14 +1,14 @@
 import { z } from "zod";
-import type { ValueType } from "./catalogues";
-import { conditionMaximumNestingDepth, conditionMaximumOperandCount } from "./common";
+import type { ValueType } from "../catalogue/catalogues";
+import { conditionMaximumNestingDepth, conditionMaximumOperandCount } from "../catalogue/common";
 import {
   builderKeySchema,
   containedComponentIdSchema,
   fieldIdSchema,
   recordTypeIdSchema,
   ruleIdSchema,
-} from "./identifiers";
-import { moduleFieldValueV2Schemas } from "./module-field-values-v2";
+} from "../catalogue/identifiers";
+import { moduleFieldValueV2Schemas } from "../records/module-field-values-v2";
 import {
   maximumRuleTableRows,
   ruleTableColumnsMatch,

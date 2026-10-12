@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   containedComponentIdSchema,
@@ -15,7 +15,7 @@ import {
   revisionSchema,
   storageContractIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   rolePermissionEntrySchema,
   roleRecentAuthenticationRequirementSchema,

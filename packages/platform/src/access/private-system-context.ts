@@ -1,4 +1,4 @@
-import type { SessionContext } from "@vortex/contracts";
+import type { SessionContext } from "../schema";
 
 /** Package-private check for immutable Definition preparation paths. */
 export const isLiveSystemContext = (context: SessionContext): boolean => {

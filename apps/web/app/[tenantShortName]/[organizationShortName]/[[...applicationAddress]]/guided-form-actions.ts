@@ -8,7 +8,7 @@ import {
   platformIdSchema,
   recordIdSchema,
   revisionSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadApplicationPage } from "../../../_lib/application-page";

@@ -11,7 +11,7 @@ import {
   type FileStorageOperationClaims,
   type OrganizationId,
   type VerifiedFileActor,
-} from "@vortex/contracts";
+} from "../schema";
 
 export { MAXIMUM_FILE_STORAGE_OPERATION_SECONDS, PRIVATE_FILE_BUCKET };
 

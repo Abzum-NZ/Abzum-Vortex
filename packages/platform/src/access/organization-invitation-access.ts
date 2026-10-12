@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   groupIdSchema,
   invitationIdSchema,
@@ -10,7 +10,7 @@ import {
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   acceptOrganizationInvitationCommandSchema,
   invitationSchema,

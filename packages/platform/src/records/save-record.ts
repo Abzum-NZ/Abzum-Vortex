@@ -18,15 +18,15 @@ import {
   type RecordSaveFieldCorrection,
   type SaveRecordCommandV2,
   type SaveRecordResultV2,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import type { BeforeSaveRuleWarning } from "@vortex/rule";
+} from "../access/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { BeforeSaveRuleWarning } from "../rules/index";
 import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,

@@ -9,6 +9,6 @@ export * from "./preview-record-port";
 export * from "./transfer-record-ownership";
 export * from "./action-flow-effects";
 export * from "./action-record-port";
-export * from "./record-lifecycle-policy";
+export * from "./record-lifecycle-policy-record";
 export * from "./lifecycle-hold-scope";
 export * from "./delete-record";

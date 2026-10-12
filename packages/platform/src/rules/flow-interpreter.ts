@@ -20,7 +20,7 @@ import {
   type FlowTask,
   type FlowValue,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   evaluateFlowFormula,
   flowRuntimeValuesEqual,

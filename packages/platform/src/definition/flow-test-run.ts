@@ -33,8 +33,8 @@ import {
   type PreviewRecordReadResultV1,
   type SaveRecordCommandV2,
   type SaveRecordResultV2,
-} from "@vortex/contracts";
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+} from "../schema";
+import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   resumeFlowRun,
   startFlowRun,
@@ -45,7 +45,7 @@ import {
   type FlowFailure,
   type FlowTaskTraceObservation,
   type FlowTaskTraceObserver,
-} from "@vortex/rule";
+} from "../rules/index";
 
 const maximumPayloadCharacters = 65_536;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;

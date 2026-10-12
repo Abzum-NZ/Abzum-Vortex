@@ -5,7 +5,7 @@ import {
   requireBuilderAuthority,
   type BuilderAuthority,
   type createHumanOrganizationRequestService,
-} from "@vortex/access";
+} from "../access/index";
 import {
   identitySessionSchema,
   previewInstallationAddressSchema,
@@ -25,12 +25,12 @@ import {
   type PreviewInstallationExpiryResult,
   type SelectedOrganizationScope,
   type SessionContext,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   PreviewInstallationRepositoryError,
   createPreviewInstallationRepository,
-} from "@vortex/module";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "./module-index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,

@@ -12,8 +12,8 @@ import {
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
   type FlowLiteral,
-} from "@vortex/contracts";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 
 /** One accepted start, written inside the caller's authorized request transaction. */

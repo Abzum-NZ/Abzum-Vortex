@@ -2,7 +2,7 @@ import {
   jsonValueSchema,
   type CustomComponentReleaseV2,
   type PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import {
   createPayloadParser,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   fieldIdSchema,
@@ -11,7 +11,7 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const STRUCTURED_RECORD_IMPORT_FORMAT = "vortex.record-import/1" as const;
 export const STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES = 5 * 1024 * 1024;

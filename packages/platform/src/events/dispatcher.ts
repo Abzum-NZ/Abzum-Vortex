@@ -1,12 +1,12 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "@vortex/contracts";
+import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 import {
   createEventConsumerProgressRepository,
   eventConsumerProgressLimits,

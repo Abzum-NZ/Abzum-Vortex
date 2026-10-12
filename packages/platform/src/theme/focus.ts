@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { DefinitionRuleFailure } from "@vortex/contracts";
+import type { DefinitionRuleFailure } from "../schema";
 import {
   contrastRatio,
   DEFAULT_DARK_SURFACE,

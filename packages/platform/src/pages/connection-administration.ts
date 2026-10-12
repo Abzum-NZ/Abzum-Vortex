@@ -12,7 +12,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
   type ConnectionType,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   assertDestinationFingerprint,
   assertSafeIntegerRevision,
@@ -21,7 +21,7 @@ import {
   type ConnectionAdministrationResult,
   type ConnectionHealthOutcome,
   type ConnectionState,
-} from "@vortex/connection";
+} from "../connections/index";
 
 /**
  * The generic connection administration page, composed over the #692 administration commands and

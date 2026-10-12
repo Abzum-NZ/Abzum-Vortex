@@ -11,7 +11,7 @@ import {
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type SourceBlockPropertyValueV2Contract,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { loadApplicationSource } from "../application-source-loader";
 
 const recordType = "vortex.tasks:task";

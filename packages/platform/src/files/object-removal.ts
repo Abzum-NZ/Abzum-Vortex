@@ -20,7 +20,7 @@ import {
   type OrganizationId,
   type PlatformId,
   type Revision,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   isValidFileLifecycleTransition,
   transitionFileLifecycleState,

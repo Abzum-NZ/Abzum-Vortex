@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -11,9 +11,9 @@ import {
   platformIdSchema,
   revisionSchema,
   semanticVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { permissionDeclarationSchema } from "./permissions";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 
 const permissionRegistryDefinitionReleaseCommon = {
   definitionKey: namespacedKeySchema,

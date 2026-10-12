@@ -9,8 +9,8 @@ import {
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
 import { flowValueDeclarationSchema } from "./application-flow-bindings";
-import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
-import { connectionTypeSchema } from "./integration-contracts";
+import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
+import { connectionTypeSchema } from "../connections/integration-contracts";
 import {
   actionInputDefinitionV3Schema,
   moduleContractVersionPairV3Schema,
@@ -18,7 +18,7 @@ import {
   storedModuleDraftV3Schema,
 } from "./module-contracts-v3";
 import { moduleSourceDocumentSchema } from "./definition-source";
-import { descriptionSchema } from "./common";
+import { descriptionSchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "./definition-provenance";
 import {
   actionIdSchema,
@@ -39,7 +39,7 @@ import {
   ruleIdSchema,
   semanticVersionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
 

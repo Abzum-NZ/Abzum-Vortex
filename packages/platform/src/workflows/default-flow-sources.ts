@@ -1,6 +1,6 @@
 import { flowContractVersion } from "./flow-contracts";
 import type { SourceFlow } from "./flow-source-contracts";
-import type { ProtectedOperationDescriptor } from "./application-flow-bindings";
+import type { ProtectedOperationDescriptor } from "../definition/application-flow-bindings";
 
 /**
  * The generated default flows (architecture decision 2): the default Save of a form is one

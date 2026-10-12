@@ -15,7 +15,7 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type SafeFlowResultKind,
-} from "@vortex/contracts";
+} from "../schema";
 import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestrator";
 
 /**

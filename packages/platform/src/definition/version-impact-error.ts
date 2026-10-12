@@ -1,4 +1,4 @@
-import type { DefinitionVersionImpactFailureCode } from "@vortex/contracts";
+import type { DefinitionVersionImpactFailureCode } from "../schema";
 
 const safeMessageByCode = {
   invalid_request: "The version-impact request is invalid.",

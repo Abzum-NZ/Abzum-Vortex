@@ -1,12 +1,12 @@
 import type {
   ModuleContentV3,
   ModuleContributionV3,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   canonicalJson,
   compareCanonicalStrings,
   fingerprintCanonicalValue,
-} from "./canonical-json";
+} from "./canonical-json-definition";
 
 /**
  * One exact installed module release, as the definition tier already reads it. The release is

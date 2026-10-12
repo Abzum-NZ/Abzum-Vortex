@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { containedComponentIdSchema } from "./identifiers";
+import { containedComponentIdSchema } from "../catalogue/identifiers";
 
 /**
  * The application flow-binding run-as vocabulary (`application-flow-bindings.ts`):

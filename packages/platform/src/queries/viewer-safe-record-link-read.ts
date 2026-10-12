@@ -12,8 +12,8 @@ import {
   viewerSafeRecordLinkTitleSchema,
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkIdentity,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { protectedQueryRowCapabilitiesSchema } from "./protected-query-contracts";
 
 const unavailable = { outcome: "unavailable" } as const;

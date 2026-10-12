@@ -10,7 +10,7 @@ import {
   type PersonalDataClass,
   type RecordTypeDefinitionV3,
   type SearchPriority,
-} from "@vortex/contracts";
+} from "../schema";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 /**

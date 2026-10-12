@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { richTextDocumentV2Schema } from "@vortex/contracts";
+import { richTextDocumentV2Schema } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import type {
   DisplayRichTextBlock,

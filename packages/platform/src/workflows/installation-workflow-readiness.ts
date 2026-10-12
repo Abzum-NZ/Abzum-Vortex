@@ -22,7 +22,7 @@ import {
   type OrganizationId,
   type SemanticVersion,
   type WorkflowRunId,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCompilerEnvironment,

@@ -1,4 +1,4 @@
-import { timestampSchema } from "@vortex/contracts";
+import { timestampSchema } from "../schema";
 
 export type ExactInstant = Readonly<{ epochSecond: bigint; fraction: string }>;
 

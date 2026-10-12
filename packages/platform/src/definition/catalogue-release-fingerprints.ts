@@ -1,5 +1,5 @@
-import { fingerprintCanonicalValue } from "./canonical-json";
-import type { ConnectionTypeSourceDocument } from "@vortex/contracts";
+import { fingerprintCanonicalValue } from "./canonical-json-definition";
+import type { ConnectionTypeSourceDocument } from "../schema";
 
 /**
  * The one derivation of every platform catalogue release fingerprint. The publication catalogue

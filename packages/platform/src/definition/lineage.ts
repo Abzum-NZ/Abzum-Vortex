@@ -11,7 +11,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const packageLineageReferenceSchema = z
   .object({

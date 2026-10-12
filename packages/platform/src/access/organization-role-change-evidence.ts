@@ -10,8 +10,8 @@ import {
   type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
   type RolePermissionEntry,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "@vortex/definition";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
 import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 
 export const organizationRoleChangeEvidenceErrorCodes = [

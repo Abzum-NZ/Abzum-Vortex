@@ -1,8 +1,9 @@
 import "server-only";
 
-export * from "./canonical-json";
+export * from "./canonical-json-definition";
+export * from "./catalogue-release-fingerprints";
 export * from "./semantic-version";
-export * from "./version-impact";
+export * from "./version-impact-definition";
 export * from "./version-impact-error";
 export * from "./compilation-error";
 export {
@@ -40,7 +41,7 @@ export {
   DefinitionConsumerReadError,
   definitionConsumerReadErrorCodes,
   type DefinitionConsumerReadErrorCode,
-} from "./definition-consumer-read";
+} from "./definition-consumer-read-definition";
 export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
 export * from "./application-bound-release-set";
 export * from "./prepared-installation-runtime-source";

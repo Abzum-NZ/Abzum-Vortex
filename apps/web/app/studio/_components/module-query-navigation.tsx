@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { moduleRootIdSchema, organizationIdSchema } from "@vortex/contracts";
+import { moduleRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
 
 /** A separate-tab entry into the authored Module query filter editor. */
 export function ModuleQueryNavigation() {

@@ -1,5 +1,5 @@
 import type { ComponentProps, ComponentType } from "react";
-import { VORTEX_ICON_NAMES, type VortexIconName } from "@vortex/contracts";
+import { VORTEX_ICON_NAMES, type VortexIconName } from "@vortex/platform/schema";
 
 /**
  * The semantic icon set every shared component and platform block asks for. A component names the

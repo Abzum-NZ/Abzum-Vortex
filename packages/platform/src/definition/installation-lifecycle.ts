@@ -12,8 +12,8 @@ import {
   type ApplicationInstallationDetachCommand,
   type ApplicationInstallationLifecycleErrorCode,
   type ApplicationInstallationLifecycleResult,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type LifecycleRow = DatabaseRow & { readonly lifecycle_result: unknown };
 type LifecyclePolicyReadinessRow = DatabaseRow & { readonly lifecycle_readiness: unknown };

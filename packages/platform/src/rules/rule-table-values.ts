@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { builderKeySchema } from "./identifiers";
+import { builderKeySchema } from "../catalogue/identifiers";
 import {
   moduleFieldValueV2Schemas,
   sourceModuleFieldValueV2Schemas,
   tableCellTypeKeysV2,
-} from "./module-field-values-v2";
+} from "../records/module-field-values-v2";
 
 /** A data shape, not storage settings or permission to write a table field. */
 export const ruleTableColumnSchema = z

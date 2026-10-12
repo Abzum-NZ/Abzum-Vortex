@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { duplicateProtectionKeySchema, jsonValueSchema } from "./common";
+import { duplicateProtectionKeySchema, jsonValueSchema } from "../catalogue/common";
 import {
   activityIdSchema,
   actorIdSchema,
@@ -17,7 +17,7 @@ import {
   workflowIdSchema,
   workflowNodeIdSchema,
   workflowRunIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 export const workflowExecutionReferenceSchema = z
   .object({

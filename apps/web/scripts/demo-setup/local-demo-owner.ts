@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { identityIdSchema } from "@vortex/contracts";
+import { identityIdSchema } from "@vortex/platform/schema";
 import { findRepositoryRoot } from "../development-setup/state";
 import { loadLocalWebEnvironment } from "./local-environment";
 

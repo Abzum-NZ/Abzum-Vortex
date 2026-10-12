@@ -4,8 +4,8 @@ import {
   correlationIdSchema,
   recordIdSchema,
   type SaveRecordCommandV2,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   calculateLockedRelationshipTotalSave,
   type CalculateRelationshipTotalSaveResult,

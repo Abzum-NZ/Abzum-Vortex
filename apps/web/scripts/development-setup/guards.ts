@@ -6,7 +6,7 @@ import {
   identityIdSchema,
   isLoopbackHostname,
   type IdentityAuthorityId,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { createClient } from "@supabase/supabase-js";
 import { findRepositoryRoot } from "./state";
 

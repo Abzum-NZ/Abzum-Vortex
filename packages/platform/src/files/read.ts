@@ -29,7 +29,7 @@ import {
   type RecordTypeId,
   type SessionContext,
   type VerifiedFileActor,
-} from "@vortex/contracts";
+} from "../schema";
 import { isExecutableContent, normalizeFileExtension } from "./content-safety";
 import { sanitizeFileDisplayName } from "./file-metadata";
 import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";

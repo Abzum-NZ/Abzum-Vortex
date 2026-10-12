@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { workflowValueTypeSchema } from "./catalogues";
+import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
-import { flowBindingInputSchema, flowBindingSchema, flowIdSchema } from "./flow-contracts";
-import { flowAliasSchema } from "./flow-source-contracts";
+import { flowBindingInputSchema, flowBindingSchema, flowIdSchema } from "../workflows/flow-contracts";
+import { flowAliasSchema } from "../workflows/flow-source-contracts";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -24,11 +24,11 @@ import {
   timestampSchema,
   workflowIdSchema,
   workflowNodeIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { versionRequirementSchema } from "./definitions";
 import { protectedOperationChannelSchema } from "./operation-contracts";
-import { flowNodeRunAsSchema } from "./run-as-vocabulary";
-import { tenantStructuralCapabilitySchema } from "./identity-access";
+import { flowNodeRunAsSchema } from "../access/run-as-vocabulary";
+import { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
 /**
  * The vocabulary Application flows share with the protected-operation, execution-binding and

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+import type { HumanOrganizationRequestResult } from "../access/index";
 import type {
   FormContinuationOutcome,
   FormContinuationRequest,
@@ -8,7 +8,7 @@ import type {
   FormContinuationStartRequest,
   IdentitySession,
   OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 import type {
   AbandonPrivateFormDraftCommand,
   PrivateFormDraftAbandonResult,

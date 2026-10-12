@@ -4,7 +4,7 @@ import {
   DEFAULT_APPLICATION_THEME_SELECTION,
   applicationThemeV2Schema,
   type DefinitionRuleFailure,
-} from "@vortex/contracts";
+} from "../schema";
 import { validatePublicPlatformAssets } from "./assets";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, ThemeValidationError } from "./errors";

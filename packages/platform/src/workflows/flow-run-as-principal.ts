@@ -9,7 +9,7 @@ import {
   ruleIdSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /** The Access-owned identity selected by one compiled flow run-as binding. */
 export const flowRunAsPrincipalActorSchema = z.discriminatedUnion("kind", [

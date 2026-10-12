@@ -10,7 +10,7 @@ import {
   type RuleGraphOperand,
   type RuleGraphValueType,
   type RuleGraphVariableDeclaration,
-} from "@vortex/contracts";
+} from "../schema";
 import { compareFlowText, flowJsonValuesEqual } from "./flow-formula";
 import {
   evaluateResolvedTypedConditionV2,

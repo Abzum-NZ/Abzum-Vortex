@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { searchPrioritySchema } from "./catalogues";
+import { searchPrioritySchema } from "../catalogue/catalogues";
 import {
   applicationRootIdSchema,
   clusterIdSchema,
@@ -11,8 +11,8 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-} from "./identifiers";
-import { federatedRefusalCodeSchema } from "./integration-contracts";
+} from "../catalogue/identifiers";
+import { federatedRefusalCodeSchema } from "../connections/integration-contracts";
 
 /**
  * Request-only Shared result groups (#646).

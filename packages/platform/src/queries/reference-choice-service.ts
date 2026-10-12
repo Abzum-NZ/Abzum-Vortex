@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "../access/index";
 import {
   sameId,
   organizationAccountIdSchema,
@@ -18,8 +18,8 @@ import {
   type RecordTypeId,
   type RecordTypeReference,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import type { QueryContinuationKey } from "./continuation-token";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
 import {

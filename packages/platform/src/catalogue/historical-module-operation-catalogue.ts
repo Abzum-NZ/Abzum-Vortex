@@ -4,7 +4,7 @@ import {
   type PlatformServiceOperationRelease,
   type ProtectedOperationDescriptor,
   type ProtectedOperationReference,
-} from "./application-flow-bindings";
+} from "../definition/application-flow-bindings";
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;

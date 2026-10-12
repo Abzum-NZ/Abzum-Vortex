@@ -7,7 +7,7 @@ import {
   verifiedIdentitySchema,
   type IdentityAuthority,
   type VerifiedIdentity,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,

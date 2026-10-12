@@ -1,4 +1,4 @@
-import type { ApplicationRootId, ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import type { ApplicationRootId, ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
 
 /** The editable Application source and its permanent Definition root identity. */
 export type StudioApplicationSelectionDraft = Readonly<{

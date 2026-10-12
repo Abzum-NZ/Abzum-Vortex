@@ -7,8 +7,8 @@ import {
   type JsonValue,
   type ModuleFieldV3,
   type RecordTypeDefinitionV3,
-} from "@vortex/contracts";
-import { compareFlowText, evaluateFlowFormula, evaluateTypedConditionV2 } from "@vortex/rule";
+} from "../schema";
+import { compareFlowText, evaluateFlowFormula, evaluateTypedConditionV2 } from "../rules/index";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type TotalField = Extract<ModuleFieldV3, { type: "total" }>;

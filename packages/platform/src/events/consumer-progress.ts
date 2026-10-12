@@ -6,8 +6,8 @@ import {
   isNonNilUuidText,
   timestampSchema,
   type EventOccurrenceEnvelopeV2,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,

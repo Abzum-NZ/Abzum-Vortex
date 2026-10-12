@@ -11,19 +11,19 @@ import {
   type OrganizationSelectionCandidate,
   type PageDefinitionV2,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   isTrustedInstalledPageComposition,
   type InstalledRuntimeContext,
-} from "@vortex/app";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../definition/app-index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createHumanOrganizationRequestService,
   evaluateOrganizationRecordPermissionAvailability,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "../access/index";
 import {
   projectPageCapability,
   type PageCapabilityState,

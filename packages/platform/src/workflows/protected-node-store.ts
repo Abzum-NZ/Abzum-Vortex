@@ -1,7 +1,7 @@
 import "server-only";
 
-import { workflowRunIdSchema, type WorkflowExecutionReference } from "@vortex/contracts";
-import { withRuntimeTransaction, type DatabaseRow } from "@vortex/db";
+import { workflowRunIdSchema, type WorkflowExecutionReference } from "../schema";
+import { withRuntimeTransaction, type DatabaseRow } from "../db/index";
 import { z } from "zod";
 import {
   protectedNodeRunRecordSchema,

@@ -11,12 +11,12 @@ import {
   type PreparedApplicationPermissionRegistration,
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   prepareApplicationPermissionRegistrationForHumanRequest,
   prepareApplicationPermissionRegistrationFromReleaseSet,
   type PermissionRegistryDefinitionSetReader,
-} from "@vortex/access";
+} from "../access/index";
 
 export const installedRuntimeContextErrorCodes = [
   "INSTALLED_RUNTIME_CONTEXT_REFUSED",

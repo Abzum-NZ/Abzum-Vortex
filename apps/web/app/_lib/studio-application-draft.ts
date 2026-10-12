@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
@@ -11,8 +11,8 @@ import {
   sourcePlacementSlotV2Schema,
   type OrganizationId,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
-import type { DatabaseRow } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow } from "@web/platform-server";
 import {
   BuilderAuthorityError,
   readApplicationDefinitionDraft,
@@ -23,7 +23,7 @@ import {
   fingerprintCanonicalValue,
   type ModuleReleasePageCursor,
   type ResolvableModuleRelease,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";

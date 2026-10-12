@@ -4,7 +4,7 @@ import {
   themeTokenKindV2Schema,
   themeTokenValueV2Schema,
   type DefinitionRuleFailure,
-} from "@vortex/contracts";
+} from "../schema";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import type {
   ComponentThemeOverrideContext,

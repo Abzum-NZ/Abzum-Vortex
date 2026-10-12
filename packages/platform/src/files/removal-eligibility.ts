@@ -12,7 +12,7 @@ import {
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
-} from "@vortex/contracts";
+} from "../schema";
 
 export {
   type FileRemovalAuthoritySnapshot,
@@ -20,7 +20,7 @@ export {
   type FileRemovalEligibilityRequest,
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
-} from "@vortex/contracts";
+} from "../schema";
 
 export type FileHoldEvaluationScope = Readonly<{
   tenantId: string;

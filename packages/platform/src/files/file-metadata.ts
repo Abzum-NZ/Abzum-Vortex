@@ -16,7 +16,7 @@ import {
   type RecordId,
   type RecordTypeId,
   type VerifiedFileActor,
-} from "@vortex/contracts";
+} from "../schema";
 import { createUnguessableStorageKey } from "./storage-policy";
 import {
   normalizeFileExtension,

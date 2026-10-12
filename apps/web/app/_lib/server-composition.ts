@@ -3,9 +3,9 @@ import "server-only";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
-import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/app";
-import type { IdentityAuthorityId } from "@vortex/contracts";
+} from "@web/platform-server";
+import { createAppTelemetryCollector, createOperationsAlertSink } from "@web/platform-server";
+import type { IdentityAuthorityId } from "@vortex/platform/schema";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 
 export const appTelemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });

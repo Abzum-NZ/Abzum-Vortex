@@ -1,4 +1,4 @@
-import releases from "./catalogue/shadcn-create-theme-releases.generated.json";
+import releases from "../catalogue/catalogue/shadcn-create-theme-releases.generated.json";
 
 /**
  * The shadcn/create theme catalogue releases #1274 generated: one complete platform theme release

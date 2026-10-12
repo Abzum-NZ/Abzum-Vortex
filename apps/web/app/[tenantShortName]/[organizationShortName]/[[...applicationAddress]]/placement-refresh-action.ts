@@ -4,7 +4,7 @@ import {
   boardColumnContinuationRequestSchema,
   containedComponentIdSchema,
   revisionSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";

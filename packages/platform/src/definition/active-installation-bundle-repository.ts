@@ -28,8 +28,8 @@ import {
   type InstallationRuntimeBundleSection,
   type InstallationRuntimeBundleWriteCommand,
   type JsonValue,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   createInstallationRuntimeBundleRepository,

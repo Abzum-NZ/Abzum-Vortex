@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RequestDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "../db/index";
 import type { BuilderAuthority } from "./builder-authority";
 import { createApplicationPreviewService } from "./application-preview";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./definition-publication-catalogue";

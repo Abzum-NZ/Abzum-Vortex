@@ -1,6 +1,6 @@
 import "server-only";
 
-import { platformIdSchema, type DefinitionRuleFailure } from "@vortex/contracts";
+import { platformIdSchema, type DefinitionRuleFailure } from "../schema";
 import { createLocatedFailure } from "./errors";
 import type {
   ThemeResolutionOptions,

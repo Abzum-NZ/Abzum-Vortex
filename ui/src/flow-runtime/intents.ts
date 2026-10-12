@@ -1,4 +1,4 @@
-import type { FormContinuationAnswer, JsonValue } from "@vortex/contracts";
+import type { FormContinuationAnswer, JsonValue } from "@vortex/platform/schema";
 
 /**
  * One typed interface intent, as the shared interpreter produces it in the page or the server

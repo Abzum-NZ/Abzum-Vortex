@@ -6,7 +6,7 @@ import {
   type ActionInputDefinitionV3,
   type DefinitionRuleFailure,
   type RecordsTableContract,
-} from "@vortex/contracts";
+} from "../schema";
 
 /** Publication checks the exact Module inputs; the protected Query engine still validates values. */
 export function tableQueryParameterFailures(

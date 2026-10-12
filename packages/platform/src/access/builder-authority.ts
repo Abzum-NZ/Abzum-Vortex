@@ -1,3 +1,4 @@
+import { platformPermissionSource } from "./platform-permissions";
 import "server-only";
 
 import {
@@ -5,7 +6,7 @@ import {
   organizationAccessDeclarationSchema,
   type OrganizationAccessDeclaration,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   builderRecentAuthentication,
   deriveBuilderRequirements,
@@ -15,13 +16,9 @@ import {
   type BuilderOperation,
   type BuilderPermissionKey,
   type BuilderTargetFacts,
-} from "@vortex/definition";
-import type { RequestDatabaseTransaction } from "@vortex/db";
-import {
-  platformPermissionDeclarations,
-  platformPermissionOwnerId,
-} from "@vortex/modules";
-import { runOrganizationAccessOperation } from "./organization-access-decision";
+} from "../definition/definition-index";
+import type { RequestDatabaseTransaction } from "../db/index";
+import { runOrganizationAccessOperation } from "./organization-access-decision-access";
 
 /**
  * The trusted source of target facts. It is answered from server evidence about the exact root in
@@ -46,7 +43,7 @@ export type BuilderAuthorityDependencies = Readonly<{
 
 /** The exact permission identity is looked up in the platform catalogue, never taken as input. */
 const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccessDeclaration => {
-  const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
+  const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
   if (permission === undefined) throw unavailableError(unavailableCode);
   return organizationAccessDeclarationSchema.parse({
     operationKey: permission.key,
@@ -54,7 +51,7 @@ const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccess
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionOwnerId,
+      ownerId: platformPermissionSource().ownerId,
       permissionId: permission.permissionId,
     },
     recentAuthentication: { kind: "none" },
@@ -71,7 +68,7 @@ const declarationForAcceptance = (
   permissions: readonly BuilderConferredPermission[],
   recentAuthentication: boolean,
 ): OrganizationAccessDeclaration => {
-  const applications = platformPermissionDeclarations.find(
+  const applications = platformPermissionSource().declarations.find(
     (entry) => entry.key === "platform.organization.applications.manage",
   );
   if (applications === undefined) throw unavailableError(unavailableCode);
@@ -81,7 +78,7 @@ const declarationForAcceptance = (
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionOwnerId,
+      ownerId: platformPermissionSource().ownerId,
       permissionId: applications.permissionId,
     },
     recentAuthentication: recentAuthentication ? builderRecentAuthentication : { kind: "none" },

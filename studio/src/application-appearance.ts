@@ -5,7 +5,7 @@ import {
   revisionSchema,
   sourceApplicationThemeV2Schema,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 export type StudioApplicationTheme = ApplicationSourceDocumentV2["body"]["theme"];
 export type StudioThemeTokenValue = StudioApplicationTheme["token_overrides"][string];

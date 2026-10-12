@@ -17,8 +17,8 @@ import {
   type SourceRuleGraphCondition,
   type SourceRuleGraphOperand,
   type SourceRuleGraphTypedValue,
-} from "@vortex/contracts";
-import { compareCanonicalStrings } from "./canonical-json";
+} from "../schema";
+import { compareCanonicalStrings } from "./canonical-json-definition";
 
 // Removal point (#1007): this compiler resolves the source node-and-edge shape that
 // `before-save-flow-rules.ts` lowers a `BeforeSave` flow into. `compiler.ts` calls it to build the

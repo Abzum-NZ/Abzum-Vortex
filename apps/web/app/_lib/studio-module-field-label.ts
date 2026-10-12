@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   canonicalJson, databaseRevision, databaseTimestamp, fingerprintSchema, labelSchema,
   moduleRootIdSchema, moduleSourceDocumentSchema, organizationAccessDeclarationSchema,
@@ -9,13 +9,13 @@ import {
   translateDefinitionRuleFailures, translateDefinitionSchemaError,
   type DefinitionValidationLocation, type DefinitionValidationResult, type IdentitySession,
   type ModuleSourceDocument, type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   BuilderAuthorityError, createDefinitionStore, DefinitionStoreError, fingerprintCanonicalValue,
   readModuleDefinitionDraft, requireBuilderAuthority, validateDefinitionSource,
   type StoredModuleDefinitionDraft,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";

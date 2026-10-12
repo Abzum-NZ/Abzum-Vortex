@@ -16,7 +16,7 @@ import {
   workflowNodeIdSchema,
   workflowRunIdSchema,
   type ProtectedOperationRequest,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
 

@@ -17,7 +17,7 @@ export {
   STRUCTURED_RECORD_IMPORT_MAXIMUM_NESTING_DEPTH,
   STRUCTURED_RECORD_IMPORT_MAXIMUM_ROWS,
   STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES,
-} from "@vortex/contracts";
+} from "../schema";
 export type {
   DecodedRecordImportRow,
   RecordImportSourceDescriptor,
@@ -25,7 +25,7 @@ export type {
   RecordImportSourceResult,
   StructuredRecordImportColumn,
   StructuredRecordImportFormat,
-} from "@vortex/contracts";
+} from "../schema";
 export {
   createFileRecordImportSourceService,
   type FileRecordImportSourceDependencies,

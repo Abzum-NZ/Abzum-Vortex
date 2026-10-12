@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { PermissionDeclaration } from "@vortex/contracts";
-import { fingerprintCanonicalValue } from "@vortex/definition";
+import type { PermissionDeclaration } from "../schema";
+import { fingerprintCanonicalValue } from "../definition/definition-index";
 
 /** Fingerprints authority-bearing meaning, excluding display-only metadata. */
 export const fingerprintPermissionMeaning = (

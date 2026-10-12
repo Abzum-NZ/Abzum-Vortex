@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { applicationSourceDocumentV2Schema, canonicalJson,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocumentV2, type DefinitionPublicationConfirmation,
-  type PublishDefinitionResult } from "@vortex/contracts";
+  type PublishDefinitionResult } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,

@@ -7,16 +7,16 @@ import {
   type IdentitySession,
   type OrganizationId,
   type SelectedOrganizationScope,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPrivateInvalidationChannelAuthorizer,
   type PrivateInvalidationChannelAccess,
   type PrivateInvalidationChannelAccessReader,
   type PrivateInvalidationChannelAuthorizer,
   type PrivateInvalidationTopicScope,
-} from "@vortex/event";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
-import type { IdentityVerificationExecution } from "@vortex/identity";
+} from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
+import type { IdentityVerificationExecution } from "@web/platform-server";
 import { z } from "zod";
 import { resolveApplicationAddress } from "./application-address";
 import { humanOrganizationRequests } from "./server-composition";

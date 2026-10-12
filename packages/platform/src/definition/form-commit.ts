@@ -1,4 +1,4 @@
-import { flowTaskChildLists, type FlowDefinition, type FlowTask } from "@vortex/contracts";
+import { flowTaskChildLists, type FlowDefinition, type FlowTask } from "../schema";
 
 /**
  * A form page declares no commit of its own: it commits what the flows bound to its controls'

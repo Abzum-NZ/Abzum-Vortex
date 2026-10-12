@@ -10,15 +10,15 @@ import {
   type OrganizationSelectionCandidate,
   type QueryId,
   type RecordsDisplayFormat,
-} from "@vortex/contracts";
-import type { HumanOrganizationRequestResult } from "@vortex/access";
+} from "../schema";
+import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   protectedQueryCommandSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
-} from "@vortex/query";
+} from "../queries/index";
 import {
   projectRecordsTableData,
   type ProjectedComponentData,

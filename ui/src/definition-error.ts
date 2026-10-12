@@ -5,7 +5,7 @@ import {
   type BlockPlacementV2Contract,
   type BlockPropertyValueV2Contract,
   type PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "./registry";
 
 export type Breakpoint = "desktop" | "tablet" | "phone";

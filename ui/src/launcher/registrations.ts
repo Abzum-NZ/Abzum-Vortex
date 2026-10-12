@@ -7,7 +7,7 @@ import {
   projectedRecordPinTilesSchema,
   mountedRecordPinFrameSchema,
   VIEW_FILTER_BLOCK_RELEASE,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPayloadParser,
   createPlatformComponentRegistry,

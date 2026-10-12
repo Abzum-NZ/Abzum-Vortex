@@ -20,13 +20,13 @@ import {
   type ServiceTelemetryPort,
   type SessionContext,
   type TelemetryOutcome,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-} from "@vortex/db";
+} from "../db/index";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,

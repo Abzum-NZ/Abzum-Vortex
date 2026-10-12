@@ -6,7 +6,7 @@ import {
   type IdentityProjection,
   type IdentitySessionResolution,
   type VerifiedIdentity,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,

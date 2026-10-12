@@ -7,7 +7,7 @@ import {
   powerOfTen,
   type ExactDecimal,
   type JsonValue,
-} from "@vortex/contracts";
+} from "../schema";
 import type {
   AggregateDescriptor,
   AggregateResult,

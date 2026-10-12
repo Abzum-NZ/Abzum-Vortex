@@ -1,4 +1,4 @@
-import type { VortexIconName } from "./icon-names";
+import type { VortexIconName } from "../catalogue/icon-names";
 
 /**
  * The navigation tree projected for one viewer. It is the compiled contract shape without

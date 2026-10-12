@@ -17,12 +17,12 @@ import {
   type Invitation,
   type RevokeOrganizationInvitationCommand,
   type VerifiedIdentity,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "@vortex/db";
+} from "../db/index";
 import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
 export const organizationAccountErrorCodes = [

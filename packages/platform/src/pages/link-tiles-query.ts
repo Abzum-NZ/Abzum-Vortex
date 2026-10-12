@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
+import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
 import {
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
@@ -26,13 +26,13 @@ import {
   type ProjectedRecordPinTiles,
   type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryRowCapabilities,
-} from "@vortex/query";
+} from "../queries/index";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
 type Settings = Readonly<Record<string, BlockPropertyValueV2Contract>>;

@@ -71,7 +71,7 @@ import {
   type ApplicationPuckRootShell,
   type PlatformBlockReleaseV2,
   type ProjectedNavigation,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { Checkbox } from "./components/checkbox";
 import { Input } from "./components/input";
 import { Label } from "./components/label";

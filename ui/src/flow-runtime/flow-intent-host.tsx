@@ -19,7 +19,7 @@ import {
 } from "../components/dialog";
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
-import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/contracts";
+import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
 import type {
   FlowConfirmIntent,
   FlowFormAnswer,

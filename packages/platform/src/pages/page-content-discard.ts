@@ -1,6 +1,6 @@
 import "server-only";
 
-import { revisionSchema, type NavigationItem, type ProjectedNavigation } from "@vortex/contracts";
+import { revisionSchema, type NavigationItem, type ProjectedNavigation } from "../schema";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import { projectNavigation, type NavigationPermissionDecisions } from "./navigation-projection";
 import {

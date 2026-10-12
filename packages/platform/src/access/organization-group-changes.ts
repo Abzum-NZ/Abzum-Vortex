@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { correlationIdSchema, labelSchema } from "./common";
+import { correlationIdSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   builderKeySchema,
   groupIdSchema,
   organizationIdSchema,
   revisionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { groupSchema } from "./organization-access-catalogue";
 
 const trustedChangeFields = {

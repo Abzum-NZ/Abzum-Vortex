@@ -5,7 +5,7 @@ import {
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type SourceApplicationThemeSelectionV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 type JsonObject = Record<string, unknown>;
 

@@ -3,8 +3,8 @@ import {
   blockPaletteGroupSchema,
   workflowValueTypeSchema,
   type BlockPaletteGroup,
-} from "./catalogues";
-import { labelSchema, safeHttpsUrlSchema } from "./common";
+} from "../catalogue/catalogues";
+import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import {
   sourceAliasSchema,
   sourceQualifiedConditionSchema,
@@ -35,19 +35,19 @@ import {
   recordIdSchema,
   semanticVersionSchema,
   shellIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   richTextDocumentV2Schema,
   richTextElementKindV2Schema,
   type RichTextInlineV2,
-} from "./rich-text";
-import type { DefinitionRuleFailureFamily } from "./validation-errors";
+} from "../records/rich-text";
+import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
 
 export {
   richTextBlockV2Schema,
   richTextDocumentV2Schema,
   richTextElementKindV2Schema,
-} from "./rich-text";
+} from "../records/rich-text";
 
 const iconKeySchema = z
   .string()

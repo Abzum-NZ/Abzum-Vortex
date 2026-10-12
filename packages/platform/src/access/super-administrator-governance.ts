@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   administrationDuplicateKeySchema,
   identityIdSchema,
   revisionSchema,
   timestampSchema,
   vortexSuperAdministratorAssignmentIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 const pageLimitSchema = z.number().int().min(1).max(100);
 

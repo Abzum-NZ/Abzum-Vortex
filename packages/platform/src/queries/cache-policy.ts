@@ -15,7 +15,7 @@ import {
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "@vortex/contracts";
+} from "../schema";
 import { protectedQueryCommandSchema } from "./protected-query-contracts";
 
 /**

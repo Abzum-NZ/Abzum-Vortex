@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { FlowTriggerOrigin } from "@vortex/contracts";
-import { withRuntimeTransaction } from "@vortex/db";
+import type { FlowTriggerOrigin } from "../schema";
+import { withRuntimeTransaction } from "../db/index";
 import { z } from "zod";
 
 /**

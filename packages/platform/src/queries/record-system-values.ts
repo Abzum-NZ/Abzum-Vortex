@@ -6,7 +6,7 @@ import {
   groupIdSchema,
   organizationAccountIdSchema,
   timestampSchema,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * The closed set of Record system values a Query may disclose: created-at and

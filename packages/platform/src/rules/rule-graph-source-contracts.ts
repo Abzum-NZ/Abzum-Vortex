@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { sourceAliasSchema, sourceQualifiedRecordTypeSchema } from "./definition-source-common";
-import { builderKeySchema } from "./identifiers";
-import { sourceModuleFieldValueV2Schemas } from "./module-field-values-v2";
+import { sourceAliasSchema, sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
+import { builderKeySchema } from "../catalogue/identifiers";
+import { sourceModuleFieldValueV2Schemas } from "../records/module-field-values-v2";
 import {
   maximumRuleTableRows,
   ruleTableColumnsMatch,

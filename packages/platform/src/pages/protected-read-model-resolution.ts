@@ -35,7 +35,7 @@ import {
   type TenantHierarchyResult,
   type TenantLauncherQuery,
   type TenantLauncherResult,
-} from "@vortex/contracts";
+} from "../schema";
 
 type OwnerResult<Value> =
   | Readonly<{ kind: "available"; value: Value }>

@@ -4,7 +4,7 @@ import {
   attachmentListPayloadV2Schema,
   validateComponentSettings,
   type AttachmentListPayloadV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { Card, CardContent, CardHeader } from "./components/card";
 import { Separator } from "./components/separator";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { applicationPageLinkTargetSchema } from "./application-page-links";
-import { recordIdSchema, revisionSchema } from "./identifiers";
-import { projectedRecordPinTargetSchema } from "./record-links";
+import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { projectedRecordPinTargetSchema } from "../records/record-links";
 
 const openBehaviour = z.enum(["replace", "new_page"]);
 

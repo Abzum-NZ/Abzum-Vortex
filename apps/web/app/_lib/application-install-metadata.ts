@@ -6,17 +6,17 @@ import {
   databaseTimestamp, fingerprintSchema, organizationAccessDeclarationSchema, revisionSchema,
   sameId, sessionContextSchema, timestampSchema,
   type IdentitySession, type OrganizationAccessDeclaration, type SelectedOrganizationScope,
-} from "@vortex/contracts";
-import { runOrganizationAccessOperation } from "@vortex/access";
+} from "@vortex/platform/schema";
+import { runOrganizationAccessOperation } from "@web/platform-server";
 import {
   applicationInstallAddressSchema, createApplicationInstallManifest,
   createHumanInstalledRuntimeContextLoader,
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
-} from "@vortex/app";
+} from "@web/platform-server";
 import { withRequestDatabaseLifetime, type DatabaseRow, type RequestDatabaseLifetime,
-  type RequestDatabaseTransaction } from "@vortex/db";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
+  type RequestDatabaseTransaction } from "@web/platform-server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";

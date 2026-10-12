@@ -24,8 +24,8 @@ import {
   type PublishedDefinitionHistory,
   type SavedConditionRevisionAssignment,
   type VersionImpact,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertUnambiguousApplicationContentV2,
   assertUnambiguousModuleContent,

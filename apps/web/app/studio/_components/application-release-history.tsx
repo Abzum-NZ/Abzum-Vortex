@@ -2,7 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState } from "react";
-import type { DefinitionReleaseMetadata } from "@vortex/contracts";
+import type { DefinitionReleaseMetadata } from "@vortex/platform/schema";
 import type { StudioApplicationHistoryFailure, StudioApplicationHistoryPage,
   StudioApplicationHistorySnapshot } from "../../_lib/studio-application-history";
 import { inspectApplicationReleaseHistory, listApplicationReleaseHistory,

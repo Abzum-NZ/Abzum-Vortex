@@ -6,8 +6,8 @@ import {
   type DelegationScope,
   type OrganizationDelegationScopeCandidate,
   type RolePermissionEntry,
-} from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "@vortex/definition";
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
 
 export const organizationDelegationScopeEvidenceErrorCodes = [
   "INVALID_ORGANIZATION_DELEGATION_SCOPE_CANDIDATE",

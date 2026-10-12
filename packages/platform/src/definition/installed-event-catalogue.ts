@@ -7,13 +7,13 @@ import {
   type DefinitionConsumerReadResult,
   type InstalledEventDescriptor,
   type ModuleInstallationBindingEvidence,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import {
   canonicalJson,
   compareCanonicalStrings,
   fingerprintCanonicalValue,
-} from "./canonical-json";
+} from "./canonical-json-definition";
 
 type ApplicationRead = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
 type ModuleRead = Extract<DefinitionConsumerReadResult, { kind: "module" }>;

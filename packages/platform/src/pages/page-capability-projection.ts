@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PageDefinitionV2 } from "@vortex/contracts";
+import type { PageDefinitionV2 } from "../schema";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 
 export type PlacementCapabilityState = Readonly<{

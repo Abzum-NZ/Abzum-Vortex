@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { applicationRoleSchema } from "./application-contracts";
-import { correlationIdSchema, descriptionSchema, labelSchema } from "./common";
+import { applicationRoleSchema } from "../definition/application-contracts";
+import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -20,7 +20,7 @@ import {
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   permissionRegistryDefinitionReleaseSchema,
   permissionRegistryEntryCandidateSchema,

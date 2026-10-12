@@ -5,8 +5,8 @@ import {
   eventOccurrenceIdSchema,
   isNonNilUuidText,
   timestampSchema,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 export const eventDeliveryRecoveryLimits = Object.freeze({
   maximumConsumerKeyLength: 128,

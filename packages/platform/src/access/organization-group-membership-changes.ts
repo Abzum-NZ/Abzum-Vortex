@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   groupIdSchema,
@@ -8,7 +8,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { groupMembershipSchema } from "./organization-access-catalogue";
 
 const trustedChangeFields = {

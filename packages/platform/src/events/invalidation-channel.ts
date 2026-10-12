@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RequestDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   applicationRootIdSchema,
   liveInvalidationSchema,
@@ -8,7 +8,7 @@ import {
   type ApplicationRootId,
   type LiveInvalidation,
   type OrganizationId,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * Private content-free invalidation channels.

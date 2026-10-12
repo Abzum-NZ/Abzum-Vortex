@@ -1,4 +1,4 @@
-import { jsonValueSchema, walkDefinitionContract } from "@vortex/contracts";
+import { jsonValueSchema, walkDefinitionContract } from "../schema";
 import type { z } from "zod";
 
 type JsonObject = Record<string, unknown>;

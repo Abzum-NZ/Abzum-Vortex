@@ -1,5 +1,5 @@
-import type { ComponentFlowBinding, JsonValue } from "@vortex/contracts";
-import type { FlowLibrary } from "@vortex/rule";
+import type { ComponentFlowBinding, JsonValue } from "@vortex/platform/schema";
+import type { FlowLibrary } from "@vortex/platform/schema";
 import { runBrowserFlow, type BrowserFlowResult } from "./browser-flow-runner";
 import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import type { FlowIntentHost } from "./intents";

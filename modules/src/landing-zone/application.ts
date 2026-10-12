@@ -5,7 +5,7 @@ import {
   applicationSourceDocumentV2Schema,
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 
 type JsonObject = Record<string, unknown>;

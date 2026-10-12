@@ -2,7 +2,7 @@ import {
   platformBlockReleaseIdentityV2,
   type BlockPaletteGroup,
   type PlatformBlockReleaseSummaryV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type { StudioDiscoveryAdapter, StudioPlacementTarget } from "./discovery-adapter";
 
 /** Hard cap for results returned to the Studio workspace. */

@@ -4,7 +4,7 @@ import { createHash, type KeyObject } from "node:crypto";
 import {
   customComponentBundleV2Schema,
   type CustomComponentReleaseV2,
-} from "@vortex/contracts";
+} from "../schema";
 import { z } from "zod";
 import {
   createStorageSignerFromPrivateKey,

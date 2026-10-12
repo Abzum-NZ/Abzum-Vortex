@@ -4,7 +4,7 @@ import {
   type RecordsTableActionContract,
   type RecordsTableColumnContract,
   type RecordsTableContract,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import { Icon } from "../icons/icon";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";

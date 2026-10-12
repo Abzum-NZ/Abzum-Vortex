@@ -1,8 +1,8 @@
 import {
   savedConditionRevisionAssignmentSchema,
   type SavedConditionRevisionAssignment,
-} from "@vortex/contracts";
-import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
+} from "../schema";
+import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import { refuseVersionImpact } from "./version-impact-error";
 
 export type SavedConditionLike = Readonly<{

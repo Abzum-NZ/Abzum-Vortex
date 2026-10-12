@@ -12,16 +12,16 @@ import {
   systemApplicationBoundReleaseSetResultSchema,
   type ResolvedPageComposition,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createActiveInstallationBundleRepository,
   activeInstallationBundleStateSchema,
   type ActiveInstallationBundleState,
   type InstallationRuntimeBundleObservationObserver,
-} from "@vortex/module";
+} from "./module-index";
 import { z } from "zod";
-import { buildInstallationRuntimeBundleWriteCommand } from "./installation-runtime-bundle";
+import { buildInstallationRuntimeBundleWriteCommand } from "./installation-runtime-bundle-app";
 import {
   createHumanInstalledRuntimeContextLoader,
   requireInstalledRuntimeContext,

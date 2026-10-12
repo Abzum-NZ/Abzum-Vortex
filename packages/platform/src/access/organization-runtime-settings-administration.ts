@@ -7,8 +7,8 @@ import {
   organizationRuntimeSettingsSchema,
   type ApplicationRootId,
   type OrganizationRuntimeSettings,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 type ReadRow = DatabaseRow & {
   organization_id: unknown;

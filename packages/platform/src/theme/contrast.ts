@@ -1,6 +1,6 @@
 import "server-only";
 
-import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "@vortex/contracts";
+import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "../schema";
 import { createLocatedFailure } from "./errors";
 import type { ThemeResolutionOptions, ThemeTokenValueV2, ThemeValidationFailure } from "./types";
 

@@ -4,7 +4,7 @@ import {
   createHumanApplicationPublisher,
   type HumanApplicationPublicationPreparationResult,
   type HumanApplicationPublicationResult,
-} from "@vortex/access";
+} from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

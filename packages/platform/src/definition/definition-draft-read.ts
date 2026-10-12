@@ -17,11 +17,11 @@ import {
   timestampSchema,
   type SelectedOrganizationScope,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
-import { fingerprintCanonicalValue } from "./canonical-json";
-import { isDefinitionContextFailure } from "./definition-consumer-read";
+import { fingerprintCanonicalValue } from "./canonical-json-definition";
+import { isDefinitionContextFailure } from "./definition-consumer-read-definition";
 import { DefinitionStoreError } from "./definition-store";
 
 const draftReadCommandSchema = z

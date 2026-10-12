@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { jsonValueSchema } from "./common";
+import { jsonValueSchema } from "../catalogue/common";
 import { flowIdSchema } from "./flow-contracts";
 import { formContinuationIntentSchema } from "./form-continuation-contracts";
-import { builderKeySchema } from "./identifiers";
+import { builderKeySchema } from "../catalogue/identifiers";
 
 const previewInstallationIdSchema = z
   .uuid()

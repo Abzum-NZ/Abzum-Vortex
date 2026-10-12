@@ -7,7 +7,7 @@ import {
   sameId,
   tenantIdSchema,
   type ProtectedLegalHoldReference,
-} from "@vortex/contracts";
+} from "../schema";
 
 type IdentifierSchema = Readonly<{
   safeParse: (value: unknown) =>

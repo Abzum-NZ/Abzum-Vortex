@@ -1,4 +1,4 @@
-import { isRecord } from "@vortex/contracts";
+import { isRecord } from "../schema";
 import "server-only";
 
 /**

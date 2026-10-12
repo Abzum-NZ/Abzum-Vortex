@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { fieldTypeKeys } from "./catalogues";
-import { safeHttpsUrlSchema } from "./common";
+import type { fieldTypeKeys } from "../catalogue/catalogues";
+import { safeHttpsUrlSchema } from "../catalogue/common";
 import {
   compareExactDecimals,
   exactDecimalDigitCounts,
@@ -14,8 +14,8 @@ import {
   organizationAccountIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-} from "./identifiers";
-import { sourceQualifiedRecordTypeSchema } from "./definition-source-common";
+} from "../catalogue/identifiers";
+import { sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import { richTextBlockV2Schema, richTextInlineV2Schema, type RichTextInlineV2 } from "./rich-text";
 
 const exactDecimalMessage = "Use exact base-10 text without exponent notation";

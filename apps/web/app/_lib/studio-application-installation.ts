@@ -9,15 +9,15 @@ import {
   type BuilderOperation,
   type BuilderConferredPermission,
   type HumanOrganizationRequestResult,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   ApplicationInstallationCoordinatorError,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationActivationResult,
   type HumanInstallationDefinitionAccess,
-} from "@vortex/app";
+} from "@web/platform-server";
 import type {
-  connectionInstanceIdSchema} from "@vortex/contracts";
+  connectionInstanceIdSchema} from "@vortex/platform/schema";
 import {
   activityIdSchema,
   applicationRootIdSchema,
@@ -53,9 +53,9 @@ import {
   type SelectedOrganizationScope,
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
-import { listEligibleArchiveConnectionsForApplication } from "@vortex/connection";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import { listEligibleArchiveConnectionsForApplication } from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   builderRecentAuthentication,
   DefinitionConsumerReadError,
@@ -66,9 +66,9 @@ import {
   deriveBuilderRequirements,
   readApplicationDefinitionDraft,
   resolveModuleContributions,
-} from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
-import { createRecordTypeLifecyclePolicyService } from "@vortex/record";
+} from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
+import { createRecordTypeLifecyclePolicyService } from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";

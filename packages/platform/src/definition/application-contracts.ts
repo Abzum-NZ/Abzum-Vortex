@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { inspectApplicationPageReplacements } from "./application-page-replacement";
+import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import {
   applicationDefinitionEnvelopeSchema,
   publishedApplicationReferenceSchema,
@@ -15,7 +15,7 @@ import {
   conditionNodeSchema,
   eventDefinitionSchema,
 } from "./module-contracts";
-import { interfaceDefinitionSchema } from "./integration-contracts";
+import { interfaceDefinitionSchema } from "../connections/integration-contracts";
 import {
   actionIdSchema,
   builderKeySchema,
@@ -32,10 +32,10 @@ import {
   recordTypeIdSchema,
   roleIdSchema,
   semanticVersionSchema,
-} from "./identifiers";
-import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
-import { actionInputValueTypes, applicationExperienceStateSchema } from "./catalogues";
-import { permissionDeclarationSchema } from "./permissions";
+} from "../catalogue/identifiers";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
+import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
+import { permissionDeclarationSchema } from "../access/permissions";
 import {
   applicationShellV2Schema,
   applicationThemeV2Schema,
@@ -46,8 +46,8 @@ import {
   type ComponentSettingValue,
 } from "./application-composition-v2";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
-import { flowSchema } from "./flow-contracts";
-import { vortexIconNameSchema } from "./icon-names";
+import { flowSchema } from "../workflows/flow-contracts";
+import { vortexIconNameSchema } from "../catalogue/icon-names";
 
 /** The typed inputs and shape of one Application-owned action. */
 const actionInputBase = {

@@ -5,16 +5,16 @@ import {
   publicDisplaySchema,
   searchPrioritySchema,
   sharingParameterValueTypeV2Schema,
-} from "./catalogues";
+} from "../catalogue/catalogues";
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
-} from "./common";
+} from "../catalogue/common";
 import { moduleDefinitionEnvelopeSchema, recordTypeReferenceSchema } from "./definitions";
-import { parseExactDecimal } from "./exact-decimal";
+import { parseExactDecimal } from "../records/exact-decimal";
 import {
   actionIdSchema,
   builderKeySchema,
@@ -28,7 +28,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import {
   currencyCodeV2Schema,
   exactDecimalFitsDigitsV2,
@@ -39,7 +39,7 @@ import {
   recordLinkValueV2Schema,
   recordRichTextDocumentV2Schema,
   type FormattedTextAllowedBlockV2,
-} from "./module-field-values-v2";
+} from "../records/module-field-values-v2";
 import {
   actionTaskSchema,
   conditionNodeSchema,
@@ -54,14 +54,14 @@ import {
   writableSystemProjectionRegistrations,
 } from "./module-source-contracts";
 export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrations };
-import { permissionDeclarationSchema } from "./permissions";
+import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
-import { PLATFORM_SERVICE_OPERATIONS } from "./platform-service-operation-catalogue";
-import { isHistoricalModuleV3SystemRecordOperation } from "./historical-module-operation-catalogue";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { isHistoricalModuleV3SystemRecordOperation } from "../catalogue/historical-module-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition-v2";
-import { flowSchema } from "./flow-contracts";
-import { recordOwnershipModeSchema } from "./record-ownership-compatibility";
-import { ruleGraphSchema } from "./rule-graph-contracts";
+import { flowSchema } from "../workflows/flow-contracts";
+import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { ruleGraphSchema } from "../rules/rule-graph-contracts";
 
 export const moduleValidationContractVersionV3 = "3.0.0" as const;
 

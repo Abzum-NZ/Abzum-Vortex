@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { applicationContentV2Schema } from "./application-contracts";
 import { placementSlotV2Schema } from "./application-composition-v2";
-import { jsonValueSchema } from "./common";
+import { jsonValueSchema } from "../catalogue/common";
 import {
   applicationDefinitionConsumerReadResultV2Schema,
   moduleDefinitionConsumerReadResultV3Schema,
@@ -24,24 +24,24 @@ import {
   storageContractIdSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "./identifiers";
-import { recordOwnershipModeSchema } from "./record-ownership-compatibility";
+} from "../catalogue/identifiers";
+import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import {
   permissionActionKindSchema,
   permissionDeclarationSchema,
   permissionRecordScopeSchema,
-} from "./permissions";
+} from "../access/permissions";
 import {
   recordStorageColumnTokenSchema,
   recordStorageTableTokenSchema,
-} from "./storage";
+} from "../files/storage";
 import { savedSharingConditionV3Schema } from "./module-contracts-v3";
 
 export {
   resolvePageComposition,
   type PlacementSlotV2,
   type ResolvedPageComposition,
-} from "./runtime-bundle-page-composition";
+} from "../pages/runtime-bundle-page-composition";
 export const installationRuntimeBundleFormatVersion = 2 as const;
 export const installationRuntimeBundleMaximumPartBytes = 1_048_575;
 

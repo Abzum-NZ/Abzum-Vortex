@@ -24,9 +24,9 @@ import {
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
   workflowNodeIdSchema,
-} from "@vortex/contracts";
-import type { FlowExecutionBinding } from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "../schema";
+import type { FlowExecutionBinding } from "../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
 /**
  * One exact execution-authority grant for a published application flow node. A binding names the

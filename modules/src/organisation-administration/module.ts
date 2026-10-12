@@ -4,7 +4,7 @@ import {
   organizationRuntimeSettingsDateFormatOptions,
   organizationRuntimeSettingsNumberFormatOptions,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /** Platform permissions protected by Organisation Administration's system records and operations. */
 export const organisationAdministrationPlatformPermissions = [

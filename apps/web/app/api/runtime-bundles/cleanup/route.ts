@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   authenticateRuntimeBundleCleanup,
   runScheduledRuntimeBundleCleanup,
-} from "@vortex/module";
+} from "@web/platform-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

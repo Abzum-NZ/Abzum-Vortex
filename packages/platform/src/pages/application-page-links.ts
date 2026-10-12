@@ -8,7 +8,7 @@ import {
   pageIdSchema,
   revisionSchema,
   semanticVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 
 /** A selector contains no address, authority or installed release evidence. */
 export const applicationPageLinkSelectorSchema = z.discriminatedUnion("kind", [

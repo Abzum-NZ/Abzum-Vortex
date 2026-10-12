@@ -6,7 +6,7 @@ import {
   identityIdSchema,
   isLoopbackHostname,
   type IdentityAuthority,
-} from "@vortex/contracts";
+} from "../schema";
 import { createIdentityVerifier } from "./identity-verifier";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;

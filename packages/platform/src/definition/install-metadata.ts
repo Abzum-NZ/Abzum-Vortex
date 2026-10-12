@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { builderKeySchema, namespacedKeySchema, themeTokenValueV2Schema } from "@vortex/contracts";
+import { builderKeySchema, namespacedKeySchema, themeTokenValueV2Schema } from "../schema";
 import { isReservedTenantSegment } from "./application-address";
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "./installed-runtime-context";
 

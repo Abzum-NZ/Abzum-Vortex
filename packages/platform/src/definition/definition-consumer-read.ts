@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applicationContentV2Schema } from "./application-contracts";
-import { correlationIdSchema } from "./common";
+import { correlationIdSchema } from "../catalogue/common";
 import { applicationToolBundleSchema } from "./definition-compilation-contracts";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
@@ -12,7 +12,7 @@ import {
   queryIdSchema,
   revisionSchema,
   semanticVersionSchema,
-} from "./identifiers";
+} from "../catalogue/identifiers";
 import { moduleQueryDefinitionV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";

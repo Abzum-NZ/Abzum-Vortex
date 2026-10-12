@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
+import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
 import {
   QUERY_NOTICE_BLOCK_RELEASE,
   sameId,
@@ -9,12 +9,12 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
-} from "@vortex/query";
+} from "../queries/index";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
 export type QueryNoticeSeverity = "info" | "success" | "warning" | "critical";

@@ -8,7 +8,7 @@ import {
   type FormContinuationService,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "../schema";
 
 /**
  * #588: the Page request adapter that turns one form gesture into the exact server interface it

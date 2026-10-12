@@ -17,11 +17,11 @@ import {
   type OrganizationSelectionCandidate,
   type RecordImportSourceRefusalReason,
   type RecordImportSourceResult,
-} from "@vortex/contracts";
+} from "../schema";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
+} from "../access/index";
 import {
   createStorageCredentialBridge,
   type StorageCredentialBridgeConfig,

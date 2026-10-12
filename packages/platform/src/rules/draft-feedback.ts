@@ -1,4 +1,4 @@
-import { isRecord, canonicalJson, type JsonValue, type ModuleFieldV3 } from "@vortex/contracts";
+import { isRecord, canonicalJson, type JsonValue, type ModuleFieldV3 } from "../schema";
 import {
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRefusal,

@@ -1,12 +1,12 @@
 import "server-only";
 
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   storedDefinitionDraftSchema,
   type SessionContext,
   type StoredDefinitionDraft,
-} from "@vortex/contracts";
-import { canonicalJson } from "./canonical-json";
+} from "../schema";
+import { canonicalJson } from "./canonical-json-definition";
 import type { DefinitionHistoryRepository } from "./definition-history";
 
 type HistoryRow = DatabaseRow & { release_history: unknown };

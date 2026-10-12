@@ -5,7 +5,7 @@ import { createImmutableDefinitionPublicationCatalogue } from "./definition-publ
 import { createDatabaseDefinitionPublicationRepository } from "./definition-publication-repository";
 import { createDefinitionPublicationService } from "./definition-publication";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./definition-publication-catalogue";
-import type { RequestDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "../db/index";
 
 /** Builds the production publication service from the database repository and one platform release catalogue. */
 export const createDatabaseDefinitionPublicationService = (
