@@ -6,7 +6,7 @@ import { formatIsoDate, type DateFormatOptions } from "./date-format";
 const DateFormatContext = createContext<DateFormatOptions>({});
 
 /** The effective presentation settings supplied by the current application shell. */
-export function useDateFormatOptions(): DateFormatOptions {
+function useDateFormatOptions(): DateFormatOptions {
   return useContext(DateFormatContext);
 }
 

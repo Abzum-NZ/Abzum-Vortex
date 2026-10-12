@@ -28,7 +28,7 @@ function refuse(location: DefinitionRenderErrorLocation): never {
 }
 
 /** The per-release parser admits only sanitized metadata and the fixed same-origin File route. */
-export function parseAttachmentListPayload(
+function parseAttachmentListPayload(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ReadonlyAttachmentListPayload {

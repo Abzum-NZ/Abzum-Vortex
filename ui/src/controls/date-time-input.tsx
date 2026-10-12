@@ -20,7 +20,7 @@ import {
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
-export type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
+type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
 
 type DateTimeParts = Readonly<{
   year: number;

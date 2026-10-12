@@ -27,7 +27,7 @@ import {
 } from "./control-context";
 import { useSeededState } from "./field-parts";
 
-export type ModalSurfaceKind = "dialog" | "drawer";
+type ModalSurfaceKind = "dialog" | "drawer";
 export type DrawerPlacement = "left" | "right" | "top" | "bottom";
 
 /** The one payload member both modal surfaces read: the projected open state. */

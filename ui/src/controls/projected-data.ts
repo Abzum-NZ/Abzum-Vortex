@@ -39,7 +39,7 @@ export type TypedRecordReference = Readonly<{
 }>;
 
 /** A field value containing the selected option values of a several_choices field. */
-export type TypedSeveralChoicesValue = readonly string[];
+type TypedSeveralChoicesValue = readonly string[];
 
 export type TypedFieldValue =
   | string
@@ -197,9 +197,7 @@ export type RichTextInputData = ControlDataState<RichTextInputPayload>;
 export type NumberInputData = ControlDataState<NumberInputPayload>;
 export type BooleanInputData = ControlDataState<BooleanInputPayload>;
 export type DateInputData = ControlDataState<DateInputPayload>;
-export type DateTimeInputData = ControlDataState<DateTimeInputPayload>;
 export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
-export type SeveralChoicesInputData = ControlDataState<SeveralChoicesInputPayload>;
 export type FieldInputData = ControlDataState<FieldInputPayload>;
 export type ValidationData = ControlDataState<ValidationPayload>;
 export type ButtonData = ControlDataState<ButtonPayload>;
@@ -531,7 +529,7 @@ export const parseDateInputPayload = (
 };
 
 /** Parses the offset-bearing instant a date-time field stores. */
-export const parseDateTimeInputPayload = (
+const parseDateTimeInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): DateTimeInputPayload => {
@@ -648,7 +646,7 @@ export const parseDependentChoiceInputPayload = (
 };
 
 /** Parses a multi-choice value as a bounded list of exact declared option values. */
-export const parseSeveralChoicesInputPayload = (
+const parseSeveralChoicesInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): SeveralChoicesInputPayload => {

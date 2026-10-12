@@ -8,7 +8,7 @@ import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedbac
 export { useFieldFeedback } from "./draft-feedback";
 
 /** Element identities for one field and the descriptions its control references. */
-export type FieldIds = Readonly<{
+type FieldIds = Readonly<{
   control: string;
   label: string;
   help: string;
