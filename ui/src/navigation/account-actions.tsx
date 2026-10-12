@@ -1,7 +1,16 @@
 "use client";
 
 import { createContext, useContext, type ReactElement, type ReactNode } from "react";
-import { Button } from "../components/button";
+import { Avatar, AvatarFallback } from "../components/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/dropdown-menu";
 import type { PlatformBlockRenderProps } from "../registry";
 
 /** Current account facts and platform actions, supplied by the signed-in route. */
@@ -25,34 +34,38 @@ export function ApplicationAccountActionsProvider({
 /** The shell chooses this block's placement; the route supplies only current account data. */
 export function ApplicationAccountActionsBlock(_props: PlatformBlockRenderProps): ReactElement {
   const actions = useContext(AccountActionsContext);
+  const organizationName = actions?.organizationName ?? "Organisation";
 
   return (
     <nav
       aria-label="Account and organisation"
       data-vortex-account-actions=""
-      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+      className="flex min-w-0 items-center gap-3"
     >
-      <span className="min-w-0 truncate text-sm font-medium">
-        {actions?.organizationName ?? "Organisation"}
+      <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
+        {organizationName}
       </span>
-      <Button
-        type="button"
-        variant="link"
-        size="sm"
-        disabled={actions === null}
-        onClick={() => void actions?.chooseOrganization()}
-      >
-        Choose organisation
-      </Button>
-      <Button
-        type="button"
-        variant="link"
-        size="sm"
-        disabled={actions === null}
-        onClick={() => void actions?.signOut()}
-      >
-        Sign out
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={actions === null}
+          aria-label="Account and organisation menu"
+          className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+        >
+          <Avatar>
+            <AvatarFallback>{organizationName.slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => void actions?.chooseOrganization()}>
+            Choose organisation
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void actions?.signOut()}>Sign out</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
   );
 }

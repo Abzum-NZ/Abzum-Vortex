@@ -1,4 +1,7 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { canonicalJson, labelSchema, sameId, storedModuleDefinitionDraftSchema } from "@vortex/contracts";
@@ -6,8 +9,8 @@ import type { StoredModuleDefinitionDraft } from "@vortex/definition";
 import type { StudioModuleFieldDescriptor, StudioModuleFieldLabelResult } from "../../_lib/studio-module-field-label";
 import { reopenModuleFieldLabel, saveModuleFieldLabel } from "../module-field-label-actions";
 
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "w-full";
+const buttonClass = "";
 const selectionKey = (field: StudioModuleFieldDescriptor) => JSON.stringify([field.recordAlias, field.fieldAlias]);
 const descriptorsFor = (draft: StoredModuleDefinitionDraft): readonly StudioModuleFieldDescriptor[] =>
   draft.source.body.record_types.flatMap((record) => record.fields.map((field) => ({
@@ -148,7 +151,7 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module field</span>
-        <select className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
+        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
           if (pending.current) return;
           const next = choices.find((field) => selectionKey(field) === event.target.value);
           if (next === undefined || (dirty && !window.confirm("Discard the pending label and select another field?"))) return;
@@ -157,19 +160,19 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
         }}>
           {choices.map((field) => <option key={selectionKey(field)} value={selectionKey(field)}>
             {field.recordName} / {field.label} ({field.recordAlias}.{field.fieldAlias})</option>)}
-        </select></label>
+        </NativeSelect></label>
       {selected !== undefined ? <>
         <p className="break-all text-sm">Field type: {selected.type}. Authored path: body.record_types[{selected.recordAlias}].fields[{selected.fieldAlias}].label</p>
         <label className="block space-y-1"><span>Field label</span>
-          <input className={inputClass} value={label} maxLength={60} required disabled={busy} onChange={(event) => {
+          <Input className={inputClass} value={label} maxLength={60} required disabled={busy} onChange={(event) => {
             if (pending.current) return;
             buffer.current = { ...buffer.current, label: event.target.value }; generation.current += 1;
             setLabel(event.target.value); setValidation(null); setMessage("");
           }} /></label>
       </> : <p role="status">No authored field is available.</p>}
       <div className="flex flex-wrap gap-2">
-        <button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save field label</button>
-        <button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</button>
+        <Button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save field label</Button>
+        <Button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</Button>
       </div>
       <p role="status" aria-live="polite">{dirty ? "Pending label changes. " : "The label matches the saved Module draft. "}{message}</p>
       {validation !== null && <ul className="space-y-2" aria-label="Module validation feedback">

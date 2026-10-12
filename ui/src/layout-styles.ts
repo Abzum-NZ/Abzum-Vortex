@@ -121,6 +121,9 @@ export function computePlacementClassName(
   return classes.join(" ");
 }
 
+/** The rhythm between the blocks of one slot, from the shadcn spacing scale. */
+const SLOT_GAP = "calc(var(--spacing, 0.25rem) * 4)";
+
 /**
  * Computes slot container style, applying a 12-column grid when child placements declare grid placement.
  */
@@ -129,6 +132,7 @@ export function computeSlotContainerStyle(hasGridChildren: boolean): CSSProperti
     return {
       display: "grid",
       gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+      gap: SLOT_GAP,
       width: "100%",
       boxSizing: "border-box",
     };
@@ -137,6 +141,7 @@ export function computeSlotContainerStyle(hasGridChildren: boolean): CSSProperti
   return {
     display: "flex",
     flexDirection: "column",
+    gap: SLOT_GAP,
     width: "100%",
     boxSizing: "border-box",
   };
@@ -282,6 +287,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 .vortex-grid-12 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: calc(var(--spacing, 0.25rem) * 4);
   width: 100%;
   box-sizing: border-box;
 }
@@ -289,6 +295,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 .vortex-slot-container {
   display: flex;
   flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 4);
   width: 100%;
   box-sizing: border-box;
 }

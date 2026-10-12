@@ -86,6 +86,15 @@
     padding: 0;
   }
 
+  /*
+   * Without preflight a bare `border` utility draws in currentcolor. Every bordered surface takes
+   * the theme's border token instead, at zero specificity so a style rule or utility still wins.
+   */
+  :where([data-vortex-style]),
+  :where([data-vortex-style]) :where(*, ::before, ::after) {
+    border-color: var(--border);
+  }
+
   :where([data-vortex-style]) :where(a):where([data-slot], [data-slot] *) {
     color: inherit;
     text-decoration: inherit;

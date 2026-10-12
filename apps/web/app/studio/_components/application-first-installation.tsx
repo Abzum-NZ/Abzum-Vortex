@@ -1,4 +1,9 @@
 "use client";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -477,21 +482,21 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       </nav>
     </header>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
-    {needsReload && <section className="rounded border p-4">
+    {needsReload && <section className="rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="font-semibold">Protected reload required</h2>
       <p>The previous action or current authority is stale or uncertain. Use a read-only reload before deciding what to do next.</p>
-      <button type="button" disabled={isPending} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void reload()}>
+      <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => void reload()}>
         Reload protected setup
-      </button>
+      </Button>
     </section>}
-    {snapshot === null ? <section className="space-y-3 rounded border p-4">
+    {snapshot === null ? <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="text-lg font-semibold">First installation unavailable</h2>
       <p>{loadMessage(load)}</p>
-      {!needsReload && <button type="button" disabled={isPending} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void reload()}>
+      {!needsReload && <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => void reload()}>
         Reload current access and installation
-      </button>}
+      </Button>}
     </section> : <>
-      <section aria-label="Exact published release" className="space-y-3 rounded border p-4">
+      <section aria-label="Exact published release" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
           <div><dt className="font-semibold">Application</dt><dd>{snapshot.selected.definitionKey}</dd></div>
           <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
@@ -506,19 +511,19 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       </section>
 
       {snapshot.registrationState === "unprepared" || snapshot.registrationState === "registration_aligned_partial"
-        ? <section aria-label="Prepare exact first installation" className="space-y-3 rounded border p-4">
+        ? <section aria-label="Prepare exact first installation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold">Prepare inactive installation</h2>
           <p>Preparation may commit Access registration before provisioning every exact Module. It does not activate the Application. If the result is uncertain, reload current state instead of repeating preparation.</p>
-          <button type="button" name="application.first_install.prepare" disabled={mutationBlocked}
-            aria-busy={pending === "prepare"} className="rounded border px-4 py-2 disabled:opacity-50"
+          <Button type="button" variant="outline" size="sm" name="application.first_install.prepare" disabled={mutationBlocked}
+            aria-busy={pending === "prepare"}
             onClick={() => void prepare()}>
             {pending === "prepare" ? "Preparing exact release…" : "Prepare this exact published release"}
-          </button>
+          </Button>
         </section>
         : null}
 
       {setup !== null && <section aria-label="Provisioned record policy setup" className="space-y-4">
-        <div className="rounded border p-4">
+        <div className="rounded-xl border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold">Provisioned inactive setup</h2>
           <p>Registration revision {setup.registrationRevision}. Organization settings revision {setup.organizationLimits.settingsRevision}.</p>
           <p>Allowed actions: {setup.organizationLimits.allowedActions.join(", ")}.</p>
@@ -529,24 +534,24 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
           const draft = drafts[target.storageContractId] ?? defaultDraft(snapshot, target);
           const page = archivePages[target.storageContractId];
           const inputPrefix = `first-install-${target.storageContractId}`;
-          return <article key={target.storageContractId} aria-label={`Record type setup target ${index + 1}`} className="space-y-4 rounded border p-4">
+          return <article key={target.storageContractId} aria-label={`Record type setup target ${index + 1}`} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
             <h3 className="font-semibold">Target {index + 1}: {target.storageContractId}</h3>
             <p>Scope: {target.storageScope === "organization_shared" ? "Organization-shared" : "Application-contained"}.</p>
             <p>Bound Module count: {target.sourceBindings.length}.</p>
-            {target.policy.state === "configured" ? <div className="space-y-2 rounded bg-slate-50 p-3">
+            {target.policy.state === "configured" ? <div className="space-y-2 rounded-lg bg-muted p-3">
               <p>Initial policy is configured at revision {target.policy.policyRevision}. This setup view does not edit it.</p>
               <p>Action: {target.policy.policyBody.action}.</p>
               <p>Maximum age: {target.policy.policyBody.maxAgeDays ?? "unlimited"} days; maximum count: {target.policy.policyBody.maxCount ?? "unlimited"}.</p>
               {target.policy.policyBody.action === "archive_workflow" && <p>Archive workflow {target.policy.policyBody.archiveWorkflowId} through the configured Connection.</p>}
             </div> : allowedTargetActions.length === 0
-              ? <p role="status" className="rounded border p-3">
+              ? <p role="status" className="rounded-xl border bg-card text-card-foreground p-3">
                 No policy action allowed by current organization limits can be applied to this target in the selected published release. Activation remains unavailable.
               </p>
               : <form className="space-y-3" onSubmit={(event) => void savePolicy(event, target.storageContractId, draft, snapshot)}>
               <label className="block space-y-1" htmlFor={`${inputPrefix}-action`}>
                 <span className="font-medium">Initial action</span>
-                <select id={`${inputPrefix}-action`} value={draft.action} disabled={mutationBlocked}
-                  className="block w-full rounded border px-3 py-2 disabled:opacity-50"
+                <NativeSelect id={`${inputPrefix}-action`} value={draft.action} disabled={mutationBlocked}
+                  className="block"
                   onChange={(event) => {
                     const value = event.currentTarget.value;
                     if (value === "delete" || value === "archive_workflow")
@@ -554,89 +559,92 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
                   }}>
                   {allowedTargetActions.map((action) =>
                     <option key={action} value={action}>{action === "delete" ? "Delete" : "Archive through a workflow"}</option>)}
-                </select>
+                </NativeSelect>
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block space-y-1" htmlFor={`${inputPrefix}-max-age`}>
                   <span className="font-medium">Maximum record age in days</span>
-                  <input id={`${inputPrefix}-max-age`} inputMode="numeric" type="number" min="1" step="1"
+                  <Input id={`${inputPrefix}-max-age`} inputMode="numeric" type="number" min="1" step="1"
                     value={draft.maxAgeDays} disabled={mutationBlocked || draft.allowUnlimitedAge}
-                    className="block w-full rounded border px-3 py-2 disabled:opacity-50"
+                    className="block"
                     onChange={(event) => updateDraft(target.storageContractId, { maxAgeDays: event.currentTarget.value }, snapshot)} />
                 </label>
                 <label className="block space-y-1" htmlFor={`${inputPrefix}-max-count`}>
                   <span className="font-medium">Maximum record count</span>
-                  <input id={`${inputPrefix}-max-count`} inputMode="numeric" type="number" min="1" step="1"
+                  <Input id={`${inputPrefix}-max-count`} inputMode="numeric" type="number" min="1" step="1"
                     value={draft.maxCount} disabled={mutationBlocked || draft.allowUnlimitedCount}
-                    className="block w-full rounded border px-3 py-2 disabled:opacity-50"
+                    className="block"
                     onChange={(event) => updateDraft(target.storageContractId, { maxCount: event.currentTarget.value }, snapshot)} />
                 </label>
               </div>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={draft.allowUnlimitedAge}
+                <Checkbox checked={draft.allowUnlimitedAge}
                   disabled={mutationBlocked || !setup.organizationLimits.allowUnlimitedRetentionDays}
-                  onChange={(event) => updateDraft(target.storageContractId, { allowUnlimitedAge: event.currentTarget.checked }, snapshot)} />
+                  onCheckedChange={(checked) => updateDraft(target.storageContractId, { allowUnlimitedAge: checked }, snapshot)} />
                 <span>Allow unlimited age retention (only if current organization limits permit it)</span>
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={draft.allowUnlimitedCount}
+                <Checkbox checked={draft.allowUnlimitedCount}
                   disabled={mutationBlocked || !setup.organizationLimits.allowUnlimitedRecordCount}
-                  onChange={(event) => updateDraft(target.storageContractId, { allowUnlimitedCount: event.currentTarget.checked }, snapshot)} />
+                  onCheckedChange={(checked) => updateDraft(target.storageContractId, { allowUnlimitedCount: checked }, snapshot)} />
                 <span>Allow unlimited record count (only if current organization limits permit it)</span>
               </label>
               {draft.action === "delete" ? <label className="block space-y-1" htmlFor={`${inputPrefix}-recovery-window`}>
                 <span className="font-medium">Optional recovery window in days</span>
-                <input id={`${inputPrefix}-recovery-window`} inputMode="numeric" type="number" min="1" step="1"
+                <Input id={`${inputPrefix}-recovery-window`} inputMode="numeric" type="number" min="1" step="1"
                   value={draft.recoveryWindowDays} disabled={mutationBlocked}
-                  className="block w-full rounded border px-3 py-2 disabled:opacity-50"
+                  className="block"
                   onChange={(event) => updateDraft(target.storageContractId, { recoveryWindowDays: event.currentTarget.value }, snapshot)} />
               </label> : <>
                 {target.storageScope === "organization_shared" || target.applicationRootId === null
-                  ? <p className="rounded border p-3">Archive policies require this Application's exact contained target. Choose a delete policy for this shared target.</p>
+                  ? <p className="rounded-xl border bg-card text-card-foreground p-3">Archive policies require this Application's exact contained target. Choose a delete policy for this shared target.</p>
                   : <>
                     <label className="block space-y-1" htmlFor={`${inputPrefix}-workflow`}>
                       <span className="font-medium">Workflow in this exact release</span>
-                      <select id={`${inputPrefix}-workflow`} value={draft.archiveWorkflowId} disabled={mutationBlocked}
-                        className="block w-full rounded border px-3 py-2 disabled:opacity-50"
+                      <NativeSelect id={`${inputPrefix}-workflow`} value={draft.archiveWorkflowId} disabled={mutationBlocked}
+                        className="block"
                         onChange={(event) => updateDraft(target.storageContractId, { archiveWorkflowId: event.currentTarget.value }, snapshot)}>
                         {snapshot.workflows.map((workflow) => <option key={workflow} value={workflow}>{workflow}</option>)}
-                      </select>
+                      </NativeSelect>
                     </label>
                     {setup.organizationLimits.allowedArchiveDestinations.length === 0
                       ? <p>No archive destination is allowed by current organization lifecycle limits.</p>
                       : <div className="space-y-2">
-                        <button type="button" disabled={mutationBlocked || page?.loading === true}
-                          className="rounded border px-3 py-2 disabled:opacity-50"
+                        <Button type="button" variant="outline" size="sm" disabled={mutationBlocked || page?.loading === true}
+                         
                           onClick={() => void loadOptions(target.storageContractId)}>
                           {page?.loading ? "Loading eligible Connections…" : "Load eligible Connections"}
-                        </button>
-                        {page?.options.map((option) => <label key={option.connectionInstanceId} className="flex items-center gap-2">
-                          <input type="radio" name={`${inputPrefix}-connection`}
-                            checked={draft.archiveConnectionInstanceId === option.connectionInstanceId}
-                            disabled={mutationBlocked}
-                            onChange={() => updateDraft(target.storageContractId, {
-                              archiveConnectionInstanceId: option.connectionInstanceId,
-                            }, snapshot)} />
-                          <span>{option.connectionTypeId} {option.connectionTypeVersion} · {option.destinationKey} · revision {option.expectedRevision}</span>
-                        </label>)}
+                        </Button>
+                        {page !== undefined && page.options.length > 0 && <RadioGroup
+                          name={`${inputPrefix}-connection`}
+                          value={draft.archiveConnectionInstanceId ?? ""}
+                          disabled={mutationBlocked}
+                          onValueChange={(connectionInstanceId) => updateDraft(target.storageContractId, {
+                            archiveConnectionInstanceId: String(connectionInstanceId),
+                          }, snapshot)}>
+                          {page.options.map((option) => <label key={option.connectionInstanceId} className="flex items-center gap-2">
+                            <RadioGroupItem value={option.connectionInstanceId} />
+                            <span>{option.connectionTypeId} {option.connectionTypeVersion} · {option.destinationKey} · revision {option.expectedRevision}</span>
+                          </label>)}
+                        </RadioGroup>}
                         {page?.nextAfterConnectionInstanceId !== null && page?.nextAfterConnectionInstanceId !== undefined &&
-                          <button type="button" disabled={mutationBlocked || page.loading}
-                            className="rounded border px-3 py-2 disabled:opacity-50"
+                          <Button type="button" variant="outline" size="sm" disabled={mutationBlocked || page.loading}
+                           
                             onClick={() => void loadOptions(target.storageContractId, page.nextAfterConnectionInstanceId ?? undefined)}>
                             Load next eligible Connections page
-                          </button>}
+                          </Button>}
                         {page?.message && <p>{page.message}</p>}
                       </div>}
                   </>}
               </>}
-              <button type="submit" name="application.first_install.save_initial_policy"
+              <Button type="submit" name="application.first_install.save_initial_policy"
                 disabled={mutationBlocked || (draft.action === "archive_workflow" &&
                   (target.storageScope !== "application_contained" || target.applicationRootId === null))}
                 aria-busy={pending === "policy_saved"}
-                className="rounded border px-4 py-2 disabled:opacity-50">
+               >
                 {pending === "policy_saved" ? "Saving initial policy…" : draft.action === "delete"
                   ? "Save initial delete policy" : "Save initial archive policy"}
-              </button>
+              </Button>
             </form>}
           </article>;
         })}
@@ -644,21 +652,21 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
 
       {snapshot.registrationState === "provisioned_inactive" && setup !== null &&
         setup.targets.every((target) => target.policy.state === "configured") &&
-        <section aria-label="Explicit activation" className="space-y-3 rounded border p-4">
+        <section aria-label="Explicit activation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold">Activate the prepared release</h2>
           <p>All current record-policy targets are configured. Activation is a separate, explicit operation for this exact Application and Module release set.</p>
-          <button type="button" name="application.first_install.activate" disabled={mutationBlocked}
-            aria-busy={pending === "activate"} className="rounded border px-4 py-2 disabled:opacity-50"
+          <Button type="button" variant="outline" size="sm" name="application.first_install.activate" disabled={mutationBlocked}
+            aria-busy={pending === "activate"}
             onClick={() => void activate()}>
             {pending === "activate" ? "Activating exact release…" : "Confirm activation"}
-          </button>
+          </Button>
         </section>}
 
-      {snapshot.registrationState === "active_exact" && <section className="rounded border p-4">
+      {snapshot.registrationState === "active_exact" && <section className="rounded-xl border bg-card text-card-foreground p-4">
         <h2 className="font-semibold">This exact release is already active</h2>
         <p>No first-install action remains for this selected release. Use the protected reload link to inspect current state.</p>
       </section>}
-      {commandResult !== null && <section className="rounded border p-4">
+      {commandResult !== null && <section className="rounded-xl border bg-card text-card-foreground p-4">
         <h2 className="font-semibold">Latest command result</h2>
         <p>{commandMessage(commandResult)}</p>
       </section>}

@@ -31,6 +31,14 @@ import {
 import { useUnsavedWorkRegistry } from "./unsaved-work";
 import type { FormPayload } from "./projected-data";
 import { Alert, AlertDescription } from "../components/alert";
+import { Field, FieldError, FieldLabel } from "../components/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/select";
 
 /**
  * A form container accepts its own projected data and declared callbacks, plus one supplied #591
@@ -291,10 +299,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       {...(title === undefined ? {} : { "aria-labelledby": titleId })}
       data-vortex-control="form-container"
       data-vortex-placement-id={props.placementId}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-xs"
     >
       {title === undefined ? null : (
-        <h2 id={titleId} className="font-heading text-base font-medium">
+        <h2 id={titleId} className="font-heading text-lg font-semibold tracking-tight">
           {title}
         </h2>
       )}
@@ -308,21 +316,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
           You need current membership in an active Group before you can create this record.
         </p>
       ) : (
-        <div className="flex flex-col gap-1">
+        <Field>
           {ownerGroups.length === 1 ? (
             <p className="text-sm">
               <span className="font-medium">Owner Group: </span>{ownerGroups[0]?.label}
             </p>
           ) : (
             <>
-              <label htmlFor={`${feedbackId}-owner-group`} className="text-sm font-medium">
-                Owner Group
-              </label>
-              <select
-                id={`${feedbackId}-owner-group`}
-                value={selectedOwnerGroupId ?? ""}
-                onChange={(event) => {
-                  const groupId = event.target.value || undefined;
+              <FieldLabel htmlFor={`${feedbackId}-owner-group`}>Owner Group</FieldLabel>
+              <Select
+                items={[
+                  { value: null, label: "Select a Group" },
+                  ...ownerGroups.map((group) => ({ value: group.groupId, label: group.label })),
+                ]}
+                value={selectedOwnerGroupId ?? null}
+                disabled={fieldsDisabled}
+                onValueChange={(next) => {
+                  const groupId = next ?? undefined;
                   setOwnerGroupChoice(groupId);
                   setOwnerGroupError(false);
                   const baseline = baselineRef.current;
@@ -332,21 +342,27 @@ export function FormContainer(props: FormContainerProps): ReactElement {
                       groupId !== undefined || !equalFormValue(registry.values(), baseline),
                     );
                 }}
-                disabled={fieldsDisabled}
-                aria-invalid={ownerGroupError}
-                className="rounded border px-2 py-1 text-sm"
               >
-                <option value="">Select a Group</option>
-                {ownerGroups.map((group) => (
-                  <option key={group.groupId} value={group.groupId}>{group.label}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  id={`${feedbackId}-owner-group`}
+                  aria-invalid={ownerGroupError}
+                  className="w-full"
+                >
+                  <SelectValue placeholder="Select a Group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={null}>Select a Group</SelectItem>
+                  {ownerGroups.map((group) => (
+                    <SelectItem key={group.groupId} value={group.groupId}>
+                      {group.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </>
           )}
-          {ownerGroupError ? (
-            <p role="alert" className="text-sm text-destructive">Select an owner Group.</p>
-          ) : null}
-        </div>
+          {ownerGroupError ? <FieldError role="alert">Select an owner Group.</FieldError> : null}
+        </Field>
       )}
       <FormScopeContext.Provider value={scope}>
         <fieldset

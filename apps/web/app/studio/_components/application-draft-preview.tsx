@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fingerprintSchema, pageCompositionV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
@@ -63,7 +65,7 @@ const selectionFor = (
   return firstStep === undefined ? null : { context, pageKey: page.key, stepAlias: firstStep.id };
 };
 
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const buttonClass = "";
 const breakpoints: readonly ApplicationPreviewBreakpoint[] = ["desktop", "tablet", "phone"];
 
 class PreviewRenderBoundary extends Component<{
@@ -206,13 +208,13 @@ export function ApplicationDraftPreview({ context, readContext }: {
   const visible = state.kind !== "idle" && context !== null &&
     sameContext(state.request.context, context) && isCurrent(state.request) ? state : null;
   const isPending = visible?.kind === "pending";
-  return <section className="space-y-3 rounded border border-border p-4" aria-label="Saved draft preview"
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Saved draft preview"
     aria-busy={isPending}>
     <h2 className="font-semibold">Saved draft preview</h2>
     <p className="text-sm">Choose a saved page and, for guided forms, a declared step. Interactions are simulations;
       nothing is saved, published or installed.</p>
     <label className="block text-sm">Saved page
-      <select className={`${buttonClass} ml-2`} value={chosen?.pageKey ?? ""}
+      <NativeSelect className={`${buttonClass} ml-2`} value={chosen?.pageKey ?? ""}
         disabled={context === null} onChange={(event) => {
           const current = readContext();
           if (current === null || context === null || !sameContext(context, current)) return;
@@ -226,10 +228,10 @@ export function ApplicationDraftPreview({ context, readContext }: {
         }}>
         {context === null && <option value="">No saved baseline</option>}
         {context?.source.body.pages.map((page) => <option key={page.key} value={page.key}>{page.name}</option>)}
-      </select>
+      </NativeSelect>
     </label>
     {chosenPage?.type === "guided_form" && <label className="block text-sm">Guided step
-      <select className={`${buttonClass} ml-2`} value={chosen?.stepAlias ?? ""}
+      <NativeSelect className={`${buttonClass} ml-2`} value={chosen?.stepAlias ?? ""}
         onChange={(event) => {
           const current = readContext();
           const currentSelection = selectionFor(current, selectedSelection.current);
@@ -239,19 +241,19 @@ export function ApplicationDraftPreview({ context, readContext }: {
           choose({ context: current, pageKey: page.key, stepAlias: event.currentTarget.value });
         }}>
         {chosenPage.steps.map((step) => <option key={step.id} value={step.id}>{step.name}</option>)}
-      </select>
+      </NativeSelect>
     </label>}
     <fieldset className="flex flex-wrap gap-2"><legend className="mb-2 text-sm">Preview size</legend>
-      {breakpoints.map((size) => <button key={size} type="button" className={buttonClass}
+      {breakpoints.map((size) => <Button key={size} type="button" className={buttonClass}
         aria-pressed={breakpoint === size} onClick={() => {
           if (selectedBreakpoint.current === size) return;
           selectedBreakpoint.current = size;
           invalidate();
           setBreakpoint(size);
-        }}>{size === "desktop" ? "Desktop" : size === "tablet" ? "Tablet" : "Phone"}</button>)}
+        }}>{size === "desktop" ? "Desktop" : size === "tablet" ? "Tablet" : "Phone"}</Button>)}
     </fieldset>
-    <button type="button" className={buttonClass} disabled={context === null || chosen === null || isPending}
-      onClick={preview}>Preview saved page</button>
+    <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={context === null || chosen === null || isPending}
+      onClick={preview}>Preview saved page</Button>
     <p role="status" aria-live="polite">{context === null
       ? "Preview requires a verified saved baseline with no unsaved or pending inputs. Finish editing or reopen the saved draft explicitly."
       : visible?.kind === "pending" ? "Reading the selected saved page preview…"

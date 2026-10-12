@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { Textarea } from "@vortex/ui/components/textarea";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { canonicalJson, sameId, type ApplicationSourceDocumentV2,
@@ -32,8 +34,8 @@ type Props = Readonly<{
     "applied" | "unchanged" | "stale";
 }>;
 
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "w-full";
+const buttonClass = "";
 
 const candidateFingerprint = async (source: ApplicationSourceDocumentV2): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(source)));
@@ -242,7 +244,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       : "The editor changed. Your input is preserved; review again.");
   };
 
-  return <section className="space-y-3 rounded border border-border p-4" aria-label="Application source import" aria-busy={operation !== null}>
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Application source import" aria-busy={operation !== null}>
     <h2 className="font-semibold">Import authored Application source</h2>
     <p>Choose a local JSON file or paste source in format 2.0.0, up to 2 MiB. Keep this draft's key and root alias.
       Review the complete source before replacing local history. Import does not publish, install or adopt a release.</p>
@@ -250,7 +252,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       <input ref={fileInput} className={inputClass} type="file" accept=".json,application/json" disabled={disabled}
         onChange={(event) => { void readFile(event); }} /></label>
     <label className="block space-y-1"><span>Authored Application JSON</span>
-      <textarea className={`${inputClass} min-h-48 font-mono text-sm`} value={text} disabled={disabled}
+      <Textarea className={`${inputClass} min-h-48 font-mono text-sm`} value={text} disabled={disabled}
         onChange={(event) => {
           if (disabled || readSnapshot() === null) return;
           replaceText(event.target.value);
@@ -278,16 +280,16 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       </ul>
     </div>}
     <div className="flex flex-wrap gap-2">
-      <button className={buttonClass} type="button" disabled={disabled || operation !== null || text.length === 0}
-        onClick={() => { void review(); }}>Review source</button>
-      <button className={buttonClass} type="button" disabled={disabled || operation !== null || reviewed === null}
-        onClick={apply}>Apply reviewed source to local history</button>
-      <button className={buttonClass} type="button" disabled={text.length === 0 && operation === null}
+      <Button className={buttonClass} type="button" disabled={disabled || operation !== null || text.length === 0}
+        onClick={() => { void review(); }}>Review source</Button>
+      <Button className={buttonClass} type="button" disabled={disabled || operation !== null || reviewed === null}
+        onClick={apply}>Apply reviewed source to local history</Button>
+      <Button className={buttonClass} type="button" disabled={text.length === 0 && operation === null}
         onClick={() => {
           replaceText("");
           if (fileInput.current !== null) fileInput.current.value = "";
           setMessage("Unapplied source input discarded. Local history is unchanged.");
-        }}>Discard source input or response</button>
+        }}>Discard source input or response</Button>
     </div>
     <p role="status" aria-live="polite">{message}</p>
   </section>;

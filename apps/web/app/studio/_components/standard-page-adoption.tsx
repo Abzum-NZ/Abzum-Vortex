@@ -1,3 +1,4 @@
+import { Button } from "@vortex/ui/components/button";
 import type { ComparisonChoice, StudioStandardPageAdoptionLoadResult } from "../../_lib/studio-standard-page-adoption";
 import { submitStandardPageAdoption } from "../[organizationId]/[applicationRootId]/page-adoption/actions";
 
@@ -29,9 +30,9 @@ const choiceForm = (
     <input type="hidden" name="decision" value={decision} />
     <input type="hidden" name="targetKind" value={choice.target.target.kind} />
     <input type="hidden" name="targetId" value={choice.target.target.id} />
-    <button className="rounded border px-3 py-2 underline" type="submit">
+    <Button className="underline" type="submit">
       {decision === "keep_replacement" ? "Keep replacement" : "Adopt supplied page"}
-    </button>
+    </Button>
   </form>
 );
 
@@ -49,7 +50,7 @@ export function StandardPageAdoption({
         <h1 className="text-2xl font-semibold">Standard page adoption</h1>
         <p>Compare the latest published standard page with its local replacement. A choice updates this draft only; publication and installation stay separate.</p>
       </header>
-      {notice !== undefined && <p role="status" className="rounded border p-3">{notice}</p>}
+      {notice !== undefined && <p role="status" className="rounded-xl border bg-card text-card-foreground p-3">{notice}</p>}
       {result.kind === "temporarily_unavailable" && <p role="status">The comparison is temporarily unavailable.</p>}
       {result.kind === "refused" && <p role="status">This Application page comparison is unavailable.</p>}
       {result.kind === "available" && result.choices.length === 0 && (
@@ -58,7 +59,7 @@ export function StandardPageAdoption({
       {result.kind === "available" && result.choices.length > 0 && (
         <section aria-label="Page replacement comparisons" className="space-y-5">
           {result.choices.map((choice) => (
-            <article key={`${choice.original.pageId}:${choice.replacement.pageId}:${choice.target.target.kind}:${choice.target.target.id}`} className="space-y-4 rounded border p-5">
+            <article key={`${choice.original.pageId}:${choice.replacement.pageId}:${choice.target.target.kind}:${choice.target.target.id}`} className="space-y-4 rounded-xl border bg-card text-card-foreground p-5">
               <div>
                 <h2 className="text-lg font-medium">{choice.original.name} and {choice.replacement.name}</h2>
                 <p>Latest published version {choice.candidate.releaseVersion}; revision {choice.candidate.releaseRevision}.</p>

@@ -95,18 +95,20 @@ export function ApplicationInstallGuidance(props: Props) {
   }, [pathname, pathMatches, props.applicationPath, props.manifestUrl, props.snapshot, props.validUntil,
     reload, removeOwnLink]);
 
-  return <aside aria-label="Application installation" className="border-b px-4 py-2 text-sm">
+  return <aside aria-label="Application installation" className="flex flex-col items-start gap-2 border-b bg-muted/40 px-4 py-1.5 text-sm">
     <Button type="button" variant="outline" size="sm" aria-expanded={open} aria-controls={id} onClick={() => {
       setOpen((value) => !value); if (!open) setReload((value) => value + 1);
     }}>Install this application</Button>
     <div id={id} hidden={!open}>
-      <p role="status" aria-live="polite">{state === "loading" ? "Checking installation availability…" :
+      <div className="flex max-w-2xl flex-col items-start gap-2 pb-1 text-muted-foreground">
+      <p role="status" aria-live="polite" className="text-foreground">{state === "loading" ? "Checking installation availability…" :
         state === "available" ? "Use your browser's Install or Add to Home Screen option if available." :
         state === "temporarily_unavailable" ? "Installation guidance is temporarily unavailable." :
         "Installation guidance is unavailable. Refresh this page to check the current application."}</p>
       <p>Installation uses your existing Vortex sign-in. It does not store private records for offline use.</p>
       {state === "temporarily_unavailable" && <Button type="button" variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}>
         Try again</Button>}
+      </div>
     </div>
   </aside>;
 }

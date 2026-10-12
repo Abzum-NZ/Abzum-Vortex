@@ -794,6 +794,8 @@ export type PageLayoutRendererProps = Readonly<{
   applicationSurface?: boolean;
   /** Host-owned outcomes rendered inside the same application theme as the composition. */
   feedback?: ReactNode;
+  /** Overlays such as toasts, mounted inside the theme root so they use the application theme. */
+  overlay?: ReactNode;
   /**
    * Raw component runtime inputs keyed by stable placement identity. Every key must name a
    * placement in the resolved tree, and each entry is validated fail-closed by that placement's own
@@ -844,6 +846,7 @@ export function PageLayoutRenderer({
   style,
   applicationSurface = false,
   feedback,
+  overlay,
   runtimeInputs,
   projectedNavigation,
   resolvePageHref,
@@ -907,6 +910,16 @@ export function PageLayoutRenderer({
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
   };
 
+  // A shell whose root container declares no padding of its own would draw edge to edge; the
+  // application surface gives it the standard page margin so every application reads alike.
+  const surfacePadding =
+    applicationSurface === true &&
+    !Object.values(resolved.slot.placements).some((placement) => "padding" in placement.settings)
+      ? "p-4"
+      : undefined;
+  const rootClassName =
+    surfacePadding === undefined ? className : className === undefined ? surfacePadding : `${className} ${surfacePadding}`;
+
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
   const activeGuidedStepIndex =
@@ -949,7 +962,7 @@ export function PageLayoutRenderer({
                   breakpoint="desktop"
                   responsive
                   {...sharedProps}
-                  {...(className === undefined ? {} : { className })}
+                  {...(rootClassName === undefined ? {} : { className: rootClassName })}
                   {...(style === undefined ? {} : { style })}
                 />
               </LayoutBreakpointProvider>
@@ -960,7 +973,7 @@ export function PageLayoutRenderer({
               slot={resolved.slot}
               breakpoint={breakpoint}
               {...sharedProps}
-              {...(className === undefined ? {} : { className })}
+              {...(rootClassName === undefined ? {} : { className: rootClassName })}
               {...(style === undefined ? {} : { style })}
             />
           )}
@@ -1006,6 +1019,7 @@ export function PageLayoutRenderer({
           )}
         </DateFormatProvider>
       </IconLibraryProvider>
+      {overlay}
     </VortexStyleRoot>
   );
 }

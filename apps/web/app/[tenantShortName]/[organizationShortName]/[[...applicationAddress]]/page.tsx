@@ -16,6 +16,7 @@ import {
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
+import { AccountDetails } from "./_components/account-details";
 import { ApplicationSearch } from "./_components/application-search";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -354,7 +355,7 @@ export default async function ApplicationAddressPage({
         description="Choose an application you can open."
       >
         {launcherValues === undefined ? (
-          <p>No applications are available for this organisation.</p>
+          <p className="text-sm text-muted-foreground">No applications are available for this organisation.</p>
         ) : (
           <div {...createThemeRootProps(undefined)}>
             <style href="vortex-ui-styles" precedence="default">
@@ -372,33 +373,23 @@ export default async function ApplicationAddressPage({
             />
           </div>
         )}
-        <details>
-          <summary>Current signed-in account details</summary>
-          <p>
-            When available, these read-only identifiers describe the account read for this request.
-            They do not select a recipient or authorize a grant.
-          </p>
-          {currentOrganizationAccount.kind === "available" ? (
-            <dl>
-              <dt>Organization ID</dt>
-              <dd>{currentOrganizationAccount.value.organizationId}</dd>
-              <dt>Organization account ID</dt>
-              <dd>{currentOrganizationAccount.value.organizationAccountId}</dd>
-              <dt>Profile revision</dt>
-              <dd>{currentOrganizationAccount.value.revision}</dd>
-            </dl>
-          ) : (
-            <p>Current signed-in account details are unavailable right now.</p>
-          )}
-        </details>
-        {studioCreateHref === undefined ? null : (
-          <p>
-            <Link className="font-medium underline underline-offset-4" href={studioCreateHref}>
+        <AccountDetails
+          account={
+            currentOrganizationAccount.kind === "available"
+              ? currentOrganizationAccount.value
+              : undefined
+          }
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          {studioCreateHref === undefined ? null : (
+            <Button variant="outline" nativeButton={false} render={<Link href={studioCreateHref} />}>
               Create application in Studio
-            </Link>
-          </p>
-        )}
-        <Link href="/signed-in">Choose another organisation</Link>
+            </Button>
+          )}
+          <Button variant="ghost" nativeButton={false} render={<Link href="/signed-in" />}>
+            Choose another organisation
+          </Button>
+        </div>
       </AuthShell>
     );
   }
@@ -464,26 +455,16 @@ export default async function ApplicationAddressPage({
       onOpenApplication={openApplication}
       pageFeedback={
         <>
-          <ApplicationSearch view={search} pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined} />
-          <details>
-            <summary>Current signed-in account details</summary>
-            <p>
-              When available, these read-only identifiers describe the account read for this
-              request. They do not select a recipient or authorize a grant.
-            </p>
-            {currentOrganizationAccount.kind === "available" ? (
-              <dl>
-                <dt>Organization ID</dt>
-                <dd>{currentOrganizationAccount.value.organizationId}</dd>
-                <dt>Organization account ID</dt>
-                <dd>{currentOrganizationAccount.value.organizationAccountId}</dd>
-                <dt>Profile revision</dt>
-                <dd>{currentOrganizationAccount.value.revision}</dd>
-              </dl>
-            ) : (
-              <p>Current signed-in account details are unavailable right now.</p>
-            )}
-          </details>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b bg-card px-4 py-2 text-card-foreground">
+            <ApplicationSearch view={search} pageSubject={searchPageSubject.success ? searchPageSubject.data : undefined} />
+            <AccountDetails
+              account={
+                currentOrganizationAccount.kind === "available"
+                  ? currentOrganizationAccount.value
+                  : undefined
+              }
+            />
+          </div>
           {projectionResponseEvidence === undefined ? null : (
             <span
               hidden

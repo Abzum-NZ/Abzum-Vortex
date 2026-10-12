@@ -1,4 +1,9 @@
 "use client";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { Textarea } from "@vortex/ui/components/textarea";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flowRoundingModeSchema } from "@vortex/contracts";
@@ -101,8 +106,8 @@ type Props = Readonly<{
     command: StudioFlowCalculateCommand, isCurrentTarget: () => boolean) => StudioFlowTextResult["kind"];
 }>;
 
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
+const buttonClass = "";
+const inputClass = "w-full";
 const pathKey = (path: readonly (string | number)[]) => JSON.stringify(path);
 
 function CalculateOperandFields({ label, inputs, references, change }: {
@@ -112,10 +117,10 @@ function CalculateOperandFields({ label, inputs, references, change }: {
   change: (inputs: OperandInputs) => void;
 }) {
   const options = references.filter((reference) => reference.kind === inputs.kind);
-  return <fieldset className="space-y-2 rounded border border-border p-2">
+  return <fieldset className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-2">
     <legend>{label}</legend>
     <label className="block space-y-1"><span>Operand source</span>
-      <select className={inputClass} required value={inputs.kind} onChange={(event) => {
+      <NativeSelect className={inputClass} required value={inputs.kind} onChange={(event) => {
         const kind = event.target.value;
         if (kind === "whole_number" || kind === "decimal_number" || kind === "input" || kind === "variable")
           change({ kind, value: "" });
@@ -125,20 +130,20 @@ function CalculateOperandFields({ label, inputs, references, change }: {
         <option value="decimal_number">Decimal number</option>
         {references.some((entry) => entry.kind === "input") && <option value="input">Declared input</option>}
         {references.some((entry) => entry.kind === "variable") && <option value="variable">Initialized variable</option>}
-      </select></label>
+      </NativeSelect></label>
     {(inputs.kind === "whole_number" || inputs.kind === "decimal_number") &&
       <label className="block space-y-1"><span>Number</span>
-        <input className={inputClass} required maxLength={120} inputMode="decimal" value={inputs.value}
+        <Input className={inputClass} required maxLength={120} inputMode="decimal" value={inputs.value}
           onChange={(event) => change({ ...inputs, value: event.target.value })} /></label>}
     {(inputs.kind === "input" || inputs.kind === "variable") &&
       <label className="block space-y-1"><span>Declared value</span>
-        <select className={inputClass} required value={inputs.value} onChange={(event) => {
+        <NativeSelect className={inputClass} required value={inputs.value} onChange={(event) => {
           const entry = options.find((option) => option.name === event.target.value);
           if (entry !== undefined) change({ ...inputs, value: entry.name });
         }}>
           <option value="" disabled>Choose a declared numeric value</option>
           {options.map((entry) => <option key={entry.name} value={entry.name}>{entry.name} ({entry.type})</option>)}
-        </select></label>}
+        </NativeSelect></label>}
   </fieldset>;
 }
 
@@ -153,11 +158,11 @@ function TaskList({ list, selected, disabled, choose }: {
     {list.tasks.length === 0 ? <p className="text-sm text-muted-foreground">No tasks.</p>
       : <ol className="space-y-2 border-l border-border pl-3">
         {list.tasks.map((task) => <li key={pathKey(task.path)} className="space-y-2">
-          <button type="button" className={`${buttonClass} w-full text-left`} disabled={disabled}
+          <Button type="button" variant="outline" size="sm" className={`${buttonClass} w-full text-left`} disabled={disabled}
             aria-pressed={selected?.id === task.id && pathKey(selected.path) === pathKey(task.path)}
             onClick={() => choose(task)}>
             {task.title} <span className="text-xs text-muted-foreground">({task.id})</span>
-          </button>
+          </Button>
           {task.properties.length === 0 && <p className="text-sm text-muted-foreground">
             {task.type === "data.calculate" ? "Select this task to check the supported Calculate controls."
               : "Configuration is read-only here."}</p>}
@@ -410,62 +415,62 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
 
   return <section className="space-y-4" aria-label="Flow task editor">
     <p className="text-sm">Inspect authored tasks and branches. Edit presentation text or a supported calculation, append a registered task, move adjacent compatible presentation tasks, or remove an unreferenced Show message task.</p>
-    {palette.length > 0 ? <form className="space-y-3 rounded border border-border p-3" onSubmit={submitAppend}>
+    {palette.length > 0 ? <form className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" onSubmit={submitAppend}>
       <h3 className="font-semibold">Add presentation task</h3>
       <fieldset className="space-y-3" disabled={disabled || pending || pendingCalculate}>
         <label className="block space-y-1"><span>Task type</span>
-          <select className={inputClass} required value={insertInputs.taskType} onChange={(event) => {
+          <NativeSelect className={inputClass} required value={insertInputs.taskType} onChange={(event) => {
             const next = palette.find((entry) => entry.type === event.target.value);
             if (next !== undefined) changeInsert({ taskType: next.type });
           }}>
             <option value="" disabled>Choose a task</option>
             {palette.map((entry) => <option key={entry.type} value={entry.type}>{entry.title}</option>)}
-          </select></label>
+          </NativeSelect></label>
         <label className="block space-y-1"><span>Task key</span>
-          <input className={inputClass} required maxLength={40} value={insertInputs.taskId}
+          <Input className={inputClass} required maxLength={40} value={insertInputs.taskId}
             onChange={(event) => changeInsert({ taskId: event.target.value })} />
           <span className="block text-sm text-muted-foreground">Use a unique lowercase key, with words separated by underscores.</span></label>
         <label className="block space-y-1"><span>Message</span>
-          <textarea className={inputClass} required maxLength={2000} value={insertInputs.message}
+          <Textarea className={inputClass} required maxLength={2000} value={insertInputs.message}
             onChange={(event) => changeInsert({ message: event.target.value })} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault(); append();
               }
             }} /></label>
         {insertInputs.taskType === "interface.confirm" && <>
-          <label className="flex gap-2"><input type="checkbox" checked={insertInputs.supplyTitle}
-            onChange={(event) => changeInsert({ supplyTitle: event.target.checked })} />Supply a title</label>
+          <label className="flex gap-2"><Checkbox checked={insertInputs.supplyTitle}
+            onCheckedChange={(checked) => changeInsert({ supplyTitle: checked })} />Supply a title</label>
           {insertInputs.supplyTitle && <label className="block space-y-1"><span>Title</span>
-            <input className={inputClass} required maxLength={2000} value={insertInputs.title}
+            <Input className={inputClass} required maxLength={2000} value={insertInputs.title}
               onChange={(event) => changeInsert({ title: event.target.value })} /></label>}
         </>}
         <p className="text-sm">Append adds one task to the end of Tasks. It does not run the Flow. Enter applies; Shift+Enter adds a message line.</p>
-        <button className={buttonClass} type="submit" disabled={!pendingInsert}>Append task</button>
+        <Button className={buttonClass} type="submit" disabled={!pendingInsert}>Append task</Button>
       </fieldset>
-      <button className={buttonClass} type="button" disabled={disabled || !pendingInsert} onClick={discardInsert}>Discard insertion inputs</button>
+      <Button className={buttonClass} type="button" disabled={disabled || !pendingInsert} onClick={discardInsert}>Discard insertion inputs</Button>
     </form> : <p className="text-sm">No presentation task can be appended to this Flow under its current execution kind, registry or task limits.</p>}
-    {palette.length === 0 && pendingInsert && <button type="button" className={buttonClass}
-      disabled={disabled} onClick={discardInsert}>Discard preserved insertion inputs</button>}
-    {calculate.kind === "available" && <section className="space-y-3 rounded border border-border p-3" aria-label="Calculate controls">
+    {palette.length === 0 && pendingInsert && <Button type="button" variant="outline" size="sm" className={buttonClass}
+      disabled={disabled} onClick={discardInsert}>Discard preserved insertion inputs</Button>}
+    {calculate.kind === "available" && <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" aria-label="Calculate controls">
       <h3 className="font-semibold">Calculate</h3>
       <div className="flex gap-2">
-        <button type="button" className={buttonClass} disabled={disabled || !calculate.canAppend}
-          onClick={() => beginCalculate(false)}>Add Calculate task</button>
-        {calculate.selected !== null && <button type="button" className={buttonClass} disabled={disabled}
-          onClick={() => beginCalculate(true)}>Edit selected calculation</button>}
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled || !calculate.canAppend}
+          onClick={() => beginCalculate(false)}>Add Calculate task</Button>
+        {calculate.selected !== null && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled}
+          onClick={() => beginCalculate(true)}>Edit selected calculation</Button>}
       </div>
       <p className="text-sm">Use two numeric operands with explicit precision and rounding. Other formulas remain read-only. These controls do not run the Flow.</p>
     </section>}
-    {calculateBuffer !== null && <form className="space-y-3 rounded border border-border p-3" onSubmit={applyCalculate}>
+    {calculateBuffer !== null && <form className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" onSubmit={applyCalculate}>
       <h3 className="font-semibold">{calculateBuffer.target === null ? "Add calculation" : "Edit calculation"}</h3>
       <fieldset className="space-y-3" disabled={disabled || pending || pendingInsert || calculate.kind !== "available"}>
         {calculateBuffer.target === null ? <label className="block space-y-1"><span>Task key</span>
-          <input className={inputClass} required maxLength={40} value={calculateBuffer.inputs.taskId}
+          <Input className={inputClass} required maxLength={40} value={calculateBuffer.inputs.taskId}
             onChange={(event) => changeCalculate({ taskId: event.target.value })} />
           <span className="block text-sm">Use a unique lowercase key, with words separated by underscores.</span>
         </label> : <p>Task key: {calculateBuffer.target.id}</p>}
         <label className="block space-y-1"><span>Operator</span>
-          <select className={inputClass} required value={calculateBuffer.inputs.operator} onChange={(event) => {
+          <NativeSelect className={inputClass} required value={calculateBuffer.inputs.operator} onChange={(event) => {
             const operator = event.target.value;
             if (operator === "add" || operator === "subtract" || operator === "multiply" || operator === "divide")
               changeCalculate({ operator });
@@ -473,7 +478,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
             <option value="" disabled>Choose an operator</option>
             <option value="add">Add</option><option value="subtract">Subtract</option>
             <option value="multiply">Multiply</option><option value="divide">Divide</option>
-          </select></label>
+          </NativeSelect></label>
         <CalculateOperandFields label="Left operand" inputs={calculateBuffer.inputs.left}
           references={calculate.kind === "available" ? calculate.references : []}
           change={(left) => changeCalculate({ left })} />
@@ -481,40 +486,40 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
           references={calculate.kind === "available" ? calculate.references : []}
           change={(right) => changeCalculate({ right })} />
         <label className="block space-y-1"><span>Decimal places</span>
-          <input className={inputClass} type="number" required min={0} max={18} step={1}
+          <Input className={inputClass} type="number" required min={0} max={18} step={1}
             value={calculateBuffer.inputs.scale} onChange={(event) => changeCalculate({ scale: event.target.value })} />
         </label>
         <label className="block space-y-1"><span>Rounding</span>
-          <select className={inputClass} required value={calculateBuffer.inputs.rounding}
+          <NativeSelect className={inputClass} required value={calculateBuffer.inputs.rounding}
             onChange={(event) => changeCalculate({ rounding: event.target.value })}>
             <option value="" disabled>Choose rounding</option>
             {flowRoundingModeSchema.options.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
-          </select></label>
-        <button type="submit" className={buttonClass}>Apply calculation</button>
+          </NativeSelect></label>
+        <Button type="submit" className={buttonClass}>Apply calculation</Button>
       </fieldset>
       <p className="text-sm">Apply or discard these inputs before saving, undoing or editing other items. Stale inputs are preserved until you discard them.</p>
-      <button type="button" className={buttonClass} disabled={disabled} onClick={discardCalculate}>Discard Calculate inputs</button>
+      <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled} onClick={discardCalculate}>Discard Calculate inputs</Button>
     </form>}
     {projection.kind !== "available" ? <p role="status">This Flow outline is unavailable or ambiguous. No source is changed.</p>
       : lists.map((list) => <TaskList key={pathKey(list.path)} list={list} selected={target}
         disabled={disabled} choose={chooseTask} />)}
-    {task !== undefined && <section className="space-y-3 rounded border border-border p-3" aria-label="Task text inspector">
+    {task !== undefined && <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" aria-label="Task text inspector">
       <h3 className="font-semibold">{task.title}</h3>
       {moves.length > 0 ? <div className="flex gap-2" aria-label="Presentation task order">
-        {moves.map((option) => <button key={option.direction} type="button" className={buttonClass}
+        {moves.map((option) => <Button key={option.direction} type="button" className={buttonClass}
           disabled={disabled || pending || pendingInsert || pendingCalculate} onClick={() => move(option)}>
           {option.direction === "up" ? "Move up" : "Move down"}
-        </button>)}
+        </Button>)}
       </div> : <p className="text-sm">Move is available only across an adjacent compatible literal presentation task in Tasks.</p>}
-      {canRemove ? <button type="button" className={buttonClass}
-        disabled={disabled || pending || pendingInsert || pendingCalculate} onClick={remove}>Remove task</button>
+      {canRemove ? <Button type="button" variant="outline" size="sm" className={buttonClass}
+        disabled={disabled || pending || pendingInsert || pendingCalculate} onClick={remove}>Remove task</Button>
         : <p className="text-sm">Remove is available only for an unreferenced literal Show message in Tasks, with another task remaining.</p>}
       {task.properties.length === 0 ? <p>{calculate.kind === "available" && calculate.selected !== null
         ? "Use the Calculate controls to edit this task's arithmetic formula."
         : "This task's configuration is read-only in this editor."}</p>
         : <form onSubmit={submit} className="space-y-3">
           <label className="block space-y-1"><span>Presentation property</span>
-            <select className={inputClass} value={target?.property ?? ""} disabled={disabled}
+            <NativeSelect className={inputClass} value={target?.property ?? ""} disabled={disabled}
               onChange={(event) => {
                 const next = task.properties.find((item) => item.key === event.target.value);
                 if (next === undefined || !canChangeTarget()) return;
@@ -524,9 +529,9 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
                 selectTarget({ id: task.id, path: task.path, property: next.key });
               }}>
               {task.properties.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select></label>
+            </NativeSelect></label>
           {property !== undefined && <label className="block space-y-1"><span>{property.label}</span>
-            <textarea className={inputClass} required maxLength={2000} disabled={disabled || pendingInsert || pendingCalculate}
+            <Textarea className={inputClass} required maxLength={2000} disabled={disabled || pendingInsert || pendingCalculate}
               value={buffer?.text ?? property.value} onChange={(event) => changeText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -536,15 +541,15 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
             <span className="block text-sm text-muted-foreground">Enter applies; Shift+Enter adds a line.</span>
           </label>}
           <div className="flex gap-2">
-            <button className={buttonClass} type="submit" disabled={disabled || pendingInsert || pendingCalculate || !pending}>Apply text</button>
-            <button className={buttonClass} type="button" disabled={disabled || !pending} onClick={discard}>Discard text</button>
+            <Button className={buttonClass} type="submit" disabled={disabled || pendingInsert || pendingCalculate || !pending}>Apply text</Button>
+            <Button className={buttonClass} type="button" disabled={disabled || !pending} onClick={discard}>Discard text</Button>
           </div>
         </form>}
     </section>}
     {pending && <div className="space-y-2">
       <p className="text-sm">Apply or discard this text before saving, undoing or editing other items.</p>
-      {(task === undefined || property === undefined) && <button type="button" className={buttonClass}
-        disabled={disabled} onClick={discard}>Discard preserved text</button>}
+      {(task === undefined || property === undefined) && <Button type="button" variant="outline" size="sm" className={buttonClass}
+        disabled={disabled} onClick={discard}>Discard preserved text</Button>}
     </div>}
     <p role="status" aria-live="polite">{message}</p>
   </section>;

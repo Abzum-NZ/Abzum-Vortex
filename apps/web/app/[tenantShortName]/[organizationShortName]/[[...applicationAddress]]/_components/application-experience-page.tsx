@@ -40,6 +40,7 @@ export function ApplicationExperiencePage({
       }}
     >
       <PageLayoutRenderer
+        themeMode="system"
         composition={page}
         registry={platformComponentRegistry}
         shells={shells}

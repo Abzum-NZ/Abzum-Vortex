@@ -1,4 +1,6 @@
 "use client";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -246,7 +248,7 @@ export function ApplicationReleaseRestore({
       </nav>
     </header>
 
-    <section aria-label="Selected release and saved draft" aria-busy={pending !== null} className="space-y-4 rounded border p-4">
+    <section aria-label="Selected release and saved draft" aria-busy={pending !== null} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="text-xl font-semibold">{staleLabel ? "Last confirmed restore preview" : "Review before restoring"}</h2>
       {displayedLoad !== null ? <>
         <dl className="space-y-3">
@@ -267,29 +269,29 @@ export function ApplicationReleaseRestore({
     </section>
 
     <div className="flex flex-wrap gap-3">
-      <button type="button" name="application.release_history.restore.reload" disabled={pending !== null}
-        className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void runReload()}>
+      <Button type="button" variant="outline" size="sm" name="application.release_history.restore.reload" disabled={pending !== null}
+        onClick={() => void runReload()}>
         {pending === "reload" ? "Reloading…" : "Reload saved draft and release"}
-      </button>
+      </Button>
     </div>
 
-    <form onSubmit={(event) => void runRestore(event)} className="space-y-4 rounded border p-4">
+    <form onSubmit={(event) => void runRestore(event)} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="text-xl font-semibold">Confirm saved-draft restore</h2>
       <p id="restore-confirmation-help">The selected release will replace the saved draft at the revision shown above. Your workspace buffers remain separate and can become stale.</p>
       <label htmlFor="restore-confirmation" className="flex items-start gap-3">
-        <input id="restore-confirmation" type="checkbox" checked={confirmation}
+        <Checkbox id="restore-confirmation" checked={confirmation}
           disabled={!ready || pending !== null} aria-describedby="restore-confirmation-help"
-          onChange={(event) => setConfirmation(event.currentTarget.checked)} />
+          onCheckedChange={(checked) => setConfirmation(checked)} />
         <span>I understand that this replaces the saved draft with the selected release.</span>
       </label>
-      <button type="submit" name="application.draft.restore"
+      <Button type="submit" name="application.draft.restore"
         disabled={!ready || pending !== null || !confirmation}
-        className="rounded border px-3 py-2 disabled:opacity-50">
+       >
         {pending === "restore" ? "Restoring…" : "Restore selected release to saved draft"}
-      </button>
+      </Button>
     </form>
 
-    {receipt !== null && <section aria-label="Committed restore receipt" className="space-y-3 rounded border p-4">
+    {receipt !== null && <section aria-label="Committed restore receipt" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="text-xl font-semibold">Restore committed</h2>
       <dl className="space-y-2">
         <div><dt className="font-semibold">New saved draft revision</dt><dd>{receipt.draftRevision}</dd></div>

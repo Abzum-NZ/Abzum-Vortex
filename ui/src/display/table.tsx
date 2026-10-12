@@ -6,6 +6,7 @@ import {
   type RecordsTableContract,
 } from "@vortex/contracts";
 import { Button } from "../components/button";
+import { Icon } from "../icons/icon";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";
 import { cn } from "../lib/utils";
 import { DisplayCellView } from "./cell";
@@ -320,9 +321,11 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                         >
                           {column.label}
                           {direction === undefined ? null : (
-                            <span aria-hidden="true">
-                              {direction === "ascending" ? " ▲" : " ▼"}
-                            </span>
+                            <Icon
+                              name={direction === "ascending" ? "arrow-up" : "arrow-down"}
+                              aria-hidden="true"
+                              className="size-3.5"
+                            />
                           )}
                         </Button>
                       )}

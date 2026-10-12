@@ -1,4 +1,8 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { Textarea } from "@vortex/ui/components/textarea";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -57,8 +61,8 @@ const samePublicationSnapshot = (left: PublicationSnapshot, right: PublicationSn
   left.sourceFingerprint === right.sourceFingerprint && left.source === right.source &&
   left.selectionKey === right.selectionKey && left.lifetime === right.lifetime && left.generation === right.generation;
 
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "w-full";
+const buttonClass = "";
 
 class StudioSaveError extends Error {
   constructor(readonly code: string) {
@@ -94,7 +98,7 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
   const textInput = (key: Exclude<keyof MinimumApplicationInputs, "moduleVersionSelection">,
     label: string, maxLength: number, hint?: string) => <label className="block space-y-1">
       <span>{label}</span>
-      <input className={inputClass} required maxLength={maxLength} value={inputs[key]}
+      <Input className={inputClass} required maxLength={maxLength} value={inputs[key]}
         disabled={isCreating} onChange={(event) => setInputs({ ...inputs, [key]: event.target.value })} />
       {hint && <span className="block text-sm text-muted-foreground">{hint}</span>}
     </label>;
@@ -139,16 +143,16 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
       {textInput("key", "Application key", 120, "Use lowercase namespaced segments, for example team.workspace. The derived .home.view permission must also fit the 120-character key limit.")}
       {textInput("name", "Application name", 120)}
       <label className="block space-y-1"><span>Description</span>
-        <textarea className={inputClass} required maxLength={1000} value={inputs.description}
+        <Textarea className={inputClass} required maxLength={1000} value={inputs.description}
           disabled={isCreating} onChange={(event) => setInputs({ ...inputs, description: event.target.value })} /></label>
-      <fieldset className="space-y-4 rounded border border-border p-4"><legend>Authored Module dependency</legend>
+      <fieldset className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4"><legend>Authored Module dependency</legend>
         {textInput("moduleKey", "Module key", 120)}
         <label className="block space-y-1"><span>Version requirement</span>
-          <select className={inputClass} value={inputs.moduleVersionSelection} disabled={isCreating}
+          <NativeSelect className={inputClass} value={inputs.moduleVersionSelection} disabled={isCreating}
             onChange={(event) => setInputs({ ...inputs, moduleVersionSelection:
               event.target.value === "allowed_range" ? "allowed_range" : "exact" })}>
             <option value="exact">Exact version</option><option value="allowed_range">Allowed version range</option>
-          </select></label>
+          </NativeSelect></label>
         {textInput("moduleVersion", "Module version or range", 120)}
         <p className="text-sm">This records a dependency requirement. It does not establish that a release is published or installed.</p>
       </fieldset>
@@ -156,7 +160,7 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
       {textInput("roleName", "Contained role name", 60)}
       {textInput("homeName", "Home page name", 60)}
       <p className="text-sm">The contained role names only the draft's non-administrative home-view permission. Live role assignment remains separate.</p>
-      <button className={buttonClass} type="submit" disabled={isCreating}>Create draft</button>
+      <Button className={buttonClass} type="submit" disabled={isCreating}>Create draft</Button>
       <p role="status" aria-live="polite">{message}</p>
     </form>
   </main>;
@@ -170,10 +174,10 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
 }) {
   return <li className="space-y-1">
     {node.selection === null ? <span className="text-sm text-muted-foreground">{node.label}</span>
-      : <button type="button" disabled={disabled} className={`${buttonClass} w-full text-left`}
+      : <Button type="button" variant="outline" size="sm" disabled={disabled} className={`${buttonClass} w-full text-left`}
         aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
         {node.label} <span className="text-xs text-muted-foreground">({node.kind})</span>
-      </button>}
+      </Button>}
     {node.children.length > 0 && <ul className="space-y-1 border-l border-border pl-3">
       {node.children.map((child) => <Outline key={child.key} node={child} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
     </ul>}
@@ -637,14 +641,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         <div><dt className="inline font-medium">Draft revision: </dt><dd className="inline">{state.draftRevision}</dd></div></dl>
       <p>Save draft changes before preparing a release. Publishing does not install or adopt it.</p>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={buttonClass} disabled={!state.canUndo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.canUndo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
           if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.undo();
-        }}>Undo</button>
-        <button type="button" className={buttonClass} disabled={!state.canRedo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
+        }}>Undo</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.canRedo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
           if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.redo();
-        }}>Redo</button>
-        <button type="button" className={buttonClass} disabled={!state.isDirty || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save draft</button>
-        <button type="button" className={buttonClass} disabled={isPublishing || state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</button>
+        }}>Redo</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.isDirty || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save draft</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={isPublishing || state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</Button>
       </div>
       <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingSearch
         ? "Apply or discard Search edits before saving or changing other editor content." : pendingSourceImport
@@ -657,7 +661,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         ? "Apply or discard the inspector text before saving or undoing." : state.isDirty
           ? "Unsaved local changes." : "Local history matches the saved baseline."} {message}</p>
     </header>
-    <section className="space-y-2 rounded border border-border p-4" aria-label="Bound Module drafts">
+    <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Bound Module drafts">
       <h2 className="font-semibold">Bound Module drafts</h2>
       <p className="text-sm">Open a Module's own draft to edit a field label. Its draft revision is separate from this Application.</p>
       {currentModuleMetadata === null
@@ -668,10 +672,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               {module.key}: open Module draft</a>
             <p>Bound release {module.releaseVersion} (revision {module.releaseRevision}); content {module.contentFingerprint}; resolution {module.resolutionFingerprint}</p>
           </li>)}</ul>}
-      <button type="button" className={buttonClass} onClick={refreshSearchMetadata}
+      <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={refreshSearchMetadata}
         disabled={refreshingSearch || isPublishing || state.isSaving || state.isDirty || isReopening || pendingSearch || pendingSourceImport ||
           pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend}>
-        Refresh saved Module bindings</button>
+        Refresh saved Module bindings</Button>
     </section>
     <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
       disabled={isPublishing || state.isSaving || isReopening || refreshingSearch || state.isDirty || pendingSourceImport || pendingLabels ||
@@ -728,13 +732,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         setMessage("Imported source applied to local history. Save explicitly to persist this change.");
         return "applied";
       }} />
-    <form aria-label="Application publication" className="space-y-3 rounded border border-border p-4"
+    <form aria-label="Application publication" className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"
       onSubmit={(event) => { event.preventDefault(); void requestPublication("publish"); }}>
       <h2 className="font-semibold">Publish the saved Application</h2>
       <p>Preparation reads the exact saved draft and its published dependencies with your current permissions.
         Confirming recompiles and compares the complete confirmation in a new protected transaction.</p>
       <label className="block space-y-1"><span>Release note</span>
-        <textarea className={inputClass} value={publicationNote} maxLength={2000} disabled={isPublishing || pendingSearch || pendingSourceImport}
+        <Textarea className={inputClass} value={publicationNote} maxLength={2000} disabled={isPublishing || pendingSearch || pendingSourceImport}
           onChange={(event) => { if (!publicationPending.current && !sourceImportPending.current && !searchPending.current) setPublicationNote(event.target.value); }} /></label>
       {preparedPublication !== null && <div className="space-y-2">
         <p>Proposed version: {preparedPublication.confirmation.assignedVersion}. Outcome: {preparedPublication.confirmation.outcome}.</p>
@@ -743,13 +747,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         </details>
       </div>}
       <div className="flex flex-wrap gap-2">
-        <button className={buttonClass} type="button" disabled={isPublishing || readPublicationSnapshot() === null}
-          onClick={() => { void requestPublication("prepare"); }}>Prepare publication</button>
-        <button className={buttonClass} type="submit" disabled={isPublishing || preparedPublication === null ||
+        <Button className={buttonClass} type="button" disabled={isPublishing || readPublicationSnapshot() === null}
+          onClick={() => { void requestPublication("prepare"); }}>Prepare publication</Button>
+        <Button className={buttonClass} type="submit" disabled={isPublishing || preparedPublication === null ||
           publicationNote.trim().length < 1 || !samePublicationSnapshot(preparedPublication.snapshot, readPublicationSnapshot())}
-          >Confirm publication</button>
-        <button className={buttonClass} type="button" disabled={!isPublishing && preparedPublication === null}
-          onClick={cancelPublication}>Cancel confirmation or response</button>
+          >Confirm publication</Button>
+        <Button className={buttonClass} type="button" disabled={!isPublishing && preparedPublication === null}
+          onClick={cancelPublication}>Cancel confirmation or response</Button>
       </div>
       <p role="status" aria-live="polite">{publicationMessage}</p>
       {publishedPublication !== null && <details><summary>Verified publication result</summary>
@@ -775,7 +779,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           setLabel(currentLabel);
           setDescription(source.body.description);
         }} /></ul></nav>
-      <section className="space-y-3 rounded border border-border p-4" aria-label="Selected item">
+      <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Selected item">
         <h2 className="font-semibold">{inspector.status === "resolved" ? inspector.descriptor.label : "Select an item"}</h2>
         {selectedPage?.type === "dashboard" && <p>This dashboard's authored composition is preserved. This minimum host edits labels; it does not render or execute application data, events or actions.</p>}
         {selected?.kind === "application" && <p>{source.body.description}</p>}
@@ -967,7 +971,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         {inspector.status === "resolved" && <p className="break-all text-sm">{inspector.descriptor.kind}: {inspector.descriptor.alias}</p>}
         {editable ? <form className="space-y-3" onSubmit={applyLabels}>
           <label className="block space-y-1"><span>Selected item name</span>
-            <input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
+            <Input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
               disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} value={label} onChange={(event) => {
                 if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
                 labelsPending.current = true;
@@ -975,18 +979,18 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
                 setLabel(event.target.value);
               }} /></label>
           {selected?.kind === "application" && <label className="block space-y-1"><span>Application description</span>
-            <textarea className={inputClass} required maxLength={1000} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition}
+            <Textarea className={inputClass} required maxLength={1000} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition}
               value={description} onChange={(event) => {
                 if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
                 labelsPending.current = true;
                 previewGeneration.current += 1;
                 setDescription(event.target.value);
               }} /></label>}
-          <button className={buttonClass} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} type="submit">Apply labels</button>
-          <button className={buttonClass} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || !pendingLabels} type="button" onClick={() => {
+          <Button className={buttonClass} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} type="submit">Apply labels</Button>
+          <Button className={buttonClass} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || !pendingLabels} type="button" onClick={() => {
             if (publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current) return;
             setLabel(currentLabel); setDescription(source.body.description);
-          }}>Discard inspector text</button>
+          }}>Discard inspector text</Button>
           <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
         </form> : <p>{selected?.kind === "flow"
           ? "Select a task in the Flow outline to inspect supported presentation text or arithmetic."
