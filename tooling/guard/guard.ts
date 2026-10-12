@@ -486,7 +486,15 @@ function unchangedFromMain(file: string): boolean {
 const added = unique.filter((finding) => !old.has(finding.id) && !unchangedFromMain(finding.file));
 const resolved = baseline.filter((id) => !current.has(id));
 const stale = resolved.filter((id) => !unchangedFromMain(id.split("|")[1]));
-if (process.argv.includes("--update-baseline")) {
+if (process.argv.includes("--refresh-from-main")) {
+  // Records main's complete current findings. Allowed only on a tree identical to origin/main,
+  // so a pull request can never use it to enlarge the baseline.
+  const diff = spawnSync("git", ["diff", "--quiet", "origin/main", "--", ".", ":(exclude)tooling/guard"], { cwd: root });
+  if (diff.status !== 0) throw new Error("--refresh-from-main requires a tree identical to origin/main");
+  writeFileSync(baselinePath, `${JSON.stringify(unique.map((finding) => finding.id), null, 2)}
+`);
+  console.log(`Baseline refreshed from main: ${unique.length} findings.`);
+} else if (process.argv.includes("--update-baseline")) {
   if (growth.length) throw new Error(`Baseline cannot grow: ${growth[0]}`);
   if (hasBaseline && added.length)
     throw new Error(
