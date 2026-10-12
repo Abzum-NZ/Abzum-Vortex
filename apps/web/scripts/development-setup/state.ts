@@ -44,6 +44,8 @@ export type SetupState = {
   setupCompleted: boolean;
   /** A default initialization attempt was durably recorded before its protected write. */
   defaultApplicationInitializationAttempted: boolean;
+  /** The settings revision observed before the pending default write, or null without one. */
+  defaultApplicationInitializationAttemptRevision: number | null;
   /** The one-time default initialization decision has been handled for this organisation. */
   defaultApplicationInitializationCompleted: boolean;
   save(): void;
@@ -74,11 +76,108 @@ const developmentSetupMetadataSchema = z
   })
   .strict();
 
+const setupRevisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const createdDraftSchema = z
+  .object({
+    rootId: z.uuid(),
+    draftRevision: setupRevisionSchema,
+  })
+  .strict();
+const publishedReleaseSchema = z
+  .object({
+    rootId: z.uuid(),
+    releaseRevision: setupRevisionSchema,
+    releaseVersion: z.string().min(1),
+  })
+  .strict();
+const setupStateEnvelopeSchema = z.object({ organizationId: z.uuid() }).passthrough();
+const setupStateDocumentSchema = z
+  .object({
+    organizationId: z.uuid(),
+    metadata: developmentSetupMetadataSchema,
+    drafts: z.record(z.string(), createdDraftSchema).optional(),
+    releases: z.record(z.string(), publishedReleaseSchema).optional(),
+    installerRoleGranted: z.boolean().optional(),
+    definitionRoleGranted: z.boolean().optional(),
+    lifecyclePolicies: z.record(z.string(), z.boolean()).optional(),
+    sharedLifecyclePolicies: z.record(z.string(), z.boolean()).optional(),
+    setupCompleted: z.boolean().optional(),
+    defaultApplicationInitializationAttempted: z.boolean().optional(),
+    defaultApplicationInitializationAttemptRevision: setupRevisionSchema.nullable().optional(),
+    defaultApplicationInitializationCompleted: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((state, context) => {
+    const attemptRevision = state.defaultApplicationInitializationAttemptRevision;
+    if (attemptRevision === undefined) return;
+    if (
+      state.defaultApplicationInitializationAttempted === undefined ||
+      state.defaultApplicationInitializationCompleted === undefined ||
+      (state.defaultApplicationInitializationAttempted && attemptRevision === null) ||
+      (!state.defaultApplicationInitializationAttempted && attemptRevision !== null)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Default initialization attempt metadata is inconsistent.",
+      });
+  });
+
+const storedStateCode = (error: unknown): unknown =>
+  typeof error === "object" && error !== null
+    ? Object.getOwnPropertyDescriptor(error, "code")?.value
+    : undefined;
+
+const stateFailure = (message: string, cause: unknown): Error => {
+  const summary =
+    cause instanceof z.ZodError
+      ? cause.issues
+          .map((issue) => `${issue.path.join(".") || "state"}: ${issue.message}`)
+          .join("; ")
+      : cause instanceof Error
+        ? `${cause.name}${typeof storedStateCode(cause) === "string" ? ` (${String(storedStateCode(cause))})` : ""}: ${cause.message}`
+        : typeof cause;
+  return new Error(`${message} Cause: ${summary}`, { cause });
+};
+
+const readSetupStateDocument = (): unknown | undefined => {
+  let contents: string;
+  try {
+    contents = readFileSync(stateFile(), "utf8");
+  } catch (error) {
+    if (storedStateCode(error) === "ENOENT") return undefined;
+    throw stateFailure("Unable to read development setup state.", error);
+  }
+  try {
+    return JSON.parse(contents) as unknown;
+  } catch (error) {
+    throw stateFailure("Unable to parse development setup state.", error);
+  }
+};
+
+const requiredStateEnvelope = (value: unknown) => {
+  const parsed = setupStateEnvelopeSchema.safeParse(value);
+  if (!parsed.success)
+    throw stateFailure(
+      "Development setup state has a malformed organisation identity.",
+      parsed.error,
+    );
+  return parsed.data;
+};
+
 export const loadSetupState = (
   organizationId: string,
   initialMetadata?: DevelopmentSetupMetadata,
 ): SetupState => {
-  let metadata = initialMetadata;
+  const parsedInitialMetadata =
+    initialMetadata === undefined
+      ? undefined
+      : developmentSetupMetadataSchema.safeParse(initialMetadata);
+  if (parsedInitialMetadata !== undefined && !parsedInitialMetadata.success)
+    throw stateFailure(
+      "Development setup metadata is malformed for the selected organisation.",
+      parsedInitialMetadata.error,
+    );
+  let metadata = parsedInitialMetadata?.success ? parsedInitialMetadata.data : undefined;
   let releases: Record<string, PublishedRelease> = {};
   let drafts: Record<string, CreatedDraft> = {};
   let installerRoleGranted = false;
@@ -87,26 +186,17 @@ export const loadSetupState = (
   let sharedLifecyclePolicies: Record<string, boolean> = {};
   let setupCompleted = false;
   let defaultApplicationInitializationAttempted = false;
+  let defaultApplicationInitializationAttemptRevision: number | null = null;
   let defaultApplicationInitializationCompleted = false;
-  try {
-    const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
-      organizationId?: unknown;
-      metadata?: unknown;
-      releases?: Record<string, PublishedRelease>;
-      drafts?: Record<string, CreatedDraft>;
-      installerRoleGranted?: boolean;
-      definitionRoleGranted?: boolean;
-      lifecyclePolicies?: Record<string, boolean>;
-      sharedLifecyclePolicies?: Record<string, boolean>;
-      setupCompleted?: boolean;
-      defaultApplicationInitializationAttempted?: boolean;
-      defaultApplicationInitializationCompleted?: boolean;
-    };
-    if (stored.organizationId === organizationId) {
-      if (initialMetadata === undefined) {
-        const parsedMetadata = developmentSetupMetadataSchema.safeParse(stored.metadata);
-        if (parsedMetadata.success) metadata = parsedMetadata.data;
-      }
+  const document = readSetupStateDocument();
+  if (document !== undefined) {
+    const envelope = requiredStateEnvelope(document);
+    if (envelope.organizationId.toLowerCase() === organizationId.toLowerCase()) {
+      const parsed = setupStateDocumentSchema.safeParse(document);
+      if (!parsed.success)
+        throw stateFailure("Development setup state is malformed.", parsed.error);
+      const stored = parsed.data;
+      if (initialMetadata === undefined) metadata = stored.metadata;
       releases = stored.releases ?? {};
       drafts = stored.drafts ?? {};
       installerRoleGranted = stored.installerRoleGranted === true;
@@ -122,14 +212,21 @@ export const loadSetupState = (
           stored.defaultApplicationInitializationAttempted;
         defaultApplicationInitializationCompleted =
           stored.defaultApplicationInitializationCompleted;
+        defaultApplicationInitializationAttemptRevision =
+          stored.defaultApplicationInitializationAttemptRevision ?? null;
+        if (
+          defaultApplicationInitializationAttempted &&
+          !defaultApplicationInitializationCompleted &&
+          stored.defaultApplicationInitializationAttemptRevision === undefined
+        ) {
+          // A pre-reconciliation attempt has no revision evidence, so preserve its prior decision.
+          defaultApplicationInitializationCompleted = true;
+        }
       } else {
-        // An existing setup predates this marker. Its null default may be an explicit clear,
-        // so upgrading must preserve that choice rather than guessing it was never initialized.
+        // Older setup state may have an explicit null default; do not infer a first initialization.
         defaultApplicationInitializationCompleted = true;
       }
     }
-  } catch {
-    // No usable state: start empty.
   }
   if (metadata === undefined)
     throw new Error("Development setup metadata is unavailable for the selected organisation.");
@@ -144,6 +241,7 @@ export const loadSetupState = (
     sharedLifecyclePolicies,
     setupCompleted,
     defaultApplicationInitializationAttempted,
+    defaultApplicationInitializationAttemptRevision,
     defaultApplicationInitializationCompleted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
@@ -162,6 +260,8 @@ export const loadSetupState = (
             setupCompleted: state.setupCompleted,
             defaultApplicationInitializationAttempted:
               state.defaultApplicationInitializationAttempted,
+            defaultApplicationInitializationAttemptRevision:
+              state.defaultApplicationInitializationAttemptRevision,
             defaultApplicationInitializationCompleted:
               state.defaultApplicationInitializationCompleted,
           },
@@ -176,7 +276,9 @@ export const loadSetupState = (
 
 /** Loads the most recently set up organisation for the standalone idempotent demo seeder. */
 export const loadCurrentSetupState = (): SetupState => {
-  const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as { organizationId?: unknown };
-  const organizationId = z.uuid().parse(stored.organizationId);
+  const document = readSetupStateDocument();
+  if (document === undefined)
+    throw new Error("Development setup state is unavailable for the demo seeder.");
+  const { organizationId } = requiredStateEnvelope(document);
   return loadSetupState(organizationId);
 };

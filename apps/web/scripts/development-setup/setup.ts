@@ -63,14 +63,7 @@ const initializeLandingZoneDefault = async (
   const session = nominatedOwnerSession(stewardIdentityId);
   const requests = createHumanOrganizationRequestService({ identityAuthorityId });
   if (state.defaultApplicationInitializationCompleted) return;
-  if (state.defaultApplicationInitializationAttempted) {
-    state.defaultApplicationInitializationCompleted = true;
-    state.save();
-    log(
-      "a prior Landing Zone default initialization was interrupted; the current default was preserved",
-    );
-    return;
-  }
+  const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
 
   const selection = organizationSelectionCandidateSchema.parse({ organizationId });
   const observed = await requests.run(session, selection, async (transaction, scope) => {
@@ -100,6 +93,42 @@ const initializeLandingZoneDefault = async (
     throw new Error(`Landing Zone default initialization failed: ${details}`);
   }
 
+  if (state.defaultApplicationInitializationAttempted) {
+    const attemptRevision = state.defaultApplicationInitializationAttemptRevision;
+    if (attemptRevision === null) {
+      state.defaultApplicationInitializationCompleted = true;
+      state.save();
+      log(
+        "a prior default initialization had no revision evidence; the current default was preserved",
+      );
+      return;
+    }
+    const writeWasObserved =
+      observed.value.revision === attemptRevision + 1 &&
+      observed.value.defaultApplicationRootId?.toLowerCase() ===
+        defaultApplicationRootId.toLowerCase();
+    if (writeWasObserved) {
+      state.defaultApplicationInitializationCompleted = true;
+      state.save();
+      log(
+        `reconciled the prior Landing Zone default write at settings revision ${observed.value.revision}`,
+      );
+      return;
+    }
+    const writeDidNotOccur =
+      observed.value.revision === attemptRevision &&
+      observed.value.defaultApplicationRootId === null;
+    if (!writeDidNotOccur) {
+      state.defaultApplicationInitializationCompleted = true;
+      state.save();
+      log(
+        "a prior default initialization changed organisation settings; the current default was preserved",
+      );
+      return;
+    }
+    log(`the prior default write did not change settings revision ${attemptRevision}; retrying it`);
+  }
+
   if (observed.value.defaultApplicationRootId !== null) {
     state.defaultApplicationInitializationCompleted = true;
     state.save();
@@ -107,7 +136,6 @@ const initializeLandingZoneDefault = async (
     return;
   }
 
-  const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
   const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
   if (administrationRelease === undefined)
     throw new Error(
@@ -139,9 +167,9 @@ const initializeLandingZoneDefault = async (
     organizationId,
     applicationRootId: administrationRelease.rootId,
   });
-  // Fence reruns before the protected write. If the process stops after the write, a later
-  // explicit clear must remain the user's choice; an interrupted attempt falls back to the launcher.
+  // Persist the observed revision before the protected write so a rerun can reconcile the outcome.
   state.defaultApplicationInitializationAttempted = true;
+  state.defaultApplicationInitializationAttemptRevision = observed.value.revision;
   state.save();
 
   const result = await createRecordSaveService({ identityAuthorityId }).save(
@@ -174,13 +202,6 @@ const initializeLandingZoneDefault = async (
       `initialized the organisation default to Landing Zone at settings revision ${result.value.concurrencyNumber}`,
     );
   } else {
-    if (
-      result.kind === "unavailable" ||
-      (result.kind === "available" && result.value.outcome !== "saved")
-    ) {
-      state.defaultApplicationInitializationAttempted = false;
-      state.save();
-    }
     const details =
       result.kind === "temporarily_unavailable"
         ? `temporarily unavailable${result.cause === undefined ? "" : `: ${result.cause}`}`
