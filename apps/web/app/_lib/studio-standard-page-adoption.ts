@@ -1,7 +1,6 @@
 import "server-only";
 
-import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
+import type { sourceIdentityAssignmentSchema } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
@@ -44,7 +43,7 @@ import {
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 
-type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
+type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -105,7 +104,8 @@ const readCurrentHumanContext = async (
     (issuedAt !== undefined && context.issuedAt !== issuedAt) ||
     context.expiresAt !== session.accessTokenExpiresAt ||
     context.accessTokenIssuedAt !==
-      (session.primaryAuthenticatedAt !== undefined || session.multiFactorAuthenticatedAt !== undefined
+      (session.primaryAuthenticatedAt !== undefined ||
+      session.multiFactorAuthenticatedAt !== undefined
         ? session.accessTokenIssuedAt
         : undefined) ||
     context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
@@ -115,10 +115,7 @@ const readCurrentHumanContext = async (
   return context;
 };
 
-const sameDraft = (
-  candidate: unknown,
-  current: StoredApplicationDefinitionDraft,
-): boolean => {
+const sameDraft = (candidate: unknown, current: StoredApplicationDefinitionDraft): boolean => {
   const parsed = storedDefinitionDraftSchema.safeParse(candidate);
   return parsed.success && canonicalJson(parsed.data) === canonicalJson(current);
 };
@@ -158,10 +155,11 @@ const readLatestPageAdoptionRelease = async (
 
 const mapPageId = (
   source: StoredDefinitionSource,
-  identities: readonly SourceIdentityAssignmentV3[],
+  identities: readonly SourceIdentityAssignment[],
   alias: string,
 ): string => {
-  if (source.kind !== "application") throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (source.kind !== "application")
+    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -171,14 +169,19 @@ const mapPageId = (
       identity.alias === alias,
   );
   const match = matches[0];
-  if (matches.length !== 1 || match === undefined) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (matches.length !== 1 || match === undefined)
+    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
   return match.identifier;
 };
 
 export type ComparisonChoice = Readonly<{
   original: Readonly<{ pageId: string; key: string; name: string; type: string }>;
   replacement: Readonly<{ pageId: string; key: string; name: string; type: string }>;
-  candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
+  candidate: Readonly<{
+    releaseRevision: number;
+    releaseVersion: string;
+    impactReasons: readonly Readonly<{ code: string; impact: string }>[];
+  }>;
   differences: Readonly<{
     entries: readonly PageAdoptionDifference[];
     omittedCount: number;
@@ -202,7 +205,7 @@ export type StudioStandardPageAdoptionLoadResult =
 
 const toChoices = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
+  identities: readonly SourceIdentityAssignment[],
   currentContent: Parameters<typeof buildPageAdoptionPlan>[0]["currentContent"],
   release: NonNullable<Awaited<ReturnType<typeof readLatestPageAdoptionRelease>>>,
 ): ComparisonChoice[] => {
@@ -282,7 +285,22 @@ export const loadStudioStandardPageAdoption = async (
     const result = await humanOrganizationRequests().run(
       resolved.session,
       { organizationId: organization.data },
-      async (transaction, scope, issuedAt): Promise<Readonly<{ kind: "available"; value: Omit<Extract<StudioStandardPageAdoptionLoadResult, { kind: "available" }>, "kind"> } | { kind: "refused" }>> => {
+      async (
+        transaction,
+        scope,
+        issuedAt,
+      ): Promise<
+        Readonly<
+          | {
+              kind: "available";
+              value: Omit<
+                Extract<StudioStandardPageAdoptionLoadResult, { kind: "available" }>,
+                "kind"
+              >;
+            }
+          | { kind: "refused" }
+        >
+      > => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
@@ -292,16 +310,28 @@ export const loadStudioStandardPageAdoption = async (
           if (error instanceof BuilderAuthorityError) return { kind: "refused" };
           throw error;
         }
-        const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
+        const draft = await readApplicationDefinitionDraft(transaction, scope, {
+          rootId: root.data,
+        });
         if (draft.kind !== "application" || !sameId(draft.organizationId, scope.organizationId))
           return { kind: "refused" };
         if (draft.publishedRevision === undefined) {
           return {
             kind: "available",
-            value: { organizationId: scope.organizationId, rootId: String(draft.rootId), draftRevision: draft.draftRevision, choices: [] },
+            value: {
+              organizationId: scope.organizationId,
+              rootId: String(draft.rootId),
+              draftRevision: draft.draftRevision,
+              choices: [],
+            },
           };
         }
-        const context = await readCurrentHumanContext(transaction, scope, resolved.session, issuedAt);
+        const context = await readCurrentHumanContext(
+          transaction,
+          scope,
+          resolved.session,
+          issuedAt,
+        );
         const current = await createDatabaseDefinitionPublicationService(
           installedReleaseCatalogue,
           transaction,
@@ -314,7 +344,8 @@ export const loadStudioStandardPageAdoption = async (
           throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
         const candidate = await readCurrentCandidate(transaction, context, draft);
         const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-        if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+        if (release === undefined)
+          throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
         const choices = toChoices(
           draft,
           candidate.identities,
@@ -326,7 +357,12 @@ export const loadStudioStandardPageAdoption = async (
           expectedDraftRevision: draft.draftRevision,
         });
         await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-        const finalContext = await readCurrentHumanContext(transaction, scope, resolved.session, issuedAt);
+        const finalContext = await readCurrentHumanContext(
+          transaction,
+          scope,
+          resolved.session,
+          issuedAt,
+        );
         if (
           canonicalJson(finalDraft) !== canonicalJson(draft) ||
           canonicalJson(finalContext) !== canonicalJson(context)
@@ -344,7 +380,8 @@ export const loadStudioStandardPageAdoption = async (
       },
     );
     if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-    if (result.kind === "unavailable" || result.value.kind !== "available") return { kind: "refused" };
+    if (result.kind === "unavailable" || result.value.kind !== "available")
+      return { kind: "refused" };
     return { kind: "available", ...result.value.value };
   } catch {
     return { kind: "temporarily_unavailable" };
@@ -374,87 +411,98 @@ export const saveStudioStandardPageAdoption = async (
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
       return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } as const
-        : { kind: "refused" } as const;
+        ? ({ kind: "temporarily_unavailable" } as const)
+        : ({ kind: "refused" } as const);
     const writer = createHumanApplicationDraftWriter({ requests: humanOrganizationRequests() });
     return await writer.saveDerivedDraft(
       resolved.session,
       organizationId,
       command,
       async ({ transaction, scope, session, draft, command: lockedCommand }) => {
-      if (
-        draft.kind !== "application" ||
-        !sameId(draft.rootId, lockedCommand.rootId) ||
-        draft.draftRevision !== lockedCommand.expectedDraftRevision ||
-        draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
-      )
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const context = await readCurrentHumanContext(transaction, scope, session);
-      const authority = createBuilderAuthority({ transaction, scope, targetFacts });
-      const facts = await targetFacts(transaction, scope, draft.rootId);
-      if (facts.isSystemApplication) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-      const current = await createDatabaseDefinitionPublicationService(
-        installedReleaseCatalogue,
-        transaction,
-        authority,
-      ).compileApplicationDraft(context, {
-        rootId: String(draft.rootId),
-        expectedDraftRevision: draft.draftRevision,
-      });
-      if (current.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor)
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const candidateState = await readCurrentCandidate(transaction, context, draft);
-      const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-      if (release === undefined) throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
-      const plan = buildPageAdoptionPlan({
-        draft,
-        currentIdentities: candidateState.identities,
-        currentContent: current.compilation.canonical.content,
-        release,
-        originalPageId: lockedCommand.originalPageId,
-        replacementPageId: lockedCommand.replacementPageId,
-        target: lockedCommand.target,
-        decision: lockedCommand.decision,
-      });
-      if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
-        throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      return {
-        source: plan.source,
-        verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
-          if (
-            savedDraft.kind !== "application" ||
-            !sameId(savedDraft.rootId, lockedCommand.rootId) ||
-            savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
-          )
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
-          const verifiedContext = await readCurrentHumanContext(
-            verifyTransaction,
-            verifyScope,
-            session,
-            context.issuedAt,
-          );
-          if (canonicalJson(verifiedContext) !== canonicalJson(context))
-            throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-          const verifiedCandidate = await createDatabaseDefinitionPublicationService(
-            installedReleaseCatalogue,
-            verifyTransaction,
-            createBuilderAuthority({ transaction: verifyTransaction, scope: verifyScope, targetFacts }),
-          ).compileApplicationDraft(verifiedContext, {
-            rootId: String(savedDraft.rootId),
-            expectedDraftRevision: savedDraft.draftRevision,
-          });
-          if (
-            verifiedCandidate.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor ||
-            canonicalJson(verifiedCandidate.compilation.canonical.content) !== canonicalJson(plan.expectedCanonicalContent) ||
-            fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
-              fingerprintCanonicalValue(plan.expectedCanonicalContent)
-          )
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
-          const verifiedRelease = await readLatestPageAdoptionRelease(verifyTransaction, verifiedContext, savedDraft);
-          if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
-            throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
-        },
-      };
+        if (
+          draft.kind !== "application" ||
+          !sameId(draft.rootId, lockedCommand.rootId) ||
+          draft.draftRevision !== lockedCommand.expectedDraftRevision ||
+          draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
+        )
+          throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const context = await readCurrentHumanContext(transaction, scope, session);
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+        const facts = await targetFacts(transaction, scope, draft.rootId);
+        if (facts.isSystemApplication) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+        const current = await createDatabaseDefinitionPublicationService(
+          installedReleaseCatalogue,
+          transaction,
+          authority,
+        ).compileApplicationDraft(context, {
+          rootId: String(draft.rootId),
+          expectedDraftRevision: draft.draftRevision,
+        });
+        if (current.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor)
+          throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const candidateState = await readCurrentCandidate(transaction, context, draft);
+        const release = await readLatestPageAdoptionRelease(transaction, context, draft);
+        if (release === undefined)
+          throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+        const plan = buildPageAdoptionPlan({
+          draft,
+          currentIdentities: candidateState.identities,
+          currentContent: current.compilation.canonical.content,
+          release,
+          originalPageId: lockedCommand.originalPageId,
+          replacementPageId: lockedCommand.replacementPageId,
+          target: lockedCommand.target,
+          decision: lockedCommand.decision,
+        });
+        if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
+          throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        return {
+          source: plan.source,
+          verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
+            if (
+              savedDraft.kind !== "application" ||
+              !sameId(savedDraft.rootId, lockedCommand.rootId) ||
+              savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
+            )
+              throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            const verifiedContext = await readCurrentHumanContext(
+              verifyTransaction,
+              verifyScope,
+              session,
+              context.issuedAt,
+            );
+            if (canonicalJson(verifiedContext) !== canonicalJson(context))
+              throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            const verifiedCandidate = await createDatabaseDefinitionPublicationService(
+              installedReleaseCatalogue,
+              verifyTransaction,
+              createBuilderAuthority({
+                transaction: verifyTransaction,
+                scope: verifyScope,
+                targetFacts,
+              }),
+            ).compileApplicationDraft(verifiedContext, {
+              rootId: String(savedDraft.rootId),
+              expectedDraftRevision: savedDraft.draftRevision,
+            });
+            if (
+              verifiedCandidate.currentReleaseRevision !==
+                lockedCommand.expectedPublicationAnchor ||
+              canonicalJson(verifiedCandidate.compilation.canonical.content) !==
+                canonicalJson(plan.expectedCanonicalContent) ||
+              fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
+                fingerprintCanonicalValue(plan.expectedCanonicalContent)
+            )
+              throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            const verifiedRelease = await readLatestPageAdoptionRelease(
+              verifyTransaction,
+              verifiedContext,
+              savedDraft,
+            );
+            if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
+              throw new DefinitionPublicationError("DEFINITION_HISTORY_INVALID");
+          },
+        };
       },
     );
   } catch {

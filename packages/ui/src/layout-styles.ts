@@ -1,14 +1,14 @@
 import type { CSSProperties } from "react";
-import type { BlockPlacementV2Contract } from "@vortex/platform/schema";
+import type { BlockPlacementContract } from "@vortex/platform/schema";
 
 /**
  * One breakpoint's declared layout values. Derived from the canonical placement contract rather
  * than a separate declaration so the renderer and the schema cannot drift.
  */
-type PlacementLayoutV2Contract = BlockPlacementV2Contract["responsive"]["desktop"];
+type PlacementLayoutContract = BlockPlacementContract["responsive"]["desktop"];
 
 /** Complete per-breakpoint layout declaration for one placement. */
-export type ResponsivePlacementLayoutsV2 = BlockPlacementV2Contract["responsive"];
+export type ResponsivePlacementLayouts = BlockPlacementContract["responsive"];
 
 /**
  * Breakpoint thresholds shared by the responsive stylesheet and the browser breakpoint provider.
@@ -42,9 +42,7 @@ export const LAYOUT_CLASS_NAMES = Object.freeze({
 /**
  * Computes inline CSSProperties for a placement's layout declaration at a given breakpoint.
  */
-export function computePlacementStyle(
-  layout: PlacementLayoutV2Contract | undefined,
-): CSSProperties {
+export function computePlacementStyle(layout: PlacementLayoutContract | undefined): CSSProperties {
   if (!layout) {
     return { boxSizing: "border-box" };
   }
@@ -87,7 +85,7 @@ export function computePlacementStyle(
 /**
  * Computes standard CSS class names for a placement's layout declaration.
  */
-export function computePlacementClassName(layout: PlacementLayoutV2Contract | undefined): string {
+export function computePlacementClassName(layout: PlacementLayoutContract | undefined): string {
   if (!layout) {
     return LAYOUT_CLASS_NAMES.placementWrapper;
   }
@@ -134,10 +132,7 @@ export const slotGapLength = (gap: SlotGapName): string =>
  * CSS declarations for one breakpoint's layout. Visibility and geometry are explicit so a narrower
  * rule can always override a wider one, including resetting bounded height and grid placement.
  */
-function responsiveLayoutDeclarations(
-  layout: PlacementLayoutV2Contract,
-  gridItem: boolean,
-): string {
+function responsiveLayoutDeclarations(layout: PlacementLayoutContract, gridItem: boolean): string {
   if (!layout.visible) return "display: none";
 
   const declarations: string[] = ["display: block"];
@@ -168,7 +163,7 @@ function responsiveLayoutDeclarations(
 /** The same per-breakpoint rules for any one selector, e.g. a placement wrapper that scopes itself. */
 export function computeResponsiveSelectorCss(
   selector: string,
-  responsive: ResponsivePlacementLayoutsV2,
+  responsive: ResponsivePlacementLayouts,
   gridItem: boolean,
 ): string {
   let css = `${selector} { ${responsiveLayoutDeclarations(responsive.desktop, gridItem)}; }\n`;

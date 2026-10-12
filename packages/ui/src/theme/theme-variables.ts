@@ -1,23 +1,23 @@
 import type { CSSProperties } from "react";
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   findShadcnFontByFamilyKey,
   resolveShadcnFontSelection,
   shadcnFontStack,
-  type ApplicationContentV2,
-  type PlatformThemeTokenRoleKeyV2,
+  type ApplicationContent,
+  type PlatformThemeTokenRoleKey,
   type ShadcnFont,
 } from "@vortex/platform/schema";
 
 /** Resolved #594 application theme, as materialised in application content. */
-export type ApplicationThemeV2 = ApplicationContentV2["theme"];
-type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
+export type ApplicationTheme = ApplicationContent["theme"];
+type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
 /** Appearance selection. `system` follows the person's browser colour-scheme preference. */
 export type ThemeMode = "light" | "dark" | "system";
 
 /** Resolved, validated #594 theme tokens keyed by builder key. */
-type ThemeTokens = Readonly<Record<string, ThemeTokenValueV2>>;
+type ThemeTokens = Readonly<Record<string, ThemeTokenValue>>;
 
 /**
  * The only CSS custom properties the shared component stylesheet reads. Names are fixed
@@ -119,24 +119,30 @@ const BUILDER_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 /** Only a validated six-digit hex or oklch() value reaches the stylesheet, never raw token text. */
-const isColorValue = (value: string): boolean =>
-  HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
+const isColorValue = (value: string): boolean => HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
 
 /**
  * Surface keys in the exact order #594 selects the surface its text, brand and focus
  * contrast checks run against. The painted surface must be that same surface.
  */
-const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
+const SURFACE_PRIORITY = [
+  "background",
+  "canvas",
+  "surface",
+  "bg",
+  "page_background",
+  "app_background",
+];
 
 /**
  * The registered platform theme release's token values. Every renderer fallback below is
  * read from here, so the renderer holds no second palette: the shared vocabulary and the
  * registered release are its only source of default colours, type, spacing and shape.
  */
-const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE_V2.tokens;
+const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE.tokens;
 
 /** The registered release's value for one shared colour role, or a loud failure if absent. */
-function platformColor(role: PlatformThemeTokenRoleKeyV2): ColorPair {
+function platformColor(role: PlatformThemeTokenRoleKey): ColorPair {
   const pair = colorPair(PLATFORM_TOKENS, role);
   if (pair === undefined)
     throw new Error(`Platform theme release is missing colour role "${role}"`);
@@ -144,7 +150,8 @@ function platformColor(role: PlatformThemeTokenRoleKeyV2): ColorPair {
 }
 
 /** The shadcn surfaces the vocabulary pairs with a `<role>_foreground` role. */
-type ShadcnFilledRole = "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
+type ShadcnFilledRole =
+  "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
 
 /** The registered release's base radius, which shadcn derives every corner size from. */
 const PLATFORM_RADIUS_BASE: string = (() => {
@@ -159,9 +166,9 @@ const DEFAULT_SURFACE: ColorPair = platformColor("background");
 const DEFAULT_TEXT: ColorPair = platformColor("text");
 
 /** The registered release's focus colour role, so the renderer never assumes it by name. */
-const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKeyV2 =
+const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKey =
   PLATFORM_TOKENS.focus?.kind === "focus"
-    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKeyV2)
+    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKey)
     : "primary";
 
 /** Platform fallbacks, each read from the registered release's matching vocabulary role. */
@@ -218,8 +225,20 @@ const PLATFORM_ELEVATION = [
 ] as const;
 
 const DENSITY = {
-  comfortable: { controlY: "0.5rem", controlX: "0.75rem", minHeight: "2.5rem", cellY: "0.625rem", cellX: "0.875rem" },
-  compact: { controlY: "0.25rem", controlX: "0.5rem", minHeight: "2rem", cellY: "0.375rem", cellX: "0.5rem" },
+  comfortable: {
+    controlY: "0.5rem",
+    controlX: "0.75rem",
+    minHeight: "2.5rem",
+    cellY: "0.625rem",
+    cellX: "0.875rem",
+  },
+  compact: {
+    controlY: "0.25rem",
+    controlX: "0.5rem",
+    minHeight: "2rem",
+    cellY: "0.375rem",
+    cellX: "0.5rem",
+  },
 } as const;
 
 const colorValue = (pair: ColorPair): string => `light-dark(${pair.light}, ${pair.dark})`;
@@ -246,7 +265,9 @@ const fontStack = (font: ShadcnFont): string =>
 const fontFamily = (familyKey: string): string | undefined => {
   const font = catalogueFont(familyKey);
   if (font !== undefined) return fontStack(font);
-  return BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
+  return BUILDER_KEY.test(familyKey)
+    ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}`
+    : undefined;
 };
 
 /**
@@ -269,13 +290,13 @@ function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
     : undefined;
 }
 
-function tokenOfKind<Kind extends ThemeTokenValueV2["kind"]>(
+function tokenOfKind<Kind extends ThemeTokenValue["kind"]>(
   tokens: ThemeTokens,
   key: string,
   kind: Kind,
-): Extract<ThemeTokenValueV2, { kind: Kind }> | undefined {
+): Extract<ThemeTokenValue, { kind: Kind }> | undefined {
   const token = tokens[key];
-  return token?.kind === kind ? (token as Extract<ThemeTokenValueV2, { kind: Kind }>) : undefined;
+  return token?.kind === kind ? (token as Extract<ThemeTokenValue, { kind: Kind }>) : undefined;
 }
 
 /**
@@ -354,7 +375,8 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
   const danger = filledPair(tokens, "danger");
 
   const focus = tokenOfKind(tokens, "focus", "focus");
-  const focusColor = focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
+  const focusColor =
+    focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
   const border = tokens.border;
   const borderColor =
     border?.kind === "border"
@@ -384,18 +406,19 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
   // Without a body token the page paints the default catalogue font; the heading paints the body
   // font unless the theme has a heading token.
   const bodyFamily =
-    body === undefined ? fontStack(PLATFORM_FONTS.body) : (fontFamily(body.family) ?? FONT_FALLBACK);
-  const headingFamily = (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
+    body === undefined
+      ? fontStack(PLATFORM_FONTS.body)
+      : (fontFamily(body.family) ?? FONT_FALLBACK);
+  const headingFamily =
+    (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
 
   // Every shadcn colour comes from the resolved theme when the role is present and well formed,
   // otherwise from the registered platform release, so the bridge holds no second palette.
-  const shadcnColour = (role: PlatformThemeTokenRoleKeyV2): string =>
+  const shadcnColour = (role: PlatformThemeTokenRoleKey): string =>
     colorValue(colorPair(tokens, role) ?? platformColor(role));
   // A fill and its #594-validated foreground change together, so a foreground is never painted on
   // a fill it was not judged against.
-  const shadcnFill = (
-    role: ShadcnFilledRole,
-  ): readonly [fill: string, foreground: string] => {
+  const shadcnFill = (role: ShadcnFilledRole): readonly [fill: string, foreground: string] => {
     const [fill, foreground]: readonly [ColorPair, ColorPair] = filledPair(tokens, role) ?? [
       platformColor(role),
       platformColor(`${role}_foreground` as const),
@@ -428,13 +451,16 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
       focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus),
     ),
     // Visible focus is never thinner than #594's 1px minimum.
-    "--vortex-focus-width": (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
+    "--vortex-focus-width":
+      (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
     "--vortex-font-family": bodyFamily,
     "--vortex-font-size": (body === undefined ? undefined : rem(body.sizeRem, 0.5)) ?? "1rem",
-    "--vortex-line-height": (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
+    "--vortex-line-height":
+      (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
     "--vortex-font-weight": (body === undefined ? undefined : fontWeight(body.weight)) ?? "400",
     "--vortex-heading-font-family": headingFamily,
-    "--vortex-heading-font-size": (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
+    "--vortex-heading-font-size":
+      (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
     "--vortex-heading-line-height":
       (heading === undefined ? undefined : plainNumber(heading.lineHeight)) ?? "1.25",
     "--vortex-heading-font-weight":
@@ -451,7 +477,8 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
     "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
     "--vortex-border-width":
       (border?.kind === "border" ? rem(border.widthRem, 0.0625) : undefined) ?? "0.0625rem",
-    "--vortex-border-style": border?.kind === "border" && border.style === "dashed" ? "dashed" : "solid",
+    "--vortex-border-style":
+      border?.kind === "border" && border.style === "dashed" ? "dashed" : "solid",
     "--vortex-elevation-low": elevation("elevation_low", PLATFORM_ELEVATION[1]),
     "--vortex-elevation-high": elevation("elevation_high", PLATFORM_ELEVATION[3]),
     "--vortex-control-padding-y": density.controlY,
@@ -511,7 +538,7 @@ export type ThemeRootProps = Readonly<{
  * component stylesheet is scoped to `[data-vortex-theme]`.
  */
 export function createThemeRootProps(
-  theme: ApplicationThemeV2 | undefined,
+  theme: ApplicationTheme | undefined,
   mode: ThemeMode = "light",
 ): ThemeRootProps {
   const style: CSSProperties & ThemeCssVariables = {

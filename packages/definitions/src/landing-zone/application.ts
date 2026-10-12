@@ -1,10 +1,10 @@
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   PLATFORM_BLOCK_RELEASES,
-  applicationSourceDocumentV2Schema,
-  type ApplicationSourceDocumentV2,
-  type PlatformBlockReleaseV2,
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 
@@ -27,44 +27,43 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
   return result;
 };
 
-const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
+const releasesByKey = new Map<string, PlatformBlockRelease>(
   PLATFORM_BLOCK_RELEASES.map((release) => [
     `${release.blockId}@${release.releaseVersion}`,
     release,
   ]),
 );
-const dependencies = [...collectBlockReleases(body)]
-  .sort()
-  .map((releaseKey) => {
-    const release = releasesByKey.get(releaseKey);
-    if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
-    return {
-      kind: "platform_block" as const,
-      block_id: release.blockId,
-      release_version: release.releaseVersion,
-      content_fingerprint: release.contentFingerprint,
-      catalogue_fingerprint: release.catalogueFingerprint,
-    };
-  });
+const dependencies = [...collectBlockReleases(body)].sort().map((releaseKey) => {
+  const release = releasesByKey.get(releaseKey);
+  if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
+  return {
+    kind: "platform_block" as const,
+    block_id: release.blockId,
+    release_version: release.releaseVersion,
+    content_fingerprint: release.contentFingerprint,
+    catalogue_fingerprint: release.catalogueFingerprint,
+  };
+});
 
 const theme = {
   base: {
     kind: "platform_theme" as const,
-    catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueThemeId,
-    release_version: DEFAULT_PLATFORM_THEME_RELEASE_V2.releaseVersion,
-    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
-    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
+    catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE.catalogueThemeId,
+    release_version: DEFAULT_PLATFORM_THEME_RELEASE.releaseVersion,
+    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint,
+    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.catalogueFingerprint,
   },
   selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   token_overrides: {},
 };
 
 /** The Landing Zone application composes the shared launcher, link-tile and filter blocks. */
-export const landingZoneApplication: ApplicationSourceDocumentV2 = applicationSourceDocumentV2Schema.parse({
-  ...sourceObject,
-  body: {
-    ...body,
-    platform_block_dependencies: dependencies,
-    theme,
-  },
-});
+export const landingZoneApplication: ApplicationSourceDocument =
+  applicationSourceDocumentSchema.parse({
+    ...sourceObject,
+    body: {
+      ...body,
+      platform_block_dependencies: dependencies,
+      theme,
+    },
+  });

@@ -2,14 +2,14 @@ import "server-only";
 
 import {
   canonicalJson,
-  pageDefinitionV2Schema,
-  type ApplicationShellV2,
+  pageDefinitionSchema,
+  type ApplicationShell,
   type ConditionNode,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationRecordAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
+  type PageDefinition,
   type SelectedOrganizationScope,
 } from "../schema";
 import {
@@ -34,8 +34,14 @@ import {
   type ResolvedPageComposition,
 } from "./page-composition-resolution";
 
-type ObservedViewReason = "ABSENT" | "ALLOWED" | "access_refused" | "authentication_required"
-  | "target_policy_unavailable" | "caller_unsupported" | "UNKNOWN";
+type ObservedViewReason =
+  | "ABSENT"
+  | "ALLOWED"
+  | "access_refused"
+  | "authentication_required"
+  | "target_policy_unavailable"
+  | "caller_unsupported"
+  | "UNKNOWN";
 type ObservedTargetKind = "ABSENT" | "ORGANIZATION" | "APPLICATION" | "UNPROVABLE";
 
 type PermissionBinding = Readonly<{
@@ -52,8 +58,8 @@ type PlacementPermissionBinding =
     }>;
 
 export type FixedAuthenticatedPageCapability = Readonly<{
-  page: PageDefinitionV2;
-  applicationShells?: readonly ApplicationShellV2[];
+  page: PageDefinition;
+  applicationShells?: readonly ApplicationShell[];
   /** Exact request-context-bound resolved roots from the validated immutable format-2 bundle. */
   resolvedComposition?: ResolvedPageComposition;
   resolvedCompositionContext?: InstalledRuntimeContext;
@@ -98,7 +104,7 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
       evaluateVisibilityCondition?: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
-        page: PageDefinitionV2,
+        page: PageDefinition,
         condition: ConditionNode,
       ) => Promise<boolean>;
       /** Final current-context and database-clock check for the earliest private Access deadline. */
@@ -109,25 +115,40 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
       ) => Promise<boolean>;
       /** Diagnostic metadata only, latched by the original serial condition invocation. */
       visibilityConditionReason?: () =>
-        | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
-        | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE" | "UNKNOWN";
+        | "SUPPORTED_TRUE"
+        | "SUPPORTED_FALSE"
+        | "UNSUPPORTED_OPERAND"
+        | "SUBJECT_UNAVAILABLE"
+        | "FIELD_UNAVAILABLE"
+        | "DECLARATION_UNPROVABLE"
+        | "UNKNOWN";
       /** Optional server-only sink; immutable decisions cannot influence projection authority. */
-      observeProjectionDecision?: (observation: Readonly<{
-        /** Only supplied after the original target/request and single-correlation checks. */
-        requestBound: true;
-        placements: readonly Readonly<{
-          placementId: string;
-          ancestorPlacementIds: readonly string[];
-          viewGate: "ABSENT" | "ALLOWED" | "REFUSED";
-          viewReason: ObservedViewReason;
-          targetKind: ObservedTargetKind;
-          condition: "ABSENT" | "TRUE" | "NOT_TRUE" | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR";
-          conditionReason: "ABSENT" | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
-            | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE"
-            | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR" | "UNKNOWN";
-          useState: "PLAIN_CONTENT" | "AVAILABLE" | "DISABLED";
-        }>[];
-      }>) => void;
+      observeProjectionDecision?: (
+        observation: Readonly<{
+          /** Only supplied after the original target/request and single-correlation checks. */
+          requestBound: true;
+          placements: readonly Readonly<{
+            placementId: string;
+            ancestorPlacementIds: readonly string[];
+            viewGate: "ABSENT" | "ALLOWED" | "REFUSED";
+            viewReason: ObservedViewReason;
+            targetKind: ObservedTargetKind;
+            condition: "ABSENT" | "TRUE" | "NOT_TRUE" | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR";
+            conditionReason:
+              | "ABSENT"
+              | "SUPPORTED_TRUE"
+              | "SUPPORTED_FALSE"
+              | "UNSUPPORTED_OPERAND"
+              | "SUBJECT_UNAVAILABLE"
+              | "FIELD_UNAVAILABLE"
+              | "DECLARATION_UNPROVABLE"
+              | "SKIPPED_VIEW"
+              | "SKIPPED_ANCESTOR"
+              | "UNKNOWN";
+            useState: "PLAIN_CONTENT" | "AVAILABLE" | "DISABLED";
+          }>[];
+        }>,
+      ) => void;
     }>;
 
 type RequiredPlacement = Readonly<{
@@ -138,8 +159,8 @@ type RequiredPlacement = Readonly<{
   ancestorPlacementIds: readonly string[];
 }>;
 
-const collectV2Slot = (
-  slot: ApplicationShellV2["layout"],
+const collectSlot = (
+  slot: ApplicationShell["layout"],
   result: RequiredPlacement[],
   ancestorPlacementIds: readonly string[] = [],
 ): void => {
@@ -158,17 +179,14 @@ const collectV2Slot = (
         : { visibilityCondition: candidate.visibilityCondition }),
     });
     for (const child of Object.values(candidate.slots))
-      collectV2Slot(child, result, [...ancestorPlacementIds, placementId]);
+      collectSlot(child, result, [...ancestorPlacementIds, placementId]);
   }
 };
 
 const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
-  if (resolved.roots.kind === "page")
-    collectV2Slot(resolved.roots.main, result);
-  else
-    for (const root of Object.values(resolved.roots.stepContent))
-      collectV2Slot(root, result);
+  if (resolved.roots.kind === "page") collectSlot(resolved.roots.main, result);
+  else for (const root of Object.values(resolved.roots.stepContent)) collectSlot(root, result);
   return result;
 };
 
@@ -181,17 +199,23 @@ const evaluate = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   binding: PermissionBinding | PlacementPermissionBinding,
-): Promise<Readonly<{
-  allowed: boolean;
-  correlationId: string;
-  validUntil?: string;
-  viewReason: ObservedViewReason;
-  targetKind: ObservedTargetKind;
-}>> => {
+): Promise<
+  Readonly<{
+    allowed: boolean;
+    correlationId: string;
+    validUntil?: string;
+    viewReason: ObservedViewReason;
+    targetKind: ObservedTargetKind;
+  }>
+> => {
   // Record placement availability carries no row decision and invokes no operation callback.
   // Page-level and non-record gates still use their original generic permission operation.
   const result = isRecordPlacementBinding(binding)
-    ? await evaluateOrganizationRecordPermissionAvailability(transaction, scope, binding.declaration)
+    ? await evaluateOrganizationRecordPermissionAvailability(
+        transaction,
+        scope,
+        binding.declaration,
+      )
     : await runOrganizationAccessOperation(
         transaction,
         scope,
@@ -201,28 +225,44 @@ const evaluate = async (
           validUntil: decision.validUntil,
         }),
       );
-  const evaluated = result.outcome === "completed"
-    ? { allowed: true, correlationId: result.value.correlationId }
-    : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
-  const validUntil = result.outcome === "eligible"
-    ? result.validUntil
-    : result.outcome === "completed" ? result.value.validUntil : undefined;
+  const evaluated =
+    result.outcome === "completed"
+      ? { allowed: true, correlationId: result.value.correlationId }
+      : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
+  const validUntil =
+    result.outcome === "eligible"
+      ? result.validUntil
+      : result.outcome === "completed"
+        ? result.value.validUntil
+        : undefined;
   // These diagnostic labels retain only the existing safe result, never private decision evidence.
   let viewReason: ObservedViewReason = "UNKNOWN";
   let targetKind: ObservedTargetKind = "UNPROVABLE";
   try {
     if (result.outcome === "completed" || result.outcome === "eligible") viewReason = "ALLOWED";
-    else if (result.reasonCode === "access_refused" ||
+    else if (
+      result.reasonCode === "access_refused" ||
       result.reasonCode === "authentication_required" ||
       result.reasonCode === "target_policy_unavailable" ||
-      result.reasonCode === "caller_unsupported") viewReason = result.reasonCode;
+      result.reasonCode === "caller_unsupported"
+    )
+      viewReason = result.reasonCode;
     const kind = binding.declaration.target.kind;
-    targetKind = kind === "organization" ? "ORGANIZATION"
-      : kind === "application" ? "APPLICATION" : "UNPROVABLE";
+    targetKind =
+      kind === "organization"
+        ? "ORGANIZATION"
+        : kind === "application"
+          ? "APPLICATION"
+          : "UNPROVABLE";
   } catch {
     // Optional metadata cannot replace the original evaluated outcome or its genuine errors.
   }
-  return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }), viewReason, targetKind };
+  return {
+    ...evaluated,
+    ...(validUntil === undefined ? {} : { validUntil }),
+    viewReason,
+    targetKind,
+  };
 };
 
 const sameKey = (left: string, right: string): boolean => left === right;
@@ -239,17 +279,19 @@ export const createAuthenticatedPageCapabilityService = <Command>(
     ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
       requests.run(session, candidate, async (transaction, scope) => {
         const loaded = await dependencies.adapter.load(transaction, scope, command);
-        const page = pageDefinitionV2Schema.parse(loaded.page);
-        if (loaded.resolvedComposition !== undefined && (
-          loaded.resolvedCompositionContext === undefined ||
-          !isTrustedInstalledPageComposition(
-            loaded.resolvedCompositionContext,
-            loaded.resolvedComposition,
-          ) ||
-          canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page)
-        )) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-        const resolved = loaded.resolvedComposition ??
-          resolvePageComposition(page, loaded.applicationShells);
+        const page = pageDefinitionSchema.parse(loaded.page);
+        if (
+          loaded.resolvedComposition !== undefined &&
+          (loaded.resolvedCompositionContext === undefined ||
+            !isTrustedInstalledPageComposition(
+              loaded.resolvedCompositionContext,
+              loaded.resolvedComposition,
+            ) ||
+            canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
+        )
+          throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+        const resolved =
+          loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
@@ -267,15 +309,20 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           if (
             earliestAccessEligibilityUntil === undefined ||
             Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
-          ) earliestAccessEligibilityUntil = candidateUntil;
+          )
+            earliestAccessEligibilityUntil = candidateUntil;
         };
         retainEarliestAccessEligibility(pageAccess.validUntil);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         const hiddenPlacements = new Set<string>();
         // Observation has its own finite custody and never changes the authoritative states.
-        const observed: Array<Parameters<NonNullable<
-          AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"]
-        >>[0]["placements"][number]> = [];
+        const observed: Array<
+          Parameters<
+            NonNullable<
+              AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"]
+            >
+          >[0]["placements"][number]
+        > = [];
         let observer: AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"];
         let observationValid = false;
         try {
@@ -290,9 +337,13 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
           const view =
             required.viewPermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId,
+              ? {
+                  allowed: true,
+                  correlationId: pageAccess.correlationId,
                   validUntil: undefined,
-                  viewReason: "ABSENT" as const, targetKind: "ABSENT" as const }
+                  viewReason: "ABSENT" as const,
+                  targetKind: "ABSENT" as const,
+                }
               : binding.viewPermission !== undefined &&
                   sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
                 ? await evaluate(transaction, scope, binding.viewPermission)
@@ -339,33 +390,52 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? {}
               : { operationRequired: binding.operationRequired }),
             operationBound: binding.operationBound,
-            ...(conditionAllowed === undefined
-              ? {}
-              : { conditionAllowed }),
+            ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
           };
           if (observationValid) {
             try {
               if (observed.length >= 4096 || required.ancestorPlacementIds.length > 64)
                 observationValid = false;
               else {
-                const condition = required.visibilityCondition === undefined ? "ABSENT"
-                  : !view.allowed ? "SKIPPED_VIEW" : ancestorHidden ? "SKIPPED_ANCESTOR"
-                  : conditionAllowed === true ? "TRUE" : "NOT_TRUE";
-                observed.push(Object.freeze({
-                  placementId: required.placementId,
-                  ancestorPlacementIds: Object.freeze([...required.ancestorPlacementIds]),
-                  viewGate: required.viewPermissionKey === undefined ? "ABSENT"
-                    : view.allowed ? "ALLOWED" : "REFUSED",
-                  viewReason: view.viewReason,
-                  targetKind: view.targetKind,
-                  condition,
-                  conditionReason: condition === "ABSENT" || condition === "SKIPPED_VIEW" ||
-                    condition === "SKIPPED_ANCESTOR" ? condition
-                    : dependencies.visibilityConditionReason?.() ?? "UNKNOWN",
-                  useState: required.usePermissionKey === undefined &&
-                    binding.operationRequired !== true && !binding.operationBound ? "PLAIN_CONTENT"
-                    : use.allowed && binding.operationBound ? "AVAILABLE" : "DISABLED",
-                }));
+                const condition =
+                  required.visibilityCondition === undefined
+                    ? "ABSENT"
+                    : !view.allowed
+                      ? "SKIPPED_VIEW"
+                      : ancestorHidden
+                        ? "SKIPPED_ANCESTOR"
+                        : conditionAllowed === true
+                          ? "TRUE"
+                          : "NOT_TRUE";
+                observed.push(
+                  Object.freeze({
+                    placementId: required.placementId,
+                    ancestorPlacementIds: Object.freeze([...required.ancestorPlacementIds]),
+                    viewGate:
+                      required.viewPermissionKey === undefined
+                        ? "ABSENT"
+                        : view.allowed
+                          ? "ALLOWED"
+                          : "REFUSED",
+                    viewReason: view.viewReason,
+                    targetKind: view.targetKind,
+                    condition,
+                    conditionReason:
+                      condition === "ABSENT" ||
+                      condition === "SKIPPED_VIEW" ||
+                      condition === "SKIPPED_ANCESTOR"
+                        ? condition
+                        : (dependencies.visibilityConditionReason?.() ?? "UNKNOWN"),
+                    useState:
+                      required.usePermissionKey === undefined &&
+                      binding.operationRequired !== true &&
+                      !binding.operationBound
+                        ? "PLAIN_CONTENT"
+                        : use.allowed && binding.operationBound
+                          ? "AVAILABLE"
+                          : "DISABLED",
+                  }),
+                );
               }
             } catch {
               observationValid = false;
@@ -389,14 +459,18 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               scope,
               earliestAccessEligibilityUntil,
             ))
-          ) return undefined;
+          )
+            return undefined;
         }
         if (projected !== undefined && observationValid) {
           try {
-            observer?.call(dependencies, Object.freeze({
-              requestBound: true,
-              placements: Object.freeze(observed),
-            }));
+            observer?.call(
+              dependencies,
+              Object.freeze({
+                requestBound: true,
+                placements: Object.freeze(observed),
+              }),
+            );
           } catch {
             // A diagnostic sink never changes the original return or genuine error.
           }

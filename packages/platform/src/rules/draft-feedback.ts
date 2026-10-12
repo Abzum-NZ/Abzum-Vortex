@@ -1,4 +1,4 @@
-import { isRecord, canonicalJson, type JsonValue, type ModuleFieldV3 } from "../schema";
+import { isRecord, canonicalJson, type JsonValue, type ModuleField } from "../schema";
 import {
   evaluateBeforeSaveRuleGraphs,
   type BeforeSaveRuleRefusal,
@@ -88,7 +88,7 @@ const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown
 };
 
 /** Field types Record generates itself and refuses as submitted input (`generated_field_input`). */
-const generatedFieldTypes = new Set<ModuleFieldV3["type"]>([
+const generatedFieldTypes = new Set<ModuleField["type"]>([
   "reference_number",
   "calculation",
   "total",

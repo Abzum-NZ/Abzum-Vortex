@@ -16,7 +16,7 @@ import {
   revisionSchema,
   storageContractIdSchema,
 } from "../catalogue/identifiers";
-import { recordLinkValueV2Schema } from "./module-field-values-v2";
+import { recordLinkValueSchema } from "./module-field-values";
 import { safeErrorResponseSchema } from "../definition/operation-contracts";
 
 const previewRecordInstallationIdSchema = z
@@ -59,7 +59,7 @@ const saveRecordCommandFields = {
   previewInstallationId: previewRecordInstallationIdSchema.optional(),
 };
 
-export const saveRecordCommandV2Schema = z.discriminatedUnion("operation", [
+export const saveRecordCommandSchema = z.discriminatedUnion("operation", [
   z
     .object({
       ...saveRecordCommandFields,
@@ -89,7 +89,7 @@ const transferRecordOwnershipCommandFields = {
  * Fixed single-record owner change.  This is intentionally distinct from a
  * field update and from named actions; server context supplies scope and actor.
  */
-export const transferRecordOwnershipCommandV2Schema = z
+export const transferRecordOwnershipCommandSchema = z
   .discriminatedUnion("targetKind", [
     z
       .object({
@@ -119,7 +119,7 @@ export const transferRecordOwnershipCommandV2Schema = z
       context.addIssue({ code: "custom", message: "A Group transfer requires a Group target" });
   });
 
-export const transferRecordOwnershipResultV2Schema = z.discriminatedUnion("outcome", [
+export const transferRecordOwnershipResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       contractVersion: saveRecordContractVersionSchema,
@@ -158,7 +158,7 @@ const readableRecordSaveProjectionSchema = z
   })
   .strict();
 
-const refusedSaveRecordResultV2Schema = z
+const refusedSaveRecordResultSchema = z
   .object({
     contractVersion: saveRecordContractVersionSchema,
     outcome: z.literal("refused"),
@@ -175,7 +175,7 @@ const refusedSaveRecordResultV2Schema = z
       });
   });
 
-export const saveRecordResultV2Schema = z.discriminatedUnion("outcome", [
+export const saveRecordResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       contractVersion: saveRecordContractVersionSchema,
@@ -195,7 +195,7 @@ export const saveRecordResultV2Schema = z.discriminatedUnion("outcome", [
       corrections: z.array(recordSaveFieldCorrectionSchema).min(1),
     })
     .strict(),
-  refusedSaveRecordResultV2Schema,
+  refusedSaveRecordResultSchema,
 ]);
 
 /** Every ordered mutation kind one record-change command may carry. */
@@ -226,7 +226,7 @@ const createRecordChangeFields = {
  * mutation is a statement of intent, never authority: the engine decides each
  * one against the invoking published definition and current access.
  */
-export const recordChangeMutationV2Schema = z.discriminatedUnion("kind", [
+export const recordChangeMutationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("create_subject"),
@@ -244,7 +244,7 @@ export const recordChangeMutationV2Schema = z.discriminatedUnion("kind", [
       kind: z.literal("change_relationship"),
       relationshipId: containedComponentIdSchema,
       change: z.enum(["link", "unlink"]),
-      target: recordLinkValueV2Schema,
+      target: recordLinkValueSchema,
     })
     .strict(),
   z
@@ -296,14 +296,14 @@ const subjectWritingMutationKinds: ReadonlySet<string> = new Set([
  * the session and the transaction context.  The mutation list is applied in
  * order and the whole command commits or is refused as one unit.
  */
-export const recordChangeCommandV2Schema = z
+export const recordChangeCommandSchema = z
   .object({
     contractVersion: saveRecordContractVersionSchema,
     commandId: platformIdSchema,
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema.optional(),
     expectedConcurrencyNumber: revisionSchema.optional(),
-    mutations: z.array(recordChangeMutationV2Schema).min(1),
+    mutations: z.array(recordChangeMutationSchema).min(1),
     announcedEventKeys: z.array(namespacedKeySchema),
   })
   .strict()
@@ -427,7 +427,7 @@ export const recordChangeReceiptSchema = z
   })
   .strict();
 
-export const recordChangeResultV2Schema = z.discriminatedUnion("outcome", [
+export const recordChangeResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       contractVersion: saveRecordContractVersionSchema,
@@ -458,17 +458,17 @@ export const recordChangeResultV2Schema = z.discriminatedUnion("outcome", [
       corrections: z.array(recordChangeFieldCorrectionSchema).min(1),
     })
     .strict(),
-  refusedSaveRecordResultV2Schema,
+  refusedSaveRecordResultSchema,
 ]);
 
 export type RecordChangeMutationKind = z.infer<typeof recordChangeMutationKindSchema>;
-export type RecordChangeMutationV2 = z.infer<typeof recordChangeMutationV2Schema>;
-export type RecordChangeCommandV2 = z.infer<typeof recordChangeCommandV2Schema>;
+export type RecordChangeMutation = z.infer<typeof recordChangeMutationSchema>;
+export type RecordChangeCommand = z.infer<typeof recordChangeCommandSchema>;
 export type RecordChangeFieldCorrection = z.infer<typeof recordChangeFieldCorrectionSchema>;
 export type RecordChangeReceipt = z.infer<typeof recordChangeReceiptSchema>;
-export type RecordChangeResultV2 = z.infer<typeof recordChangeResultV2Schema>;
+export type RecordChangeResult = z.infer<typeof recordChangeResultSchema>;
 export type RecordScope = z.infer<typeof recordScopeSchema>;
-export type SaveRecordCommandV2 = z.infer<typeof saveRecordCommandV2Schema>;
+export type SaveRecordCommand = z.infer<typeof saveRecordCommandSchema>;
 
 export const previewRecordReadCommandV1Schema = z
   .object({
@@ -493,9 +493,7 @@ export const previewRecordReadResultV1Schema = z.discriminatedUnion("outcome", [
 
 export type PreviewRecordReadCommandV1 = z.infer<typeof previewRecordReadCommandV1Schema>;
 export type PreviewRecordReadResultV1 = z.infer<typeof previewRecordReadResultV1Schema>;
-export type TransferRecordOwnershipCommandV2 = z.infer<
-  typeof transferRecordOwnershipCommandV2Schema
->;
-export type TransferRecordOwnershipResultV2 = z.infer<typeof transferRecordOwnershipResultV2Schema>;
+export type TransferRecordOwnershipCommand = z.infer<typeof transferRecordOwnershipCommandSchema>;
+export type TransferRecordOwnershipResult = z.infer<typeof transferRecordOwnershipResultSchema>;
 export type RecordSaveFieldCorrection = z.infer<typeof recordSaveFieldCorrectionSchema>;
-export type SaveRecordResultV2 = z.infer<typeof saveRecordResultV2Schema>;
+export type SaveRecordResult = z.infer<typeof saveRecordResultSchema>;

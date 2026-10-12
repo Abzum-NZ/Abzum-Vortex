@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sharingParameterValueTypeV2Schema } from "../catalogue/catalogues";
+import { sharingParameterValueTypeSchema } from "../catalogue/catalogues";
 import {
   boundedRuleGraphConditionInputSchema,
   ruleGraphBinaryConditionOperatorSchema,
@@ -13,23 +13,21 @@ import {
   conditionMaximumOperandCount,
   jsonValueSchema,
 } from "../catalogue/common";
-import { builderKeySchema, containedComponentIdSchema, fieldIdSchema } from "../catalogue/identifiers";
-import { moduleFieldV3Schema } from "../definition/module-contracts-v3";
+import {
+  builderKeySchema,
+  containedComponentIdSchema,
+  fieldIdSchema,
+} from "../catalogue/identifiers";
+import { moduleFieldSchema } from "../definition/module-contracts";
 
 const conditionReferenceOperandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("module_field"), fieldId: fieldIdSchema }).strict(),
-  z
-    .object({ kind: z.literal("module_parameter"), key: builderKeySchema })
-    .strict(),
+  z.object({ kind: z.literal("module_parameter"), key: builderKeySchema }).strict(),
   z.object({ kind: z.literal("module_literal"), value: jsonValueSchema }).strict(),
   z.object({ kind: z.literal("graph_current_field"), fieldId: fieldIdSchema }).strict(),
   z.object({ kind: z.literal("graph_previous_field"), fieldId: fieldIdSchema }).strict(),
-  z
-    .object({ kind: z.literal("graph_input"), inputId: containedComponentIdSchema })
-    .strict(),
-  z
-    .object({ kind: z.literal("graph_variable"), variableId: containedComponentIdSchema })
-    .strict(),
+  z.object({ kind: z.literal("graph_input"), inputId: containedComponentIdSchema }).strict(),
+  z.object({ kind: z.literal("graph_variable"), variableId: containedComponentIdSchema }).strict(),
   z.object({ kind: z.literal("graph_literal"), value: ruleGraphTypedValueSchema }).strict(),
 ]);
 
@@ -76,7 +74,7 @@ const conditionReferenceNodeSchema: z.ZodType<ConditionReferenceNode> = z.lazy((
 );
 
 const moduleParameterDeclarationSchema = z
-  .object({ key: builderKeySchema, type: sharingParameterValueTypeV2Schema })
+  .object({ key: builderKeySchema, type: sharingParameterValueTypeSchema })
   .strict();
 
 const reportDuplicate = (
@@ -94,7 +92,7 @@ const reportDuplicate = (
 
 const moduleConditionReferenceDeclarationsSchema = z
   .object({
-    fields: z.array(moduleFieldV3Schema).max(500),
+    fields: z.array(moduleFieldSchema).max(500),
     parameters: z.array(moduleParameterDeclarationSchema),
   })
   .strict()
@@ -121,7 +119,7 @@ const moduleConditionReferenceDeclarationsSchema = z
 
 const ruleGraphConditionReferenceDeclarationsSchema = z
   .object({
-    fields: z.array(moduleFieldV3Schema).max(500),
+    fields: z.array(moduleFieldSchema).max(500),
     inputs: z.array(ruleGraphInputDeclarationSchema).max(100),
     variables: z.array(ruleGraphVariableDeclarationSchema).max(100),
   })
@@ -253,7 +251,9 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
       : new Set(contract.declarations.inputs.map((input) => input.inputId.toLowerCase()));
     const graphVariableIds = module
       ? new Set<string>()
-      : new Set(contract.declarations.variables.map((variable) => variable.variableId.toLowerCase()));
+      : new Set(
+          contract.declarations.variables.map((variable) => variable.variableId.toLowerCase()),
+        );
 
     const operands = operandsIn(contract.condition);
     for (const { operand, path } of operands) {
@@ -287,10 +287,21 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
           (operand.kind === "graph_current_field" || operand.kind === "graph_previous_field") &&
           !fieldIds.has(operand.fieldId.toLowerCase())
         )
-          context.addIssue({ code: "custom", path, message: "Rule graph field reference is unbound" });
+          context.addIssue({
+            code: "custom",
+            path,
+            message: "Rule graph field reference is unbound",
+          });
         if (operand.kind === "graph_input" && !graphInputIds.has(operand.inputId.toLowerCase()))
-          context.addIssue({ code: "custom", path, message: "Rule graph input reference is unbound" });
-        if (operand.kind === "graph_variable" && !graphVariableIds.has(operand.variableId.toLowerCase()))
+          context.addIssue({
+            code: "custom",
+            path,
+            message: "Rule graph input reference is unbound",
+          });
+        if (
+          operand.kind === "graph_variable" &&
+          !graphVariableIds.has(operand.variableId.toLowerCase())
+        )
           context.addIssue({
             code: "custom",
             path,

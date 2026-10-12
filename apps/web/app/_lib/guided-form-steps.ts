@@ -15,17 +15,17 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   jsonValueSchema,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   recordIdSchema,
   ruleIdSchema,
   timestampSchema,
   type IdentitySession,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
-  type RecordTypeDefinitionV3,
+  type PageDefinition,
+  type RecordTypeDefinition,
   type SelectedOrganizationScope,
 } from "@vortex/platform/schema";
 import {
@@ -45,13 +45,13 @@ import type { RequestDatabaseTransaction } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
-import { prepareRecordFieldValuesV2 } from "@web/platform-server";
+import { prepareRecordFieldValues } from "@web/platform-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
 type GuidedFormStepField = Readonly<{
-  field: ModuleFieldV3;
+  field: ModuleField;
   fieldKey: string;
   placementId: string;
   required: boolean;
@@ -120,7 +120,9 @@ const confirmationPurpose = "vortex-guided-form-final-confirmation-v1";
 
 export const guidedFormConfirmationReference = (
   candidate: unknown,
-): Readonly<{ draftId: string; revision: number; issuedAt: number; signature: string }> | undefined => {
+):
+  | Readonly<{ draftId: string; revision: number; issuedAt: number; signature: string }>
+  | undefined => {
   if (typeof candidate !== "string") return undefined;
   const match = /^([0-9a-f-]{36})\.([1-9][0-9]*)\.([0-9]{10})\.([0-9a-f]{64})$/u.exec(candidate);
   if (match === null) return undefined;
@@ -143,19 +145,24 @@ const confirmationSignature = (
     applicationRootId: string;
     subjectRecordId?: string;
   }>,
-): Buffer => createHmac("sha256", getQueryContinuationKey().key).update(JSON.stringify([
-  confirmationPurpose,
-  details.draftId.toLowerCase(),
-  details.revision,
-  details.issuedAt,
-  details.pageId.toLowerCase(),
-  details.flowId.toLowerCase(),
-  details.sessionId.toLowerCase(),
-  details.identityId.toLowerCase(),
-  details.organizationId.toLowerCase(),
-  details.applicationRootId.toLowerCase(),
-  details.subjectRecordId?.toLowerCase() ?? null,
-])).digest();
+): Buffer =>
+  createHmac("sha256", getQueryContinuationKey().key)
+    .update(
+      JSON.stringify([
+        confirmationPurpose,
+        details.draftId.toLowerCase(),
+        details.revision,
+        details.issuedAt,
+        details.pageId.toLowerCase(),
+        details.flowId.toLowerCase(),
+        details.sessionId.toLowerCase(),
+        details.identityId.toLowerCase(),
+        details.organizationId.toLowerCase(),
+        details.applicationRootId.toLowerCase(),
+        details.subjectRecordId?.toLowerCase() ?? null,
+      ]),
+    )
+    .digest();
 
 export const issueGuidedFormConfirmation = async (
   details: Omit<Parameters<typeof confirmationSignature>[0], "issuedAt">,
@@ -198,7 +205,7 @@ const readGuidedFormContext = async (
 const recordTypeForPage = (
   page: Readonly<Record<string, unknown>>,
   modules: readonly Readonly<Record<string, unknown>>[],
-): RecordTypeDefinitionV3 | undefined => {
+): RecordTypeDefinition | undefined => {
   const reference = page.recordType;
   if (!isRecord(reference) || reference.state !== "resolved") return undefined;
   for (const module of modules) {
@@ -215,7 +222,7 @@ const recordTypeForPage = (
         typeof candidate.recordTypeId === "string" &&
         sameId(candidate.recordTypeId, String(reference.recordTypeId)),
     );
-    if (matches.length === 1) return matches[0] as RecordTypeDefinitionV3;
+    if (matches.length === 1) return matches[0] as RecordTypeDefinition;
   }
   return undefined;
 };
@@ -233,12 +240,13 @@ const inputBlock = (placement: Record<string, unknown>): boolean => {
 
 const fieldForPlacement = (
   placement: Record<string, unknown>,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
 ): Omit<GuidedFormStepField, "placementId"> | undefined => {
   const settings = placement.settings;
   if (!isRecord(settings)) return undefined;
   const name = settings.name;
-  const parsedKey = isRecord(name) && name.kind === "text" ? builderKeySchema.safeParse(name.value) : undefined;
+  const parsedKey =
+    isRecord(name) && name.kind === "text" ? builderKeySchema.safeParse(name.value) : undefined;
   const fieldReference = settings.field;
   const referencedFieldId =
     isRecord(fieldReference) &&
@@ -272,10 +280,7 @@ type GuidedStepRoot = Readonly<{
   pagePlacementIds: ReadonlySet<string>;
 }>;
 
-const placementIdsInTree = (
-  root: unknown,
-  availableOnly = false,
-): ReadonlySet<string> => {
+const placementIdsInTree = (root: unknown, availableOnly = false): ReadonlySet<string> => {
   const ids = new Set<string>();
   const visit = (slot: unknown): void => {
     if (!isRecord(slot)) return;
@@ -316,7 +321,8 @@ const guidedStepRoots = (
     return undefined;
 
   if (composition.shellKind !== "application") {
-    if (composition.shellKind !== undefined && composition.shellKind !== "default") return undefined;
+    if (composition.shellKind !== undefined && composition.shellKind !== "default")
+      return undefined;
     const roots = declaredSteps.map((stepId) => ({
       stepId: stepId!,
       root: stepContent[stepId!],
@@ -333,7 +339,8 @@ const guidedStepRoots = (
     return undefined;
   const shells = shellsCandidate.filter(isRecord);
   const matchingShells = shells.filter(
-    (shell) => typeof shell.shellId === "string" && sameId(shell.shellId, composition.shellId as string),
+    (shell) =>
+      typeof shell.shellId === "string" && sameId(shell.shellId, composition.shellId as string),
   );
   const shell = matchingShells[0];
   if (matchingShells.length !== 1 || shell === undefined) return undefined;
@@ -386,7 +393,10 @@ const guidedStepRoots = (
       return { ...slotCandidate, placements };
     };
     const root = merge(shellLayout);
-    if (root === undefined || contentSlots.some((slot) => !usedContentSlots.has(String(slot.slotId))))
+    if (
+      root === undefined ||
+      contentSlots.some((slot) => !usedContentSlots.has(String(slot.slotId)))
+    )
       return undefined;
     resolved.push({
       stepId,
@@ -401,7 +411,7 @@ const guidedStepRoots = (
 
 const collectStepFields = (
   page: Readonly<Record<string, unknown>>,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   shellsCandidate?: unknown,
   visiblePlacementIds?: ReadonlySet<string>,
 ): readonly GuidedFormStepFields[] | undefined => {
@@ -411,7 +421,11 @@ const collectStepFields = (
   const result: GuidedFormStepFields[] = [];
   const allFieldKeys = new Set<string>();
   for (const candidate of page.steps as readonly unknown[]) {
-    if (!isRecord(candidate) || typeof candidate.id !== "string" || typeof candidate.summary !== "boolean")
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.id !== "string" ||
+      typeof candidate.summary !== "boolean"
+    )
       return undefined;
     const stepRoot = roots.find((entry) => entry.stepId === candidate.id);
     const root = stepRoot?.root;
@@ -440,7 +454,8 @@ const collectStepFields = (
         if (
           owner !== undefined &&
           stepRoot?.pagePlacementIds.has(placementId.toLowerCase()) === true &&
-          (visiblePlacementIds === undefined || visiblePlacementIds.has(placementId.toLowerCase())) &&
+          (visiblePlacementIds === undefined ||
+            visiblePlacementIds.has(placementId.toLowerCase())) &&
           inputBlock(placementCandidate)
         ) {
           const field = fieldForPlacement(placementCandidate, recordType);
@@ -469,7 +484,7 @@ const collectStepFields = (
 
 export const getGuidedFormStepFields = (
   pageCandidate: unknown,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   shellsCandidate?: unknown,
   visiblePageCandidate?: unknown,
 ): readonly GuidedFormStepFields[] | undefined => {
@@ -495,7 +510,7 @@ export const getGuidedFormVisiblePlacementIds = (
 export const getGuidedFormRecordType = (
   pageCandidate: unknown,
   modulesCandidate: unknown,
-): RecordTypeDefinitionV3 | undefined => {
+): RecordTypeDefinition | undefined => {
   if (!isRecord(pageCandidate) || !Array.isArray(modulesCandidate)) return undefined;
   return recordTypeForPage(
     pageCandidate,
@@ -591,7 +606,9 @@ const flowForGuidedForm = (
   const forms = collectFormIds(page, shellsCandidate);
   if (forms.size === 0) return undefined;
   const summary = Array.isArray(page.steps)
-    ? page.steps.find((step) => isRecord(step) && step.summary === true && typeof step.id === "string")
+    ? page.steps.find(
+        (step) => isRecord(step) && step.summary === true && typeof step.id === "string",
+      )
     : undefined;
   if (!isRecord(summary) || roots === undefined) return undefined;
   const summaryForms = new Set<string>();
@@ -668,7 +685,7 @@ const pageAccess = (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-          ownerId: platformPermissionOwnerId,
+        ownerId: platformPermissionOwnerId,
         permissionId: platform.permissionId,
       },
       recentAuthentication: { kind: "none" },
@@ -703,20 +720,24 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
   async load(transaction, scope, form) {
     const context = await readGuidedFormContext(transaction, scope);
     if (context === undefined) return undefined;
-    const pages = context.releaseSet.application.content.pages.filter(
-      (candidate) => sameId(String(candidate.pageId), String(form.formId)),
+    const pages = context.releaseSet.application.content.pages.filter((candidate) =>
+      sameId(String(candidate.pageId), String(form.formId)),
     );
     if (pages.length !== 1 || pages[0] === undefined) return undefined;
     const page = pages[0] as unknown as Readonly<Record<string, unknown>>;
     if (page.type !== "guided_form") return undefined;
-    const recordType = recordTypeForPage(page, context.releaseSet.modules as unknown as readonly Readonly<Record<string, unknown>>[]);
+    const recordType = recordTypeForPage(
+      page,
+      context.releaseSet.modules as unknown as readonly Readonly<Record<string, unknown>>[],
+    );
     if (recordType === undefined) return undefined;
     const steps = collectStepFields(
       page,
       recordType,
       context.releaseSet.application.content.shells,
     );
-    const applicationBindings = context.releaseSet.application.content.flowBindings as unknown as readonly Readonly<Record<string, unknown>>[];
+    const applicationBindings = context.releaseSet.application.content
+      .flowBindings as unknown as readonly Readonly<Record<string, unknown>>[];
     const flowId = flowForGuidedForm(
       page,
       applicationBindings,
@@ -731,7 +752,7 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
       return undefined;
     const access = pageAccess(context, page);
     if (access === undefined) return undefined;
-    const fields = new Map<string, ModuleFieldV3>();
+    const fields = new Map<string, ModuleField>();
     for (const step of steps)
       for (const entry of step.fields) fields.set(entry.fieldKey, entry.field);
     const fieldChoices: Record<string, JsonValue[]> = {};
@@ -846,8 +867,7 @@ export const openGuidedFormDraft = async (
     validation: {},
   });
   if (created.kind !== "available") return created;
-  if (created.value.outcome === "created")
-    return { kind: "available", draft: created.value.draft };
+  if (created.value.outcome === "created") return { kind: "available", draft: created.value.draft };
   const read = await service.read(session, selection, scope);
   if (read.kind !== "available") return read;
   return read.value.outcome === "available"
@@ -867,7 +887,7 @@ const isIncompleteIssue = (code: string): boolean =>
   code === "required_attachment_empty";
 
 export const validateGuidedFormStep = (
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   stepFields: readonly GuidedFormStepField[],
   currentValues: Readonly<Record<string, JsonValue>>,
   currentValidation: Readonly<Record<string, PrivateFormDraftFieldValidation>>,
@@ -889,17 +909,19 @@ export const validateGuidedFormStep = (
     if (Object.hasOwn(currentValues, entry.fieldKey))
       submittedById[String(entry.field.fieldId)] = currentValues[entry.fieldKey];
   }
-  const requiredById = new Map(stepFields.map((entry) => [String(entry.field.fieldId), entry.required]));
-  const restrictedRecordType: RecordTypeDefinitionV3 = {
+  const requiredById = new Map(
+    stepFields.map((entry) => [String(entry.field.fieldId), entry.required]),
+  );
+  const restrictedRecordType: RecordTypeDefinition = {
     ...recordType,
     fields: recordType.fields.map((field) => {
       const required = requiredById.get(String(field.fieldId));
-      if (required !== undefined) return { ...field, required } as ModuleFieldV3;
+      if (required !== undefined) return { ...field, required } as ModuleField;
       const { default: _default, ...withoutDefault } = field;
-      return { ...withoutDefault, required: false } as ModuleFieldV3;
+      return { ...withoutDefault, required: false } as ModuleField;
     }),
   };
-  const prepared = prepareRecordFieldValuesV2({
+  const prepared = prepareRecordFieldValues({
     operation: "create",
     recordType: restrictedRecordType,
     submittedValues: submittedById,
@@ -948,8 +970,7 @@ export const computeGuidedFormStepId = (
   return (
     steps.find(
       (step) =>
-        !step.summary &&
-        step.fields.some((field) => validation[field.fieldKey]?.state !== "valid"),
+        !step.summary && step.fields.some((field) => validation[field.fieldKey]?.state !== "valid"),
     )?.stepId ?? summary.stepId
   );
 };
@@ -997,14 +1018,12 @@ export const visibleGuidedFormValidation = (
   steps: readonly GuidedFormStepFields[],
 ): Readonly<Record<string, PrivateFormDraftFieldValidation>> => {
   const keys = new Set(steps.flatMap((step) => step.fields.map((field) => field.fieldKey)));
-  return Object.fromEntries(
-    Object.entries(validation).filter(([fieldKey]) => keys.has(fieldKey)),
-  );
+  return Object.fromEntries(Object.entries(validation).filter(([fieldKey]) => keys.has(fieldKey)));
 };
 
 export const guidedFormInputData = (
   page: unknown,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   values: Readonly<Record<string, JsonValue>>,
   dateTimeZones: Readonly<{ personTimeZone?: string; organizationTimeZone?: string }> = {},
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
@@ -1030,9 +1049,7 @@ export const guidedFormInputData = (
           const blockId = isRecord(placementCandidate.block)
             ? String(placementCandidate.block.blockId)
             : "";
-          const settings = isRecord(placementCandidate.settings)
-            ? placementCandidate.settings
-            : {};
+          const settings = isRecord(placementCandidate.settings) ? placementCandidate.settings : {};
           const control = sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
             ? isRecord(settings.control) && settings.control.kind === "choice"
               ? settings.control.value
@@ -1138,7 +1155,7 @@ export const guidedFormInputData = (
                   typeof value.recordTypeId === "string" &&
                   typeof value.recordId === "string");
             } else if (control === "rich_text") {
-              usable = value === null || richTextDocumentV2Schema.safeParse(value).success;
+              usable = value === null || richTextDocumentSchema.safeParse(value).success;
             }
             if (usable)
               result[placementId] = {
@@ -1164,16 +1181,19 @@ export const resolveGuidedFormAuthority = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   form: PrivateFormDraftScope,
-): Promise<Readonly<{
-  access: OrganizationAccessDeclaration;
-  page: PageDefinitionV2;
-  recordType: RecordTypeDefinitionV3;
-  steps: readonly GuidedFormStepFields[];
-}> | undefined> => {
+): Promise<
+  | Readonly<{
+      access: OrganizationAccessDeclaration;
+      page: PageDefinition;
+      recordType: RecordTypeDefinition;
+      steps: readonly GuidedFormStepFields[];
+    }>
+  | undefined
+> => {
   const context = await readGuidedFormContext(transaction, scope);
   if (context === undefined) return undefined;
-  const pages = context.releaseSet.application.content.pages.filter(
-    (candidate) => sameId(String(candidate.pageId), String(form.formId)),
+  const pages = context.releaseSet.application.content.pages.filter((candidate) =>
+    sameId(String(candidate.pageId), String(form.formId)),
   );
   if (pages.length !== 1 || pages[0] === undefined) return undefined;
   const page = pages[0] as unknown as Readonly<Record<string, unknown>>;
@@ -1182,14 +1202,12 @@ export const resolveGuidedFormAuthority = async (
     context.releaseSet.modules as unknown as readonly Readonly<Record<string, unknown>>[],
   );
   if (page.type !== "guided_form" || recordType === undefined) return undefined;
-  const steps = collectStepFields(
-    page,
-    recordType,
-    context.releaseSet.application.content.shells,
-  );
+  const steps = collectStepFields(page, recordType, context.releaseSet.application.content.shells);
   const flowId = flowForGuidedForm(
     page,
-    context.releaseSet.application.content.flowBindings as unknown as readonly Readonly<Record<string, unknown>>[],
+    context.releaseSet.application.content.flowBindings as unknown as readonly Readonly<
+      Record<string, unknown>
+    >[],
     context.releaseSet.application.content.shells,
   );
   const access = pageAccess(context, page);
@@ -1208,7 +1226,9 @@ export const loadGuidedFormAuthorityForSession = async (
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   form: PrivateFormDraftScope,
-): Promise<HumanOrganizationRequestResult<Awaited<ReturnType<typeof resolveGuidedFormAuthority>>>> => {
+): Promise<
+  HumanOrganizationRequestResult<Awaited<ReturnType<typeof resolveGuidedFormAuthority>>>
+> => {
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
   });

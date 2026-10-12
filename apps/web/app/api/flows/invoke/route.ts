@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { NextResponse} from "next/server";
+import type { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
   createOrganizationAccessAdministrationService,
@@ -25,11 +25,11 @@ import {
   flowReadFieldsTypeMapSchema,
   fieldIdSchema,
   flowBindingInvocationSchema,
-  installedNamedActionReferenceV2Schema,
+  installedNamedActionReferenceSchema,
   recordIdSchema,
   recordTypeIdSchema,
   sameId,
-  type ApplicationContentV2,
+  type ApplicationContent,
   type ExactDefinitionDependency,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
@@ -37,10 +37,13 @@ import {
   type FormContinuationOutcome,
   type FormContinuationRequest,
   type IdentitySession,
-  type ModuleDefinitionConsumerReadResultV3,
+  type ModuleDefinitionConsumerReadResult,
   type OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
-import { createReferenceChoiceService, createViewerSafeRecordLinkReadService } from "@web/platform-server";
+import {
+  createReferenceChoiceService,
+  createViewerSafeRecordLinkReadService,
+} from "@web/platform-server";
 import {
   createDatabaseApplicationBoundReleaseSetService,
   flowReadFieldsScalarTypeForField,
@@ -95,11 +98,27 @@ export const dynamic = "force-dynamic";
 const maximumRequestBodyLength = 131_072;
 
 const localFlowLedgerSqlStates = new Set<string>([
-  "22023", "42501", "P0002", "40001", "23503", "23505", "23514", "55000",
-  "57014", "40P01", "57P01", "08000", "08001", "08003", "08006",
+  "22023",
+  "42501",
+  "P0002",
+  "40001",
+  "23503",
+  "23505",
+  "23514",
+  "55000",
+  "57014",
+  "40P01",
+  "57P01",
+  "08000",
+  "08001",
+  "08003",
+  "08006",
 ]);
 const localFlowLedgerClaimKinds = new Set<string>([
-  "claimed", "completed", "in_progress", "unavailable",
+  "claimed",
+  "completed",
+  "in_progress",
+  "unavailable",
 ]);
 
 const localFlowLedgerSqlState = (error: unknown): string => {
@@ -134,7 +153,8 @@ const createLocalFlowLedgerDiagnostic = () => {
         process.env.VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC !== "1" ||
         process.env.NODE_ENV === "production" ||
         process.env.VORTEX_ENVIRONMENT !== "local"
-      ) return;
+      )
+        return;
       const journey = getIdentityJourneyConfiguration();
       const authority = getIdentityAuthorityConfiguration();
       if (
@@ -143,12 +163,14 @@ const createLocalFlowLedgerDiagnostic = () => {
         new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
         authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
         authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
-      ) return;
-      const event = stage === "BEGIN_RETURN"
-        ? { stage, claimKind: localFlowLedgerClaimKind(value) }
-        : stage === "BEGIN_THREW"
-          ? { stage, sqlstate: localFlowLedgerSqlState(value) }
-          : { stage };
+      )
+        return;
+      const event =
+        stage === "BEGIN_RETURN"
+          ? { stage, claimKind: localFlowLedgerClaimKind(value) }
+          : stage === "BEGIN_THREW"
+            ? { stage, sqlstate: localFlowLedgerSqlState(value) }
+            : { stage };
       // Count the attempt before logging so logger failure cannot bypass the request cap.
       emitted += 1;
       console.error("VORTEX_LOCAL_FLOW_LEDGER_DIAGNOSTIC:" + JSON.stringify(event));
@@ -207,7 +229,7 @@ type ModuleDependency = Extract<ExactDefinitionDependency, { kind: "module" }>;
 
 const moduleDependencyMatches = (
   dependency: ModuleDependency,
-  release: ModuleDefinitionConsumerReadResultV3,
+  release: ModuleDefinitionConsumerReadResult,
 ): boolean =>
   sameId(dependency.rootId, release.rootId) &&
   dependency.key === release.definitionKey &&
@@ -219,12 +241,12 @@ const moduleDependencyMatches = (
 /** Resolve only the exact Module closure reachable from the installed Application manifests. */
 const installedModuleClosure = (
   application: Readonly<{
-    content: ApplicationContentV2;
+    content: ApplicationContent;
     dependencyManifest: readonly ExactDefinitionDependency[];
   }>,
-  releases: readonly ModuleDefinitionConsumerReadResultV3[],
-): ReadonlyMap<string, ModuleDefinitionConsumerReadResultV3> | undefined => {
-  const byRoot = new Map<string, ModuleDefinitionConsumerReadResultV3>();
+  releases: readonly ModuleDefinitionConsumerReadResult[],
+): ReadonlyMap<string, ModuleDefinitionConsumerReadResult> | undefined => {
+  const byRoot = new Map<string, ModuleDefinitionConsumerReadResult>();
   for (const release of releases) {
     const root = release.rootId.toLowerCase();
     if (byRoot.has(root)) return undefined;
@@ -244,7 +266,7 @@ const installedModuleClosure = (
     if (matches.length !== 1) return undefined;
   }
 
-  const reachable = new Map<string, ModuleDefinitionConsumerReadResultV3>();
+  const reachable = new Map<string, ModuleDefinitionConsumerReadResult>();
   const pending = [...directDependencies];
   while (pending.length > 0) {
     const dependency = pending.pop();
@@ -266,10 +288,10 @@ const installedModuleClosure = (
 
 const installedSelectedRecordReadContext = (
   application: Readonly<{
-    content: ApplicationContentV2;
+    content: ApplicationContent;
     dependencyManifest: readonly ExactDefinitionDependency[];
   }>,
-  releases: readonly ModuleDefinitionConsumerReadResultV3[],
+  releases: readonly ModuleDefinitionConsumerReadResult[],
 ): InstalledSelectedRecordReadContext | undefined => {
   const modules = installedModuleClosure(application, releases);
   if (modules === undefined) return undefined;
@@ -278,8 +300,8 @@ const installedSelectedRecordReadContext = (
     string,
     Array<
       Readonly<{
-        module: ModuleDefinitionConsumerReadResultV3;
-        recordType: ModuleDefinitionConsumerReadResultV3["content"]["recordTypes"][number];
+        module: ModuleDefinitionConsumerReadResult;
+        recordType: ModuleDefinitionConsumerReadResult["content"]["recordTypes"][number];
       }>
     >
   >();
@@ -554,9 +576,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return createHumanInstalledRuntimeContextLoader({
           activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
           releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-            installedReleaseCatalogue, transaction,
+            installedReleaseCatalogue,
+            transaction,
           ),
-          scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+          scope: {
+            organizationId: scope.organizationId,
+            applicationRootId: scope.applicationRootId,
+          },
         });
       },
       resolveTargetApplication: async (session, sourceSelection, applicationKey) => {
@@ -565,18 +591,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           !sameId(sourceSelection.organizationId, address.read.organizationId) ||
           sourceSelection.applicationRootId === undefined ||
           !sameId(sourceSelection.applicationRootId, address.application.applicationRootId)
-        ) return undefined;
+        )
+          return undefined;
         const permitted = await readPermittedApplicationsAtAddress(
-          session, body.tenantShortName, body.organizationShortName, authorityId, applicationKey,
+          session,
+          body.tenantShortName,
+          body.organizationShortName,
+          authorityId,
+          applicationKey,
         );
         if (
           permitted.kind !== "available" ||
           !sameId(permitted.organizationId, sourceSelection.organizationId)
-        ) return undefined;
+        )
+          return undefined;
         const targets = permitted.applications.filter((target) => target.key === applicationKey);
         const target = targets[0];
         return targets.length === 1 && target !== undefined
-          ? { organizationId: permitted.organizationId, applicationRootId: target.applicationRootId }
+          ? {
+              organizationId: permitted.organizationId,
+              applicationRootId: target.applicationRootId,
+            }
           : undefined;
       },
     });
@@ -697,39 +732,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               selection.applicationRootId === undefined ||
               !sameId(selection.applicationRootId, installation.applicationRootId) ||
               release.releaseKey !== installation.releaseKey ||
-              release.flows !== installation.flows || installation.modules === undefined
-            ) return { outcome: "unavailable" };
+              release.flows !== installation.flows ||
+              installation.modules === undefined
+            )
+              return { outcome: "unavailable" };
             const capturedModules = installation.modules;
             const checked = await requests.run(session, selection, async (transaction, scope) => {
               if (
                 !sameId(scope.organizationId, installation.organizationId) ||
                 scope.applicationRootId === undefined ||
                 !sameId(scope.applicationRootId, installation.applicationRootId)
-              ) return false;
+              )
+                return false;
               const current = await createHumanInstalledRuntimeContextLoader({
-                activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+                activeInstallationReader:
+                  createActiveApplicationInstallationRepository(transaction),
                 releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                  installedReleaseCatalogue, transaction,
+                  installedReleaseCatalogue,
+                  transaction,
                 ),
-                scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+                scope: {
+                  organizationId: scope.organizationId,
+                  applicationRootId: scope.applicationRootId,
+                },
               }).load();
               const application = current.releaseSet.application;
               const modules = installedModuleClosure(application, current.releaseSet.modules);
-              return sameId(current.organizationId, installation.organizationId) &&
+              return (
+                sameId(current.organizationId, installation.organizationId) &&
                 sameId(current.applicationRootId, installation.applicationRootId) &&
                 current.applicationReleaseRevision === installation.installationRevision &&
-                [application.releaseVersion, application.contentFingerprint, application.resolutionFingerprint]
-                  .join(":") === installation.releaseKey &&
-                modules !== undefined && modules.size === capturedModules.length &&
+                [
+                  application.releaseVersion,
+                  application.contentFingerprint,
+                  application.resolutionFingerprint,
+                ].join(":") === installation.releaseKey &&
+                modules !== undefined &&
+                modules.size === capturedModules.length &&
                 capturedModules.every((captured) => {
                   const bound = modules.get(captured.rootId.toLowerCase());
-                  return bound !== undefined && bound.definitionKey === captured.definitionKey &&
+                  return (
+                    bound !== undefined &&
+                    bound.definitionKey === captured.definitionKey &&
                     bound.validationContractVersion === captured.validationContractVersion &&
                     bound.releaseRevision === captured.releaseRevision &&
                     bound.releaseVersion === captured.releaseVersion &&
                     bound.contentFingerprint === captured.contentFingerprint &&
-                    bound.resolutionFingerprint === captured.resolutionFingerprint;
-                });
+                    bound.resolutionFingerprint === captured.resolutionFingerprint
+                  );
+                })
+              );
             });
             return checked.kind === "available" && checked.value
               ? recordPinService.acquireIdentity(session, selection, selector)
@@ -788,7 +840,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               )
                 return false;
               const current = await createHumanInstalledRuntimeContextLoader({
-                activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
+                activeInstallationReader:
+                  createActiveApplicationInstallationRepository(transaction),
                 releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
                   installedReleaseCatalogue,
                   transaction,
@@ -1006,7 +1059,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ) => {
           for (const action of actions) {
             const key = String(action.key);
-            const reference = installedNamedActionReferenceV2Schema.safeParse({
+            const reference = installedNamedActionReferenceSchema.safeParse({
               ...owner,
               actionId: action.actionId,
             });

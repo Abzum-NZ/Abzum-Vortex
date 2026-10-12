@@ -1,10 +1,10 @@
 import { platformPermissionSource } from "../access/platform-permissions";
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
-  applicationDraftV2Schema,
+  applicationDraftSchema,
   boardBlockSourceIsSupported,
   readBoardPlacementContract,
   calendarBlockSourceIsSupported,
@@ -13,21 +13,21 @@ import {
   protectedReadModelKeys,
   readRecordDetailContract,
   readRecordsTableContract,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   inspectApplicationPageReplacements,
-  applicationCompilationRequestV2Schema,
-  moduleDraftV3Schema,
+  applicationCompilationRequestSchema,
+  moduleDraftSchema,
   moduleSourceDocumentSchema,
-  moduleQueryDefinitionV3Schema,
-  moduleCompilationRequestV3Schema,
-  savedSharingConditionV3Schema,
+  moduleQueryDefinitionSchema,
+  moduleCompilationRequestSchema,
+  savedSharingConditionSchema,
   connectionTypeSchema,
-  exactDecimalTextV2Schema,
-  moneyValueV2Schema,
-  sourceExactDecimalTextV2Schema,
-  sourceMoneyValueV2Schema,
-  moduleFieldValueV2Schemas,
-  sourceModuleFieldValueV2Schemas,
+  exactDecimalTextSchema,
+  moneyValueSchema,
+  sourceExactDecimalTextSchema,
+  sourceMoneyValueSchema,
+  moduleFieldValueSchemas,
+  sourceModuleFieldValueSchemas,
   parseExactDecimal,
   jsonValueSchema,
   walkDefinitionContract,
@@ -44,14 +44,14 @@ import {
   flowTaskChildLists,
   flowTaskRegistry,
   type DefinitionCompilationOutput,
-  type ApplicationCompilationOutputV2,
-  type ModuleCompilationOutputV3,
+  type ApplicationCompilationOutput,
+  type ModuleCompilationOutput,
   type DefinitionCompilationRequest,
-  type ApplicationCompilationRequestV2,
-  type ModuleCompilationRequestV3,
+  type ApplicationCompilationRequest,
+  type ModuleCompilationRequest,
   type ModuleSourceDocument,
-  type ModuleFieldV3,
-  type ApplicationSourceDocumentV2,
+  type ModuleField,
+  type ApplicationSourceDocument,
   type ConditionNode,
   type DefinitionSourceDocument,
   type DefinitionPublicationContext,
@@ -61,15 +61,15 @@ import {
   type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowTask,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "../schema";
 import type { z } from "zod";
 import {
-  evaluateTypedConditionV2,
+  evaluateTypedCondition,
   TypedConditionEvaluationError,
-  type TypedConditionParameterDeclarationV2,
+  type TypedConditionParameterDeclaration,
 } from "../rules/index";
 import { satisfies } from "semver";
 import { compileParsedDefinition } from "./compiler";
@@ -89,18 +89,18 @@ import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { deriveFormCommitActionKeys } from "./form-commit";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { tableQueryParameterFailures } from "./table-query-parameters";
-import { applicationSearchFieldIsSelectable } from "./application-v2-resolution";
+import { applicationSearchFieldIsSelectable } from "./application-resolution";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
 type PublicationCompilationRequest =
-  DefinitionCompilationRequest | ApplicationCompilationRequestV2 | ModuleCompilationRequestV3;
+  DefinitionCompilationRequest | ApplicationCompilationRequest | ModuleCompilationRequest;
 type DefinitionPath = readonly (string | number)[];
-type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocument;
+type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocument | ModuleSourceDocument;
 
 /** Registered platform block releases by exact identity; the one source of supported events. */
-const registeredBlockReleases: ReadonlyMap<string, PlatformBlockReleaseV2> = new Map(
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases.map((release) => [
+const registeredBlockReleases: ReadonlyMap<string, PlatformBlockRelease> = new Map(
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.releases.map((release) => [
     `${release.blockId}:${release.releaseVersion}`,
     release,
   ]),
@@ -128,7 +128,7 @@ const parseEditSaveSource = (
     }>
   | Readonly<{ success: false; error: z.ZodError }> => {
   const schema = isApplicationSource(source)
-    ? applicationSourceDocumentV2Schema
+    ? applicationSourceDocumentSchema
     : isModuleSource(source)
       ? moduleSourceDocumentSchema
       : definitionSourceDocumentSchema;
@@ -184,9 +184,9 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
     allValidationOutputs(context).map((output) => ({
       schema:
         output.kind === "module"
-          ? moduleDraftV3Schema
+          ? moduleDraftSchema
           : output.kind === "application"
-            ? applicationDraftV2Schema
+            ? applicationDraftSchema
             : connectionTypeSchema,
       value: output.canonical,
     })),
@@ -982,7 +982,8 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           .map((permission) => String(permission.key)),
       );
       const pageGateKnown = (key: unknown) =>
-        applicationPermissionKeys.has(String(key)) || platformPermissionSource().hasKey(String(key));
+        applicationPermissionKeys.has(String(key)) ||
+        platformPermissionSource().hasKey(String(key));
       for (const permission of array(body.permissions)) {
         const scope = permission.record_scope ? object(permission.record_scope) : undefined;
         for (const route of scope ? array(scope.routes) : []) {
@@ -1159,10 +1160,10 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
             : aggregateField === undefined) ||
           (["sum", "average"].includes(String(settings.operation)) &&
             !["whole_number", "decimal_number", "money"].includes(
-              fieldValueTypeV2(aggregateField) ?? "",
+              typedFieldValueType(aggregateField) ?? "",
             )) ||
           (settings.filter !== undefined &&
-            !conditionTypesValidV2(settings.filter, aggregateFields, new Map(), "source")) ||
+            !typedConditionTypesValid(settings.filter, aggregateFields, new Map(), "source")) ||
           !resultTypeValid
         )
           valid = false;
@@ -1174,16 +1175,16 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
         array(action.inputs).map((input) => [String(input.key), input] as const),
       );
       const inputTypes = new Map(
-        [...inputs].map(([key, input]) => [key, semanticFieldTypeV2(input.type) ?? ""] as const),
+        [...inputs].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""] as const),
       );
       if (
         action.precondition &&
-        !conditionTypesValidV2(action.precondition, subjectFields, inputTypes, "source")
+        !typedConditionTypesValid(action.precondition, subjectFields, inputTypes, "source")
       )
         valid = false;
       const subjectRecordType = `${source.key}:${String(action.record_type)}`;
       const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) =>
-        actionValueCompatibleV2(
+        actionValueCompatible(
           candidate,
           targetField,
           subjectFields,
@@ -1230,7 +1231,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
           (parameter) => [String(parameter.key), String(parameter.type)] as const,
         ),
       );
-      if (!conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source"))
+      if (!typedConditionTypesValid(sharingCondition.condition, fields, parameters, "source"))
         valid = false;
     }
     for (const query of array(body.queries)) {
@@ -1244,10 +1245,10 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
       );
       const inputTypes = new Map(
         array(query.inputs).map(
-          (input) => [String(input.key), semanticFieldTypeV2(input.type) ?? ""] as const,
+          (input) => [String(input.key), typedSemanticFieldType(input.type) ?? ""] as const,
         ),
       );
-      if (query.filter && !conditionTypesValidV2(query.filter, fields, inputTypes, "source"))
+      if (query.filter && !typedConditionTypesValid(query.filter, fields, inputTypes, "source"))
         valid = false;
     }
     const sharingConditions = new Map(
@@ -1277,7 +1278,7 @@ function sourceTypeCompatibilityRule(context: PreparedValidationContext): Defini
             expected === undefined ||
             (binding.source === "current_organization_account_id"
               ? !["text", "organization_account_reference"].includes(expected)
-              : !valueMatchesTypeV2(binding.value, expected, "source"))
+              : !typedValueMatchesType(binding.value, expected, "source"))
           );
         })
       )
@@ -1493,13 +1494,13 @@ function fieldValueType(field: JsonObject | undefined): string | undefined {
   return "text";
 }
 
-type ModuleV2ValueDialect = "source" | "canonical";
-type ModuleV2ValueDeclaration = Readonly<{
+type ModuleValueDialect = "source" | "canonical";
+type ModuleValueDeclaration = Readonly<{
   field?: JsonObject;
   type?: string;
 }>;
 
-function semanticFieldTypeV2(type: unknown): string | undefined {
+function typedSemanticFieldType(type: unknown): string | undefined {
   const value = String(type);
   if (
     [
@@ -1536,24 +1537,24 @@ function semanticFieldTypeV2(type: unknown): string | undefined {
   return undefined;
 }
 
-function fieldValueTypeV2(field: JsonObject | undefined): string | undefined {
-  return field ? semanticFieldTypeV2(fieldDeclaredResultType(field)) : undefined;
+function typedFieldValueType(field: JsonObject | undefined): string | undefined {
+  return field ? typedSemanticFieldType(fieldDeclaredResultType(field)) : undefined;
 }
 
-type NumericDimensionV2 = "dimensionless" | "money";
+type NumericDimension = "dimensionless" | "money";
 
-const numericDimensionV2 = (field: JsonObject | undefined): NumericDimensionV2 | undefined => {
-  const type = fieldValueTypeV2(field);
+const numericDimension = (field: JsonObject | undefined): NumericDimension | undefined => {
+  const type = typedFieldValueType(field);
   if (type === "whole_number" || type === "decimal_number") return "dimensionless";
   return type === "money" ? "money" : undefined;
 };
 
-const exactIntegerLiteralV2 = (value: unknown): boolean => {
+const exactIntegerLiteral = (value: unknown): boolean => {
   const parsed = parseExactDecimal(value);
   return parsed !== undefined && parsed.scale === 0;
 };
 
-const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
+const calculationDependencyFieldIds = (expression: JsonObject): string[] => {
   const dependencies: string[] = [];
   const add = (value: unknown) => {
     if (typeof value === "string" && !dependencies.includes(value)) dependencies.push(value);
@@ -1601,10 +1602,10 @@ const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
  * dimension is unknown or the operation's dimensions are not allowed. Money divided by money is
  * refused: only a dimensionless divisor keeps the dividend's currency.
  */
-const numericOperationDimensionV2 = (
+const numericOperationDimension = (
   operation: string,
-  dimensions: readonly (NumericDimensionV2 | undefined)[],
-): NumericDimensionV2 | undefined => {
+  dimensions: readonly (NumericDimension | undefined)[],
+): NumericDimension | undefined => {
   if (dimensions.some((dimension) => dimension === undefined)) return undefined;
   const moneyPositions = dimensions.flatMap((dimension, index) =>
     dimension === "money" ? [index] : [],
@@ -1622,36 +1623,36 @@ const numericOperationDimensionV2 = (
 };
 
 /** The money dimension of one numeric value, worked out through any nesting of operations. */
-const numericValueDimensionV2 = (
+const numericValueDimension = (
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   depth = 1,
-): NumericDimensionV2 | undefined => {
+): NumericDimension | undefined => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   if (depth > calculationMaximumNestingDepth) return undefined;
   const entry = object(value);
   if (entry.source === "literal")
-    return exactDecimalTextV2Schema.safeParse(entry.value).success
+    return exactDecimalTextSchema.safeParse(entry.value).success
       ? ("dimensionless" as const)
       : undefined;
-  if (entry.source === "field") return numericDimensionV2(fields.get(String(entry.fieldId)));
+  if (entry.source === "field") return numericDimension(fields.get(String(entry.fieldId)));
   if (entry.source !== "numeric") return undefined;
   const operands = array(entry.operands);
   if (operands.length < 2) return undefined;
-  return numericOperationDimensionV2(
+  return numericOperationDimension(
     String(entry.operation),
-    operands.map((operand) => numericValueDimensionV2(operand, fields, depth + 1)),
+    operands.map((operand) => numericValueDimension(operand, fields, depth + 1)),
   );
 };
 
-const numericExpressionValidV2 = (
+const numericExpressionValid = (
   expression: JsonObject,
   resultType: string,
   fields: ReadonlyMap<string, JsonObject>,
 ): boolean => {
-  const dimension = numericOperationDimensionV2(
+  const dimension = numericOperationDimension(
     String(expression.operation),
-    array(expression.operands).map((operand) => numericValueDimensionV2(operand, fields)),
+    array(expression.operands).map((operand) => numericValueDimension(operand, fields)),
   );
   if (dimension === undefined) return false;
   return dimension === "money"
@@ -1659,20 +1660,20 @@ const numericExpressionValidV2 = (
     : resultType === "whole_number" || resultType === "decimal_number";
 };
 
-function valueMatchesTypeV2(
+function typedValueMatchesType(
   value: unknown,
   type: string,
-  dialect: ModuleV2ValueDialect = "canonical",
+  dialect: ModuleValueDialect = "canonical",
 ): boolean {
   if (type === "text") return typeof value === "string";
   if (type === "number") return typeof value === "number" && Number.isFinite(value);
   if (type === "whole_number") return typeof value === "number" && Number.isInteger(value);
   if (type === "decimal_number")
-    return (
-      dialect === "source" ? sourceExactDecimalTextV2Schema : exactDecimalTextV2Schema
-    ).safeParse(value).success;
+    return (dialect === "source" ? sourceExactDecimalTextSchema : exactDecimalTextSchema).safeParse(
+      value,
+    ).success;
   if (type === "money")
-    return (dialect === "source" ? sourceMoneyValueV2Schema : moneyValueV2Schema).safeParse(value)
+    return (dialect === "source" ? sourceMoneyValueSchema : moneyValueSchema).safeParse(value)
       .success;
   if (type === "boolean") return typeof value === "boolean";
   if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
@@ -1694,18 +1695,17 @@ function valueMatchesTypeV2(
   return type === "opaque_json" && jsonValueSchema.safeParse(value).success;
 }
 
-function fieldValueMatchesV2(
+function fieldValueMatches(
   value: unknown,
   field: JsonObject | undefined,
-  dialect: ModuleV2ValueDialect,
+  dialect: ModuleValueDialect,
 ): boolean {
   if (!field) return false;
   if (field.type === "calculation" || field.type === "total") {
-    const resultType = fieldValueTypeV2(field);
-    return resultType !== undefined && valueMatchesTypeV2(value, resultType, dialect);
+    const resultType = typedFieldValueType(field);
+    return resultType !== undefined && typedValueMatchesType(value, resultType, dialect);
   }
-  const schemas =
-    dialect === "source" ? sourceModuleFieldValueV2Schemas : moduleFieldValueV2Schemas;
+  const schemas = dialect === "source" ? sourceModuleFieldValueSchemas : moduleFieldValueSchemas;
   const schema = schemas[String(field.type) as keyof typeof schemas];
   if (schema === undefined || !schema.safeParse(value).success) return false;
   const expectedRecordTypeIds = fieldRecordTypeIds(field);
@@ -1716,10 +1716,10 @@ function fieldValueMatchesV2(
   );
 }
 
-const conditionCollectionElementTypeV2 = (type: string | undefined): type is string =>
+const conditionCollectionElementType = (type: string | undefined): type is string =>
   type !== undefined && type !== "text_collection" && type !== "opaque_json";
 
-function naturalLiteralTypeV2(value: unknown): string | undefined {
+function typedNaturalLiteralType(value: unknown): string | undefined {
   if (value === null) return undefined;
   if (typeof value === "number") return "number";
   if (typeof value === "boolean") return "boolean";
@@ -1733,11 +1733,11 @@ function naturalLiteralTypeV2(value: unknown): string | undefined {
   return "opaque_json";
 }
 
-function conditionTypesValidV2(
+function typedConditionTypesValid(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   parameters: ReadonlyMap<string, string> = new Map(),
-  dialect: ModuleV2ValueDialect = "canonical",
+  dialect: ModuleValueDialect = "canonical",
 ): boolean {
   if (value === null || value === undefined) return true;
   const condition = object(value);
@@ -1760,10 +1760,14 @@ function conditionTypesValidV2(
         ? condition.condition
         : undefined;
   if (all)
-    return array(all).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
+    return array(all).every((entry) =>
+      typedConditionTypesValid(entry, fields, parameters, dialect),
+    );
   if (any)
-    return array(any).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
-  if (not) return conditionTypesValidV2(not, fields, parameters, dialect);
+    return array(any).every((entry) =>
+      typedConditionTypesValid(entry, fields, parameters, dialect),
+    );
+  if (not) return typedConditionTypesValid(not, fields, parameters, dialect);
   if (dialect === "canonical" && condition.kind !== "comparison") return false;
 
   const authoredLeft =
@@ -1776,18 +1780,18 @@ function conditionTypesValidV2(
         ? { source: "parameter", parameter: condition.parameter }
         : { source: "value", value: condition.value }
       : condition.right;
-  const declaration = (operandValue: unknown): ModuleV2ValueDeclaration | undefined => {
+  const declaration = (operandValue: unknown): ModuleValueDeclaration | undefined => {
     const operand = object(operandValue);
     if (operand.source === "field") {
       const field = fields.get(String(operand[dialect === "source" ? "field" : "fieldId"]));
       if (!field) return undefined;
-      const type = fieldValueTypeV2(field);
+      const type = typedFieldValueType(field);
       return { field, ...(type === undefined ? {} : { type }) };
     }
     if (operand.source === "parameter") {
       const type = parameters.get(String(operand[dialect === "source" ? "parameter" : "key"]));
       if (!type) return undefined;
-      const semanticType = semanticFieldTypeV2(type);
+      const semanticType = typedSemanticFieldType(type);
       return semanticType === undefined ? undefined : { type: semanticType };
     }
     return operand.source === "value" ? {} : undefined;
@@ -1796,11 +1800,12 @@ function conditionTypesValidV2(
     const operand = object(operandValue);
     return operand.source === "value" ? operand.value : undefined;
   };
-  const matches = (literalValue: unknown, expected: ModuleV2ValueDeclaration | undefined) =>
+  const matches = (literalValue: unknown, expected: ModuleValueDeclaration | undefined) =>
     literalValue === null ||
     (expected?.field
-      ? fieldValueMatchesV2(literalValue, expected.field, dialect)
-      : expected?.type !== undefined && valueMatchesTypeV2(literalValue, expected.type, dialect));
+      ? fieldValueMatches(literalValue, expected.field, dialect)
+      : expected?.type !== undefined &&
+        typedValueMatchesType(literalValue, expected.type, dialect));
   const leftDeclaration = declaration(authoredLeft);
   if (!leftDeclaration) return false;
   const operator = String(condition.operator);
@@ -1818,15 +1823,15 @@ function conditionTypesValidV2(
   const rightIsLiteral = object(authoredRight).source === "value";
 
   if (["in", "not_in"].includes(operator)) {
-    const elementType = leftDeclaration.type ?? naturalLiteralTypeV2(leftLiteral);
-    if (!conditionCollectionElementTypeV2(elementType)) return false;
+    const elementType = leftDeclaration.type ?? typedNaturalLiteralType(leftLiteral);
+    if (!conditionCollectionElementType(elementType)) return false;
     if (!rightIsLiteral)
       return rightDeclaration.type === "text_collection" && elementType === "text";
     if (!Array.isArray(rightLiteral)) return false;
     return rightLiteral.every((entry) =>
       leftDeclaration.type
         ? matches(entry, leftDeclaration)
-        : valueMatchesTypeV2(entry, elementType, dialect),
+        : typedValueMatchesType(entry, elementType, dialect),
     );
   }
   if (["contains", "not_contains"].includes(operator)) {
@@ -1979,7 +1984,7 @@ function actionValueRecordTypeIds(
   return undefined;
 }
 
-function actionValueTypeV2(
+function actionValueType(
   value: unknown,
   fields: ReadonlyMap<string, JsonObject>,
   inputs: ReadonlyMap<string, JsonObject>,
@@ -1990,35 +1995,35 @@ function actionValueTypeV2(
     const input = inputs.get(String(reference.name));
     if (input === undefined)
       return String(reference.name) === "record" ? "record_reference" : undefined;
-    return input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
+    return input.type === "formatted_text" ? "formatted_text" : typedSemanticFieldType(input.type);
   }
   if (reference.source === "trigger_record") {
     const field = actionFieldByKey(fields, String(reference.field));
     return ["formatted_text", "table", "attachment"].includes(String(field?.type))
       ? String(field!.type)
-      : fieldValueTypeV2(field);
+      : typedFieldValueType(field);
   }
   if (reference.source === "execution_actor") return "organization_account_reference";
   if (reference.source === "execution_now") return "date_time";
   return undefined;
 }
 
-function actionValueCompatibleV2(
+function actionValueCompatible(
   value: unknown,
   targetField: JsonObject | undefined,
   fields: ReadonlyMap<string, JsonObject>,
   inputs: ReadonlyMap<string, JsonObject>,
   subjectRecordTypeId: string,
-  dialect: ModuleV2ValueDialect = "canonical",
+  dialect: ModuleValueDialect = "canonical",
 ): boolean {
   const entry = object(value);
   const expectedType = ["formatted_text", "table", "attachment"].includes(String(targetField?.type))
     ? String(targetField!.type)
-    : fieldValueTypeV2(targetField);
+    : typedFieldValueType(targetField);
   const compatible =
     entry.kind === "literal"
-      ? fieldValueMatchesV2(actionValueLiteral(value), targetField, dialect)
-      : valueTypesCompatible(actionValueTypeV2(value, fields, inputs), expectedType, "exact");
+      ? fieldValueMatches(actionValueLiteral(value), targetField, dialect)
+      : valueTypesCompatible(actionValueType(value, fields, inputs), expectedType, "exact");
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
   if (entry.kind === "literal") return compatible;
@@ -2038,7 +2043,7 @@ const applicationFieldType = (pair: ApplicationFieldValuePair | undefined): stri
   if (!pair) return undefined;
   if (["formatted_text", "table", "attachment"].includes(String(pair.field.type)))
     return String(pair.field.type);
-  return fieldValueTypeV2(pair.field);
+  return typedFieldValueType(pair.field);
 };
 
 const actionValueReferenceEntry = (entry: JsonObject): JsonObject | undefined =>
@@ -2055,7 +2060,7 @@ function applicationActionValueCompatible(
   if (!target) return false;
   const entry = object(value);
   if (entry.kind === "literal")
-    return fieldValueMatchesV2(actionValueLiteral(value), target.field, "canonical");
+    return fieldValueMatches(actionValueLiteral(value), target.field, "canonical");
   const reference = actionValueReference(value);
   if (reference?.source === "trigger_record" && !subjectModuleBound) return false;
   if (
@@ -2067,13 +2072,13 @@ function applicationActionValueCompatible(
     return false;
   if (
     !valueTypesCompatible(
-      actionValueTypeV2(value, subjectFields, inputs),
+      actionValueType(value, subjectFields, inputs),
       applicationFieldType(target),
       "mapping",
     )
   )
     return false;
-  return actionValueCompatibleV2(value, target.field, subjectFields, inputs, subjectRecordTypeId);
+  return actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
 }
 
 function applicationConditionUsesLossyInput(
@@ -2093,7 +2098,7 @@ function applicationConditionUsesLossyInput(
   const exactFieldType = (operandValue: unknown) => {
     const operand = object(operandValue);
     if (operand.source !== "field") return undefined;
-    const type = fieldValueTypeV2(fields.get(String(operand.fieldId)));
+    const type = typedFieldValueType(fields.get(String(operand.fieldId)));
     return type === "decimal_number" || type === "money" ? type : undefined;
   };
   const isLegacyNumberInput = (operandValue: unknown) => {
@@ -2114,7 +2119,7 @@ const applicationConditionTypesValid = (
 ): boolean =>
   moduleBound
     ? !applicationConditionUsesLossyInput(value, fields, inputTypes) &&
-      conditionTypesValidV2(value, fields, inputTypes)
+      typedConditionTypesValid(value, fields, inputTypes)
     : conditionTypesValid(value, fields, inputTypes);
 
 const applicationInterfaceFieldType = (
@@ -2217,9 +2222,9 @@ function permissionRecordScopesValid(
           (binding.source === "current_organization_account_id"
             ? !["text", "organization_account_reference"].includes(expected)
             : !(expected === "decimal_number"
-                ? exactDecimalTextV2Schema.safeParse(binding.value).success
+                ? exactDecimalTextSchema.safeParse(binding.value).success
                 : expected === "money"
-                  ? moneyValueV2Schema.safeParse(binding.value).success
+                  ? moneyValueSchema.safeParse(binding.value).success
                   : valueMatchesType(binding.value, expected)))
         );
       })
@@ -2624,7 +2629,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           );
         if (field.type === "calculation") {
           const expression = object(settings.expression);
-          const expectedDependencies = calculationDependencyFieldIdsV2(expression);
+          const expectedDependencies = calculationDependencyFieldIds(expression);
           valid =
             (settings.dependencyFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
             fieldReferencesValid(settings.expression, fields) &&
@@ -2639,25 +2644,25 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             valid =
               valid &&
               (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(fieldValueTypeV2(fieldMap.get(id)) ?? ""),
+                ["text", "choice"].includes(typedFieldValueType(fieldMap.get(id)) ?? ""),
               );
           if (expression.kind === "numeric")
             valid =
-              valid && numericExpressionValidV2(expression, String(settings.resultType), fieldMap);
+              valid && numericExpressionValid(expression, String(settings.resultType), fieldMap);
           if (expression.kind === "condition")
-            valid = valid && conditionTypesValidV2(expression.condition, fieldMap);
+            valid = valid && typedConditionTypesValid(expression.condition, fieldMap);
           if (expression.kind === "date_offset") {
             const amount = object(expression.amount);
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ?? "",
+                typedFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
-              fieldValueTypeV2(fieldMap.get(String(expression.dateFieldId))) ===
+              typedFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
                 settings.resultType &&
-              ((amount.source === "literal" && exactIntegerLiteralV2(amount.value)) ||
+              ((amount.source === "literal" && exactIntegerLiteral(amount.value)) ||
                 (amount.source === "field" &&
-                  fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"));
+                  typedFieldValueType(fieldMap.get(String(amount.fieldId))) === "whole_number"));
           }
           if (expression.kind === "deadline_passed") {
             const statusField =
@@ -2667,15 +2672,15 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueTypeV2(fieldMap.get(String(expression.dueFieldId))) ?? "",
+                typedFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(fieldValueTypeV2(statusField) ?? "")) &&
+                ["text", "choice"].includes(typedFieldValueType(statusField) ?? "")) &&
               (expression.statusFieldId !== undefined ||
                 array(expression.terminalStatusValues).length === 0) &&
               (statusField === undefined ||
                 array(expression.terminalStatusValues).every((value) =>
-                  fieldValueMatchesV2(value, statusField, "canonical"),
+                  fieldValueMatches(value, statusField, "canonical"),
                 ));
           }
         }
@@ -2717,7 +2722,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
-              conditionTypesValidV2(settings.filter, aggregateFieldMap));
+              typedConditionTypesValid(settings.filter, aggregateFieldMap));
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");
@@ -2740,7 +2745,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               : aggregateField !== undefined) &&
             (!["sum", "average"].includes(String(settings.operation)) ||
               ["whole_number", "decimal_number", "money"].includes(
-                fieldValueTypeV2(aggregateField) ?? "",
+                typedFieldValueType(aggregateField) ?? "",
               ));
           const declaredResultType = String(settings.resultType);
           const resultTypeValid =
@@ -2812,7 +2817,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
       const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
-        [...inputMap].map(([key, input]) => [key, semanticFieldTypeV2(input.type) ?? ""]),
+        [...inputMap].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""]),
       );
       let valid =
         subject !== undefined &&
@@ -2820,7 +2825,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          conditionTypesValidV2(action.precondition, fieldMap, inputTypes));
+          typedConditionTypesValid(action.precondition, fieldMap, inputTypes));
       for (const input of array(action.inputs))
         if (
           input.type === "record_reference" &&
@@ -2835,7 +2840,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           for (const [id, value] of Object.entries(object(properties.values)))
             if (
               !fields.has(id) ||
-              !actionValueCompatibleV2(
+              !actionValueCompatible(
                 value,
                 fieldMap.get(id),
                 fieldMap,
@@ -2869,7 +2874,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
             Object.entries(object(properties.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !actionValueCompatibleV2(
+                !actionValueCompatible(
                   value,
                   targetFields.get(id),
                   fieldMap,
@@ -3041,7 +3046,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        conditionTypesValidV2(condition.condition, fieldMap, parameterTypes);
+        typedConditionTypesValid(condition.condition, fieldMap, parameterTypes);
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
@@ -3049,7 +3054,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
               condition,
               object(publicationTest.fieldValues),
               object(publicationTest.parameters),
-              [...fieldMap.values()] as ModuleFieldV3[],
+              [...fieldMap.values()] as ModuleField[],
             ) !== publicationTest.expected
           )
             valid = false;
@@ -3166,13 +3171,13 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const filterValid =
         !query.filter ||
         (fieldReferencesValid(query.filter, fields) &&
-          conditionTypesValidV2(
+          typedConditionTypesValid(
             query.filter,
             fieldMap,
             new Map(
               array(query.inputs).map((input) => [
                 String(input.key),
-                semanticFieldTypeV2(input.type) ?? "",
+                typedSemanticFieldType(input.type) ?? "",
               ]),
             ),
           ));
@@ -3308,8 +3313,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         entry.recordType.state === "resolved"
           ? records.get(String(entry.recordType.recordTypeId))
           : undefined;
-      const fields =
-        record === undefined ? [] : (array(record.fields) as unknown as ModuleFieldV3[]);
+      const fields = record === undefined ? [] : (array(record.fields) as unknown as ModuleField[]);
       if (
         record === undefined ||
         entry.recordType.state !== "resolved" ||
@@ -3574,7 +3578,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     );
     const pages = new Map(array(content.pages).map((page) => [String(page.pageId), page]));
     const shells = new Map(array(content.shells).map((shell) => [String(shell.shellId), shell]));
-    const collectPlacementEntriesV2 = (
+    const collectPlacementEntries = (
       slotValue: unknown,
       entries: [string, JsonObject][] = [],
     ): [string, JsonObject][] => {
@@ -3583,31 +3587,29 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         const placement = object(placementValue);
         entries.push([placementId, placement]);
         for (const childSlot of Object.values(object(placement.slots)))
-          collectPlacementEntriesV2(childSlot, entries);
+          collectPlacementEntries(childSlot, entries);
       }
       return entries;
     };
-    const pageContentPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+    const pageContentPlacementEntries = (page: JsonObject): [string, JsonObject][] => {
       const composition = object(page.composition);
-      if ("main" in composition) return collectPlacementEntriesV2(composition.main);
+      if ("main" in composition) return collectPlacementEntries(composition.main);
       if ("content" in composition)
         return Object.values(object(composition.content)).flatMap((slotValue) =>
-          collectPlacementEntriesV2(slotValue),
+          collectPlacementEntries(slotValue),
         );
       if (composition.shellKind === "default")
         return Object.values(object(composition.stepContent)).flatMap((slotValue) =>
-          collectPlacementEntriesV2(slotValue),
+          collectPlacementEntries(slotValue),
         );
       return Object.values(object(composition.stepContent)).flatMap((stepValue) =>
-        Object.values(object(stepValue)).flatMap((slotValue) =>
-          collectPlacementEntriesV2(slotValue),
-        ),
+        Object.values(object(stepValue)).flatMap((slotValue) => collectPlacementEntries(slotValue)),
       );
     };
-    const pageShellPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+    const pageShellPlacementEntries = (page: JsonObject): [string, JsonObject][] => {
       const composition = object(page.composition);
       if (composition.shellKind !== "application") return [];
-      return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
+      return collectPlacementEntries(shells.get(String(composition.shellId))?.layout);
     };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
     // The queries a page or placement binds are the ones a bound Module exposes, by exact identity.
@@ -3704,7 +3706,9 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       // administration permission cannot gate it: the runtime record-access decision refuses
       // platform authority for a record target. The reference is refused here rather than
       // compiled into a release that cannot enforce it.
-      const usesPlatformPermission = actionPermissionKeys(action).some((key) => platformPermissionSource().hasKey(key));
+      const usesPlatformPermission = actionPermissionKeys(action).some((key) =>
+        platformPermissionSource().hasKey(key),
+      );
       if (usesPlatformPermission)
         failures.push(
           failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
@@ -3815,8 +3819,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         );
     }
     const applicationPlacementEntries = [
-      ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
-      ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
+      ...[...shells.values()].flatMap((shell) => collectPlacementEntries(shell.layout)),
+      ...[...pages.values()].flatMap(pageContentPlacementEntries),
     ];
     const applicationPlacementIds = new Set(
       applicationPlacementEntries.map(([placementId]) => placementId),
@@ -4014,7 +4018,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
         );
       if (page.type === "guided_form") {
-        const controls = pageContentPlacementEntriesV2(page);
+        const controls = pageContentPlacementEntries(page);
         const forms = new Set(
           controls
             .filter(
@@ -4061,10 +4065,10 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           ? [
               ...(composition.shellKind === "application"
                 ? Object.values(object(summaryContent)).flatMap((slotValue) =>
-                    collectPlacementEntriesV2(slotValue),
+                    collectPlacementEntries(slotValue),
                   )
-                : collectPlacementEntriesV2(summaryContent)),
-              ...pageShellPlacementEntriesV2(page),
+                : collectPlacementEntries(summaryContent)),
+              ...pageShellPlacementEntries(page),
             ]
           : [];
         const summaryForms = new Set(
@@ -4098,8 +4102,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           );
       }
       const placements = [
-        ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
-        ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
+        ...pageContentPlacementEntries(page).map(([, placement]) => placement),
+        ...pageShellPlacementEntries(page).map(([, placement]) => placement),
       ];
       // A Records table or Record detail may map only fields its bound Module query selects, and
       // may order only by fields the query can order (a grouped or aggregating query orders by its
@@ -4226,7 +4230,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         }
         if (table === undefined && detail === undefined) continue;
         if (table !== undefined) {
-          const query = moduleQueryDefinitionV3Schema.safeParse(bound);
+          const query = moduleQueryDefinitionSchema.safeParse(bound);
           const families = query.success
             ? tableQueryParameterFailures(table, query.data.inputs)
             : (["broken_reference"] as const);
@@ -4973,7 +4977,7 @@ function publicationCompatibilityRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const output of context.outputs.filter(
-    (candidate): candidate is ModuleCompilationOutputV3 | ApplicationCompilationOutputV2 =>
+    (candidate): candidate is ModuleCompilationOutput | ApplicationCompilationOutput =>
       candidate.kind === "module" || candidate.kind === "application",
   )) {
     const key = outputKey(output);
@@ -5125,7 +5129,7 @@ function applicationCatalogueRule(context: PreparedValidationContext): Definitio
   return editSaveSources(context).flatMap((source, index) => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
     return parsed.success && isApplicationSource(parsed.data)
-      ? validateApplicationSourceCatalogue(parsed.data as ApplicationSourceDocumentV2)
+      ? validateApplicationSourceCatalogue(parsed.data as ApplicationSourceDocument)
       : [];
   });
 }
@@ -5175,7 +5179,7 @@ function applicationFlowBindingEventRule(
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success || !isApplicationSource(parsed.data)) return [];
-    const source = parsed.data as ApplicationSourceDocumentV2;
+    const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
     const placedBlocks = placedApplicationBlocks(body);
     const failures: DefinitionRuleFailure[] = [];
@@ -5263,7 +5267,7 @@ function applicationControlBindingRule(
   return editSaveSources(context).flatMap((raw, index): DefinitionRuleFailure[] => {
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success || !isApplicationSource(parsed.data)) return [];
-    const source = parsed.data as ApplicationSourceDocumentV2;
+    const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
     for (const binding of array(body.flow_bindings)) {
@@ -5529,16 +5533,16 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
-  sourceRecordFields: readonly ModuleFieldV3[],
+  sourceRecordFields: readonly ModuleField[],
 ): boolean {
   const candidate = object(input);
   let result: boolean;
   try {
-    result = evaluateTypedConditionV2({
+    result = evaluateTypedCondition({
       condition: candidate.condition as ConditionNode,
       sourceRecordFields,
       declaredFieldIds: candidate.declaredFieldIds as string[],
-      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclarationV2[],
+      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
       fieldValues,
       parameterValues: parameters,
     });
@@ -5555,7 +5559,7 @@ export function evaluateSavedSharingCondition(
       error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
     );
   }
-  if (!savedSharingConditionV3Schema.safeParse(input).success)
+  if (!savedSharingConditionSchema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",
@@ -5599,8 +5603,8 @@ export function compileDefinitionSet(
   const publicationContext = parsedContext.data;
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
-    if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isApplicationSource(source)) return applicationCompilationRequestV2Schema.safeParse(input);
+    if (isModuleSource(source)) return moduleCompilationRequestSchema.safeParse(input);
+    if (isApplicationSource(source)) return applicationCompilationRequestSchema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);
   });
   if (parsedInputs.some((result) => !result.success))

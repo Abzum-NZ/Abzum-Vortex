@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  applicationDraftV2Schema,
+  applicationDraftSchema,
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
 import {
@@ -15,11 +15,11 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleDraftV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
+import { moduleDraftSchema, storedModuleContentSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
-export const moduleVersionImpactPolicyVersionV3 = "3.0.0" as const;
+export const applicationVersionImpactPolicyVersion = "2.0.0" as const;
+export const moduleVersionImpactPolicyVersion = "3.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
@@ -176,42 +176,44 @@ export const definitionVersionImpactFailureCodeSchema = z.enum([
 const historyLimit = 10_000;
 
 /** The one current Application history evidence; publication dispatch requires this exact pair. */
-export const applicationVersionImpactRequestV2Schema = z
+export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
-    candidate: applicationDraftV2Schema,
+    candidate: applicationDraftSchema,
   })
   .strict();
 
 /** Immutable Module history evidence; publication dispatch requires the exact 3.0.0 pair. */
-export const moduleVersionImpactHistoryEntryV3Schema = z
+export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
       validationContractVersion: z.literal("3.0.0"),
     }),
-    content: storedModuleContentV3Schema,
+    content: storedModuleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(storedModuleContentV3Schema, value.content, context, ["content"]),
+    requireResolvedRecordTypeReferences(storedModuleContentSchema, value.content, context, [
+      "content",
+    ]),
   );
 
-export const moduleVersionImpactRequestV3Schema = z
+export const moduleVersionImpactRequestSchema = z
   .object({
     kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleVersionImpactPolicyVersionV3),
-    history: z.array(moduleVersionImpactHistoryEntryV3Schema).max(historyLimit),
-    candidate: moduleDraftV3Schema,
+    validationContractVersion: z.literal(moduleVersionImpactPolicyVersion),
+    history: z.array(moduleVersionImpactHistoryEntrySchema).max(historyLimit),
+    candidate: moduleDraftSchema,
   })
   .strict();
 
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
-  moduleVersionImpactRequestV3Schema,
-  applicationVersionImpactRequestV2Schema,
+  moduleVersionImpactRequestSchema,
+  applicationVersionImpactRequestSchema,
 ]);
 
 const resultCommon = {
@@ -304,12 +306,8 @@ export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema
 >;
 export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImpactRequestSchema>;
-export type ApplicationVersionImpactRequestV2 = z.infer<
-  typeof applicationVersionImpactRequestV2Schema
->;
-export type ModuleVersionImpactRequestV3 = z.infer<typeof moduleVersionImpactRequestV3Schema>;
-export type ModuleVersionImpactHistoryEntryV3 = z.infer<
-  typeof moduleVersionImpactHistoryEntryV3Schema
->;
+export type ApplicationVersionImpactRequest = z.infer<typeof applicationVersionImpactRequestSchema>;
+export type ModuleVersionImpactRequest = z.infer<typeof moduleVersionImpactRequestSchema>;
+export type ModuleVersionImpactHistoryEntry = z.infer<typeof moduleVersionImpactHistoryEntrySchema>;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
 export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

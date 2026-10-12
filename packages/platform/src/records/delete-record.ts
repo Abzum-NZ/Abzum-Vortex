@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  correlationIdSchema,
-  recordIdSchema,
-  type SaveRecordCommandV2,
-} from "../schema";
+import { correlationIdSchema, recordIdSchema, type SaveRecordCommand } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   calculateLockedRelationshipTotalSave,
@@ -146,13 +142,13 @@ const parseDatabaseOutcome = (candidate: unknown): DatabaseOutcome => {
 };
 
 const one = <Value>(rows: readonly Value[]): Value => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
   return rows[0];
 };
 
 export type Settled<Result> =
-  | Readonly<{ kind: "restart" }>
-  | Readonly<{ kind: "result"; value: Result }>;
+  Readonly<{ kind: "restart" }> | Readonly<{ kind: "result"; value: Result }>;
 
 /**
  * Carries the command's settled outcome out of a transaction that must roll
@@ -229,7 +225,7 @@ const refuseCalculation = (recordId: string, correlationId: string): never => {
 
 // Neither lifecycle operation submits values: every closure record is
 // recalculated from its locked current values and live related records.
-const unchangedSubmission: Pick<SaveRecordCommandV2, "operation" | "submittedValues"> = {
+const unchangedSubmission: Pick<SaveRecordCommand, "operation" | "submittedValues"> = {
   operation: "update",
   submittedValues: {},
 };

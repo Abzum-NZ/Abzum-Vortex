@@ -5,7 +5,7 @@ import {
   canonicalJson,
   flowLiteralSchema,
   jsonValueSchema,
-  type CustomComponentReleaseV2,
+  type CustomComponentRelease,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
@@ -32,7 +32,7 @@ import {
  */
 
 /** One declared custom component event, as carried by its release. */
-export type CustomComponentEventDeclaration = CustomComponentReleaseV2["events"][number];
+export type CustomComponentEventDeclaration = CustomComponentRelease["events"][number];
 
 /** One typed value a custom component sends back in an event payload. */
 export type CustomComponentEventPayload = Readonly<Record<string, unknown>>;
@@ -122,7 +122,7 @@ export const validateCustomComponentEventPayload = (
  * the host is rendered outside the registration's parser.
  */
 const contractValues = (
-  custom: CustomComponentReleaseV2 | undefined,
+  custom: CustomComponentRelease | undefined,
   values: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> => {
   if (custom === undefined) return EMPTY_RECORD;

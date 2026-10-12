@@ -1,26 +1,26 @@
-import type { sourcePlacementSlotV2Schema } from "@vortex/platform/schema";
+import type { sourcePlacementSlotSchema } from "@vortex/platform/schema";
 import {
   flowContractVersion,
   flowTaskRegistry,
-  immutablePlatformBlockCatalogueV2Schema,
-  moduleDraftV3Schema,
+  immutablePlatformBlockCatalogueSchema,
+  moduleDraftSchema,
   namespacedKeySchema,
   queryIdSchema,
   recordTypeIdSchema,
   sourceComponentFlowBindingSchema,
   sourceFlowSchema,
-  sourcePageDefinitionV2Schema,
-  sourcePlacementEntriesV2,
-  sourcePlatformBlockDependenciesV2Schema,
-  type ImmutablePlatformBlockCatalogueV2,
-  type ModuleDraftV3,
-  type ModuleFieldV3,
-  type ModuleQueryDefinitionV3,
-  type RecordTypeDefinitionV3,
-  type SourceApplicationBodyV2,
-  type SourceBlockPropertyValueV2Contract,
+  sourcePageDefinitionSchema,
+  sourcePlacementEntries,
+  sourcePlatformBlockDependenciesSchema,
+  type ImmutablePlatformBlockCatalogue,
+  type ModuleDraft,
+  type ModuleField,
+  type ModuleQueryDefinition,
+  type RecordTypeDefinition,
+  type SourceApplicationBody,
+  type SourceBlockPropertyValueContract,
   type SourceFlow,
-  type SourcePageDefinitionV2,
+  type SourcePageDefinition,
 } from "@vortex/platform/schema";
 
 /** The four normal Application page kinds projected from one bound Module record type. */
@@ -33,7 +33,7 @@ export type ModuleGeneratedPageKind = "list" | "detail" | "create" | "edit";
  * Module Query whose projection includes the record title field.
  */
 export type ModulePageGeneratorInput = Readonly<{
-  module: ModuleDraftV3;
+  module: ModuleDraft;
   recordTypeId: string;
   listQueryId: string;
   permissions: Readonly<{
@@ -41,22 +41,20 @@ export type ModulePageGeneratorInput = Readonly<{
     create: string;
     update: string;
   }>;
-  catalogue: ImmutablePlatformBlockCatalogueV2;
+  catalogue: ImmutablePlatformBlockCatalogue;
   /** Placements retained in the target Application outside these four replacement pages. */
   retainedApplicationPlacementCount: number;
   /** Replacements keep the generated page identity and each form's bound submit control. */
-  authoredPageOverrides?: Readonly<
-    Partial<Record<ModuleGeneratedPageKind, SourcePageDefinitionV2>>
-  >;
+  authoredPageOverrides?: Readonly<Partial<Record<ModuleGeneratedPageKind, SourcePageDefinition>>>;
 }>;
 
 type ParsedFlowBinding = ReturnType<typeof sourceComponentFlowBindingSchema.parse>;
-type ParsedPlatformDependencies = ReturnType<typeof sourcePlatformBlockDependenciesV2Schema.parse>;
-type SourceApplicationEvent = SourceApplicationBodyV2["events"][number];
+type ParsedPlatformDependencies = ReturnType<typeof sourcePlatformBlockDependenciesSchema.parse>;
+type SourceApplicationEvent = SourceApplicationBody["events"][number];
 
 /** Ordinary authored Application source. Callers merge these fragments into the current draft. */
 export type ModulePageFragments = Readonly<{
-  pages: readonly SourcePageDefinitionV2[];
+  pages: readonly SourcePageDefinition[];
   events: readonly SourceApplicationEvent[];
   flows: readonly SourceFlow[];
   flow_bindings: readonly ParsedFlowBinding[];
@@ -87,7 +85,7 @@ export class ModulePageGeneratorError extends Error {
   }
 }
 
-const supportedFieldInputTypes: ReadonlySet<ModuleFieldV3["type"]> = new Set([
+const supportedFieldInputTypes: ReadonlySet<ModuleField["type"]> = new Set([
   "text",
   "email_address",
   "long_text",
@@ -104,7 +102,7 @@ const supportedFieldInputTypes: ReadonlySet<ModuleFieldV3["type"]> = new Set([
   "link_to_one_of_several",
 ]);
 
-const generatedFieldTypes: ReadonlySet<ModuleFieldV3["type"]> = new Set([
+const generatedFieldTypes: ReadonlySet<ModuleField["type"]> = new Set([
   "reference_number",
   "calculation",
   "total",
@@ -114,8 +112,8 @@ const compactId = (identity: string): string => identity.replaceAll("-", "").toL
 
 /** Source aliases are scoped to the Application and anchored to permanent Module identities. */
 const sourceIdentity = (
-  module: ModuleDraftV3,
-  recordType: RecordTypeDefinitionV3,
+  module: ModuleDraft,
+  recordType: RecordTypeDefinition,
   suffix: string,
 ): string =>
   `generated_${compactId(String(module.envelope.rootId))}_${compactId(String(recordType.recordTypeId))}_${suffix}`;
@@ -170,7 +168,7 @@ const compareReleaseVersions = (left: string, right: string): number => {
   return compareText(a.build ?? "", b.build ?? "");
 };
 
-const latestRelease = (catalogue: ImmutablePlatformBlockCatalogueV2, key: string) => {
+const latestRelease = (catalogue: ImmutablePlatformBlockCatalogue, key: string) => {
   const matches = catalogue.releases.filter((release) => release.key === key);
   if (matches.length === 0)
     throw new ModulePageGeneratorError(
@@ -185,9 +183,9 @@ const latestRelease = (catalogue: ImmutablePlatformBlockCatalogueV2, key: string
 };
 
 const matchesRecordType = (
-  query: ModuleQueryDefinitionV3,
-  module: ModuleDraftV3,
-  recordType: RecordTypeDefinitionV3,
+  query: ModuleQueryDefinition,
+  module: ModuleDraft,
+  recordType: RecordTypeDefinition,
 ): boolean => {
   const reference = query.recordType;
   if (reference.state === "resolved")
@@ -200,33 +198,33 @@ const matchesRecordType = (
 };
 
 const fieldReference = (
-  module: ModuleDraftV3,
-  recordType: RecordTypeDefinitionV3,
-  field: ModuleFieldV3,
+  module: ModuleDraft,
+  recordType: RecordTypeDefinition,
+  field: ModuleField,
 ): string => `${module.envelope.key}:${recordType.key}.${field.key}`;
 
-const textValue = (value: string): SourceBlockPropertyValueV2Contract => ({
+const textValue = (value: string): SourceBlockPropertyValueContract => ({
   kind: "text",
   value,
 });
 
-const choiceValue = (value: string): SourceBlockPropertyValueV2Contract => ({
+const choiceValue = (value: string): SourceBlockPropertyValueContract => ({
   kind: "choice",
   value,
 });
 
-const fieldValue = (field: string): SourceBlockPropertyValueV2Contract => ({
+const fieldValue = (field: string): SourceBlockPropertyValueContract => ({
   kind: "field_reference",
   field,
 });
 
 const groupValue = (
-  properties: Record<string, SourceBlockPropertyValueV2Contract>,
-): SourceBlockPropertyValueV2Contract => ({ kind: "group", properties });
+  properties: Record<string, SourceBlockPropertyValueContract>,
+): SourceBlockPropertyValueContract => ({ kind: "group", properties });
 
 const listValue = (
-  items: SourceBlockPropertyValueV2Contract[],
-): SourceBlockPropertyValueV2Contract => ({ kind: "list", items });
+  items: SourceBlockPropertyValueContract[],
+): SourceBlockPropertyValueContract => ({ kind: "list", items });
 
 const pageName = (value: string): string => {
   let name = "";
@@ -237,7 +235,7 @@ const pageName = (value: string): string => {
   return name;
 };
 
-type SourcePlacementSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+type SourcePlacementSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 type SourcePlacement = SourcePlacementSlot["placements"][string];
 
 const findPlacement = (slot: SourcePlacementSlot, alias: string): SourcePlacement | undefined => {
@@ -254,12 +252,12 @@ const findPlacement = (slot: SourcePlacementSlot, alias: string): SourcePlacemen
 
 const withAuthoredPageOverride = (
   kind: ModuleGeneratedPageKind,
-  generated: SourcePageDefinitionV2,
-  authored: SourcePageDefinitionV2 | undefined,
+  generated: SourcePageDefinition,
+  authored: SourcePageDefinition | undefined,
   boundForm?: Readonly<{ alias: string; blockId: string; releaseVersion: string }>,
-): SourcePageDefinitionV2 => {
+): SourcePageDefinition => {
   if (authored === undefined) return generated;
-  const parsed = sourcePageDefinitionV2Schema.parse(authored);
+  const parsed = sourcePageDefinitionSchema.parse(authored);
   const expectedType = kind === "list" || kind === "detail" ? kind : "form";
   if (parsed.id !== generated.id || parsed.key !== generated.key || parsed.type !== expectedType)
     throw new ModulePageGeneratorError(
@@ -299,7 +297,7 @@ const responsive = {
 
 const placement = (
   release: ReturnType<typeof latestRelease>,
-  settings: Readonly<Record<string, SourceBlockPropertyValueV2Contract>>,
+  settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
   slots: Readonly<Record<string, ReturnType<typeof slot>>> = {},
   query?: string,
 ) => ({
@@ -330,8 +328,8 @@ const flowValueReference = (name: string) => ({
 export const generateModulePageFragments = (
   input: ModulePageGeneratorInput,
 ): ModulePageFragments => {
-  const module = moduleDraftV3Schema.parse(input.module);
-  const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(input.catalogue);
+  const module = moduleDraftSchema.parse(input.module);
+  const catalogue = immutablePlatformBlockCatalogueSchema.parse(input.catalogue);
   if (
     !Number.isSafeInteger(input.retainedApplicationPlacementCount) ||
     input.retainedApplicationPlacementCount < 0
@@ -415,7 +413,7 @@ export const generateModulePageFragments = (
       "list_query_not_usable",
       `Query '${query.key}' selects a field outside record type '${recordType.key}'`,
     );
-  const selectedFields = queryFields as ModuleFieldV3[];
+  const selectedFields = queryFields as ModuleField[];
   const titleField = fieldsById.get(String(recordType.titleFieldId));
   if (titleField === undefined)
     throw new ModulePageGeneratorError(
@@ -457,7 +455,7 @@ export const generateModulePageFragments = (
     {},
     queryReference,
   );
-  const listPage = sourcePageDefinitionV2Schema.parse({
+  const listPage = sourcePageDefinitionSchema.parse({
     id: listPageId,
     key: listKey,
     name: pageName(recordType.pluralLabel),
@@ -480,7 +478,7 @@ export const generateModulePageFragments = (
       ),
     ),
   });
-  const detailPage = sourcePageDefinitionV2Schema.parse({
+  const detailPage = sourcePageDefinitionSchema.parse({
     id: detailPageId,
     key: detailKey,
     name: pageName(`${recordType.singularLabel} details`),
@@ -528,7 +526,7 @@ export const generateModulePageFragments = (
         content: slot(childPlacements, [...fieldPlacements.map(([id]) => id), submitButtonId]),
       },
     );
-    const page = sourcePageDefinitionV2Schema.parse({
+    const page = sourcePageDefinitionSchema.parse({
       id: pageId,
       key: pageKey,
       name: pageName(`${kind === "create" ? "New" : "Edit"} ${recordType.singularLabel}`),
@@ -643,7 +641,7 @@ export const generateModulePageFragments = (
           ? [composition.main]
           : Object.values(composition.content);
     for (const rootSlot of rootSlots) {
-      const entries = sourcePlacementEntriesV2(rootSlot);
+      const entries = sourcePlacementEntries(rootSlot);
       placementCount += entries.length;
       for (const [, placed] of entries) {
         const release = catalogue.releases.find(
@@ -666,7 +664,7 @@ export const generateModulePageFragments = (
       "composition_policy_too_small",
       `The generated pages use ${placementCount} placements plus ${input.retainedApplicationPlacementCount} retained Application placements, exceeding the catalogue limit of ${catalogue.compositionPolicy.maximumPlacements}`,
     );
-  const dependencies = sourcePlatformBlockDependenciesV2Schema.parse(
+  const dependencies = sourcePlatformBlockDependenciesSchema.parse(
     [...usedReleases.values()]
       .map((release) => ({
         kind: "platform_block",

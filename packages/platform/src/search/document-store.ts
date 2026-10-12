@@ -6,9 +6,9 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   type FieldType,
-  type ModuleFieldV3,
+  type ModuleField,
   type PersonalDataClass,
-  type RecordTypeDefinitionV3,
+  type RecordTypeDefinition,
   type SearchPriority,
 } from "../schema";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
@@ -99,7 +99,7 @@ const isIndexableField = (
   (field.personalData === "none" ||
     (field.personalData === "personal" && policy.personalDataPermitted === true));
 
-const optionLabelsFor = (field: ModuleFieldV3): Readonly<Record<string, string>> | undefined =>
+const optionLabelsFor = (field: ModuleField): Readonly<Record<string, string>> | undefined =>
   field.type === "choice" || field.type === "several_choices"
     ? Object.freeze(
         Object.fromEntries(
@@ -115,7 +115,7 @@ const optionLabelsFor = (field: ModuleFieldV3): Readonly<Record<string, string>>
  * treated as an indexer.
  */
 export const searchableFieldConfigurationFor = (
-  recordType: Pick<RecordTypeDefinitionV3, "recordTypeId" | "fields">,
+  recordType: Pick<RecordTypeDefinition, "recordTypeId" | "fields">,
   policy: SearchableFieldPolicy,
 ): SearchableFieldConfiguration =>
   Object.freeze({
@@ -123,7 +123,12 @@ export const searchableFieldConfigurationFor = (
     fields: Object.freeze(
       recordType.fields.flatMap((field): SearchableFieldConfigurationEntry[] => {
         const priority = field.searchPriority;
-        if (priority === undefined || !isIndexableField({ ...field, priority }, policy) || !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)) return [];
+        if (
+          priority === undefined ||
+          !isIndexableField({ ...field, priority }, policy) ||
+          !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)
+        )
+          return [];
         const optionLabels = optionLabelsFor(field);
         return [
           Object.freeze({
@@ -185,9 +190,7 @@ export type SearchDocumentDeletion = SearchDocumentIdentity &
   }>;
 
 export type SearchDocumentRefusalCode =
-  | "invalid_snapshot"
-  | "configuration_mismatch"
-  | "shared_source_record";
+  "invalid_snapshot" | "configuration_mismatch" | "shared_source_record";
 
 export type BuildSearchDocumentResult =
   | Readonly<{ success: true; output: SearchDocument | SearchDocumentDeletion }>
@@ -440,12 +443,7 @@ export type SearchDocumentStoreCommand = Readonly<{
  * its version).
  */
 export type SearchDocumentStoreOutcome =
-  | "stored"
-  | "replaced"
-  | "rebuilt"
-  | "replayed"
-  | "ignored_older"
-  | "ignored_deleted";
+  "stored" | "replaced" | "rebuilt" | "replayed" | "ignored_older" | "ignored_deleted";
 
 export const searchDocumentStoreCommand = (
   output: SearchDocument | SearchDocumentDeletion,

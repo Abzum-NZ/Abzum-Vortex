@@ -21,8 +21,8 @@ import {
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
-  type ApplicationContentV2,
-  type ModuleDefinitionConsumerReadResultV3,
+  type ApplicationContent,
+  type ModuleDefinitionConsumerReadResult,
   type FlowBindingInvocation,
   type FlowDefinition,
   type FlowRefusalFeedback,
@@ -97,8 +97,8 @@ export type InstalledFlowBindings = Readonly<{
   /** The release's named actions by key, for a Call protected operation task that names one. */
   namedActions?: ReadonlyMap<string, FlowNamedAction>;
   /** The exact active Application and Module definitions used to verify authored form values. */
-  applicationContent?: ApplicationContentV2;
-  modules?: readonly ModuleDefinitionConsumerReadResultV3[];
+  applicationContent?: ApplicationContent;
+  modules?: readonly ModuleDefinitionConsumerReadResult[];
   /** Compiler-owned selected-record projections derived from the exact installed releases. */
   selectedRecordReadProjections?: FlowRelease["selectedRecordReadProjections"];
   /** Flow input name to exact selected record type, keyed by lower-case flow identity. */
@@ -228,7 +228,8 @@ const hasVisibleOwningFormField = (
   ): void => {
     if (!isRecord(candidate)) return;
     if (!isRecord(candidate.placements)) {
-      for (const child of Object.values(candidate)) visitSlotTree(child, currentFormId, ancestorsVisible);
+      for (const child of Object.values(candidate))
+        visitSlotTree(child, currentFormId, ancestorsVisible);
       return;
     }
     for (const [placementId, value] of Object.entries(candidate.placements)) {
@@ -288,9 +289,7 @@ const hasVisibleOwningFormField = (
   )
     return false;
   const ownerFormId = controls[0]!.formId;
-  const matchingFields = fields.filter(
-    (field) => field.formId === ownerFormId && field.visible,
-  );
+  const matchingFields = fields.filter((field) => field.formId === ownerFormId && field.visible);
   return matchingFields.length === 1;
 };
 
@@ -562,9 +561,7 @@ const finishedResult = (
       : {
           failure: {
             code: response.failure.code,
-            ...(response.failure.taskId === undefined
-              ? {}
-              : { taskId: response.failure.taskId }),
+            ...(response.failure.taskId === undefined ? {} : { taskId: response.failure.taskId }),
             ...(diagnostic === undefined ? {} : { diagnostic }),
           },
         }),
@@ -673,9 +670,7 @@ const continuationResult = (
           : {
               failure: {
                 code: outcome.failure.code,
-                ...(outcome.failure.taskId === undefined
-                  ? {}
-                  : { taskId: outcome.failure.taskId }),
+                ...(outcome.failure.taskId === undefined ? {} : { taskId: outcome.failure.taskId }),
                 ...(diagnostic === undefined ? {} : { diagnostic }),
               },
             }),

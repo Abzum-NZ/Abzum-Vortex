@@ -14,7 +14,7 @@ import {
   selectApplicationContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
-  sourceIdentityAssignmentV3Schema,
+  sourceIdentityAssignmentSchema,
   storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
@@ -66,7 +66,7 @@ export class DefinitionHistoryError extends Error {
   }
 }
 
-const currentIdentityEvidenceSchema = sourceIdentityAssignmentV3Schema
+const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
   .extend({ ownerScope: z.string().min(1).max(500) })
   .strict();
 
@@ -114,9 +114,7 @@ const humanRestoreDefinitionDraftCommandSchema = z
       });
   });
 
-type HumanRestoreDefinitionDraftCommand = z.infer<
-  typeof humanRestoreDefinitionDraftCommandSchema
->;
+type HumanRestoreDefinitionDraftCommand = z.infer<typeof humanRestoreDefinitionDraftCommandSchema>;
 
 const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
@@ -615,9 +613,7 @@ export const createDefinitionHistoryService = (
       const humanCommand = humanRestoreDefinitionDraftCommandSchema.safeParse(commandCandidate);
       if (!humanCommand.success)
         throw new DefinitionHistoryError("INVALID_DEFINITION_RESTORE_COMMAND");
-      if (
-        humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase()
-      )
+      if (humanContext.organizationId.toLowerCase() !== authority.organizationId.toLowerCase())
         throw new DefinitionHistoryError("DEFINITION_CONTEXT_REFUSED");
       await requireBuilderAuthority(authority, {
         kind: "draft_change",
@@ -652,10 +648,7 @@ export const createDefinitionHistoryService = (
           },
           async (draftCandidate) => {
             verificationCallbackCount += 1;
-            if (
-              verificationCallbackCount !== 1 ||
-              verifiedRestore?.humanDraftBefore === undefined
-            )
+            if (verificationCallbackCount !== 1 || verifiedRestore?.humanDraftBefore === undefined)
               throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
             const draft = parseHumanRestoredDraft(
               draftCandidate,

@@ -11,13 +11,13 @@ import {
   groupIdSchema,
   identitySessionSchema,
   jsonValueSchema,
-  moduleDefinitionConsumerReadResultV3Schema,
+  moduleDefinitionConsumerReadResultSchema,
   organizationAccountIdSchema,
   organizationSelectionCandidateSchema,
   previewInstallationAddressSchema,
   previewRecordReadCommandV1Schema,
   recordTypeIdSchema,
-  saveRecordCommandV2Schema,
+  saveRecordCommandSchema,
   type FlowDefinition,
   type FlowTask,
   type FlowTestRunFailure,
@@ -31,8 +31,8 @@ import {
   type PreviewInstallation,
   type PreviewInstallationAddress,
   type PreviewRecordReadResultV1,
-  type SaveRecordCommandV2,
-  type SaveRecordResultV2,
+  type SaveRecordCommand,
+  type SaveRecordResult,
 } from "../schema";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
@@ -59,15 +59,12 @@ type PreviewRecordTaskPort = Readonly<{
   save(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    command: SaveRecordCommandV2,
-  ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
+    command: SaveRecordCommand,
+  ): Promise<HumanOrganizationRequestResult<SaveRecordResult>>;
 }>;
 
 type PreviewInstallationReader = Readonly<{
-  read(
-    session: IdentitySession,
-    address: PreviewInstallationAddress,
-  ): Promise<PreviewInstallation>;
+  read(session: IdentitySession, address: PreviewInstallationAddress): Promise<PreviewInstallation>;
 }>;
 
 export type FlowTestRunDependencies = Readonly<{
@@ -96,7 +93,8 @@ export type FlowTestRunDependencies = Readonly<{
 }>;
 
 type TaskExecution = Readonly<{
-  outcome: "completed" | "committed" | "refused" | "conflict" | "validation" | "uncertain" | "failed";
+  outcome:
+    "completed" | "committed" | "refused" | "conflict" | "validation" | "uncertain" | "failed";
   outputs?: Readonly<Record<string, string>>;
   failure?: FlowTestRunFailure;
 }>;
@@ -230,11 +228,7 @@ const emptyObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const resultOutcome = (code: string): FlowTestRunFailure["outcome"] =>
-  code === "conflict"
-    ? "conflict"
-    : code === "invalid_request"
-      ? "validation"
-      : "refused";
+  code === "conflict" ? "conflict" : code === "invalid_request" ? "validation" : "refused";
 
 const previewFieldIds = async (
   dependencies: FlowTestRunDependencies,
@@ -252,9 +246,10 @@ const previewFieldIds = async (
   );
   if (identities.length !== 1) return undefined;
   const identity = identities[0]!;
-  const pins = previewInstallation.resolvedModules.filter((module) =>
-    sameId(module.moduleRootId, identity.moduleRootId) &&
-    module.moduleReleaseRevision === identity.moduleReleaseRevision,
+  const pins = previewInstallation.resolvedModules.filter(
+    (module) =>
+      sameId(module.moduleRootId, identity.moduleRootId) &&
+      module.moduleReleaseRevision === identity.moduleReleaseRevision,
   );
   if (pins.length !== 1) return undefined;
 
@@ -265,14 +260,15 @@ const previewFieldIds = async (
       identity.moduleRootId,
       identity.moduleReleaseRevision,
     );
-    const parsed = moduleDefinitionConsumerReadResultV3Schema.safeParse(candidate);
+    const parsed = moduleDefinitionConsumerReadResultSchema.safeParse(candidate);
     if (
       !parsed.success ||
       !sameId(parsed.data.organizationId, previewInstallation.organizationId) ||
       !sameId(parsed.data.rootId, identity.moduleRootId) ||
       parsed.data.releaseRevision !== identity.moduleReleaseRevision ||
       parsed.data.releaseVersion !== pins[0]!.releaseVersion
-    ) return undefined;
+    )
+      return undefined;
     const recordTypes = parsed.data.content.recordTypes.filter((recordType) =>
       sameId(recordType.recordTypeId, recordTypeId),
     );
@@ -281,8 +277,7 @@ const previewFieldIds = async (
     for (const field of recordTypes[0]!.fields) {
       for (const name of [field.key, field.fieldId]) {
         const alias = name.toLowerCase();
-        if (fieldIds.has(alias) && !sameId(fieldIds.get(alias)!, field.fieldId))
-          return undefined;
+        if (fieldIds.has(alias) && !sameId(fieldIds.get(alias)!, field.fieldId)) return undefined;
         fieldIds.set(alias, field.fieldId);
       }
     }
@@ -359,9 +354,8 @@ const runRecordTask = async (
       ? "create"
       : "update";
   const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
-  const selectedGroup = selectedOwnerGroupId === undefined
-    ? undefined
-    : groupIdSchema.safeParse(selectedOwnerGroupId);
+  const selectedGroup =
+    selectedOwnerGroupId === undefined ? undefined : groupIdSchema.safeParse(selectedOwnerGroupId);
   if (
     (selectedGroup !== undefined && !selectedGroup.success) ||
     (operation === "update" && Object.hasOwn(call.properties, "selected_owner_group_id"))
@@ -424,9 +418,11 @@ const runRecordTask = async (
     submittedValues,
     ...(operation === "update"
       ? { recordId: recordValue, expectedConcurrencyNumber }
-      : selectedOwnerGroup === undefined ? {} : { selectedOwnerGroupId: selectedOwnerGroup }),
+      : selectedOwnerGroup === undefined
+        ? {}
+        : { selectedOwnerGroupId: selectedOwnerGroup }),
   };
-  const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
+  const command = saveRecordCommandSchema.safeParse(commandCandidate);
   if (!command.success)
     return {
       outcome: "validation",
@@ -464,9 +460,8 @@ const runRecordTask = async (
   }
 };
 
-const completedResult = (
-  step: Extract<FlowRunStep, { kind: "finished" }>,
-): FlowRunResult => step.result;
+const completedResult = (step: Extract<FlowRunStep, { kind: "finished" }>): FlowRunResult =>
+  step.result;
 
 const rawResult = (result: FlowRunResult) =>
   result.status === "failed"
@@ -480,8 +475,8 @@ const rawResult = (result: FlowRunResult) =>
       };
 
 const refusal = (
-  reason: Extract<FlowTestRunResponse, { kind: "refused" }>['reason'],
-  location: Extract<FlowTestRunResponse, { kind: "refused" }>['location'],
+  reason: Extract<FlowTestRunResponse, { kind: "refused" }>["reason"],
+  location: Extract<FlowTestRunResponse, { kind: "refused" }>["location"],
 ): FlowTestRunResponse => ({ kind: "refused", reason, location });
 
 export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
@@ -550,7 +545,8 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
         return refusal("preview_unavailable", { kind: "preview" });
 
       const candidateFlows = new Map<string, FlowDefinition>();
-      for (const flowCandidate of previewInstallation.candidate.compilation.canonical.content.flows) {
+      for (const flowCandidate of previewInstallation.candidate.compilation.canonical.content
+        .flows) {
         const parsed = flowSchema.safeParse(flowCandidate);
         if (parsed.success && parsed.data.id === flowCandidate.id)
           candidateFlows.set(parsed.data.id, parsed.data);
@@ -604,7 +600,8 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
       const runId = newRunId();
       const trace: FlowTestRunTaskTraceEntry[] = [];
       const fieldIdsCache = new Map<string, ReadonlyMap<string, string>>();
-      const intents: NonNullable<Extract<FlowTestRunResponse, { kind: "finished" }>['intents']> = [];
+      const intents: NonNullable<Extract<FlowTestRunResponse, { kind: "finished" }>["intents"]> =
+        [];
       const pendingRunFlows: Array<{
         flowId: string;
         taskId: string;
@@ -653,22 +650,24 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
           if (pendingIndex !== -1) {
             const [pending] = pendingRunFlows.splice(pendingIndex, 1);
             const entry = trace[pending!.traceIndex]!;
-            trace[pending!.traceIndex] = observation.failure === undefined
-              ? { ...entry, outcome: "completed" }
-              : {
-                  ...entry,
-                  outcome: "failed",
-                  failure: failureFromInterpreter(observation.failure),
-                };
+            trace[pending!.traceIndex] =
+              observation.failure === undefined
+                ? { ...entry, outcome: "completed" }
+                : {
+                    ...entry,
+                    outcome: "failed",
+                    failure: failureFromInterpreter(observation.failure),
+                  };
             return;
           }
         }
         const intent = observation.intent === undefined ? undefined : asIntent(observation.intent);
         if (intent !== undefined) intents.push(intent);
         const simulated = simulatedTasks.has(key) || observation.outcome === "interface";
-        const failure = observation.failure === undefined
-          ? undefined
-          : failureFromInterpreter(observation.failure);
+        const failure =
+          observation.failure === undefined
+            ? undefined
+            : failureFromInterpreter(observation.failure);
         trace.push({
           flowId,
           taskId: observation.taskId,

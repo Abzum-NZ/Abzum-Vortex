@@ -1,9 +1,9 @@
-import type { ApplicationRootId, ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
+import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
 
 /** The editable Application source and its permanent Definition root identity. */
 export type StudioApplicationSelectionDraft = Readonly<{
   rootId: ApplicationRootId;
-  source: ApplicationSourceDocumentV2;
+  source: ApplicationSourceDocument;
 }>;
 
 /**
@@ -74,7 +74,7 @@ export type StudioSemanticSelectionTraversalListener = (
   event: StudioSemanticSelectionTraversalEvent,
 ) => void;
 
-type SourcePlacementSlot = ApplicationSourceDocumentV2["body"]["shells"][number]["layout"];
+type SourcePlacementSlot = ApplicationSourceDocument["body"]["shells"][number]["layout"];
 
 type SelectionIndex = Readonly<{
   applicationRootId: ApplicationRootId;
@@ -85,9 +85,7 @@ type SelectionIndex = Readonly<{
   placementOwners: ReadonlyMap<string, StudioSemanticPlacementOwner>;
 }>;
 
-export type StudioSemanticSelectionListener = (
-  selection: StudioSemanticSelection | null,
-) => void;
+export type StudioSemanticSelectionListener = (selection: StudioSemanticSelection | null) => void;
 
 export interface StudioSemanticSelectionStore {
   /** Returns the current semantic identity, or `null` when the editor cleared selection. */
@@ -125,10 +123,7 @@ export const traverseStudioSemanticSelectionDraft = (
   draft: StudioApplicationSelectionDraft,
   listener: StudioSemanticSelectionTraversalListener,
 ): void => {
-  const visit = (
-    node: StudioSemanticSelectionTraversalNode,
-    children?: () => void,
-  ): void => {
+  const visit = (node: StudioSemanticSelectionTraversalNode, children?: () => void): void => {
     listener(Object.freeze({ phase: "enter", node }));
     children?.();
     listener(Object.freeze({ phase: "exit", node }));
@@ -184,7 +179,7 @@ export const traverseStudioSemanticSelectionDraft = (
   };
 
   const navigation = (
-    items: readonly ApplicationSourceDocumentV2["body"]["navigation"][number][],
+    items: readonly ApplicationSourceDocument["body"]["navigation"][number][],
   ): void => {
     for (const item of items) {
       const selection = Object.freeze({
@@ -304,7 +299,10 @@ const normalizeSelection = (
     case "shell":
       return Object.freeze({ kind: "shell", shellAlias: selection.shellAlias });
     case "navigation":
-      return Object.freeze({ kind: "navigation", navigationItemAlias: selection.navigationItemAlias });
+      return Object.freeze({
+        kind: "navigation",
+        navigationItemAlias: selection.navigationItemAlias,
+      });
     case "flow":
       return Object.freeze({ kind: "flow", flowAlias: selection.flowAlias });
     case "placement":
@@ -335,10 +333,7 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
 const selectionKey = (selection: StudioSemanticSelection | null): string | null =>
   selection === null ? null : studioSemanticSelectionKey(selection);
 
-const containsSelection = (
-  index: SelectionIndex,
-  selection: StudioSemanticSelection,
-): boolean => {
+const containsSelection = (index: SelectionIndex, selection: StudioSemanticSelection): boolean => {
   switch (selection.kind) {
     case "application":
       return selection.applicationRootId === index.applicationRootId;

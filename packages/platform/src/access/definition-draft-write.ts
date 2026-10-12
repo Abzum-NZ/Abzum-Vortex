@@ -3,7 +3,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   applicationRootIdSchema,
   canonicalJson,
   correlationIdSchema,
@@ -23,7 +23,7 @@ import {
   storedDefinitionDraftSchema,
   tenantIdSchema,
   timestampSchema,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
   type IdentitySession,
   type SelectedOrganizationScope,
   type StoredDefinitionDraft,
@@ -129,7 +129,7 @@ const derivedDraftCommandSchema = z
 
 type DerivedDraftCommand = z.infer<typeof derivedDraftCommandSchema>;
 type DerivedDraftMaterialization = Readonly<{
-  source: ApplicationSourceDocumentV2;
+  source: ApplicationSourceDocument;
   verifySaved: (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
@@ -237,7 +237,7 @@ const assertLiveCompletion = async (
 
 const verifySavedDraft = (
   candidate: StoredDefinitionDraft,
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   scope: SelectedOrganizationScope,
   writeStartedAt: number,
   previous?: StoredApplicationDefinitionDraft,
@@ -326,7 +326,7 @@ export const createHumanApplicationDraftWriter = (
     const command = createCommand ?? saveCommandResult;
     if (!organization.success || command === undefined || !command.success)
       return { kind: "refused" };
-    const source = applicationSourceDocumentV2Schema.safeParse(command.data.source);
+    const source = applicationSourceDocumentSchema.safeParse(command.data.source);
     if (!source.success || !validateDefinitionSource(source.data).valid) return { kind: "refused" };
     const saveCommand = saveCommandResult?.success ? saveCommandResult.data : undefined;
     // Detached validated source is reused for hashing, identities, storage and result comparison.
@@ -478,7 +478,7 @@ export const createHumanApplicationDraftWriter = (
             draft: previous,
             command: command.data,
           });
-          const source = applicationSourceDocumentV2Schema.safeParse(materialized.source);
+          const source = applicationSourceDocumentSchema.safeParse(materialized.source);
           if (!source.success || !validateDefinitionSource(source.data).valid)
             throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE");
           if (

@@ -4,7 +4,7 @@ import {
   readRecordDetailContract,
   readRecordsTableContract,
   timestampSchema,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type JsonValue,
   type RecordsDisplayFormat,
 } from "../schema";
@@ -61,8 +61,7 @@ export type ProjectedRecordDetailValues = Readonly<{
  * caller cannot render data the projection did not authorise.
  */
 export type ProjectedComponentData<Values> =
-  | Readonly<{ status: "empty" }>
-  | Readonly<{ status: "ready"; values: Values }>;
+  Readonly<{ status: "empty" }> | Readonly<{ status: "ready"; values: Values }>;
 
 /**
  * What the projector combines with the component's declared contract. `settings` are the
@@ -73,7 +72,7 @@ export type ProjectedComponentData<Values> =
  * fields the Query engine returned.
  */
 export type ComponentDataProjectionInput = Readonly<{
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
+  settings: Readonly<Record<string, BlockPropertyValueContract>>;
   fieldLabels?: Readonly<Record<string, string>>;
   /** Options in definition order for choice fields; several-choice options are limited to those the viewer may use. */
   fieldChoiceLabels?: Readonly<
@@ -165,7 +164,8 @@ const projectCell = (
  * Field identities are UUIDs compared without regard to case: the Query engine keys row values by
  * the lowercase identity, while a declaration may spell it in either case.
  */
-const sameField = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+const sameField = (left: string, right: string): boolean =>
+  left.toLowerCase() === right.toLowerCase();
 
 /** The row's value for a declared field, or undefined when the engine withheld it (absent). */
 const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
@@ -266,7 +266,12 @@ export const projectRecordDetailData = (
 ): ProjectedComponentData<ProjectedRecordDetailValues> | undefined => {
   const contract = readRecordDetailContract(input.settings);
   const row = rows[0];
-  if (contract === undefined || contract.fields.length === 0 || rows.length !== 1 || row === undefined)
+  if (
+    contract === undefined ||
+    contract.fields.length === 0 ||
+    rows.length !== 1 ||
+    row === undefined
+  )
     return undefined;
 
   const fields: { key: string; label: string; value: ProjectedCellValue }[] = [];

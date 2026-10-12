@@ -19,8 +19,8 @@ import {
   type ModuleInstallationBindingEvidence,
   type ModuleInstallationStorageResult,
   type ModuleRootId,
-  type ModuleContentV3,
-  type ModuleContributionV3,
+  type ModuleContent,
+  type ModuleContribution,
   type OrganizationId,
   type PermissionRegistryDefinitionRelease,
   type PermissionRegistryEntryCandidate,
@@ -263,7 +263,7 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
       moduleRootId: string;
       definitionKey: string;
       releaseVersion: string;
-      content: ModuleContentV3;
+      content: ModuleContent;
     }>[],
   ) => Readonly<{
     outcome: "resolved" | "conflicted";
@@ -346,17 +346,19 @@ const installationDrainResultSchema = z
 type InstallationBindings = z.infer<typeof installationBindingsSchema>;
 type ExpectedModuleBinding = Readonly<{ moduleRootId: ModuleRootId; bindingRevision: number }>;
 type ModulePin = Readonly<{ moduleRootId: ModuleRootId; moduleReleaseRevision: number }>;
-type ContributionGroup = ModulePin & Readonly<{
-  contributions: readonly ResolvedContributionBinding[];
-}>;
+type ContributionGroup = ModulePin &
+  Readonly<{
+    contributions: readonly ResolvedContributionBinding[];
+  }>;
 type ExactStorageRelease = Readonly<{
   releaseSet: SystemApplicationBoundReleaseSetResult;
   pins: readonly ModulePin[];
   contributionGroups: readonly ContributionGroup[];
 }>;
-type ExactRelease = ExactStorageRelease & Readonly<{
-  preparedTemplates: PreparedApplicationRoleTemplates;
-}>;
+type ExactRelease = ExactStorageRelease &
+  Readonly<{
+    preparedTemplates: PreparedApplicationRoleTemplates;
+  }>;
 type ReleaseTarget = InstallationReleaseTarget;
 
 const canonicalModuleRootId = (value: string): ModuleRootId =>
@@ -658,28 +660,42 @@ const sameUniqueEvidence = <Value>(
   evidence: (value: Value) => string,
 ): boolean => {
   if (left.length !== right.length) return false;
-  const ordered = (values: readonly Value[]) => values
-    .map((value) => ({ identity: identity(value), evidence: evidence(value) }))
-    .sort((a, b) => a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0);
+  const ordered = (values: readonly Value[]) =>
+    values
+      .map((value) => ({ identity: identity(value), evidence: evidence(value) }))
+      .sort((a, b) => (a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0));
   const oldEntries = ordered(left);
   const newEntries = ordered(right);
-  return new Set(oldEntries.map((entry) => entry.identity)).size === left.length &&
+  return (
+    new Set(oldEntries.map((entry) => entry.identity)).size === left.length &&
     new Set(newEntries.map((entry) => entry.identity)).size === right.length &&
-    oldEntries.every((entry, index) => entry.identity === newEntries[index]!.identity &&
-      entry.evidence === newEntries[index]!.evidence);
+    oldEntries.every(
+      (entry, index) =>
+        entry.identity === newEntries[index]!.identity &&
+        entry.evidence === newEntries[index]!.evidence,
+    )
+  );
 };
 
 /** The full immutable release evidence; request-specific correlation is not release identity. */
 const releaseEvidenceKey = (release: PermissionRegistryDefinitionRelease): string =>
   JSON.stringify([
-    release.kind, release.rootId, release.definitionKey, release.releaseRevision,
-    release.releaseVersion, release.validationContractVersion,
-    release.contentFingerprint, release.resolutionFingerprint,
+    release.kind,
+    release.rootId,
+    release.definitionKey,
+    release.releaseRevision,
+    release.releaseVersion,
+    release.validationContractVersion,
+    release.contentFingerprint,
+    release.resolutionFingerprint,
   ]);
 
 const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
   JSON.stringify([
-    entry.applicationRootId, entry.ownerKind, entry.ownerId, entry.permission.permissionId,
+    entry.applicationRootId,
+    entry.ownerKind,
+    entry.ownerId,
+    entry.permission.permissionId,
   ]);
 
 /** Used only after each candidate has been verified against its own exact release. */
@@ -688,8 +704,12 @@ const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string
     permissionIdentity(entry),
     fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),
     entry.ownerKind === "application"
-      ? [entry.sourceRelease.kind, entry.sourceRelease.rootId,
-          entry.sourceRelease.definitionKey, entry.sourceRelease.validationContractVersion]
+      ? [
+          entry.sourceRelease.kind,
+          entry.sourceRelease.rootId,
+          entry.sourceRelease.definitionKey,
+          entry.sourceRelease.validationContractVersion,
+        ]
       : releaseEvidenceKey(entry.sourceRelease),
   ]);
 
@@ -735,7 +755,9 @@ const changeContributions = async (
       mode === "attach"
         ? await storage.attachContributions(command)
         : await storage.detachContributions(command);
-    const expectedIds = new Set(group.contributions.map((item) => item.contributionId.toLowerCase()));
+    const expectedIds = new Set(
+      group.contributions.map((item) => item.contributionId.toLowerCase()),
+    );
     const actualIds = result.contributionIds.map((id) => id.toLowerCase());
     if (
       !sameId(result.applicationRootId, target.applicationRootId) ||
@@ -939,14 +961,15 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
     const declared = new Map<
       string,
-      { moduleRootId: ModuleRootId; contribution: ModuleContributionV3 }
+      { moduleRootId: ModuleRootId; contribution: ModuleContribution }
     >();
     for (const module of releaseSet.modules) {
       for (const contribution of module.content.contributions ?? []) {
         const id = contribution.contributionId.toLowerCase();
         if (declared.has(id)) throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
         declared.set(id, {
-          moduleRootId: canonicalModuleRootId(module.rootId), contribution,
+          moduleRootId: canonicalModuleRootId(module.rootId),
+          contribution,
         });
       }
     }
@@ -966,7 +989,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
     }
     if (
-      resolution.outcome !== "resolved" || resolution.conflicts.length !== 0 ||
+      resolution.outcome !== "resolved" ||
+      resolution.conflicts.length !== 0 ||
       resolution.bindings.length !== declared.size
     )
       throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE");
@@ -982,9 +1006,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         sameId(candidate.extensionPointId, binding.targetExtensionPointId),
       );
       if (
-        seen.has(id) || source === undefined || source.moduleRootId !== contributorRoot ||
+        seen.has(id) ||
+        source === undefined ||
+        source.moduleRootId !== contributorRoot ||
         source.contribution.kind !== binding.kind ||
-        contributor === undefined || targetModule === undefined ||
+        contributor === undefined ||
+        targetModule === undefined ||
         sameId(contributor.rootId, targetModule.rootId) ||
         contributor.releaseVersion !== binding.contributorReleaseVersion ||
         targetModule.releaseVersion !== binding.targetModuleReleaseVersion ||
@@ -1021,10 +1048,12 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     }
     return {
       releaseSet,
-      pins: byModuleRoot(releaseSet.modules.map((module) => ({
-        moduleRootId: canonicalModuleRootId(module.rootId),
-        moduleReleaseRevision: module.releaseRevision,
-      }))),
+      pins: byModuleRoot(
+        releaseSet.modules.map((module) => ({
+          moduleRootId: canonicalModuleRootId(module.rootId),
+          moduleReleaseRevision: module.releaseRevision,
+        })),
+      ),
       contributionGroups: byModuleRoot(contributionGroups),
     };
   };
@@ -1097,12 +1126,18 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   const verifiedOwnReleaseTemplates = (exact: ExactRelease): PreparedApplicationRoleTemplates => {
     const application = exact.releaseSet.application;
     const prepared = verifyPreparedApplicationRoleTemplates(exact.preparedTemplates);
-    const own = prepareApplicationRoleTemplatesForHumanRequest(application.organizationId, {
-      applicationRootId: application.rootId,
-      releaseRevision: application.releaseRevision,
-    }, exact.releaseSet);
-    if (prepared.preparationBasis.kind !== "registration_candidate" ||
-      prepared.candidateFingerprint !== own.candidateFingerprint)
+    const own = prepareApplicationRoleTemplatesForHumanRequest(
+      application.organizationId,
+      {
+        applicationRootId: application.rootId,
+        releaseRevision: application.releaseRevision,
+      },
+      exact.releaseSet,
+    );
+    if (
+      prepared.preparationBasis.kind !== "registration_candidate" ||
+      prepared.candidateFingerprint !== own.candidateFingerprint
+    )
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     return prepared;
   };
@@ -1118,11 +1153,15 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     prior: ExactRelease | null,
     target: ExactRelease,
   ): boolean => {
-    if (prior === null || request.expectedActiveReleaseRevision === null ||
+    if (
+      prior === null ||
+      request.expectedActiveReleaseRevision === null ||
       request.expectedActiveReleaseRevision >= request.applicationReleaseRevision ||
       state.registeredReleaseRevision !== request.expectedActiveReleaseRevision ||
-      state.moduleBindings.some((binding) =>
-        binding.state !== "active" && binding.state !== "detached"))
+      state.moduleBindings.some(
+        (binding) => binding.state !== "active" && binding.state !== "detached",
+      )
+    )
       return false;
     // Invalid target evidence remains a refusal; only unavailable prior comparison evidence may
     // fall back to the normal acceptance branch. Each full fingerprint binds its own release.
@@ -1135,12 +1174,19 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     try {
       const active = activeRelease(state);
       if (active?.releaseRevision !== request.expectedActiveReleaseRevision) return false;
-      requireExactBindings({
-        ...request, applicationReleaseRevision: request.expectedActiveReleaseRevision,
-      }, prior.pins, active.bindings, "active");
+      requireExactBindings(
+        {
+          ...request,
+          applicationReleaseRevision: request.expectedActiveReleaseRevision,
+        },
+        prior.pins,
+        active.bindings,
+        "active",
+      );
       const oldApplication = prior.releaseSet.application;
       const newApplication = target.releaseSet.application;
-      if (!sameId(oldApplication.organizationId, request.organizationId) ||
+      if (
+        !sameId(oldApplication.organizationId, request.organizationId) ||
         !sameId(newApplication.organizationId, request.organizationId) ||
         !sameId(oldApplication.rootId, request.applicationRootId) ||
         !sameId(newApplication.rootId, request.applicationRootId) ||
@@ -1148,12 +1194,18 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         newApplication.releaseRevision !== request.applicationReleaseRevision ||
         oldApplication.definitionKey !== newApplication.definitionKey ||
         oldApplication.validationContractVersion !== newApplication.validationContractVersion ||
-        [...prior.releaseSet.modules, ...target.releaseSet.modules].some((module) =>
-          !sameId(module.organizationId, request.organizationId)) ||
-        !sameUniqueEvidence(prior.releaseSet.modules, target.releaseSet.modules,
-          (module) => module.rootId, releaseEvidenceKey) ||
+        [...prior.releaseSet.modules, ...target.releaseSet.modules].some(
+          (module) => !sameId(module.organizationId, request.organizationId),
+        ) ||
+        !sameUniqueEvidence(
+          prior.releaseSet.modules,
+          target.releaseSet.modules,
+          (module) => module.rootId,
+          releaseEvidenceKey,
+        ) ||
         dependencies.containsCustomComponents(prior.releaseSet) !== false ||
-        dependencies.containsCustomComponents(target.releaseSet) !== false)
+        dependencies.containsCustomComponents(target.releaseSet) !== false
+      )
         return false;
 
       // Application revision/version/content/resolution are verified separately before their
@@ -1161,21 +1213,33 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const oldTemplates = verifiedOwnReleaseTemplates(prior);
       const oldRegistration = oldTemplates.permissionRegistration;
       const newRegistration = newTemplates.permissionRegistration;
-      return oldRegistration.applicationCatalogueFingerprint ===
+      return (
+        oldRegistration.applicationCatalogueFingerprint ===
           newRegistration.applicationCatalogueFingerprint &&
-        sameUniqueEvidence(oldRegistration.applicationPermissionIds,
-          newRegistration.applicationPermissionIds, (id) => id, (id) => id) &&
+        sameUniqueEvidence(
+          oldRegistration.applicationPermissionIds,
+          newRegistration.applicationPermissionIds,
+          (id) => id,
+          (id) => id,
+        ) &&
         samePermissionAuthority(oldRegistration.entries, newRegistration.entries) &&
-        sameUniqueEvidence(oldTemplates.templates, newTemplates.templates,
+        sameUniqueEvidence(
+          oldTemplates.templates,
+          newTemplates.templates,
           (prepared) => prepared.template.roleId,
-          (prepared) => prepared.sourceTemplateFingerprint) &&
+          (prepared) => prepared.sourceTemplateFingerprint,
+        ) &&
         oldTemplates.templates.every((prepared) => {
           const next = newTemplates.templates.find((candidate) =>
-            sameId(candidate.template.roleId, prepared.template.roleId));
-          return next !== undefined &&
+            sameId(candidate.template.roleId, prepared.template.roleId),
+          );
+          return (
+            next !== undefined &&
             samePermissionAuthority(prepared.sourcePermissions, next.sourcePermissions) &&
-            samePermissionAuthority(prepared.livePermissions, next.livePermissions);
-        });
+            samePermissionAuthority(prepared.livePermissions, next.livePermissions)
+          );
+        })
+      );
     } catch {
       return false;
     }
@@ -1192,8 +1256,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     applicationRootId: ApplicationRootId,
     applicationReleaseRevision: number,
     exact: ExactRelease,
-    acceptance: "accept_role_templates" | "preserve_registered_authority" |
-      "restore_accepted_role_templates",
+    acceptance:
+      "accept_role_templates" | "preserve_registered_authority" | "restore_accepted_role_templates",
   ): Promise<boolean> => {
     if (state.registeredReleaseRevision === applicationReleaseRevision) return false;
     // Without a proof of unchanged authority, registration follows the role-template acceptance
@@ -1313,8 +1377,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
       const preparedRuntimeSource = dependencies.preparedRuntimeSource;
-      if (preparedRuntimeSource === undefined)
-        throw fail("APPLICATION_INSTALLATION_FAILED");
+      if (preparedRuntimeSource === undefined) throw fail("APPLICATION_INSTALLATION_FAILED");
       const exact = await readExactRelease(verifiedSession.data, request);
       const { pins } = exact;
 
@@ -1375,7 +1438,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             currentBindingRevisions(state),
           );
           const contributionsChanged = await changeContributions(
-            transaction, request, exact.contributionGroups, provisioned, "attach",
+            transaction,
+            request,
+            exact.contributionGroups,
+            provisioned,
+            "attach",
           );
           const preparedBindings = provisioned.map((result) => ({
             moduleRootId: result.moduleRootId,
@@ -1393,7 +1460,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             transaction,
             preparedSource,
           );
-          await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
+          await requireBuilderAuthority(
+            authority,
+            installOperation(request.applicationRootId, exact, false),
+          );
           return {
             runtimeBundleIndex,
             outcome:
@@ -1435,14 +1505,15 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const { releaseSet, pins } = exact;
       // Optional evidence for the equality-only registration decision. Failure never turns the
       // prior release into an empty catalogue or suppresses the normal target authority check.
-      const prior = request.expectedActiveReleaseRevision === null ||
+      const prior =
+        request.expectedActiveReleaseRevision === null ||
         request.expectedActiveReleaseRevision >= request.applicationReleaseRevision
-        ? null
-        : await readExactRelease(verifiedSession.data, {
-            organizationId: request.organizationId,
-            applicationRootId: request.applicationRootId,
-            applicationReleaseRevision: request.expectedActiveReleaseRevision,
-          }).catch(() => null);
+          ? null
+          : await readExactRelease(verifiedSession.data, {
+              organizationId: request.organizationId,
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.expectedActiveReleaseRevision,
+            }).catch(() => null);
 
       // 1. Align Access with the exact target release. This must commit before the switch: it
       //    advances the Access version that the fixed lifecycle operations pin to. An already
@@ -1492,13 +1563,20 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           installOperation(request.applicationRootId, exact, false),
           async (transaction) => {
             const state = await readInstallationBindings(
-              transaction, request.organizationId, request.applicationRootId,
+              transaction,
+              request.organizationId,
+              request.applicationRootId,
             );
             requireNotDraining(state);
             const installation = activeSummary(request, state);
             requireExactBindings(request, pins, installation.moduleBindings, "active");
-            await changeContributions(transaction, request, exact.contributionGroups,
-              installation.moduleBindings, "attach");
+            await changeContributions(
+              transaction,
+              request,
+              exact.contributionGroups,
+              installation.moduleBindings,
+              "attach",
+            );
             return installation;
           },
         );
@@ -1516,16 +1594,18 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         "installedEvents"
       >;
       try {
-        const oldTarget = request.expectedActiveReleaseRevision === null
-          ? null
-          : {
-              organizationId: request.organizationId,
-              applicationRootId: request.applicationRootId,
-              applicationReleaseRevision: request.expectedActiveReleaseRevision,
-            };
-        const oldExact = oldTarget === null
-          ? null
-          : exactStorageRelease(oldTarget, await readReleaseSet(verifiedSession.data, oldTarget));
+        const oldTarget =
+          request.expectedActiveReleaseRevision === null
+            ? null
+            : {
+                organizationId: request.organizationId,
+                applicationRootId: request.applicationRootId,
+                applicationReleaseRevision: request.expectedActiveReleaseRevision,
+              };
+        const oldExact =
+          oldTarget === null
+            ? null
+            : exactStorageRelease(oldTarget, await readReleaseSet(verifiedSession.data, oldTarget));
         switched = await inInstallerTransaction(
           verifiedSession.data,
           request.organizationId,
@@ -1541,8 +1621,13 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             if (requireExpectedActive(request, active) === "already_active") {
               const installation = activeSummary(request, state);
               requireExactBindings(request, pins, installation.moduleBindings, "active");
-              await changeContributions(transaction, request, exact.contributionGroups,
-                installation.moduleBindings, "attach");
+              await changeContributions(
+                transaction,
+                request,
+                exact.contributionGroups,
+                installation.moduleBindings,
+                "attach",
+              );
               return {
                 outcome: "unchanged" as const,
                 previousApplicationReleaseRevision: request.applicationReleaseRevision,
@@ -1553,8 +1638,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
             const current = currentBindingRevisions(state);
             if (active !== null) {
-              if (oldTarget === null || oldExact === null ||
-                active.releaseRevision !== oldTarget.applicationReleaseRevision)
+              if (
+                oldTarget === null ||
+                oldExact === null ||
+                active.releaseRevision !== oldTarget.applicationReleaseRevision
+              )
                 throw fail("APPLICATION_INSTALLATION_STALE");
               requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
               const detached = requireLifecycleResult(
@@ -1569,15 +1657,25 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 "detached",
               );
               requireExactBindings(oldTarget, oldExact.pins, detached.moduleBindings, "detached");
-              await changeContributions(transaction, oldTarget, oldExact.contributionGroups,
-                detached.moduleBindings, "detach");
+              await changeContributions(
+                transaction,
+                oldTarget,
+                oldExact.contributionGroups,
+                detached.moduleBindings,
+                "detach",
+              );
               for (const binding of detached.moduleBindings)
                 current.set(canonicalModuleRootId(binding.moduleRootId), binding.bindingRevision);
             }
 
             const provisioned = await provisionPins(transaction, request, pins, current);
-            await changeContributions(transaction, request, exact.contributionGroups,
-              provisioned, "attach");
+            await changeContributions(
+              transaction,
+              request,
+              exact.contributionGroups,
+              provisioned,
+              "attach",
+            );
             if (active === null && request.expectedActiveReleaseRevision === null) {
               if (preparedRuntimeSource === undefined)
                 throw fail("APPLICATION_INSTALLATION_FAILED");
@@ -1598,7 +1696,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 preparedSource,
                 preparedBindings,
               );
-              await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
+              await requireBuilderAuthority(
+                authority,
+                installOperation(request.applicationRootId, exact, false),
+              );
             }
             const activated = requireLifecycleResult(
               await lifecycle.activate({
@@ -1692,14 +1793,22 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 binding.applicationReleaseRevision === request.applicationReleaseRevision,
             ),
           );
-          if (state.moduleBindings.some((binding) => binding.state !== "detached" &&
-            binding.applicationReleaseRevision !== request.applicationReleaseRevision))
+          if (
+            state.moduleBindings.some(
+              (binding) =>
+                binding.state !== "detached" &&
+                binding.applicationReleaseRevision !== request.applicationReleaseRevision,
+            )
+          )
             throw fail("APPLICATION_INSTALLATION_STALE");
           if (releaseBindings.length === 0 && state.registeredReleaseRevision === null)
             throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
           const bindingState = releaseBindings[0]?.state;
-          if (bindingState !== "active" && bindingState !== "detached" &&
-            bindingState !== "provisioned")
+          if (
+            bindingState !== "active" &&
+            bindingState !== "detached" &&
+            bindingState !== "provisioned"
+          )
             throw fail("APPLICATION_INSTALLATION_STALE");
           requireExactBindings(request, exact.pins, releaseBindings, bindingState);
           // Terminate the complete homogeneous active/provisioned set, or replay a detached set.

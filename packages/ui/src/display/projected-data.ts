@@ -1,7 +1,7 @@
 import {
   builderKeySchema,
   fieldIdSchema,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   recordIdSchema,
   moduleRootIdSchema,
   queryIdSchema,
@@ -9,7 +9,7 @@ import {
   safeHttpsUrlSchema,
   timestampSchema,
   type BoardColumnSelector,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -19,7 +19,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
  * Derived from the platform property-value contract so no second representation exists.
  */
 export type DisplayRichTextDocument = Extract<
-  BlockPropertyValueV2Contract,
+  BlockPropertyValueContract,
   { kind: "rich_text" }
 >["value"];
 
@@ -347,9 +347,7 @@ const isValidIsoCalendarDate = (text: string): boolean => {
   date.setUTCFullYear(year, month - 1, day);
   date.setUTCHours(0, 0, 0, 0);
   return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   );
 };
 
@@ -439,13 +437,14 @@ const requireFiniteNumber = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
-): number => (typeof value === "number" && Number.isFinite(value) ? value : fail(message, location));
+): number =>
+  typeof value === "number" && Number.isFinite(value) ? value : fail(message, location);
 
 const parseRichTextDocument = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): DisplayRichTextDocument => {
-  const parsed = richTextDocumentV2Schema.safeParse(value);
+  const parsed = richTextDocumentSchema.safeParse(value);
   return parsed.success
     ? (parsed.data as DisplayRichTextDocument)
     : fail("Projected rich text must satisfy the structured rich-text contract", location);
@@ -554,7 +553,11 @@ const parseRowCapabilities = (
   );
   if (new Set(changeable.map((fieldId) => fieldId.toLowerCase())).size !== changeable.length)
     fail("Each changeable field is reported once", location);
-  const actions = requireArray(record.actions, "Row capabilities require an action list", location).map(
+  const actions = requireArray(
+    record.actions,
+    "Row capabilities require an action list",
+    location,
+  ).map(
     (action) =>
       displayRowActionKinds.find((kind) => kind === action) ??
       fail(`Unknown row action '${String(action)}'`, location),
@@ -582,8 +585,7 @@ const parseRows = (
         "A projected row requires a stable record identity",
         rowLocation,
       );
-      if (seen.has(recordId))
-        fail(`Duplicate projected row identity '${recordId}'`, rowLocation);
+      if (seen.has(recordId)) fail(`Duplicate projected row identity '${recordId}'`, rowLocation);
       seen.add(recordId);
       const cellsRecord = requireRecord(
         record.cells,
@@ -670,8 +672,7 @@ const parseSelection = (
       );
       if (!known.has(recordId))
         fail(`Selected record identity '${recordId}' is not a projected row`, location);
-      if (seen.has(recordId))
-        fail(`Duplicate selected record identity '${recordId}'`, location);
+      if (seen.has(recordId)) fail(`Duplicate selected record identity '${recordId}'`, location);
       seen.add(recordId);
       return recordId;
     }),
@@ -747,8 +748,7 @@ const parseSummaryEntries = <Value>(
 const parseSummaryMetrics = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryMetric[] =>
-  parseSummaryEntries(value, location, parseSummaryValue);
+): readonly DisplaySummaryMetric[] => parseSummaryEntries(value, location, parseSummaryValue);
 
 const parseSummaryValues = (
   value: unknown,
@@ -812,7 +812,11 @@ const parseGroups = (
       const selection = parseSelection(record.selectedRecordIds, rows, groupLocation);
       return Object.freeze({
         groupId,
-        label: requireNonEmptyString(record.label, "A projected group requires a label", groupLocation),
+        label: requireNonEmptyString(
+          record.label,
+          "A projected group requires a label",
+          groupLocation,
+        ),
         headingKey: requireBuilderKey(
           record.headingKey,
           "A projected group requires a heading key",
@@ -998,7 +1002,17 @@ export const parseCalendarPayload = (
     return fail(`Expected 'calendar' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(
     record,
-    ["kind", "view", "date", "windowStart", "windowEnd", "timeZone", "endExclusive", "truncated", "items"],
+    [
+      "kind",
+      "view",
+      "date",
+      "windowStart",
+      "windowEnd",
+      "timeZone",
+      "endExclusive",
+      "truncated",
+      "items",
+    ],
     location,
   );
   const calendarDate = (candidate: unknown, message: string): string => {
@@ -1018,8 +1032,13 @@ export const parseCalendarPayload = (
   const date = calendarDate(record.date, "A calendar requires an ISO date");
   const windowStart = calendarDate(record.windowStart, "A calendar requires a window start date");
   const windowEnd = calendarDate(record.windowEnd, "A calendar requires a window end date");
-  if (windowStart >= windowEnd) return fail("A calendar window must have positive length", location);
-  const timeZone = requireNonEmptyString(record.timeZone, "A calendar requires a time zone", location);
+  if (windowStart >= windowEnd)
+    return fail("A calendar window must have positive length", location);
+  const timeZone = requireNonEmptyString(
+    record.timeZone,
+    "A calendar requires a time zone",
+    location,
+  );
   try {
     new Intl.DateTimeFormat("en", { timeZone }).format(0);
   } catch {
@@ -1098,10 +1117,7 @@ export const parseGroupedPayload = (
 ): GroupedPayload => {
   const record = requireRecord(value, "Projected display values must be an object", location);
   if (record.kind !== "grouped_data")
-    return fail(
-      `Expected 'grouped_data' projected values, got '${String(record.kind)}'`,
-      location,
-    );
+    return fail(`Expected 'grouped_data' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(record, ["kind", "groups"], location);
   return Object.freeze({ kind: "grouped_data", groups: parseGroups(record.groups, location) });
 };
@@ -1207,8 +1223,7 @@ const parseBoardPage = (
       if (!declaredCardFields.has(key))
         fail("A board card contains a field outside its declared card projection", rowLocation);
       if (seenFields.has(key)) fail("A board card field appears once", rowLocation);
-      if (field.label.length > 60)
-        fail("A board card field label exceeds its bound", rowLocation);
+      if (field.label.length > 60) fail("A board card field label exceeds its bound", rowLocation);
       if (field.value.kind === "text" && field.value.text.length > 1_000_000)
         fail("A board card text value exceeds its field contract bound", rowLocation);
       seenFields.add(key);
@@ -1436,10 +1451,7 @@ export const parseDisplayData = <Values>(
         values: parseValues(record.values, location),
       });
     default:
-      return fail(
-        `Unknown projected display status '${String(record.status)}'`,
-        location,
-      );
+      return fail(`Unknown projected display status '${String(record.status)}'`, location);
   }
 };
 

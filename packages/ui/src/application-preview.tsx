@@ -15,20 +15,14 @@ import {
 } from "./definition-error";
 import {
   resolveRootPlacementSlot,
-  type MaterialisedApplicationCompositionV2,
-  type PlacementSlotV2,
+  type MaterialisedApplicationComposition,
+  type PlacementSlot,
 } from "./page-composition";
 import { PagePuckRenderer } from "./page-puck-renderer";
 import { cn } from "./lib/utils";
 import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
-import {
-  CONTROL_EVENT_NAMES,
-  type ControlSemanticEventName,
-} from "./controls/projected-data";
-import {
-  DISPLAY_EVENT_NAMES,
-  type DisplaySemanticEventName,
-} from "./display/projected-data";
+import { CONTROL_EVENT_NAMES, type ControlSemanticEventName } from "./controls/projected-data";
+import { DISPLAY_EVENT_NAMES, type DisplaySemanticEventName } from "./display/projected-data";
 import type { ThemeMode } from "./theme";
 
 /**
@@ -85,7 +79,7 @@ export type ApplicationPreviewArtifact = Readonly<{
   activeStepId?: string;
   breakpoint: ApplicationPreviewBreakpoint;
   interactionMode: "simulation";
-  composition: MaterialisedApplicationCompositionV2;
+  composition: MaterialisedApplicationComposition;
   interactions: readonly ApplicationPreviewInteraction[];
   displaySampleDataByPlacement: Readonly<Record<string, unknown>>;
   controlSampleDataByPlacement: Readonly<Record<string, unknown>>;
@@ -133,7 +127,12 @@ const parseFlowNodeSimulation = (value: unknown): ApplicationPreviewFlowNodeSimu
     nodeKind: requireString(record.nodeKind, "A preview flow-node simulation requires a node kind"),
     ...(record.targetKind === undefined
       ? {}
-      : { targetKind: requireString(record.targetKind, "A preview flow-node target kind is invalid") }),
+      : {
+          targetKind: requireString(
+            record.targetKind,
+            "A preview flow-node target kind is invalid",
+          ),
+        }),
     simulatedEffect: requireSimulatedEffect(record.simulatedEffect),
     label: requireString(record.label, "A preview flow-node simulation requires a label"),
   };
@@ -143,8 +142,7 @@ const parseInteraction = (value: unknown): ApplicationPreviewInteraction => {
   const record = requireObject(value, "A preview interaction must be an object");
   if (record.simulated !== true) fail("A preview interaction must be explicitly simulated");
   const flowKind = record.flowKind;
-  if (flowKind !== "application_owned")
-    fail("A preview interaction requires a known flow kind");
+  if (flowKind !== "application_owned") fail("A preview interaction requires a known flow kind");
   return {
     bindingId: requireString(record.bindingId, "A preview interaction requires a binding identity"),
     controlId: requireString(record.controlId, "A preview interaction requires a control identity"),
@@ -191,7 +189,10 @@ const parseOutcome = (value: unknown): ApplicationPreviewOutcome => {
   }
 };
 
-const parsePlacementDataMap = (value: unknown, message: string): Readonly<Record<string, unknown>> => {
+const parsePlacementDataMap = (
+  value: unknown,
+  message: string,
+): Readonly<Record<string, unknown>> => {
   const record = requireObject(value, message);
   return Object.freeze({ ...record });
 };
@@ -212,7 +213,10 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   const currentReleaseRevision = record.currentReleaseRevision;
   if (currentReleaseRevision !== null && typeof currentReleaseRevision !== "number")
     fail("A preview artifact requires its current release revision or null");
-  const composition = requireObject(record.composition, "A preview artifact requires a composition");
+  const composition = requireObject(
+    record.composition,
+    "A preview artifact requires a composition",
+  );
   requireArray(composition.pages, "A preview composition requires its pages");
   requireArray(composition.shells, "A preview composition requires its shells");
   requireArray(
@@ -224,7 +228,10 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   return Object.freeze({
     kind: "application_preview",
     rootId: requireString(record.rootId, "A preview artifact requires an application root"),
-    draftRevision: requireRevision(record.draftRevision, "A preview artifact requires a draft revision"),
+    draftRevision: requireRevision(
+      record.draftRevision,
+      "A preview artifact requires a draft revision",
+    ),
     currentReleaseRevision:
       currentReleaseRevision === null
         ? null
@@ -235,9 +242,11 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
       : { activeStepId: requireString(activeStepId, "A preview active step identity is invalid") }),
     breakpoint,
     interactionMode: "simulation",
-    composition: composition as unknown as MaterialisedApplicationCompositionV2,
+    composition: composition as unknown as MaterialisedApplicationComposition,
     interactions: Object.freeze(
-      requireArray(record.interactions, "A preview artifact requires its interactions").map(parseInteraction),
+      requireArray(record.interactions, "A preview artifact requires its interactions").map(
+        parseInteraction,
+      ),
     ),
     displaySampleDataByPlacement: parsePlacementDataMap(
       record.displaySampleDataByPlacement,
@@ -251,14 +260,15 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
       requireArray(record.outcomes, "A preview artifact requires its outcomes").map(parseOutcome),
     ),
     suppressedEffects: Object.freeze(
-      requireArray(record.suppressedEffects, "A preview artifact requires its suppressed effects").map(
-        (effect) => requireEffect(effect, "A suppressed preview effect is invalid"),
-      ),
+      requireArray(
+        record.suppressedEffects,
+        "A preview artifact requires its suppressed effects",
+      ).map((effect) => requireEffect(effect, "A suppressed preview effect is invalid")),
     ),
   });
 };
 
-const collectPlacementIds = (slot: PlacementSlotV2, into: Set<string>): void => {
+const collectPlacementIds = (slot: PlacementSlot, into: Set<string>): void => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     into.add(placementId);
     for (const child of Object.values(placement.slots)) collectPlacementIds(child, into);
@@ -271,8 +281,8 @@ const collectPlacementIds = (slot: PlacementSlotV2, into: Set<string>): void => 
  * no permission-projected availability. A refusal is then shown as a preview outcome.
  */
 const validatePreviewPlacements = (
-  slot: PlacementSlotV2,
-  dependencies: MaterialisedApplicationCompositionV2["platformBlockDependencies"],
+  slot: PlacementSlot,
+  dependencies: MaterialisedApplicationComposition["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
   const releases = new Set(
@@ -308,7 +318,7 @@ const validatePreviewPlacements = (
  * rather than failing the render.
  */
 const validatePreviewRuntimeInputs = (
-  slot: PlacementSlotV2,
+  slot: PlacementSlot,
   registry: PlatformComponentRegistry,
   runtimeInputs: RuntimeInputsByPlacement,
   location: DefinitionRenderErrorLocation,
@@ -393,7 +403,7 @@ export function ApplicationPreview({
   };
   const composition = artifact.composition;
 
-  let resolvedSlot: PlacementSlotV2 | undefined;
+  let resolvedSlot: PlacementSlot | undefined;
   let renderFailure: DefinitionRenderError | undefined;
   try {
     resolvedSlot = resolveRootPlacementSlot({

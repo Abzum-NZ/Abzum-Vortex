@@ -1,9 +1,9 @@
 import {
-  type ApplicationThemeSelectionV2,
-  applicationThemeSelectionV2Schema,
-  type SourceApplicationThemeSelectionV2,
-  sourceApplicationThemeSelectionV2Schema,
-} from "../definition/application-composition-v2";
+  type ApplicationThemeSelection,
+  applicationThemeSelectionSchema,
+  type SourceApplicationThemeSelection,
+  sourceApplicationThemeSelectionSchema,
+} from "../definition/application-composition";
 import index from "../catalogue/catalogue/shadcn-create-theme-catalogue.generated.json";
 
 /**
@@ -100,8 +100,7 @@ export const shadcnThemeCatalogueDimension = (
 /** One dimension's options, in catalogue order. */
 export const shadcnThemeCatalogueOptions = (
   dimension: ShadcnThemeCatalogueDimensionKey,
-): readonly ShadcnThemeCatalogueOption[] =>
-  shadcnThemeCatalogueDimension(dimension)?.options ?? [];
+): readonly ShadcnThemeCatalogueOption[] => shadcnThemeCatalogueDimension(dimension)?.options ?? [];
 
 /** One option of one dimension, or undefined when the id is not offered by that dimension. */
 export const findShadcnThemeCatalogueOption = (
@@ -116,8 +115,8 @@ export const findShadcnThemeCatalogueOption = (
  * it paints the font catalogue's defaults (contracts/src/shadcn-font-catalogue.ts). Every shipped
  * application pins this so a new application starts from the platform look.
  */
-export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelectionV2 =
-  applicationThemeSelectionV2Schema.parse({
+export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelection =
+  applicationThemeSelectionSchema.parse({
     style: "nova",
     baseColor: "neutral",
     theme: "neutral",
@@ -128,8 +127,8 @@ export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelectionV2 =
   });
 
 /** The platform default selection in its authored form, which shipped application sources pin. */
-export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION: SourceApplicationThemeSelectionV2 =
-  sourceApplicationThemeSelectionV2Schema.parse({
+export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION: SourceApplicationThemeSelection =
+  sourceApplicationThemeSelectionSchema.parse({
     style: DEFAULT_APPLICATION_THEME_SELECTION.style,
     base_color: DEFAULT_APPLICATION_THEME_SELECTION.baseColor,
     theme: DEFAULT_APPLICATION_THEME_SELECTION.theme,

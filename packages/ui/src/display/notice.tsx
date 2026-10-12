@@ -1,19 +1,23 @@
 import {
-  blockPropertyValueV2Schema,
+  blockPropertyValueSchema,
   NOTICE_BLOCK_RELEASE,
   validateComponentSettings,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Notice, type NoticeContentPart, type NoticeSeverity } from "../components/notice";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { DisplayRenderProps } from "./context";
 
-const NOTICE_SEVERITIES =
-  ["info", "success", "warning", "critical"] as const satisfies readonly NoticeSeverity[];
+const NOTICE_SEVERITIES = [
+  "info",
+  "success",
+  "warning",
+  "critical",
+] as const satisfies readonly NoticeSeverity[];
 const NOTICE_CONTENT_KINDS = ["text", "link"] as const;
 
-type NoticeSettings = Readonly<Record<string, BlockPropertyValueV2Contract>>;
+type NoticeSettings = Readonly<Record<string, BlockPropertyValueContract>>;
 
 const noticeLocation = (props: DisplayRenderProps<never>): DefinitionRenderErrorLocation => ({
   placementId: props.placementId,
@@ -70,9 +74,9 @@ const parseCanonicalSettings = (
   if (typeof input !== "object" || input === null || Array.isArray(input))
     return refuse(location, "Notice settings must be an object");
 
-  const settings: Record<string, BlockPropertyValueV2Contract> = Object.create(null);
+  const settings: Record<string, BlockPropertyValueContract> = Object.create(null);
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const parsed = blockPropertyValueV2Schema.safeParse(value);
+    const parsed = blockPropertyValueSchema.safeParse(value);
     if (!parsed.success)
       return refuse(location, "Notice settings must match the declared Notice release", [key]);
     settings[key] = parsed.data;
@@ -81,11 +85,7 @@ const parseCanonicalSettings = (
   const failures = validateComponentSettings(settings, NOTICE_BLOCK_RELEASE.properties);
   const failure = failures[0];
   if (failure !== undefined) {
-    return refuse(
-      location,
-      "Notice settings must match the declared Notice release",
-      failure.path,
-    );
+    return refuse(location, "Notice settings must match the declared Notice release", failure.path);
   }
   return Object.freeze(settings);
 };
@@ -97,11 +97,9 @@ function readDismissible(
   const setting = settings.dismissible;
   if (setting !== undefined) {
     if (setting.kind !== "boolean")
-      return refuse(
-        location,
-        "Notice settings must match the declared Notice release",
-        ["dismissible"],
-      );
+      return refuse(location, "Notice settings must match the declared Notice release", [
+        "dismissible",
+      ]);
     return setting.value;
   }
 
@@ -109,11 +107,9 @@ function readDismissible(
     (property) => property.key === "dismissible",
   );
   if (declaration?.kind !== "boolean" || declaration.defaultValue?.kind !== "boolean")
-    return refuse(
-      location,
-      "Notice release must declare a boolean dismissal default",
-      ["dismissible"],
-    );
+    return refuse(location, "Notice release must declare a boolean dismissal default", [
+      "dismissible",
+    ]);
   return declaration.defaultValue.value;
 }
 
@@ -162,10 +158,7 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
         ]);
       if (kind === "text") return Object.freeze({ kind, value });
 
-      const href = readTextSetting(item.properties, "href", location, false, [
-        ...itemPath,
-        "href",
-      ]);
+      const href = readTextSetting(item.properties, "href", location, false, [...itemPath, "href"]);
       return Object.freeze({ kind, label: value, href: href ?? "" });
     }),
   );

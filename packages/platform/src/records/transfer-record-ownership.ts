@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import {
   activityIdSchema,
   eventOccurrenceIdSchema,
-  transferRecordOwnershipCommandV2Schema,
-  transferRecordOwnershipResultV2Schema,
+  transferRecordOwnershipCommandSchema,
+  transferRecordOwnershipResultSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-  type TransferRecordOwnershipResultV2,
+  type TransferRecordOwnershipResult,
 } from "../schema";
 import {
   createHumanOrganizationRequestService,
@@ -28,8 +28,8 @@ const one = <Row>(rows: readonly Row[]): Row => {
 const safeRefusal = (
   correlationId: string,
   code: "operation_refused" | "conflict" = "operation_refused",
-): TransferRecordOwnershipResultV2 =>
-  transferRecordOwnershipResultV2Schema.parse({
+): TransferRecordOwnershipResult =>
+  transferRecordOwnershipResultSchema.parse({
     contractVersion: "2.0.0",
     outcome: "refused",
     error: { code, messageKey: `errors.${code}`, correlationId },
@@ -37,18 +37,16 @@ const safeRefusal = (
 
 const transfer = async (
   transaction: RequestDatabaseTransaction,
-  command: ReturnType<typeof transferRecordOwnershipCommandV2Schema.parse>,
+  command: ReturnType<typeof transferRecordOwnershipCommandSchema.parse>,
   activityId: string,
   occurrenceId: string,
-): Promise<TransferRecordOwnershipResultV2 | "recorded_refusal" | "undisclosed_refusal"> => {
+): Promise<TransferRecordOwnershipResult | "recorded_refusal" | "undisclosed_refusal"> => {
   await transaction.query`set local role vortex_runtime`;
   const targetId =
     command.targetKind === "organization_account"
       ? command.targetOrganizationAccountId
       : command.targetGroupId;
-  const targetMutation = [
-    { kind: "transfer_ownership", targetKind: command.targetKind, targetId },
-  ];
+  const targetMutation = [{ kind: "transfer_ownership", targetKind: command.targetKind, targetId }];
   const rows = await transaction.query<TransferRow>`
     select vortex_record.apply_lifecycle_record_changes(
       ${command.commandId}::uuid,
@@ -67,7 +65,7 @@ const transfer = async (
   const candidate = value as Record<string, unknown>;
   if (candidate.outcome === "refused_recorded") return "recorded_refusal";
   if (candidate.outcome === "transferred") {
-    return transferRecordOwnershipResultV2Schema.parse({
+    return transferRecordOwnershipResultSchema.parse({
       contractVersion: "2.0.0",
       outcome: "transferred",
       recordId: candidate.recordId,
@@ -107,8 +105,8 @@ export const createRecordOwnershipTransferService = (
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-    ): Promise<HumanOrganizationRequestResult<TransferRecordOwnershipResultV2>> {
-      const command = transferRecordOwnershipCommandV2Schema.safeParse(commandCandidate);
+    ): Promise<HumanOrganizationRequestResult<TransferRecordOwnershipResult>> {
+      const command = transferRecordOwnershipCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
       let activityId: string;

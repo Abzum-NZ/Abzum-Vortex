@@ -1,7 +1,5 @@
 import { z } from "zod";
-import {
-  applicationCompilationOutputV2Schema,
-} from "./definition-compilation-contracts";
+import { applicationCompilationOutputSchema } from "./definition-compilation-contracts";
 import {
   applicationRootIdSchema,
   identityIdSchema,
@@ -20,7 +18,7 @@ const previewInstallationIdSchema = z
 
 export const previewInstallationCandidateSchema = z
   .object({
-    compilation: applicationCompilationOutputV2Schema,
+    compilation: applicationCompilationOutputSchema,
     currentReleaseRevision: revisionSchema.nullable(),
   })
   .strict();
@@ -112,9 +110,7 @@ export type PreviewInstallation = z.infer<typeof previewInstallationSchema>;
 export type PreviewInstallationExpiryRequest = z.input<
   typeof previewInstallationExpiryRequestSchema
 >;
-export type PreviewInstallationExpiryResult = z.infer<
-  typeof previewInstallationExpiryResultSchema
->;
+export type PreviewInstallationExpiryResult = z.infer<typeof previewInstallationExpiryResultSchema>;
 export type PreviewInstallationDiscardResult = z.infer<
   typeof previewInstallationDiscardResultSchema
 >;

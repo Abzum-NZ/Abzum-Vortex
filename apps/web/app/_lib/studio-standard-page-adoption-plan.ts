@@ -1,17 +1,16 @@
 import "server-only";
 
-import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
+import type { sourceIdentityAssignmentSchema } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
   pageIdSchema,
   platformIdSchema,
   sameId,
-  type ApplicationContentV2,
-  type ApplicationSourceDocumentV2,
-  type BlockPropertyValueV2Contract,
-  type PageDefinitionV2,
+  type ApplicationContent,
+  type ApplicationSourceDocument,
+  type BlockPropertyValueContract,
+  type PageDefinition,
 } from "@vortex/platform/schema";
 import {
   fingerprintCanonicalValue,
@@ -20,7 +19,7 @@ import {
 } from "@web/platform-server";
 import { z } from "zod";
 
-type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
+type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
 export const pageAdoptionCommandSchema = z
   .object({
@@ -56,12 +55,21 @@ export type PageAdoptionTargetOption = Readonly<{
 }>;
 
 type PageAdoptionPlan = Readonly<{
-  source: ApplicationSourceDocumentV2;
-  expectedCanonicalContent: ApplicationContentV2;
+  source: ApplicationSourceDocument;
+  expectedCanonicalContent: ApplicationContent;
   comparisonFingerprint: string;
-  original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
-  replacement: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
-  candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
+  original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinition["type"] }>;
+  replacement: Readonly<{
+    pageId: string;
+    key: string;
+    name: string;
+    type: PageDefinition["type"];
+  }>;
+  candidate: Readonly<{
+    releaseRevision: number;
+    releaseVersion: string;
+    impactReasons: readonly Readonly<{ code: string; impact: string }>[];
+  }>;
   differences: Readonly<{
     entries: readonly PageAdoptionDifference[];
     omittedCount: number;
@@ -72,7 +80,7 @@ type PageAdoptionPlan = Readonly<{
 }>;
 
 type DefaultPageComposition = Extract<
-  PageDefinitionV2["composition"],
+  PageDefinition["composition"],
   { shellKind: "default"; main: unknown }
 >;
 type PagePlacementSlot = DefaultPageComposition["main"];
@@ -91,7 +99,7 @@ const safeDifferenceLabel = (value: string): string => {
   return value.length > maxDifferenceLabelLength ? `${bounded}…` : bounded;
 };
 
-const propertyDisplayValue = (value: BlockPropertyValueV2Contract): string => {
+const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
   switch (value.kind) {
     case "text":
       return `Text content (${value.value.length} characters)`;
@@ -128,18 +136,18 @@ const propertyDisplayValue = (value: BlockPropertyValueV2Contract): string => {
 };
 
 const pageLayoutDisplay = (layout: PagePlacement["responsive"]["desktop"]): string => {
-  const width = layout.width.kind === "grid"
-    ? `grid column ${layout.width.startColumn}, span ${layout.width.span}`
-    : layout.width.kind;
-  const height = layout.height.kind === "bounded"
-    ? `bounded ${layout.height.units} units`
-    : layout.height.kind;
+  const width =
+    layout.width.kind === "grid"
+      ? `grid column ${layout.width.startColumn}, span ${layout.width.span}`
+      : layout.width.kind;
+  const height =
+    layout.height.kind === "bounded" ? `bounded ${layout.height.units} units` : layout.height.kind;
   return `${layout.visible ? "Visible" : "Hidden"}; width ${width}; height ${height}`;
 };
 
 const pageFacts = (
-  page: PageDefinitionV2,
-  content: ApplicationContentV2,
+  page: PageDefinition,
+  content: ApplicationContent,
 ): Readonly<{ facts: ReadonlyMap<string, PageFact>; truncated: boolean }> => {
   const facts = new Map<string, PageFact>();
   let truncated = false;
@@ -153,11 +161,7 @@ const pageFacts = (
       displayValue: displayValue.slice(0, maxDifferenceLabelLength),
     });
   };
-  const addProperty = (
-    path: string,
-    property: BlockPropertyValueV2Contract,
-    depth = 0,
-  ): void => {
+  const addProperty = (path: string, property: BlockPropertyValueContract, depth = 0): void => {
     add(path, property, propertyDisplayValue(property));
     if (depth >= 3) {
       if (property.kind === "group" && Object.keys(property.properties).length > 0) {
@@ -169,7 +173,9 @@ const pageFacts = (
       return;
     }
     if (property.kind === "group") {
-      for (const [key, child] of Object.entries(property.properties).sort(([left], [right]) => left.localeCompare(right))) {
+      for (const [key, child] of Object.entries(property.properties).sort(([left], [right]) =>
+        left.localeCompare(right),
+      )) {
         if (facts.size >= maxPageDifferenceFacts) {
           truncated = true;
           break;
@@ -190,12 +196,20 @@ const pageFacts = (
   add("Page name", page.name, safeDifferenceLabel(page.name));
   add("Page type", page.type, page.type.replaceAll("_", " "));
   if ("recordType" in page)
-    add("Data binding / record type", page.recordType ?? null, "Record type binding (identifier omitted)");
+    add(
+      "Data binding / record type",
+      page.recordType ?? null,
+      "Record type binding (identifier omitted)",
+    );
   if ("queryId" in page)
     add("Data binding / list query", page.queryId, "List query binding (identifier omitted)");
   if (page.type === "guided_form") {
     page.steps.forEach((step, index) => {
-      add(`Guided form / step ${index + 1}`, step, `${safeDifferenceLabel(step.name)}${step.summary ? " (summary step)" : ""}`);
+      add(
+        `Guided form / step ${index + 1}`,
+        step,
+        `${safeDifferenceLabel(step.name)}${step.summary ? " (summary step)" : ""}`,
+      );
     });
   }
 
@@ -203,7 +217,9 @@ const pageFacts = (
   if (composition.shellKind === "default") {
     add("Page shell", "default", "Default shell");
   } else {
-    const shell = content.shells.find((candidate) => sameId(candidate.shellId, composition.shellId));
+    const shell = content.shells.find((candidate) =>
+      sameId(candidate.shellId, composition.shellId),
+    );
     add(
       "Page shell",
       { shellId: composition.shellId, key: shell?.key ?? null, name: shell?.name ?? null },
@@ -230,9 +246,11 @@ const pageFacts = (
     guidedSteps.forEach((step, stepIndex) => {
       const stepContent = composition.stepContent[step.id];
       if (stepContent === undefined) return;
-      Object.entries(stepContent).sort(([left], [right]) => left.localeCompare(right)).forEach(([, slot], regionIndex) =>
-        groups.push({ label: `Step ${stepIndex + 1} region ${regionIndex + 1}`, slot }),
-      );
+      Object.entries(stepContent)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .forEach(([, slot], regionIndex) =>
+          groups.push({ label: `Step ${stepIndex + 1} region ${regionIndex + 1}`, slot }),
+        );
       add(
         `Guided form / step ${stepIndex + 1} content binding`,
         step.id,
@@ -302,12 +320,20 @@ const pageFacts = (
           .map(([kind]) => kind.replace(/([A-Z])/g, " $1").toLowerCase())
           .join(", ") || "No additional binding",
       );
-      for (const [propertyKey, value] of Object.entries(placement.settings).sort(([left], [right]) => left.localeCompare(right))) {
+      for (const [propertyKey, value] of Object.entries(placement.settings).sort(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
         addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
         if (facts.size >= maxPageDifferenceFacts) break;
       }
-      for (const [tokenKey, value] of Object.entries(placement.themeOverrides).sort(([left], [right]) => left.localeCompare(right))) {
-        add(`${placementLabel} / theme override ${safeDifferenceLabel(tokenKey)}`, value, `${value.kind.replaceAll("_", " ")} override`);
+      for (const [tokenKey, value] of Object.entries(placement.themeOverrides).sort(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
+        add(
+          `${placementLabel} / theme override ${safeDifferenceLabel(tokenKey)}`,
+          value,
+          `${value.kind.replaceAll("_", " ")} override`,
+        );
         if (facts.size >= maxPageDifferenceFacts) break;
       }
       for (const [breakpoint, layout] of Object.entries(placement.responsive))
@@ -323,16 +349,22 @@ const pageFacts = (
 };
 
 const comparePages = (
-  suppliedPage: PageDefinitionV2,
-  suppliedContent: ApplicationContentV2,
-  currentPage: PageDefinitionV2,
-  currentContent: ApplicationContentV2,
-): Readonly<{ entries: readonly PageAdoptionDifference[]; omittedCount: number; summaryTruncated: boolean }> => {
+  suppliedPage: PageDefinition,
+  suppliedContent: ApplicationContent,
+  currentPage: PageDefinition,
+  currentContent: ApplicationContent,
+): Readonly<{
+  entries: readonly PageAdoptionDifference[];
+  omittedCount: number;
+  summaryTruncated: boolean;
+}> => {
   const suppliedSummary = pageFacts(suppliedPage, suppliedContent);
   const currentSummary = pageFacts(currentPage, currentContent);
   const supplied = suppliedSummary.facts;
   const current = currentSummary.facts;
-  const paths = [...new Set([...current.keys(), ...supplied.keys()])].sort((left, right) => left.localeCompare(right));
+  const paths = [...new Set([...current.keys(), ...supplied.keys()])].sort((left, right) =>
+    left.localeCompare(right),
+  );
   const differences: PageAdoptionDifference[] = [];
   for (const path of paths) {
     const localFact = current.get(path);
@@ -342,7 +374,8 @@ const comparePages = (
       path: safeDifferenceLabel(path),
       currentReplacement: localFact?.displayValue ?? "Not present",
       suppliedPage: suppliedFact?.displayValue ?? "Not present",
-      change: localFact === undefined ? "added" : suppliedFact === undefined ? "removed" : "changed",
+      change:
+        localFact === undefined ? "added" : suppliedFact === undefined ? "removed" : "changed",
     });
   }
   return {
@@ -357,10 +390,10 @@ const invalid = (): never => {
 };
 
 const sourcePageIdentifier = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
-  page: ApplicationSourceDocumentV2["body"]["pages"][number],
-): PageDefinitionV2["pageId"] => {
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): PageDefinition["pageId"] => {
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -370,15 +403,20 @@ const sourcePageIdentifier = (
       identity.alias === page.id,
   );
   const match = matches[0];
-  if (matches.length !== 1 || match === undefined || !pageIdSchema.safeParse(match.identifier).success) return invalid();
+  if (
+    matches.length !== 1 ||
+    match === undefined ||
+    !pageIdSchema.safeParse(match.identifier).success
+  )
+    return invalid();
   return pageIdSchema.parse(match.identifier);
 };
 
 const sourcePagesByIdentifier = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
-): ReadonlyMap<string, ApplicationSourceDocumentV2["body"]["pages"][number]> => {
-  const pages = new Map<string, ApplicationSourceDocumentV2["body"]["pages"][number]>();
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
+): ReadonlyMap<string, ApplicationSourceDocument["body"]["pages"][number]> => {
+  const pages = new Map<string, ApplicationSourceDocument["body"]["pages"][number]>();
   for (const page of source.body.pages) {
     const identifier = sourcePageIdentifier(source, identities, page).toLowerCase();
     if (pages.has(identifier)) return invalid();
@@ -387,21 +425,18 @@ const sourcePagesByIdentifier = (
   return pages;
 };
 
-const canonicalPage = (
-  content: ApplicationContentV2,
-  pageId: string,
-): PageDefinitionV2 => {
+const canonicalPage = (content: ApplicationContent, pageId: string): PageDefinition => {
   const matches = content.pages.filter((page) => sameId(page.pageId, pageId));
   if (matches.length !== 1 || matches[0] === undefined) return invalid();
   return matches[0];
 };
 
 const identityForComponent = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   kind: "navigation_item" | "role",
   componentOwner: string,
-): SourceIdentityAssignmentV3["identifier"] => {
+): SourceIdentityAssignment["identifier"] => {
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -411,18 +446,26 @@ const identityForComponent = (
       identity.alias === componentOwner,
   );
   const match = matches[0];
-  if (matches.length !== 1 || match === undefined || !platformIdSchema.safeParse(match.identifier).success) return invalid();
+  if (
+    matches.length !== 1 ||
+    match === undefined ||
+    !platformIdSchema.safeParse(match.identifier).success
+  )
+    return invalid();
   return match.identifier;
 };
 
-type SourceNavigationItem = ApplicationSourceDocumentV2["body"]["navigation"][number];
+type SourceNavigationItem = ApplicationSourceDocument["body"]["navigation"][number];
 const flattenNavigation = (items: readonly SourceNavigationItem[]): SourceNavigationItem[] =>
-  items.flatMap((item) => [item, ...(item.type === "heading" ? flattenNavigation(item.children) : [])]);
+  items.flatMap((item) => [
+    item,
+    ...(item.type === "heading" ? flattenNavigation(item.children) : []),
+  ]);
 
 const targetOptions = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
-  currentContent: ApplicationContentV2,
+  identities: readonly SourceIdentityAssignment[],
+  currentContent: ApplicationContent,
   release: AuthenticatedApplicationPageAdoptionRelease,
   originalPageId: string,
   replacementPageId: string,
@@ -433,7 +476,8 @@ const targetOptions = (
   const replacement = currentPages.get(replacementPageId.toLowerCase());
   const candidatePages = sourcePagesByIdentifier(release.authoredSource, release.identities);
   const candidateOriginal = candidatePages.get(originalPageId.toLowerCase());
-  if (original === undefined || replacement === undefined || candidateOriginal === undefined) return invalid();
+  if (original === undefined || replacement === undefined || candidateOriginal === undefined)
+    return invalid();
   const canonicalOriginal = canonicalPage(
     release.compilationOutput.canonical.content,
     originalPageId,
@@ -444,8 +488,12 @@ const targetOptions = (
     canonicalReplacement.type === "public" ||
     canonicalOriginal.type !== canonicalReplacement.type ||
     canonicalOriginal.accessPermissionKey !== canonicalReplacement.accessPermissionKey ||
-    canonicalJson("recordType" in canonicalOriginal ? canonicalOriginal.recordType ?? null : null) !==
-      canonicalJson("recordType" in canonicalReplacement ? canonicalReplacement.recordType ?? null : null)
+    canonicalJson(
+      "recordType" in canonicalOriginal ? (canonicalOriginal.recordType ?? null) : null,
+    ) !==
+      canonicalJson(
+        "recordType" in canonicalReplacement ? (canonicalReplacement.recordType ?? null) : null,
+      )
   )
     return invalid();
 
@@ -474,25 +522,28 @@ const setNavigationPage = (
   items: readonly SourceNavigationItem[],
   identity: string,
   pageKey: string,
-  identities: readonly SourceIdentityAssignmentV3[],
-  source: ApplicationSourceDocumentV2,
+  identities: readonly SourceIdentityAssignment[],
+  source: ApplicationSourceDocument,
 ): SourceNavigationItem[] =>
   items.map((item) => {
     if (item.type === "heading")
-      return { ...item, children: setNavigationPage(item.children, identity, pageKey, identities, source) };
+      return {
+        ...item,
+        children: setNavigationPage(item.children, identity, pageKey, identities, source),
+      };
     if (item.type !== "page") return item;
     const itemIdentity = identityForComponent(source, identities, "navigation_item", item.id);
     return sameId(itemIdentity, identity) ? { ...item, page: pageKey } : item;
   });
 
 const replaceSelectedTarget = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   rootId: string,
   target: PageAdoptionTarget,
   replacementKey: string,
   originalKey: string,
-): ApplicationSourceDocumentV2 => {
+): ApplicationSourceDocument => {
   if (target.kind === "application_home") {
     if (!sameId(target.id, rootId) || source.body.home_page !== replacementKey) return invalid();
     return { ...source, body: { ...source.body, home_page: originalKey } };
@@ -539,7 +590,7 @@ const replaceSelectedTarget = (
 };
 
 const canonicalTargetIsPage = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   rootId: string,
   target: PageAdoptionTarget,
   pageId: string,
@@ -551,7 +602,7 @@ const canonicalTargetIsPage = (
     const match = matches[0];
     return matches.length === 1 && match !== undefined && sameId(match.homePageId, pageId);
   }
-  const visit = (items: readonly ApplicationContentV2["navigation"][number][]): string[] =>
+  const visit = (items: readonly ApplicationContent["navigation"][number][]): string[] =>
     items.flatMap((item) =>
       item.type === "heading"
         ? visit(item.children)
@@ -565,8 +616,8 @@ const canonicalTargetIsPage = (
 };
 
 const normalizedSource = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   omittedPageIds: readonly string[],
   target: PageAdoptionTarget,
 ): unknown => {
@@ -591,7 +642,10 @@ const normalizedSource = (
       items.map((item) => {
         if (item.type === "heading") return { ...item, children: normalize(item.children) };
         if (item.type !== "page") return item;
-        return sameId(identityForComponent(source, identities, "navigation_item", item.id), target.id)
+        return sameId(
+          identityForComponent(source, identities, "navigation_item", item.id),
+          target.id,
+        )
           ? { ...item, page: marker }
           : item;
       });
@@ -601,31 +655,31 @@ const normalizedSource = (
 };
 
 const normalizedCanonical = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   omittedPageIds: readonly string[],
   target: PageAdoptionTarget,
 ): unknown => {
   const omitted = new Set(omittedPageIds.map((id) => id.toLowerCase()));
   const marker = pageIdSchema.parse(omittedPageIds[0]);
   const pages = content.pages.filter((page) => !omitted.has(String(page.pageId).toLowerCase()));
-  let normalized: ApplicationContentV2 = { ...content, pages };
+  let normalized: ApplicationContent = { ...content, pages };
   if (target.kind === "application_home") normalized = { ...normalized, homePageId: marker };
   if (target.kind === "role_home")
     normalized = {
       ...normalized,
       roles: normalized.roles.map((role) =>
-        sameId(role.roleId, target.id)
-          ? { ...role, homePageId: marker }
-          : role,
+        sameId(role.roleId, target.id) ? { ...role, homePageId: marker } : role,
       ),
     };
   if (target.kind === "navigation") {
-    const normalize = (items: readonly ApplicationContentV2["navigation"][number][]): ApplicationContentV2["navigation"] =>
+    const normalize = (
+      items: readonly ApplicationContent["navigation"][number][],
+    ): ApplicationContent["navigation"] =>
       items.map((item) =>
         item.type === "heading"
           ? { ...item, children: normalize(item.children) }
-            : item.type === "page" && sameId(item.id, target.id)
-              ? { ...item, pageId: marker }
+          : item.type === "page" && sameId(item.id, target.id)
+            ? { ...item, pageId: marker }
             : item,
       );
     normalized = { ...normalized, navigation: normalize(normalized.navigation) };
@@ -633,17 +687,28 @@ const normalizedCanonical = (
   return normalized;
 };
 
-export const buildPageAdoptionPlan = (input: Readonly<{
-  draft: StoredApplicationDefinitionDraft;
-  currentIdentities: readonly SourceIdentityAssignmentV3[];
-  currentContent: ApplicationContentV2;
-  release: AuthenticatedApplicationPageAdoptionRelease;
-  originalPageId: string;
-  replacementPageId: string;
-  target: PageAdoptionTarget;
-  decision: PageAdoptionCommand["decision"];
-}>): PageAdoptionPlan => {
-  const { draft, currentIdentities, currentContent, release, originalPageId, replacementPageId, target, decision } = input;
+export const buildPageAdoptionPlan = (
+  input: Readonly<{
+    draft: StoredApplicationDefinitionDraft;
+    currentIdentities: readonly SourceIdentityAssignment[];
+    currentContent: ApplicationContent;
+    release: AuthenticatedApplicationPageAdoptionRelease;
+    originalPageId: string;
+    replacementPageId: string;
+    target: PageAdoptionTarget;
+    decision: PageAdoptionCommand["decision"];
+  }>,
+): PageAdoptionPlan => {
+  const {
+    draft,
+    currentIdentities,
+    currentContent,
+    release,
+    originalPageId,
+    replacementPageId,
+    target,
+    decision,
+  } = input;
   if (
     draft.source.kind !== "application" ||
     draft.publishedRevision === undefined ||
@@ -662,14 +727,22 @@ export const buildPageAdoptionPlan = (input: Readonly<{
   const replacement = currentPages.get(replacementPageId.toLowerCase());
   const candidateOriginal = candidatePages.get(originalPageId.toLowerCase());
   if (
-    original === undefined || replacement === undefined || candidateOriginal === undefined ||
+    original === undefined ||
+    replacement === undefined ||
+    candidateOriginal === undefined ||
     sameId(originalPageId, replacementPageId) ||
     original.replaces_page !== undefined ||
     replacement.replaces_page === undefined ||
     candidateOriginal.replaces_page !== undefined ||
     !sameId(sourcePageIdentifier(draft.source, currentIdentities, original), originalPageId) ||
-    !sameId(sourcePageIdentifier(draft.source, currentIdentities, replacement), replacementPageId) ||
-    !sameId(sourcePageIdentifier(release.authoredSource, release.identities, candidateOriginal), originalPageId) ||
+    !sameId(
+      sourcePageIdentifier(draft.source, currentIdentities, replacement),
+      replacementPageId,
+    ) ||
+    !sameId(
+      sourcePageIdentifier(release.authoredSource, release.identities, candidateOriginal),
+      originalPageId,
+    ) ||
     original.key !== candidateOriginal.key ||
     !sameId(replacement.replaces_page, original.id)
   )
@@ -677,19 +750,40 @@ export const buildPageAdoptionPlan = (input: Readonly<{
 
   const currentOriginalCanonical = canonicalPage(currentContent, originalPageId);
   const currentReplacementCanonical = canonicalPage(currentContent, replacementPageId);
-  const candidateOriginalCanonical = canonicalPage(release.compilationOutput.canonical.content, originalPageId);
+  const candidateOriginalCanonical = canonicalPage(
+    release.compilationOutput.canonical.content,
+    originalPageId,
+  );
   if (
     currentOriginalCanonical.type === "public" ||
     currentReplacementCanonical.type === "public" ||
     candidateOriginalCanonical.type === "public" ||
     currentOriginalCanonical.type !== currentReplacementCanonical.type ||
     candidateOriginalCanonical.type !== currentOriginalCanonical.type ||
-    currentOriginalCanonical.accessPermissionKey !== currentReplacementCanonical.accessPermissionKey ||
-    candidateOriginalCanonical.accessPermissionKey !== currentOriginalCanonical.accessPermissionKey ||
-    canonicalJson("recordType" in currentOriginalCanonical ? currentOriginalCanonical.recordType ?? null : null) !==
-      canonicalJson("recordType" in currentReplacementCanonical ? currentReplacementCanonical.recordType ?? null : null) ||
-    canonicalJson("recordType" in candidateOriginalCanonical ? candidateOriginalCanonical.recordType ?? null : null) !==
-      canonicalJson("recordType" in currentOriginalCanonical ? currentOriginalCanonical.recordType ?? null : null)
+    currentOriginalCanonical.accessPermissionKey !==
+      currentReplacementCanonical.accessPermissionKey ||
+    candidateOriginalCanonical.accessPermissionKey !==
+      currentOriginalCanonical.accessPermissionKey ||
+    canonicalJson(
+      "recordType" in currentOriginalCanonical
+        ? (currentOriginalCanonical.recordType ?? null)
+        : null,
+    ) !==
+      canonicalJson(
+        "recordType" in currentReplacementCanonical
+          ? (currentReplacementCanonical.recordType ?? null)
+          : null,
+      ) ||
+    canonicalJson(
+      "recordType" in candidateOriginalCanonical
+        ? (candidateOriginalCanonical.recordType ?? null)
+        : null,
+    ) !==
+      canonicalJson(
+        "recordType" in currentOriginalCanonical
+          ? (currentOriginalCanonical.recordType ?? null)
+          : null,
+      )
   )
     return invalid();
 
@@ -701,18 +795,43 @@ export const buildPageAdoptionPlan = (input: Readonly<{
     originalPageId,
     replacementPageId,
   );
-  const targetOption = options.find((option) => canonicalJson(option.target) === canonicalJson(target));
+  const targetOption = options.find(
+    (option) => canonicalJson(option.target) === canonicalJson(target),
+  );
   if (targetOption === undefined) return invalid();
   if (
     !canonicalTargetIsPage(currentContent, String(draft.rootId), target, replacementPageId) ||
-    !canonicalTargetIsPage(release.compilationOutput.canonical.content, String(draft.rootId), target, originalPageId)
+    !canonicalTargetIsPage(
+      release.compilationOutput.canonical.content,
+      String(draft.rootId),
+      target,
+      originalPageId,
+    )
   )
     return invalid();
 
-  const normalizedCurrentSource = normalizedSource(draft.source, currentIdentities, [originalPageId, replacementPageId], target);
-  const normalizedCandidateSource = normalizedSource(release.authoredSource, release.identities, [originalPageId], target);
-  const normalizedCurrentContent = normalizedCanonical(currentContent, [originalPageId, replacementPageId], target);
-  const normalizedCandidateContent = normalizedCanonical(release.compilationOutput.canonical.content, [originalPageId], target);
+  const normalizedCurrentSource = normalizedSource(
+    draft.source,
+    currentIdentities,
+    [originalPageId, replacementPageId],
+    target,
+  );
+  const normalizedCandidateSource = normalizedSource(
+    release.authoredSource,
+    release.identities,
+    [originalPageId],
+    target,
+  );
+  const normalizedCurrentContent = normalizedCanonical(
+    currentContent,
+    [originalPageId, replacementPageId],
+    target,
+  );
+  const normalizedCandidateContent = normalizedCanonical(
+    release.compilationOutput.canonical.content,
+    [originalPageId],
+    target,
+  );
   if (
     canonicalJson(normalizedCurrentSource) !== canonicalJson(normalizedCandidateSource) ||
     canonicalJson(normalizedCurrentContent) !== canonicalJson(normalizedCandidateContent)
@@ -721,7 +840,7 @@ export const buildPageAdoptionPlan = (input: Readonly<{
 
   const replacementPage = currentPages.get(replacementPageId.toLowerCase());
   if (replacementPage === undefined) return invalid();
-  let source: ApplicationSourceDocumentV2 = {
+  let source: ApplicationSourceDocument = {
     ...draft.source,
     body: {
       ...draft.source.body,
@@ -742,7 +861,7 @@ export const buildPageAdoptionPlan = (input: Readonly<{
       candidateOriginal.key,
     );
 
-  const expectedCanonicalContent: ApplicationContentV2 = {
+  const expectedCanonicalContent: ApplicationContent = {
     ...currentContent,
     pages: currentContent.pages.map((page) =>
       sameId(page.pageId, originalPageId) ? candidateOriginalCanonical : page,
@@ -760,7 +879,9 @@ export const buildPageAdoptionPlan = (input: Readonly<{
             }
           : {
               navigation: (() => {
-                const replace = (items: readonly ApplicationContentV2["navigation"][number][]): ApplicationContentV2["navigation"] =>
+                const replace = (
+                  items: readonly ApplicationContent["navigation"][number][],
+                ): ApplicationContent["navigation"] =>
                   items.map((item) =>
                     item.type === "heading"
                       ? { ...item, children: replace(item.children) }
@@ -809,7 +930,10 @@ export const buildPageAdoptionPlan = (input: Readonly<{
     candidate: {
       releaseRevision: release.publication.revision,
       releaseVersion: release.publication.releaseVersion,
-      impactReasons: release.impactReasons.map((reason) => ({ code: reason.code, impact: reason.impact })),
+      impactReasons: release.impactReasons.map((reason) => ({
+        code: reason.code,
+        impact: reason.impact,
+      })),
     },
     differences: comparePages(
       candidateOriginalCanonical,
@@ -824,16 +948,10 @@ export const buildPageAdoptionPlan = (input: Readonly<{
 
 export const listPageAdoptionTargets = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
-  currentContent: ApplicationContentV2,
+  identities: readonly SourceIdentityAssignment[],
+  currentContent: ApplicationContent,
   release: AuthenticatedApplicationPageAdoptionRelease,
   originalPageId: string,
   replacementPageId: string,
-): readonly PageAdoptionTargetOption[] => targetOptions(
-  draft,
-  identities,
-  currentContent,
-  release,
-  originalPageId,
-  replacementPageId,
-);
+): readonly PageAdoptionTargetOption[] =>
+  targetOptions(draft, identities, currentContent, release, originalPageId, replacementPageId);

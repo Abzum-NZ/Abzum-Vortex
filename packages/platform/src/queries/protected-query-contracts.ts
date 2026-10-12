@@ -11,10 +11,10 @@ import {
   recordIdSchema,
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
-  moduleFieldValueV2Schemas,
-  personLinkValueV2Schema,
-  recordLinkValueV2Schema,
-  sourceExactDecimalTextV2Schema,
+  moduleFieldValueSchemas,
+  personLinkValueSchema,
+  recordLinkValueSchema,
+  sourceExactDecimalTextSchema,
 } from "../schema";
 import {
   recordSystemValuesSchema,
@@ -186,18 +186,18 @@ const groupTypedValue = <K extends string, T extends z.ZodType>(fieldType: K, va
 export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", [
   groupTypedValue("text", groupStringValueSchema),
   groupTypedValue("whole_number", safeWholeNumberGroupValueSchema),
-  groupTypedValue("decimal_number", sourceExactDecimalTextV2Schema),
+  groupTypedValue("decimal_number", sourceExactDecimalTextSchema),
   groupTypedValue("yes_no", z.boolean()),
-  groupTypedValue("date", moduleFieldValueV2Schemas.date),
-  groupTypedValue("date_time", moduleFieldValueV2Schemas.date_time),
+  groupTypedValue("date", moduleFieldValueSchemas.date),
+  groupTypedValue("date_time", moduleFieldValueSchemas.date_time),
   groupTypedValue("choice", groupChoiceValueSchema),
   groupTypedValue("reference_number", groupStringValueSchema),
   groupTypedValue("email_address", groupStringValueSchema),
   groupTypedValue("phone_number", groupStringValueSchema),
   groupTypedValue("web_address", groupStringValueSchema),
-  groupTypedValue("link", recordLinkValueV2Schema),
-  groupTypedValue("link_to_one_of_several", recordLinkValueV2Schema),
-  groupTypedValue("link_to_person", personLinkValueV2Schema),
+  groupTypedValue("link", recordLinkValueSchema),
+  groupTypedValue("link_to_one_of_several", recordLinkValueSchema),
+  groupTypedValue("link_to_person", personLinkValueSchema),
 ]);
 export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;
 
@@ -497,7 +497,11 @@ export type ProtectedQuerySummaryResult = z.infer<typeof protectedQuerySummaryRe
 export const protectedQueryBoardSummaryColumnSchema = z
   .object({
     value: z.string().min(1).max(120),
-    label: z.string().min(1).max(60).refine((label) => label.trim().length > 0),
+    label: z
+      .string()
+      .min(1)
+      .max(60)
+      .refine((label) => label.trim().length > 0),
     rowCount: z.number().int().nonnegative().max(100_000),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
   })
@@ -566,8 +570,12 @@ export const protectedQueryBoardSummaryCompletedSchema = z
       )
         context.addIssue({
           code: "custom",
-          path: index < summary.columns.length ? ["columns", index, "aggregates"] : ["unassigned", "aggregates"],
-          message: "Every board bucket reports the same declared aggregate aliases as the global result",
+          path:
+            index < summary.columns.length
+              ? ["columns", index, "aggregates"]
+              : ["unassigned", "aggregates"],
+          message:
+            "Every board bucket reports the same declared aggregate aliases as the global result",
         });
     }
 

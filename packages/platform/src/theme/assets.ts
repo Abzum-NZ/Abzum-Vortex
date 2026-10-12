@@ -2,14 +2,10 @@ import "server-only";
 
 import { platformIdSchema, type DefinitionRuleFailure } from "../schema";
 import { createLocatedFailure } from "./errors";
-import type {
-  ThemeResolutionOptions,
-  ThemeTokenValueV2,
-  ThemeValidationFailure,
-} from "./types";
+import type { ThemeResolutionOptions, ThemeTokenValue, ThemeValidationFailure } from "./types";
 
 export function validatePublicPlatformAssets(
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>,
+  tokens: Readonly<Record<string, ThemeTokenValue>>,
   options?: ThemeResolutionOptions | undefined,
 ): { failures: ThemeValidationFailure[]; ruleFailures: DefinitionRuleFailure[] } {
   const failures: ThemeValidationFailure[] = [];
@@ -31,13 +27,9 @@ export function validatePublicPlatformAssets(
   };
 
   const approvedSet =
-    options?.approvedAssetIds !== undefined
-      ? new Set(options.approvedAssetIds)
-      : undefined;
+    options?.approvedAssetIds !== undefined ? new Set(options.approvedAssetIds) : undefined;
   const publicSet =
-    options?.publicAssetIds !== undefined
-      ? new Set(options.publicAssetIds)
-      : undefined;
+    options?.publicAssetIds !== undefined ? new Set(options.publicAssetIds) : undefined;
 
   for (const key of Object.keys(tokens).sort()) {
     const token = tokens[key];

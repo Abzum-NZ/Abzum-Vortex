@@ -8,9 +8,9 @@ import {
   TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_INPUT_BLOCK_RELEASE,
   defaultSaveFlowSource,
-  type ApplicationSourceDocumentV2,
-  type PlatformBlockReleaseV2,
-  type SourceBlockPropertyValueV2Contract,
+  type ApplicationSourceDocument,
+  type PlatformBlockRelease,
+  type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { loadApplicationSource } from "../application-source-loader";
 
@@ -24,8 +24,8 @@ const layout = {
   height: { kind: "content" as const },
 };
 const placement = (
-  release: PlatformBlockReleaseV2,
-  settings: Record<string, SourceBlockPropertyValueV2Contract> = {},
+  release: PlatformBlockRelease,
+  settings: Record<string, SourceBlockPropertyValueContract> = {},
   slots: Record<string, unknown> = {},
 ) => ({
   block: { block_id: release.blockId, release_version: release.releaseVersion },
@@ -135,7 +135,7 @@ const shell = {
 };
 
 /** The module supplies records and queries; this Application supplies navigation and pages. */
-export const tasksApplication: ApplicationSourceDocumentV2 = loadApplicationSource(
+export const tasksApplication: ApplicationSourceDocument = loadApplicationSource(
   {
     source_contract_version: "2.0.0",
     root_alias: "app_tasks",
@@ -183,7 +183,14 @@ export const tasksApplication: ApplicationSourceDocumentV2 = loadApplicationSour
         },
       ],
       navigation: [
-        { id: "nav_tasks_list", type: "page", label: "Tasks", icon: "check", page: "tasks", permission: readPage },
+        {
+          id: "nav_tasks_list",
+          type: "page",
+          label: "Tasks",
+          icon: "check",
+          page: "tasks",
+          permission: readPage,
+        },
         {
           id: "nav_tasks_create",
           type: "page",

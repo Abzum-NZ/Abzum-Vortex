@@ -5,7 +5,7 @@ import {
   inspectApplicationPageReplacements,
   pageIdSchema,
   sameId,
-  type PageDefinitionV2,
+  type PageDefinition,
 } from "../schema";
 import { z } from "zod";
 import {
@@ -40,7 +40,7 @@ export type InstalledPageIdentity = Readonly<{
   requested: InstalledPageEndpointIdentity;
   original: InstalledPageEndpointIdentity;
   replacement?: InstalledPageEndpointIdentity;
-  pageType: PageDefinitionV2["type"];
+  pageType: PageDefinition["type"];
   accessPermissionKey: string;
   subject?: InstalledPageSubjectIdentity;
 }>;
@@ -98,7 +98,7 @@ const verifyContext = (context: InstalledRuntimeContext): void => {
 
 const subjectIdentity = (
   context: InstalledRuntimeContext,
-  page: PageDefinitionV2,
+  page: PageDefinition,
 ): InstalledPageSubjectIdentity | undefined => {
   if (!("recordType" in page) || page.recordType === undefined) return undefined;
   const reference = page.recordType;
@@ -123,7 +123,7 @@ const subjectIdentity = (
   });
 };
 
-const endpointIdentity = (page: PageDefinitionV2): InstalledPageEndpointIdentity =>
+const endpointIdentity = (page: PageDefinition): InstalledPageEndpointIdentity =>
   Object.freeze({ pageId: page.pageId, key: page.key });
 
 /**
@@ -171,8 +171,7 @@ export const resolveInstalledPageIdentity = (
     if (original === undefined) return unavailable();
     const replacement = pages.find(
       (page) =>
-        page.replacementOfPageId !== undefined &&
-        sameId(page.replacementOfPageId, original.pageId),
+        page.replacementOfPageId !== undefined && sameId(page.replacementOfPageId, original.pageId),
     );
     const subject = subjectIdentity(context, original);
     // Resolve each declared endpoint's subject against real bound records, including unpaired

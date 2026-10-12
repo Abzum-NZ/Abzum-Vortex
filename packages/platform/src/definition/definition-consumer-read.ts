@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationContentV2Schema } from "./application-contracts";
+import { applicationContentSchema } from "./application-contracts";
 import { correlationIdSchema } from "../catalogue/common";
 import { applicationToolBundleSchema } from "./definition-compilation-contracts";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
@@ -13,7 +13,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleQueryDefinitionV3Schema, storedModuleContentV3Schema } from "./module-contracts-v3";
+import { moduleQueryDefinitionSchema, storedModuleContentSchema } from "./module-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
@@ -109,11 +109,11 @@ const definitionConsumerReadResultCommon = {
  * The only release projection exposed to Definition-service consumers.
  * It deliberately excludes authored source, publication evidence and persistence details.
  */
-export const applicationDefinitionConsumerReadResultV2Schema = z
+export const applicationDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("application"),
     rootId: applicationRootIdSchema,
-    content: applicationContentV2Schema,
+    content: applicationContentSchema,
     toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("2.0.0"),
@@ -130,19 +130,19 @@ export const applicationDefinitionConsumerReadResultV2Schema = z
   });
 
 /** The Module 3.0.0 stored consumer projection and its exact immutable release identity. */
-export const moduleDefinitionConsumerReadResultV3Schema = z
+export const moduleDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
-    content: storedModuleContentV3Schema,
+    content: storedModuleContentSchema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("3.0.0"),
   })
   .strict();
 
 export const definitionConsumerReadResultSchema = z.union([
-  moduleDefinitionConsumerReadResultV3Schema,
-  applicationDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultSchema,
+  applicationDefinitionConsumerReadResultSchema,
 ]);
 
 export const applicationBoundReleaseSetCommandSchema = z
@@ -156,10 +156,6 @@ export const systemApplicationBoundReleaseSetCommandSchema = z
     applicationReleaseRevision: revisionSchema,
   })
   .strict();
-
-const applicationDefinitionConsumerReadResultSchema =
-  applicationDefinitionConsumerReadResultV2Schema;
-const moduleDefinitionConsumerReadResultSchema = moduleDefinitionConsumerReadResultV3Schema;
 
 export const applicationBoundReleaseSetResultSchema = z
   .object({
@@ -201,11 +197,11 @@ export const systemApplicationBoundReleaseSetResultSchema = z
  * One published Module query with the exact release identity it was read from. This is the only
  * shape a Query executor receives; it carries the declared contract, never a database target.
  */
-export const publishedModuleQueryDescriptorV3Schema = z
+export const publishedModuleQueryDescriptorSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-    query: moduleQueryDefinitionV3Schema,
+    query: moduleQueryDefinitionSchema,
   })
   .strict();
 
@@ -224,9 +220,9 @@ export const applicationModuleQueryBindingSchema = z
  * renamed key or a different release can never satisfy the binding.
  */
 export const resolvePublishedModuleQuery = (
-  release: ModuleDefinitionConsumerReadResultV3,
+  release: ModuleDefinitionConsumerReadResult,
   binding: ApplicationModuleQueryBinding,
-): PublishedModuleQueryDescriptorV3 | undefined => {
+): PublishedModuleQueryDescriptor | undefined => {
   if (
     release.rootId !== binding.moduleRootId ||
     release.releaseVersion !== binding.moduleReleaseVersion
@@ -260,10 +256,8 @@ export type SystemApplicationBoundReleaseSetCommand = z.infer<
 export type SystemApplicationBoundReleaseSetResult = z.infer<
   typeof systemApplicationBoundReleaseSetResultSchema
 >;
-export type ModuleDefinitionConsumerReadResultV3 = z.infer<
-  typeof moduleDefinitionConsumerReadResultV3Schema
+export type ModuleDefinitionConsumerReadResult = z.infer<
+  typeof moduleDefinitionConsumerReadResultSchema
 >;
-export type PublishedModuleQueryDescriptorV3 = z.infer<
-  typeof publishedModuleQueryDescriptorV3Schema
->;
+export type PublishedModuleQueryDescriptor = z.infer<typeof publishedModuleQueryDescriptorSchema>;
 export type ApplicationModuleQueryBinding = z.infer<typeof applicationModuleQueryBindingSchema>;

@@ -1,8 +1,8 @@
 import {
-  applicationDefinitionConsumerReadResultV2Schema,
+  applicationDefinitionConsumerReadResultSchema,
   activeApplicationInstallationEvidenceSchema,
   installedEventDescriptorSchema,
-  moduleDefinitionConsumerReadResultV3Schema,
+  moduleDefinitionConsumerReadResultSchema,
   systemApplicationBoundReleaseSetResultSchema,
   type DefinitionConsumerReadResult,
   type InstalledEventDescriptor,
@@ -19,8 +19,8 @@ type ApplicationRead = Extract<DefinitionConsumerReadResult, { kind: "applicatio
 type ModuleRead = Extract<DefinitionConsumerReadResult, { kind: "module" }>;
 type ModuleRecordType = ModuleRead["content"]["recordTypes"][number];
 
-const applicationReadSchema = applicationDefinitionConsumerReadResultV2Schema;
-const moduleReadSchema = moduleDefinitionConsumerReadResultV3Schema;
+const applicationReadSchema = applicationDefinitionConsumerReadResultSchema;
+const moduleReadSchema = moduleDefinitionConsumerReadResultSchema;
 const rawInstallationEvidenceSchema = z
   .object(activeApplicationInstallationEvidenceSchema.shape)
   .strict();

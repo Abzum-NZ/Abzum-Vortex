@@ -1,7 +1,7 @@
 import {
-  applicationSourceDocumentV2Schema,
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  type ApplicationSourceDocumentV2,
+  applicationSourceDocumentSchema,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
 export type MinimumApplicationInputs = Readonly<{
@@ -17,7 +17,7 @@ export type MinimumApplicationInputs = Readonly<{
 }>;
 
 type MinimumApplicationSourceResult =
-  | Readonly<{ kind: "valid"; source: ApplicationSourceDocumentV2 }>
+  | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "invalid"; message: string }>;
 
 /** Authored aliases are local identities; permanent root identities come only from Definition. */
@@ -26,8 +26,8 @@ export const minimumApplicationSource = (
 ): MinimumApplicationSourceResult => {
   const applicationKey = inputs.key.trim();
   const permissionKey = `${applicationKey}.home.view`;
-  const theme = DEFAULT_PLATFORM_THEME_RELEASE_V2;
-  const parsed = applicationSourceDocumentV2Schema.safeParse({
+  const theme = DEFAULT_PLATFORM_THEME_RELEASE;
+  const parsed = applicationSourceDocumentSchema.safeParse({
     source_contract_version: "2.0.0",
     root_alias: "application_root",
     key: applicationKey,
@@ -37,40 +37,49 @@ export const minimumApplicationSource = (
       description: inputs.description.trim(),
       icon: "layout-dashboard",
       home_page: "home",
-      module_bindings: [{
-        module: inputs.moduleKey.trim(),
-        version: inputs.moduleVersionSelection === "exact"
-          ? { selection: "exact", version: inputs.moduleVersion.trim() }
-          : { selection: "allowed_range", expression: inputs.moduleVersion.trim() },
-        purpose: "primary",
-      }],
-      permissions: [{
-        id: "permission_home",
-        key: permissionKey,
-        label: "View home",
-        description: "View the application's home page.",
-        action_kind: "named",
-        named_action: "view_home",
-        administrative: false,
-      }],
-      roles: [{
-        id: "role_member",
-        key: inputs.roleKey.trim(),
-        name: inputs.roleName.trim(),
-        home_page: "home",
-        permissions: [permissionKey],
-      }],
-      pages: [{
-        id: "page_home",
-        key: "home",
-        name: inputs.homeName.trim(),
-        type: "dashboard",
-        permission: permissionKey,
-        composition: {
-          shell_kind: "default",
-          main: { placements: {}, order: { desktop: [] } },
+      module_bindings: [
+        {
+          module: inputs.moduleKey.trim(),
+          version:
+            inputs.moduleVersionSelection === "exact"
+              ? { selection: "exact", version: inputs.moduleVersion.trim() }
+              : { selection: "allowed_range", expression: inputs.moduleVersion.trim() },
+          purpose: "primary",
         },
-      }],
+      ],
+      permissions: [
+        {
+          id: "permission_home",
+          key: permissionKey,
+          label: "View home",
+          description: "View the application's home page.",
+          action_kind: "named",
+          named_action: "view_home",
+          administrative: false,
+        },
+      ],
+      roles: [
+        {
+          id: "role_member",
+          key: inputs.roleKey.trim(),
+          name: inputs.roleName.trim(),
+          home_page: "home",
+          permissions: [permissionKey],
+        },
+      ],
+      pages: [
+        {
+          id: "page_home",
+          key: "home",
+          name: inputs.homeName.trim(),
+          type: "dashboard",
+          permission: permissionKey,
+          composition: {
+            shell_kind: "default",
+            main: { placements: {}, order: { desktop: [] } },
+          },
+        },
+      ],
       navigation: [],
       queries: [],
       pipelines: [],
@@ -96,6 +105,9 @@ export const minimumApplicationSource = (
     },
   });
   if (!parsed.success)
-    return { kind: "invalid", message: "Check the application key, labels and Module version requirement." };
+    return {
+      kind: "invalid",
+      message: "Check the application key, labels and Module version requirement.",
+    };
   return { kind: "valid", source: parsed.data };
 };

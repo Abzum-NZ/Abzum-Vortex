@@ -12,8 +12,8 @@ import {
   ruleGraphConditionSchema,
 } from "./rule-graph-contracts";
 import type { RuleGraphCondition } from "./rule-graph-contracts";
-import { conditionNodeSchema } from "../definition/module-contracts";
-import type { ConditionNode } from "../definition/module-contracts";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
 
 type ModuleComparison = Extract<ConditionNode, { kind: "comparison" }>;
 type ModuleOperand = ModuleComparison["left"];
@@ -105,8 +105,7 @@ const toModuleReferenceNode = (node: ConditionNode): ConditionReferenceNode => {
       right: toModuleReferenceOperand(node.right),
     };
   }
-  if (node.kind === "not")
-    return { kind: "not", condition: toModuleReferenceNode(node.condition) };
+  if (node.kind === "not") return { kind: "not", condition: toModuleReferenceNode(node.condition) };
   return { kind: node.kind, conditions: node.conditions.map(toModuleReferenceNode) };
 };
 
@@ -229,7 +228,9 @@ const fromRuleGraphReferenceNode = (node: ConditionReferenceNode): RuleGraphCond
 export const projectReferencesToModuleCondition = (contract: unknown): ConditionNode => {
   const parsedContract = conditionReferenceContractSchema.parse(contract);
   if (parsedContract.sourceProfile !== "module")
-    throw new TypeError("A rule-graph reference contract cannot be projected to a Module condition");
+    throw new TypeError(
+      "A rule-graph reference contract cannot be projected to a Module condition",
+    );
   const condition = fromModuleReferenceNode(parsedContract.condition);
   boundedRuleGraphConditionInputSchema.parse(condition);
   assertModuleUnaryRightAbsent(condition);
@@ -237,11 +238,11 @@ export const projectReferencesToModuleCondition = (contract: unknown): Condition
 };
 
 /** Invert only a rule-graph-profile representation; declaration context is revalidated, not rebound. */
-export const projectReferencesToRuleGraphCondition = (
-  contract: unknown,
-): RuleGraphCondition => {
+export const projectReferencesToRuleGraphCondition = (contract: unknown): RuleGraphCondition => {
   const parsedContract = conditionReferenceContractSchema.parse(contract);
   if (parsedContract.sourceProfile !== "rule_graph")
-    throw new TypeError("A Module reference contract cannot be projected to a rule-graph condition");
+    throw new TypeError(
+      "A Module reference contract cannot be projected to a rule-graph condition",
+    );
   return ruleGraphConditionSchema.parse(fromRuleGraphReferenceNode(parsedContract.condition));
 };

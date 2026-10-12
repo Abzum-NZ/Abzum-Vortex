@@ -1,11 +1,11 @@
 import type { ComponentType, ReactNode } from "react";
 import {
-  immutablePlatformBlockCatalogueV2Schema,
-  platformBlockReleaseV2Schema,
-  type ApplicationCompositionPolicyV2,
-  type BlockPropertyValueV2Contract,
-  type ImmutablePlatformBlockCatalogueV2,
-  type PlatformBlockReleaseV2,
+  immutablePlatformBlockCatalogueSchema,
+  platformBlockReleaseSchema,
+  type ApplicationCompositionPolicy,
+  type BlockPropertyValueContract,
+  type ImmutablePlatformBlockCatalogue,
+  type PlatformBlockRelease,
   type ProjectedNavigation,
 } from "@vortex/platform/schema";
 import {
@@ -167,12 +167,12 @@ export function assertRuntimeInputKeysArePlacements(
  */
 export type PlatformBlockRenderProps = Readonly<{
   placementId: string;
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
+  settings: Readonly<Record<string, BlockPropertyValueContract>>;
   slots: Readonly<Record<string, ReactNode>>;
   breakpoint: Breakpoint;
   /** Live pages use viewport media rules; preview renders only its selected breakpoint. */
   responsiveLayout?: boolean;
-  metadata: PlatformBlockReleaseV2;
+  metadata: PlatformBlockRelease;
   themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";
   unavailableReason?: "operation_unavailable";
@@ -214,7 +214,7 @@ export type PlatformComponentRenderer = ComponentType<PlatformBlockRenderProps>;
  * Puck component config (`puck-config.tsx`) binds every renderer key to its render function.
  */
 export type PlatformComponentRegistration = Readonly<{
-  metadata: PlatformBlockReleaseV2;
+  metadata: PlatformBlockRelease;
   parsePayload: PlatformComponentPayloadParser;
 }>;
 
@@ -246,17 +246,17 @@ export interface PlatformComponentRegistry {
   /**
    * List all block releases, matching the catalogue validation snapshot format.
    */
-  getReleases(): readonly PlatformBlockReleaseV2[];
+  getReleases(): readonly PlatformBlockRelease[];
 
   /**
    * Export the registered releases to an immutable platform block catalogue for pure compilation snapshots.
    */
   toPlatformBlockCatalogue(
-    compositionPolicy?: ApplicationCompositionPolicyV2,
-  ): ImmutablePlatformBlockCatalogueV2;
+    compositionPolicy?: ApplicationCompositionPolicy,
+  ): ImmutablePlatformBlockCatalogue;
 }
 
-const DEFAULT_COMPOSITION_POLICY: ApplicationCompositionPolicyV2 = {
+const DEFAULT_COMPOSITION_POLICY: ApplicationCompositionPolicy = {
   maximumDepth: 32,
   maximumPlacements: 512,
 };
@@ -281,7 +281,7 @@ export function createPlatformComponentRegistry(
   const list: PlatformComponentRegistration[] = [];
 
   for (const registration of registrations) {
-    const parsedMetadata = platformBlockReleaseV2Schema.safeParse(registration.metadata);
+    const parsedMetadata = platformBlockReleaseSchema.safeParse(registration.metadata);
     if (!parsedMetadata.success) {
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
@@ -368,14 +368,14 @@ export function createPlatformComponentRegistry(
       return frozenList;
     },
 
-    getReleases(): readonly PlatformBlockReleaseV2[] {
+    getReleases(): readonly PlatformBlockRelease[] {
       return frozenReleases;
     },
 
     toPlatformBlockCatalogue(
-      compositionPolicy: ApplicationCompositionPolicyV2 = DEFAULT_COMPOSITION_POLICY,
-    ): ImmutablePlatformBlockCatalogueV2 {
-      const parsed = immutablePlatformBlockCatalogueV2Schema.safeParse({
+      compositionPolicy: ApplicationCompositionPolicy = DEFAULT_COMPOSITION_POLICY,
+    ): ImmutablePlatformBlockCatalogue {
+      const parsed = immutablePlatformBlockCatalogueSchema.safeParse({
         compositionPolicy,
         releases: [...frozenReleases].sort(
           (first, second) =>

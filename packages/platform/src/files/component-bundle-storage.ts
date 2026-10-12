@@ -1,15 +1,9 @@
 import "server-only";
 
 import { createHash, type KeyObject } from "node:crypto";
-import {
-  customComponentBundleV2Schema,
-  type CustomComponentReleaseV2,
-} from "../schema";
+import { customComponentBundleSchema, type CustomComponentRelease } from "../schema";
 import { z } from "zod";
-import {
-  createStorageSignerFromPrivateKey,
-  type StorageKeySigner,
-} from "./storage-credentials";
+import { createStorageSignerFromPrivateKey, type StorageKeySigner } from "./storage-credentials";
 
 /**
  * The private bucket that holds custom component bundles. It is created and
@@ -182,7 +176,8 @@ export const decodeComponentBundleManifest = (bytes: Uint8Array): ComponentBundl
 };
 
 const bytesEqual = (left: Uint8Array, right: Uint8Array): boolean =>
-  left.byteLength === right.byteLength && Buffer.compare(Buffer.from(left), Buffer.from(right)) === 0;
+  left.byteLength === right.byteLength &&
+  Buffer.compare(Buffer.from(left), Buffer.from(right)) === 0;
 
 /**
  * The server-side bundle object store. Implementations read and write exactly
@@ -262,7 +257,8 @@ export const createComponentBundleStorageCredentialMinter = (
     );
   }
   const activeSigner = signers.get(config.activeKeyId);
-  if (activeSigner === undefined) throw new Error("Component bundle active signing key is unavailable");
+  if (activeSigner === undefined)
+    throw new Error("Component bundle active signing key is unavailable");
   const clock = config.clock ?? (() => new Date());
 
   return async ({ operation, objectPath }) => {
@@ -295,10 +291,7 @@ export const createComponentBundleStorageCredentialMinter = (
     const header = encodeBase64UrlJson({ alg: "ES256", kid: config.activeKeyId, typ: "JWT" });
     const payload = encodeBase64UrlJson(claims);
     const signature = await activeSigner(Buffer.from(`${header}.${payload}`));
-    if (
-      !/^[A-Za-z0-9_-]{86}$/.test(signature) ||
-      Buffer.from(signature, "base64url").length !== 64
-    )
+    if (!/^[A-Za-z0-9_-]{86}$/.test(signature) || Buffer.from(signature, "base64url").length !== 64)
       throw new Error("Component bundle signer returned an invalid ES256 signature");
     return Object.freeze({ token: `${header}.${payload}.${signature}` });
   };
@@ -418,7 +411,7 @@ export const componentBundleMediaType = (relativePath: string): string => {
 
 export type PublishedComponentBundle = Readonly<{
   /** The #1142 component release with its verified digest recorded. */
-  release: CustomComponentReleaseV2;
+  release: CustomComponentRelease;
   digest: string;
   contentAddress: string;
   entryFile: string;
@@ -443,10 +436,10 @@ export type PublishedComponentBundle = Readonly<{
  * refused rather than overwritten.
  */
 export const publishComponentBundle = async (
-  input: Readonly<{ release: CustomComponentReleaseV2; files: readonly ComponentBundleFile[] }>,
+  input: Readonly<{ release: CustomComponentRelease; files: readonly ComponentBundleFile[] }>,
   store: ComponentBundleObjectStore,
 ): Promise<PublishedComponentBundle> => {
-  const parsedBundle = customComponentBundleV2Schema.safeParse(input.release.bundle);
+  const parsedBundle = customComponentBundleSchema.safeParse(input.release.bundle);
   if (!parsedBundle.success) return refuse("malformed_bundle");
   const bundle = parsedBundle.data;
 

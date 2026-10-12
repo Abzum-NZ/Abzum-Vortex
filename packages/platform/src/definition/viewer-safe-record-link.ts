@@ -11,7 +11,7 @@ import {
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
+  type PageDefinition,
   type PermissionDeclaration,
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkResult,
@@ -105,7 +105,7 @@ const canOpenDetailPage = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,
-  page: PageDefinitionV2,
+  page: PageDefinition,
 ): Promise<boolean> => {
   const platform = platformPermissionSource().forKey(page.accessPermissionKey);
   let declaration: OrganizationAccessDeclaration;
@@ -192,26 +192,38 @@ export const createViewerSafeRecordLinkService = (
       const source = organizationSelectionCandidateSchema.safeParse(sourceSelectionCandidate);
       const selector = viewerSafeRecordPinSelectorSchema.safeParse(selectorCandidate);
       if (
-        !source.success || source.data.applicationRootId === undefined || !selector.success ||
+        !source.success ||
+        source.data.applicationRootId === undefined ||
+        !selector.success ||
         dependencies.resolveTargetApplication === undefined
-      ) return pinUnavailable;
+      )
+        return pinUnavailable;
       const sourceRoot = source.data.applicationRootId;
 
       try {
         // Verify the source human request before resolving a target in that same organisation.
-        const verifiedSource = await requests.run(session, source.data, async (_transaction, scope) =>
-          sameId(scope.organizationId, source.data.organizationId) &&
-          scope.applicationRootId !== undefined &&
-          sameId(scope.applicationRootId, sourceRoot)
+        const verifiedSource = await requests.run(
+          session,
+          source.data,
+          async (_transaction, scope) =>
+            sameId(scope.organizationId, source.data.organizationId) &&
+            scope.applicationRootId !== undefined &&
+            sameId(scope.applicationRootId, sourceRoot),
         );
         if (verifiedSource.kind !== "available" || !verifiedSource.value) return pinUnavailable;
         const target = organizationSelectionCandidateSchema.safeParse(
-          await dependencies.resolveTargetApplication(session, source.data, selector.data.applicationKey),
+          await dependencies.resolveTargetApplication(
+            session,
+            source.data,
+            selector.data.applicationKey,
+          ),
         );
         if (
-          !target.success || target.data.applicationRootId === undefined ||
+          !target.success ||
+          target.data.applicationRootId === undefined ||
           !sameId(target.data.organizationId, source.data.organizationId)
-        ) return pinUnavailable;
+        )
+          return pinUnavailable;
         const targetRoot = target.data.applicationRootId;
         const [moduleKey, recordTypeKey] = selector.data.recordTypeKey.split(":");
         const request = await requests.run(
@@ -220,17 +232,23 @@ export const createViewerSafeRecordLinkService = (
           async (transaction, scope): Promise<ViewerSafeRecordPinAcquisitionResult> => {
             if (
               !sameId(scope.organizationId, source.data.organizationId) ||
-              scope.applicationRootId === undefined || !sameId(scope.applicationRootId, targetRoot)
-            ) return pinUnavailable;
+              scope.applicationRootId === undefined ||
+              !sameId(scope.applicationRootId, targetRoot)
+            )
+              return pinUnavailable;
             const context = requireInstalledRuntimeContext(
               await dependencies.createInstalledContextLoader(transaction, scope).load(),
             );
             if (context.releaseSet.application.definitionKey !== selector.data.applicationKey)
               return pinUnavailable;
-            const modules = context.releaseSet.modules.filter((module) => module.definitionKey === moduleKey);
+            const modules = context.releaseSet.modules.filter(
+              (module) => module.definitionKey === moduleKey,
+            );
             const module = modules[0];
             if (modules.length !== 1 || module === undefined) return pinUnavailable;
-            const recordTypes = module.content.recordTypes.filter((record) => record.key === recordTypeKey);
+            const recordTypes = module.content.recordTypes.filter(
+              (record) => record.key === recordTypeKey,
+            );
             const recordType = recordTypes[0];
             if (recordTypes.length !== 1 || recordType === undefined) return pinUnavailable;
             const identity = viewerSafeRecordLinkIdentitySchema.parse({

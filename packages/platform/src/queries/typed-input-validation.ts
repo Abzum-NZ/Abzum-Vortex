@@ -2,14 +2,14 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  actionInputDefinitionV3Schema,
+  actionInputDefinitionSchema,
   compareExactDecimals,
   isUuidText,
   compileTextInputPattern,
   normalizeExactDecimal,
   parseExactDecimal,
-  recordRichTextDocumentV2Schema,
-  type ActionInputDefinitionV3,
+  recordRichTextDocumentSchema,
+  type ActionInputDefinition,
   type JsonValue,
 } from "../schema";
 
@@ -34,12 +34,12 @@ const hasExactKeys = (value: Readonly<Record<string, unknown>>, keys: readonly s
 const isoDate = z.iso.date();
 const isoDateTime = z.iso.datetime({ offset: true });
 
-const inputDeclarationsSchema = z.array(actionInputDefinitionV3Schema).max(50);
+const inputDeclarationsSchema = z.array(actionInputDefinitionSchema).max(50);
 
 /** Parses the installed input contract the database returned; a malformed one is not guessed at. */
 export const parseQueryInputDeclarations = (
   candidate: unknown,
-): readonly ActionInputDefinitionV3[] | undefined => {
+): readonly ActionInputDefinition[] | undefined => {
   const parsed = inputDeclarationsSchema.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;
 };
@@ -52,7 +52,7 @@ export const parseQueryInputDeclarations = (
  * reader checks the same values again against the condition engine's types.
  */
 export const validateQueryInputValues = (
-  inputs: readonly ActionInputDefinitionV3[],
+  inputs: readonly ActionInputDefinition[],
   suppliedValues: Readonly<Record<string, JsonValue>>,
 ): Readonly<Record<string, JsonValue>> => {
   const declaredKeys = new Set(inputs.map((input) => input.key));
@@ -89,7 +89,7 @@ const exactWithinRange = (
   return normalized;
 };
 
-const validateOne = (input: ActionInputDefinitionV3, value: JsonValue): JsonValue => {
+const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue => {
   switch (input.type) {
     case "text": {
       if (typeof value !== "string") return refuse();
@@ -106,7 +106,7 @@ const validateOne = (input: ActionInputDefinitionV3, value: JsonValue): JsonValu
       return value;
     }
     case "formatted_text":
-      return recordRichTextDocumentV2Schema.safeParse(value).success ? value : refuse();
+      return recordRichTextDocumentSchema.safeParse(value).success ? value : refuse();
     case "number": {
       if (typeof value !== "number" || !Number.isFinite(value)) return refuse();
       if (input.validation?.minimum !== undefined && value < input.validation.minimum) refuse();

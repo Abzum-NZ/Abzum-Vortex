@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   DEFAULT_APPLICATION_THEME_SELECTION,
-  applicationThemeV2Schema,
+  applicationThemeSchema,
   type DefinitionRuleFailure,
 } from "../schema";
 import { validatePublicPlatformAssets } from "./assets";
@@ -12,12 +12,12 @@ import { validateFocusVisibility } from "./focus";
 import { validateComponentThemeOverrides } from "./overrides";
 import { validateThemeSelectionOptions } from "./selection";
 import type {
-  ApplicationThemeV2,
+  ApplicationTheme,
   ComponentThemeOverrideContext,
   ResolvedTheme,
   ThemeResolutionInput,
   ThemeResolutionOptions,
-  ThemeTokenValueV2,
+  ThemeTokenValue,
   ThemeValidationFailure,
   ThemeValidationResult,
 } from "./types";
@@ -46,14 +46,14 @@ function deepFreeze<T>(value: T): T {
  * Returns a structured ThemeValidationResult with located definition failures.
  */
 export function validateApplicationTheme(
-  theme: ApplicationThemeV2,
+  theme: ApplicationTheme,
   options?: ThemeResolutionOptions | undefined,
 ): ThemeValidationResult {
   const failures: ThemeValidationFailure[] = [];
   const ruleFailures: DefinitionRuleFailure[] = [];
 
   // 1. Schema check
-  const parsedTheme = applicationThemeV2Schema.safeParse(theme);
+  const parsedTheme = applicationThemeSchema.safeParse(theme);
   if (!parsedTheme.success) {
     const located = createLocatedFailure({
       code: "INVALID_THEME_SCHEMA",
@@ -115,16 +115,16 @@ export function validateApplicationTheme(
  */
 export function resolveTheme(input: ThemeResolutionInput): ResolvedTheme;
 export function resolveTheme(
-  theme: ApplicationThemeV2,
+  theme: ApplicationTheme,
   componentOverrideContext?: ComponentThemeOverrideContext | undefined,
   options?: ThemeResolutionOptions | undefined,
 ): ResolvedTheme;
 export function resolveTheme(
-  first: ApplicationThemeV2 | ThemeResolutionInput,
+  first: ApplicationTheme | ThemeResolutionInput,
   second?: ComponentThemeOverrideContext | undefined,
   third?: ThemeResolutionOptions | undefined,
 ): ResolvedTheme {
-  let theme: ApplicationThemeV2;
+  let theme: ApplicationTheme;
   let overrideContext: ComponentThemeOverrideContext | undefined;
   let options: ThemeResolutionOptions | undefined;
 
@@ -144,12 +144,12 @@ export function resolveTheme(
   const allRuleFailures: DefinitionRuleFailure[] = [...baseValidation.ruleFailures];
 
   // 2. Process & Validate Component Overrides
-  const parsedTheme = applicationThemeV2Schema.safeParse(theme);
+  const parsedTheme = applicationThemeSchema.safeParse(theme);
   if (!parsedTheme.success) {
     throw new ThemeValidationError(allFailures, allRuleFailures);
   }
   const canonicalTheme = parsedTheme.data;
-  let effectiveTokens: Record<string, ThemeTokenValueV2> = { ...canonicalTheme.tokens };
+  let effectiveTokens: Record<string, ThemeTokenValue> = { ...canonicalTheme.tokens };
 
   if (overrideContext !== undefined && baseValidation.valid) {
     const overrideResult = validateComponentThemeOverrides(
@@ -185,7 +185,7 @@ export function resolveTheme(
 
   // 4. Construct deterministic sorted token map
   const sortedKeys = Object.keys(effectiveTokens).sort();
-  const deterministicTokens: Record<string, ThemeTokenValueV2> = {};
+  const deterministicTokens: Record<string, ThemeTokenValue> = {};
   for (const key of sortedKeys) {
     const token = effectiveTokens[key];
     if (token !== undefined) {
@@ -204,17 +204,19 @@ export function resolveTheme(
 /**
  * Convenience helper returning just the deterministic final token map.
  */
-export function resolveThemeTokens(input: ThemeResolutionInput): Readonly<Record<string, ThemeTokenValueV2>>;
 export function resolveThemeTokens(
-  theme: ApplicationThemeV2,
+  input: ThemeResolutionInput,
+): Readonly<Record<string, ThemeTokenValue>>;
+export function resolveThemeTokens(
+  theme: ApplicationTheme,
   componentOverrideContext?: ComponentThemeOverrideContext | undefined,
   options?: ThemeResolutionOptions | undefined,
-): Readonly<Record<string, ThemeTokenValueV2>>;
+): Readonly<Record<string, ThemeTokenValue>>;
 export function resolveThemeTokens(
-  first: ApplicationThemeV2 | ThemeResolutionInput,
+  first: ApplicationTheme | ThemeResolutionInput,
   second?: ComponentThemeOverrideContext | undefined,
   third?: ThemeResolutionOptions | undefined,
-): Readonly<Record<string, ThemeTokenValueV2>> {
+): Readonly<Record<string, ThemeTokenValue>> {
   const resolved = isThemeResolutionInput(first)
     ? resolveTheme(first)
     : resolveTheme(first, second, third);

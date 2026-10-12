@@ -1,16 +1,16 @@
 import {
-  exactDecimalTextV2Schema,
+  exactDecimalTextSchema,
   jsonValueSchema,
-  moduleFieldValueV2Schemas,
-  moneyValueV2Schema,
+  moduleFieldValueSchemas,
+  moneyValueSchema,
   organizationAccountIdSchema,
   parseExactDecimal,
-  personLinkValueV2Schema,
-  recordLinkValueV2Schema,
+  personLinkValueSchema,
+  recordLinkValueSchema,
   type ExactDecimal,
   type FlowFormula,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
 } from "../schema";
 import {
   TypedConditionEvaluationError,
@@ -20,12 +20,12 @@ import { evaluateFlowFormula } from "./flow-formula";
 import { flowInstantMicros } from "./flow-instant";
 import {
   type ResolvedTypedConditionNode,
-  type ResolvedTypedConditionOperand,
+  type ResolvedTypedConditionOperand as CoreResolvedTypedConditionOperand,
   validDate,
   validText,
 } from "./typed-condition-core";
 
-export type SemanticTypeV2 =
+export type SemanticType =
   | "text"
   | "number"
   | "whole_number"
@@ -39,14 +39,14 @@ export type SemanticTypeV2 =
   | "record_reference"
   | "organization_account_reference";
 
-export type ResolvedTypedConditionOperandV2 = ResolvedTypedConditionOperand<SemanticTypeV2> &
+export type ResolvedTypedConditionOperand = CoreResolvedTypedConditionOperand<SemanticType> &
   Readonly<{ missing?: boolean }>;
 
 const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
   throw new TypedConditionEvaluationError(reason);
 };
 
-export const semanticTypeForFieldV2 = (field: ModuleFieldV3): SemanticTypeV2 => {
+export const semanticTypeForField = (field: ModuleField): SemanticType => {
   switch (field.type) {
     case "whole_number":
       return "whole_number";
@@ -87,7 +87,7 @@ export const semanticTypeForFieldV2 = (field: ModuleFieldV3): SemanticTypeV2 => 
   }
 };
 
-export const valueMatchesSemanticTypeV2 = (value: JsonValue, type: SemanticTypeV2): boolean => {
+export const valueMatchesSemanticType = (value: JsonValue, type: SemanticType): boolean => {
   if (value === null) return true;
   switch (type) {
     case "text":
@@ -97,9 +97,9 @@ export const valueMatchesSemanticTypeV2 = (value: JsonValue, type: SemanticTypeV
     case "whole_number":
       return typeof value === "number" && Number.isInteger(value);
     case "decimal_number":
-      return exactDecimalTextV2Schema.safeParse(value).success;
+      return exactDecimalTextSchema.safeParse(value).success;
     case "money":
-      return moneyValueV2Schema.safeParse(value).success;
+      return moneyValueSchema.safeParse(value).success;
     case "boolean":
       return typeof value === "boolean";
     case "date":
@@ -109,27 +109,27 @@ export const valueMatchesSemanticTypeV2 = (value: JsonValue, type: SemanticTypeV
     case "text_collection":
       return Array.isArray(value) && value.every(validText);
     case "record_reference":
-      return recordLinkValueV2Schema.safeParse(value).success;
+      return recordLinkValueSchema.safeParse(value).success;
     case "organization_account_reference":
       return (
         organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueV2Schema.safeParse(value).success
+        personLinkValueSchema.safeParse(value).success
       );
     case "opaque_json":
       return jsonValueSchema.safeParse(value).success;
   }
 };
 
-export const valueMatchesFieldV2 = (value: JsonValue, field: ModuleFieldV3): boolean => {
+export const valueMatchesField = (value: JsonValue, field: ModuleField): boolean => {
   if (value === null) return true;
-  const leafSchema = moduleFieldValueV2Schemas[field.type];
+  const leafSchema = moduleFieldValueSchemas[field.type];
   return (
     leafSchema.safeParse(value).success &&
-    valueMatchesSemanticTypeV2(value, semanticTypeForFieldV2(field))
+    valueMatchesSemanticType(value, semanticTypeForField(field))
   );
 };
 
-const naturalLiteralType = (value: JsonValue): SemanticTypeV2 | undefined => {
+const naturalLiteralType = (value: JsonValue): SemanticType | undefined => {
   if (value === null) return undefined;
   if (typeof value === "number") return "number";
   if (typeof value === "boolean") return "boolean";
@@ -143,26 +143,26 @@ const naturalLiteralType = (value: JsonValue): SemanticTypeV2 | undefined => {
   return "opaque_json";
 };
 
-const literalMatchesType = (value: JsonValue, type: SemanticTypeV2): boolean => {
+const literalMatchesType = (value: JsonValue, type: SemanticType): boolean => {
   if (value === null) return true;
   if (type === "decimal_number")
     return (
-      exactDecimalTextV2Schema.safeParse(value).success ||
+      exactDecimalTextSchema.safeParse(value).success ||
       (typeof value === "number" && Number.isInteger(value))
     );
-  return valueMatchesSemanticTypeV2(value, type);
+  return valueMatchesSemanticType(value, type);
 };
 
 const exactFromValue = (value: JsonValue): ExactDecimal | undefined => {
   if (typeof value === "string") {
-    if (!exactDecimalTextV2Schema.safeParse(value).success) return undefined;
+    if (!exactDecimalTextSchema.safeParse(value).success) return undefined;
     return parseExactDecimal(value);
   }
   if (typeof value !== "number" || !Number.isInteger(value)) return undefined;
   return parseExactDecimal(BigInt(value).toString());
 };
 
-const exactCompatible = (operand: ResolvedTypedConditionOperandV2): boolean => {
+const exactCompatible = (operand: ResolvedTypedConditionOperand): boolean => {
   if (operand.value === null) return true;
   if (
     operand.type !== undefined &&
@@ -173,9 +173,9 @@ const exactCompatible = (operand: ResolvedTypedConditionOperandV2): boolean => {
 };
 
 const sharedType = (
-  left: ResolvedTypedConditionOperandV2,
-  right: ResolvedTypedConditionOperandV2,
-): SemanticTypeV2 | undefined => {
+  left: ResolvedTypedConditionOperand,
+  right: ResolvedTypedConditionOperand,
+): SemanticType | undefined => {
   if (left.type && right.type) {
     if (left.type === right.type) return left.type;
     if (exactCompatible(left) && exactCompatible(right)) return "decimal_number";
@@ -203,14 +203,14 @@ const sharedType = (
 };
 
 const isCollectionElementType = (
-  type: SemanticTypeV2 | undefined,
-): type is Exclude<SemanticTypeV2, "text_collection" | "opaque_json"> =>
+  type: SemanticType | undefined,
+): type is Exclude<SemanticType, "text_collection" | "opaque_json"> =>
   type !== undefined && type !== "text_collection" && type !== "opaque_json";
 
 const collectionElementType = (
-  operand: ResolvedTypedConditionOperandV2,
-  expectedType?: SemanticTypeV2,
-): SemanticTypeV2 | undefined => {
+  operand: ResolvedTypedConditionOperand,
+  expectedType?: SemanticType,
+): SemanticType | undefined => {
   if (operand.type === "text_collection") return "text";
   if (!operand.type && Array.isArray(operand.literal)) {
     const values = operand.literal;
@@ -229,13 +229,13 @@ const collectionElementType = (
   return undefined;
 };
 
-const valueCanBeType = (operand: ResolvedTypedConditionOperandV2, type: SemanticTypeV2): boolean =>
+const valueCanBeType = (operand: ResolvedTypedConditionOperand, type: SemanticType): boolean =>
   operand.type
     ? operand.type === type
     : operand.literal !== undefined && literalMatchesType(operand.literal, type);
 
 const recordReferenceIdentity = (value: JsonValue): string | undefined => {
-  const parsed = recordLinkValueV2Schema.safeParse(value);
+  const parsed = recordLinkValueSchema.safeParse(value);
   return parsed.success
     ? `${parsed.data.recordTypeId.toLowerCase()}/${parsed.data.recordId.toLowerCase()}`
     : undefined;
@@ -244,14 +244,14 @@ const recordReferenceIdentity = (value: JsonValue): string | undefined => {
 const organizationAccountIdentity = (value: JsonValue): string | undefined => {
   const direct = organizationAccountIdSchema.safeParse(value);
   if (direct.success) return direct.data.toLowerCase();
-  const linked = personLinkValueV2Schema.safeParse(value);
+  const linked = personLinkValueSchema.safeParse(value);
   return linked.success ? linked.data.organizationAccountId.toLowerCase() : undefined;
 };
 
 const moneyParts = (
   value: JsonValue,
 ): Readonly<{ amount: ExactDecimal; currency: string }> | undefined => {
-  const parsed = moneyValueV2Schema.safeParse(value);
+  const parsed = moneyValueSchema.safeParse(value);
   if (!parsed.success) return undefined;
   const amount = exactFromValue(parsed.data.amount);
   return amount === undefined ? undefined : { amount, currency: parsed.data.currency };
@@ -272,9 +272,9 @@ const decimalTextFromNumber = (value: number): string => {
   return scientific[1] + magnitude;
 };
 
-export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
+export const evaluateResolvedTypedCondition = <TSourceOperand>(
   condition: ResolvedTypedConditionNode<TSourceOperand>,
-  resolveOperand: (entry: TSourceOperand) => ResolvedTypedConditionOperandV2,
+  resolveOperand: (entry: TSourceOperand) => ResolvedTypedConditionOperand,
 ): boolean => {
   const validate = (node: ResolvedTypedConditionNode<TSourceOperand>): void => {
     if (node.kind === "all" || node.kind === "any") {
@@ -297,8 +297,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       return;
     }
     if (operator === "contains" || operator === "not_contains") {
-      const validTextOperands =
-        valueCanBeType(left, "text") && valueCanBeType(binaryRight, "text");
+      const validTextOperands = valueCanBeType(left, "text") && valueCanBeType(binaryRight, "text");
       const elementType = collectionElementType(left, binaryRight.type);
       if (!validTextOperands && (!elementType || !valueCanBeType(binaryRight, elementType)))
         refuse("operator_refused");
@@ -312,15 +311,9 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
     const type = sharedType(left, binaryRight);
     if (
       !type ||
-      ![
-        "text",
-        "number",
-        "whole_number",
-        "decimal_number",
-        "money",
-        "date",
-        "date_time",
-      ].includes(type)
+      !["text", "number", "whole_number", "decimal_number", "money", "date", "date_time"].includes(
+        type,
+      )
     )
       refuse("operator_refused");
     if (type === "money" && left.value !== null && binaryRight.value !== null) {
@@ -332,15 +325,13 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
   validate(condition);
 
   const formulaLiteral = (
-    operand: ResolvedTypedConditionOperandV2,
-    typeOverride?: SemanticTypeV2,
+    operand: ResolvedTypedConditionOperand,
+    typeOverride?: SemanticType,
   ): FlowFormula => {
     const sourceType =
       typeOverride ??
       operand.type ??
-      (operand.literal === undefined
-        ? undefined
-        : naturalLiteralType(operand.literal)) ??
+      (operand.literal === undefined ? undefined : naturalLiteralType(operand.literal)) ??
       "opaque_json";
     let type: string = sourceType;
     let value = operand.value;
@@ -370,8 +361,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
   };
 
   const combine = (op: "and" | "or", formulas: readonly FlowFormula[]): FlowFormula => {
-    if (formulas.length === 0)
-      return { op: "literal", type: "yes_no", value: op === "and" };
+    if (formulas.length === 0) return { op: "literal", type: "yes_no", value: op === "and" };
     if (formulas.length === 1) return formulas[0]!;
     if (formulas.length <= 20) return { op, args: [...formulas] };
     const groups: FlowFormula[] = [];
@@ -382,10 +372,7 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
 
   const toFormula = (node: ResolvedTypedConditionNode<TSourceOperand>): FlowFormula => {
     if (node.kind === "all" || node.kind === "any")
-      return combine(
-        node.kind === "all" ? "and" : "or",
-        node.conditions.map(toFormula),
-      );
+      return combine(node.kind === "all" ? "and" : "or", node.conditions.map(toFormula));
     if (node.kind === "not") return { op: "not", arg: toFormula(node.condition) };
     if (node.kind !== "comparison") return refuse("operator_refused");
 
@@ -428,15 +415,16 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       else if (Array.isArray(left.value)) {
         const elementType = collectionElementType(left, right.type);
         if (elementType === undefined) refuse("operator_refused");
-        contains = left.value.length === 0
-          ? { op: "literal", type: "yes_no", value: false }
-          : {
-              op: "in",
-              value: formulaLiteral(right, elementType),
-              options: left.value.map((entry) =>
-                formulaLiteral({ value: entry, literal: entry }, elementType),
-              ),
-            };
+        contains =
+          left.value.length === 0
+            ? { op: "literal", type: "yes_no", value: false }
+            : {
+                op: "in",
+                value: formulaLiteral(right, elementType),
+                options: left.value.map((entry) =>
+                  formulaLiteral({ value: entry, literal: entry }, elementType),
+                ),
+              };
       } else contains = { op: "contains", left: leftFormula, right: rightFormula };
       return node.operator === "not_contains" ? { op: "not", arg: contains } : contains;
     }
@@ -447,15 +435,16 @@ export const evaluateResolvedTypedConditionV2 = <TSourceOperand>(
       else if (Array.isArray(right.value)) {
         const elementType = collectionElementType(right, left.type);
         if (elementType === undefined) refuse("operator_refused");
-        membership = right.value.length === 0
-          ? { op: "literal", type: "yes_no", value: false }
-          : {
-              op: "in",
-              value: formulaLiteral(left, elementType),
-              options: right.value.map((entry) =>
-                formulaLiteral({ value: entry, literal: entry }, elementType),
-              ),
-            };
+        membership =
+          right.value.length === 0
+            ? { op: "literal", type: "yes_no", value: false }
+            : {
+                op: "in",
+                value: formulaLiteral(left, elementType),
+                options: right.value.map((entry) =>
+                  formulaLiteral({ value: entry, literal: entry }, elementType),
+                ),
+              };
       } else if (right.type === "text_collection") {
         membership = { op: "contains", left: rightFormula, right: leftFormula };
       } else {

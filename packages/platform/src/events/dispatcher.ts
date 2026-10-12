@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { actorIdSchema, type EventOccurrenceEnvelopeV2 } from "../schema";
+import { actorIdSchema, type EventOccurrenceEnvelope } from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
@@ -71,7 +71,7 @@ export type EventConsumerDeliveryPolicy = Readonly<{
  */
 export type EventConsumerDelivery = Readonly<{
   consumerKey: string;
-  occurrence: EventOccurrenceEnvelopeV2;
+  occurrence: EventOccurrenceEnvelope;
   causalDepth: number;
   leaseExpiresAt: string;
   /**

@@ -1,18 +1,18 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
-  isRepeatableSlotIdentityV2,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
+  isRepeatableSlotIdentity,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
   validateComponentSettings,
-  type ApplicationSourceDocumentV2,
-  type BlockPropertySchemaV2Contract,
+  type ApplicationSourceDocument,
+  type BlockPropertySchemaContract,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
-  type PlatformBlockReleaseV2,
-  type SourceBlockPropertyValueV2Contract,
+  type PlatformBlockRelease,
+  type SourceBlockPropertyValueContract,
 } from "../schema";
 
 /**
@@ -25,11 +25,11 @@ import {
  */
 
 type Segment = DefinitionValidationLocation["segments"][number];
-type Body = ApplicationSourceDocumentV2["body"];
+type Body = ApplicationSourceDocument["body"];
 type SourceSlot = Body["shells"][number]["layout"];
 type SourcePlacement = SourceSlot["placements"][string];
 type SourceLayout = SourcePlacement["responsive"]["desktop"];
-type SourceValue = SourceBlockPropertyValueV2Contract;
+type SourceValue = SourceBlockPropertyValueContract;
 
 export const applicationCatalogueRuleCodes = [
   "vortex.definition.application_dependency_manifest",
@@ -53,10 +53,10 @@ const effectiveLayouts = (responsive: SourcePlacement["responsive"]): SourceLayo
 
 /** Exact registered releases keyed by permanent block identity and release version. */
 const registeredReleasesOf = (
-  additionalReleases: readonly PlatformBlockReleaseV2[],
-): ReadonlyMap<string, PlatformBlockReleaseV2> =>
+  additionalReleases: readonly PlatformBlockRelease[],
+): ReadonlyMap<string, PlatformBlockRelease> =>
   new Map(
-    [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases, ...additionalReleases].map((release) => [
+    [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.releases, ...additionalReleases].map((release) => [
       `${release.blockId}:${release.releaseVersion}`,
       release,
     ]),
@@ -71,7 +71,7 @@ type SlotOptions = Readonly<{
   responsiveOrderAllowed: boolean;
   publicSurface: boolean;
   reserved?: ReadonlySet<string>;
-  shellPlacements?: Map<string, Readonly<{ depth: number; release: PlatformBlockReleaseV2 }>>;
+  shellPlacements?: Map<string, Readonly<{ depth: number; release: PlatformBlockRelease }>>;
 }>;
 
 type ShellContentSlot = Readonly<{
@@ -86,16 +86,16 @@ type ShellContentSlot = Readonly<{
  * Every refusal names the placement, and where relevant the setting, that caused it.
  */
 export function validateApplicationSourceCatalogue(
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   /**
    * Custom component releases the publishing path resolved for this application: its own and the
    * exact releases of the modules it binds. Draft save passes none, so only the platform catalogue
    * is available then; publication passes the resolved custom component releases so a release that
    * carries a custom component validates against its own catalogue.
    */
-  customComponentReleases: readonly PlatformBlockReleaseV2[] = [],
+  customComponentReleases: readonly PlatformBlockRelease[] = [],
 ): DefinitionRuleFailure[] {
-  const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
+  const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
   const registeredReleases = registeredReleasesOf(customComponentReleases);
   const failures: DefinitionRuleFailure[] = [];
   const report = (
@@ -118,9 +118,7 @@ export function validateApplicationSourceCatalogue(
   const manifest = new Map<string, Body["platform_block_dependencies"][number]>();
   for (const dependency of source.body.platform_block_dependencies) {
     manifest.set(`${dependency.block_id}@${dependency.release_version}`, dependency);
-    const release = registeredReleases.get(
-      `${dependency.block_id}:${dependency.release_version}`,
-    );
+    const release = registeredReleases.get(`${dependency.block_id}:${dependency.release_version}`);
     if (release === undefined)
       report("vortex.definition.application_dependency_manifest", "broken_reference");
     else if (
@@ -182,7 +180,8 @@ export function validateApplicationSourceCatalogue(
     ): void => {
       const seen = new Set<string>();
       for (const field of fields) {
-        if (seen.has(field)) report("vortex.definition.application_block_settings", "duplicate_key", at(key));
+        if (seen.has(field))
+          report("vortex.definition.application_block_settings", "duplicate_key", at(key));
         seen.add(field);
         if (!mapped(field))
           report("vortex.definition.application_block_settings", "broken_reference", at(key));
@@ -193,7 +192,12 @@ export function validateApplicationSourceCatalogue(
     const orders = (): boolean => true;
 
     if (table !== undefined) {
-      checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
+      checkFields(
+        "columns",
+        table.columns.map((column) => column.field),
+        () => true,
+        "invalid_value",
+      );
       if (table.defaultSort !== undefined) {
         checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
       }
@@ -204,13 +208,21 @@ export function validateApplicationSourceCatalogue(
         // The exact bound Module query owns the input names and types. Publication checks them;
         // draft save can check only the authored parameter structure here.
         if (inputs.has(parameter.input))
-          report("vortex.definition.application_block_settings", "duplicate_key", at("query_parameters"));
+          report(
+            "vortex.definition.application_block_settings",
+            "duplicate_key",
+            at("query_parameters"),
+          );
         inputs.add(parameter.input);
         if (
           (parameter.source === "fixed" && parameter.fixedValue === undefined) ||
           (parameter.source === "page" && parameter.pageParameter === undefined)
         )
-          report("vortex.definition.application_block_settings", "required_value", at("query_parameters"));
+          report(
+            "vortex.definition.application_block_settings",
+            "required_value",
+            at("query_parameters"),
+          );
       }
 
       /**
@@ -250,17 +262,28 @@ export function validateApplicationSourceCatalogue(
         const accepts = Object.values(flow.inputs).some(
           (input) => input.type === requiredInputType,
         );
-        if (!accepts) report("vortex.definition.application_block_settings", "invalid_value", at(key));
+        if (!accepts)
+          report("vortex.definition.application_block_settings", "invalid_value", at(key));
       };
       const behaviours = table.rowBehaviours;
       if (behaviours.rowClick !== undefined)
-        checkRowBehaviour("row_click", behaviours.rowClick.eventId, "row_clicked", "record_reference");
+        checkRowBehaviour(
+          "row_click",
+          behaviours.rowClick.eventId,
+          "row_clicked",
+          "record_reference",
+        );
       for (const action of behaviours.rowActions)
         checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
       for (const action of behaviours.bulkActions)
         checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
       if (behaviours.inlineEdit !== undefined) {
-        checkRowBehaviour("inline_edit", behaviours.inlineEdit.eventId, "inline_edit", "record_reference");
+        checkRowBehaviour(
+          "inline_edit",
+          behaviours.inlineEdit.eventId,
+          "inline_edit",
+          "record_reference",
+        );
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));
@@ -272,7 +295,12 @@ export function validateApplicationSourceCatalogue(
         );
       }
     } else if (detail !== undefined)
-      checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
+      checkFields(
+        "detail_fields",
+        detail.fields.map((entry) => entry.field),
+        () => true,
+        "invalid_value",
+      );
   };
 
   const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
@@ -280,29 +308,28 @@ export function validateApplicationSourceCatalogue(
 
   const validateSettings = (
     authored: Readonly<Record<string, SourceValue>>,
-    declarations: readonly BlockPropertySchemaV2Contract[],
+    declarations: readonly BlockPropertySchemaContract[],
     location: readonly Segment[],
   ): void => {
     for (const failure of validateComponentSettings(authored, declarations))
-      report(
-        "vortex.definition.application_block_settings",
-        failure.family,
-        [...location, ...settingPathSegments(failure.path)],
-      );
+      report("vortex.definition.application_block_settings", failure.family, [
+        ...location,
+        ...settingPathSegments(failure.path),
+      ]);
   };
 
   /** A required accessible name must exist after defaults; a supplied name must be real text. */
   const validateAccessibleName = (
     settings: Readonly<Record<string, SourceValue>>,
-    release: PlatformBlockReleaseV2,
+    release: PlatformBlockRelease,
     location: readonly Segment[],
   ): void => {
     if (release.capabilities.accessibleName === "not_applicable") return;
     const path = release.capabilities.accessibleNamePropertyPath;
-    let declarations: readonly BlockPropertySchemaV2Contract[] = release.properties;
+    let declarations: readonly BlockPropertySchemaContract[] = release.properties;
     let values: Readonly<Record<string, SourceValue>> = settings;
     let nameLocation = location;
-    let name: SourceValue | BlockPropertySchemaV2Contract["defaultValue"] = undefined;
+    let name: SourceValue | BlockPropertySchemaContract["defaultValue"] = undefined;
     for (const [index, key] of path.entries()) {
       const declaration = declarations.find((candidate) => candidate.key === key);
       nameLocation = [...nameLocation, ...keySegment("setting", key)];
@@ -326,7 +353,7 @@ export function validateApplicationSourceCatalogue(
 
   const validateResponsive = (
     placement: SourcePlacement,
-    release: PlatformBlockReleaseV2,
+    release: PlatformBlockRelease,
     location: readonly Segment[],
   ): void => {
     const layouts = effectiveLayouts(placement.responsive);
@@ -434,21 +461,19 @@ export function validateApplicationSourceCatalogue(
       const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
       for (const declaration of release.slots) {
         if (declaration.repeats === undefined) continue;
-        const identities = repeatableSlotItemIdentitiesV2(declaration, placement.settings);
+        const identities = repeatableSlotItemIdentities(declaration, placement.settings);
         if (new Set(identities).size !== identities.length)
-          report(
-            "vortex.definition.application_block_settings",
-            "duplicate_key",
-            [...location, ...keySegment("setting", declaration.repeats.items)],
-          );
+          report("vortex.definition.application_block_settings", "duplicate_key", [
+            ...location,
+            ...keySegment("setting", declaration.repeats.items),
+          ]);
         for (const identity of identities) {
-          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
-            report(
-              "vortex.definition.application_block_settings",
-              "invalid_value",
-              [...location, ...keySegment("setting", declaration.repeats.items)],
-            );
-          else repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+          if (!isRepeatableSlotIdentity(declaration.key, identity))
+            report("vortex.definition.application_block_settings", "invalid_value", [
+              ...location,
+              ...keySegment("setting", declaration.repeats.items),
+            ]);
+          else repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
         }
       }
       if (
@@ -502,7 +527,7 @@ export function validateApplicationSourceCatalogue(
   for (const shell of source.body.shells) {
     const shellPlacements = new Map<
       string,
-      Readonly<{ depth: number; release: PlatformBlockReleaseV2 }>
+      Readonly<{ depth: number; release: PlatformBlockRelease }>
     >();
     validateSlot(
       shell.layout,
@@ -605,12 +630,7 @@ export function validateApplicationSourceCatalogue(
       }
     } else if (page.composition.shell_kind === "default") pageSlot(page.composition.main);
     else
-      validateShellContent(
-        page.composition.shell,
-        page.composition.content,
-        publicSurface,
-        scope,
-      );
+      validateShellContent(page.composition.shell, page.composition.content, publicSurface, scope);
   }
 
   return failures;

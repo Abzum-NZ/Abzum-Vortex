@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PageDefinitionV2 } from "../schema";
+import type { PageDefinition } from "../schema";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 
 export type PlacementCapabilityState = Readonly<{
@@ -76,7 +76,7 @@ const placementAvailability = (state: PlacementCapabilityState, hasUseGate: bool
     ? {}
     : { availability: "unavailable", unavailableReason: "operation_unavailable" };
 
-const projectV2Slot = (
+const projectSlot = (
   slotCandidate: unknown,
   states: PageCapabilityState["placements"],
 ): JsonObject => {
@@ -100,7 +100,7 @@ const projectV2Slot = (
       const slots = Object.fromEntries(
         Object.entries(object(placement.slots)).map(([key, child]) => [
           key,
-          projectV2Slot(child, states),
+          projectSlot(child, states),
         ]),
       );
       return [
@@ -129,16 +129,16 @@ const projectV2Slot = (
   return { placements: projected, order };
 };
 
-const projectV2 = (
+const project = (
   resolved: ResolvedPageComposition,
   states: PageCapabilityState["placements"],
 ): JsonObject => {
-  const page: PageDefinitionV2 = resolved.page;
+  const page: PageDefinition = resolved.page;
   const source = object(page);
   if (resolved.roots.kind === "page")
     return {
       ...withoutKeys(source, ["accessPermissionKey"]),
-      composition: { main: projectV2Slot(resolved.roots.main, states) },
+      composition: { main: projectSlot(resolved.roots.main, states) },
     };
   return {
     ...withoutKeys(source, ["accessPermissionKey"]),
@@ -146,7 +146,7 @@ const projectV2 = (
       stepContent: Object.fromEntries(
         Object.entries(resolved.roots.stepContent).map(([stepId, root]) => [
           stepId,
-          projectV2Slot(root, states),
+          projectSlot(root, states),
         ]),
       ),
     },
@@ -165,7 +165,7 @@ export const projectPageCapability = (
 ): ProjectedPageCapability => {
   if (!capability.pageAllowed) return undefined;
   return {
-    ...projectV2(resolved, capability.placements),
+    ...project(resolved, capability.placements),
     ...(capability.accessVersion === undefined ? {} : { accessVersion: capability.accessVersion }),
     ...(capability.applicationReleaseRevision === undefined
       ? {}

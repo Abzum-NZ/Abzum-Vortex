@@ -2,10 +2,10 @@ import {
   canonicalWorkflowValueType,
   compareExactDecimals,
   formatExactDecimal,
-  moneyValueV2Schema,
+  moneyValueSchema,
   parseExactDecimal,
   powerOfTen,
-  recordLinkValueV2Schema,
+  recordLinkValueSchema,
   type ExactDecimal,
   type FlowDateUnit,
   type FlowFormula,
@@ -54,7 +54,7 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
   if (candidate.type === "money") {
     // Flow literals carry an amount; stored Record values also carry a currency.
     if (typeof candidate.value === "string") return parseExactDecimal(candidate.value);
-    const money = moneyValueV2Schema.safeParse(candidate.value);
+    const money = moneyValueSchema.safeParse(candidate.value);
     return money.success ? parseExactDecimal(money.data.amount) : undefined;
   }
   return isNumericType(candidate.type) ? parseExactDecimal(candidate.value) : undefined;
@@ -151,7 +151,7 @@ const roundedQuotient = (
 
 const currencyOf = (candidate: FlowRuntimeValue): string | undefined => {
   if (candidate.type !== "money") return undefined;
-  const parsed = moneyValueV2Schema.safeParse(candidate.value);
+  const parsed = moneyValueSchema.safeParse(candidate.value);
   return parsed.success ? parsed.data.currency : undefined;
 };
 
@@ -213,7 +213,8 @@ const arithmetic = (
         combined === undefined ||
         absolute(combined.numerator).toString().length > 512 ||
         combined.denominator.toString().length > 512
-      ) return undefined;
+      )
+        return undefined;
       exact = combined;
     }
     const scaled = roundedQuotient(exact.numerator * powerOfTen(scale), exact.denominator, mode);
@@ -289,9 +290,7 @@ const exactInstantOf = (candidate: FlowRuntimeValue): ExactInstant | undefined =
       : microseconds / 1_000_000n;
   const fractionalMicros = microseconds - epochSecond * 1_000_000n;
   const fraction =
-    fractionalMicros === 0n
-      ? ""
-      : fractionalMicros.toString().padStart(6, "0").replace(/0+$/, "");
+    fractionalMicros === 0n ? "" : fractionalMicros.toString().padStart(6, "0").replace(/0+$/, "");
   return { epochSecond, fraction };
 };
 
@@ -350,7 +349,10 @@ const dateAdd = (
     return value("date", iso.slice(0, 10));
   }
   const fraction = /\.(\d+)(?=Z|[+-]\d{2}:\d{2}$)/.exec(String(date.value))?.[1] ?? "";
-  return value("date_time", iso.replace(/\.\d{3}Z$/, (fraction === "" ? "" : "." + fraction) + "Z"));
+  return value(
+    "date_time",
+    iso.replace(/\.\d{3}Z$/, (fraction === "" ? "" : "." + fraction) + "Z"),
+  );
 };
 
 const dateDiff = (
@@ -412,8 +414,7 @@ export const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean 
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && flowJsonValuesEqual(left[key]!, right[key]!),
+      (key, index) => key === rightKeys[index] && flowJsonValuesEqual(left[key]!, right[key]!),
     )
   );
 };
@@ -432,8 +433,7 @@ const compare = (
       const leftCurrency = currencyOf(left);
       const rightCurrency = currencyOf(right);
       if (leftCurrency === undefined || rightCurrency === undefined) {
-        if (typeof left.value !== "string" || typeof right.value !== "string")
-          return undefined;
+        if (typeof left.value !== "string" || typeof right.value !== "string") return undefined;
       }
       if (leftCurrency !== rightCurrency) return "equal_only_different";
     }
@@ -452,9 +452,7 @@ const compare = (
   if (left.type !== right.type) return undefined;
   if (left.type === "yes_no" && typeof left.value === "boolean" && typeof right.value === "boolean")
     return left.value === right.value ? "equal_only_same" : "equal_only_different";
-  return flowJsonValuesEqual(left.value, right.value)
-    ? "equal_only_same"
-    : "equal_only_different";
+  return flowJsonValuesEqual(left.value, right.value) ? "equal_only_same" : "equal_only_different";
 };
 
 const joined = (candidate: FlowRuntimeValue): string | undefined => {
@@ -491,7 +489,7 @@ export const evaluateFlowFormula = (
           !Object.hasOwn(operand.value, "recordId")
         )
           return undefined;
-        const record = recordLinkValueV2Schema.safeParse(operand.value);
+        const record = recordLinkValueSchema.safeParse(operand.value);
         return record.success ? value("text", record.data.recordId) : undefined;
       }
       case "add":

@@ -6,9 +6,9 @@ import {
   findShadcnThemeCatalogueOption,
   isShadcnIconLibrary,
   shadcnThemeCatalogueDimensionKeys,
-  sourceApplicationThemeSelectionV2Schema,
+  sourceApplicationThemeSelectionSchema,
   type ShadcnThemeCatalogueDimensionKey,
-  type SourceApplicationThemeSelectionV2,
+  type SourceApplicationThemeSelection,
 } from "../schema";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import {
@@ -50,7 +50,8 @@ export type ShadcnPresetImportFailure = Readonly<{
     | "REFUSED_THEME_OPTION"
     | "MISSING_THEME_RELEASE"
     | "INVALID_THEME_SELECTION";
-  dimension?: ShadcnThemeCatalogueDimensionKey | "iconLibrary" | "bodyFont" | "headingFont" | undefined;
+  dimension?:
+    ShadcnThemeCatalogueDimensionKey | "iconLibrary" | "bodyFont" | "headingFont" | undefined;
   value?: string | undefined;
   message: string;
 }>;
@@ -69,7 +70,7 @@ export type ShadcnPresetImportDraft =
       source: PresetSourceKind;
       presetCode: string;
       version: "a" | "b";
-      selection: SourceApplicationThemeSelectionV2;
+      selection: SourceApplicationThemeSelection;
       notYetImportable: readonly ShadcnPresetDimensionNotYetImportable[];
     }>
   | Readonly<{
@@ -106,8 +107,7 @@ const parsePresetInput = (input: unknown): ParsedPresetInput | PresetInputFailur
   } catch {
     return {
       code: "INVALID_PRESET_SOURCE",
-      message:
-        "Enter a shadcn preset code or an HTTPS preset URL from ui.shadcn.com/create.",
+      message: "Enter a shadcn preset code or an HTTPS preset URL from ui.shadcn.com/create.",
     };
   }
 
@@ -260,7 +260,10 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
       value: decoded.font,
       message: `The preset font value "${decoded.font}" is not available in the pinned font catalogue.`,
     });
-  if (decoded.fontHeading !== SHADCN_HEADING_FONT_INHERIT && findShadcnFont(decoded.fontHeading) === undefined)
+  if (
+    decoded.fontHeading !== SHADCN_HEADING_FONT_INHERIT &&
+    findShadcnFont(decoded.fontHeading) === undefined
+  )
     failures.push({
       code: "UNKNOWN_THEME_OPTION",
       dimension: "headingFont",
@@ -280,7 +283,7 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     };
   }
 
-  const parsedSelection = sourceApplicationThemeSelectionV2Schema.safeParse({
+  const parsedSelection = sourceApplicationThemeSelectionSchema.safeParse({
     style: selectedOptions.style,
     base_color: selectedOptions.baseColor,
     theme: selectedOptions.theme,

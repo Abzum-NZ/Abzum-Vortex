@@ -1,12 +1,12 @@
 import "server-only";
 
 import {
-  containsCustomComponentReleasesV2,
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  containsCustomComponentReleases,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@web/platform-server";
@@ -21,14 +21,14 @@ import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@web/pla
  */
 export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
   connectionTypeReleases: PLATFORM_CONNECTION_TYPE_RELEASES,
-  applicationCompositionV2: {
-    compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.compositionPolicy,
+  applicationComposition: {
+    compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
       ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => definition,
     ),
     platformThemeReleases: [
       (({ contentFingerprint, catalogueFingerprint, ...definition }) => definition)(
-        DEFAULT_PLATFORM_THEME_RELEASE_V2,
+        DEFAULT_PLATFORM_THEME_RELEASE,
       ),
     ],
   },
@@ -44,7 +44,7 @@ export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueD
 export const releaseSetContainsCustomComponents = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): boolean => {
-  const releases: PlatformBlockReleaseV2[] = [];
+  const releases: PlatformBlockRelease[] = [];
   for (const dependency of releaseSet.application.content.platformBlockDependencies) {
     const release = PLATFORM_BLOCK_RELEASES.find(
       (candidate) =>
@@ -56,5 +56,5 @@ export const releaseSetContainsCustomComponents = (
     if (release === undefined) return true;
     releases.push(release);
   }
-  return containsCustomComponentReleasesV2(releases);
+  return containsCustomComponentReleases(releases);
 };

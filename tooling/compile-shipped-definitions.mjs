@@ -48,23 +48,20 @@ if (!process.argv.includes("--worker")) {
     hasKey: isPlatformPermissionKey,
   });
   const { compileDefinitionWithContext } = platform;
-  const { canonicalJson, fingerprintCanonicalValue } =
-    platform;
+  const { canonicalJson, fingerprintCanonicalValue } = platform;
   const {
-    extractApplicationSourceIdentityRequirementsV2,
-    extractModuleSourceIdentityRequirementsV3,
+    extractApplicationSourceIdentityRequirements,
+    extractModuleSourceIdentityRequirements,
     extractSourceIdentityRequirements,
   } = platform;
   const {
-    applicationCompilationRequestV2Schema,
-    DEFAULT_PLATFORM_THEME_RELEASE_V2,
-    IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
-    sourceIdentityKindV2Schema,
-    sourceIdentityKindSchema,
+    applicationCompilationRequestSchema,
+    DEFAULT_PLATFORM_THEME_RELEASE,
+    IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
     sourceProvenanceRegistry,
     jsonValueSchema,
     moduleSourceDocumentSchema,
-    applicationSourceDocumentV2Schema,
+    applicationSourceDocumentSchema,
     connectionTypeSourceDocumentSchema,
     PLATFORM_CONNECTION_TYPE_RELEASES,
   } = await import("@vortex/platform/schema");
@@ -119,7 +116,7 @@ if (!process.argv.includes("--worker")) {
       }
     };
     inspect(moduleSourceDocumentSchema, ["module"]);
-    inspect(applicationSourceDocumentV2Schema, ["application"]);
+    inspect(applicationSourceDocumentSchema, ["application"]);
     inspect(connectionTypeSourceDocumentSchema, ["connection"]);
     process.stdout.write(
       `${JSON.stringify({ missingCount: missing.length, missing: missing.slice(0, 100) }, null, 2)}\n`,
@@ -172,7 +169,8 @@ if (!process.argv.includes("--worker")) {
       }
     }
   }
-  const connectionPath = "packages/platform/src/catalogue/catalogue/platform-connection-type-catalogue.source.json";
+  const connectionPath =
+    "packages/platform/src/catalogue/catalogue/platform-connection-type-catalogue.source.json";
   const currentConnections = new Map();
   for (const release of PLATFORM_CONNECTION_TYPE_RELEASES) {
     const current = currentConnections.get(release.source.key);
@@ -205,9 +203,9 @@ if (!process.argv.includes("--worker")) {
   }));
   const requirements = sources.flatMap(({ source }) =>
     source.kind === "module"
-      ? extractModuleSourceIdentityRequirementsV3(source)
+      ? extractModuleSourceIdentityRequirements(source)
       : source.kind === "application"
-        ? extractApplicationSourceIdentityRequirementsV2(source)
+        ? extractApplicationSourceIdentityRequirements(source)
         : extractSourceIdentityRequirements(source),
   );
   const identities = requirements.flatMap((requirement) => {
@@ -226,14 +224,8 @@ if (!process.argv.includes("--worker")) {
       identifier,
     }));
   });
-  const snapshot = (contractVersion) => {
-    const allowedIdentities =
-      contractVersion === "1.0.0"
-        ? identities.filter(({ kind }) => sourceIdentityKindSchema.safeParse(kind).success)
-        : contractVersion === "2.0.0"
-          ? identities.filter(({ kind }) => sourceIdentityKindV2Schema.safeParse(kind).success)
-          : identities;
-    const evidence = { contractVersion, definitions, identities: allowedIdentities };
+  const snapshot = () => {
+    const evidence = { contractVersion: "3.0.0", definitions, identities };
     return { ...evidence, fingerprint: fingerprintCanonicalValue(evidence) };
   };
   const catalogueSnapshotFor = (source) => {
@@ -245,8 +237,8 @@ if (!process.argv.includes("--worker")) {
     const catalogueEvidence = {
       contractVersion: "2.0.0",
       platformBlocks: {
-        ...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
-        releases: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases
+        ...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+        releases: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.releases
           .filter((release) => selected.has(`${release.blockId}@${release.releaseVersion}`))
           .sort((left, right) =>
             `${left.blockId}@${left.releaseVersion}`.localeCompare(
@@ -254,7 +246,7 @@ if (!process.argv.includes("--worker")) {
             ),
           ),
       },
-      platformTheme: DEFAULT_PLATFORM_THEME_RELEASE_V2,
+      platformTheme: DEFAULT_PLATFORM_THEME_RELEASE,
     };
     return {
       ...catalogueEvidence,
@@ -374,7 +366,7 @@ if (!process.argv.includes("--worker")) {
       .sort((left, right) => left.localeCompare(right));
   const applicationCatalogueReleases = new Map();
   const ambiguousApplicationCatalogueReleases = new Set();
-  for (const release of IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases) {
+  for (const release of IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.releases) {
     const identity = release.blockId + "@" + release.releaseVersion;
     if (applicationCatalogueReleases.has(identity))
       ambiguousApplicationCatalogueReleases.add(identity);
@@ -1101,13 +1093,13 @@ if (!process.argv.includes("--worker")) {
     try {
       const request =
         source.kind === "connection_type"
-          ? { source, resolution: snapshot("1.0.0") }
+          ? { source, resolution: snapshot() }
           : source.kind === "module"
             ? {
                 sourceContractVersion: "3.0.0",
                 validationContractVersion: "3.0.0",
                 source,
-                resolution: snapshot("3.0.0"),
+                resolution: snapshot(),
                 draftMetadata,
                 savedConditionRevisions: identities
                   .filter(
@@ -1122,12 +1114,12 @@ if (!process.argv.includes("--worker")) {
                 sourceContractVersion: "2.0.0",
                 validationContractVersion: "2.0.0",
                 source,
-                resolution: snapshot("2.0.0"),
+                resolution: snapshot(),
                 catalogueSnapshot: catalogueSnapshotFor(source),
                 draftMetadata,
               };
       if (source.kind === "application") {
-        const parsed = applicationCompilationRequestV2Schema.safeParse(request);
+        const parsed = applicationCompilationRequestSchema.safeParse(request);
         if (!parsed.success) throw new Error(JSON.stringify(parsed.error.issues));
       }
       const output = compileDefinitionWithContext(request, { dependencyOutputs: outputs });

@@ -1,7 +1,4 @@
-import type {
-  ModuleContentV3,
-  ModuleContributionV3,
-} from "../schema";
+import type { ModuleContent, ModuleContribution } from "../schema";
 import {
   canonicalJson,
   compareCanonicalStrings,
@@ -18,7 +15,7 @@ export type InstalledModuleContributionRelease = Readonly<{
   moduleRootId: string;
   definitionKey: string;
   releaseVersion: string;
-  content: ModuleContentV3;
+  content: ModuleContent;
 }>;
 
 /**
@@ -84,7 +81,7 @@ export type ModuleContributionResolution = Readonly<{
   fingerprint: `sha256:${string}`;
 }>;
 
-type AnyModuleContent = ModuleContentV3;
+type AnyModuleContent = ModuleContent;
 
 /** Only the exact fields the resolver reads; the contract schema already guarantees their shapes. */
 type ModuleContentView = Readonly<{
@@ -100,12 +97,12 @@ type ModuleContentView = Readonly<{
     recordTypeId: string;
     accepts: readonly string[];
   }>[];
-  contributions?: readonly ModuleContributionV3[];
+  contributions?: readonly ModuleContribution[];
 }>;
 
 type ContributionSource = Readonly<{
   release: InstalledModuleContributionRelease;
-  contribution: ModuleContributionV3;
+  contribution: ModuleContribution;
 }>;
 
 const viewOf = (content: AnyModuleContent): ModuleContentView =>
@@ -317,9 +314,7 @@ export const resolveModuleContributions = (
     });
   }
 
-  bindings.sort((left, right) =>
-    compareCanonicalStrings(bindingOrder(left), bindingOrder(right)),
-  );
+  bindings.sort((left, right) => compareCanonicalStrings(bindingOrder(left), bindingOrder(right)));
   conflicts.sort((left, right) =>
     compareCanonicalStrings(conflictOrder(left), conflictOrder(right)),
   );

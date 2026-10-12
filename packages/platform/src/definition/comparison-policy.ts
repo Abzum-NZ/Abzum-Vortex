@@ -1,6 +1,6 @@
 import type {
-  ApplicationContentV2,
-  ModuleContentV3,
+  ApplicationContent,
+  ModuleContent,
   VersionImpact,
   VersionImpactReason,
 } from "../schema";
@@ -993,8 +993,8 @@ const compareFlow = (
 };
 
 export const compareModuleContents = (
-  previousContent: ModuleContentV3,
-  candidateContent: ModuleContentV3,
+  previousContent: ModuleContent,
+  candidateContent: ModuleContent,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
@@ -1289,16 +1289,24 @@ const compareSharingCondition = (
 
 /**
  * The definition-wide comparison every Application release shares. Shells, pages, placements and
- * the theme carry their own current-contract comparison in compareApplicationContentsV2.
+ * the theme carry their own current-contract comparison in compareApplicationContents.
  */
 const compareApplicationSharedContent = (
-  previousContent: ApplicationContentV2,
-  candidateContent: ApplicationContentV2,
+  previousContent: ApplicationContent,
+  candidateContent: ApplicationContent,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
-  pushChange(reasons, previous.search, candidate.search, "major", "presentation_changed", "application", "configuration");
+  pushChange(
+    reasons,
+    previous.search,
+    candidate.search,
+    "major",
+    "presentation_changed",
+    "application",
+    "configuration",
+  );
   for (const key of ["name", "description", "icon"])
     pushChange(
       reasons,
@@ -1948,9 +1956,7 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
-export const normaliseModuleContent = <T extends ModuleContentV3>(
-  content: T,
-): T => {
+export const normaliseModuleContent = <T extends ModuleContent>(content: T): T => {
   const value = asRecord(content);
   return {
     ...value,
@@ -2012,7 +2018,7 @@ export const normaliseModuleContent = <T extends ModuleContentV3>(
 };
 
 /** Canonical ordering for the definition-wide fields every Application release shares. */
-const normaliseApplicationSharedContent = (content: ApplicationContentV2): RecordValue => {
+const normaliseApplicationSharedContent = (content: ApplicationContent): RecordValue => {
   const value = asRecord(structuredClone(content));
   return {
     ...value,
@@ -2058,10 +2064,7 @@ const normaliseApplicationSharedContent = (content: ApplicationContentV2): Recor
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
     flows: sorted(value.flows as unknown[], "id"),
-    flowBindings: sorted(
-      value.flowBindings as RecordValue[],
-      "bindingId",
-    ),
+    flowBindings: sorted(value.flowBindings as RecordValue[], "bindingId"),
   };
 };
 
@@ -2185,9 +2188,7 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
   for (const pipeline of value.pipelines as RecordValue[])
     assertUnique(pipeline.stages as RecordValue[], "key");
   const flowBindings = value.flowBindings as RecordValue[];
-  const flowBindingKeys = flowBindings.map(
-    (binding) => `${binding.controlId}:${binding.eventId}`,
-  );
+  const flowBindingKeys = flowBindings.map((binding) => `${binding.controlId}:${binding.eventId}`);
   if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
     refuseVersionImpact("ambiguous_component_identity");
   const flowBindingIds = flowBindings.map((binding) => binding.bindingId);
@@ -2206,7 +2207,7 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
     assertUnambiguousTypedInputs(action.inputs as RecordValue[]);
 };
 
-type PlacementContextV2 = {
+type PlacementContext = {
   placement: RecordValue;
   parent: string;
   order: Record<"desktop" | "tablet" | "phone", number>;
@@ -2215,7 +2216,7 @@ type PlacementContextV2 = {
   pageId?: string;
 };
 
-const presentationPropertyValueV2 = (value: unknown): boolean => {
+const presentationPropertyValue = (value: unknown): boolean => {
   const property = asRecord(value);
   switch (property.kind) {
     case "text":
@@ -2229,35 +2230,35 @@ const presentationPropertyValueV2 = (value: unknown): boolean => {
     case "theme_token":
       return true;
     case "group":
-      return Object.values(asRecord(property.properties)).every(presentationPropertyValueV2);
+      return Object.values(asRecord(property.properties)).every(presentationPropertyValue);
     case "list":
-      return (property.items as unknown[]).every(presentationPropertyValueV2);
+      return (property.items as unknown[]).every(presentationPropertyValue);
     default:
       return false;
   }
 };
 
-const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boolean =>
+const placementSubtreeIsOptionalPresentation = (placement: RecordValue): boolean =>
   placement.viewPermissionKey === undefined &&
   placement.usePermissionKey === undefined &&
   placement.visibilityCondition === undefined &&
   placement.queryId === undefined &&
   placement.readModel === undefined &&
-  Object.values(asRecord(placement.settings)).every(presentationPropertyValueV2) &&
+  Object.values(asRecord(placement.settings)).every(presentationPropertyValue) &&
   Object.values(asRecord(placement.slots)).every((slot) =>
     Object.values(asRecord(asRecord(slot).placements)).every((child) =>
-      placementSubtreeIsOptionalPresentationV2(asRecord(child)),
+      placementSubtreeIsOptionalPresentation(asRecord(child)),
     ),
   );
 
-const pageIsCompatibleAdditionV2 = (page: RecordValue): boolean =>
+const pageIsCompatibleAddition = (page: RecordValue): boolean =>
   page.type !== "public" && page.replacementOfPageId === undefined;
 
-const collectPlacementSlotV2 = (
+const collectPlacementSlot = (
   slotValue: unknown,
   parent: string,
-  flags: Pick<PlacementContextV2, "publicPage" | "guidedStep"> & { pageId?: string },
-  result: Map<string, PlacementContextV2>,
+  flags: Pick<PlacementContext, "publicPage" | "guidedStep"> & { pageId?: string },
+  result: Map<string, PlacementContext>,
 ): void => {
   const slot = asRecord(slotValue);
   const placements = asRecord(slot.placements);
@@ -2275,7 +2276,7 @@ const collectPlacementSlotV2 = (
       ...flags,
     });
     for (const [slotKey, childSlot] of Object.entries(asRecord(placement.slots)))
-      collectPlacementSlotV2(
+      collectPlacementSlot(
         childSlot,
         `${parent}/placement:${placementId}/slot:${slotKey}`,
         flags,
@@ -2284,11 +2285,9 @@ const collectPlacementSlotV2 = (
   }
 };
 
-const collectPlacementsV2 = (
-  contentValue: ApplicationContentV2,
-): Map<string, PlacementContextV2> => {
+const collectPlacements = (contentValue: ApplicationContent): Map<string, PlacementContext> => {
   const content = asRecord(contentValue);
-  const result = new Map<string, PlacementContextV2>();
+  const result = new Map<string, PlacementContext>();
   const shells = content.shells as RecordValue[];
   const shellConsumers = new Map<string, { publicPage: boolean; guidedStep: boolean }>();
   for (const page of content.pages as RecordValue[]) {
@@ -2306,7 +2305,7 @@ const collectPlacementsV2 = (
       publicPage: false,
       guidedStep: false,
     };
-    collectPlacementSlotV2(shell.layout, `shell:${String(shell.shellId)}:root`, consumers, result);
+    collectPlacementSlot(shell.layout, `shell:${String(shell.shellId)}:root`, consumers, result);
   }
   for (const page of content.pages as RecordValue[]) {
     const pageId = String(page.pageId);
@@ -2316,7 +2315,7 @@ const collectPlacementsV2 = (
     if ("stepContent" in composition) {
       for (const [stepId, stepValue] of Object.entries(asRecord(composition.stepContent))) {
         if (composition.shellKind === "default")
-          collectPlacementSlotV2(
+          collectPlacementSlot(
             stepValue,
             `page:${pageId}/step:${stepId}/default`,
             { publicPage, guidedStep, pageId },
@@ -2324,7 +2323,7 @@ const collectPlacementsV2 = (
           );
         else
           for (const [slotId, slot] of Object.entries(asRecord(stepValue)))
-            collectPlacementSlotV2(
+            collectPlacementSlot(
               slot,
               `page:${pageId}/step:${stepId}/shell:${String(composition.shellId)}/slot:${slotId}`,
               { publicPage, guidedStep, pageId },
@@ -2332,7 +2331,7 @@ const collectPlacementsV2 = (
             );
       }
     } else if (composition.shellKind === "default")
-      collectPlacementSlotV2(
+      collectPlacementSlot(
         composition.main,
         `page:${pageId}/default`,
         { publicPage, guidedStep, pageId },
@@ -2340,7 +2339,7 @@ const collectPlacementsV2 = (
       );
     else
       for (const [slotId, slot] of Object.entries(asRecord(composition.content)))
-        collectPlacementSlotV2(
+        collectPlacementSlot(
           slot,
           `page:${pageId}/shell:${String(composition.shellId)}/slot:${slotId}`,
           { publicPage, guidedStep, pageId },
@@ -2350,21 +2349,19 @@ const collectPlacementsV2 = (
   return result;
 };
 
-const comparePlacementsV2 = (
+const comparePlacements = (
   reasons: VersionImpactReason[],
-  previousContent: ApplicationContentV2,
-  candidateContent: ApplicationContentV2,
+  previousContent: ApplicationContent,
+  candidateContent: ApplicationContent,
 ): void => {
-  const previous = collectPlacementsV2(previousContent);
-  const candidate = collectPlacementsV2(candidateContent);
+  const previous = collectPlacements(previousContent);
+  const candidate = collectPlacements(candidateContent);
   const previousPageIds = new Set(
     (asRecord(previousContent).pages as RecordValue[]).map((page) => String(page.pageId)),
   );
   const compatibleAddedPageIds = new Set(
     (asRecord(candidateContent).pages as RecordValue[])
-      .filter(
-        (page) => !previousPageIds.has(String(page.pageId)) && pageIsCompatibleAdditionV2(page),
-      )
+      .filter((page) => !previousPageIds.has(String(page.pageId)) && pageIsCompatibleAddition(page))
       .map((page) => String(page.pageId)),
   );
   for (const [id, current] of candidate)
@@ -2373,7 +2370,7 @@ const comparePlacementsV2 = (
       const presentationOnly =
         !current.publicPage &&
         !current.guidedStep &&
-        placementSubtreeIsOptionalPresentationV2(current.placement);
+        placementSubtreeIsOptionalPresentation(current.placement);
       reasons.push(
         makeReason(
           presentationOnly ? "minor" : "major",
@@ -2478,7 +2475,7 @@ const comparePlacementsV2 = (
   }
 };
 
-const compareShellContentSlotV2 = (
+const compareShellContentSlot = (
   reasons: VersionImpactReason[],
   previous: RecordValue,
   candidate: RecordValue,
@@ -2527,7 +2524,7 @@ const compareShellContentSlotV2 = (
   );
 };
 
-const compareShellsV2 = (
+const compareShells = (
   reasons: VersionImpactReason[],
   previous: RecordValue[],
   candidate: RecordValue[],
@@ -2576,7 +2573,7 @@ const compareShellsV2 = (
         after.contentSlots as RecordValue[],
         "slotId",
         "shell_content_slot",
-        (left, right) => compareShellContentSlotV2(reasons, left, right),
+        (left, right) => compareShellContentSlot(reasons, left, right),
         (slot) => (slot.required === true ? "major" : "minor"),
       );
     },
@@ -2584,14 +2581,14 @@ const compareShellsV2 = (
       const placements = asRecord(asRecord(shell.layout).placements);
       return (shell.contentSlots as RecordValue[]).every((slot) => slot.required === false) &&
         Object.values(placements).every((placement) =>
-          placementSubtreeIsOptionalPresentationV2(asRecord(placement)),
+          placementSubtreeIsOptionalPresentation(asRecord(placement)),
         )
         ? "minor"
         : "major";
     },
   );
 
-const compareCompositionOwnershipV2 = (
+const compareCompositionOwnership = (
   reasons: VersionImpactReason[],
   previousComposition: RecordValue,
   candidateComposition: RecordValue,
@@ -2636,7 +2633,7 @@ const compareCompositionOwnershipV2 = (
   compareSlotKeys(previousComposition.content, candidateComposition.content);
 };
 
-const comparePageV2 = (
+const comparePage = (
   reasons: VersionImpactReason[],
   previous: RecordValue,
   candidate: RecordValue,
@@ -2696,7 +2693,7 @@ const comparePageV2 = (
     "ownership",
     id,
   );
-  compareCompositionOwnershipV2(reasons, beforeComposition, afterComposition, id);
+  compareCompositionOwnership(reasons, beforeComposition, afterComposition, id);
   if (Array.isArray(previous.steps) || Array.isArray(candidate.steps)) {
     const before = (previous.steps as RecordValue[] | undefined) ?? [];
     const after = (candidate.steps as RecordValue[] | undefined) ?? [];
@@ -2724,9 +2721,9 @@ const comparePageV2 = (
   }
 };
 
-export const compareApplicationContentsV2 = (
-  previousContent: ApplicationContentV2,
-  candidateContent: ApplicationContentV2,
+export const compareApplicationContents = (
+  previousContent: ApplicationContent,
+  candidateContent: ApplicationContent,
 ): VersionImpactReason[] => {
   const reasons = compareApplicationSharedContent(previousContent, candidateContent);
   const previous = asRecord(previousContent);
@@ -2742,17 +2739,17 @@ export const compareApplicationContentsV2 = (
     () => "major",
     (item) => item.blockId,
   );
-  compareShellsV2(reasons, previous.shells as RecordValue[], candidate.shells as RecordValue[]);
+  compareShells(reasons, previous.shells as RecordValue[], candidate.shells as RecordValue[]);
   compareKeyed(
     reasons,
     previous.pages as RecordValue[],
     candidate.pages as RecordValue[],
     "pageId",
     "page",
-    (before, after) => comparePageV2(reasons, before, after),
-    (page) => (pageIsCompatibleAdditionV2(page) ? "minor" : "major"),
+    (before, after) => comparePage(reasons, before, after),
+    (page) => (pageIsCompatibleAddition(page) ? "minor" : "major"),
   );
-  comparePlacementsV2(reasons, previousContent, candidateContent);
+  comparePlacements(reasons, previousContent, candidateContent);
   pushChange(
     reasons,
     previous.theme,
@@ -2765,13 +2762,11 @@ export const compareApplicationContentsV2 = (
   return finaliseReasons(reasons);
 };
 
-export const normaliseApplicationContentV2 = (
-  content: ApplicationContentV2,
-): ApplicationContentV2 => {
+export const normaliseApplicationContent = (content: ApplicationContent): ApplicationContent => {
   const comparisonContent = structuredClone(content);
   // Empty internal containers have no display effect. Children and exposed
   // shell-slot declarations independently carry their meaningful changes.
-  for (const { placement } of collectPlacementsV2(comparisonContent).values())
+  for (const { placement } of collectPlacements(comparisonContent).values())
     placement.slots = Object.fromEntries(
       Object.entries(asRecord(placement.slots)).filter(
         ([, slot]) => Object.keys(asRecord(asRecord(slot).placements)).length > 0,
@@ -2818,10 +2813,10 @@ export const normaliseApplicationContentV2 = (
       })),
       "pageId",
     ),
-  } as ApplicationContentV2;
+  } as ApplicationContent;
 };
 
-export const assertUnambiguousApplicationContentV2 = (content: unknown): void => {
+export const assertUnambiguousApplicationContent = (content: unknown): void => {
   const value = asRecord(content);
   assertUnambiguousApplicationSharedContent(value);
   assertUnique(value.pages as RecordValue[], (page) => String(page.pageId).toLowerCase());
@@ -2834,8 +2829,7 @@ export const assertUnambiguousApplicationContentV2 = (content: unknown): void =>
     return slots;
   });
   assertUnique(contentSlots, "slotId");
-  if (Array.isArray(value.experiences))
-    assertUnique(value.experiences as RecordValue[], "state");
+  if (Array.isArray(value.experiences)) assertUnique(value.experiences as RecordValue[], "state");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);

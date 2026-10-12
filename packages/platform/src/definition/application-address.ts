@@ -6,8 +6,8 @@ import {
   sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
-  applicationShellV2Schema,
-  applicationThemeV2Schema,
+  applicationShellSchema,
+  applicationThemeSchema,
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
@@ -16,7 +16,7 @@ import {
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
   organizationIdSchema,
-  pageDefinitionV2Schema,
+  pageDefinitionSchema,
   pageIdSchema,
   permissionIdSchema,
   revisionSchema,
@@ -44,13 +44,7 @@ import {
 } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 
-const reservedTenantSegments = new Set([
-  "auth",
-  "health",
-  "signed-in",
-  "signin",
-  "api",
-]);
+const reservedTenantSegments = new Set(["auth", "health", "signed-in", "signin", "api"]);
 
 export const isReservedTenantSegment = (candidate: string): boolean =>
   reservedTenantSegments.has(candidate.toLowerCase());
@@ -102,14 +96,14 @@ const applicationCandidateSchema = z
         z
           .object({
             state: applicationExperienceStateSchema,
-            page: pageDefinitionV2Schema,
+            page: pageDefinitionSchema,
           })
           .strict(),
       )
       .max(3)
       .optional(),
-    shells: z.array(applicationShellV2Schema).max(100).optional(),
-    theme: applicationThemeV2Schema.optional(),
+    shells: z.array(applicationShellSchema).max(100).optional(),
+    theme: applicationThemeSchema.optional(),
     roles: z
       .array(
         z
@@ -159,9 +153,9 @@ export const permittedApplicationSchema = z
 export const applicationExperienceSchema = z
   .object({
     state: applicationExperienceStateSchema,
-    page: pageDefinitionV2Schema,
-    shells: z.array(applicationShellV2Schema).max(1),
-    theme: applicationThemeV2Schema.optional(),
+    page: pageDefinitionSchema,
+    shells: z.array(applicationShellSchema).max(1),
+    theme: applicationThemeSchema.optional(),
   })
   .strict();
 
@@ -178,9 +172,7 @@ export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
-  z
-    .object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() })
-    .strict(),
+  z.object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() }).strict(),
 ]);
 
 export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
@@ -238,23 +230,27 @@ export type AddressedBundleDefinitionReaderFactory = (
 ) => HumanInstalledPageBundleContextDependencies["releaseSetReader"];
 
 type AddressRow = Readonly<{ address: unknown }>;
-type OrganizationLauncherRow = DatabaseRow & Readonly<{
-  organization_id: unknown;
-  tenant_short_name: unknown;
-  tenant_display_name: unknown;
-  organization_short_name: unknown;
-  organization_display_name: unknown;
-  account_display_name: unknown;
-}>;
-type AddressCompletionContextRow = DatabaseRow & Readonly<{
-  request_context: unknown;
-}>;
-type AddressCompletionClockRow = DatabaseRow & Readonly<{
-  observed_at: unknown;
-}>;
-type AddressCompletionBundleRow = DatabaseRow & Readonly<{
-  bundle_state: unknown;
-}>;
+type OrganizationLauncherRow = DatabaseRow &
+  Readonly<{
+    organization_id: unknown;
+    tenant_short_name: unknown;
+    tenant_display_name: unknown;
+    organization_short_name: unknown;
+    organization_display_name: unknown;
+    account_display_name: unknown;
+  }>;
+type AddressCompletionContextRow = DatabaseRow &
+  Readonly<{
+    request_context: unknown;
+  }>;
+type AddressCompletionClockRow = DatabaseRow &
+  Readonly<{
+    observed_at: unknown;
+  }>;
+type AddressCompletionBundleRow = DatabaseRow &
+  Readonly<{
+    bundle_state: unknown;
+  }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
 type AddressedIdentityRow = Readonly<{ addressed_identity: unknown }>;
@@ -310,12 +306,14 @@ const applicationCandidateFromInstalledContext = (
   });
 };
 
-const addressedActiveApplicationIdentitySchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-  definitionKey: namespacedKeySchema,
-  applicationReleaseRevision: revisionSchema,
-}).strict();
+const addressedActiveApplicationIdentitySchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    definitionKey: namespacedKeySchema,
+    applicationReleaseRevision: revisionSchema,
+  })
+  .strict();
 
 export type AddressedActiveApplicationIdentity = z.infer<
   typeof addressedActiveApplicationIdentitySchema
@@ -361,8 +359,10 @@ const permittedApplication = async (
         const candidateMilliseconds = Date.parse(deadline);
         if (!Number.isFinite(candidateMilliseconds))
           throw new Error("APPLICATION_PAGE_PERMISSION_UNAVAILABLE");
-        if (earliestAccessDeadline === undefined ||
-          candidateMilliseconds < Date.parse(earliestAccessDeadline))
+        if (
+          earliestAccessDeadline === undefined ||
+          candidateMilliseconds < Date.parse(earliestAccessDeadline)
+        )
           earliestAccessDeadline = deadline;
       };
       if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
@@ -475,7 +475,8 @@ const permittedApplication = async (
             scope.accessVersion,
             scope.organizationAccountId,
           )
-        ) return null;
+        )
+          return null;
 
         const contextRows = await transaction.query<AddressCompletionContextRow>`
           select vortex_access.validated_human_request_context() - 'channel' as request_context
@@ -492,7 +493,8 @@ const permittedApplication = async (
         if (typeof observedAt !== "string") return null;
         const observedMilliseconds = Date.parse(observedAt);
         const earliestDeadlineMilliseconds = Date.parse(earliestAccessDeadline);
-        if (!Number.isFinite(observedMilliseconds) ||
+        if (
+          !Number.isFinite(observedMilliseconds) ||
           !Number.isFinite(earliestDeadlineMilliseconds) ||
           current.data.expiresAt === undefined ||
           Date.parse(current.data.expiresAt) <= observedMilliseconds ||
@@ -506,7 +508,9 @@ const permittedApplication = async (
           scope.applicationRootId === undefined ||
           !sameId(current.data.applicationRootId, scope.applicationRootId) ||
           current.data.accessVersion !== scope.accessVersion ||
-          earliestDeadlineMilliseconds <= observedMilliseconds) return null;
+          earliestDeadlineMilliseconds <= observedMilliseconds
+        )
+          return null;
       }
 
       return {
@@ -621,8 +625,10 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
         applicationRootId: addressedIdentity.identity.applicationRootId,
       },
       async (transaction, scope) => {
-        if (scope.applicationRootId === undefined ||
-          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId))
+        if (
+          scope.applicationRootId === undefined ||
+          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
+        )
           return undefined;
         const context = await createHumanInstalledPageBundleContextLoader({
           transaction,
@@ -633,11 +639,13 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           },
         }).load();
         const application = context.releaseSet.application;
-        if (!sameId(context.organizationId, addressedIdentity.organizationId) ||
+        if (
+          !sameId(context.organizationId, addressedIdentity.organizationId) ||
           !sameId(context.applicationRootId, addressedIdentity.identity.applicationRootId) ||
           application.releaseRevision !== addressedIdentity.identity.applicationReleaseRevision ||
           application.definitionKey !== addressedIdentity.identity.definitionKey ||
-          application.releaseRevision !== context.applicationReleaseRevision)
+          application.releaseRevision !== context.applicationReleaseRevision
+        )
           return undefined;
         return context;
       },
@@ -689,7 +697,12 @@ export const readAddressedActiveApplicationIdentity = async (
   const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
-  if (!session.success || !organizationId.success || !identityAuthorityId.success || !applicationKey.success)
+  if (
+    !session.success ||
+    !organizationId.success ||
+    !identityAuthorityId.success ||
+    !applicationKey.success
+  )
     return undefined;
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
@@ -707,9 +720,14 @@ export const readAddressedActiveApplicationIdentity = async (
       `;
       if (rows.length !== 1 || rows[0] === undefined)
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
-      const identity = addressedActiveApplicationIdentitySchema.safeParse(rows[0].addressed_identity);
-      if (!identity.success || identity.data.organizationId !== organizationId.data ||
-        identity.data.definitionKey !== applicationKey.data)
+      const identity = addressedActiveApplicationIdentitySchema.safeParse(
+        rows[0].addressed_identity,
+      );
+      if (
+        !identity.success ||
+        identity.data.organizationId !== organizationId.data ||
+        identity.data.definitionKey !== applicationKey.data
+      )
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
       return identity.data;
     },
@@ -724,47 +742,58 @@ export const readAddressedApplicationIdentityAtAddress = async (
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate: string,
-): Promise<Readonly<{
-  organizationId: string;
-  tenantShortName: string;
-  organizationShortName: string;
-  identity: AddressedActiveApplicationIdentity;
-}> | undefined> => {
+): Promise<
+  | Readonly<{
+      organizationId: string;
+      tenantShortName: string;
+      organizationShortName: string;
+      identity: AddressedActiveApplicationIdentity;
+    }>
+  | undefined
+> => {
   const session = identitySessionSchema.safeParse(sessionCandidate);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
   const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
   if (
-    !session.success || !tenantShortName.success || !organizationShortName.success ||
-    !identityAuthorityId.success || !applicationKey.success ||
+    !session.success ||
+    !tenantShortName.success ||
+    !organizationShortName.success ||
+    !identityAuthorityId.success ||
+    !applicationKey.success ||
     isReservedTenantSegment(tenantShortNameCandidate) ||
     Date.parse(session.data.accessTokenExpiresAt) <= Date.now()
-  ) return undefined;
+  )
+    return undefined;
 
   try {
-    const rows = await withRuntimeTransaction(async (transaction) =>
-      transaction.query<OrganizationLauncherRow>`
+    const rows = await withRuntimeTransaction(
+      async (transaction) =>
+        transaction.query<OrganizationLauncherRow>`
         select *
         from vortex_identity.list_organization_launcher(
           ${session.data.identityId}::uuid
         )
       `,
     );
-    const entries = rows.map((row) => organizationLauncherEntrySchema.safeParse({
-      organizationId: row.organization_id,
-      tenantShortName: row.tenant_short_name,
-      tenantDisplayName: row.tenant_display_name,
-      organizationShortName: row.organization_short_name,
-      organizationDisplayName: row.organization_display_name,
-      ...(row.account_display_name === null || row.account_display_name === undefined
-        ? {}
-        : { accountDisplayName: row.account_display_name }),
-    }));
+    const entries = rows.map((row) =>
+      organizationLauncherEntrySchema.safeParse({
+        organizationId: row.organization_id,
+        tenantShortName: row.tenant_short_name,
+        tenantDisplayName: row.tenant_display_name,
+        organizationShortName: row.organization_short_name,
+        organizationDisplayName: row.organization_display_name,
+        ...(row.account_display_name === null || row.account_display_name === undefined
+          ? {}
+          : { accountDisplayName: row.account_display_name }),
+      }),
+    );
     if (entries.some((entry) => !entry.success)) return undefined;
     const matchedEntries = entries.flatMap((entry) =>
-      entry.success && entry.data.tenantShortName === tenantShortName.data &&
-        entry.data.organizationShortName === organizationShortName.data
+      entry.success &&
+      entry.data.tenantShortName === tenantShortName.data &&
+      entry.data.organizationShortName === organizationShortName.data
         ? [entry.data]
         : [],
     );
@@ -780,7 +809,8 @@ export const readAddressedApplicationIdentityAtAddress = async (
       identity === undefined ||
       identity.organizationId !== address.organizationId ||
       identity.definitionKey !== applicationKey.data
-    ) return undefined;
+    )
+      return undefined;
     return Object.freeze({
       organizationId: address.organizationId,
       tenantShortName: address.tenantShortName,

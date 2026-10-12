@@ -4,4 +4,4 @@ export * from "./draft-feedback";
 export * from "./flow-formula";
 export * from "./flow-interpreter";
 export * from "./typed-condition-error";
-export * from "./typed-condition-v2";
+export * from "./typed-condition";

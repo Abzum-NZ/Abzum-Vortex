@@ -4,7 +4,7 @@ import {
   personalDataClassSchema,
   publicDisplaySchema,
   searchPrioritySchema,
-  sharingParameterValueTypeV2Schema,
+  sharingParameterValueTypeSchema,
 } from "../catalogue/catalogues";
 import {
   calculationMaximumNestingDepth,
@@ -30,27 +30,27 @@ import {
   storageContractIdSchema,
 } from "../catalogue/identifiers";
 import {
-  currencyCodeV2Schema,
-  exactDecimalFitsDigitsV2,
-  exactDecimalTextV2Schema,
-  exactDecimalWithinBoundsV2,
-  inspectRecordRichTextV2,
-  personLinkValueV2Schema,
-  recordLinkValueV2Schema,
-  recordRichTextDocumentV2Schema,
-  type FormattedTextAllowedBlockV2,
-} from "../records/module-field-values-v2";
+  currencyCodeSchema,
+  exactDecimalFitsDigits,
+  exactDecimalTextSchema,
+  exactDecimalWithinBounds,
+  inspectRecordRichText,
+  personLinkValueSchema,
+  recordLinkValueSchema,
+  recordRichTextDocumentSchema,
+  type FormattedTextAllowedBlock,
+} from "../records/module-field-values";
 import {
   actionTaskSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
   moduleDependencySchema,
   relationshipDefinitionSchema,
-} from "./module-contracts";
+} from "./module-foundation-contracts";
 import { refineActionTaskIds } from "./definition-source-common";
 import {
   isRegisteredWritableSystemProjection,
-  moduleSourceContractVersion as moduleSourceContractVersionV3,
+  moduleSourceContractVersion as moduleSourceContractVersion,
   writableSystemProjectionRegistrations,
 } from "./module-source-contracts";
 export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrations };
@@ -58,18 +58,18 @@ import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { isHistoricalModuleV3SystemRecordOperation } from "../catalogue/historical-module-operation-catalogue";
-import { protectedReadModelKeySchema } from "./application-composition-v2";
+import { protectedReadModelKeySchema } from "./application-composition";
 import { flowSchema } from "../workflows/flow-contracts";
 import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import { ruleGraphSchema } from "../rules/rule-graph-contracts";
 
-export const moduleValidationContractVersionV3 = "3.0.0" as const;
+export const moduleValidationContractVersion = "3.0.0" as const;
 
 /** The one current Module source/validation contract pair. */
-export const moduleContractVersionPairV3Schema = z
+export const moduleContractVersionPairSchema = z
   .object({
-    sourceContractVersion: z.literal(moduleSourceContractVersionV3),
-    validationContractVersion: z.literal(moduleValidationContractVersionV3),
+    sourceContractVersion: z.literal(moduleSourceContractVersion),
+    validationContractVersion: z.literal(moduleValidationContractVersion),
   })
   .strict();
 
@@ -124,7 +124,7 @@ const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
   return (
     parsedMinimum !== undefined &&
     parsedMaximum !== undefined &&
-    exactDecimalWithinBoundsV2(parsedMinimum, undefined, parsedMaximum)
+    exactDecimalWithinBounds(parsedMinimum, undefined, parsedMaximum)
   );
 };
 
@@ -132,8 +132,8 @@ const decimalSettingsSchema = z
   .object({
     digitsBeforeDecimal: z.number().int().min(1).max(30),
     decimalPlaces: z.number().int().min(0).max(12),
-    minimum: exactDecimalTextV2Schema.optional(),
-    maximum: exactDecimalTextV2Schema.optional(),
+    minimum: exactDecimalTextSchema.optional(),
+    maximum: exactDecimalTextSchema.optional(),
   })
   .strict()
   .refine(
@@ -146,9 +146,9 @@ const decimalSettingsSchema = z
 const moneySettingsSchema = z
   .object({
     currencyMode: z.enum(["fixed", "organization_default"]),
-    currency: currencyCodeV2Schema.optional(),
-    minimum: exactDecimalTextV2Schema.optional(),
-    maximum: exactDecimalTextV2Schema.optional(),
+    currency: currencyCodeSchema.optional(),
+    minimum: exactDecimalTextSchema.optional(),
+    maximum: exactDecimalTextSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -175,9 +175,7 @@ const dateSettingsSchema = z
 const dateTimeSettingsSchema = z
   .object({ displayTimeZone: z.enum(["person", "organization", "utc"]).optional() })
   .strict();
-const choiceSettingsSchema = z
-  .object({ options: z.array(optionSchema).min(1).max(200) })
-  .strict();
+const choiceSettingsSchema = z.object({ options: z.array(optionSchema).min(1).max(200) }).strict();
 const severalChoicesSettingsSchema = z
   .object({
     options: z.array(optionSchema).min(1).max(200),
@@ -192,18 +190,14 @@ const referenceNumberSettingsSchema = z
     startingNumber: z.number().int().positive().optional(),
   })
   .strict();
-const phoneSettingsSchema = z
-  .object({ defaultCountry: z.string().length(2).optional() })
-  .strict();
+const phoneSettingsSchema = z.object({ defaultCountry: z.string().length(2).optional() }).strict();
 const webAddressSettingsSchema = z
   .object({ allowedSchemes: z.array(z.literal("https")).min(1).optional() })
   .strict();
 
 const tableColumnBase = { key: builderKeySchema, required: z.boolean() };
 const tableColumnSchema = z.discriminatedUnion("type", [
-  z
-    .object({ ...tableColumnBase, type: z.literal("text"), settings: textSettingsSchema })
-    .strict(),
+  z.object({ ...tableColumnBase, type: z.literal("text"), settings: textSettingsSchema }).strict(),
   z
     .object({
       ...tableColumnBase,
@@ -224,9 +218,7 @@ const tableColumnSchema = z.discriminatedUnion("type", [
   z
     .object({ ...tableColumnBase, type: z.literal("yes_no"), settings: emptySettingsSchema })
     .strict(),
-  z
-    .object({ ...tableColumnBase, type: z.literal("date"), settings: dateSettingsSchema })
-    .strict(),
+  z.object({ ...tableColumnBase, type: z.literal("date"), settings: dateSettingsSchema }).strict(),
   z
     .object({
       ...tableColumnBase,
@@ -288,36 +280,36 @@ const personLinkSettingsSchema = z
 /** A named field or one exact decimal literal. A date offset takes only these. */
 const calculationNumberOperandSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
-  z.object({ source: z.literal("literal"), value: exactDecimalTextV2Schema }).strict(),
+  z.object({ source: z.literal("literal"), value: exactDecimalTextSchema }).strict(),
 ]);
 const calculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
-type CalculationNumberOperationV3 = z.infer<typeof calculationNumberOperationSchema>;
+type CalculationNumberOperation = z.infer<typeof calculationNumberOperationSchema>;
 /**
  * One value of a numeric calculation: a named field, an exact decimal literal, or a further
  * numeric operation over further values. A nested operation is the same closed form the
  * calculation itself uses, so a new formula needs no new expression kind and no engine change.
  */
-type CalculationNumberValueV3 =
+type CalculationNumberValue =
   | z.infer<typeof calculationNumberOperandSchema>
   | {
       source: "numeric";
-      operation: CalculationNumberOperationV3;
-      operands: CalculationNumberValueV3[];
+      operation: CalculationNumberOperation;
+      operands: CalculationNumberValue[];
     };
-const inspectCalculationNumberValueV3 = (
-  value: CalculationNumberValueV3,
+const inspectCalculationNumberValue = (
+  value: CalculationNumberValue,
   depth = 1,
 ): { depth: number; values: number } => {
   if (value.source !== "numeric") return { depth, values: 1 };
   const inspected = value.operands.map((operand) =>
-    inspectCalculationNumberValueV3(operand, depth + 1),
+    inspectCalculationNumberValue(operand, depth + 1),
   );
   return {
     depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
     values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
   };
 };
-const calculationNumberValueSchema: z.ZodType<CalculationNumberValueV3> = z.lazy(() =>
+const calculationNumberValueSchema: z.ZodType<CalculationNumberValue> = z.lazy(() =>
   z
     .discriminatedUnion("source", [
       ...calculationNumberOperandSchema.options,
@@ -330,7 +322,7 @@ const calculationNumberValueSchema: z.ZodType<CalculationNumberValueV3> = z.lazy
         .strict(),
     ])
     .superRefine((value, context) => {
-      const inspected = inspectCalculationNumberValueV3(value);
+      const inspected = inspectCalculationNumberValue(value);
       if (inspected.depth > calculationMaximumNestingDepth)
         context.addIssue({
           code: "custom",
@@ -382,7 +374,7 @@ const calculationExpressionSchema = z.discriminatedUnion("kind", [
  * therefore always read-time; a stored field may never use the current time. A calculation that
  * uses a read-time calculation is itself read-time, and publication refuses one declared `stored`.
  */
-export const moduleCalculationEvaluationV3Schema = z.enum(["read_time", "stored"]);
+export const moduleCalculationEvaluationSchema = z.enum(["read_time", "stored"]);
 
 const calculationSettingsSchema = z
   .object({
@@ -395,7 +387,7 @@ const calculationSettingsSchema = z
       "date",
       "date_time",
     ]),
-    evaluation: moduleCalculationEvaluationV3Schema.optional(),
+    evaluation: moduleCalculationEvaluationSchema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
     expression: calculationExpressionSchema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
@@ -421,7 +413,7 @@ const calculationSettingsSchema = z
     if (
       value.expression.kind === "numeric" &&
       value.expression.operands.reduce(
-        (total, operand) => total + inspectCalculationNumberValueV3(operand).values,
+        (total, operand) => total + inspectCalculationNumberValue(operand).values,
         0,
       ) > calculationMaximumOperandCount
     )
@@ -462,7 +454,7 @@ const totalSettingsSchema = z
     ]),
     fieldId: fieldIdSchema.optional(),
     filter: conditionNodeSchema.optional(),
-    currency: currencyCodeV2Schema.optional(),
+    currency: currencyCodeSchema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
   })
   .strict()
@@ -535,10 +527,10 @@ const tableDefaultSchema = z.array(z.record(builderKeySchema, jsonValueSchema));
 const fieldMembers = [
   moduleFieldMember("text", textSettingsSchema, z.string()),
   moduleFieldMember("long_text", longTextSettingsSchema, z.string()),
-  moduleFieldMember("formatted_text", formattedTextSettingsSchema, recordRichTextDocumentV2Schema),
+  moduleFieldMember("formatted_text", formattedTextSettingsSchema, recordRichTextDocumentSchema),
   moduleFieldMember("whole_number", wholeNumberSettingsSchema, z.number().int()),
-  moduleFieldMember("decimal_number", decimalSettingsSchema, exactDecimalTextV2Schema),
-  moduleFieldMember("money", moneySettingsSchema, exactDecimalTextV2Schema),
+  moduleFieldMember("decimal_number", decimalSettingsSchema, exactDecimalTextSchema),
+  moduleFieldMember("money", moneySettingsSchema, exactDecimalTextSchema),
   moduleFieldMember("yes_no", emptySettingsSchema, z.boolean()),
   moduleFieldMember("date", dateSettingsSchema, z.iso.date()),
   moduleFieldMember("date_time", dateTimeSettingsSchema, z.iso.datetime({ offset: true })),
@@ -549,9 +541,9 @@ const fieldMembers = [
   moduleFieldMember("phone_number", phoneSettingsSchema, z.string()),
   moduleFieldMember("web_address", webAddressSettingsSchema, safeHttpsUrlSchema),
   moduleFieldMember("table", tableSettingsSchema, tableDefaultSchema),
-  moduleFieldMember("link", linkSettingsSchema, recordLinkValueV2Schema),
-  moduleFieldMember("link_to_one_of_several", multiLinkSettingsSchema, recordLinkValueV2Schema),
-  moduleFieldMember("link_to_person", personLinkSettingsSchema, personLinkValueV2Schema),
+  moduleFieldMember("link", linkSettingsSchema, recordLinkValueSchema),
+  moduleFieldMember("link_to_one_of_several", multiLinkSettingsSchema, recordLinkValueSchema),
+  moduleFieldMember("link_to_person", personLinkSettingsSchema, personLinkValueSchema),
   moduleFieldMember("calculation", calculationSettingsSchema, noDefaultSchema),
   moduleFieldMember("total", totalSettingsSchema, noDefaultSchema),
   moduleFieldMember("attachment", attachmentSettingsSchema, noDefaultSchema),
@@ -570,8 +562,8 @@ const decimalValid = (value: string, settings: z.infer<typeof decimalSettingsSch
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
   return (
-    exactDecimalFitsDigitsV2(parsed, settings.digitsBeforeDecimal, settings.decimalPlaces) &&
-    exactDecimalWithinBoundsV2(
+    exactDecimalFitsDigits(parsed, settings.digitsBeforeDecimal, settings.decimalPlaces) &&
+    exactDecimalWithinBounds(
       parsed,
       settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
       settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
@@ -581,18 +573,18 @@ const decimalValid = (value: string, settings: z.infer<typeof decimalSettingsSch
 const moneyAmountValid = (value: string, settings: z.infer<typeof moneySettingsSchema>) => {
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
-  return exactDecimalWithinBoundsV2(
+  return exactDecimalWithinBounds(
     parsed,
     settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
     settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
   );
 };
 const formattedTextValid = (
-  value: z.infer<typeof recordRichTextDocumentV2Schema>,
+  value: z.infer<typeof recordRichTextDocumentSchema>,
   settings: z.infer<typeof formattedTextSettingsSchema>,
 ) => {
-  const inspected = inspectRecordRichTextV2(value);
-  const allowed = new Set<FormattedTextAllowedBlockV2>(settings.allowedBlocks);
+  const inspected = inspectRecordRichText(value);
+  const allowed = new Set<FormattedTextAllowedBlock>(settings.allowedBlocks);
   return (
     [...inspected.usedBlocks].every((kind) => allowed.has(kind)) &&
     (settings.maxLength === undefined || inspected.visibleTextLength <= settings.maxLength)
@@ -613,12 +605,12 @@ const tableCellDefaultValid = (
       return Number.isInteger(value) && wholeNumberValid(value as number, column.settings);
     case "decimal_number":
       return (
-        exactDecimalTextV2Schema.safeParse(value).success &&
+        exactDecimalTextSchema.safeParse(value).success &&
         decimalValid(value as string, column.settings)
       );
     case "money":
       return (
-        exactDecimalTextV2Schema.safeParse(value).success &&
+        exactDecimalTextSchema.safeParse(value).success &&
         moneyAmountValid(value as string, column.settings)
       );
     case "yes_no":
@@ -659,7 +651,7 @@ const tableDefaultValid = (
   );
 };
 
-export const moduleFieldV3Schema = z
+export const moduleFieldSchema = z
   .discriminatedUnion("type", fieldMembers)
   .superRefine((value, context) => {
     if (value.default === undefined) return;
@@ -751,8 +743,8 @@ const actionInputBase = {
 };
 const exactActionInputValidationSchema = z
   .object({
-    minimum: exactDecimalTextV2Schema.optional(),
-    maximum: exactDecimalTextV2Schema.optional(),
+    minimum: exactDecimalTextSchema.optional(),
+    maximum: exactDecimalTextSchema.optional(),
   })
   .strict()
   .refine(
@@ -763,7 +755,7 @@ const exactActionInputValidationSchema = z
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
 
-export const actionInputDefinitionV3Schema = z
+export const actionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     z
       .object({
@@ -883,7 +875,7 @@ export const actionInputDefinitionV3Schema = z
   });
 
 const sharingConditionParameterSchema = z
-  .object({ key: builderKeySchema, type: sharingParameterValueTypeV2Schema })
+  .object({ key: builderKeySchema, type: sharingParameterValueTypeSchema })
   .strict();
 const sharingConditionPublicationTestSchema = z
   .object({
@@ -902,11 +894,9 @@ const sharingParameterValueSchema = (
     case "number":
       return z.number().finite();
     case "decimal_number":
-      return exactDecimalTextV2Schema;
+      return exactDecimalTextSchema;
     case "money":
-      return z
-        .object({ amount: exactDecimalTextV2Schema, currency: currencyCodeV2Schema })
-        .strict();
+      return z.object({ amount: exactDecimalTextSchema, currency: currencyCodeSchema }).strict();
     case "boolean":
       return z.boolean();
     case "date":
@@ -918,7 +908,7 @@ const sharingParameterValueSchema = (
   }
 };
 
-export const savedSharingConditionV3Schema = z
+export const savedSharingConditionSchema = z
   .object({
     conditionId: containedComponentIdSchema,
     sourceRecordTypeId: recordTypeIdSchema,
@@ -966,14 +956,14 @@ export const moduleQueryAggregateSchema = z
  * Application already publishes, extended with typed inputs and owned by a stable query
  * identity inside an exact Module release. It never carries SQL or a database target.
  */
-export const moduleQueryDefinitionV3Schema = z
+export const moduleQueryDefinitionSchema = z
   .object({
     queryId: queryIdSchema,
     key: builderKeySchema,
     label: z.string().min(1).max(60).optional(),
     description: z.string().min(1).max(1_000).optional(),
     recordType: recordTypeReferenceSchema,
-    inputs: z.array(actionInputDefinitionV3Schema).max(50),
+    inputs: z.array(actionInputDefinitionSchema).max(50),
     selectedFieldIds: z.array(fieldIdSchema).min(1).max(200),
     filter: conditionNodeSchema.nullable().optional(),
     groupByFieldIds: z.array(fieldIdSchema).max(10),
@@ -990,7 +980,7 @@ export const moduleQueryDefinitionV3Schema = z
  * existing permanent identity, which is also the contribution's stable identity. The
  * target module is the exact resolved dependency entry, never a fresh reference.
  */
-export const moduleContributionV3Schema = z
+export const moduleContributionSchema = z
   .object({
     contributionId: containedComponentIdSchema,
     targetModule: moduleDependencySchema,
@@ -1017,12 +1007,14 @@ export const moduleContributionV3Schema = z
         invalid("A field contribution is identified by its contributed field", ["contributionId"]);
       return;
     }
-    if (value.fieldId !== undefined || value.recordTypeId !== undefined || value.actionId === undefined)
+    if (
+      value.fieldId !== undefined ||
+      value.recordTypeId !== undefined ||
+      value.actionId === undefined
+    )
       invalid("An action contribution declares exactly its contributing action", ["actionId"]);
     else if (String(value.contributionId) !== String(value.actionId))
-      invalid("An action contribution is identified by its contributed action", [
-        "contributionId",
-      ]);
+      invalid("An action contribution is identified by its contributed action", ["contributionId"]);
   });
 
 /**
@@ -1031,7 +1023,7 @@ export const moduleContributionV3Schema = z
  * the organisation field, the revision field and the declared filterable and sortable fields to
  * their permanent field identities.
  */
-export const moduleSystemProjectionV3Schema = z
+export const moduleSystemProjectionSchema = z
   .object({
     protectedView: protectedReadModelKeySchema,
     organizationFieldId: fieldIdSchema,
@@ -1075,7 +1067,7 @@ const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
  * required text organisation field and a required whole-number revision field, and its declared
  * filterable and sortable fields are exactly its fields flagged filterable and sortable.
  */
-export const recordTypeDefinitionV3Schema = z
+export const recordTypeDefinitionSchema = z
   .object({
     recordTypeId: recordTypeIdSchema,
     key: builderKeySchema,
@@ -1086,13 +1078,13 @@ export const recordTypeDefinitionV3Schema = z
     storageScope: z.enum(["organization_shared", "application_contained"]),
     ownershipMode: recordOwnershipModeSchema,
     ownershipRelationshipId: containedComponentIdSchema.optional(),
-    fields: z.array(moduleFieldV3Schema).min(1).max(500),
+    fields: z.array(moduleFieldSchema).min(1).max(500),
     relationships: z.array(relationshipDefinitionSchema),
     standardActions: z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
       .min(1),
     customActionIds: z.array(actionIdSchema),
-    systemProjection: moduleSystemProjectionV3Schema.optional(),
+    systemProjection: moduleSystemProjectionSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1149,10 +1141,7 @@ export const recordTypeDefinitionV3Schema = z
       invalid("A system projection record type is scoped to exactly one organisation", [
         "storageScope",
       ]);
-    const mayUpdate = isRegisteredWritableSystemProjection(
-      value.key,
-      projection.protectedView,
-    );
+    const mayUpdate = isRegisteredWritableSystemProjection(value.key, projection.protectedView);
     if (
       value.standardActions.some(
         (action) =>
@@ -1247,77 +1236,78 @@ export const isSystemRecordProtectedOperation = (
  * re-checks the actor's current authority in its owning service and never accepts an organisation
  * or actor.
  */
-const createActionDefinitionV3Schema = (
+const createActionDefinitionSchema = (
   registeredOperation: (reference: z.infer<typeof protectedOperationReferenceSchema>) => boolean,
-) => z
-  .object({
-    actionId: actionIdSchema,
-    key: namespacedKeySchema,
-    label: labelSchema,
-    subjectRecordTypeId: recordTypeIdSchema,
-    permissionKey: namespacedKeySchema.optional(),
-    permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
-    sharing: z.enum(["refused", "allowed"]),
-    inputs: z.array(actionInputDefinitionV3Schema).max(50),
-    precondition: conditionNodeSchema.optional(),
-    tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
-    protectedOperation: protectedOperationReferenceSchema.optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["permissionKeys"],
-        message: "An action requires either one permission or canonical alternatives",
-      });
-    if (value.permissionKeys) {
-      if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+) =>
+  z
+    .object({
+      actionId: actionIdSchema,
+      key: namespacedKeySchema,
+      label: labelSchema,
+      subjectRecordTypeId: recordTypeIdSchema,
+      permissionKey: namespacedKeySchema.optional(),
+      permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
+      sharing: z.enum(["refused", "allowed"]),
+      inputs: z.array(actionInputDefinitionSchema).max(50),
+      precondition: conditionNodeSchema.optional(),
+      tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
+      protectedOperation: protectedOperationReferenceSchema.optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
         context.addIssue({
           code: "custom",
           path: ["permissionKeys"],
-          message: "Action permission alternatives must be unique",
+          message: "An action requires either one permission or canonical alternatives",
         });
-      if (
-        value.permissionKeys.some(
-          (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
+      if (value.permissionKeys) {
+        if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+          context.addIssue({
+            code: "custom",
+            path: ["permissionKeys"],
+            message: "Action permission alternatives must be unique",
+          });
+        if (
+          value.permissionKeys.some(
+            (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
+          )
         )
-      )
+          context.addIssue({
+            code: "custom",
+            path: ["permissionKeys"],
+            message: "Action permission alternatives must use canonical order",
+          });
+      }
+      if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
         context.addIssue({
           code: "custom",
-          path: ["permissionKeys"],
-          message: "Action permission alternatives must use canonical order",
+          path: ["inputs"],
+          message: "Action input keys must be unique",
         });
-    }
-    if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
-      context.addIssue({
-        code: "custom",
-        path: ["inputs"],
-        message: "Action input keys must be unique",
-      });
-  })
-  .superRefine((value, context) => {
-    const operation = value.protectedOperation;
-    if ((operation !== undefined) === value.tasks.length > 0)
-      context.addIssue({
-        code: "custom",
-        path: ["protectedOperation"],
-        message: "An action targets either ordered tasks or one registered protected operation",
-      });
-    if (operation !== undefined && !registeredOperation(operation))
-      context.addIssue({
-        code: "custom",
-        path: ["protectedOperation"],
-        message: "An action targets a registered platform-service operation on one existing row",
-      });
-  });
+    })
+    .superRefine((value, context) => {
+      const operation = value.protectedOperation;
+      if ((operation !== undefined) === value.tasks.length > 0)
+        context.addIssue({
+          code: "custom",
+          path: ["protectedOperation"],
+          message: "An action targets either ordered tasks or one registered protected operation",
+        });
+      if (operation !== undefined && !registeredOperation(operation))
+        context.addIssue({
+          code: "custom",
+          path: ["protectedOperation"],
+          message: "An action targets a registered platform-service operation on one existing row",
+        });
+    });
 
-export const actionDefinitionV3Schema = createActionDefinitionV3Schema(
+export const actionDefinitionSchema = createActionDefinitionSchema(
   isSystemRecordProtectedOperation,
 );
 
 /** Immutable Module 3.0.0 content keeps its original registration meaning, never an executor. */
-export const storedActionDefinitionV3Schema = createActionDefinitionV3Schema(
+export const storedActionDefinitionSchema = createActionDefinitionSchema(
   (reference) =>
     isSystemRecordProtectedOperation(reference) ||
     isHistoricalModuleV3SystemRecordOperation(reference),
@@ -1333,122 +1323,120 @@ export const storedActionDefinitionV3Schema = createActionDefinitionV3Schema(
  * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
  * no rule exists without its flow, so a save can never run without a rule its Module declares.
  */
-const createModuleContentV3Schema = (
-  actionSchema: ReturnType<typeof createActionDefinitionV3Schema>,
-) => z
+const createModuleContentSchema = (actionSchema: ReturnType<typeof createActionDefinitionSchema>) =>
+  z
+    .object({
+      name: z.string().min(1).max(120),
+      description: z.string().min(1).max(1_000),
+      dependencies: z.array(moduleDependencySchema),
+      recordTypes: z.array(recordTypeDefinitionSchema).min(1).max(100),
+      permissions: z.array(permissionDeclarationSchema),
+      actions: z.array(actionSchema),
+      events: z.array(eventDefinitionSchema),
+      sharingConditions: z.array(savedSharingConditionSchema),
+      extensionPoints: z.array(
+        z
+          .object({
+            extensionPointId: containedComponentIdSchema,
+            key: builderKeySchema,
+            recordTypeId: recordTypeIdSchema,
+            accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
+          })
+          .strict(),
+      ),
+      flows: z.array(flowSchema).max(100),
+      rules: z.array(ruleGraphSchema).max(100),
+      queries: z.array(moduleQueryDefinitionSchema).max(100).default([]),
+      contributions: z.array(moduleContributionSchema).max(100).optional(),
+    })
+    .strict();
+
+export const moduleContentSchema = createModuleContentSchema(actionDefinitionSchema);
+export const storedModuleContentSchema = createModuleContentSchema(storedActionDefinitionSchema);
+
+const createModuleDraftSchema = (contentSchema: ReturnType<typeof createModuleContentSchema>) =>
+  z
+    .object({ envelope: moduleDefinitionEnvelopeSchema, content: contentSchema })
+    .strict()
+    .superRefine((draft, context) => {
+      const invalid = (message: string, path: (string | number)[]) =>
+        context.addIssue({ code: "custom", path: ["content", ...path], message });
+      const flowIds = new Set<string>();
+      const flowKeys = new Set<string>();
+      draft.content.flows.forEach((flow, index) => {
+        if (flowIds.has(flow.id)) invalid("Flow identities must be unique", ["flows", index, "id"]);
+        if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
+        flowIds.add(flow.id);
+        flowKeys.add(flow.key);
+      });
+      const beforeSave = new Map(
+        draft.content.flows.flatMap((flow) =>
+          flow.triggers.some((trigger) => trigger.type === "BeforeSave")
+            ? [[String(flow.id), flow] as const]
+            : [],
+        ),
+      );
+      const ruleIds = new Set<string>();
+      draft.content.rules.forEach((rule, index) => {
+        ruleIds.add(String(rule.ruleId));
+        const flow = beforeSave.get(String(rule.ruleId));
+        const trigger = flow?.triggers[0];
+        if (
+          flow === undefined ||
+          flow.triggers.length !== 1 ||
+          trigger?.type !== "BeforeSave" ||
+          trigger.recordTypeId !== rule.subjectRecordTypeId ||
+          trigger.priority !== rule.priority ||
+          flow.key !== rule.key
+        )
+          invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
+      });
+      for (const flowId of beforeSave.keys())
+        if (!ruleIds.has(flowId))
+          invalid("Every BeforeSave flow needs its executable rule", [
+            "flows",
+            draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
+          ]);
+      // Every named action on a system projection targets a registered protected operation, and no
+      // other record type's action may target one; standard update is governed by the closed registry.
+      const projections = new Set(
+        draft.content.recordTypes.flatMap((recordType) =>
+          recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
+        ),
+      );
+      draft.content.actions.forEach((action, index) => {
+        if (
+          projections.has(String(action.subjectRecordTypeId)) !==
+          (action.protectedOperation !== undefined)
+        )
+          invalid(
+            "Exactly the actions of a system projection record type target a protected operation",
+            ["actions", index, "protectedOperation"],
+          );
+      });
+    });
+
+export const moduleDraftSchema = createModuleDraftSchema(moduleContentSchema);
+export const storedModuleDraftSchema = createModuleDraftSchema(storedModuleContentSchema);
+
+export const moduleCanonicalDocumentSchema = z
   .object({
-    name: z.string().min(1).max(120),
-    description: z.string().min(1).max(1_000),
-    dependencies: z.array(moduleDependencySchema),
-    recordTypes: z.array(recordTypeDefinitionV3Schema).min(1).max(100),
-    permissions: z.array(permissionDeclarationSchema),
-    actions: z.array(actionSchema),
-    events: z.array(eventDefinitionSchema),
-    sharingConditions: z.array(savedSharingConditionV3Schema),
-    extensionPoints: z.array(
-      z
-        .object({
-          extensionPointId: containedComponentIdSchema,
-          key: builderKeySchema,
-          recordTypeId: recordTypeIdSchema,
-          accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
-        })
-        .strict(),
-    ),
-    flows: z.array(flowSchema).max(100),
-    rules: z.array(ruleGraphSchema).max(100),
-    queries: z.array(moduleQueryDefinitionV3Schema).max(100).default([]),
-    contributions: z.array(moduleContributionV3Schema).max(100).optional(),
+    validationContractVersion: z.literal(moduleValidationContractVersion),
+    canonical: moduleDraftSchema,
   })
   .strict();
 
-export const moduleContentV3Schema = createModuleContentV3Schema(actionDefinitionV3Schema);
-export const storedModuleContentV3Schema = createModuleContentV3Schema(storedActionDefinitionV3Schema);
-
-const createModuleDraftV3Schema = (
-  contentSchema: ReturnType<typeof createModuleContentV3Schema>,
-) => z
-  .object({ envelope: moduleDefinitionEnvelopeSchema, content: contentSchema })
-  .strict()
-  .superRefine((draft, context) => {
-    const invalid = (message: string, path: (string | number)[]) =>
-      context.addIssue({ code: "custom", path: ["content", ...path], message });
-    const flowIds = new Set<string>();
-    const flowKeys = new Set<string>();
-    draft.content.flows.forEach((flow, index) => {
-      if (flowIds.has(flow.id)) invalid("Flow identities must be unique", ["flows", index, "id"]);
-      if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
-      flowIds.add(flow.id);
-      flowKeys.add(flow.key);
-    });
-    const beforeSave = new Map(
-      draft.content.flows.flatMap((flow) =>
-        flow.triggers.some((trigger) => trigger.type === "BeforeSave")
-          ? [[String(flow.id), flow] as const]
-          : [],
-      ),
-    );
-    const ruleIds = new Set<string>();
-    draft.content.rules.forEach((rule, index) => {
-      ruleIds.add(String(rule.ruleId));
-      const flow = beforeSave.get(String(rule.ruleId));
-      const trigger = flow?.triggers[0];
-      if (
-        flow === undefined ||
-        flow.triggers.length !== 1 ||
-        trigger?.type !== "BeforeSave" ||
-        trigger.recordTypeId !== rule.subjectRecordTypeId ||
-        trigger.priority !== rule.priority ||
-        flow.key !== rule.key
-      )
-        invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
-    });
-    for (const flowId of beforeSave.keys())
-      if (!ruleIds.has(flowId))
-        invalid("Every BeforeSave flow needs its executable rule", [
-          "flows",
-          draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
-        ]);
-    // Every named action on a system projection targets a registered protected operation, and no
-    // other record type's action may target one; standard update is governed by the closed registry.
-    const projections = new Set(
-      draft.content.recordTypes.flatMap((recordType) =>
-        recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
-      ),
-    );
-    draft.content.actions.forEach((action, index) => {
-      if (
-        projections.has(String(action.subjectRecordTypeId)) !==
-        (action.protectedOperation !== undefined)
-      )
-        invalid(
-          "Exactly the actions of a system projection record type target a protected operation",
-          ["actions", index, "protectedOperation"],
-        );
-    });
-  });
-
-export const moduleDraftV3Schema = createModuleDraftV3Schema(moduleContentV3Schema);
-export const storedModuleDraftV3Schema = createModuleDraftV3Schema(storedModuleContentV3Schema);
-
-export const moduleCanonicalDocumentV3Schema = z
-  .object({
-    validationContractVersion: z.literal(moduleValidationContractVersionV3),
-    canonical: moduleDraftV3Schema,
-  })
-  .strict();
-
-export type ModuleContractVersionPairV3 = z.infer<typeof moduleContractVersionPairV3Schema>;
-export type ModuleFieldV3 = z.infer<typeof moduleFieldV3Schema>;
-export type ActionInputDefinitionV3 = z.infer<typeof actionInputDefinitionV3Schema>;
-export type SavedSharingConditionV3 = z.infer<typeof savedSharingConditionV3Schema>;
+export type ModuleContractVersionPair = z.infer<typeof moduleContractVersionPairSchema>;
+export type ModuleField = z.infer<typeof moduleFieldSchema>;
+export type ActionInputDefinition = z.infer<typeof actionInputDefinitionSchema>;
+export type SavedSharingCondition = z.infer<typeof savedSharingConditionSchema>;
 export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
 export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
-export type ModuleQueryDefinitionV3 = z.infer<typeof moduleQueryDefinitionV3Schema>;
-export type ModuleSystemProjectionV3 = z.infer<typeof moduleSystemProjectionV3Schema>;
-export type RecordTypeDefinitionV3 = z.infer<typeof recordTypeDefinitionV3Schema>;
-export type ActionDefinitionV3 = z.infer<typeof actionDefinitionV3Schema>;
-export type ModuleContributionV3 = z.infer<typeof moduleContributionV3Schema>;
-export type ModuleContentV3 = z.infer<typeof moduleContentV3Schema>;
-export type ModuleDraftV3 = z.infer<typeof moduleDraftV3Schema>;
-export type ModuleCanonicalDocumentV3 = z.infer<typeof moduleCanonicalDocumentV3Schema>;
+export type ModuleQueryDefinition = z.infer<typeof moduleQueryDefinitionSchema>;
+export type ModuleSystemProjection = z.infer<typeof moduleSystemProjectionSchema>;
+export type RecordTypeDefinition = z.infer<typeof recordTypeDefinitionSchema>;
+export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
+export type ModuleContribution = z.infer<typeof moduleContributionSchema>;
+export type ModuleContent = z.infer<typeof moduleContentSchema>;
+export type ModuleDraft = z.infer<typeof moduleDraftSchema>;
+export type ModuleCanonicalDocument = z.infer<typeof moduleCanonicalDocumentSchema>;

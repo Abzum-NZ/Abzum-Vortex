@@ -49,7 +49,7 @@ import {
   projectedRecordPinTilesSchema,
   projectedApplicationPageLinkTilesSchema,
   mountedRecordPinFrameSchema,
-  responsivePlacementV2Schema,
+  responsivePlacementSchema,
   type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
@@ -110,7 +110,9 @@ type GuidedFormActions = Readonly<{
   confirm: (request: GuidedFormConfirmRequest) => Promise<GuidedFormConfirmResult>;
   abandon: (
     request: GuidedFormAbandonRequest,
-  ) => Promise<Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>>;
+  ) => Promise<
+    Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>
+  >;
 }>;
 
 /**
@@ -278,7 +280,13 @@ const choiceScopeKey = (placementId: string, formId?: string): string =>
   formId === undefined ? placementId : `${formId}\u0000${placementId}`;
 
 /** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */
-function ChoiceFormLifetime({ children, mount, unmount, context, baseline }: Readonly<{
+function ChoiceFormLifetime({
+  children,
+  mount,
+  unmount,
+  context,
+  baseline,
+}: Readonly<{
   children: ReactNode;
   mount: () => void;
   unmount: () => void;
@@ -333,11 +341,13 @@ const formSurfaceComposition = (
   page: Readonly<Record<string, unknown>>,
   pageId: string,
   formId: string,
-): Readonly<{
-  composition: ProjectedPageCapability;
-  placementIds: readonly string[];
-  placements: Readonly<Record<string, Record<string, unknown>>>;
-}> | undefined => {
+):
+  | Readonly<{
+      composition: ProjectedPageCapability;
+      placementIds: readonly string[];
+      placements: Readonly<Record<string, Record<string, unknown>>>;
+    }>
+  | undefined => {
   let match: Record<string, unknown> | undefined;
   let matchId: string | undefined;
   let matchUsable = false;
@@ -378,13 +388,8 @@ const formSurfaceComposition = (
   const desktop = sourceResponsive.desktop;
   const tablet = sourceResponsive.tablet;
   const phone = sourceResponsive.phone;
-  const responsive = responsivePlacementV2Schema.safeParse(sourceResponsive);
-  if (
-    !responsive.success ||
-    !isRecord(desktop) ||
-    !isRecord(tablet) ||
-    !isRecord(phone)
-  )
+  const responsive = responsivePlacementSchema.safeParse(sourceResponsive);
+  if (!responsive.success || !isRecord(desktop) || !isRecord(tablet) || !isRecord(phone))
     return undefined;
   const modalRoot: Record<string, unknown> = {
     ...match,
@@ -425,7 +430,11 @@ const formSurfaceComposition = (
 
 const isVisibleInCurrentDocument = (element: HTMLElement): boolean => {
   if (!element.isConnected || element.getClientRects().length === 0) return false;
-  for (let current: HTMLElement | null = element; current !== null; current = current.parentElement) {
+  for (
+    let current: HTMLElement | null = element;
+    current !== null;
+    current = current.parentElement
+  ) {
     const style = window.getComputedStyle(current);
     if (
       current.hidden ||
@@ -486,11 +495,9 @@ const visibleOwningFormFieldLabel = (
   });
   if (matchingPlacements.length !== 1) return undefined;
 
-  const forms = [...document.querySelectorAll<HTMLFormElement>(
-    'form[data-vortex-control="form-container"]',
-  )].filter(
-    (form) => form.dataset.vortexPlacementId === formId && isVisibleInCurrentDocument(form),
-  );
+  const forms = [
+    ...document.querySelectorAll<HTMLFormElement>('form[data-vortex-control="form-container"]'),
+  ].filter((form) => form.dataset.vortexPlacementId === formId && isVisibleInCurrentDocument(form));
   if (forms.length !== 1) return undefined;
   const fieldNodes = [...forms[0]!.querySelectorAll<HTMLElement>("[data-vortex-field-key]")].filter(
     (element) =>
@@ -515,9 +522,10 @@ const runtimeInputWithFormDefault = (
   )?.[0];
   if (blockId === FIELD_INPUT_BLOCK_RELEASE.blockId.toLowerCase()) {
     const selected = settings.control;
-    control = isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"
-      ? selected.value
-      : undefined;
+    control =
+      isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"
+        ? selected.value
+        : undefined;
   } else if (
     blockId === CHOICE_INPUT_BLOCK_RELEASE.blockId.toLowerCase() ||
     blockId === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId.toLowerCase() ||
@@ -535,7 +543,11 @@ const runtimeInputWithFormDefault = (
   const kind = control === undefined ? undefined : payloadKind[control];
   if (kind === undefined) return input;
   if (control === "text" && typeof value !== "string") return input;
-  if (control === "number" && value !== null && (typeof value !== "number" || !Number.isFinite(value)))
+  if (
+    control === "number" &&
+    value !== null &&
+    (typeof value !== "number" || !Number.isFinite(value))
+  )
     return input;
   if (control === "boolean" && typeof value !== "boolean") return input;
   if (
@@ -549,12 +561,12 @@ const runtimeInputWithFormDefault = (
     const data = input.data;
     const projectedValues =
       isRecord(data) && data.status === "ready" && isRecord(data.values) ? data.values : undefined;
-    const projectedOptions = Array.isArray(projectedValues?.options)
-      ? projectedValues.options
-      : [];
+    const projectedOptions = Array.isArray(projectedValues?.options) ? projectedValues.options : [];
     const authoredOptions = settings.options;
     const authoredKeys =
-      isRecord(authoredOptions) && authoredOptions.kind === "list" && Array.isArray(authoredOptions.items)
+      isRecord(authoredOptions) &&
+      authoredOptions.kind === "list" &&
+      Array.isArray(authoredOptions.items)
         ? authoredOptions.items.flatMap((item) =>
             isRecord(item) &&
             isRecord(item.properties) &&
@@ -704,8 +716,8 @@ const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
   left.choiceFieldId.toLowerCase() === right.choiceFieldId.toLowerCase() &&
   left.cardTitleFieldId.toLowerCase() === right.cardTitleFieldId.toLowerCase() &&
   left.cardFieldIds.length === right.cardFieldIds.length &&
-  left.cardFieldIds.every((fieldId, index) =>
-    fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
+  left.cardFieldIds.every(
+    (fieldId, index) => fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
   );
 
 const boardBucketForSelector = (
@@ -888,10 +900,15 @@ function ApplicationPageViewContent({
     ) => Promise<void>
   >(async () => undefined);
   const choiceRequestIdsRef = useRef<Record<string, number>>({});
-  const choiceSelectionsRef = useRef<Record<string, Readonly<{
-    key: string;
-    evidence: ReferenceChoiceSelectionEvidence;
-  }>>>({});
+  const choiceSelectionsRef = useRef<
+    Record<
+      string,
+      Readonly<{
+        key: string;
+        evidence: ReferenceChoiceSelectionEvidence;
+      }>
+    >
+  >({});
   const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
@@ -931,10 +948,7 @@ function ApplicationPageViewContent({
 
   const application = model.invocation;
   const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
-  const placementEventNames = useMemo(
-    () => placementEventNamesByPage(model.page),
-    [model.page],
-  );
+  const placementEventNames = useMemo(() => placementEventNamesByPage(model.page), [model.page]);
   const launcherPlacements = useMemo(
     () => applicationLauncherPlacementIds(model.page),
     [model.page],
@@ -980,7 +994,7 @@ function ApplicationPageViewContent({
   const subject =
     refreshedPlacementData?.navigationKey === navigationKey &&
     refreshedPlacementData.subject !== undefined
-      ? refreshedPlacementData.subject ?? undefined
+      ? (refreshedPlacementData.subject ?? undefined)
       : model.subject;
   const currentPageKey = model.pages.find(
     (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
@@ -994,7 +1008,7 @@ function ApplicationPageViewContent({
   }, [model.guidedForm, model.page]);
   const guidedActiveFormIds = useMemo(
     () =>
-        guidedActivePlacementIds === undefined
+      guidedActivePlacementIds === undefined
         ? []
         : [...guidedActivePlacementIds].filter(
             (placementId) => formOwners[placementId] === placementId,
@@ -1099,19 +1113,19 @@ function ApplicationPageViewContent({
         }
 
         for (const [key, request] of batch) {
-          if (
-            !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
-          )
+          if (!isCurrentComponentRequestGeneration(requestScope.generations.get(key), request))
             continue;
           const data =
             result.kind === "available"
-              ? Object.entries(result.data).find(([candidate]) => candidate.toLowerCase() === key)?.[1]
+              ? Object.entries(result.data).find(
+                  ([candidate]) => candidate.toLowerCase() === key,
+                )?.[1]
               : undefined;
           const baseline =
             result.kind === "available"
-              ? Object.entries(result.editFormBaselines).find(
+              ? (Object.entries(result.editFormBaselines).find(
                   ([candidate]) => candidate.toLowerCase() === key,
-                )?.[1] ?? null
+                )?.[1] ?? null)
               : null;
           loadedData.set(key, data ?? { status: "error" });
           loadedBaselines.set(key, baseline);
@@ -1153,15 +1167,21 @@ function ApplicationPageViewContent({
       const refreshedChoices = new Set(
         accepted
           .filter((entry) =>
-            isCurrentComponentRequestGeneration(requestScope.generations.get(entry.key), entry.request),
+            isCurrentComponentRequestGeneration(
+              requestScope.generations.get(entry.key),
+              entry.request,
+            ),
           )
           .map((entry) => entry.placementId),
       );
       if (refreshedChoices.size > 0) {
         for (const stateKey of Object.keys(choiceRequestIdsRef.current))
-          if ([...refreshedChoices].some((placementId) =>
-            stateKey === placementId || stateKey.endsWith(`\u0000${placementId}`),
-          ))
+          if (
+            [...refreshedChoices].some(
+              (placementId) =>
+                stateKey === placementId || stateKey.endsWith(`\u0000${placementId}`),
+            )
+          )
             choiceRequestIdsRef.current[stateKey] =
               (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
         setChoicePages((current) =>
@@ -1171,10 +1191,11 @@ function ApplicationPageViewContent({
         );
         setDialogChoicePages((current) =>
           Object.fromEntries(
-            Object.entries(current).filter(([stateKey]) =>
-              ![...refreshedChoices].some((placementId) =>
-                stateKey.endsWith(`\u0000${placementId}`),
-              ),
+            Object.entries(current).filter(
+              ([stateKey]) =>
+                ![...refreshedChoices].some((placementId) =>
+                  stateKey.endsWith(`\u0000${placementId}`),
+                ),
             ),
           ),
         );
@@ -1189,7 +1210,12 @@ function ApplicationPageViewContent({
         let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
         let changed = false;
         for (const entry of accepted) {
-          if (!isCurrentComponentRequestGeneration(liveScope.generations.get(entry.key), entry.request))
+          if (
+            !isCurrentComponentRequestGeneration(
+              liveScope.generations.get(entry.key),
+              entry.request,
+            )
+          )
             continue;
           data[entry.placementId] = entry.data;
           editFormBaselines[entry.placementId] = entry.editFormBaseline;
@@ -1230,7 +1256,9 @@ function ApplicationPageViewContent({
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
   const compositionRootRef = useRef<HTMLDivElement>(null);
-  const pinWatchClientRef = useRef<ReturnType<typeof createMountedRecordPinWatchClient> | undefined>(undefined);
+  const pinWatchClientRef = useRef<
+    ReturnType<typeof createMountedRecordPinWatchClient> | undefined
+  >(undefined);
   const pinRefreshRef = useRef(refreshPlacements);
   pinRefreshRef.current = refreshPlacements;
   useEffect(() => {
@@ -1252,9 +1280,13 @@ function ApplicationPageViewContent({
         pageKey: model.invocation.pageKey,
       },
       isCurrent,
-      readMemberships: () => !isCurrent() || model.bodyContentAvailable === false ? []
-        : readMountedRecordPinMemberships(root, frame.data, currentTileDataRef.current),
-      refreshPlacements: async (ids) => { if (isCurrent()) await pinRefreshRef.current(ids); },
+      readMemberships: () =>
+        !isCurrent() || model.bodyContentAvailable === false
+          ? []
+          : readMountedRecordPinMemberships(root, frame.data, currentTileDataRef.current),
+      refreshPlacements: async (ids) => {
+        if (isCurrent()) await pinRefreshRef.current(ids);
+      },
     });
     pinWatchClientRef.current = client;
     return () => {
@@ -1263,7 +1295,9 @@ function ApplicationPageViewContent({
       client.dispose();
     };
   }, [model, navigationKey]);
-  useEffect(() => { pinWatchClientRef.current?.reconcile(); }, [currentData]);
+  useEffect(() => {
+    pinWatchClientRef.current?.reconcile();
+  }, [currentData]);
   const pinActivationInFlightRef = useRef(false);
   const currentEditFormBaselines = useMemo(() => {
     const baselines = { ...model.editFormBaselines };
@@ -1290,13 +1324,17 @@ function ApplicationPageViewContent({
     choiceSelectionsRef.current = {};
     choiceDefaultContextsRef.current = {};
     for (const placementId of Object.keys(choiceRequestIdsRef.current))
-      choiceRequestIdsRef.current[placementId] = (choiceRequestIdsRef.current[placementId] ?? 0) + 1;
+      choiceRequestIdsRef.current[placementId] =
+        (choiceRequestIdsRef.current[placementId] ?? 0) + 1;
   }, [model]);
 
   const parseChoicePage = useCallback(
     (placementId: string, values: unknown): ChoiceInputPayload =>
-      parseChoiceInputPayload(values, { pageId: model.pageId, placementId },
-        model.referenceChoiceInputs.find((field) => field.placementId === placementId)?.releaseVersion,
+      parseChoiceInputPayload(
+        values,
+        { pageId: model.pageId, placementId },
+        model.referenceChoiceInputs.find((field) => field.placementId === placementId)
+          ?.releaseVersion,
       ),
     [model.pageId, model.referenceChoiceInputs],
   );
@@ -1323,7 +1361,8 @@ function ApplicationPageViewContent({
       values: Readonly<Record<string, unknown>>,
       surface: "page" | "dialog" = "page",
     ): ReferenceChoiceSelectionEvidenceMap | undefined => {
-      const evidence: Record<string, NonNullable<ChoiceInputPayload["optionEvidence"]>[string]> = {};
+      const evidence: Record<string, NonNullable<ChoiceInputPayload["optionEvidence"]>[string]> =
+        {};
       for (const field of model.referenceChoiceInputs) {
         if (field.formId.toLowerCase() !== formId.toLowerCase()) continue;
         const selected = values[field.fieldKey];
@@ -1346,16 +1385,23 @@ function ApplicationPageViewContent({
       formId?: string,
     ): Promise<void> => {
       const stateKey = choiceScopeKey(placementId, formId);
-      const field = model.referenceChoiceInputs.find((candidate) => candidate.placementId === placementId);
-      const dependencyContext = model.referenceChoiceInputs.some((candidate) =>
-        candidate.formId === field?.formId && candidate.dependency !== undefined,
-      ) ? placementRequestsRef.current.key : undefined;
-      const currentContext = (): boolean => dependencyContext === undefined ||
-        placementRequestsRef.current.key === dependencyContext;
-      const dependencyChoice = field?.dependency === undefined ? undefined :
-        choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, formId)];
+      const field = model.referenceChoiceInputs.find(
+        (candidate) => candidate.placementId === placementId,
+      );
+      const dependencyContext = model.referenceChoiceInputs.some(
+        (candidate) => candidate.formId === field?.formId && candidate.dependency !== undefined,
+      )
+        ? placementRequestsRef.current.key
+        : undefined;
+      const currentContext = (): boolean =>
+        dependencyContext === undefined || placementRequestsRef.current.key === dependencyContext;
+      const dependencyChoice =
+        field?.dependency === undefined
+          ? undefined
+          : choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, formId)];
       if (field?.dependency !== undefined && dependencyChoice === undefined) return;
-      const selected = field?.dependency === undefined ||
+      const selected =
+        field?.dependency === undefined ||
         choiceSelectionsRef.current[stateKey]?.key === event.selectedKey;
       const requestId = (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
       choiceRequestIdsRef.current[stateKey] = requestId;
@@ -1377,7 +1423,9 @@ function ApplicationPageViewContent({
             ...(event.continuationToken === undefined
               ? {}
               : { continuationToken: event.continuationToken }),
-            ...(event.selectedKey === undefined || !selected ? {} : { selectedKey: event.selectedKey }),
+            ...(event.selectedKey === undefined || !selected
+              ? {}
+              : { selectedKey: event.selectedKey }),
             ...(event.selectedEvidence === undefined || !selected
               ? {}
               : { selectedEvidence: event.selectedEvidence }),
@@ -1386,10 +1434,7 @@ function ApplicationPageViewContent({
         });
         const body: unknown = await response.json();
         if (!currentContext() || choiceRequestIdsRef.current[stateKey] !== requestId) return;
-        if (
-          isRecord(body) &&
-          body.kind === "reload"
-        ) {
+        if (isRecord(body) && body.kind === "reload") {
           router.refresh();
           return;
         }
@@ -1399,12 +1444,16 @@ function ApplicationPageViewContent({
           return;
         }
         const payload = parseChoicePage(placementId, body.values);
-        if (dependencyChoice !== undefined && payload.dependencyKey !== dependencyChoice.key) return;
+        if (dependencyChoice !== undefined && payload.dependencyKey !== dependencyChoice.key)
+          return;
         const setPages = formId === undefined ? setChoicePages : setDialogChoicePages;
         setPages((current) => {
-          if (!currentContext() || choiceRequestIdsRef.current[stateKey] !== requestId) return current;
+          if (!currentContext() || choiceRequestIdsRef.current[stateKey] !== requestId)
+            return current;
           const previous = current[stateKey] ?? choicePayloadFor(placementId, formId);
-          const append = event.continuationToken !== undefined && previous !== undefined &&
+          const append =
+            event.continuationToken !== undefined &&
+            previous !== undefined &&
             previous.dependencyKey === payload.dependencyKey;
           const allOptions = append
             ? [
@@ -1431,16 +1480,18 @@ function ApplicationPageViewContent({
           return {
             ...current,
             [stateKey]: parseChoicePage(placementId, {
-                kind: "choice_input",
-                value: payload.value ?? null,
-                options,
-                optionEvidence,
-                ...(payload.dependencyKey === undefined ? {} : { dependencyKey: payload.dependencyKey }),
-                ...(payload.nextContinuationToken === undefined
-                  ? {}
-                  : { nextContinuationToken: payload.nextContinuationToken }),
-                ...(payload.error === undefined ? {} : { error: payload.error }),
-              }),
+              kind: "choice_input",
+              value: payload.value ?? null,
+              options,
+              optionEvidence,
+              ...(payload.dependencyKey === undefined
+                ? {}
+                : { dependencyKey: payload.dependencyKey }),
+              ...(payload.nextContinuationToken === undefined
+                ? {}
+                : { nextContinuationToken: payload.nextContinuationToken }),
+              ...(payload.error === undefined ? {} : { error: payload.error }),
+            }),
           };
         });
       } catch {
@@ -1452,110 +1503,167 @@ function ApplicationPageViewContent({
   );
   requestChoicePageRef.current = requestChoicePage;
 
-  const clearChoiceForm = useCallback((formId: string, dialogFormId?: string): void => {
-    const fields = model.referenceChoiceInputs.filter((field) =>
-      field.formId.toLowerCase() === formId.toLowerCase(),
-    );
-    if (!fields.some((field) => field.dependency !== undefined)) return;
-    const keys = new Set(fields.map((field) => choiceScopeKey(field.placementId, dialogFormId)));
-    for (const key of keys) {
-      delete choiceSelectionsRef.current[key];
-      delete choiceDefaultContextsRef.current[key];
-      choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
-    }
-    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
-    setPages((current) => {
-      const pages = Object.fromEntries(Object.entries(current).filter(([key]) => !keys.has(key)));
-      for (const field of fields)
-        if (field.dependency !== undefined)
-          pages[choiceScopeKey(field.placementId, dialogFormId)] = parseChoicePage(field.placementId, {
-            kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: null,
-          });
-      return pages;
-    });
-  }, [model.referenceChoiceInputs, parseChoicePage]);
+  const clearChoiceForm = useCallback(
+    (formId: string, dialogFormId?: string): void => {
+      const fields = model.referenceChoiceInputs.filter(
+        (field) => field.formId.toLowerCase() === formId.toLowerCase(),
+      );
+      if (!fields.some((field) => field.dependency !== undefined)) return;
+      const keys = new Set(fields.map((field) => choiceScopeKey(field.placementId, dialogFormId)));
+      for (const key of keys) {
+        delete choiceSelectionsRef.current[key];
+        delete choiceDefaultContextsRef.current[key];
+        choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
+      }
+      const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+      setPages((current) => {
+        const pages = Object.fromEntries(Object.entries(current).filter(([key]) => !keys.has(key)));
+        for (const field of fields)
+          if (field.dependency !== undefined)
+            pages[choiceScopeKey(field.placementId, dialogFormId)] = parseChoicePage(
+              field.placementId,
+              {
+                kind: "choice_input",
+                value: null,
+                options: [],
+                optionEvidence: {},
+                dependencyKey: null,
+              },
+            );
+        return pages;
+      });
+    },
+    [model.referenceChoiceInputs, parseChoicePage],
+  );
 
-  const initializeChoiceForm = useCallback((
-    formId: string,
-    dialogFormId?: string,
-    defaults?: Readonly<Record<string, unknown>>,
-  ): void => {
-    clearChoiceForm(formId, dialogFormId);
-    const fields = model.referenceChoiceInputs.filter((field) =>
-      field.formId.toLowerCase() === formId.toLowerCase(),
-    );
-    if (!fields.some((field) => field.dependency !== undefined)) return;
-    for (const field of fields) {
-      if (field.dependency !== undefined) continue;
-      const data = currentData[field.placementId];
-      if (!isRecord(data) || data.status !== "ready") continue;
-      let payload: ChoiceInputPayload;
-      try { payload = parseChoicePage(field.placementId, data.values); } catch { continue; }
-      const key = defaults !== undefined && Object.hasOwn(defaults, field.fieldKey)
-        ? defaults[field.fieldKey] : payload.value;
-      const evidence = typeof key === "string" ? payload.optionEvidence?.[key] : undefined;
-      if (typeof key === "string" && evidence !== undefined &&
-          payload.options?.some((option) => option.key === key))
-        choiceSelectionsRef.current[choiceScopeKey(field.placementId, dialogFormId)] = { key, evidence };
-    }
-    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
-    for (const field of fields) {
-      if (field.dependency === undefined) continue;
-      const parent = choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, dialogFormId)];
-      if (parent === undefined) continue;
-      const key = choiceScopeKey(field.placementId, dialogFormId);
-      choiceDefaultContextsRef.current[key] = true;
-      setPages((current) => ({ ...current, [key]: parseChoicePage(field.placementId, {
-        kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: parent.key,
-      }) }));
-      void requestChoicePageRef.current(field.placementId, { event: "choices_requested" }, dialogFormId);
-    }
-  }, [clearChoiceForm, currentData, model.referenceChoiceInputs, parseChoicePage]);
+  const initializeChoiceForm = useCallback(
+    (formId: string, dialogFormId?: string, defaults?: Readonly<Record<string, unknown>>): void => {
+      clearChoiceForm(formId, dialogFormId);
+      const fields = model.referenceChoiceInputs.filter(
+        (field) => field.formId.toLowerCase() === formId.toLowerCase(),
+      );
+      if (!fields.some((field) => field.dependency !== undefined)) return;
+      for (const field of fields) {
+        if (field.dependency !== undefined) continue;
+        const data = currentData[field.placementId];
+        if (!isRecord(data) || data.status !== "ready") continue;
+        let payload: ChoiceInputPayload;
+        try {
+          payload = parseChoicePage(field.placementId, data.values);
+        } catch {
+          continue;
+        }
+        const key =
+          defaults !== undefined && Object.hasOwn(defaults, field.fieldKey)
+            ? defaults[field.fieldKey]
+            : payload.value;
+        const evidence = typeof key === "string" ? payload.optionEvidence?.[key] : undefined;
+        if (
+          typeof key === "string" &&
+          evidence !== undefined &&
+          payload.options?.some((option) => option.key === key)
+        )
+          choiceSelectionsRef.current[choiceScopeKey(field.placementId, dialogFormId)] = {
+            key,
+            evidence,
+          };
+      }
+      const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+      for (const field of fields) {
+        if (field.dependency === undefined) continue;
+        const parent =
+          choiceSelectionsRef.current[choiceScopeKey(field.dependency.placementId, dialogFormId)];
+        if (parent === undefined) continue;
+        const key = choiceScopeKey(field.placementId, dialogFormId);
+        choiceDefaultContextsRef.current[key] = true;
+        setPages((current) => ({
+          ...current,
+          [key]: parseChoicePage(field.placementId, {
+            kind: "choice_input",
+            value: null,
+            options: [],
+            optionEvidence: {},
+            dependencyKey: parent.key,
+          }),
+        }));
+        void requestChoicePageRef.current(
+          field.placementId,
+          { event: "choices_requested" },
+          dialogFormId,
+        );
+      }
+    },
+    [clearChoiceForm, currentData, model.referenceChoiceInputs, parseChoicePage],
+  );
 
   useEffect(() => {
-    const forms = new Set(model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
-      .map((field) => field.formId));
+    const forms = new Set(
+      model.referenceChoiceInputs
+        .filter((field) => field.dependency !== undefined)
+        .map((field) => field.formId),
+    );
     for (const formId of forms) initializeChoiceForm(formId);
     return () => {
       for (const formId of forms) clearChoiceForm(formId);
     };
   }, [clearChoiceForm, initializeChoiceForm, model.referenceChoiceInputs]);
 
-  const changeChoiceField = useCallback((
-    placementId: string,
-    event: ControlSemanticEvent,
-    dialogFormId?: string,
-  ): void => {
-    if (event.event !== "field_changed") return;
-    const field = model.referenceChoiceInputs.find((candidate) => candidate.placementId === placementId);
-    if (field === undefined || !model.referenceChoiceInputs.some((candidate) =>
-      candidate.formId === field.formId && candidate.dependency !== undefined,
-    )) return;
-    const stateKey = choiceScopeKey(placementId, dialogFormId);
-    if (field.dependency !== undefined) delete choiceDefaultContextsRef.current[stateKey];
-    const previous = choiceSelectionsRef.current[stateKey]?.key;
-    const payload = choicePayloadFor(placementId, dialogFormId);
-    const evidence = typeof event.value === "string" ? payload?.optionEvidence?.[event.value] : undefined;
-    const next = typeof event.value === "string" && evidence !== undefined &&
-      payload?.options?.some((option) => option.key === event.value)
-      ? { key: event.value, evidence } : undefined;
-    if (next === undefined) delete choiceSelectionsRef.current[stateKey];
-    else choiceSelectionsRef.current[stateKey] = next;
-    if (previous === next?.key) return;
-    const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
-    for (const child of model.referenceChoiceInputs) {
-      if (child.formId !== field.formId || child.dependency?.placementId !== placementId) continue;
-      const key = choiceScopeKey(child.placementId, dialogFormId);
-      delete choiceSelectionsRef.current[key];
-      delete choiceDefaultContextsRef.current[key];
-      choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
-      setPages((current) => ({ ...current, [key]: parseChoicePage(child.placementId, {
-        kind: "choice_input", value: null, options: [], optionEvidence: {}, dependencyKey: next?.key ?? null,
-      }) }));
-      if (next !== undefined)
-        void requestChoicePageRef.current(child.placementId, { event: "choices_requested" }, dialogFormId);
-    }
-  }, [choicePayloadFor, model.referenceChoiceInputs, parseChoicePage]);
+  const changeChoiceField = useCallback(
+    (placementId: string, event: ControlSemanticEvent, dialogFormId?: string): void => {
+      if (event.event !== "field_changed") return;
+      const field = model.referenceChoiceInputs.find(
+        (candidate) => candidate.placementId === placementId,
+      );
+      if (
+        field === undefined ||
+        !model.referenceChoiceInputs.some(
+          (candidate) => candidate.formId === field.formId && candidate.dependency !== undefined,
+        )
+      )
+        return;
+      const stateKey = choiceScopeKey(placementId, dialogFormId);
+      if (field.dependency !== undefined) delete choiceDefaultContextsRef.current[stateKey];
+      const previous = choiceSelectionsRef.current[stateKey]?.key;
+      const payload = choicePayloadFor(placementId, dialogFormId);
+      const evidence =
+        typeof event.value === "string" ? payload?.optionEvidence?.[event.value] : undefined;
+      const next =
+        typeof event.value === "string" &&
+        evidence !== undefined &&
+        payload?.options?.some((option) => option.key === event.value)
+          ? { key: event.value, evidence }
+          : undefined;
+      if (next === undefined) delete choiceSelectionsRef.current[stateKey];
+      else choiceSelectionsRef.current[stateKey] = next;
+      if (previous === next?.key) return;
+      const setPages = dialogFormId === undefined ? setChoicePages : setDialogChoicePages;
+      for (const child of model.referenceChoiceInputs) {
+        if (child.formId !== field.formId || child.dependency?.placementId !== placementId)
+          continue;
+        const key = choiceScopeKey(child.placementId, dialogFormId);
+        delete choiceSelectionsRef.current[key];
+        delete choiceDefaultContextsRef.current[key];
+        choiceRequestIdsRef.current[key] = (choiceRequestIdsRef.current[key] ?? 0) + 1;
+        setPages((current) => ({
+          ...current,
+          [key]: parseChoicePage(child.placementId, {
+            kind: "choice_input",
+            value: null,
+            options: [],
+            optionEvidence: {},
+            dependencyKey: next?.key ?? null,
+          }),
+        }));
+        if (next !== undefined)
+          void requestChoicePageRef.current(
+            child.placementId,
+            { event: "choices_requested" },
+            dialogFormId,
+          );
+      }
+    },
+    [choicePayloadFor, model.referenceChoiceInputs, parseChoicePage],
+  );
 
   useEffect(() => {
     if (!hasUnsavedWork) return;
@@ -1721,17 +1829,18 @@ function ApplicationPageViewContent({
         const current = runtimeInputsRef.current[placementId];
         let input: Record<string, unknown> = isRecord(current) ? current : {};
         const isReferenceChoice = model.referenceChoiceInputs.some(
-          (field) => field.placementId === placementId &&
+          (field) =>
+            field.placementId === placementId &&
             field.formId.toLowerCase() === form.formId.toLowerCase(),
         );
-        const dialogChoicePage =
-          isReferenceChoice ? choicePayloadFor(placementId, form.formId) : undefined;
+        const dialogChoicePage = isReferenceChoice
+          ? choicePayloadFor(placementId, form.formId)
+          : undefined;
         if (dialogChoicePage !== undefined)
           input = { ...input, data: { status: "ready", values: dialogChoicePage } };
         const placement = surface.placements[placementId];
-        const settings = placement !== undefined && isRecord(placement.settings)
-          ? placement.settings
-          : undefined;
+        const settings =
+          placement !== undefined && isRecord(placement.settings) ? placement.settings : undefined;
         const name =
           settings !== undefined &&
           isRecord(settings.name) &&
@@ -1739,22 +1848,31 @@ function ApplicationPageViewContent({
           typeof settings.name.value === "string"
             ? settings.name.value
             : undefined;
-        const choiceField = model.referenceChoiceInputs.find((field) => field.placementId === placementId);
+        const choiceField = model.referenceChoiceInputs.find(
+          (field) => field.placementId === placementId,
+        );
         const defaultValue = name === undefined ? undefined : form.inputs[name];
-        const defaultEvidence = typeof defaultValue === "string"
-          ? dialogChoicePage?.optionEvidence?.[defaultValue] : undefined;
-        const dependentDefaultOffered = choiceField?.dependency === undefined ||
+        const defaultEvidence =
+          typeof defaultValue === "string"
+            ? dialogChoicePage?.optionEvidence?.[defaultValue]
+            : undefined;
+        const dependentDefaultOffered =
+          choiceField?.dependency === undefined ||
           (choiceDefaultContextsRef.current[choiceScopeKey(placementId, form.formId)] === true &&
             defaultEvidence !== undefined &&
             dialogChoicePage?.options?.some((option) => option.key === defaultValue) === true);
         if (
           placement !== undefined &&
           name !== undefined &&
-          Object.hasOwn(form.inputs, name) && dependentDefaultOffered
+          Object.hasOwn(form.inputs, name) &&
+          dependentDefaultOffered
         ) {
           input = runtimeInputWithFormDefault(input, placement, form.inputs[name]);
-          if (choiceField?.dependency !== undefined && typeof defaultValue === "string" &&
-              defaultEvidence !== undefined) {
+          if (
+            choiceField?.dependency !== undefined &&
+            typeof defaultValue === "string" &&
+            defaultEvidence !== undefined
+          ) {
             choiceSelectionsRef.current[choiceScopeKey(placementId, form.formId)] = {
               key: defaultValue,
               evidence: defaultEvidence,
@@ -1804,37 +1922,45 @@ function ApplicationPageViewContent({
           mount={() => initializeChoiceForm(form.formId, form.formId, form.inputs)}
           unmount={() => clearChoiceForm(form.formId, form.formId)}
         >
-        <div ref={dialogFormRef} className="flex flex-col gap-4">
-          <UnsavedWorkProvider>
-            <PagePuckRenderer
-              themeMode="system"
-              composition={surface.composition}
-              registry={platformComponentRegistry}
-              pageId={model.pageId}
-              theme={model.theme}
-              projectedNavigation={model.navigation}
-              resolvePageHref={resolvePageHref}
-              currentPageId={model.pageId}
-              runtimeInputs={scopedInputs}
-            />
-          </UnsavedWorkProvider>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={controls.cancel}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
-        </div>
+          <div ref={dialogFormRef} className="flex flex-col gap-4">
+            <UnsavedWorkProvider>
+              <PagePuckRenderer
+                themeMode="system"
+                composition={surface.composition}
+                registry={platformComponentRegistry}
+                pageId={model.pageId}
+                theme={model.theme}
+                projectedNavigation={model.navigation}
+                resolvePageHref={resolvePageHref}
+                currentPageId={model.pageId}
+                runtimeInputs={scopedInputs}
+              />
+            </UnsavedWorkProvider>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={controls.cancel}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
+              >
+                Continue
+              </Button>
+            </DialogFooter>
+          </div>
         </ChoiceFormLifetime>
       );
     },
-    [choiceEvidenceFor, choicePayloadFor, changeChoiceField, clearChoiceForm,
-      currentData, initializeChoiceForm, model, resolvePageHref],
+    [
+      choiceEvidenceFor,
+      choicePayloadFor,
+      changeChoiceField,
+      clearChoiceForm,
+      currentData,
+      initializeChoiceForm,
+      model,
+      resolvePageHref,
+    ],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,
@@ -1874,8 +2000,7 @@ function ApplicationPageViewContent({
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
     ) => {
-      const isCurrentNavigation = (): boolean =>
-        placementRequestsRef.current.key === navigationKey;
+      const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -1953,9 +2078,7 @@ function ApplicationPageViewContent({
           }
           if (
             afterAccepted !== undefined &&
-            ["completed", "committed", "background_pending"].includes(
-              server.descriptor.outcome,
-            )
+            ["completed", "committed", "background_pending"].includes(server.descriptor.outcome)
           ) {
             try {
               resultNotice = (await afterAccepted()) ?? resultNotice;
@@ -2046,7 +2169,10 @@ function ApplicationPageViewContent({
         });
         if (result.kind === "updated" || result.kind === "unchanged") {
           if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
-            setNotice({ tone: "problem", text: "Review the fields in this step before continuing." });
+            setNotice({
+              tone: "problem",
+              text: "Review the fields in this step before continuing.",
+            });
           const queryStep =
             result.activeStepId === result.computedStepId ? null : result.activeStepId;
           if (searchParams.get("step") === queryStep) router.refresh();
@@ -2058,7 +2184,10 @@ function ApplicationPageViewContent({
           return;
         }
         if (result.kind === "conflict") {
-          setNotice({ tone: "problem", text: "This draft changed in another session. Review the latest step." });
+          setNotice({
+            tone: "problem",
+            text: "This draft changed in another session. Review the latest step.",
+          });
           router.refresh();
           return;
         }
@@ -2104,9 +2233,11 @@ function ApplicationPageViewContent({
       const activeForm =
         activeFormId === undefined
           ? undefined
-          : [...document.querySelectorAll<HTMLFormElement>(
-              'form[data-vortex-control="form-container"]',
-            )].find((form) => form.dataset.vortexPlacementId === activeFormId);
+          : [
+              ...document.querySelectorAll<HTMLFormElement>(
+                'form[data-vortex-control="form-container"]',
+              ),
+            ].find((form) => form.dataset.vortexPlacementId === activeFormId);
       if (activeForm !== undefined) {
         activeForm.requestSubmit();
         return;
@@ -2157,7 +2288,10 @@ function ApplicationPageViewContent({
         if (confirmed.kind !== "confirmed") {
           setNotice(
             confirmed.kind === "conflict"
-              ? { tone: "problem", text: "This draft changed in another session. Review the latest step." }
+              ? {
+                  tone: "problem",
+                  text: "This draft changed in another session. Review the latest step.",
+                }
               : unavailableNotice,
           );
           if (confirmed.kind === "conflict") router.refresh();
@@ -2272,8 +2406,8 @@ function ApplicationPageViewContent({
         return false;
 
       const displayId =
-        Object.keys(currentData).find((candidate) =>
-          candidate.toLowerCase() === parsedId.data.toLowerCase(),
+        Object.keys(currentData).find(
+          (candidate) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
         ) ?? parsedId.data;
       const currentBoard = boardPayloadFor(currentData[displayId]);
       const currentBucket =
@@ -2439,8 +2573,7 @@ function ApplicationPageViewContent({
         if (
           table.hasNextPage !== true ||
           continuationToken === undefined ||
-          (event.continuationToken !== undefined &&
-            event.continuationToken !== continuationToken)
+          (event.continuationToken !== undefined && event.continuationToken !== continuationToken)
         )
           return;
         cursors.set(event.page, continuationToken);
@@ -2476,7 +2609,8 @@ function ApplicationPageViewContent({
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
-      ...model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
+      ...model.referenceChoiceInputs
+        .filter((field) => field.dependency !== undefined)
         .map((field) => field.formId),
     ]);
     if (guidedActivePlacementIds !== undefined)
@@ -2494,8 +2628,7 @@ function ApplicationPageViewContent({
       const boardRowActionBinding =
         boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
-      const supportsEvent = (eventName: string): boolean =>
-        declaredEvents?.has(eventName) === true;
+      const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       const flowFeedback =
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
@@ -2594,7 +2727,8 @@ function ApplicationPageViewContent({
           return requestChoicePageRef.current(placementId, event);
         };
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
-        events.field_changed = (event: ControlSemanticEvent) => changeChoiceField(placementId, event);
+        events.field_changed = (event: ControlSemanticEvent) =>
+          changeChoiceField(placementId, event);
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
@@ -2626,15 +2760,14 @@ function ApplicationPageViewContent({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(
-                placementId,
-                submitBinding,
-                event.values,
-                event.selectedOwnerGroupId,
-              );
-            }
-            else
-              void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
+              else
+                void submitGuidedSummary(
+                  placementId,
+                  submitBinding,
+                  event.values,
+                  event.selectedOwnerGroupId,
+                );
+            } else void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
             return;
           }
           if (submitBinding === undefined) return;
@@ -2701,9 +2834,11 @@ function ApplicationPageViewContent({
             resetBinding.bindingId,
           );
         };
-      if (model.referenceChoiceInputs.some((field) =>
-        field.formId === placementId && field.dependency !== undefined,
-      )) {
+      if (
+        model.referenceChoiceInputs.some(
+          (field) => field.formId === placementId && field.dependency !== undefined,
+        )
+      ) {
         const boundReset = events.form_reset;
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset") return;
@@ -2721,13 +2856,15 @@ function ApplicationPageViewContent({
       }
       const held = selection[placementId];
       const ready = data as { status?: string; values?: Record<string, unknown> };
-      const pins = ready.status === "ready"
-        ? ready.values?.kind === "application_page_link_tiles"
-          ? projectedApplicationPageLinkTilesSchema.safeParse(ready.values)
-          : projectedRecordPinTilesSchema.safeParse(ready.values)
-        : undefined;
+      const pins =
+        ready.status === "ready"
+          ? ready.values?.kind === "application_page_link_tiles"
+            ? projectedApplicationPageLinkTilesSchema.safeParse(ready.values)
+            : projectedRecordPinTilesSchema.safeParse(ready.values)
+          : undefined;
       const pinFrame = mountedRecordPinFrameSchema.safeParse({
-        pageId: model.pageId, installationRevision: application.installationRevision,
+        pageId: model.pageId,
+        installationRevision: application.installationRevision,
         releaseKey: application.releaseKey,
       });
       inputs[placementId] = {
@@ -2738,99 +2875,168 @@ function ApplicationPageViewContent({
               ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
               : data,
         events,
-        ...(pins?.success !== true || !pinFrame.success ? {} : {
-          pin_frame: pinFrame.data,
-          open_tile: async (sourceRecordId: string, sourceRevision: number, isVisible?: () => boolean): Promise<void> => {
-            if (busy || pinActivationInFlightRef.current || placementRequestsRef.current.key !== navigationKey ||
-                currentTileDataRef.current[placementId] !== data) return;
-            const rows = pins.data.rows.filter((row) => row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-              row.sourceRevision === sourceRevision);
-            const row = rows[0];
-            if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable") return;
-            if (pins.data.kind === "application_page_link_tiles") {
-              if (currentPageKey === undefined || typeof isVisible !== "function") return;
-              const generation = placementRequestsRef.current.generations.get(placementId.toLowerCase());
-              const visible = isVisible;
-              const currentSource = () => {
-                try {
-                  return !currentBusyRef.current && placementRequestsRef.current.key === navigationKey &&
-                    placementRequestsRef.current.generations.get(placementId.toLowerCase()) === generation &&
-                    currentTileDataRef.current[placementId] === data && visible();
-                } catch { return false; }
-              };
-              if (!currentSource()) return;
-              pinActivationInFlightRef.current = true;
-              try {
-                // The unsaved-work wait precedes both source selection and target authority rereads.
-                if (row.target.openBehaviour === "replace" && unsavedWork.hasUnsavedWork() &&
-                    !(await unsavedWork.confirmDiscardUnsavedWork())) return;
-                if (!currentSource()) return;
-                const refreshed = await rereadApplicationPlacements({
-                  tenantShortName: application.tenantShortName,
-                  organizationShortName: application.organizationShortName,
-                  applicationKey: application.applicationKey,
-                  pageKey: currentPageKey,
-                  installationRevision: application.installationRevision,
-                  search: currentSearch,
-                }, [placementId]);
-                if (!currentSource()) return;
-                if (refreshed.kind === "reload") { router.refresh(); return; }
-                if (refreshed.kind !== "available") return;
-                const state = Object.entries(refreshed.data).find(([id]) =>
-                  id.toLowerCase() === placementId.toLowerCase())?.[1];
-                if (state?.status !== "ready") return;
-                const fresh = projectedApplicationPageLinkTilesSchema.safeParse(state.values);
-                if (!fresh.success) return;
-                const selected = fresh.data.rows.filter((entry) =>
-                  entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-                  entry.sourceRevision === sourceRevision);
-                const current = selected[0];
-                if (selected.length !== 1 || current === undefined || current.target.kind === "unavailable" ||
-                    current.target.kind !== row.target.kind ||
-                    current.target.openBehaviour !== row.target.openBehaviour) return;
-                const target = current.target;
-                // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
-                const internal = target.kind !== "external";
-                if ((target.kind === "application" || target.kind === "page") &&
-                    (target.tenantShortName !== application.tenantShortName ||
-                      target.organizationShortName !== application.organizationShortName)) return;
-                const href = target.kind === "record"
-                  ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-                  : target.kind === "external" ? target.address
-                    : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
+        ...(pins?.success !== true || !pinFrame.success
+          ? {}
+          : {
+              pin_frame: pinFrame.data,
+              open_tile: async (
+                sourceRecordId: string,
+                sourceRevision: number,
+                isVisible?: () => boolean,
+              ): Promise<void> => {
+                if (
+                  busy ||
+                  pinActivationInFlightRef.current ||
+                  placementRequestsRef.current.key !== navigationKey ||
+                  currentTileDataRef.current[placementId] !== data
+                )
+                  return;
+                const rows = pins.data.rows.filter(
+                  (row) =>
+                    row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+                    row.sourceRevision === sourceRevision,
+                );
+                const row = rows[0];
+                if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable")
+                  return;
+                if (pins.data.kind === "application_page_link_tiles") {
+                  if (currentPageKey === undefined || typeof isVisible !== "function") return;
+                  const generation = placementRequestsRef.current.generations.get(
+                    placementId.toLowerCase(),
+                  );
+                  const visible = isVisible;
+                  const currentSource = () => {
+                    try {
+                      return (
+                        !currentBusyRef.current &&
+                        placementRequestsRef.current.key === navigationKey &&
+                        placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
+                          generation &&
+                        currentTileDataRef.current[placementId] === data &&
+                        visible()
+                      );
+                    } catch {
+                      return false;
+                    }
+                  };
+                  if (!currentSource()) return;
+                  pinActivationInFlightRef.current = true;
+                  try {
+                    // The unsaved-work wait precedes both source selection and target authority rereads.
+                    if (
+                      row.target.openBehaviour === "replace" &&
+                      unsavedWork.hasUnsavedWork() &&
+                      !(await unsavedWork.confirmDiscardUnsavedWork())
+                    )
+                      return;
+                    if (!currentSource()) return;
+                    const refreshed = await rereadApplicationPlacements(
+                      {
+                        tenantShortName: application.tenantShortName,
+                        organizationShortName: application.organizationShortName,
+                        applicationKey: application.applicationKey,
+                        pageKey: currentPageKey,
+                        installationRevision: application.installationRevision,
+                        search: currentSearch,
+                      },
+                      [placementId],
+                    );
+                    if (!currentSource()) return;
+                    if (refreshed.kind === "reload") {
+                      router.refresh();
+                      return;
+                    }
+                    if (refreshed.kind !== "available") return;
+                    const state = Object.entries(refreshed.data).find(
+                      ([id]) => id.toLowerCase() === placementId.toLowerCase(),
+                    )?.[1];
+                    if (state?.status !== "ready") return;
+                    const fresh = projectedApplicationPageLinkTilesSchema.safeParse(state.values);
+                    if (!fresh.success) return;
+                    const selected = fresh.data.rows.filter(
+                      (entry) =>
+                        entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+                        entry.sourceRevision === sourceRevision,
+                    );
+                    const current = selected[0];
+                    if (
+                      selected.length !== 1 ||
+                      current === undefined ||
+                      current.target.kind === "unavailable" ||
+                      current.target.kind !== row.target.kind ||
+                      current.target.openBehaviour !== row.target.openBehaviour
+                    )
+                      return;
+                    const target = current.target;
+                    // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
+                    const internal = target.kind !== "external";
+                    if (
+                      (target.kind === "application" || target.kind === "page") &&
+                      (target.tenantShortName !== application.tenantShortName ||
+                        target.organizationShortName !== application.organizationShortName)
+                    )
+                      return;
+                    const href =
+                      target.kind === "record"
+                        ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+                        : target.kind === "external"
+                          ? target.address
+                          : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
+                    const address = new URL(href, window.location.origin);
+                    if (
+                      (internal && address.origin !== window.location.origin) ||
+                      (!internal && address.protocol !== "https:") ||
+                      !currentSource()
+                    )
+                      return;
+                    if (target.openBehaviour === "new_page")
+                      window.open(address.href, "_blank", "noopener,noreferrer");
+                    else if (internal) router.push(`${address.pathname}${address.search}`);
+                    else window.location.assign(address.href);
+                  } catch {
+                    // No navigation or target metadata on a failed current protected reread.
+                  } finally {
+                    pinActivationInFlightRef.current = false;
+                  }
+                  return;
+                }
+                const target = row.target;
+                // The old1.1 payload is independently closed to Record/external targets.
+                if (target.kind !== "record" && target.kind !== "external") return;
+                const href =
+                  target.kind === "record"
+                    ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+                    : target.address;
                 const address = new URL(href, window.location.origin);
-                if ((internal && address.origin !== window.location.origin) ||
-                    (!internal && address.protocol !== "https:") || !currentSource()) return;
-                if (target.openBehaviour === "new_page") window.open(address.href, "_blank", "noopener,noreferrer");
-                else if (internal) router.push(`${address.pathname}${address.search}`);
-                else window.location.assign(address.href);
-              } catch {
-                // No navigation or target metadata on a failed current protected reread.
-              } finally { pinActivationInFlightRef.current = false; }
-              return;
-            }
-            const target = row.target;
-            // The old1.1 payload is independently closed to Record/external targets.
-            if (target.kind !== "record" && target.kind !== "external") return;
-            const href = target.kind === "record"
-              ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-              : target.address;
-            const address = new URL(href, window.location.origin);
-            if ((target.kind === "record" && address.origin !== window.location.origin) ||
-                (target.kind === "external" && address.protocol !== "https:")) return;
-            pinActivationInFlightRef.current = true;
-            try {
-              if (target.openBehaviour === "replace" && unsavedWork.hasUnsavedWork() &&
-                  !(await unsavedWork.confirmDiscardUnsavedWork())) return;
-              // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
-              if (placementRequestsRef.current.key !== navigationKey ||
-                  currentTileDataRef.current[placementId] !== data) return;
-              if (target.openBehaviour === "new_page") window.open(address.href, "_blank", "noopener,noreferrer");
-              else if (target.kind === "record") router.push(`${address.pathname}${address.search}`);
-              else window.location.assign(address.href);
-            } finally { pinActivationInFlightRef.current = false; }
-          },
-        }),
+                if (
+                  (target.kind === "record" && address.origin !== window.location.origin) ||
+                  (target.kind === "external" && address.protocol !== "https:")
+                )
+                  return;
+                pinActivationInFlightRef.current = true;
+                try {
+                  if (
+                    target.openBehaviour === "replace" &&
+                    unsavedWork.hasUnsavedWork() &&
+                    !(await unsavedWork.confirmDiscardUnsavedWork())
+                  )
+                    return;
+                  // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
+                  if (
+                    placementRequestsRef.current.key !== navigationKey ||
+                    currentTileDataRef.current[placementId] !== data
+                  )
+                    return;
+                  if (target.openBehaviour === "new_page")
+                    window.open(address.href, "_blank", "noopener,noreferrer");
+                  else if (target.kind === "record")
+                    router.push(`${address.pathname}${address.search}`);
+                  else window.location.assign(address.href);
+                } finally {
+                  pinActivationInFlightRef.current = false;
+                }
+              },
+            }),
         ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
@@ -2891,7 +3097,10 @@ function ApplicationPageViewContent({
               formData.set("applicationKey", model.invocation.applicationKey);
               formData.set("pageKey", model.invocation.pageKey);
               formData.set("targetReleaseRevision", String(releaseAdoption.offeredReleaseRevision));
-              formData.set("expectedActiveReleaseRevision", String(releaseAdoption.installedReleaseRevision));
+              formData.set(
+                "expectedActiveReleaseRevision",
+                String(releaseAdoption.installedReleaseRevision),
+              );
               await adoptReleaseAction(formData);
             },
           },
@@ -2925,65 +3134,68 @@ function ApplicationPageViewContent({
   return (
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
-      <div ref={compositionRootRef} className="contents">
-      <PagePuckRenderer
-        overlay={<Toaster position="bottom-right" />}
-        themeMode="system"
-        applicationSurface
-        feedback={pageFeedback === undefined && (notice === undefined || notice.tone === "info") &&
-          model.bodyContentAvailable !== false ? undefined : (
-          <>
-            {pageFeedback}
-            {model.bodyContentAvailable !== false ? null : (
-              <Alert role="status" aria-live="polite">
-                <AlertDescription>No page content is available.</AlertDescription>
-              </Alert>
-            )}
-            {notice === undefined || notice.tone === "info" ? null : (
-              <Alert
-                variant={notice.tone === "problem" ? "destructive" : "default"}
-                role={notice.tone === "problem" ? "alert" : "status"}
-                aria-live="polite"
-                data-vortex-notice={notice.tone}
-              >
-                <AlertDescription>{notice.text}</AlertDescription>
-              </Alert>
-            )}
-          </>
-        )}
-        composition={model.page as unknown as ProjectedPageCapability}
-        registry={platformComponentRegistry}
-        shells={model.shells}
-        {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
-        applicationShellRuntime={applicationShellRuntime}
-        applicationSearch={applicationSearch}
-        applicationSearchPageSubject={applicationSearchPageSubject}
-        pageId={model.pageId}
-        theme={model.theme}
-        projectedNavigation={model.navigation}
-        resolvePageHref={resolvePageHref}
-        currentPageId={model.pageId}
-        {...(model.guidedForm === undefined
-          ? {}
-          : {
-              activeStepId: model.guidedForm.activeStepId,
-              guidedSummaryValues: model.guidedForm.values,
-            })}
-        runtimeInputs={runtimeInputs}
-        {...(model.guidedForm === undefined
-          ? {}
-          : {
-              guidedStepNavigation: {
-                  disabled: busy || guidedFormCompleted,
-                  onBack: () => {
-                    if (guidedPreviousStepId !== undefined)
-                      requestGuidedStep(guidedPreviousStepId);
+        <div ref={compositionRootRef} className="contents">
+          <PagePuckRenderer
+            overlay={<Toaster position="bottom-right" />}
+            themeMode="system"
+            applicationSurface
+            feedback={
+              pageFeedback === undefined &&
+              (notice === undefined || notice.tone === "info") &&
+              model.bodyContentAvailable !== false ? undefined : (
+                <>
+                  {pageFeedback}
+                  {model.bodyContentAvailable !== false ? null : (
+                    <Alert role="status" aria-live="polite">
+                      <AlertDescription>No page content is available.</AlertDescription>
+                    </Alert>
+                  )}
+                  {notice === undefined || notice.tone === "info" ? null : (
+                    <Alert
+                      variant={notice.tone === "problem" ? "destructive" : "default"}
+                      role={notice.tone === "problem" ? "alert" : "status"}
+                      aria-live="polite"
+                      data-vortex-notice={notice.tone}
+                    >
+                      <AlertDescription>{notice.text}</AlertDescription>
+                    </Alert>
+                  )}
+                </>
+              )
+            }
+            composition={model.page as unknown as ProjectedPageCapability}
+            registry={platformComponentRegistry}
+            shells={model.shells}
+            {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
+            applicationShellRuntime={applicationShellRuntime}
+            applicationSearch={applicationSearch}
+            applicationSearchPageSubject={applicationSearchPageSubject}
+            pageId={model.pageId}
+            theme={model.theme}
+            projectedNavigation={model.navigation}
+            resolvePageHref={resolvePageHref}
+            currentPageId={model.pageId}
+            {...(model.guidedForm === undefined
+              ? {}
+              : {
+                  activeStepId: model.guidedForm.activeStepId,
+                  guidedSummaryValues: model.guidedForm.values,
+                })}
+            runtimeInputs={runtimeInputs}
+            {...(model.guidedForm === undefined
+              ? {}
+              : {
+                  guidedStepNavigation: {
+                    disabled: busy || guidedFormCompleted,
+                    onBack: () => {
+                      if (guidedPreviousStepId !== undefined)
+                        requestGuidedStep(guidedPreviousStepId);
+                    },
+                    onNext: () => requestGuidedStep(),
                   },
-                  onNext: () => requestGuidedStep(),
-              },
-            })}
-      />
-      </div>
+                })}
+          />
+        </div>
       </ApplicationAccountActionsProvider>
       {intentHostElement}
       <Dialog

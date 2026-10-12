@@ -2,7 +2,7 @@
 
 import type { ComponentProps, ReactElement } from "react";
 import { useRouter } from "next/navigation";
-import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/platform/schema";
+import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   createFullPlatformComponentRegistry,
@@ -25,8 +25,8 @@ export function ApplicationExperiencePage({
   organizationName,
   identityId,
 }: Readonly<{
-  page: PageDefinitionV2;
-  shells: readonly ApplicationShellV2[];
+  page: PageDefinition;
+  shells: readonly ApplicationShell[];
   /** The application's installed release theme; absent keeps the platform default. */
   theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
   organizationName: string;

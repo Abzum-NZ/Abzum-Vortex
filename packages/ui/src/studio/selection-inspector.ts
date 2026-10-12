@@ -1,8 +1,8 @@
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   type ApplicationRootId,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -65,9 +65,7 @@ const hasExactKeys = (value: Record<string, unknown>, expected: readonly string[
   );
 };
 
-const parseSelection = (
-  selection: unknown,
-): ParsedSelection | null | undefined => {
+const parseSelection = (selection: unknown): ParsedSelection | null | undefined => {
   if (selection === null) return null;
   if (!isObjectRecord(selection)) return undefined;
 
@@ -95,8 +93,7 @@ const parseSelection = (
                 ? "shellAlias"
                 : "pageAlias";
       if (!hasExactKeys(selection, ["kind", aliasField])) return undefined;
-      const alias =
-        selection[aliasField];
+      const alias = selection[aliasField];
       if (typeof alias !== "string" || alias.length === 0) return undefined;
       return Object.freeze({ kind: selection.kind, alias }) as ParsedSelection;
     }
@@ -142,12 +139,12 @@ const onlyMatch = (
 };
 
 const placementCandidates = (
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   alias: string,
 ): InspectorCandidate[] => {
   const matches: InspectorCandidate[] = [];
   const visitSlot = (
-    slot: ApplicationSourceDocumentV2["body"]["shells"][number]["layout"],
+    slot: ApplicationSourceDocument["body"]["shells"][number]["layout"],
     path: SourcePath,
   ): void => {
     for (const [placementAlias, placement] of Object.entries(slot.placements)) {
@@ -177,13 +174,7 @@ const placementCandidates = (
       } else {
         for (const [stepAlias, content] of Object.entries(composition.step_content)) {
           for (const [slotAlias, slot] of Object.entries(content))
-            visitSlot(slot, [
-              ...pagePath,
-              "composition",
-              "step_content",
-              stepAlias,
-              slotAlias,
-            ]);
+            visitSlot(slot, [...pagePath, "composition", "step_content", stepAlias, slotAlias]);
         }
       }
     } else if (page.composition.shell_kind === "default") {
@@ -211,7 +202,7 @@ export const resolveStudioSelectionInspectorContext = (
     const parsedRoot = applicationRootIdSchema.safeParse(draft.rootId);
     if (!parsedRoot.success) return refused("invalid_context");
 
-    const parsedSource = applicationSourceDocumentV2Schema.safeParse(draft.source);
+    const parsedSource = applicationSourceDocumentSchema.safeParse(draft.source);
     if (!parsedSource.success) return refused("invalid_context");
     const source = parsedSource.data;
     const parsedSelection = parseSelection(selection);
@@ -232,37 +223,40 @@ export const resolveStudioSelectionInspectorContext = (
       case "page":
         candidates = source.body.pages.flatMap((page, index) =>
           page.id === parsedSelection.alias
-            ? [{
-                alias: page.id,
-                label: page.name,
-                sourcePath: ["body", "pages", index],
-              }]
+            ? [
+                {
+                  alias: page.id,
+                  label: page.name,
+                  sourcePath: ["body", "pages", index],
+                },
+              ]
             : [],
         );
         break;
       case "shell":
         candidates = source.body.shells.flatMap((shell, index) =>
           shell.id === parsedSelection.alias
-            ? [{
-                alias: shell.id,
-                label: shell.name,
-                sourcePath: ["body", "shells", index],
-              }]
+            ? [
+                {
+                  alias: shell.id,
+                  label: shell.name,
+                  sourcePath: ["body", "shells", index],
+                },
+              ]
             : [],
         );
         break;
       case "navigation": {
         candidates = [];
         const visitNavigation = (
-          items: ApplicationSourceDocumentV2["body"]["navigation"],
+          items: ApplicationSourceDocument["body"]["navigation"],
           path: SourcePath,
         ): void => {
           items.forEach((item, index) => {
             const itemPath = [...path, index] as const;
             if (item.id === parsedSelection.alias)
               candidates.push({ alias: item.id, label: item.label, sourcePath: itemPath });
-            if (item.type === "heading")
-              visitNavigation(item.children, [...itemPath, "children"]);
+            if (item.type === "heading") visitNavigation(item.children, [...itemPath, "children"]);
           });
         };
         visitNavigation(source.body.navigation, ["body", "navigation"]);
@@ -271,11 +265,13 @@ export const resolveStudioSelectionInspectorContext = (
       case "flow":
         candidates = source.body.flows.flatMap((flow, index) =>
           flow.id === parsedSelection.alias
-            ? [{
-                alias: flow.id,
-                label: readableKey(flow.key, "Flow"),
-                sourcePath: ["body", "flows", index],
-              }]
+            ? [
+                {
+                  alias: flow.id,
+                  label: readableKey(flow.key, "Flow"),
+                  sourcePath: ["body", "flows", index],
+                },
+              ]
             : [],
         );
         break;

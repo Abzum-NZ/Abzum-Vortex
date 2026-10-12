@@ -1,10 +1,10 @@
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE_V2,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   PLATFORM_BLOCK_RELEASES,
-  applicationSourceDocumentV2Schema,
-  type ApplicationSourceDocumentV2,
-  type PlatformBlockReleaseV2,
-  type SourceApplicationThemeSelectionV2,
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+  type PlatformBlockRelease,
+  type SourceApplicationThemeSelection,
 } from "@vortex/platform/schema";
 
 type JsonObject = Record<string, unknown>;
@@ -23,7 +23,7 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
   return result;
 };
 
-const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
+const releasesByKey = new Map<string, PlatformBlockRelease>(
   PLATFORM_BLOCK_RELEASES.map((release) => [
     `${release.blockId}@${release.releaseVersion}`,
     release,
@@ -33,37 +33,35 @@ const releasesByKey = new Map<string, PlatformBlockReleaseV2>(
 /** Loads authored JSON with its exact registered block dependencies and explicit theme selection. */
 export const loadApplicationSource = (
   authoredSource: unknown,
-  selection: SourceApplicationThemeSelectionV2,
-): ApplicationSourceDocumentV2 => {
+  selection: SourceApplicationThemeSelection,
+): ApplicationSourceDocument => {
   const sourceObject = authoredSource as JsonObject;
   const body = sourceObject.body as JsonObject;
-  const dependencies = [...collectBlockReleases(body)]
-    .sort()
-    .map((releaseKey) => {
-      const release = releasesByKey.get(releaseKey);
-      if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
-      return {
-        kind: "platform_block" as const,
-        block_id: release.blockId,
-        release_version: release.releaseVersion,
-        content_fingerprint: release.contentFingerprint,
-        catalogue_fingerprint: release.catalogueFingerprint,
-      };
-    });
+  const dependencies = [...collectBlockReleases(body)].sort().map((releaseKey) => {
+    const release = releasesByKey.get(releaseKey);
+    if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
+    return {
+      kind: "platform_block" as const,
+      block_id: release.blockId,
+      release_version: release.releaseVersion,
+      content_fingerprint: release.contentFingerprint,
+      catalogue_fingerprint: release.catalogueFingerprint,
+    };
+  });
 
   const theme = {
     base: {
       kind: "platform_theme" as const,
-      catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueThemeId,
-      release_version: DEFAULT_PLATFORM_THEME_RELEASE_V2.releaseVersion,
-      content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.contentFingerprint,
-      catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE_V2.catalogueFingerprint,
+      catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE.catalogueThemeId,
+      release_version: DEFAULT_PLATFORM_THEME_RELEASE.releaseVersion,
+      content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint,
+      catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.catalogueFingerprint,
     },
     selection,
     token_overrides: {},
   };
 
-  return applicationSourceDocumentV2Schema.parse({
+  return applicationSourceDocumentSchema.parse({
     ...sourceObject,
     body: {
       ...body,

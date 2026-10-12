@@ -1,10 +1,10 @@
 import {
   isRecord,
-  recordLinkValueV2Schema,
+  recordLinkValueSchema,
   ruleGraphTypedValueSchema,
   type JsonValue,
-  type ModuleDefinitionConsumerReadResultV3,
-  type ModuleFieldV3,
+  type ModuleDefinitionConsumerReadResult,
+  type ModuleField,
   type RuleGraph,
   type RuleGraphInputDeclaration,
   type RuleGraphOperand,
@@ -13,12 +13,12 @@ import {
 } from "../schema";
 import { compareFlowText, flowJsonValuesEqual } from "./flow-formula";
 import {
-  evaluateResolvedTypedConditionV2,
-  semanticTypeForFieldV2,
-  valueMatchesFieldV2,
-  type ResolvedTypedConditionOperandV2,
-  type SemanticTypeV2,
-} from "./typed-condition-v2-semantics";
+  evaluateResolvedTypedCondition,
+  semanticTypeForField,
+  valueMatchesField,
+  type ResolvedTypedConditionOperand,
+  type SemanticType,
+} from "./typed-condition-semantics";
 
 export const beforeSaveRuleGraphEvaluationErrorReasons = [
   "input_refused",
@@ -53,7 +53,7 @@ export type BeforeSaveRuleRefusal = Readonly<{
 }>;
 
 type BeforeSaveRuleGraphEvaluationInputBase = Readonly<{
-  release: ModuleDefinitionConsumerReadResultV3;
+  release: ModuleDefinitionConsumerReadResult;
   subjectRecordTypeId: string;
   initialCandidateValues: Readonly<Record<string, JsonValue>>;
   inputValuesByRuleId?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
@@ -83,7 +83,7 @@ export type EvaluateBeforeSaveRuleGraphsResult =
     }>;
 
 type GraphDeclaration = RuleGraphInputDeclaration | RuleGraphVariableDeclaration;
-type ResolvedGraphOperand = ResolvedTypedConditionOperandV2 & Readonly<{ missing: boolean }>;
+type ResolvedGraphOperand = ResolvedTypedConditionOperand & Readonly<{ missing: boolean }>;
 
 const refuse = (reason: BeforeSaveRuleGraphEvaluationErrorReason): never => {
   throw new BeforeSaveRuleGraphEvaluationError(reason);
@@ -94,7 +94,7 @@ const hasOwn = (value: Readonly<Record<string, unknown>>, key: string): boolean 
 
 const clone = <Value extends JsonValue>(value: Value): Value => structuredClone(value);
 
-const semanticTypeForGraphValue = (type: RuleGraphValueType): SemanticTypeV2 => {
+const semanticTypeForGraphValue = (type: RuleGraphValueType): SemanticType => {
   switch (type) {
     case "whole_number":
       return "whole_number";
@@ -135,19 +135,19 @@ const valueMatchesDeclaration = (
   });
   if (!parsed.success) return false;
   if (declaration.recordTypeIds === undefined) return true;
-  const link = recordLinkValueV2Schema.safeParse(value);
+  const link = recordLinkValueSchema.safeParse(value);
   return link.success && declaration.recordTypeIds.includes(link.data.recordTypeId);
 };
 
 const validateFieldMap = (
   values: Readonly<Record<string, JsonValue>>,
-  fieldsById: ReadonlyMap<string, ModuleFieldV3>,
+  fieldsById: ReadonlyMap<string, ModuleField>,
 ): Map<string, JsonValue> => {
   if (!isRecord(values)) refuse("input_refused");
   const validated = new Map<string, JsonValue>();
   for (const [fieldId, value] of Object.entries(values)) {
     const field = fieldsById.get(fieldId);
-    if (field === undefined || value === null || !valueMatchesFieldV2(value, field))
+    if (field === undefined || value === null || !valueMatchesField(value, field))
       refuse("input_refused");
     validated.set(fieldId, clone(value));
   }
@@ -191,7 +191,7 @@ const graphVariables = (graph: RuleGraph): Map<string, JsonValue> => {
 };
 
 const resolved = (
-  type: SemanticTypeV2,
+  type: SemanticType,
   value: JsonValue | undefined,
   missing: boolean,
   literal = false,
@@ -205,7 +205,7 @@ const resolved = (
 const resolveOperand = (
   operand: RuleGraphOperand,
   graph: RuleGraph,
-  fieldsById: ReadonlyMap<string, ModuleFieldV3>,
+  fieldsById: ReadonlyMap<string, ModuleField>,
   candidate: ReadonlyMap<string, JsonValue>,
   previous: ReadonlyMap<string, JsonValue> | undefined,
   inputs: ReadonlyMap<string, JsonValue>,
@@ -243,7 +243,7 @@ const resolveOperand = (
   if (field === undefined) return refuse("graph_refused");
   const values = operand.source === "current_field" ? candidate : previous;
   return resolved(
-    semanticTypeForFieldV2(field),
+    semanticTypeForField(field),
     values?.get(operand.fieldId),
     values === undefined || !values.has(operand.fieldId),
   );
@@ -283,8 +283,7 @@ export const evaluateBeforeSaveRuleGraphs = (
         ),
     )
     .sort(
-      (left, right) =>
-        left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
+      (left, right) => left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
     );
   const applicableIds = new Set<string>(applicableGraphs.map((graph) => graph.ruleId));
   if (Object.keys(suppliedByRule).some((ruleId) => !applicableIds.has(ruleId)))
@@ -317,7 +316,7 @@ export const evaluateBeforeSaveRuleGraphs = (
         continue;
       }
       if (node.type === "condition") {
-        const outcome = evaluateResolvedTypedConditionV2(node.condition, (operand) =>
+        const outcome = evaluateResolvedTypedCondition(node.condition, (operand) =>
           resolveOperand(operand, graph, fieldsById, candidate, previous, inputs, variables),
         );
         nextNodeId = outgoingEdge(graph, node.nodeId, outcome ? "true" : "false");

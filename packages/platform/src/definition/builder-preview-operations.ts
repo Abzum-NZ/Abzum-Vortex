@@ -19,7 +19,7 @@ import {
   previewInstallationDiscardResultSchema,
   previewInstallationSchema,
 } from "./preview-installation-contracts";
-import { saveRecordCommandV2Schema, saveRecordResultV2Schema } from "../records/records";
+import { saveRecordCommandSchema, saveRecordResultSchema } from "../records/records";
 import { publicDefinitionValidationErrorSchema } from "../catalogue/validation-errors";
 
 export const builderPreviewOperationLocationSchema = z.discriminatedUnion("kind", [
@@ -121,7 +121,7 @@ export const builderPreviewSaveRecordRequestSchema = z
       .uuid()
       .refine((value) => value !== "00000000-0000-0000-0000-000000000000"),
     expectedDraftRevision: revisionSchema,
-    command: saveRecordCommandV2Schema,
+    command: saveRecordCommandSchema,
   })
   .strict()
   .superRefine((request, context) => {
@@ -148,7 +148,9 @@ export const builderPreviewReadResultSchema = z.union([
 
 export const builderPreviewDiscardResultSchema = z.union([
   builderPreviewOperationRefusalSchema,
-  z.object({ kind: z.literal("discarded"), result: previewInstallationDiscardResultSchema }).strict(),
+  z
+    .object({ kind: z.literal("discarded"), result: previewInstallationDiscardResultSchema })
+    .strict(),
 ]);
 
 export const builderPreviewRunFlowResultSchema = z.union([
@@ -170,30 +172,22 @@ export const builderPreviewSaveRecordResultSchema = z.union([
   z
     .object({
       kind: z.literal("completed"),
-      result: saveRecordResultV2Schema.refine((result) => result.outcome !== "refused", {
+      result: saveRecordResultSchema.refine((result) => result.outcome !== "refused", {
         message: "A refused record save must be returned as a located refusal",
       }),
     })
     .strict(),
 ]);
 
-export type BuilderPreviewOperationLocation = z.infer<
-  typeof builderPreviewOperationLocationSchema
->;
-export type BuilderPreviewOperationRefusal = z.infer<
-  typeof builderPreviewOperationRefusalSchema
->;
+export type BuilderPreviewOperationLocation = z.infer<typeof builderPreviewOperationLocationSchema>;
+export type BuilderPreviewOperationRefusal = z.infer<typeof builderPreviewOperationRefusalSchema>;
 export type BuilderPreviewCreateRequest = z.infer<typeof builderPreviewCreateRequestSchema>;
 export type BuilderPreviewReadRequest = z.infer<typeof builderPreviewReadRequestSchema>;
 export type BuilderPreviewDiscardRequest = z.infer<typeof builderPreviewDiscardRequestSchema>;
 export type BuilderPreviewRunFlowRequest = z.infer<typeof builderPreviewRunFlowRequestSchema>;
-export type BuilderPreviewSaveRecordRequest = z.infer<
-  typeof builderPreviewSaveRecordRequestSchema
->;
+export type BuilderPreviewSaveRecordRequest = z.infer<typeof builderPreviewSaveRecordRequestSchema>;
 export type BuilderPreviewCreateResult = z.infer<typeof builderPreviewCreateResultSchema>;
 export type BuilderPreviewReadResult = z.infer<typeof builderPreviewReadResultSchema>;
 export type BuilderPreviewDiscardResult = z.infer<typeof builderPreviewDiscardResultSchema>;
 export type BuilderPreviewRunFlowResult = z.infer<typeof builderPreviewRunFlowResultSchema>;
-export type BuilderPreviewSaveRecordResult = z.infer<
-  typeof builderPreviewSaveRecordResultSchema
->;
+export type BuilderPreviewSaveRecordResult = z.infer<typeof builderPreviewSaveRecordResultSchema>;

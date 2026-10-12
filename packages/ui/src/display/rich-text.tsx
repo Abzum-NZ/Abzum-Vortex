@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { richTextDocumentV2Schema } from "@vortex/platform/schema";
+import { richTextDocumentSchema } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import type {
   DisplayRichTextBlock,
@@ -100,7 +100,7 @@ const renderBlock = (block: DisplayRichTextBlock, key: number): ReactNode => {
 export function RichTextDocumentView({
   document,
 }: Readonly<{ document: DisplayRichTextDocument }>): ReactElement {
-  const parsed = richTextDocumentV2Schema.safeParse(document);
+  const parsed = richTextDocumentSchema.safeParse(document);
   if (!parsed.success) {
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",

@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
-  attachmentListPayloadV2Schema,
+  attachmentListPayloadSchema,
   validateComponentSettings,
-  type AttachmentListPayloadV2,
+  type AttachmentListPayload,
 } from "@vortex/platform/schema";
 import { Card, CardContent, CardHeader } from "./components/card";
 import { Separator } from "./components/separator";
@@ -15,8 +15,8 @@ import { parseDisplayData, parseDisplayEventHandlers } from "./display/projected
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 
 type ReadonlyAttachmentListPayload = Readonly<{
-  kind: AttachmentListPayloadV2["kind"];
-  files: readonly Readonly<AttachmentListPayloadV2["files"][number]>[];
+  kind: AttachmentListPayload["kind"];
+  files: readonly Readonly<AttachmentListPayload["files"][number]>[];
 }>;
 
 function refuse(location: DefinitionRenderErrorLocation): never {
@@ -32,7 +32,7 @@ function parseAttachmentListPayload(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ReadonlyAttachmentListPayload {
-  const parsed = attachmentListPayloadV2Schema.safeParse(value);
+  const parsed = attachmentListPayloadSchema.safeParse(value);
   if (!parsed.success) return refuse(location);
   return Object.freeze({
     kind: parsed.data.kind,
@@ -74,7 +74,9 @@ export function SearchAttachmentDisplay(
       "Attachment list received a different immutable release",
       location,
     );
-  if (validateComponentSettings(props.settings, ATTACHMENT_LIST_BLOCK_RELEASE.properties).length !== 0)
+  if (
+    validateComponentSettings(props.settings, ATTACHMENT_LIST_BLOCK_RELEASE.properties).length !== 0
+  )
     return refuse(location);
 
   const {
