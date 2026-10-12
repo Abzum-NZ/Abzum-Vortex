@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   databaseTimestamp,
   databaseRevision,
+  describeFailure,
   archiveTenantOrganizationCommandSchema,
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
@@ -108,6 +109,8 @@ const databaseCode = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error
     ? String((error as { code?: unknown }).code)
     : undefined;
+// A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
+export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {
   switch (databaseCode(error)) {
     case "V3001":
@@ -126,6 +129,8 @@ const mutationCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
+      if (!(error instanceof Error && error.name === transactionPoisonErrorName))
+        console.error(`[identity] tenant governance operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
@@ -215,7 +220,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -239,7 +245,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -257,7 +264,8 @@ export const createTenantGovernanceService = (
         );
         if (rows.length !== 1) return readRefusal(false);
         return { outcome: "available", organization: hierarchyEntry(rows[0]!) };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -279,7 +287,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },

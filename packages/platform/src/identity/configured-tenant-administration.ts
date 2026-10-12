@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   databaseTimestamp,
   databaseRevision,
+  describeFailure,
   adoptOrganizationCommandSchema,
   adoptOrganizationResultSchema,
   adoptTenantCommandSchema,
@@ -150,6 +151,7 @@ const refusalCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
+      console.error(`[identity] configured operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
@@ -164,6 +166,7 @@ const superAdministratorBootstrapCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
+      console.error(`[identity] configured operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
@@ -215,13 +218,15 @@ export const createConfiguredTenantAdministrationService = (
         };
       try {
         const value = command.data;
-        const rows = await run((transaction) => transaction.query<SuperAdministratorBootstrapRow>`
+        const rows = await run(
+          (transaction) => transaction.query<SuperAdministratorBootstrapRow>`
           select *
           from vortex_identity.bootstrap_vortex_super_administrator(
             ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid,
             ${value.identityId}::uuid
           )
-        `);
+        `,
+        );
         const row = one(rows);
         if (row === undefined)
           return {
@@ -300,7 +305,10 @@ export const createConfiguredTenantAdministrationService = (
               acceptedAt: databaseTimestamp(row.accepted_at),
             },
           );
-          if (!parsed.success) throw new Error("Configured provisioning result contract mismatch");
+          if (!parsed.success)
+            throw new Error("Configured provisioning result contract mismatch", {
+              cause: parsed.error,
+            });
           return parsed.data;
         });
       } catch (error) {
@@ -546,8 +554,7 @@ export const createConfiguredTenantAdministrationService = (
 };
 
 const defaultService = createConfiguredTenantAdministrationService();
-export const bootstrapVortexSuperAdministrator =
-  defaultService.bootstrapVortexSuperAdministrator;
+export const bootstrapVortexSuperAdministrator = defaultService.bootstrapVortexSuperAdministrator;
 export const provisionTenant = defaultService.provisionTenant;
 export const adoptTenant = defaultService.adoptTenant;
 export const adoptOrganization = defaultService.adoptOrganization;

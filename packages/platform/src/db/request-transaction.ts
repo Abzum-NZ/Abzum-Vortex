@@ -119,8 +119,9 @@ const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabase
     withSavepoint: <Result>(
       operation: (child: SavepointRequestDatabaseTransaction) => Promise<Result>,
     ) =>
-      (withSavepoint<Result>).call(transaction, async (child) =>
-        await operation(requireRequestSavepoint(child)),
+      (withSavepoint<Result>).call(
+        transaction,
+        async (child) => await operation(requireRequestSavepoint(child)),
       ),
   };
   return capable;
@@ -576,22 +577,24 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
   }
 
   async transportSettled(): Promise<void> {
-    let endFailed = false;
-    await this.ended?.catch(() => {
-      endFailed = true;
+    let endFailure: unknown;
+    await this.ended?.catch((error: unknown) => {
+      endFailure = error ?? new Error("Client end rejected without a reason");
     });
     await this.sockets.settled();
-    if (endFailed) throw requestDatabaseError("DATABASE_CLIENT_END_FAILED");
+    if (endFailure !== undefined)
+      throw requestDatabaseError("DATABASE_CLIENT_END_FAILED", endFailure);
   }
 
   private async settled(): Promise<void> {
-    let transportFailed = false;
-    await this.transportSettled().catch(() => {
-      transportFailed = true;
+    let transportFailure: unknown;
+    await this.transportSettled().catch((error: unknown) => {
+      transportFailure = error;
     });
     await this.queries.settled();
     await this.transactions.settled();
-    if (transportFailed) throw requestDatabaseError("DATABASE_CLIENT_END_FAILED");
+    if (transportFailure !== undefined)
+      throw requestDatabaseError("DATABASE_CLIENT_END_FAILED", transportFailure);
   }
 }
 

@@ -93,8 +93,10 @@ const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-const invalidStorage = (): never => {
-  throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_STORAGE_RESULT");
+const invalidStorage = (cause: unknown): never => {
+  throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_STORAGE_RESULT", {
+    cause,
+  });
 };
 
 const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult => {
@@ -138,7 +140,9 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
         },
     meaningFingerprint: row.meaning_fingerprint,
   });
-  return parsed.success ? { outcome: "available", entry: parsed.data } : invalidStorage();
+  return parsed.success
+    ? { outcome: "available", entry: parsed.data }
+    : invalidStorage(parsed.error);
 };
 
 const parseSnapshot = (row: ApplicationSnapshotRow): ApplicationPermissionCatalogueSnapshot => {
@@ -159,7 +163,7 @@ const parseSnapshot = (row: ApplicationSnapshotRow): ApplicationPermissionCatalo
     catalogueFingerprint: row.catalogue_fingerprint,
     permissionIds: row.permission_ids,
   });
-  return parsed.success ? parsed.data : invalidStorage();
+  return parsed.success ? parsed.data : invalidStorage(parsed.error);
 };
 
 const mapStorageFailure = (error: unknown): PermissionRegistryRepositoryError => {
@@ -168,14 +172,24 @@ const mapStorageFailure = (error: unknown): PermissionRegistryRepositoryError =>
       ? String((error as { readonly code?: unknown }).code)
       : undefined;
   if (databaseCode === "22023")
-    return new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+    return new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND", {
+      cause: error,
+    });
   if (databaseCode === "42501")
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_SCOPE_UNAVAILABLE");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_SCOPE_UNAVAILABLE", {
+      cause: error,
+    });
   if (databaseCode === "22003")
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_ACCESS_VERSION_EXHAUSTED");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_ACCESS_VERSION_EXHAUSTED", {
+      cause: error,
+    });
   if (["23503", "23505", "40001", "55000"].includes(databaseCode ?? ""))
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_STALE_OR_UNAVAILABLE");
-  return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_OPERATION_FAILED");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_STALE_OR_UNAVAILABLE", {
+      cause: error,
+    });
+  return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_OPERATION_FAILED", {
+    cause: error,
+  });
 };
 
 const execute = async <Result>(operation: () => Promise<Result>): Promise<Result> => {

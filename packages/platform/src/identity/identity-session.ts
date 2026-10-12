@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   identitySessionResolutionSchema,
   type CorrelationId,
   type IdentityProjection,
@@ -34,9 +35,15 @@ export type IdentitySessionServiceDependencies = Readonly<{
 const closed = (result: IdentitySessionResolution): IdentitySessionResolution =>
   identitySessionResolutionSchema.parse(result);
 
+// Refusals of a bad token are expected; an unexpected exception (or a refusal that carries one as
+// its cause) is a platform defect and is logged once with its safe description.
 const verificationFailure = (error: unknown): IdentitySessionResolution => {
-  if (!(error instanceof IdentityVerificationError))
+  if (!(error instanceof IdentityVerificationError)) {
+    console.error(`[identity] session verification failed: ${describeFailure(error)}`);
     return closed({ kind: "invalid_session_state" });
+  }
+  if (error.cause !== undefined)
+    console.error(`[identity] session verification failed: ${describeFailure(error)}`);
   const code: IdentityVerificationRefusalCode = error.refusalCode;
   if (code === "vortex.identity.authority_unavailable")
     return closed({ kind: "temporarily_unavailable" });
@@ -45,8 +52,10 @@ const verificationFailure = (error: unknown): IdentitySessionResolution => {
   return closed({ kind: "invalid_session_state" });
 };
 
-const projectionFailure = (): IdentitySessionResolution =>
-  closed({ kind: "temporarily_unavailable" });
+const projectionFailure = (error: unknown): IdentitySessionResolution => {
+  console.error(`[identity] session projection failed: ${describeFailure(error)}`);
+  return closed({ kind: "temporarily_unavailable" });
+};
 
 const activeResult = (
   verifiedIdentity: VerifiedIdentity,
@@ -121,8 +130,8 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
         });
         dependencies.checkpoint?.();
         return activeResult(verified.identity, projection, clock);
-      } catch {
-        return projectionFailure();
+      } catch (error) {
+        return projectionFailure(error);
       }
     },
 
@@ -133,13 +142,9 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
         dependencies.checkpoint?.();
         const projection = await dependencies.readProjection(verified.identity);
         dependencies.checkpoint?.();
-        return activeResult(
-          verified.identity,
-          projection,
-          clock,
-        );
-      } catch {
-        return projectionFailure();
+        return activeResult(verified.identity, projection, clock);
+      } catch (error) {
+        return projectionFailure(error);
       }
     },
   });

@@ -226,6 +226,18 @@ export const signInWithLocalDevelopmentAccount = async (
   }
 };
 
+// Only the error class, HTTP status and provider code are logged: the message can carry the email.
+const logProviderFailure = (journey: string, error: unknown): void => {
+  const { name, status, code } = (error ?? {}) as {
+    name?: unknown;
+    status?: unknown;
+    code?: unknown;
+  };
+  console.error(
+    `[identity] ${journey} provider failure: ${String(name)} status=${String(status)} code=${String(code)}`,
+  );
+};
+
 const confirmationUrl = (configuration: IdentityJourneyConfiguration): string =>
   new URL("/auth/confirm", configuration.siteUrl).toString();
 
@@ -243,16 +255,18 @@ export const requestRegistration = async (
 
   try {
     const authority = createAuthorityClient(configuration);
-    await authority.auth.signUp({
+    const { error } = await authority.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: confirmationUrl(configuration) },
     });
+    if (error) logProviderFailure("registration", error);
 
     // Registration acknowledgement is intentionally neutral. Existing and new addresses
     // receive the same result so this boundary cannot be used for identity discovery.
     return { ok: true };
-  } catch {
+  } catch (error) {
+    logProviderFailure("registration", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
 };
@@ -300,11 +314,13 @@ export const requestPasswordRecovery = async (
 
   try {
     const authority = createAuthorityClient(configuration);
-    await authority.auth.resetPasswordForEmail(email, {
+    const { error } = await authority.auth.resetPasswordForEmail(email, {
       redirectTo: updatePasswordUrl(configuration),
     });
-  } catch {
+    if (error) logProviderFailure("password recovery", error);
+  } catch (error) {
     // Recovery acknowledgement never reveals whether an identity or authority call exists.
+    logProviderFailure("password recovery", error);
   }
 
   return { ok: true };

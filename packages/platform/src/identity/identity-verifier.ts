@@ -53,8 +53,8 @@ export type IdentityVerifier = Readonly<{
   checkpoint?(): void;
 }>;
 
-const refuse = (refusalCode: IdentityVerificationRefusalCode): never => {
-  throw new IdentityVerificationError(refusalCode);
+const refuse = (refusalCode: IdentityVerificationRefusalCode, cause?: unknown): never => {
+  throw new IdentityVerificationError(refusalCode, cause === undefined ? undefined : { cause });
 };
 
 const parseAuthority = (input: unknown): IdentityAuthority => {
@@ -214,6 +214,7 @@ const createIdentityVerifierWithClient = (
           isAuthRetryableFetchError(error)
             ? "vortex.identity.authority_unavailable"
             : "vortex.identity.token_verification_failed",
+          error,
         );
       }
 
