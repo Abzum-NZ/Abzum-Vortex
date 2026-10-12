@@ -184,6 +184,15 @@ begin
     ), '[]'::jsonb),
     'recordId', p_record_id,
     'existingValues', loaded -> 'fieldValues',
+    -- A singleton required permission was decided by the named-action access
+    -- check above. The Record port may use it for a choice gated by that exact
+    -- permission; a multi-permission declaration grants no such shortcut.
+    'singleRequiredPermissionId', case
+      when pg_catalog.jsonb_array_length(
+        loaded #> '{declaration,requiredPermissions}'
+      ) = 1 then loaded #> '{declaration,requiredPermissions,0,permissionId}'
+      else 'null'::jsonb
+    end,
     'readableFieldIds', bounds -> 'readableFieldIds',
     'changeableFieldIds', bounds -> 'changeableFieldIds',
     'eventDescriptors', action_context -> 'eventDescriptors',

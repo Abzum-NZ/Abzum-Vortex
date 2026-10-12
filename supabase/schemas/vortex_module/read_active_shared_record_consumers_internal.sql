@@ -237,12 +237,7 @@ begin
         or module_release.compilation_output #>> '{canonical,envelope,kind}'
           is distinct from 'module'
         or module_release.compilation_output #>> '{canonical,envelope,validationContractVersion}'
-          is distinct from module_release.validation_contract_version
-        or module_binding.content_fingerprint is distinct from module_release.content_fingerprint
-        or module_binding.resolution_fingerprint is distinct from module_release.resolution_fingerprint
-        -- The current release_provisions/installation_bindings constraints and
-        -- provisioner both pin this generator contract; it is not caller input.
-        or module_binding.generator_contract_version is distinct from '1.0.0' then
+          is distinct from module_release.validation_contract_version then
         continue application_loop;
       end if;
 
@@ -309,9 +304,9 @@ begin
           'applicationReleaseRevision', module_binding.application_release_revision,
           'moduleReleaseRevision', module_binding.module_release_revision,
           'state', module_binding.state,
-          'contentFingerprint', module_binding.content_fingerprint,
-          'resolutionFingerprint', module_binding.resolution_fingerprint,
-          'generatorContractVersion', module_binding.generator_contract_version,
+          'contentFingerprint', module_release.content_fingerprint,
+          'resolutionFingerprint', module_release.resolution_fingerprint,
+          'generatorContractVersion', '1.0.0',
           'storageContractIds', pg_catalog.to_jsonb(storage_provision.storage_contract_ids)
         )
       );

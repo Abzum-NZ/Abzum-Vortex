@@ -8,6 +8,7 @@ import {
   executeNamedActionCommandV2Schema,
   executeNamedActionResultV2Schema,
   moduleValidationContractVersionV3,
+  permissionIdSchema,
   recordTypeDefinitionV3Schema,
   saveRecordCommandV2Schema,
   type ExecuteNamedActionCommandV2,
@@ -47,6 +48,7 @@ import {
   calculateLockedRelationshipTotalSave,
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
+import type { RecordFieldValuePendingCheck } from "./field-values";
 import {
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
@@ -64,6 +66,7 @@ type PreparedAction = PreparedNamedAction &
     changeableFieldIds: ReadonlySet<string>;
     eventDescriptorCount: number;
     correlationId: string;
+    singleRequiredPermissionId?: string;
     /** The exact release's compiled before-save rules for the subject, unparsed. */
     beforeSaveRules?: unknown;
   }>;
@@ -166,6 +169,12 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     return { outcome: value.outcome, ...(correlationId ? { correlationId } : {}) };
   if (value.outcome !== "prepared" && value.outcome !== "previewed")
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
+  const singleRequiredPermissionId =
+    value.singleRequiredPermissionId === null || value.singleRequiredPermissionId === undefined
+      ? undefined
+      : permissionIdSchema.safeParse(value.singleRequiredPermissionId);
+  if (singleRequiredPermissionId !== undefined && !singleRequiredPermissionId.success)
+    return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   const actionV2 = actionDefinitionV3Schema.safeParse(value.action);
   const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
@@ -190,13 +199,26 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     correlationId === undefined
   )
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
+  // Ordinary storage reads represent unset optional columns as null. The field
+  // candidate treats absence as unset, as the base save preparation does.
+  const existingValues = { ...(value.existingValues as Record<string, unknown>) };
+  for (const field of recordType.data.fields) {
+    if (
+      !field.required &&
+      field.type !== "reference_number" &&
+      field.type !== "calculation" &&
+      field.type !== "total" &&
+      existingValues[field.fieldId] === null
+    )
+      delete existingValues[field.fieldId];
+  }
   return {
     outcome: value.outcome,
     validationContractVersion: moduleValidationContractVersionV3,
     action: actionV2.data,
     recordType: recordType.data,
     recordId: value.recordId,
-    existingValues: value.existingValues as Readonly<Record<string, unknown>>,
+    existingValues,
     actorOrganizationAccountId: value.actorOrganizationAccountId,
     createTargets,
     readableFieldIds: new Set(
@@ -207,9 +229,21 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     ),
     eventDescriptorCount: value.eventDescriptors.length,
     correlationId,
+    ...(singleRequiredPermissionId === undefined
+      ? {}
+      : { singleRequiredPermissionId: singleRequiredPermissionId.data }),
     ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
   };
 };
+
+const pendingCheckIsAuthorized = (
+  check: RecordFieldValuePendingCheck,
+  singleRequiredPermissionId: string | undefined,
+): boolean =>
+  check.kind === "record_reference" ||
+  (check.kind === "choice_permission" &&
+    singleRequiredPermissionId !== undefined &&
+    check.permissionId.toLowerCase() === singleRequiredPermissionId.toLowerCase());
 
 /**
  * Finalises each creation on its own when the merged closure reported
@@ -247,7 +281,11 @@ const creationFinalValues = (
       timeZone,
     });
     if (!calculated.success) return undefined;
-    if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
+    if (
+      calculated.pendingChecks.some(
+        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+      )
+    )
       return undefined;
     const created: Record<string, JsonValue | null> = { ...calculated.setValues };
     for (const fieldId of calculated.clearFieldIds) created[fieldId] = null;
@@ -549,8 +587,9 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 : safeRefusal(prepared.correlationId, "operation_refused");
             }
             const composition = preparedRun.composition;
-            const previewComposition = (previewRun as Extract<FlowComposition, { kind: "composed" }>)
-              .composition;
+            const previewComposition = (
+              previewRun as Extract<FlowComposition, { kind: "composed" }>
+            ).composition;
             if (
               JSON.stringify(composition.submittedValues) !==
                 JSON.stringify(previewComposition.submittedValues) ||
@@ -649,12 +688,19 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 (totalPreparation.outcome === "prepared" && root === undefined)
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
-              if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
+              if (
+                calculated.pendingChecks.some(
+                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+                )
+              )
                 return safeRefusal(prepared.correlationId, "operation_refused");
               if (
                 "creationPendingChecks" in calculated &&
                 Object.values(calculated.creationPendingChecks).some((checks) =>
-                  checks.some((check) => check.kind !== "record_reference"),
+                  checks.some(
+                    (check) =>
+                      !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+                  ),
                 )
               )
                 return safeRefusal(prepared.correlationId, "operation_refused");
@@ -775,7 +821,8 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       backgroundDelivery: "pending",
                     })
                   : undefined;
-              if (deletedResult === undefined) throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
+              if (deletedResult === undefined)
+                throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
               return deletedResult;
             } catch (error) {
               deleteSettlement = settleRecordLifecycleError(error);

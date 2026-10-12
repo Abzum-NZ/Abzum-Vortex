@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Field } from "@vortex/ui/components/field";
+import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { AuthShell } from "../_components/auth-shell";
@@ -12,6 +12,16 @@ export default function UpdatePasswordPage() {
       eyebrow="Password recovery"
       title="Choose a new password"
       description="Enter the email address and six-digit recovery code from your message, then choose a new password. Opening this page does not change your password."
+      footer={
+        <div className="text-center text-sm">
+          <Link
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
+            href="/auth/recover"
+          >
+            Request a new recovery code
+          </Link>
+        </div>
+      }
     >
       <form className="flex flex-col gap-5" action={updatePassword}>
         <Field>
@@ -42,15 +52,12 @@ export default function UpdatePasswordPage() {
             pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
             required
           />
-          <p className="text-sm text-muted-foreground">
+          <FieldDescription>
             Use at least 8 characters, including a letter and a number.
-          </p>
+          </FieldDescription>
         </Field>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>
-      <Link className="font-medium underline underline-offset-4" href="/auth/recover">
-        Request a new recovery code
-      </Link>
     </AuthShell>
   );
 }

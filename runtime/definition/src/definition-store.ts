@@ -8,6 +8,7 @@ import {
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
 } from "@vortex/contracts";
+import type { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalValue } from "./canonical-json";
@@ -32,8 +33,8 @@ export type DefinitionStoreErrorCode = (typeof definitionStoreErrorCodes)[number
 export class DefinitionStoreError extends Error {
   readonly code: DefinitionStoreErrorCode;
 
-  constructor(code: DefinitionStoreErrorCode, options?: ErrorOptions) {
-    super(code, options);
+  constructor(code: DefinitionStoreErrorCode, options?: ErrorOptions & { detail?: string }) {
+    super(options?.detail ? `${code}: ${options.detail}` : code, options);
     this.name = "DefinitionStoreError";
     this.code = code;
   }
@@ -124,10 +125,35 @@ const parseStoredDraft = (row: StoredDraftRow): StoredDefinitionDraft => {
   return result.data;
 };
 
+const sourceFailureDetail = (validation: ReturnType<typeof validateDefinitionSource>): string => {
+  const first = validation.failures[0]!;
+  const path =
+    first.location?.segments.map((segment) => `${segment.kind}:${segment.key}`).join("/") ??
+    "source";
+  return `${path}: ${first.family} (${first.ruleCode})`;
+};
+
 const validateSource = (source: CreateDefinitionRootCommand["source"]) => {
   const validation = validateDefinitionSource(source);
-  if (!validation.valid) throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE");
+  if (!validation.valid)
+    throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", {
+      detail: sourceFailureDetail(validation),
+    });
   return source;
+};
+
+const invalidSourceDetail = (candidate: unknown): string | undefined => {
+  if (candidate === null || typeof candidate !== "object" || !("source" in candidate))
+    return undefined;
+  const validation = validateDefinitionSource(candidate.source);
+  return validation.valid ? undefined : sourceFailureDetail(validation);
+};
+
+const commandIssueDetail = (error: z.ZodError): string => {
+  const issue = error.issues[0];
+  if (!issue) return "command: invalid value";
+  const path = issue.path.map(String).join(".") || "command";
+  return `${path}: ${issue.message}`;
 };
 
 type DefinitionStoreOperation = "create_root" | "save_draft";
@@ -188,7 +214,14 @@ export const createDefinitionStore = (
     await requireBuilderAuthority(authority, { kind: "draft_change" });
     return safeStoreOperation("create_root", async () => {
       const command = createDefinitionRootCommandSchema.safeParse(candidate);
-      if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      if (!command.success) {
+        const sourceDetail = invalidSourceDetail(candidate);
+        if (sourceDetail)
+          throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
+        throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND", {
+          detail: commandIssueDetail(command.error),
+        });
+      }
       const source = validateSource(command.data.source);
       if (
         mode.kind === "trusted_application" &&
@@ -233,12 +266,27 @@ export const createDefinitionStore = (
       createRoot(candidate, { kind: "trusted_application", applicationOriginKind }),
 
     async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
-      const rootId = saveDefinitionDraftCommandSchema.safeParse(candidate);
+      const rootId = saveDefinitionDraftCommandSchema.pick({ rootId: true }).safeParse({
+        rootId:
+          typeof candidate === "object" && candidate !== null
+            ? (candidate as { rootId?: unknown }).rootId
+            : undefined,
+      });
       if (!rootId.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
-      await requireBuilderAuthority(authority, { kind: "draft_change", rootId: rootId.data.rootId });
+      await requireBuilderAuthority(authority, {
+        kind: "draft_change",
+        rootId: rootId.data.rootId,
+      });
       return safeStoreOperation("save_draft", async () => {
         const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
-        if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+        if (!command.success) {
+          const sourceDetail = invalidSourceDetail(candidate);
+          if (sourceDetail)
+            throw new DefinitionStoreError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
+          throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND", {
+            detail: commandIssueDetail(command.error),
+          });
+        }
         const source = validateSource(command.data.source);
         const sourceFingerprint = fingerprintCanonicalValue(source);
         const identityRequirements = extractStoredSourceIdentityRequirements(source);

@@ -29,6 +29,7 @@ const shippedApplicationKeys = [
   "vortex.app.operations",
   "vortex.app.crm",
   "vortex.app.hr",
+  "vortex.app.tasks",
   "vortex.app.service_desk",
   "vortex.app.landing_zone",
 ] as const;

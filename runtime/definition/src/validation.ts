@@ -1,5 +1,8 @@
 import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
   applicationDraftV2Schema,
   boardBlockSourceIsSupported,
   readBoardPlacementContract,
@@ -91,9 +94,7 @@ import { applicationSearchFieldIsSelectable } from "./application-v2-resolution"
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
 type PublicationCompilationRequest =
-  | DefinitionCompilationRequest
-  | ApplicationCompilationRequestV2
-  | ModuleCompilationRequestV3;
+  DefinitionCompilationRequest | ApplicationCompilationRequestV2 | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
 type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocument;
 
@@ -263,9 +264,7 @@ const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
   return (
     !types.includes("record.delete") ||
     (types.filter((type) => type === "record.delete").length === 1 &&
-      types.every((type) =>
-        ["record.delete", "record.changes", "event.announce"].includes(type),
-      ))
+      types.every((type) => ["record.delete", "record.changes", "event.announce"].includes(type)))
   );
 };
 
@@ -362,7 +361,9 @@ function sourceTranslationContext(source: unknown) {
     const insideFlow = current.segments.some((segment) => segment.kind === "flow");
     // A flow's tasks, at any depth, are located by their readable task id.
     const locationKind =
-      insideFlow && current.collectionName !== undefined && flowTaskListNames.has(current.collectionName)
+      insideFlow &&
+      current.collectionName !== undefined &&
+      flowTaskListNames.has(current.collectionName)
         ? "flow_node"
         : current.collectionName
           ? sourceCollectionLocationKind[
@@ -399,6 +400,73 @@ function sourceTranslationContext(source: unknown) {
   }
   return { rootLocation, pathMap };
 }
+
+const sourceValueAtPath = (source: unknown, path: DefinitionPath): unknown =>
+  path.reduce<unknown>((value, part) => {
+    if (value === null || typeof value !== "object") return undefined;
+    return (value as Record<string | number, unknown>)[part];
+  }, source);
+
+const unlistedBlockPath = (source: unknown): DefinitionPath | undefined => {
+  if (!isApplicationSource(source)) return undefined;
+  const body = object(object(source).body);
+  const listed = new Set(
+    array(body.platform_block_dependencies).map(
+      (entry) => `${entry.block_id}@${entry.release_version}`,
+    ),
+  );
+  const pending: { value: unknown; path: DefinitionPath }[] = [{ value: body, path: ["body"] }];
+  let visited = 0;
+  while (pending.length > 0 && visited++ < 50_000) {
+    const current = pending.pop()!;
+    if (current.value === null || typeof current.value !== "object") continue;
+    const entries = Object.entries(current.value);
+    for (const [key, value] of entries) {
+      if (key === "block" && value !== null && typeof value === "object") {
+        const block = object(value);
+        if (!listed.has(`${block.block_id}@${block.release_version}`))
+          return [...current.path, "block", "block_id"];
+      }
+    }
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const [key, value] = entries[index]!;
+      pending.push({
+        value,
+        path: [...current.path, Array.isArray(current.value) ? Number(key) : key],
+      });
+    }
+  }
+  return undefined;
+};
+
+const issueLocation = (
+  translation: NonNullable<ReturnType<typeof sourceTranslationContext>>,
+  path: DefinitionPath,
+): DefinitionValidationLocation => {
+  const ancestor = [...translation.pathMap]
+    .reverse()
+    .find((entry) => entry.sourcePath.every((part, index) => path[index] === part));
+  const location = ancestor?.location ?? translation.rootLocation;
+  const property = [...path].reverse().find((part): part is string => typeof part === "string");
+  if (
+    property === undefined ||
+    location.segments.length >= 12 ||
+    !builderKeySchema.safeParse(property).success
+  )
+    return location;
+  const placementIndex = path.lastIndexOf("placements");
+  const placementAlias = placementIndex < 0 ? undefined : path[placementIndex + 1];
+  const namedPlacement =
+    typeof placementAlias === "string" &&
+    builderKeySchema.safeParse(placementAlias).success &&
+    location.segments.length < 11
+      ? [{ kind: "setting" as const, key: placementAlias }]
+      : [];
+  return {
+    ...location,
+    segments: [...location.segments, ...namedPlacement, { kind: "setting", key: property }],
+  };
+};
 
 function leafPaths(value: unknown, path: DefinitionPath = []): DefinitionPath[] {
   if (Array.isArray(value))
@@ -456,7 +524,7 @@ function localIdentityRule(context: PreparedValidationContext): DefinitionRuleFa
         const canonical = object(candidate.canonical);
         return String(object(canonical.envelope ?? canonical).key) === sourceKey;
       }) ?? context.outputs[index];
-    let duplicate = false;
+    let duplicateKey: string | undefined;
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
     if (!parsed.success) continue;
     walkDefinitionContract(parsed.schema, parsed.data, (schema, value) => {
@@ -476,19 +544,36 @@ function localIdentityRule(context: PreparedValidationContext): DefinitionRuleFa
             )
             .map((entry) => entry[property])
             .filter((entry): entry is string => typeof entry === "string");
-          if (new Set(values).size !== values.length) duplicate = true;
+          const seen = new Set<string>();
+          for (const key of values) {
+            if (seen.has(key)) duplicateKey ??= key;
+            seen.add(key);
+          }
         }
       }
     });
-    if (duplicate)
-      failures.push(
-        output
-          ? failure(output, "vortex.definition.local_identity_unique", "duplicate_key")
-          : {
-              ruleCode: "vortex.definition.local_identity_unique",
-              family: "duplicate_key",
-            },
-      );
+    if (duplicateKey !== undefined) {
+      const translation = sourceTranslationContext(source);
+      const location =
+        translation &&
+        (builderKeySchema.safeParse(duplicateKey).success ||
+          namespacedKeySchema.safeParse(duplicateKey).success)
+          ? {
+              ...translation.rootLocation,
+              segments: [
+                ...translation.rootLocation.segments,
+                { kind: "setting" as const, key: duplicateKey },
+              ],
+            }
+          : translation?.rootLocation;
+      failures.push({
+        ruleCode: "vortex.definition.local_identity_unique",
+        family: "duplicate_key",
+        ...((location ?? (output ? rootLocation(output) : undefined))
+          ? { location: location ?? rootLocation(output!) }
+          : {}),
+      });
+    }
   }
   return failures;
 }
@@ -510,17 +595,40 @@ function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFail
                 ? ("too_few_items" as const)
                 : issue.code === "too_big" && issue.origin === "array"
                   ? ("too_many_items" as const)
-                  : issue.code === "invalid_type" && "input" in issue && issue.input === undefined
+                  : issue.code === "invalid_type" &&
+                      sourceValueAtPath(
+                        source,
+                        issue.path.filter(
+                          (part): part is string | number => typeof part !== "symbol",
+                        ),
+                      ) === undefined
                     ? ("required_value" as const)
                     : ("invalid_value" as const),
       }));
     const translated = translateDefinitionSchemaError(parsed.error, {
       correlationId: "00000000-0000-4000-8000-000000000000",
       rootLocation: translation.rootLocation,
-      pathMap: translation.pathMap,
+      pathMap: [
+        ...parsed.error.issues.map((issue) => {
+          const path = issue.path.filter(
+            (part): part is string | number => typeof part !== "symbol",
+          );
+          const effectivePath =
+            path.at(-1) === "platform_block_dependencies"
+              ? (unlistedBlockPath(source) ?? path)
+              : path;
+          return { sourcePath: path, location: issueLocation(translation, effectivePath) };
+        }),
+        ...translation.pathMap,
+      ],
       requiredPaths: parsed.error.issues
         .filter(
-          (issue) => issue.code === "invalid_type" && "input" in issue && issue.input === undefined,
+          (issue) =>
+            issue.code === "invalid_type" &&
+            sourceValueAtPath(
+              source,
+              issue.path.filter((part): part is string | number => typeof part !== "symbol"),
+            ) === undefined,
         )
         .map((issue) =>
           issue.path.filter((part): part is string | number => typeof part !== "symbol"),
@@ -534,9 +642,7 @@ function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFail
   });
 }
 
-function pinnedModulePermissionIdRule(
-  context: PreparedValidationContext,
-): DefinitionRuleFailure[] {
+function pinnedModulePermissionIdRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   return editSaveSources(context).flatMap((candidate): DefinitionRuleFailure[] => {
     if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return [];
     const source = object(candidate);
@@ -545,11 +651,12 @@ function pinnedModulePermissionIdRule(
       return [];
     const body = object(source.body);
     if (!Array.isArray(body.permissions)) return [];
-    const pinnedPermissions = (body.permissions as unknown[]).filter((candidatePermission) =>
-      candidatePermission !== null &&
-      typeof candidatePermission === "object" &&
-      !Array.isArray(candidatePermission) &&
-      Object.prototype.hasOwnProperty.call(candidatePermission, "pinnedPermissionId"),
+    const pinnedPermissions = (body.permissions as unknown[]).filter(
+      (candidatePermission) =>
+        candidatePermission !== null &&
+        typeof candidatePermission === "object" &&
+        !Array.isArray(candidatePermission) &&
+        Object.prototype.hasOwnProperty.call(candidatePermission, "pinnedPermissionId"),
     );
     if (pinnedPermissions.length === 0) return [];
     return [
@@ -575,6 +682,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
     const walkValues = createContractValueWalker([{ schema: parsed.schema, value: source }]);
     const body = object(source.body);
     let valid = true;
+    let invalidLocation: DefinitionValidationLocation | undefined;
     if (source.kind === "module") {
       const records = new Map(
         array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -759,9 +867,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
           if (String(task.type) === "record.changes")
             for (const change of array(properties.changes))
               if (
-                ((change.relationships as string[]) ?? []).some(
-                  (key) => !relationships.has(key),
-                ) ||
+                ((change.relationships as string[]) ?? []).some((key) => !relationships.has(key)) ||
                 inputs.get(String(change.target_input)) !== "record_reference"
               )
                 valid = false;
@@ -867,6 +973,16 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       const moduleBindings = new Set(
         array(body.module_bindings).map((binding) => String(binding.module)),
       );
+      const applicationPermissionKeys = new Set(
+        array(body.permissions)
+          .filter(
+            (permission) =>
+              permission.action_kind === "named" && permission.record_type === undefined,
+          )
+          .map((permission) => String(permission.key)),
+      );
+      const pageGateKnown = (key: unknown) =>
+        applicationPermissionKeys.has(String(key)) || isPlatformPermissionKey(String(key));
       for (const permission of array(body.permissions)) {
         const scope = permission.record_scope ? object(permission.record_scope) : undefined;
         for (const route of scope ? array(scope.routes) : []) {
@@ -877,21 +993,42 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
         }
       }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
-      const queries = new Set(array(body.queries).map((query) => String(query.key)));
       const flows = new Set(
         array(body.flows).flatMap((flow) => [String(flow.id), String(flow.key)]),
       );
-      const connections = new Set(
-        array(body.connection_bindings).map((binding) => String(binding.id)),
-      );
       for (const page of array(body.pages)) {
+        if (!pageGateKnown(page.permission)) {
+          valid = false;
+          const root = sourceTranslationContext(source)?.rootLocation;
+          const key = builderKeySchema.safeParse(page.key);
+          if (root && key.success)
+            invalidLocation ??= {
+              ...root,
+              segments: [...root.segments, { kind: "page", key: key.data }],
+            };
+        }
         // A page binds a Module query by "module_key:query_key"; the Module must be bound here.
-        if (page.query && !moduleBindings.has(String(page.query).slice(0, String(page.query).lastIndexOf(":"))))
+        if (
+          page.query &&
+          !moduleBindings.has(String(page.query).slice(0, String(page.query).lastIndexOf(":")))
+        )
           valid = false;
       }
       const visitNavigation = (items: JsonObject[]) => {
         for (const item of items) {
-          if (item.type === "page" && !pages.has(String(item.page))) valid = false;
+          if (
+            item.type === "page" &&
+            (!pages.has(String(item.page)) || !pageGateKnown(item.permission))
+          ) {
+            valid = false;
+            const root = sourceTranslationContext(source)?.rootLocation;
+            const key = builderKeySchema.safeParse(item.id);
+            if (root && key.success)
+              invalidLocation ??= {
+                ...root,
+                segments: [...root.segments, { kind: "setting", key: key.data }],
+              };
+          }
           if (item.type === "heading") visitNavigation(array(item.children));
         }
       };
@@ -936,7 +1073,7 @@ function sourceLocalReferenceRule(context: PreparedValidationContext): Definitio
       failures.push({
         ruleCode: "vortex.definition.local_references",
         family: "broken_reference",
-        location: {
+        location: invalidLocation ?? {
           documentKind: source.kind,
           documentKey: source.key,
           segments: [
@@ -1339,9 +1476,7 @@ function storedNumericSummaryResultType(field: JsonObject | undefined): string |
   if (object(settings.expression).kind !== "numeric" || settings.evaluation !== "stored")
     return undefined;
   const resultType = fieldDeclaredResultType(field);
-  return resultType === "whole_number" || resultType === "decimal_number"
-    ? resultType
-    : undefined;
+  return resultType === "whole_number" || resultType === "decimal_number" ? resultType : undefined;
 }
 
 function fieldValueType(field: JsonObject | undefined): string | undefined {
@@ -1831,7 +1966,8 @@ function actionValueRecordTypeIds(
   if (reference === undefined) return undefined;
   if (reference.source === "input") {
     const input = inputs.get(String(reference.name));
-    if (input === undefined) return String(reference.name) === "record" ? [subjectRecordTypeId] : undefined;
+    if (input === undefined)
+      return String(reference.name) === "record" ? [subjectRecordTypeId] : undefined;
     if (input.type !== "record_reference") return undefined;
     const references = array(input.recordTypes ?? input.record_types);
     return references.map((entry) =>
@@ -1852,7 +1988,8 @@ function actionValueTypeV2(
   if (reference === undefined) return undefined;
   if (reference.source === "input") {
     const input = inputs.get(String(reference.name));
-    if (input === undefined) return String(reference.name) === "record" ? "record_reference" : undefined;
+    if (input === undefined)
+      return String(reference.name) === "record" ? "record_reference" : undefined;
     return input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
   }
   if (reference.source === "trigger_record") {
@@ -1905,9 +2042,7 @@ const applicationFieldType = (pair: ApplicationFieldValuePair | undefined): stri
 };
 
 const actionValueReferenceEntry = (entry: JsonObject): JsonObject | undefined =>
-  actionValueReferenceSources.has(String(entry.source))
-    ? entry
-    : actionValueReference(entry);
+  actionValueReferenceSources.has(String(entry.source)) ? entry : actionValueReference(entry);
 
 function applicationActionValueCompatible(
   value: unknown,
@@ -2347,9 +2482,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       array(content.flows).length > 0 &&
       !readFieldsTypeMapsValid(
         array(content.flows) as unknown as FlowDefinition[],
-        boundOutputs.flatMap((candidate) =>
-          array(object(candidate.canonical.content).recordTypes),
-        ),
+        boundOutputs.flatMap((candidate) => array(object(candidate.canonical.content).recordTypes)),
       )
     )
       failures.push(
@@ -2679,10 +2812,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
       const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
-        [...inputMap].map(([key, input]) => [
-          key,
-          semanticFieldTypeV2(input.type) ?? "",
-        ]),
+        [...inputMap].map(([key, input]) => [key, semanticFieldTypeV2(input.type) ?? ""]),
       );
       let valid =
         subject !== undefined &&
@@ -2961,13 +3091,30 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
       const unique = (values: readonly string[]) => new Set(values).size === values.length;
       const summaryGroupFieldTypes = new Set([
-        "text", "whole_number", "decimal_number", "yes_no", "date", "date_time",
-        "choice", "reference_number", "email_address", "phone_number", "web_address",
-        "link", "link_to_one_of_several", "link_to_person",
+        "text",
+        "whole_number",
+        "decimal_number",
+        "yes_no",
+        "date",
+        "date_time",
+        "choice",
+        "reference_number",
+        "email_address",
+        "phone_number",
+        "web_address",
+        "link",
+        "link_to_one_of_several",
+        "link_to_person",
       ]);
       const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
       const extremaFieldTypes = new Set([
-        "text", "whole_number", "decimal_number", "yes_no", "money", "date", "date_time",
+        "text",
+        "whole_number",
+        "decimal_number",
+        "yes_no",
+        "money",
+        "date",
+        "date_time",
       ]);
       const refuseSummaryField = (ruleCode: string, field: JsonObject): void => {
         const root = rootLocation(output);
@@ -3011,8 +3158,7 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
       // grouped ordering still names grouping keys only. Summary output remains
       // constrained to the groups and aggregates declared separately.
       const groupingValid =
-        groupByFieldIds.length === 0 ||
-        sortFieldIds.every((id) => groupByFieldIds.includes(id));
+        groupByFieldIds.length === 0 || sortFieldIds.every((id) => groupByFieldIds.includes(id));
       const aggregatesValid = array(query.aggregates).every((aggregate) => {
         if (aggregate.operation === "count") return aggregate.fieldId === undefined;
         return aggregate.fieldId !== undefined && fieldMap.has(String(aggregate.fieldId));
@@ -3131,8 +3277,9 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       boundRoots.size !== bindings.length ||
       boundModules.length !== bindings.length ||
       new Set(
-        boundModules.map((module) =>
-          `${module.artifact.definitionKey}\u0000${module.artifact.rootId}\u0000${module.artifact.exactVersion}`,
+        boundModules.map(
+          (module) =>
+            `${module.artifact.definitionKey}\u0000${module.artifact.rootId}\u0000${module.artifact.exactVersion}`,
         ),
       ).size !== boundModules.length
     )
@@ -3143,17 +3290,40 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
-    const searchRecordOwners = new Map(boundModules.flatMap((module) =>
-      array(object(object(module.canonical).content).recordTypes).map((record) =>
-        [String(record.recordTypeId), String(object(object(module.canonical).envelope).rootId)] as const)));
-    for (const entry of output.kind === "application" ? output.canonical.content.search?.recordTypes ?? [] : []) {
-      const record = entry.recordType.state === "resolved" ? records.get(String(entry.recordType.recordTypeId)) : undefined;
-      const fields = record === undefined ? [] : array(record.fields) as unknown as ModuleFieldV3[];
-      if (record === undefined || entry.recordType.state !== "resolved" || searchRecordOwners.get(String(entry.recordType.recordTypeId)) !== entry.recordType.moduleRootId ||
-          [...entry.fields.map((field) => String(field.fieldId)), String(entry.titleFieldId),
-          ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)])]
-          .some((fieldId) => !applicationSearchFieldIsSelectable(fields, fieldId)))
-        failures.push(failure(output, "vortex.definition.application_page_query", "broken_reference"));
+    const searchRecordOwners = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).map(
+          (record) =>
+            [
+              String(record.recordTypeId),
+              String(object(object(module.canonical).envelope).rootId),
+            ] as const,
+        ),
+      ),
+    );
+    for (const entry of output.kind === "application"
+      ? (output.canonical.content.search?.recordTypes ?? [])
+      : []) {
+      const record =
+        entry.recordType.state === "resolved"
+          ? records.get(String(entry.recordType.recordTypeId))
+          : undefined;
+      const fields =
+        record === undefined ? [] : (array(record.fields) as unknown as ModuleFieldV3[]);
+      if (
+        record === undefined ||
+        entry.recordType.state !== "resolved" ||
+        searchRecordOwners.get(String(entry.recordType.recordTypeId)) !==
+          entry.recordType.moduleRootId ||
+        [
+          ...entry.fields.map((field) => String(field.fieldId)),
+          String(entry.titleFieldId),
+          ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)]),
+        ].some((fieldId) => !applicationSearchFieldIsSelectable(fields, fieldId))
+      )
+        failures.push(
+          failure(output, "vortex.definition.application_page_query", "broken_reference"),
+        );
     }
     const boundRecordTypeIds = new Set(recordTypes.map((record) => String(record.recordTypeId)));
     const allFields = new Map(
@@ -3164,13 +3334,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     const fieldValuePairs = new Map<string, ApplicationFieldValuePair>(
       boundModules.flatMap((module) =>
         array(object(object(module.canonical).content).recordTypes).flatMap((record) =>
-          array(record.fields).map(
-            (field) =>
-              [
-                String(field.fieldId),
-                { field },
-              ] as const,
-          ),
+          array(record.fields).map((field) => [String(field.fieldId), { field }] as const),
         ),
       ),
     );
@@ -3178,14 +3342,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       recordTypes.flatMap((record) =>
         array(record.relationships).map(
           (relationship) => [String(relationship.relationshipId), relationship] as const,
-        ),
-      ),
-    );
-    const allRelationships = new Set(relationshipMap.keys());
-    const fieldRecordTypes = new Map(
-      recordTypes.flatMap((record) =>
-        array(record.fields).map(
-          (field) => [String(field.fieldId), String(record.recordTypeId)] as const,
         ),
       ),
     );
@@ -3210,13 +3366,18 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       ),
     ]);
     const permissions = new Set(permissionMap.keys());
-    // A page access requirement or navigation item may name an exact application or bound-Module
-    // permission, or an exact platform administration permission from the shipped platform
-    // catalogue. Every other permission requirement stays limited to the application's own
-    // permissions, so a key this release cannot enforce is refused rather than accepted.
+    // A page discovery requirement is evaluated against the Application target. Record
+    // permissions govern data operations and cannot serve as Application page gates.
     const pageNavigationPermissionKnown = (permissionKey: unknown): boolean => {
       const key = String(permissionKey);
-      return permissions.has(key) || isPlatformPermissionKey(key);
+      return (
+        array(content.permissions).some(
+          (permission) =>
+            permission.key === key &&
+            permission.actionKind === "named" &&
+            permission.recordTypeId === undefined,
+        ) || isPlatformPermissionKey(key)
+      );
     };
     // A requirement key names exactly one permission, and the runtime reads a platform catalogue
     // key as platform authority. An application or bound-Module permission reusing a platform key
@@ -3456,9 +3617,6 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (query) => [String(query.queryId), query] as const,
         ),
       ),
-    );
-    const pipelines = new Map(
-      array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
     );
     const connectionMap = new Map(
       connections
@@ -3855,6 +4013,90 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         failures.push(
           failure(output, "vortex.definition.application_page_references", "broken_reference"),
         );
+      if (page.type === "guided_form") {
+        const controls = pageContentPlacementEntriesV2(page);
+        const forms = new Set(
+          controls
+            .filter(
+              ([, placement]) =>
+                String(object(placement.block).blockId) ===
+                String(FORM_CONTAINER_BLOCK_RELEASE.blockId),
+            )
+            .map(([id]) => id.toLowerCase()),
+        );
+        const flowIds = new Set(
+          array(content.flowBindings)
+            .filter(
+              (binding) =>
+                binding.event === "form_submit" &&
+                forms.has(String(binding.controlId).toLowerCase()),
+            )
+            .map((binding) => String(object(binding.flow).flowId)),
+        );
+        const inputBlocks = new Set([
+          String(FIELD_INPUT_BLOCK_RELEASE.blockId),
+          ...Object.values(FIELD_INPUT_CONTROL_RELEASES).map((release) => String(release.blockId)),
+        ]);
+        const fieldKeys = new Set(
+          pageRecord ? array(pageRecord.fields).map((field) => String(field.key)) : [],
+        );
+        const seenFields = new Set<string>();
+        let inputMismatch = false;
+        for (const [, placement] of controls) {
+          if (!inputBlocks.has(String(object(placement.block).blockId))) continue;
+          const candidate = object(placement.settings).name;
+          const name = candidate === undefined ? {} : object(candidate);
+          const key = name.kind === "text" ? String(name.value) : "";
+          if (!fieldKeys.has(key) || seenFields.has(key)) inputMismatch = true;
+          seenFields.add(key);
+        }
+        // The runtime completes a guided form only through exactly one form on the summary step,
+        // bound to the page's single completion flow.
+        const summaryStep = array(page.steps).find((step) => step.summary === true);
+        const composition = object(page.composition);
+        const summaryContent = summaryStep
+          ? object(composition.stepContent)[String(summaryStep.id)]
+          : undefined;
+        const summaryPlacements = summaryStep
+          ? [
+              ...(composition.shellKind === "application"
+                ? Object.values(object(summaryContent)).flatMap((slotValue) =>
+                    collectPlacementEntriesV2(slotValue),
+                  )
+                : collectPlacementEntriesV2(summaryContent)),
+              ...pageShellPlacementEntriesV2(page),
+            ]
+          : [];
+        const summaryForms = new Set(
+          summaryPlacements
+            .filter(
+              ([, placement]) =>
+                String(object(placement.block).blockId) ===
+                String(FORM_CONTAINER_BLOCK_RELEASE.blockId),
+            )
+            .map(([id]) => id.toLowerCase()),
+        );
+        const summaryFlowIds = new Set(
+          array(content.flowBindings)
+            .filter(
+              (binding) =>
+                binding.event === "form_submit" &&
+                summaryForms.has(String(binding.controlId).toLowerCase()),
+            )
+            .map((binding) => String(object(binding.flow).flowId)),
+        );
+        const summaryBindingValid =
+          summaryForms.size === 1 &&
+          summaryFlowIds.size === 1 &&
+          flowIds.has([...summaryFlowIds][0]!);
+        if (forms.size === 0 || flowIds.size !== 1 || !summaryBindingValid || inputMismatch)
+          failures.push(
+            failure(output, "vortex.definition.application_page_references", "broken_reference", {
+              kind: "page",
+              key: String(page.key),
+            }),
+          );
+      }
       const placements = [
         ...pageContentPlacementEntriesV2(page).map(([, placement]) => placement),
         ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
@@ -3865,22 +4107,23 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
       // engine actually applies. The Query engine refuses a request for an unselected field.
       for (const placement of placements) {
         const bound =
-          placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
+          placement.queryId === undefined
+            ? undefined
+            : moduleQueries.get(String(placement.queryId));
         const block = object(placement.block);
         const blockKey = registeredBlockReleases.get(
           `${String(block.blockId)}:${String(block.releaseVersion)}`,
         )?.key;
         if (bound === undefined) {
-          if (
-            blockKey === "platform.display.calendar" ||
-            blockKey === "platform.display.board"
-          )
+          if (blockKey === "platform.display.calendar" || blockKey === "platform.display.board")
             failures.push(
               failure(output, "vortex.definition.application_block_settings", "broken_reference"),
             );
           continue;
         }
-        const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
+        const settings = object(placement.settings) as Parameters<
+          typeof readRecordsTableContract
+        >[0];
         const table = readRecordsTableContract(settings);
         const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
         if (blockKey === "platform.display.board") {
@@ -3969,16 +4212,12 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
               (dateType === "date" || dateType === "date_time") &&
               dateFields.every(
                 (field) =>
-                  field !== undefined &&
-                  field.type === dateType &&
-                  field.filterable === true,
+                  field !== undefined && field.type === dateType && field.filterable === true,
               ) &&
               durationValid &&
               titleField !== undefined &&
               calendarBlockSourceIsSupported(bound, titleField.type) &&
-              mappedFieldIds.every((fieldId) =>
-                selectedFieldIds.has(fieldId.toLowerCase()),
-              );
+              mappedFieldIds.every((fieldId) => selectedFieldIds.has(fieldId.toLowerCase()));
           }
           if (!calendarMappingValid)
             failures.push(
@@ -3997,7 +4236,8 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
         const lower = (ids: readonly unknown[]): Set<string> =>
           new Set(ids.map((id) => String(id).toLowerCase()));
         const selected = lower(array(bound.selectedFieldIds));
-        const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
+        const grouped =
+          array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
         const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
         const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
           fields.every((field) => allowed.has(field.toLowerCase()));
@@ -4101,7 +4341,11 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
           (page.publicFieldIds as string[]).some((id) => !publicFields.has(id)) ||
           !publicPermissionSafe(page.accessPermissionKey) ||
           (page.queryId &&
-            !publicQuerySafe(moduleQueries.get(String(page.queryId)), pageRecordId, pagePublicFields)) ||
+            !publicQuerySafe(
+              moduleQueries.get(String(page.queryId)),
+              pageRecordId,
+              pagePublicFields,
+            )) ||
           (page.publicActionKey &&
             !publicActionSafe(page.publicActionKey, pageRecordId, pagePublicFields)) ||
           !publicBlockReferencesSafe
@@ -4229,10 +4473,7 @@ function applicationRule(context: PreparedValidationContext): DefinitionRuleFail
     // is ambiguous and resolves to no query.
     const queriesByKey = new Map<string, JsonObject | undefined>();
     for (const query of moduleQueries.values())
-      queriesByKey.set(
-        String(query.key),
-        queriesByKey.has(String(query.key)) ? undefined : query,
-      );
+      queriesByKey.set(String(query.key), queriesByKey.has(String(query.key)) ? undefined : query);
     const interfaceActionInputType = (type: unknown): string | undefined => {
       const value = String(type);
       if (["decimal_number", "money", "formatted_text"].includes(value)) return value;
@@ -4982,9 +5223,8 @@ const sourceBlockSetting = (placement: JsonObject, key: string, kind: string): u
 /** The registered key of a placement's exact block release, or undefined for an unknown release. */
 const sourceBlockKey = (placement: JsonObject): string | undefined => {
   const block = object(placement.block);
-  return registeredBlockReleases.get(
-    `${String(block.block_id)}:${String(block.release_version)}`,
-  )?.key;
+  return registeredBlockReleases.get(`${String(block.block_id)}:${String(block.release_version)}`)
+    ?.key;
 };
 
 /** A button's authored action kind, `action` when it declares none. */
@@ -5360,8 +5600,7 @@ export function compileDefinitionSet(
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
     if (isModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
-    if (isApplicationSource(source))
-      return applicationCompilationRequestV2Schema.safeParse(input);
+    if (isApplicationSource(source)) return applicationCompilationRequestV2Schema.safeParse(input);
     return definitionCompilationRequestSchema.safeParse(input);
   });
   if (parsedInputs.some((result) => !result.success))

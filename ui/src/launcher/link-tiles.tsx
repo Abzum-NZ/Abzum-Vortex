@@ -21,10 +21,12 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/card";
+import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayCellValue, DisplayDataState } from "../display/projected-data";
+import { cn } from "../lib/utils";
 import {
   readLauncherSettings,
   resolveLauncherListContext,
@@ -82,9 +84,16 @@ function ExternalLinkTiles(props: LauncherRenderProps): ReactElement {
               events={context.events}
             />
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground" role="status">
-                {filter?.emptyMessage ?? "No links to show"}
-              </p>
+              <Empty
+                role="status"
+                data-vortex-display-state="empty"
+                className="border border-dashed border-border py-12 text-muted-foreground"
+                aria-label={`${context.accessibleName}: empty`}
+              >
+                <EmptyHeader>
+                  <EmptyTitle>{filter?.emptyMessage ?? "No links to show"}</EmptyTitle>
+                </EmptyHeader>
+              </Empty>
             ) : (
               <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((row) => {
@@ -93,7 +102,14 @@ function ExternalLinkTiles(props: LauncherRenderProps): ReactElement {
                   const address = row.cells[addressKey];
                   return (
                     <li key={row.recordId} data-vortex-record-id={row.recordId} className="flex">
-                      <Card size="sm" className="w-full">
+                      <Card
+                        size="sm"
+                        className={cn(
+                          "group relative flex w-full flex-col justify-between overflow-hidden border-border bg-card text-card-foreground transition-all duration-200",
+                          openable &&
+                            "cursor-pointer hover:border-primary/50 hover:bg-accent/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                        )}
+                      >
                         <CardHeader>
                           <CardTitle>{label}</CardTitle>
                           {description === "" ? null : (
@@ -175,9 +191,17 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
       {values === undefined ? null : <section data-vortex-display="record-pin-tiles"
         data-vortex-placement-id={props.placementId} aria-label={context.accessibleName} className="flex flex-col">
         <DisplayHeader title={context.title} accessibleName={context.accessibleName} events={events} />
-        {rows.length === 0 ? <p role="status" className="text-sm text-muted-foreground">
-          {filter?.emptyMessage ?? "No links to show"}
-        </p> : <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
+        {rows.length === 0 ? (
+          <Empty
+            role="status"
+            className="border border-dashed border-border py-12 text-muted-foreground"
+            aria-label={`${context.accessibleName}: empty`}
+          >
+            <EmptyHeader>
+              <EmptyTitle>{filter?.emptyMessage ?? "No links to show"}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((row) => {
             const target = row.target;
             const iconName = target.kind === "application" || target.kind === "page"
@@ -201,7 +225,10 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
                     }),
                 });
               }}>
-              <Card size="sm" className="w-full">
+              <Card
+                size="sm"
+                className="group relative flex w-full flex-col justify-between overflow-hidden border-border bg-card text-card-foreground transition-all duration-200 hover:border-primary/50 hover:bg-accent/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring"
+              >
                 <CardHeader><CardTitle>
                   {target.kind === "application" || target.kind === "page"
                     ? <Icon name={iconName ?? "circle"} width={20} height={20}

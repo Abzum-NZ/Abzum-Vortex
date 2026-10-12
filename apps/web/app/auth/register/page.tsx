@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Field } from "@vortex/ui/components/field";
+import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { AuthShell } from "../_components/auth-shell";
@@ -18,9 +18,12 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       title="Start with your email"
       description="Use an email address you can verify. You will receive a one-time confirmation code before you can sign in."
       footer={
-        <p>
+        <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link className="font-medium underline underline-offset-4" href="/auth/sign-in">
+          <Link
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
+            href="/auth/sign-in"
+          >
             Sign in
           </Link>
         </p>
@@ -43,9 +46,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
             required
           />
-          <p className="text-sm text-muted-foreground">
+          <FieldDescription>
             Use at least 8 characters, including a letter and a number.
-          </p>
+          </FieldDescription>
         </Field>
         <SubmitButton pendingLabel="Creating account…">Create account</SubmitButton>
       </form>

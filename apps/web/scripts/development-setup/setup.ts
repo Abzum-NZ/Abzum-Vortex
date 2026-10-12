@@ -106,7 +106,9 @@ const initializeLandingZoneDefault = async (
   const defaultApplicationRootId = applicationRootIdSchema.parse(applicationRootId);
   const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
   if (administrationRelease === undefined)
-    throw new Error(`No published release recorded for ${organisationAdministrationApplicationKey}`);
+    throw new Error(
+      `No published release recorded for ${organisationAdministrationApplicationKey}`,
+    );
   const definitionContext = mintSystemContext(facts.system);
   const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
     createDatabaseSystemApplicationBoundReleaseSetService(
@@ -138,15 +140,19 @@ const initializeLandingZoneDefault = async (
   state.defaultApplicationInitializationAttempted = true;
   state.save();
 
-  const result = await createRecordSaveService({ identityAuthorityId }).save(session, saveSelection, {
-    contractVersion: "2.0.0",
-    commandId: randomUUID(),
-    operation: "update",
-    recordTypeId: settingsRecordType.recordTypeId,
-    recordId: organizationId,
-    expectedConcurrencyNumber: observed.value.revision,
-    submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
-  });
+  const result = await createRecordSaveService({ identityAuthorityId }).save(
+    session,
+    saveSelection,
+    {
+      contractVersion: "2.0.0",
+      commandId: randomUUID(),
+      operation: "update",
+      recordTypeId: settingsRecordType.recordTypeId,
+      recordId: organizationId,
+      expectedConcurrencyNumber: observed.value.revision,
+      submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
+    },
+  );
   state.defaultApplicationInitializationCompleted = true;
   state.save();
   const savedDefaultApplicationRootId =
@@ -184,28 +190,33 @@ const main = async (): Promise<void> => {
       VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID: manifest.operator.systemActorId,
     },
   });
-  const provisioned = await tenantAdministration.provisionTenant(
-    provisionTenantCommandSchema.parse({
-      operation: "provision_tenant",
-      duplicateKey: manifest.provisioning.duplicateKey,
-      tenant: manifest.provisioning.tenant,
-      rootOrganization: manifest.provisioning.rootOrganization,
-      tenantSteward: { identityId: stewardIdentityId },
-      organizationSteward: {
-        identityId: stewardIdentityId,
-        accountDisplayName: manifest.provisioning.accountDisplayName,
-        accountLanguage: manifest.provisioning.language,
-        accountTimeZone: manifest.provisioning.timeZone,
-      },
-      runtimeSettings: {
-        language: manifest.provisioning.language,
-        timeZone: manifest.provisioning.timeZone,
-        currency: manifest.provisioning.currency,
-        dateFormat: "medium",
-        numberFormat: "auto",
-      },
-    }),
-  );
+  const provisioningCommand = provisionTenantCommandSchema.safeParse({
+    operation: "provision_tenant",
+    duplicateKey: manifest.provisioning.duplicateKey,
+    tenant: manifest.provisioning.tenant,
+    rootOrganization: manifest.provisioning.rootOrganization,
+    tenantSteward: { identityId: stewardIdentityId },
+    organizationSteward: {
+      identityId: stewardIdentityId,
+      accountDisplayName: manifest.provisioning.accountDisplayName,
+      accountLanguage: manifest.provisioning.language,
+      accountTimeZone: manifest.provisioning.timeZone,
+    },
+    runtimeSettings: {
+      language: manifest.provisioning.language,
+      timeZone: manifest.provisioning.timeZone,
+      currency: manifest.provisioning.currency,
+      dateFormat: "medium",
+      numberFormat: "auto",
+    },
+  });
+  if (!provisioningCommand.success) {
+    const issue = provisioningCommand.error.issues[0];
+    throw new DevelopmentSetupRefusal(
+      `Provisioning manifest ${issue?.path.join(".") || "command"}: ${issue?.message ?? "invalid value"}.`,
+    );
+  }
+  const provisioned = await tenantAdministration.provisionTenant(provisioningCommand.data);
   if (provisioned.outcome === "refused")
     throw new DevelopmentSetupRefusal(
       `Provisioning was refused (${provisioned.code}). If the organisation already exists for a different account, reset the local database (pnpm db:reset).`,
