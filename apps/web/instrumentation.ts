@@ -8,4 +8,10 @@ export async function register(): Promise<void> {
 
   const { registerCleanNetworkStartup } = await import("./app/_lib/clean-network-startup");
   registerCleanNetworkStartup();
+
+  // Development servers have no database webhook or Kestra tick to deliver committed events.
+  if (process.env.NODE_ENV === "development") {
+    const { startLocalEventDispatch } = await import("./app/_lib/local-event-dispatch");
+    startLocalEventDispatch();
+  }
 }
