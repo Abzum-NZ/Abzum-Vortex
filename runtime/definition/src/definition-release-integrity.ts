@@ -21,7 +21,7 @@ type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "co
 type CustomerDefinitionResolution =
   DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
 
-export type StoredCustomerDefinitionReleaseEvidence = Readonly<{
+type StoredCustomerDefinitionReleaseEvidence = Readonly<{
   organizationId: OrganizationId;
   kind: "module" | "application";
   key: string;
