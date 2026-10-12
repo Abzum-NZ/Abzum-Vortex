@@ -3,10 +3,9 @@ import type { ConnectionTypeSourceDocument } from "@vortex/contracts";
 
 /**
  * The one derivation of every platform catalogue release fingerprint. The publication catalogue
- * uses it to materialise and verify releases, and tooling/generate-catalogue-fingerprints.mjs uses
- * it to write the fingerprints the contracts catalogues carry, so a release fingerprint has one
- * definition. This module is plain, erasable TypeScript with no server-only import so the
- * generator can load it directly.
+ * uses it to materialise and verify releases, and it derived the fingerprints the contracts
+ * catalogues carry, so a release fingerprint has one definition. This module is plain, erasable
+ * TypeScript with no server-only import.
  */
 export type CatalogueReleaseFingerprints = Readonly<{
   contentFingerprint: `sha256:${string}`;
