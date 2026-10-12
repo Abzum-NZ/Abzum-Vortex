@@ -18,7 +18,7 @@ begin
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_application_release_revision is null
     or p_application_release_revision not between 1 and 9007199254740991
-    or p_bundle_format_version is null or p_bundle_format_version < 1 then
+    or p_bundle_format_version is distinct from 2 then
     raise exception using errcode = '22023',
       message = 'Installation runtime bundle key is invalid';
   end if;
@@ -47,6 +47,7 @@ begin
     'applicationReleaseRevision', stored_bundle.application_release_revision,
     'bundleFormatVersion', stored_bundle.bundle_format_version,
     'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest,
     'parts', stored_bundle.parts,
     'totalSizeBytes', stored_bundle.total_size_bytes,
     'builtAt', stored_bundle.built_at

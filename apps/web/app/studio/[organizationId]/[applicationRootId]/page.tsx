@@ -12,5 +12,5 @@ export default async function StudioApplicationPage({ params }: {
     return <main className="mx-auto max-w-3xl p-6"><h1>Studio unavailable</h1>
       <p role="status">This draft is unavailable. Sign in with an account permitted to manage drafts and try again.</p></main>;
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
-    mode="existing" organizationId={result.organizationId} draft={result.draft} />;
+    mode="existing" organizationId={result.organizationId} draft={result.draft} searchMetadata={result.searchMetadata} />;
 }

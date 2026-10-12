@@ -1333,6 +1333,17 @@ function fieldDeclaredResultType(field: JsonObject | undefined): string | undefi
   return String(field.type);
 }
 
+function storedNumericSummaryResultType(field: JsonObject | undefined): string | undefined {
+  if (!field || field.type !== "calculation") return undefined;
+  const settings = object(field.settings);
+  if (object(settings.expression).kind !== "numeric" || settings.evaluation !== "stored")
+    return undefined;
+  const resultType = fieldDeclaredResultType(field);
+  return resultType === "whole_number" || resultType === "decimal_number"
+    ? resultType
+    : undefined;
+}
+
 function fieldValueType(field: JsonObject | undefined): string | undefined {
   if (!field) return undefined;
   const type = String(field.type);
@@ -2978,8 +2989,12 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
         if (aggregate.fieldId === undefined) continue;
         const field = fieldMap.get(String(aggregate.fieldId));
         if (!field || aggregate.operation === "count") continue;
-        const fieldType = String(field.type);
-        if (fieldType === "calculation" || fieldType === "total")
+        const storedNumericResultType = storedNumericSummaryResultType(field);
+        const fieldType = storedNumericResultType ?? String(field.type);
+        if (
+          field.type === "total" ||
+          (field.type === "calculation" && storedNumericResultType === undefined)
+        )
           refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
         else if (
           (aggregate.operation === "sum" || aggregate.operation === "average") &&

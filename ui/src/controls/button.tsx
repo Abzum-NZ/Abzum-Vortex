@@ -111,7 +111,7 @@ export function Button(props: ButtonProps): ReactElement {
         {label}
       </SharedButton>
       {note === undefined ? null : (
-        <span id={noteId} className="vortex-field-note">
+        <span id={noteId} className="text-muted-foreground">
           {note}
         </span>
       )}

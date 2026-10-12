@@ -95,7 +95,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
       aria-invalid={fieldError !== undefined}
     >
       <FieldSet disabled={disabled} className="min-w-0">
-        <FieldLegend id={ids.label} className="vortex-field-label">
+        <FieldLegend id={ids.label} variant="label">
           <FieldLabelText label={label} required={required} />
         </FieldLegend>
         <FieldGroup data-slot="checkbox-group" className="min-w-0 max-h-64 overflow-y-auto p-1">
