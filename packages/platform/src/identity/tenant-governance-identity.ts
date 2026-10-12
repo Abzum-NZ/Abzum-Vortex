@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   databaseTimestamp,
   databaseRevision,
+  describeFailure,
   archiveTenantOrganizationCommandSchema,
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
@@ -126,6 +127,7 @@ const mutationCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
+      console.error(`[identity] tenant governance operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
@@ -215,7 +217,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -239,7 +242,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -257,7 +261,8 @@ export const createTenantGovernanceService = (
         );
         if (rows.length !== 1) return readRefusal(false);
         return { outcome: "available", organization: hierarchyEntry(rows[0]!) };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },
@@ -279,7 +284,8 @@ export const createTenantGovernanceService = (
           });
         });
         return { outcome: "available", page };
-      } catch {
+      } catch (error) {
+        console.error(`[identity] tenant governance read failed: ${describeFailure(error)}`);
         return readRefusal(false);
       }
     },

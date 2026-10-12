@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   databaseRevision,
+  databaseCode,
+  describeFailure,
   clampTelemetryDurationMs,
   correlationIdSchema,
   countersForOutcome,
@@ -86,31 +88,6 @@ const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
 
 const representsSameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-/**
- * A safe server-side description of a failed request: only the error class name and code of the
- * error and its causes, never a message, value, identity or secret, so it can be logged without
- * being shown to the browser or leaking data.
- */
-const describeFailure = (error: unknown): string => {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
-    const name = current instanceof Error ? current.name : typeof current;
-    const code = databaseCode(current);
-    // A database error's message is its stable cause code (never row data), so it stays in the log.
-    const detail =
-      current instanceof Error && name === "VortexDatabaseError" ? `:${current.message}` : "";
-    parts.push(code === undefined ? `${name}${detail}` : `${name}${detail}(${code})`);
-    current = current instanceof Error ? current.cause : undefined;
-  }
-  return parts.join(" <- ");
-};
 
 export const createHumanOrganizationRequestService = (
   dependencies: HumanOrganizationRequestDependencies,
@@ -296,8 +273,7 @@ export const createHumanOrganizationRequestService = (
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (refused)
-        console.error(`[access] human organisation request refused: ${cause}`);
+      else if (refused) console.error(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
@@ -335,7 +311,15 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
       mapDatabaseRefusal: (code: string) => Result | undefined,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
-      runWithMode("change", session, candidate, operation, undefined, undefined, mapDatabaseRefusal),
+      runWithMode(
+        "change",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        mapDatabaseRefusal,
+      ),
     runChangePrepared: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -351,8 +335,12 @@ export const createHumanOrganizationRequestService = (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
     ): Promise<OrganizationScopeResolutionResult> =>
-      runWithMode("read", session, candidate, async (transaction, scope) => {
-        const rows = await transaction.query<ScopeRow>`
+      runWithMode(
+        "read",
+        session,
+        candidate,
+        async (transaction, scope) => {
+          const rows = await transaction.query<ScopeRow>`
           select
             checked ->> 'tenantId' as tenant_id,
             checked ->> 'organizationId' as organization_id,
@@ -361,19 +349,22 @@ export const createHumanOrganizationRequestService = (
             checked ->> 'accessVersion' as access_version
           from vortex_access.validated_human_request_context() as checked
         `;
-        const checked = parseScope(rows);
-        if (
-          checked.tenantId !== scope.tenantId ||
-          checked.organizationId !== scope.organizationId ||
-          checked.organizationAccountId !== scope.organizationAccountId ||
-          (checked.applicationRootId === undefined) !== (scope.applicationRootId === undefined) ||
-          (checked.applicationRootId !== undefined &&
-            scope.applicationRootId !== undefined &&
-            !representsSameUuid(checked.applicationRootId, scope.applicationRootId)) ||
-          checked.accessVersion !== scope.accessVersion
-        )
-          throw new Error("INVALID_PROTECTED_CONTEXT_RESULT");
-        return checked;
-      }, undefined, () => ({ kind: "suspended_super_administrator_account" as const })),
+          const checked = parseScope(rows);
+          if (
+            checked.tenantId !== scope.tenantId ||
+            checked.organizationId !== scope.organizationId ||
+            checked.organizationAccountId !== scope.organizationAccountId ||
+            (checked.applicationRootId === undefined) !== (scope.applicationRootId === undefined) ||
+            (checked.applicationRootId !== undefined &&
+              scope.applicationRootId !== undefined &&
+              !representsSameUuid(checked.applicationRootId, scope.applicationRootId)) ||
+            checked.accessVersion !== scope.accessVersion
+          )
+            throw new Error("INVALID_PROTECTED_CONTEXT_RESULT");
+          return checked;
+        },
+        undefined,
+        () => ({ kind: "suspended_super_administrator_account" as const }),
+      ),
   });
 };

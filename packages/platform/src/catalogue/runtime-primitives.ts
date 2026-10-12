@@ -37,10 +37,45 @@ export const uuidText = (value: unknown): string | undefined =>
 export const isNonNilUuidText = (value: unknown): value is string =>
   isUuidText(value) && value.toLowerCase() !== "00000000-0000-0000-0000-000000000000";
 
-export const unavailableError = (message: string, code?: string): Error => {
-  const error = new Error(message);
+export const unavailableError = (message: string, code?: string, cause?: unknown): Error => {
+  const error = new Error(message, cause === undefined ? undefined : { cause });
   if (code !== undefined) Object.assign(error, { code });
   return error;
+};
+
+export const databaseCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error
+    ? String((error as { readonly code?: unknown }).code)
+    : undefined;
+
+/**
+ * A safe server-side description of a failed request: only the error class name and code of the
+ * error and its causes, never a message, value, identity or secret, so it can be logged without
+ * being shown to the browser or leaking data.
+ */
+export const describeFailure = (error: unknown): string => {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    const name = current instanceof Error ? current.name : typeof current;
+    const code = databaseCode(current);
+    // A database error's message is its stable cause code (never row data), so it stays in the log.
+    // A schema mismatch is described by the failing paths and issue codes, never the values.
+    const detail =
+      current instanceof Error && name === "VortexDatabaseError"
+        ? `:${current.message}`
+        : isRecord(current) && Array.isArray(current.issues)
+          ? `:${current.issues
+              .map(
+                (issue: { path?: readonly unknown[]; code?: unknown }) =>
+                  `${(issue.path ?? []).join(".")}=${String(issue.code)}`,
+              )
+              .join(",")}`
+          : "";
+    parts.push(code === undefined ? `${name}${detail}` : `${name}${detail}(${code})`);
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return parts.join(" <- ");
 };
 
 export const unavailableResult = Object.freeze({ kind: "unavailable" as const });

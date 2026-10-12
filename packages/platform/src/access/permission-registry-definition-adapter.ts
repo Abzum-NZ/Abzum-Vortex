@@ -40,8 +40,8 @@ export type PermissionRegistryPreparationErrorCode =
 export class PermissionRegistryPreparationError extends Error {
   readonly code: PermissionRegistryPreparationErrorCode;
 
-  constructor(code: PermissionRegistryPreparationErrorCode) {
-    super(code);
+  constructor(code: PermissionRegistryPreparationErrorCode, options?: ErrorOptions) {
+    super(code, options);
     this.name = "PermissionRegistryPreparationError";
     this.code = code;
   }
@@ -301,8 +301,10 @@ export const createPermissionRegistryDefinitionAdapter = (
         applicationRootId: applicationRootId.data,
         applicationReleaseRevision: releaseRevision.data,
       });
-    } catch {
-      throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE");
+    } catch (error) {
+      throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE", {
+        cause: error,
+      });
     }
     return prepareApplicationPermissionRegistrationFromReleaseSet(
       context.data,

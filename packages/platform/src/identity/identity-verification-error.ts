@@ -29,8 +29,8 @@ export const isIdentityVerificationRefusalCode = (
 export class IdentityVerificationError extends Error {
   readonly refusalCode: IdentityVerificationRefusalCode;
 
-  constructor(refusalCode: IdentityVerificationRefusalCode) {
-    super(refusalCode);
+  constructor(refusalCode: IdentityVerificationRefusalCode, options?: ErrorOptions) {
+    super(refusalCode, options);
     this.name = "IdentityVerificationError";
     this.refusalCode = refusalCode;
   }
