@@ -25,7 +25,7 @@ import {
   verifyRecordedShippedApplicationRoots,
 } from "./definitions";
 import { installApplications, type InstallFacts } from "./install";
-import { grantStewardInstallerRole } from "./installer-access";
+import { grantStewardDefinitionRole, grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
 import {
   inSystemTransaction,
@@ -308,6 +308,17 @@ export const runDevelopmentSetup = async (
       stewardOrganizationAccountId: provisioned.organizationAccountId,
       applicationKeys: manifest.applicationKeys,
       releases,
+    },
+    log,
+  );
+  await grantStewardDefinitionRole(
+    {
+      identityAuthorityId,
+      organizationId: system.organizationId,
+      stewardIdentityId,
+      stewardOrganizationAccountId: provisioned.organizationAccountId,
+      manifest,
+      state,
     },
     log,
   );

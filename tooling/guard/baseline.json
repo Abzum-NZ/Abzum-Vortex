@@ -1502,7 +1502,6 @@
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|currentPlatformPermissionCatalogueFingerprint|1",
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|currentPlatformPermissionCatalogueFingerprint|2",
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|evidence|1",
-  "process-artifact|apps/web/scripts/development-setup/installer-access.ts|evidence|2",
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|fingerprintCanonicalValue|1",
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|fingerprintCanonicalValue|2",
   "process-artifact|apps/web/scripts/development-setup/installer-access.ts|fingerprintPermissionMeaning|1",
