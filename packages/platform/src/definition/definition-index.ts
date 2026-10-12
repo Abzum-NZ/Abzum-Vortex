@@ -17,7 +17,6 @@ export * from "./application-materialisation";
 export * from "./application-resolution";
 export * from "./extension-contributions";
 export * from "./application-preview";
-export * from "./application-preview-composition";
 export * from "./validation";
 export * from "./builder-authority";
 export * from "./definition-store";
@@ -42,11 +41,9 @@ export {
   definitionConsumerReadErrorCodes,
   type DefinitionConsumerReadErrorCode,
 } from "./definition-consumer-read-definition";
-export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
 export * from "./application-bound-release-set";
 export * from "./prepared-installation-runtime-source";
 export * from "./application-release-adoption";
-export * from "./application-tool-bundle-projection";
 export {
   createDefinitionHistoryService,
   DefinitionHistoryError,

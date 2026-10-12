@@ -13,7 +13,6 @@ import {
   actionInputDefinitionSchema,
   moduleContractVersionPairSchema,
   moduleDraftSchema,
-  storedModuleDraftSchema,
 } from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "../catalogue/common";
@@ -411,12 +410,11 @@ export const storedApplicationCompilationOutputSchema = z
       });
   });
 
-const createModuleCompilationOutputSchema = (canonicalSchema: typeof moduleDraftSchema) =>
-  z
+export const moduleCompilationOutputSchema = z
     .object({
       kind: z.literal("module"),
       validationContractVersion: z.literal("3.0.0"),
-      canonical: canonicalSchema,
+      canonical: moduleDraftSchema,
       artifact: compiledModuleArtifactSchema,
       provenance: z.array(definitionProvenanceEntrySchema),
       dependencyOrder: z.array(namespacedKeySchema),
@@ -424,10 +422,6 @@ const createModuleCompilationOutputSchema = (canonicalSchema: typeof moduleDraft
       resolutionFingerprint: fingerprintSchema,
     })
     .strict();
-
-export const moduleCompilationOutputSchema = createModuleCompilationOutputSchema(moduleDraftSchema);
-export const storedModuleCompilationOutputSchema =
-  createModuleCompilationOutputSchema(storedModuleDraftSchema);
 
 const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.ZodTypeAny>(
   moduleSchema: typeof moduleCompilationOutputSchema,
@@ -455,7 +449,7 @@ export const definitionCompilationOutputSchema = createDefinitionCompilationOutp
 );
 /** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
 export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
-  storedModuleCompilationOutputSchema,
+  moduleCompilationOutputSchema,
   storedApplicationCompilationOutputSchema,
 );
 export type StoredDefinitionCompilationOutput = z.infer<

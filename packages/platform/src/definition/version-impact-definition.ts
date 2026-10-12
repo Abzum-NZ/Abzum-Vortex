@@ -4,7 +4,6 @@ import {
   applicationVersionImpactRequestSchema,
   definitionPublicationHistoryEvidenceSchema,
   moduleContentSchema,
-  storedModuleContentSchema,
   moduleVersionImpactPolicyVersion,
   moduleVersionImpactRequestSchema,
   publishedDefinitionHistorySchema,
@@ -95,7 +94,7 @@ const assertHistoryRelease = (
   if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
     refuseVersionImpact("content_fingerprint_mismatch");
   if (kind === "module") {
-    if (unresolvedRecordTypeReferencePaths(storedModuleContentSchema, release.content).length > 0)
+    if (unresolvedRecordTypeReferencePaths(moduleContentSchema, release.content).length > 0)
       refuseVersionImpact("invalid_history");
     assertUnambiguousModuleContent(release.content);
   } else {
@@ -385,7 +384,7 @@ const compareParsedDefinitionVersionImpact = (
   let reasons: DefinitionVersionImpactResult["reasons"];
   if (request.kind === "module") {
     const latestModule = latest!;
-    const latestContent = storedModuleContentSchema.parse(latestModule.content);
+    const latestContent = moduleContentSchema.parse(latestModule.content);
     const comparablePrevious = normaliseModuleContent(latestContent);
     const comparableCandidate = normaliseModuleContent(request.candidate.content);
     normalisedPrevious = comparablePrevious;

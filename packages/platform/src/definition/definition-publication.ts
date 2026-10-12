@@ -27,7 +27,7 @@ import {
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
-  storedModuleCompilationOutputSchema,
+  moduleCompilationOutputSchema,
   recordTypeIdSchema,
   fieldIdSchema,
   type DefinitionCompilationOutput,
@@ -783,7 +783,7 @@ const verifyHistoricalModuleRelease = (
     candidate,
     expectedKey,
     release,
-    storedModuleCompilationOutputSchema.safeParse(release.compilationOutput),
+    moduleCompilationOutputSchema.safeParse(release.compilationOutput),
   );
 
 const sameModuleReleaseLocator = (

@@ -13,7 +13,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleQueryDefinitionSchema, storedModuleContentSchema } from "./module-contracts";
+import { moduleQueryDefinitionSchema, moduleContentSchema } from "./module-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
@@ -134,7 +134,7 @@ export const moduleDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
-    content: storedModuleContentSchema,
+    content: moduleContentSchema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("3.0.0"),
   })
