@@ -21,7 +21,7 @@ import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   parseBoardPayload,
   FORM_CONTAINER_BLOCK_RELEASE,
-  PageLayoutRenderer,
+  PagePuckRenderer,
   UnsavedWorkProvider,
   useFlowIntentHost,
   useUnsavedWorkGuard,
@@ -1745,7 +1745,7 @@ function ApplicationPageViewContent({
         >
         <div ref={dialogFormRef} className="flex flex-col gap-4">
           <UnsavedWorkProvider>
-            <PageLayoutRenderer
+            <PagePuckRenderer
               themeMode="system"
               composition={surface.composition}
               registry={platformComponentRegistry}
@@ -2760,7 +2760,7 @@ function ApplicationPageViewContent({
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
       <div ref={compositionRootRef} className="contents">
-      <PageLayoutRenderer
+      <PagePuckRenderer
         overlay={<Toaster position="bottom-right" />}
         themeMode="system"
         applicationSurface

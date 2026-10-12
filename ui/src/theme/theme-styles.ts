@@ -117,6 +117,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 /**
  * The complete shared UI stylesheet: deterministic layout rules and themed component states.
- * `PageLayoutRenderer` mounts it once for runtime pages and preview canvases.
+ * The Puck page renderer mounts it once for runtime pages and preview canvases.
  */
 export const ALL_UI_STYLES_CSS = `${LAYOUT_ONLY_STYLES_CSS.trim()}\n\n${SHARED_COMPONENT_STYLES_CSS}`;

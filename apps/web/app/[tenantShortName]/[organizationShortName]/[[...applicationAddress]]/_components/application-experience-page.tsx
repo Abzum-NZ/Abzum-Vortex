@@ -6,7 +6,7 @@ import type { ApplicationShellV2, PageDefinitionV2 } from "@vortex/contracts";
 import {
   ApplicationAccountActionsProvider,
   createFullPlatformComponentRegistry,
-  PageLayoutRenderer,
+  PagePuckRenderer,
 } from "@vortex/ui";
 import { signOut } from "../../../../auth/actions";
 
@@ -27,7 +27,7 @@ export function ApplicationExperiencePage({
   page: PageDefinitionV2;
   shells: readonly ApplicationShellV2[];
   /** The application's installed release theme; absent keeps the platform default. */
-  theme?: ComponentProps<typeof PageLayoutRenderer>["theme"];
+  theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
   organizationName: string;
 }>): ReactElement {
   const router = useRouter();
@@ -39,7 +39,7 @@ export function ApplicationExperiencePage({
         signOut,
       }}
     >
-      <PageLayoutRenderer
+      <PagePuckRenderer
         themeMode="system"
         composition={page}
         registry={platformComponentRegistry}
