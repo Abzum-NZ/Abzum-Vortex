@@ -465,7 +465,6 @@ const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseli
 });
 const allowed =
   mainBaseline.status === 0 ? new Set(JSON.parse(mainBaseline.stdout) as string[]) : null;
-const growth = allowed ? baseline.filter((id) => !allowed.has(id)) : [];
 const current = new Set(unique.map((finding) => finding.id));
 const old = new Set(baseline);
 const mainFiles = new Map<string, boolean>();
@@ -481,6 +480,13 @@ function unchangedFromMain(file: string): boolean {
   mainFiles.set(file, unchanged);
   return unchanged;
 }
+// A new baseline entry is allowed only for a finding that exists now in a file identical to
+// main, i.e. one that predates this pull request (recorded by --refresh-from-main).
+const growth = allowed
+  ? baseline.filter(
+      (id) => !allowed.has(id) && !(current.has(id) && unchangedFromMain(id.split("|")[1])),
+    )
+  : [];
 // Main can advance while this PR is open. A finding on a file identical to the
 // PR base belongs to main; a changed or newly added file is still checked here.
 const added = unique.filter((finding) => !old.has(finding.id) && !unchangedFromMain(finding.file));
