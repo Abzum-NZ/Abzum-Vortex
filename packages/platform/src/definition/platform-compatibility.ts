@@ -1,5 +1,4 @@
 import { semanticVersionSchema } from "../catalogue/identifiers";
-import type { SemanticVersion } from "../catalogue/identifiers";
 
 /** Semantic version schema for the Application package/platform compatibility protocol. */
 export const applicationPlatformCompatibilityVersionSchema = semanticVersionSchema;
@@ -14,4 +13,3 @@ applicationPlatformCompatibilityVersionSchema.parse(
 export const APPLICATION_PLATFORM_COMPATIBILITY_VERSION =
   currentApplicationPlatformCompatibilityVersion;
 
-export type ApplicationPlatformCompatibilityVersion = SemanticVersion;

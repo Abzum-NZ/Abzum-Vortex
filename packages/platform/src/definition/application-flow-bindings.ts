@@ -63,13 +63,6 @@ export const flowValueDeclarationSchema = z
       });
   });
 
-export const typedFlowResultMappingSchema = z
-  .object({
-    output: builderKeySchema,
-    type: workflowValueTypeSchema,
-  })
-  .strict();
-
 export const componentSemanticEventKindSchema = z.enum([
   "action",
   "row_clicked",
@@ -120,7 +113,6 @@ export const componentFlowBindingSchema = z
     flow: flowBindingSchema,
   })
   .strict();
-
 
 export const protectedOperationOwnerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
@@ -203,22 +195,6 @@ export const protectedOperationReferenceSetSchema = z
       });
   });
 
-export const sameProtectedOperationReferenceSet = (
-  left: readonly ProtectedOperationReference[],
-  right: readonly ProtectedOperationReference[],
-): boolean => {
-  const canonicalLeft = canonicalizeProtectedOperationReferences(left);
-  const canonicalRight = canonicalizeProtectedOperationReferences(right);
-  return (
-    canonicalLeft.length === canonicalRight.length &&
-    canonicalLeft.every(
-      (reference, index) =>
-        protectedOperationReferenceKey(reference) ===
-        protectedOperationReferenceKey(canonicalRight[index]!),
-    )
-  );
-};
-
 const flowNodeOperationReferencesShape = {
   nodeId: builderKeySchema,
   operations: protectedOperationReferenceSetSchema,
@@ -241,11 +217,6 @@ const refineFlowNodeGrantability = (
       message: "Record and Query nodes are owned by an Application or Module",
     });
 };
-
-export const flowNodeOperationReferencesSchema = z
-  .object(flowNodeOperationReferencesShape)
-  .strict()
-  .superRefine(refineFlowNodeGrantability);
 
 /**
  * Exact manifest entries for targets contained by an Application release. These are deliberately
@@ -701,7 +672,6 @@ export const sourceComponentFlowBindingSchema = z
       .default({}),
   })
   .strict();
-
 
 export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKindSchema>;
 export type FlowEffectKind = z.infer<typeof flowEffectKindSchema>;

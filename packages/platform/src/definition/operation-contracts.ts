@@ -5,34 +5,7 @@ import {
   jsonValueSchema,
   secretReferenceSchema,
 } from "../catalogue/common";
-import {
-  activityIdSchema,
-  actorIdSchema,
-  applicationRootIdSchema,
-  builderKeySchema,
-  containedComponentIdSchema,
-  eventIdSchema,
-  eventOccurrenceIdSchema,
-  fieldIdSchema,
-  fileIdSchema,
-  fingerprintSchema,
-  identityIdSchema,
-  meteringEventIdSchema,
-  moduleRootIdSchema,
-  namespacedKeySchema,
-  organizationAccountIdSchema,
-  organizationIdSchema,
-  platformIdSchema,
-  recordIdSchema,
-  recordTypeIdSchema,
-  removalReceiptIdSchema,
-  retentionPolicyIdSchema,
-  revisionSchema,
-  semanticVersionSchema,
-  tenantIdSchema,
-  timestampSchema,
-  vortexSuperAdministratorAssignmentIdSchema,
-} from "../catalogue/identifiers";
+import { actorIdSchema, applicationRootIdSchema, builderKeySchema, eventIdSchema, eventOccurrenceIdSchema, fieldIdSchema, fileIdSchema, fingerprintSchema, identityIdSchema, meteringEventIdSchema, moduleRootIdSchema, namespacedKeySchema, organizationAccountIdSchema, organizationIdSchema, platformIdSchema, recordIdSchema, recordTypeIdSchema, retentionPolicyIdSchema, revisionSchema, semanticVersionSchema, tenantIdSchema, timestampSchema } from "../catalogue/identifiers";
 import { installedEventDescriptorSchema } from "./module-foundation-contracts";
 import type { StandardInstalledEventKind } from "./module-foundation-contracts";
 
@@ -332,7 +305,6 @@ export const protectedLegalHoldScopeSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export type ProtectedLegalHoldScope = z.infer<typeof protectedLegalHoldScopeSchema>;
 
 /**
  * Exact protected legal hold reference binding organisation ownership, hold identity,
@@ -371,7 +343,6 @@ export const activeFileAttachmentReferenceSchema = z
     owner: fileRemovalOwnerBindingSchema,
   })
   .strict();
-export type ActiveFileAttachmentReference = z.infer<typeof activeFileAttachmentReferenceSchema>;
 
 export const activeFileShareReferenceSchema = z
   .object({
@@ -389,7 +360,6 @@ export const activeFileShareReferenceSchema = z
       message: "A file share names a distinct recipient organisation",
     },
   );
-export type ActiveFileShareReference = z.infer<typeof activeFileShareReferenceSchema>;
 
 export const activeFileSourceResponsibilityReferenceSchema = z
   .object({
@@ -398,9 +368,6 @@ export const activeFileSourceResponsibilityReferenceSchema = z
     fileId: fileIdSchema,
   })
   .strict();
-export type ActiveFileSourceResponsibilityReference = z.infer<
-  typeof activeFileSourceResponsibilityReferenceSchema
->;
 
 export const fileRemovalRecoveryPolicySnapshotSchema = z
   .object({
@@ -416,9 +383,6 @@ export const fileRemovalRecoveryPolicySnapshotSchema = z
     validUntil: timestampSchema,
   })
   .strict();
-export type FileRemovalRecoveryPolicySnapshot = z.infer<
-  typeof fileRemovalRecoveryPolicySnapshotSchema
->;
 
 export const fileRemovalHoldAuthoritySnapshotSchema = z
   .object({
@@ -429,9 +393,6 @@ export const fileRemovalHoldAuthoritySnapshotSchema = z
     validUntil: timestampSchema,
   })
   .strict();
-export type FileRemovalHoldAuthoritySnapshot = z.infer<
-  typeof fileRemovalHoldAuthoritySnapshotSchema
->;
 
 /**
  * Closed stable refusal reasons for file removal eligibility.
@@ -505,7 +466,6 @@ export const fileRemovalEligibilityBindingSchema = z
     holdPolicyRevision: revisionSchema,
   })
   .strict();
-export type FileRemovalEligibilityBinding = z.infer<typeof fileRemovalEligibilityBindingSchema>;
 
 export const fileRemovalEligibleDecisionSchema = z
   .object({
@@ -526,7 +486,6 @@ export const fileRemovalRefusedDecisionSchema = z
     decidedAt: timestampSchema,
   })
   .strict();
-export type FileRemovalRefusedDecision = z.infer<typeof fileRemovalRefusedDecisionSchema>;
 
 export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligible", [
   fileRemovalEligibleDecisionSchema,
@@ -861,37 +820,6 @@ export type FileUploadActivationRefusalReason = z.infer<
   typeof fileUploadActivationRefusalReasonSchema
 >;
 
-const canonicalActivitySubjectIdsSchema = z
-  .array(platformIdSchema)
-  .min(1)
-  .superRefine((identifiers, context) => {
-    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
-    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
-      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
-        context.addIssue({
-          code: "custom",
-          message: "Activity subject identifiers must be unique and in canonical order",
-        });
-        return;
-      }
-    }
-  });
-
-const canonicalActivityChangedFieldIdsSchema = z
-  .array(fieldIdSchema)
-  .superRefine((identifiers, context) => {
-    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
-    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
-      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
-        context.addIssue({
-          code: "custom",
-          message: "Changed field identifiers must be unique and in canonical order",
-        });
-        return;
-      }
-    }
-  });
-
 export const activityActorKindSchema = z.enum([
   "identity",
   "organization_account",
@@ -926,29 +854,6 @@ export const protectedOperationChannelSchema = z.enum([
   "durable_workflow",
   "system",
 ]);
-
-export const activityEntrySchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    activityId: activityIdSchema,
-    occurredAt: timestampSchema,
-    actorKind: activityActorKindSchema,
-    actorId: actorIdSchema,
-    action: builderKeySchema,
-    subjectIds: canonicalActivitySubjectIdsSchema,
-    changedFieldIds: canonicalActivityChangedFieldIdsSchema,
-    source: protectedOperationChannelSchema,
-    correlationId: correlationIdSchema,
-    outcome: z.enum(["completed", "refused", "failed"]),
-    authority: z
-      .object({
-        kind: z.literal("vortex_super_administrator"),
-        assignmentId: vortexSuperAdministratorAssignmentIdSchema,
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
 
 export const activitySourceSchema = protectedOperationChannelSchema;
 
@@ -990,75 +895,6 @@ export const activityAggregateDimensionSchema = z.enum([
   "source",
   "outcome",
 ]);
-export const retentionPolicySchema = z
-  .object({
-    retentionPolicyId: retentionPolicyIdSchema,
-    organizationId: organizationIdSchema,
-    dataCategory: builderKeySchema,
-    savedConditionId: containedComponentIdSchema.optional(),
-    savedConditionRevision: revisionSchema.optional(),
-    savedConditionFingerprint: fingerprintSchema.optional(),
-    activeDays: z.number().int().min(0).max(36_500),
-    recoveryDays: z.number().int().min(0).max(3_650),
-    removalSchedule: z.string().min(1).max(200),
-    legalConstraintKeys: z.array(builderKeySchema),
-    state: z.enum(["draft", "active", "retired"]),
-    createdBy: organizationAccountIdSchema,
-    approvedBy: organizationAccountIdSchema,
-    version: revisionSchema,
-  })
-  .strict()
-  .refine(
-    (value) => {
-      const suppliedReferenceParts = [
-        value.savedConditionId,
-        value.savedConditionRevision,
-        value.savedConditionFingerprint,
-      ].filter((item) => item !== undefined).length;
-      return suppliedReferenceParts === 0 || suppliedReferenceParts === 3;
-    },
-    {
-      path: ["savedConditionId"],
-      message: "A saved condition identifier, revision and fingerprint are supplied together",
-    },
-  );
-export const permanentRemovalReceiptSchema = z
-  .object({
-    removalReceiptId: removalReceiptIdSchema,
-    organizationId: organizationIdSchema,
-    protectedFingerprint: fingerprintSchema,
-    category: builderKeySchema,
-    selectionFingerprint: fingerprintSchema,
-    completedAt: timestampSchema,
-    retentionPolicyId: retentionPolicyIdSchema,
-    jobId: platformIdSchema,
-    outcome: z.enum(["removed", "partially_removed", "lawful_exception"]),
-    lawfulExceptionCode: builderKeySchema.optional(),
-  })
-  .strict();
-export const protectedRemovalCommandSchema = z
-  .object({
-    commandId: platformIdSchema,
-    tenantId: tenantIdSchema,
-    organizationIds: z.array(organizationIdSchema).min(1),
-    dataCategories: z.array(builderKeySchema).min(1),
-    savedConditionId: containedComponentIdSchema.optional(),
-    savedConditionRevision: revisionSchema.optional(),
-    subjectFingerprint: fingerprintSchema.optional(),
-    requestedBy: platformIdSchema,
-    authorizedBy: platformIdSchema,
-    issuedAt: timestampSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict()
-  .refine(
-    (value) =>
-      (value.savedConditionId === undefined) === (value.savedConditionRevision === undefined),
-    {
-      path: ["savedConditionRevision"],
-      message: "A saved condition identifier and revision are supplied together",
-    },
-  );
 
 export const entitlementCheckRequestSchema = z
   .object({
@@ -1235,49 +1071,17 @@ export const safeErrorResponseSchema = z.discriminatedUnion("code", [
   safeErrorVariant("temporarily_unavailable"),
   safeErrorVariant("operation_failed"),
 ]);
-export const performanceMeasurementSchema = z
-  .object({
-    operation: builderKeySchema,
-    dataset: builderKeySchema,
-    cacheState: z.enum(["cold", "warm", "bypass"]),
-    region: z.string().min(1).max(100),
-    device: z.string().min(1).max(100),
-    network: z.string().min(1).max(100),
-    percentile: z.enum(["p50", "p75", "p95", "p99"]),
-    clientMilliseconds: z.number().nonnegative(),
-    serverMilliseconds: z.number().nonnegative(),
-    databaseMilliseconds: z.number().nonnegative(),
-    codeRevision: z.string().min(7).max(64),
-    comparisonBaseline: z.string().min(1).max(200),
-  })
-  .strict();
 
 export type EventOccurrenceEnvelope = z.infer<typeof eventOccurrenceEnvelopeSchema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;
 export type VerifiedFileActor = z.infer<typeof verifiedFileActorSchema>;
-export type PrivateFileBucket = z.infer<typeof privateFileBucketSchema>;
 export type FileStorageOperation = z.infer<typeof fileStorageOperationSchema>;
 export type FileStorageOperationClaims = z.infer<typeof fileStorageOperationClaimsSchema>;
 export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
-export type ActivityEntry = z.infer<typeof activityEntrySchema>;
 export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
-export type ActivitySource = z.infer<typeof activitySourceSchema>;
-export type ActivityOutcome = z.infer<typeof activityOutcomeSchema>;
-export type ActivityProjection = z.infer<typeof activityProjectionSchema>;
-export type ActivityHistoryFilter = z.infer<typeof activityHistoryFilterSchema>;
-export type ActivityAggregateDimension = z.infer<typeof activityAggregateDimensionSchema>;
-export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
-export type PermanentRemovalReceipt = z.infer<typeof permanentRemovalReceiptSchema>;
-export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSchema>;
 export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
 export type MeteringEvent = z.infer<typeof meteringEventSchema>;
-export type MeteringEventSource = z.infer<typeof meteringEventSourceSchema>;
-export type MeteringAllocationOwner = z.infer<typeof meteringAllocationOwnerSchema>;
-export type MeteringCorrectionDirection = z.infer<typeof meteringCorrectionDirectionSchema>;
-export type MeteringEventDimensions = z.infer<typeof meteringEventDimensionsSchema>;
 export type RecordMeteringEventCommand = z.infer<typeof recordMeteringEventCommandSchema>;
-export type SafeErrorResponse = z.infer<typeof safeErrorResponseSchema>;
-export type PerformanceMeasurement = z.infer<typeof performanceMeasurementSchema>;

@@ -17,32 +17,6 @@ import { moduleQueryDefinitionSchema, moduleContentSchema } from "./module-contr
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
-const definitionConsumerReadSelectorSchema = z.discriminatedUnion("selection", [
-  z.object({ selection: z.literal("current") }).strict(),
-  z.object({ selection: z.literal("revision"), releaseRevision: revisionSchema }).strict(),
-]);
-
-/**
- * A consumer must select a release explicitly. `current` is discovery-only;
- * durable consumers retain and request their exact immutable release revision.
- */
-export const definitionConsumerReadCommandSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      selector: definitionConsumerReadSelectorSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      rootId: applicationRootIdSchema,
-      selector: definitionConsumerReadSelectorSchema,
-    })
-    .strict(),
-]);
-
 const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema>): string =>
   // IDs compare lower-cased, matching the publication contract's lowercase references,
   // so casing differences cannot hide a duplicate subject or break canonical order.
@@ -214,35 +188,6 @@ export const applicationModuleQueryBindingSchema = z
   })
   .strict();
 
-/**
- * Resolves a bound Application query against one exact Module release read. The binding must name
- * that release's own root and version, and the query is found only by its stable identity, so a
- * renamed key or a different release can never satisfy the binding.
- */
-export const resolvePublishedModuleQuery = (
-  release: ModuleDefinitionConsumerReadResult,
-  binding: ApplicationModuleQueryBinding,
-): PublishedModuleQueryDescriptor | undefined => {
-  if (
-    release.rootId !== binding.moduleRootId ||
-    release.releaseVersion !== binding.moduleReleaseVersion
-  )
-    return undefined;
-  const query = release.content.queries.find((candidate) => candidate.queryId === binding.queryId);
-  return query === undefined
-    ? undefined
-    : {
-        moduleRootId: release.rootId,
-        moduleReleaseVersion: release.releaseVersion,
-        query,
-      };
-};
-
-export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;
-export type DefinitionConsumerReadSelector = z.infer<typeof definitionConsumerReadSelectorSchema>;
-export type DefinitionConsumerReadDependencyManifest = z.infer<
-  typeof definitionConsumerReadDependencyManifestSchema
->;
 export type DefinitionConsumerReadResult = z.infer<typeof definitionConsumerReadResultSchema>;
 export type ApplicationBoundReleaseSetCommand = z.infer<
   typeof applicationBoundReleaseSetCommandSchema
@@ -259,5 +204,4 @@ export type SystemApplicationBoundReleaseSetResult = z.infer<
 export type ModuleDefinitionConsumerReadResult = z.infer<
   typeof moduleDefinitionConsumerReadResultSchema
 >;
-export type PublishedModuleQueryDescriptor = z.infer<typeof publishedModuleQueryDescriptorSchema>;
 export type ApplicationModuleQueryBinding = z.infer<typeof applicationModuleQueryBindingSchema>;

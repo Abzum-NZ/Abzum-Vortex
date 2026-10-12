@@ -32,8 +32,6 @@ export const moduleContractPair = {
   validationContractVersion: moduleValidationContractVersion,
 } as const;
 
-export type ModuleContractPair = typeof moduleContractPair;
-
 /** Refuses any pair other than the one current Module source/validation contract. */
 export const assertModuleContractPair = (
   sourceContractVersion: string,

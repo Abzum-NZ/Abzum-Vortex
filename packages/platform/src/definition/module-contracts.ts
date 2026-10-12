@@ -1396,24 +1396,10 @@ export const moduleDraftSchema = z
       });
     });
 
-export const moduleCanonicalDocumentSchema = z
-  .object({
-    validationContractVersion: z.literal(moduleValidationContractVersion),
-    canonical: moduleDraftSchema,
-  })
-  .strict();
-
-export type ModuleContractVersionPair = z.infer<typeof moduleContractVersionPairSchema>;
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ActionInputDefinition = z.infer<typeof actionInputDefinitionSchema>;
-export type SavedSharingCondition = z.infer<typeof savedSharingConditionSchema>;
-export type ModuleQuerySort = z.infer<typeof moduleQuerySortSchema>;
-export type ModuleQueryAggregate = z.infer<typeof moduleQueryAggregateSchema>;
 export type ModuleQueryDefinition = z.infer<typeof moduleQueryDefinitionSchema>;
-export type ModuleSystemProjection = z.infer<typeof moduleSystemProjectionSchema>;
 export type RecordTypeDefinition = z.infer<typeof recordTypeDefinitionSchema>;
-export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
 export type ModuleContribution = z.infer<typeof moduleContributionSchema>;
 export type ModuleContent = z.infer<typeof moduleContentSchema>;
 export type ModuleDraft = z.infer<typeof moduleDraftSchema>;
-export type ModuleCanonicalDocument = z.infer<typeof moduleCanonicalDocumentSchema>;

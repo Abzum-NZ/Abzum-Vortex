@@ -289,14 +289,6 @@ export const definitionVersionImpactResultSchema = z.discriminatedUnion("outcome
   requiredDefinitionReleaseResultSchema,
 ]);
 
-export const definitionVersionConfirmationSchema = z
-  .object({
-    subject: definitionVersionSubjectSchema,
-    comparisonFingerprint: fingerprintSchema,
-    assignedVersion: stableDefinitionReleaseVersionSchema,
-  })
-  .strict();
-
 export type VersionImpact = z.infer<typeof versionImpactSchema>;
 export type VersionImpactReason = z.infer<typeof versionImpactReasonSchema>;
 export type DefinitionVersionSubject = z.infer<typeof definitionVersionSubjectSchema>;
@@ -312,4 +304,3 @@ export type ModuleVersionImpactHistoryEntry = z.infer<
   typeof moduleVersionImpactHistoryEntrySchema
 >;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
-export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

@@ -166,4 +166,3 @@ export type NamespacedKey = z.infer<typeof namespacedKeySchema>;
 export type SemanticVersion = z.infer<typeof semanticVersionSchema>;
 export type Revision = z.infer<typeof revisionSchema>;
 export type Fingerprint = z.infer<typeof fingerprintSchema>;
-export type Timestamp = z.infer<typeof timestampSchema>;

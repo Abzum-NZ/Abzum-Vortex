@@ -314,4 +314,3 @@ export const createViewerSafeRecordLinkService = (
   });
 };
 
-export type ViewerSafeRecordLinkService = ReturnType<typeof createViewerSafeRecordLinkService>;

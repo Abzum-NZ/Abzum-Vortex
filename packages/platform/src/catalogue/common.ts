@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { builderKeySchema, platformIdSchema, timestampSchema } from "./identifiers";
+import { builderKeySchema, platformIdSchema } from "./identifiers";
 
 export const labelSchema = z.string().trim().min(1).max(60);
 export const descriptionSchema = z.string().trim().min(1).max(1_000);
@@ -84,15 +84,4 @@ export const boundedPageSchema = z
   })
   .strict();
 
-export const operationEvidenceSchema = z
-  .object({
-    correlationId: correlationIdSchema,
-    occurredAt: timestampSchema,
-  })
-  .strict();
-
-export type SecretReference = z.infer<typeof secretReferenceSchema>;
 export type CorrelationId = z.infer<typeof correlationIdSchema>;
-export type RetryPolicy = z.infer<typeof retryPolicySchema>;
-export type BoundedPage = z.infer<typeof boundedPageSchema>;
-export type OperationEvidence = z.infer<typeof operationEvidenceSchema>;

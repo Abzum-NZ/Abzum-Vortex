@@ -1,23 +1,7 @@
 import "server-only";
 
-import {
-  alertDeduplicationKeySchema,
-  alertRecordSchema,
-  alertSeveritySchema,
-  builderKeySchema,
-  namespacedKeySchema,
-  runbookReferenceSchema,
-  telemetryServiceSchema,
-  timestampSchema,
-  type AlertRecord,
-  type ServiceTelemetryPort,
-} from "../schema";
-import {
-  withRuntimeTransaction,
-  type DatabaseRow,
-  type RequestDatabaseTransaction,
-} from "../db/index";
-import { z } from "zod";
+import { alertRecordSchema, type AlertRecord, type ServiceTelemetryPort } from "../schema";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -26,37 +10,6 @@ type RuntimeTransactionRunner = <Result>(
 export interface OperationsAlertSinkDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
-
-/**
- * The canonical shape of one persisted Operations alert signal. It mirrors the
- * protected `vortex_operations.alert_signals` row, with deduplication state
- * owned by the database writer rather than by the producer.
- */
-export const operationsAlertSignalSchema = z
-  .object({
-    signalId: z.uuid(),
-    code: namespacedKeySchema,
-    severity: alertSeveritySchema,
-    affectedService: telemetryServiceSchema,
-    deduplicationKey: alertDeduplicationKeySchema,
-    owningRole: builderKeySchema,
-    runbookReference: runbookReferenceSchema,
-    occurrenceCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    firstSeenAt: timestampSchema,
-    lastSeenAt: timestampSchema,
-    state: z.enum(["open", "resolved"]),
-  })
-  .strict();
-
-export type OperationsAlertSignal = z.infer<typeof operationsAlertSignalSchema>;
-
-/** The narrow read's page bound, identical to `read_open_alert_signals`. */
-export const operationsAlertSignalReadLimitSchema = z.number().int().min(1).max(500);
-
-export type OpenOperationsAlertSignalsRead =
-  | Readonly<{ kind: "available"; signals: readonly OperationsAlertSignal[] }>
-  | Readonly<{ kind: "invalid" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /**
  * At most this many signal writes are in flight across every sink in the
@@ -121,76 +74,3 @@ export const createOperationsAlertSink = (
   });
 };
 
-type AlertSignalRow = DatabaseRow & {
-  signal_id: unknown;
-  code: unknown;
-  severity: unknown;
-  affected_service: unknown;
-  deduplication_key: unknown;
-  owning_role: unknown;
-  runbook_reference: unknown;
-  occurrence_count: unknown;
-  first_seen_at: unknown;
-  last_seen_at: unknown;
-  state: unknown;
-};
-
-const safeInteger = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && /^[0-9]+$/.test(value)) return Number(value);
-  return value;
-};
-
-const isoInstant = (value: unknown): unknown => {
-  if (value instanceof Date) return value.toISOString();
-  return value;
-};
-
-const projectAlertSignal = (row: AlertSignalRow): OperationsAlertSignal =>
-  operationsAlertSignalSchema.parse({
-    signalId: row.signal_id,
-    code: row.code,
-    severity: row.severity,
-    affectedService: row.affected_service,
-    deduplicationKey: row.deduplication_key,
-    owningRole: row.owning_role,
-    runbookReference: row.runbook_reference,
-    occurrenceCount: safeInteger(row.occurrence_count),
-    firstSeenAt: isoInstant(row.first_seen_at),
-    lastSeenAt: isoInstant(row.last_seen_at),
-    state: row.state,
-  });
-
-/**
- * The narrow Operations read: one bounded page of open signals, most recently
- * seen first. Resolved signals are never returned. The caller supplies only a
- * page bound; the database decides ordering, and malformed rows fail closed
- * rather than being projected. Database and projection failures settle as
- * `temporarily_unavailable`, never as a raw error.
- *
- * This runs as the runtime role with no operator authority of its own: a
- * caller must authorise the Operations operator before invoking it.
- */
-export const readOpenOperationsAlertSignals = async (
-  limit = 100,
-  dependencies: OperationsAlertSinkDependencies = {},
-): Promise<OpenOperationsAlertSignalsRead> => {
-  const bound = operationsAlertSignalReadLimitSchema.safeParse(limit);
-  if (!bound.success) return { kind: "invalid" };
-  const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
-
-  try {
-    const rows = await runtimeTransaction(
-      async (transaction) =>
-        transaction.query<AlertSignalRow>`
-        select signal_id, code, severity, affected_service, deduplication_key,
-          owning_role, runbook_reference, occurrence_count, first_seen_at,
-          last_seen_at, state
-        from vortex_operations.read_open_alert_signals(${bound.data}::integer)
-      `,
-    );
-    return { kind: "available", signals: rows.map(projectAlertSignal) };
-  } catch {
-    return { kind: "temporarily_unavailable" };
-  }
-};
