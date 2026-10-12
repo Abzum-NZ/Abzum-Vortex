@@ -37,7 +37,7 @@ export type PreparedInstallationRuntimeSourceReader = (
   }>,
 ) => Promise<PreparedInstallationRuntimeSource>;
 
-export const installationRuntimeBundleKey = (
+const installationRuntimeBundleKey = (
   applicationRootId: string,
   applicationReleaseRevision: number,
 ) => {

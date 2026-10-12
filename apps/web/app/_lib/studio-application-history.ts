@@ -51,8 +51,6 @@ const pageSchema = z.object({
 }).strict();
 
 export type StudioApplicationHistorySnapshot = z.infer<typeof snapshotSchema>;
-export type StudioApplicationHistoryListRequest = z.infer<typeof listRequestSchema>;
-export type StudioApplicationHistoryInspectRequest = z.infer<typeof inspectRequestSchema>;
 export type StudioApplicationHistoryFailure = Readonly<{
   kind: "refused" | "conflict" | "temporarily_unavailable";
 }>;
@@ -66,7 +64,7 @@ export type StudioApplicationHistoryListResult = StudioApplicationHistoryFailure
 export type StudioApplicationHistoryInspectResult = StudioApplicationHistoryFailure |
   Readonly<{ kind: "available"; snapshot: StudioApplicationHistorySnapshot;
     metadata: DefinitionReleaseMetadata }>;
-export type StudioApplicationHistoryAccessResult = StudioApplicationHistoryFailure |
+type StudioApplicationHistoryAccessResult = StudioApplicationHistoryFailure |
   Readonly<{ kind: "available"; snapshot: StudioApplicationHistorySnapshot }>;
 
 type Draft = Extract<StoredDefinitionDraft, { kind: "application" }>;

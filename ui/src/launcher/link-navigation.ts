@@ -11,11 +11,6 @@ import type { FlowIntent } from "../flow-runtime/intents";
  */
 export type LinkOpenBehavior = "replace" | "new_page";
 
-export const LINK_OPEN_BEHAVIORS: readonly LinkOpenBehavior[] = Object.freeze([
-  "replace",
-  "new_page",
-]);
-
 /**
  * One declared link target. The target is definition or record data and grants no access to what
  * it names; an internal target is only ever resolved against the viewer's current server-side
@@ -56,7 +51,7 @@ export type LinkNavigationEnvironment = Readonly<{
 }>;
 
 /** One external anchor's attributes: a validated address opened in a new browsing context. */
-export type ExternalLinkActivation = Readonly<{
+type ExternalLinkActivation = Readonly<{
   href: string;
   target: "_blank";
   rel: "noopener noreferrer";

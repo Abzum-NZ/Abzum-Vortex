@@ -22,18 +22,7 @@ import type { KestraFlowCompilerEnvironment, KestraFlowIdentity } from "./kestra
 
 type ScheduleRecurrence = Extract<FlowTrigger, { type: "Schedule" }>["recurrence"];
 
-export type ScheduleOccurrenceInput = Readonly<{
-  identity: KestraFlowIdentity;
-  flowId: string;
-  triggerId: string;
-  recurrence: ScheduleRecurrence;
-  /** An exclusive UTC cursor, serialized as an ISO timestamp ending in `Z`. */
-  afterUtc: string;
-  /** An inclusive UTC search bound, serialized as an ISO timestamp ending in `Z`. */
-  throughUtc: string;
-}>;
-
-export const scheduleOccurrenceRefusalReasons = [
+const scheduleOccurrenceRefusalReasons = [
   "invalid_input",
   "invalid_identity",
   "invalid_flow_id",
@@ -46,10 +35,10 @@ export const scheduleOccurrenceRefusalReasons = [
   "candidate_limit_exceeded",
 ] as const;
 
-export type ScheduleOccurrenceRefusalReason =
+type ScheduleOccurrenceRefusalReason =
   (typeof scheduleOccurrenceRefusalReasons)[number];
 
-export type ScheduleOccurrenceResult =
+type ScheduleOccurrenceResult =
   | Readonly<{
       outcome: "occurrence";
       scheduledForUtc: string;
@@ -355,7 +344,7 @@ const refused = (reason: ScheduleOccurrenceRefusalReason): ScheduleOccurrenceRes
  * transition-complete IANA database using the Temporal polyfill. Gaps and absent month days are
  * skipped; folds keep their earlier UTC instant.
  */
-export const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceResult => {
+const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceResult => {
   try {
     if (!isRecord(candidate) || !hasOnlyKeys(candidate, inputKeys)) return refused("invalid_input");
 

@@ -207,7 +207,7 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 // directly; their shape is not versioned per Module generation.
 // ---------------------------------------------------------------------------
 
-export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
+const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("all_records")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("ownership")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("direct_share")) }).strict(),
@@ -227,7 +227,7 @@ const sourceRecordScopeRouteIdentity = (
     ? `${route.kind}:${route.relationship}:${route.source_permission}`
     : route.kind;
 
-export const sourcePermissionRecordScopeBaseSchema = z
+const sourcePermissionRecordScopeBaseSchema = z
   .object({
     routes: sourceProvenanceUnchanged(
       z.array(sourcePermissionRecordScopeRouteSchema).min(1).max(100),
@@ -1203,7 +1203,7 @@ const tableDefaultValid = (
   );
 };
 
-export const moduleSourceFieldSchema = z
+const moduleSourceFieldSchema = z
   .discriminatedUnion("type", sourceFieldMembers)
   .superRefine((value, context) => {
     if (value.default === undefined) return;
@@ -1304,7 +1304,7 @@ const moduleSourceExactActionInputValidationSchema = z
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
 
-export const moduleSourceActionInputSchema = z
+const moduleSourceActionInputSchema = z
   .discriminatedUnion("type", [
     z
       .object({
@@ -1469,7 +1469,7 @@ const systemRecordProtectedOperationKeys = Object.entries(PLATFORM_SERVICE_OPERA
  * identity. The operation requires its own registered permission and re-checks the actor's current
  * authority when it runs, in addition to the action's own permission.
  */
-export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtectedOperationKeys);
+const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtectedOperationKeys);
 
 /**
  * The system projection storage kind: the record type's typed fields project one registered
@@ -1478,7 +1478,7 @@ export const moduleSourceProtectedOperationKeySchema = z.enum(systemRecordProtec
  * sortable fields are the closed subset the query engine may use; and the revision field is the
  * concurrency number every protected operation re-checks.
  */
-export const moduleSourceSystemProjectionSchema = z
+const moduleSourceSystemProjectionSchema = z
   .object({
     protected_view: sourceProvenanceUnchanged(protectedReadModelKeySchema),
     organization_field: sourceProvenanceTarget(builderKeySchema, ["organizationFieldId"]),
@@ -1520,7 +1520,7 @@ const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "attachment",
 ]);
 
-export const moduleSourceRecordTypeSchema = z
+const moduleSourceRecordTypeSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["recordTypeId", "fromRecordTypeId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
@@ -1683,7 +1683,7 @@ export const moduleSourceRecordTypeSchema = z
     }
   });
 
-export const moduleSourceActionSchema = z
+const moduleSourceActionSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
     key: sourceProvenanceUnchanged(namespacedKeySchema),
@@ -1792,7 +1792,7 @@ const sourceSharingParameterValueSchemas: Record<
   organization_account_reference: organizationAccountIdSchema,
 };
 
-export const moduleSourceSharingConditionSchema = z
+const moduleSourceSharingConditionSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["conditionId"]),
     source_record_type: sourceProvenanceTarget(builderKeySchema, ["sourceRecordTypeId"]),
@@ -1826,14 +1826,14 @@ export const moduleSourceSharingConditionSchema = z
 // Module queries.
 // ---------------------------------------------------------------------------
 
-export const moduleSourceQuerySortSchema = z
+const moduleSourceQuerySortSchema = z
   .object({
     field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
     direction: sourceProvenanceUnchanged(z.enum(["ascending", "descending"])),
   })
   .strict();
 
-export const moduleSourceQueryAggregateSchema = z
+const moduleSourceQueryAggregateSchema = z
   .object({
     operation: sourceProvenanceUnchanged(z.enum(["count", "sum", "minimum", "maximum", "average"])),
     field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
@@ -1846,7 +1846,7 @@ export const moduleSourceQueryAggregateSchema = z
  * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
  * a bounded page size and its declared relationship hops. It never carries a database target.
  */
-export const moduleSourceQuerySchema = z
+const moduleSourceQuerySchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
@@ -1890,7 +1890,7 @@ const moduleSourceContributionBase = {
  * entry by its local `dependency_key`; `extension_point` names the target's extension-point
  * key. The contribution is additive and never names the Module's own extension points.
  */
-export const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
+const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...moduleSourceContributionBase,
@@ -2074,14 +2074,4 @@ export const moduleSourceDocumentSchema = z
   })
   .strict();
 
-export type ModuleSourceField = z.infer<typeof moduleSourceFieldSchema>;
-export type ModuleSourceActionInput = z.infer<typeof moduleSourceActionInputSchema>;
-export type ModuleSourceAction = z.infer<typeof moduleSourceActionSchema>;
-export type ModuleSourceRecordType = z.infer<typeof moduleSourceRecordTypeSchema>;
-export type ModuleSourceSharingCondition = z.infer<typeof moduleSourceSharingConditionSchema>;
-export type ModuleSourceQuerySort = z.infer<typeof moduleSourceQuerySortSchema>;
-export type ModuleSourceQueryAggregate = z.infer<typeof moduleSourceQueryAggregateSchema>;
-export type ModuleSourceQuery = z.infer<typeof moduleSourceQuerySchema>;
-export type ModuleSourceContribution = z.infer<typeof moduleSourceContributionSchema>;
-export type ModuleSourceBody = z.infer<typeof moduleSourceBodySchema>;
 export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;

@@ -71,7 +71,7 @@ export type StudioModuleQueryFilterResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type StudioModuleQueryFilterSaveResult =
+type StudioModuleQueryFilterSaveResult =
   | Readonly<{
       kind: "saved" | "unchanged";
       snapshot: StudioModuleQueryFilterSnapshot;
@@ -86,7 +86,7 @@ export type StudioModuleQueryFilterSaveResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type StudioModuleQueryFilterValidationResult =
+type StudioModuleQueryFilterValidationResult =
   | Readonly<{ kind: "valid" }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{

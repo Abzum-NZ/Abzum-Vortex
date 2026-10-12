@@ -31,7 +31,7 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 type Path = (string | number)[];
 
-export type BeforeSaveLoweringRefusal = Readonly<{
+type BeforeSaveLoweringRefusal = Readonly<{
   ruleCode: DefinitionCompilerRefusalCode;
   family: DefinitionRuleFailureFamily;
   /** Path inside the flow of the first thing that cannot be lowered. */
@@ -40,7 +40,7 @@ export type BeforeSaveLoweringRefusal = Readonly<{
   taskId?: string;
 }>;
 
-export type BeforeSaveLowering =
+type BeforeSaveLowering =
   | Readonly<{ ok: true; graph: SourceRuleGraph }>
   | Readonly<{ ok: false; refusal: BeforeSaveLoweringRefusal }>;
 
@@ -70,9 +70,9 @@ const invalidValue = (path: Path): never => {
 export const isBeforeSaveFlow = (flow: SourceFlow): boolean =>
   flow.triggers.some((trigger) => trigger.type === "BeforeSave");
 
-export const startNodeAlias = "start";
-export const finishNodeAlias = "finish";
-export const taskNodeAlias = (taskId: string): string => `task_${taskId}`;
+const startNodeAlias = "start";
+const finishNodeAlias = "finish";
+const taskNodeAlias = (taskId: string): string => `task_${taskId}`;
 
 // ─── Conditions ────────────────────────────────────────────────────────────────────────────────
 

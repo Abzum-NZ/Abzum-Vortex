@@ -153,14 +153,14 @@ const validateContext = (candidate: SessionContext): SessionContext => {
   return parsed.data;
 };
 
-export const createRuntimeTransactionRunner =
+const createRuntimeTransactionRunner =
   (driver: DatabaseDriver) =>
   async <Result>(operation: RuntimeOperation<Result>): Promise<Result> =>
     driver.transaction(async (transaction) =>
       invokeRequestDatabaseCallback(() => operation(transaction)),
     );
 
-export const createResolvedRequestTransactionRunner =
+const createResolvedRequestTransactionRunner =
   (driver: DatabaseDriver) =>
   async <Scope, Result>(
     resolve: RequestContextResolver<Scope>,
@@ -617,7 +617,7 @@ const parsePoolSize = (candidate: string | undefined): number => {
   return size;
 };
 
-export const parseRuntimeDatabaseConfiguration = (
+const parseRuntimeDatabaseConfiguration = (
   environment: Readonly<Record<string, string | undefined>>,
 ): RuntimeDatabaseConfiguration => {
   const connectionString = environment.VORTEX_RUNTIME_DATABASE_URL;
@@ -669,7 +669,7 @@ export const parseRuntimeDatabaseConfiguration = (
   };
 };
 
-export const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration): Sql =>
+const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration): Sql =>
   postgres(configuration.connectionString, {
     prepare: false,
     max: configuration.poolSize,

@@ -121,7 +121,7 @@ export const readApplicationReleaseAdoption = async (
   }
 };
 
-export type AdoptApplicationReleaseRequest = Readonly<{
+type AdoptApplicationReleaseRequest = Readonly<{
   organizationId: string;
   applicationRootId: string;
   applicationReleaseRevision: number;

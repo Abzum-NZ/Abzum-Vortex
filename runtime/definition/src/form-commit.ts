@@ -15,7 +15,7 @@ const object = (value: unknown): JsonObject =>
     : {};
 
 /** How the executable actions a flow can commit are named in this Application's release. */
-export type FormCommitActions = Readonly<{
+type FormCommitActions = Readonly<{
   /** A bound Module's standard record action key by `${recordTypeId}:${standardAction}`. */
   standardActionKeysByRecordAction: ReadonlyMap<string, string>;
   /** Every executable action key: Application and bound Module named actions and standard actions. */
@@ -23,7 +23,7 @@ export type FormCommitActions = Readonly<{
 }>;
 
 /** The canonical Application content the derivation reads. */
-export type FormCommitContent = Readonly<{
+type FormCommitContent = Readonly<{
   pages: readonly unknown[];
   shells: readonly unknown[];
   flows: readonly unknown[];

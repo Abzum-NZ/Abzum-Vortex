@@ -45,7 +45,6 @@ export { createDatabaseDefinitionConsumerReadService } from "./definition-consum
 export * from "./application-bound-release-set";
 export * from "./prepared-installation-runtime-source";
 export * from "./application-release-adoption";
-export * from "./application-lifecycle";
 export * from "./application-tool-bundle-projection";
 export {
   createDefinitionHistoryService,

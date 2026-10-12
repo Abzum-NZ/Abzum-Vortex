@@ -1,6 +1,6 @@
 import "server-only";
 
-export type BoundedRequestText =
+type BoundedRequestText =
   | Readonly<{ kind: "read"; text: string }>
   | Readonly<{ kind: "too_large" }>
   | Readonly<{ kind: "unreadable" }>;

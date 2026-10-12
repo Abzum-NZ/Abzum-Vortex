@@ -57,8 +57,6 @@ export const protectedRunRegisteredReleaseSchema = z
       context.addIssue({ code: "custom", message: "Registered Flow publication identity mismatch" });
   });
 
-export type ProtectedRunRegisteredRelease = z.infer<typeof protectedRunRegisteredReleaseSchema>;
-
 /**
  * #947: storage-bound repository for inactive workflow flow registrations.
  *

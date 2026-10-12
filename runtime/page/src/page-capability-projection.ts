@@ -34,14 +34,14 @@ export type ProjectedPageCapability = Readonly<Record<string, unknown>> | undefi
  * which carries no name, icon, address or reason, so nothing can distinguish why it is
  * unavailable and a tile rendered in this state can only be removed.
  */
-export const unavailableLinkDestination = Object.freeze({
+const unavailableLinkDestination = Object.freeze({
   availability: "unavailable" as const,
 });
 
-export type UnavailableLinkDestination = typeof unavailableLinkDestination;
+type UnavailableLinkDestination = typeof unavailableLinkDestination;
 
 /** A link destination already proven openable for the current viewer from trusted evidence only. */
-export type AvailableLinkDestination =
+type AvailableLinkDestination =
   | Readonly<{ availability: "available"; kind: "page"; pageId: string }>
   | Readonly<{ availability: "available"; kind: "application"; applicationRootId: string }>
   | Readonly<{ availability: "available"; kind: "external"; address: string }>;

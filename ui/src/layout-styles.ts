@@ -5,7 +5,7 @@ import type { BlockPlacementV2Contract } from "@vortex/contracts";
  * One breakpoint's declared layout values. Derived from the canonical placement contract rather
  * than a separate declaration so the renderer and the schema cannot drift.
  */
-export type PlacementLayoutV2Contract = BlockPlacementV2Contract["responsive"]["desktop"];
+type PlacementLayoutV2Contract = BlockPlacementV2Contract["responsive"]["desktop"];
 
 /** Complete per-breakpoint layout declaration for one placement. */
 export type ResponsivePlacementLayoutsV2 = BlockPlacementV2Contract["responsive"];

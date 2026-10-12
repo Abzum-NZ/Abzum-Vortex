@@ -49,17 +49,15 @@ const groupByFieldIdsSchema = z
   .refine(uniqueIds, { message: "Each grouping field is named once" });
 
 /** The installed Module query and release every arrangement output is derived from. */
-export const arrangementSourcePlanSchema = z
+const arrangementSourcePlanSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
     queryId: queryIdSchema,
   })
   .strict();
-export type ArrangementSourcePlan = z.infer<typeof arrangementSourcePlanSchema>;
-
 /** A field the authorised plan selected, with its declared field type. */
-export const arrangementFieldSchema = z
+const arrangementFieldSchema = z
   .object({
     fieldId: fieldIdSchema,
     type: z.enum(fieldTypeKeys),
@@ -73,7 +71,7 @@ export type ArrangementField = z.infer<typeof arrangementFieldSchema>;
  * in the plan's deterministic order, before any page is cut. Every row, count,
  * group and total of one arrangement is derived from this one value.
  */
-export const arrangementDatasetSchema = z
+const arrangementDatasetSchema = z
   .object({
     plan: arrangementSourcePlanSchema,
     fields: z
@@ -88,7 +86,7 @@ export const arrangementDatasetSchema = z
   .strict();
 export type ArrangementDataset = z.infer<typeof arrangementDatasetSchema>;
 
-export const aggregateDescriptorSchema = z
+const aggregateDescriptorSchema = z
   .object({
     operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
     fieldId: fieldIdSchema.optional(),
@@ -112,7 +110,7 @@ const aggregatesSchema = z
  * and maximum return the field's own value. `null` means no value was present.
  * Declared field and operation validation decides which scalar type is permitted.
  */
-export const aggregateValueSchema = z.union([
+const aggregateValueSchema = z.union([
   exactDecimalTextV2Schema,
   moneyValueV2Schema,
   z.number().int(),
@@ -124,7 +122,7 @@ export const aggregateValueSchema = z.union([
 ]);
 export type AggregateValue = z.infer<typeof aggregateValueSchema>;
 
-export const aggregateResultSchema = z.discriminatedUnion("outcome", [
+const aggregateResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       outcome: z.literal("completed"),
@@ -140,12 +138,12 @@ export type AggregateResult = z.infer<typeof aggregateResultSchema>;
 
 const aggregateResultsSchema = z.record(builderKeySchema, aggregateResultSchema);
 
-export const arrangementRowSchema = protectedQueryRowSchema;
+const arrangementRowSchema = protectedQueryRowSchema;
 export type ArrangementRow = z.infer<typeof arrangementRowSchema>;
 
 // Descriptors
 
-export const tableArrangementDescriptorSchema = z
+const tableArrangementDescriptorSchema = z
   .object({
     type: z.literal("table"),
     declaredFieldIds: declaredFieldIdsSchema,
@@ -154,14 +152,14 @@ export const tableArrangementDescriptorSchema = z
   })
   .strict();
 
-export const boardChoiceOptionSchema = z
+const boardChoiceOptionSchema = z
   .object({
     value: z.string().min(1).max(120),
     label: z.string().min(1).max(120),
   })
   .strict();
 
-export const boardArrangementDescriptorSchema = z
+const boardArrangementDescriptorSchema = z
   .object({
     type: z.literal("board"),
     declaredFieldIds: declaredFieldIdsSchema,
@@ -178,7 +176,7 @@ export const boardArrangementDescriptorSchema = z
   })
   .strict();
 
-export const calendarArrangementDescriptorSchema = z
+const calendarArrangementDescriptorSchema = z
   .object({
     type: z.literal("calendar"),
     declaredFieldIds: declaredFieldIdsSchema,
@@ -188,7 +186,7 @@ export const calendarArrangementDescriptorSchema = z
   })
   .strict();
 
-export const arrangementDescriptorSchema = z.discriminatedUnion("type", [
+const arrangementDescriptorSchema = z.discriminatedUnion("type", [
   tableArrangementDescriptorSchema,
   boardArrangementDescriptorSchema,
   calendarArrangementDescriptorSchema,
@@ -292,7 +290,7 @@ export type ProtectedBoardArrangementResult = z.infer<
 
 const groupValuesSchema = z.record(fieldIdSchema, jsonValueSchema);
 
-export const tableGroupSchema = z
+const tableGroupSchema = z
   .object({
     /** Stable identity of the grouping values, unique within the arrangement. */
     groupKey: z.string(),
@@ -304,7 +302,7 @@ export const tableGroupSchema = z
   .strict();
 export type TableGroup = z.infer<typeof tableGroupSchema>;
 
-export const tableArrangementResultSchema = z
+const tableArrangementResultSchema = z
   .object({
     outcome: z.literal("completed"),
     arrangement: z.literal("table"),
@@ -321,7 +319,7 @@ export const tableArrangementResultSchema = z
   .strict();
 export type TableArrangementResult = z.infer<typeof tableArrangementResultSchema>;
 
-export const boardColumnSchema = z
+const boardColumnSchema = z
   .object({
     rowCount: z.number().int().nonnegative(),
     rows: z.array(arrangementRowSchema),
@@ -329,7 +327,7 @@ export const boardColumnSchema = z
   })
   .strict();
 
-export const boardArrangementResultSchema = z
+const boardArrangementResultSchema = z
   .object({
     outcome: z.literal("completed"),
     arrangement: z.literal("board"),
@@ -345,7 +343,7 @@ export const boardArrangementResultSchema = z
   .strict();
 export type BoardArrangementResult = z.infer<typeof boardArrangementResultSchema>;
 
-export const calendarItemSchema = z
+const calendarItemSchema = z
   .object({
     recordId: recordIdSchema,
     start: z.union([z.iso.date(), z.iso.datetime({ offset: true })]),
@@ -355,7 +353,7 @@ export const calendarItemSchema = z
   .strict();
 export type CalendarItem = z.infer<typeof calendarItemSchema>;
 
-export const calendarArrangementResultSchema = z
+const calendarArrangementResultSchema = z
   .object({
     outcome: z.literal("completed"),
     arrangement: z.literal("calendar"),
@@ -372,7 +370,7 @@ export const calendarArrangementResultSchema = z
   .strict();
 export type CalendarArrangementResult = z.infer<typeof calendarArrangementResultSchema>;
 
-export const summaryGroupSchema = tableGroupSchema.omit({ rows: true }).strict();
+const summaryGroupSchema = tableGroupSchema.omit({ rows: true }).strict();
 export type SummaryGroup = z.infer<typeof summaryGroupSchema>;
 
 export const summaryArrangementResultSchema = z
@@ -414,7 +412,7 @@ export const arrangementRefusalReasonCodes = [
 export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
 
 /** One neutral refusal; it names no field value. */
-export const arrangementRefusalSchema = z
+const arrangementRefusalSchema = z
   .object({
     outcome: z.literal("refused"),
     reasonCode: z.enum(arrangementRefusalReasonCodes),

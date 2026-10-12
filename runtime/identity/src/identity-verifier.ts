@@ -45,7 +45,7 @@ type IdentityVerifierOptions = Readonly<{
   execution?: IdentityVerificationExecution;
 }>;
 
-export const identityVerifierMaximumClockSkewSeconds = 60;
+const identityVerifierMaximumClockSkewSeconds = 60;
 
 export type IdentityVerifier = Readonly<{
   authority: IdentityAuthority;
@@ -184,7 +184,7 @@ const projectVerifiedIdentity = (
  * Internal construction seam used by contract tests. Production callers use
  * createIdentityVerifier, which supplies the official Supabase client.
  */
-export const createIdentityVerifierWithClient = (
+const createIdentityVerifierWithClient = (
   authorityInput: unknown,
   client: IdentityClaimsClient,
   options: IdentityVerifierOptions = {},

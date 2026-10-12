@@ -7,7 +7,7 @@ import {
 import type { IdentitySession, OrganizationAccountId, OrganizationId } from "@vortex/contracts";
 import { humanOrganizationRequestDependencies } from "./server-composition";
 
-export type CurrentOrganizationAccountResult = HumanOrganizationRequestResult<
+type CurrentOrganizationAccountResult = HumanOrganizationRequestResult<
   Readonly<{
     organizationId: OrganizationId;
     organizationAccountId: OrganizationAccountId;

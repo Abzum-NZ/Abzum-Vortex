@@ -10,9 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vortex/access": "workspace:*",
     "@vortex/contracts": "workspace:*",
-    "@vortex/record": "workspace:*",
     "server-only": "0.0.1"
   },
   "vortex": {

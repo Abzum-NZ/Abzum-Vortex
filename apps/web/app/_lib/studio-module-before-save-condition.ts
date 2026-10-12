@@ -71,7 +71,7 @@ export type StudioModuleBeforeSaveConditionResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type StudioModuleBeforeSaveConditionSaveResult =
+type StudioModuleBeforeSaveConditionSaveResult =
   | Readonly<{
       kind: "saved" | "unchanged";
       snapshot: StudioModuleBeforeSaveConditionSnapshot;
@@ -86,7 +86,7 @@ export type StudioModuleBeforeSaveConditionSaveResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type StudioModuleBeforeSaveConditionValidationResult =
+type StudioModuleBeforeSaveConditionValidationResult =
   | Readonly<{ kind: "valid" }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{

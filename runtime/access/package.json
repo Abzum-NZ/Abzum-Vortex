@@ -13,7 +13,6 @@
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
-    "@vortex/identity": "workspace:*",
     "@vortex/modules": "workspace:*",
     "server-only": "0.0.1",
     "zod": "4.6.5"

@@ -39,7 +39,7 @@ const isExpectedBuilderRefusal = (error: unknown): boolean =>
   (error.code === "BUILDER_PERMISSION_REFUSED" ||
     error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED");
 
-export type StudioApplicationLoadResult =
+type StudioApplicationLoadResult =
   | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -163,7 +163,7 @@ export type StudioApplicationSearchMetadata = Readonly<{
   }>[];
 }>;
 
-export type StudioApplicationCreateAccessResult =
+type StudioApplicationCreateAccessResult =
   | Readonly<{ kind: "available"; organizationId: OrganizationId }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;

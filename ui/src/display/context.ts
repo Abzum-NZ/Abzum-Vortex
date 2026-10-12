@@ -14,7 +14,7 @@ export type DisplayRenderProps<Values> = PlatformBlockRenderProps &
   Readonly<{ data?: DisplayDataState<Values>; events?: DisplayEventHandlers }>;
 
 /** Resolved presentation context shared by every display component. */
-export type DisplayContext<Values> = Readonly<{
+type DisplayContext<Values> = Readonly<{
   /** Authored accessible name, read only through the declared metadata path. */
   title: string | undefined;
   /** Authored name, or the block's palette name when the optional name is absent. */

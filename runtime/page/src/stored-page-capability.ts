@@ -97,7 +97,7 @@ export type StoredPageReadModelValue = Readonly<{
  * names a target kind and that target's permanent identity (or an external address); it carries no
  * authority, so resolving it can never grant access to what it names.
  */
-export type StoredLinkTargetDeclaration =
+type StoredLinkTargetDeclaration =
   | Readonly<{ kind: "page"; pageId: string }>
   | Readonly<{ kind: "application"; applicationRootId: string }>
   | Readonly<{ kind: "external"; address: string }>;

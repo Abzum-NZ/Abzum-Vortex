@@ -11,7 +11,7 @@ export const richTextElementKindV2Schema = z.enum([
 ]);
 
 /** Deepest inline nesting a paragraph, heading or list item may use; top-level inlines are level 1. */
-export const richTextInlineMaximumDepth = 8;
+const richTextInlineMaximumDepth = 8;
 
 export type RichTextInlineV2 =
   | { kind: "text"; text: string }

@@ -31,7 +31,7 @@ type Provenance = DefinitionProvenanceEntry[];
 const resolutionRule = "vortex.definition.immutable_resolution";
 const transformRule = "vortex.definition.semantic_transform";
 
-export type RuleGraphCompilationResolver = Readonly<{
+type RuleGraphCompilationResolver = Readonly<{
   ruleId: (alias: string) => RuleId;
   nodeId: (ruleAlias: string, nodeAlias: string) => ContainedComponentId;
   inputId: (ruleAlias: string, inputAlias: string) => ContainedComponentId;
@@ -41,7 +41,7 @@ export type RuleGraphCompilationResolver = Readonly<{
   qualifiedRecordTypeId: (reference: string) => RecordTypeId;
 }>;
 
-export type CompiledRuleGraph = Readonly<{
+type CompiledRuleGraph = Readonly<{
   graph: RuleGraph;
   /** Paths are relative to the source and canonical graph roots. */
   provenance: readonly DefinitionProvenanceEntry[];

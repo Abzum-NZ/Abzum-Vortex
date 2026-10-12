@@ -1858,7 +1858,7 @@ const compareInterfaceOperation = (
     );
 };
 
-export const finaliseReasons = (reasons: VersionImpactReason[]): VersionImpactReason[] => {
+const finaliseReasons = (reasons: VersionImpactReason[]): VersionImpactReason[] => {
   const unique = new Map(reasons.map((reason) => [canonicalJson(reason), reason]));
   return [...unique.values()].sort((left, right) => {
     const severity = impactRank[right.impact] - impactRank[left.impact];

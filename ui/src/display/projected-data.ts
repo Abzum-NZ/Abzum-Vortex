@@ -47,15 +47,15 @@ export type DisplayCellValue =
   | Readonly<{ kind: "empty" }>;
 
 /** The record action kinds a row may report as available to the viewer. */
-export const displayRowActionKinds = ["update", "delete", "restore"] as const;
-export type DisplayRowActionKind = (typeof displayRowActionKinds)[number];
+const displayRowActionKinds = ["update", "delete", "restore"] as const;
+type DisplayRowActionKind = (typeof displayRowActionKinds)[number];
 
 /**
  * The per-row capabilities the Query engine decided for the viewer: the fields it may change on
  * this row and the record actions it may take. They only hide controls; the server re-checks
  * every change and action.
  */
-export type DisplayRowCapabilities = Readonly<{
+type DisplayRowCapabilities = Readonly<{
   changeableFieldIds: readonly string[];
   actions: readonly DisplayRowActionKind[];
 }>;
@@ -86,7 +86,7 @@ export type DisplaySummaryValue = Readonly<{
 }>;
 
 /** One summary-block aggregate, which may be unavailable on its own. */
-export type DisplaySummaryMetric = Readonly<{
+type DisplaySummaryMetric = Readonly<{
   key: string;
   label: string;
   value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
@@ -134,7 +134,7 @@ export type TablePayload = Readonly<{
 export type CalendarView = "month" | "week" | "agenda";
 
 /** One permitted query row placed on a calendar day and shown with its declared title field. */
-export type CalendarItemPayload = Readonly<{
+type CalendarItemPayload = Readonly<{
   recordId: string;
   start: string;
   end: string | null;
@@ -215,7 +215,6 @@ export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
 export type ListData = DisplayDataState<ListPayload>;
 export type TableData = DisplayDataState<TablePayload>;
-export type CalendarData = DisplayDataState<CalendarPayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
 export type GroupedData = DisplayDataState<GroupedPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;

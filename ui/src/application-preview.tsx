@@ -41,8 +41,7 @@ import type { ThemeMode } from "./theme";
  * are surfaced as a truthful preview outcome instead of falling back to arbitrary output.
  */
 
-export const applicationPreviewBreakpoints = ["desktop", "tablet", "phone"] as const;
-export type ApplicationPreviewBreakpoint = (typeof applicationPreviewBreakpoints)[number];
+export type ApplicationPreviewBreakpoint = "desktop" | "tablet" | "phone";
 
 const applicationPreviewSimulatedEffects = [
   "read",

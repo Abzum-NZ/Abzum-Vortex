@@ -199,7 +199,7 @@ export type ProtectedNodeEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
-export type ProtectedNodeEffectReplay =
+type ProtectedNodeEffectReplay =
   | Extract<ProtectedNodeEffectClaim, { kind: "completed" | "in_progress" | "unavailable" }>
   | Readonly<{ kind: "missing" }>;
 
