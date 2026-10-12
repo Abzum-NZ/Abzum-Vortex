@@ -201,6 +201,11 @@ export interface DefinitionPublicationReader {
     rootId: ModuleRootId,
     releaseRevision: Revision,
   ): Promise<ResolvableModuleRelease | undefined>;
+  /** Reads several exact releases in one call; the result lines up with the locators. */
+  readModuleReleases(
+    organizationId: OrganizationId,
+    locators: readonly Readonly<{ rootId: ModuleRootId; releaseRevision: Revision }>[],
+  ): Promise<readonly (ResolvableModuleRelease | undefined)[]>;
 }
 
 export interface DefinitionPublicationCatalogue {
@@ -1021,54 +1026,72 @@ const resolveDependencies = async (
   candidate: DefinitionPublicationCandidate,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ResolvedDependencies> => {
-  const modules: ResolvableModuleRelease[] = [];
-  for (const [key, requirements] of groupRequirements(moduleRequirements(candidate.draft))) {
-    let release: ResolvableModuleRelease | undefined;
-    if (pinned === undefined) {
-      release = await selectModuleRelease(reader, candidate, key, requirements);
-    } else {
+  const moduleGroups = [...groupRequirements(moduleRequirements(candidate.draft))];
+  let moduleReleases: readonly (ResolvableModuleRelease | undefined)[];
+  if (pinned === undefined) {
+    moduleReleases = await Promise.all(
+      moduleGroups.map(([key, requirements]) =>
+        selectModuleRelease(reader, candidate, key, requirements),
+      ),
+    );
+  } else {
+    const exacts = moduleGroups.map(([key, requirements]) => {
       const exact = findPinned(pinned, "module", key);
       if (!accepts(requirements, exact.releaseVersion)) refuse("DEFINITION_CONFIRMATION_MISMATCH");
-      release = await reader.readModuleRelease(
-        candidate.draft.organizationId,
-        exact.rootId,
-        exact.releaseRevision,
+      return exact;
+    });
+    moduleReleases = await reader.readModuleReleases(
+      candidate.draft.organizationId,
+      exacts.map((exact) => ({ rootId: exact.rootId, releaseRevision: exact.releaseRevision })),
+    );
+    exacts.forEach((exact, index) => {
+      const release = moduleReleases[index];
+      if (
+        release !== undefined &&
+        (release.releaseVersion !== exact.releaseVersion ||
+          release.contentFingerprint !== exact.contentFingerprint ||
+          release.resolutionFingerprint !== exact.resolutionFingerprint)
+      )
+        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+    });
+  }
+  const modules: ResolvableModuleRelease[] = moduleGroups.map(([key], index) => {
+    const release = moduleReleases[index];
+    if (release === undefined)
+      return refuse(
+        pinned === undefined ? "DEFINITION_DEPENDENCY_MISSING" : "DEFINITION_DEPENDENCY_SUBSTITUTED",
       );
-      if (
-        release === undefined ||
-        release.releaseVersion !== exact.releaseVersion ||
-        release.contentFingerprint !== exact.contentFingerprint ||
-        release.resolutionFingerprint !== exact.resolutionFingerprint
-      )
-        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-    }
-    if (release === undefined) refuse("DEFINITION_DEPENDENCY_MISSING");
-    const resolvedRelease = release as ResolvableModuleRelease;
-    verifyModuleRelease(candidate, key, resolvedRelease);
-    modules.push(resolvedRelease);
-  }
+    verifyModuleRelease(candidate, key, release);
+    return release;
+  });
 
-  const connections: ResolvableConnectionTypeRelease[] = [];
-  for (const [key, requirements] of groupRequirements(connectionRequirements(candidate.draft))) {
-    let release: ResolvableConnectionTypeRelease | undefined;
-    if (pinned === undefined) {
-      release = chooseStableRelease(await catalogue.listConnectionTypeReleases(key), requirements);
-    } else {
-      const exact = findPinned(pinned, "connection_type", key);
-      if (!accepts(requirements, exact.releaseVersion)) refuse("DEFINITION_CONFIRMATION_MISMATCH");
-      release = await catalogue.readConnectionTypeRelease(exact.rootId, exact.releaseVersion);
-      if (
-        release === undefined ||
-        release.contentFingerprint !== exact.contentFingerprint ||
-        release.catalogueFingerprint !== exact.catalogueFingerprint
-      )
-        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-    }
-    if (release === undefined) refuse("DEFINITION_DEPENDENCY_MISSING");
-    const resolvedRelease = release as ResolvableConnectionTypeRelease;
-    verifyConnectionRelease(key, resolvedRelease);
-    connections.push(resolvedRelease);
-  }
+  const connections: ResolvableConnectionTypeRelease[] = await Promise.all(
+    [...groupRequirements(connectionRequirements(candidate.draft))].map(
+      async ([key, requirements]) => {
+        let release: ResolvableConnectionTypeRelease | undefined;
+        if (pinned === undefined) {
+          release = chooseStableRelease(
+            await catalogue.listConnectionTypeReleases(key),
+            requirements,
+          );
+        } else {
+          const exact = findPinned(pinned, "connection_type", key);
+          if (!accepts(requirements, exact.releaseVersion))
+            refuse("DEFINITION_CONFIRMATION_MISMATCH");
+          release = await catalogue.readConnectionTypeRelease(exact.rootId, exact.releaseVersion);
+          if (
+            release === undefined ||
+            release.contentFingerprint !== exact.contentFingerprint ||
+            release.catalogueFingerprint !== exact.catalogueFingerprint
+          )
+            refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+        }
+        if (release === undefined) return refuse("DEFINITION_DEPENDENCY_MISSING");
+        verifyConnectionRelease(key, release);
+        return release;
+      },
+    ),
+  );
 
   let composition: ApplicationCompositionCatalogueSnapshot | undefined;
   if (candidate.draft.source.kind === "application")
@@ -1084,13 +1107,19 @@ const resolveDependencies = async (
   if (candidate.draft.source.kind === "application") {
     // A flow names a platform-service operation only by its key, so the release the catalogue holds
     // for that operation is what publication pins.
-    for (const operation of platformOperationsCalledBy(candidate.draft.source.body.flows)) {
+    const called = platformOperationsCalledBy(candidate.draft.source.body.flows);
+    const operationReleases = await Promise.all(
+      called.map((operation) =>
+        catalogue.readPlatformServiceOperationRelease?.(
+          operation.release.serviceId,
+          operation.release.operationId,
+          operation.release.releaseVersion,
+        ),
+      ),
+    );
+    for (const [index, operation] of called.entries()) {
       const registered = operation.release;
-      const release = await catalogue.readPlatformServiceOperationRelease?.(
-        registered.serviceId,
-        registered.operationId,
-        registered.releaseVersion,
-      );
+      const release = operationReleases[index];
       if (
         release === undefined ||
         release.serviceId !== registered.serviceId ||
@@ -1176,17 +1205,22 @@ const assertNoCycle = async (
     if (visiting.has(reference)) refuse("DEFINITION_DEPENDENCY_CYCLE");
     if (visited.has(reference)) return;
     visiting.add(reference);
-    for (const dependency of release.published.dependencyManifest) {
-      if (dependency.kind !== "module") refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-      const moduleDependency = dependency as Extract<
+    const moduleDependencies = release.published.dependencyManifest.map((dependency) => {
+      if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+      return dependency as Extract<
         (typeof release.published.dependencyManifest)[number],
         { kind: "module" }
       >;
-      const child = await reader.readModuleRelease(
-        candidate.draft.organizationId,
-        moduleDependency.rootId,
-        moduleDependency.revision,
-      );
+    });
+    const children = await reader.readModuleReleases(
+      candidate.draft.organizationId,
+      moduleDependencies.map((dependency) => ({
+        rootId: dependency.rootId,
+        releaseRevision: dependency.revision,
+      })),
+    );
+    for (const [index, moduleDependency] of moduleDependencies.entries()) {
+      const child = children[index];
       if (
         child === undefined ||
         child.releaseVersion !== moduleDependency.releaseVersion ||
