@@ -23,7 +23,7 @@ import {
  * tamper-evident. An empty sort key is valid when the reader may not safely
  * order on any declared sort field, and the scan then orders by record identity.
  */
-export const queryContinuationSchema = z
+const queryContinuationSchema = z
   .object({
     version: z.literal(1),
     organizationId: organizationIdSchema,
