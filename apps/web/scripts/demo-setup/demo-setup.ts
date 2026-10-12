@@ -95,8 +95,10 @@ const main = async (): Promise<void> => {
   ]);
   const site = new URL(process.env.VORTEX_SITE_URL!);
   log(`ready. Sign in with VORTEX_DEMO_OWNER_EMAIL at ${site.origin}/auth/sign-in.`);
-  log(`CRM company list: ${site.origin}/abzum/abzum/crm/crm_companies`);
-  log(`Service Desk case list: ${site.origin}/abzum/abzum/service_desk/service_desk_cases`);
+  log(`CRM company list: ${site.origin}/abzum/abzum/vortex.app.crm/crm_companies`);
+  log(
+    `Service Desk case list: ${site.origin}/abzum/abzum/vortex.app.service_desk/service_desk_cases`,
+  );
 };
 
 main().catch((error: unknown) => {

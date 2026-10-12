@@ -90,7 +90,7 @@ A fresh local database has no organisation, so a signed-in developer sees "No or
    pnpm dev
    ```
 
-   Open `http://127.0.0.1:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The seeded CRM companies are at `/abzum/abzum/crm/crm_companies`; Service Desk cases are at `/abzum/abzum/service_desk/service_desk_cases`.
+   Open `http://127.0.0.1:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The seeded CRM companies are at `/abzum/abzum/vortex.app.crm/crm_companies`; Service Desk cases are at `/abzum/abzum/vortex.app.service_desk/service_desk_cases`.
 
 For a manually nominated account or a separate validation organisation, use `pnpm setup:local` after the account exists in local Supabase Auth. Pass `--first-owner-email <email>` or `--first-owner-identity-id <uuid>` plus `--local-development`. The optional `--tenant-short-name` and `--organization-short-name` flags accept lowercase underscore keys such as `val_demo`; add `--seed-demo` to create the same idempotent demo data. The seeder can also be run later with `pnpm demo:seed -- --tenant-short-name val_demo --organization-short-name val_demo` against the most recently configured organisation.
 
