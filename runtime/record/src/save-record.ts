@@ -85,6 +85,7 @@ type StoredResult =
   | Readonly<{
       outcome: "conflict";
       concurrencyNumber?: number | bigint | string;
+      reasonCode?: string;
     }>
   | Readonly<{
       outcome: "refused";
@@ -768,8 +769,14 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             );
             if (stored.outcome === "restart") return restartRelationshipTotalSave;
             if (stored.outcome === "refused_recorded") return recordedRefusal;
-            if (stored.outcome === "conflict")
+            if (stored.outcome === "conflict") {
+              console.error(
+                `[record] protected save persistence conflicted (${stored.reasonCode})`,
+              );
               return safeRefusal(prepared.correlationId, "conflict");
+            }
+            if (stored.outcome === "refused")
+              console.error(`[record] protected save persistence refused (${stored.reasonCode})`);
             if (stored.outcome === "refused")
               return safeRefusal(
                 prepared.correlationId,

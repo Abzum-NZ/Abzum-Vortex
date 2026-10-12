@@ -113,7 +113,11 @@ begin
   where catalogue.storage_contract_id = p_storage_contract_id;
   if not found
     or catalogue_row.state is distinct from 'active'
-    or catalogue_row.physical_schema_token is distinct from 'record_data' then
+    or catalogue_row.physical_schema_token is null
+    or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and catalogue_row.protected_read_model_key
+        is distinct from 'organization_runtime_settings') then
     raise exception using errcode = 'P0002', message = 'Event record is unavailable';
   end if;
 
@@ -207,6 +211,18 @@ begin
 
   if catalogue_row.storage_scope = 'organization_shared' then
     sequence_application_scope_id := null;
+  else
+    sequence_application_scope_id := context_application_root_id;
+  end if;
+  if catalogue_row.physical_schema_token = 'system_projection' then
+    locked_definition_revision := null;
+    locked_record_count := case when
+      vortex_access.lock_organization_runtime_settings_record_for_event_internal(p_record_id)
+      then 1 else 0 end;
+    if locked_record_count = 1 then
+      locked_definition_revision := binding_module_release_revision;
+    end if;
+  elsif catalogue_row.storage_scope = 'organization_shared' then
     locked_definition_revision := null;
     execute pg_catalog.format(
       'select stored.definition_revision
@@ -219,7 +235,6 @@ begin
     using context_organization_id, p_record_id;
     get diagnostics locked_record_count = row_count;
   else
-    sequence_application_scope_id := context_application_root_id;
     locked_definition_revision := null;
     execute pg_catalog.format(
       'select stored.definition_revision

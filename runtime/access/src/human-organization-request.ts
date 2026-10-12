@@ -296,7 +296,9 @@ export const createHumanOrganizationRequestService = (
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (!refused) console.error(`[access] human organisation request failed: ${cause}`);
+      else if (refused)
+        console.error(`[access] human organisation request refused: ${cause}`);
+      else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
     }
