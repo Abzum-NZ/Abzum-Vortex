@@ -208,19 +208,18 @@ export const loadSetupState = (
         typeof stored.defaultApplicationInitializationAttempted === "boolean" &&
         typeof stored.defaultApplicationInitializationCompleted === "boolean"
       ) {
-        defaultApplicationInitializationAttempted =
-          stored.defaultApplicationInitializationAttempted;
-        defaultApplicationInitializationCompleted =
-          stored.defaultApplicationInitializationCompleted;
-        defaultApplicationInitializationAttemptRevision =
-          stored.defaultApplicationInitializationAttemptRevision ?? null;
-        if (
-          defaultApplicationInitializationAttempted &&
-          !defaultApplicationInitializationCompleted &&
-          stored.defaultApplicationInitializationAttemptRevision === undefined
-        ) {
-          // A pre-reconciliation attempt has no revision evidence, so preserve its prior decision.
+        if (stored.defaultApplicationInitializationAttemptRevision === undefined) {
+          // A legacy attempt has no revision evidence. Preserve the decision and clear its pending
+          // marker so a later save remains a valid, completed state document.
+          defaultApplicationInitializationAttempted = false;
           defaultApplicationInitializationCompleted = true;
+        } else {
+          defaultApplicationInitializationAttempted =
+            stored.defaultApplicationInitializationAttempted;
+          defaultApplicationInitializationCompleted =
+            stored.defaultApplicationInitializationCompleted;
+          defaultApplicationInitializationAttemptRevision =
+            stored.defaultApplicationInitializationAttemptRevision;
         }
       } else {
         // Older setup state may have an explicit null default; do not infer a first initialization.
