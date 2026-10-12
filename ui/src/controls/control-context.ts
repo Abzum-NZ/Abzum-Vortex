@@ -156,6 +156,12 @@ export type ControlSettings = Readonly<{
   boolean: (key: string) => boolean;
   number: (key: string) => number | undefined;
   choice: <Option extends string>(key: string, fallback: Option) => Option;
+  /**
+   * A choice the block has no default for: layout and spacing settings. The component config
+   * writes each declared one into the placement's settings (`defaultProps`), so an absent value
+   * here is a defect and fails closed rather than silently picking a layout.
+   */
+  explicitChoice: <Option extends string>(key: string) => Option;
   options: (key: string) => readonly ChoiceOption[];
   /**
    * The grouped property records of a list setting, in declared order. A repeatable component reads
@@ -185,6 +191,21 @@ export function readControlSettings(
     choice: <Option extends string>(key: string, fallback: Option): Option => {
       const value = read(key, "choice");
       if (value?.kind !== "choice") return fallback;
+      const property = metadata.properties.find((candidate) => candidate.key === key);
+      if (
+        property?.kind !== "choice" ||
+        !property.options.some((option) => option.key === value.value)
+      )
+        fail(`Setting '${key}' is not a declared choice`, { ...location, propertyPath: [key] });
+      return value.value as Option;
+    },
+    explicitChoice: <Option extends string>(key: string): Option => {
+      const value = read(key, "choice");
+      if (value?.kind !== "choice")
+        return fail(`Setting '${key}' must be set explicitly`, {
+          ...location,
+          propertyPath: [key],
+        });
       const property = metadata.properties.find((candidate) => candidate.key === key);
       if (
         property?.kind !== "choice" ||

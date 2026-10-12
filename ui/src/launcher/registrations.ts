@@ -23,9 +23,6 @@ import {
   parseDisplayEventHandlers,
   parseListPayload,
 } from "../display/projected-data";
-import { ApplicationLauncher } from "./application-launcher";
-import { LinkTiles } from "./link-tiles";
-import { ViewFilter } from "./view-filter";
 
 /**
  * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
@@ -106,27 +103,22 @@ export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistr
   Object.freeze([
     Object.freeze({
       metadata: APPLICATION_LAUNCHER_BLOCK_RELEASE,
-      render: ApplicationLauncher,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: LINK_TILES_BLOCK_RELEASE,
-      render: LinkTiles,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-      render: LinkTiles,
       parsePayload: RECORD_PIN_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-      render: LinkTiles,
       parsePayload: APPLICATION_PAGE_LINK_PAYLOAD_PARSER,
     }),
     Object.freeze({
       metadata: VIEW_FILTER_BLOCK_RELEASE,
-      render: ViewFilter,
       parsePayload: noRuntimeInputs,
     }),
   ]);

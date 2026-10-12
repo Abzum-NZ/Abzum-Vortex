@@ -4,8 +4,8 @@ import {
   applicationSourceDocumentV2Schema,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_2_0,
+  CONTAINER_BLOCK_RELEASE_1_3_0,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -379,10 +379,12 @@ const applicationShell = {
   name: "Operations shell",
   layout: slot({
     shell_root: placement(
-      CONTAINER_BLOCK_RELEASE,
+      CONTAINER_BLOCK_RELEASE_1_3_0,
       {
         direction: { kind: "choice", value: "column" },
         gap: { kind: "choice", value: "medium" },
+        padding: { kind: "choice", value: "medium" },
+        content_width: { kind: "choice", value: "fill" },
       },
       {
         header: slot({

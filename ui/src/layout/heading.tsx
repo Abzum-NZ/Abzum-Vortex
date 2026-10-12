@@ -47,7 +47,7 @@ export function Heading(props: HeadingProps): ReactElement {
       location,
     );
 
-  const level = readControlSettings(props, location).choice<HeadingLevel>("level", "two");
+  const level = readControlSettings(props, location).explicitChoice<HeadingLevel>("level");
   const Element = HEADING_LEVEL_ELEMENTS[level];
   return (
     <Element

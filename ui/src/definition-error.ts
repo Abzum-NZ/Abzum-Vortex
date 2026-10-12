@@ -367,15 +367,6 @@ export function validatePlacementTree(
         );
       }
 
-      const keyedRenderer = registry.getRenderer(registration.metadata.rendererKey);
-      if (keyedRenderer === undefined || keyedRenderer !== registration.render) {
-        throw new DefinitionRenderError(
-          "RENDERER_KEY_CONFLICT",
-          `Renderer key '${registration.metadata.rendererKey}' does not resolve to the exact registered renderer`,
-          placementLocation,
-        );
-      }
-
       validateAccessibleName(placement.settings, registration.metadata.capabilities, placementLocation);
       validatePlacementSlots(
         placement,

@@ -3650,6 +3650,10 @@
                                "padding": {
                                    "kind": "choice",
                                    "value": "medium"
+                               },
+                               "content_width": {
+                                   "kind": "choice",
+                                   "value": "fill"
                                }
                            },
                            "theme_overrides": {},
@@ -3684,6 +3688,14 @@
                                              "phone_direction": {
                                                  "kind": "choice",
                                                  "value": "column"
+                                             },
+                                             "padding": {
+                                                 "kind": "choice",
+                                                 "value": "none"
+                                             },
+                                             "content_width": {
+                                                 "kind": "choice",
+                                                 "value": "fill"
                                              }
                                          },
                                          "theme_overrides": {},
@@ -3916,7 +3928,7 @@
                          "shell_public_root": {
                            "block": {
                              "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                             "release_version": "1.0.0"
+                             "release_version": "1.3.0"
                            },
                            "settings": {
                              "direction": {
@@ -3926,6 +3938,14 @@
                              "gap": {
                                "kind": "choice",
                                "value": "medium"
+                             },
+                             "padding": {
+                               "kind": "choice",
+                               "value": "medium"
+                             },
+                             "content_width": {
+                               "kind": "choice",
+                               "value": "fill"
                              }
                            },
                            "theme_overrides": {},

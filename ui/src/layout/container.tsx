@@ -78,21 +78,25 @@ export function Container(props: ContainerProps): ReactElement {
   };
 
   const settings = readControlSettings(props, location);
-  const direction = settings.choice<ContainerDirection>("direction", "column");
-  const gap = settings.choice<ContainerGap>("gap", "medium");
+  const direction = settings.explicitChoice<ContainerDirection>("direction");
+  const gap = settings.explicitChoice<ContainerGap>("gap");
   const declared = new Set(props.metadata.properties.map((property) => property.key));
   const menuGeometryDeclared = declared.has("menu_width");
   const contentLandmark = declared.has("content_landmark") && settings.boolean("content_landmark");
   const readWidth = (key: string): number | undefined =>
     declared.has(key) ? settings.number(key) : undefined;
+  // Geometry a release does not declare does not exist. Every declared one is written explicitly
+  // by the component config, except the tablet and phone overrides, whose absence means "inherit".
   const readChoice = <Value extends string>(key: string, fallback: Value): Value =>
     declared.has(key) ? settings.choice(key, fallback) : fallback;
-  const padding = readChoice<ContainerGap>("padding", "none");
-  const contentWidth = readChoice<ContainerContentWidth>("content_width", "fill");
+  const readExplicit = <Value extends string>(key: string): Value | undefined =>
+    declared.has(key) ? settings.explicitChoice<Value>(key) : undefined;
+  const padding = readExplicit<ContainerGap>("padding");
+  const contentWidth = readExplicit<ContainerContentWidth>("content_width");
   const desktop: ContainerGeometry = {
     direction,
     menuWidth: readWidth("menu_width"),
-    menuPlacement: readChoice<MenuPlacement>("menu_placement", "flow"),
+    menuPlacement: readExplicit<MenuPlacement>("menu_placement") ?? "flow",
   };
   const tabletDirection = readChoice<ContainerDirection | "inherit">("tablet_direction", "inherit");
   const tabletPlacement = readChoice<MenuPlacement | "inherit">("tablet_menu_placement", "inherit");
@@ -141,7 +145,7 @@ export function Container(props: ContainerProps): ReactElement {
         "box-border flex w-full",
         direction === "row" ? "flex-row" : "flex-col",
         CONTAINER_GAPS[gap],
-        declared.has("padding") ? CONTAINER_PADDING[padding] : undefined,
+        padding === undefined ? undefined : CONTAINER_PADDING[padding],
         contentWidth === "readable" ? "mx-auto max-w-2xl" : undefined,
       )}
     >

@@ -121,13 +121,29 @@ export function computePlacementClassName(
   return classes.join(" ");
 }
 
-/** The rhythm between the blocks of one slot, from the shadcn spacing scale. */
-const SLOT_GAP = "calc(var(--spacing, 0.25rem) * 4)";
+/** The named gaps a block can declare between its slot children, on the shadcn spacing scale. */
+export type SlotGapName = "none" | "small" | "medium" | "large";
+
+const SLOT_GAP_UNITS: Readonly<Record<SlotGapName, number>> = Object.freeze({
+  none: 0,
+  small: 2,
+  medium: 4,
+  large: 6,
+});
+
+/** The CSS length of a named slot gap. Callers always name the gap; nothing here supplies one. */
+export const slotGapLength = (gap: SlotGapName): string =>
+  `calc(var(--spacing, 0.25rem) * ${SLOT_GAP_UNITS[gap]})`;
 
 /**
- * Computes slot container style, applying a 12-column grid when child placements declare grid placement.
+ * Computes slot container style, applying a 12-column grid when child placements declare grid
+ * placement. The gap between children is always supplied by the caller.
  */
-export function computeSlotContainerStyle(hasGridChildren: boolean): CSSProperties {
+export function computeSlotContainerStyle(
+  hasGridChildren: boolean,
+  gap: SlotGapName,
+): CSSProperties {
+  const SLOT_GAP = slotGapLength(gap);
   if (hasGridChildren) {
     return {
       display: "grid",
@@ -241,8 +257,19 @@ export function computeResponsivePlacementCss(
   responsive: ResponsivePlacementLayoutsV2,
   options: Readonly<{ gridItem?: boolean }> = {},
 ): string {
-  const gridItem = options.gridItem ?? false;
-  const selector = placementCssSelector(scope, placementId);
+  return computeResponsiveSelectorCss(
+    placementCssSelector(scope, placementId),
+    responsive,
+    options.gridItem ?? false,
+  );
+}
+
+/** The same per-breakpoint rules for any one selector, e.g. a placement wrapper that scopes itself. */
+export function computeResponsiveSelectorCss(
+  selector: string,
+  responsive: ResponsivePlacementLayoutsV2,
+  gridItem: boolean,
+): string {
   let css = `${selector} { ${responsiveLayoutDeclarations(responsive.desktop, gridItem)}; }\n`;
   for (const breakpoint of RESPONSIVE_BREAKPOINT_ORDER) {
     if (breakpoint === "desktop") continue;
@@ -287,7 +314,6 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 .vortex-grid-12 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: calc(var(--spacing, 0.25rem) * 4);
   width: 100%;
   box-sizing: border-box;
 }
@@ -295,7 +321,6 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 .vortex-slot-container {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--spacing, 0.25rem) * 4);
   width: 100%;
   box-sizing: border-box;
 }
@@ -324,6 +349,25 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 
 .vortex-hidden {
   display: none !important;
+}
+
+.vortex-puck-slot {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* A Puck slot is always present, so a container region that holds no placement is not rendered. In
+   the editor an empty region stays, as the drop target an author fills. */
+[data-vortex-puck-root]:not([data-vortex-editing])
+  [data-vortex-container-region]:not(:has([data-vortex-layout-wrapper])) {
+  display: none;
+}
+
+.vortex-puck-slot:has(> [data-vortex-grid-child]) {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
 ${GRID_POSITION_STYLES}
