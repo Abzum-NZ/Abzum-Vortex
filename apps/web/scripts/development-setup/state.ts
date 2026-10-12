@@ -209,10 +209,12 @@ export const loadSetupState = (
         typeof stored.defaultApplicationInitializationCompleted === "boolean"
       ) {
         if (stored.defaultApplicationInitializationAttemptRevision === undefined) {
-          // A legacy attempt has no revision evidence. Preserve the decision and clear its pending
-          // marker so a later save remains a valid, completed state document.
+          // A legacy attempted write has no revision evidence. Preserve its prior decision as
+          // completed and clear its pending marker so later saves remain internally consistent.
           defaultApplicationInitializationAttempted = false;
-          defaultApplicationInitializationCompleted = true;
+          defaultApplicationInitializationCompleted =
+            stored.defaultApplicationInitializationAttempted ||
+            stored.defaultApplicationInitializationCompleted;
         } else {
           defaultApplicationInitializationAttempted =
             stored.defaultApplicationInitializationAttempted;
