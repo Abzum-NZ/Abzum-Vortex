@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -179,13 +180,13 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
       </nav>
     </header>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
-    {snapshot === null ? <section className="space-y-3 rounded border p-4">
+    {snapshot === null ? <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
       <h2 className="text-lg font-semibold">Upgrade unavailable</h2>
       <p>{state.load.kind === "unavailable" ? unavailableText(state.load.reason)
         : state.load.kind === "refused" ? "Current application access is unavailable. Sign in with an account permitted to manage the application and reload."
           : "Current installation information is temporarily unavailable. Reload this page to try a fresh read."}</p>
     </section> : <>
-      <section aria-label="Selected release and active installation" className="space-y-3 rounded border p-4">
+      <section aria-label="Selected release and active installation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
           <div><dt className="font-semibold">Application</dt><dd>{snapshot.definitionKey}</dd></div>
           <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
@@ -197,8 +198,8 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         </dl>
         <p>This partial supports an explicit upgrade of an existing Application only when every Module release is unchanged. First installation, older releases and Module changes are unavailable here.</p>
       </section>
-      {expired && <p className="rounded border p-3">This access snapshot expired. Reload before continuing.</p>}
-      {state.command !== null && <section className="space-y-3 rounded border p-4">
+      {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">This access snapshot expired. Reload before continuing.</p>}
+      {state.command !== null && <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <h2 ref={outcomeHeading} tabIndex={-1} className="text-lg font-semibold">Upgrade outcome</h2>
         <p>{commandText(state.command)}</p>
         {state.command.kind === "completed" && <dl className="space-y-2">
@@ -208,18 +209,18 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
           {state.command.postCommit.kind === "observed" && <div><dt className="font-semibold">Freshly observed active</dt><dd>Revision {state.command.postCommit.active.releaseRevision}</dd></div>}
         </dl>}
       </section>}
-      <section aria-label="Confirm selected release upgrade" className="space-y-3 rounded border p-4">
+      <section aria-label="Confirm selected release upgrade" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <h2 className="text-lg font-semibold">Confirm upgrade</h2>
         {snapshot.selected.releaseRevision === snapshot.active.releaseRevision
           ? <p>This selected release is already active. Reload to confirm its current state.</p>
           : <p>Continue only if you want to activate version {snapshot.selected.releaseVersion}, revision {snapshot.selected.releaseRevision} for this installed Application.</p>}
-        <button type="button" name="application.release.install_selected"
+        <Button type="button" variant="outline" size="sm" name="application.release.install_selected"
           disabled={pending || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision || state.command !== null}
           aria-busy={pending}
-          className="rounded border px-4 py-2 disabled:opacity-50"
+         
           onClick={() => void install()}>
           {pending ? "Installing selected release…" : "Confirm upgrade to selected release"}
-        </button>
+        </Button>
       </section>
     </>}
   </main>;

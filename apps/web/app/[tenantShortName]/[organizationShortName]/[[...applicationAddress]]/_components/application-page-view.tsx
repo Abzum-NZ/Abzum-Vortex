@@ -60,6 +60,7 @@ import {
 } from "@vortex/contracts";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Toaster, toast } from "@vortex/ui/components/sonner";
 import {
   Dialog,
   DialogContent,
@@ -818,6 +819,11 @@ function ApplicationPageViewContent({
     | undefined
   >(undefined);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
+  // A confirmation is a transient toast; a problem stays on the page as an alert until dismissed
+  // by the next action, so it is never missed.
+  useEffect(() => {
+    if (notice?.tone === "info") toast.success(notice.text);
+  }, [notice]);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
   const [busy, setBusy] = useState(false);
   const currentBusyRef = useRef(busy);
@@ -1740,6 +1746,7 @@ function ApplicationPageViewContent({
         <div ref={dialogFormRef} className="flex flex-col gap-4">
           <UnsavedWorkProvider>
             <PageLayoutRenderer
+              themeMode="system"
               composition={surface.composition}
               registry={platformComponentRegistry}
               pageId={model.pageId}
@@ -2754,8 +2761,9 @@ function ApplicationPageViewContent({
       <ApplicationAccountActionsProvider actions={accountActions}>
       <div ref={compositionRootRef} className="contents">
       <PageLayoutRenderer
+        themeMode="system"
         applicationSurface
-        feedback={pageFeedback === undefined && notice === undefined &&
+        feedback={pageFeedback === undefined && (notice === undefined || notice.tone === "info") &&
           model.bodyContentAvailable !== false ? undefined : (
           <>
             {pageFeedback}
@@ -2764,7 +2772,7 @@ function ApplicationPageViewContent({
                 <AlertDescription>No page content is available.</AlertDescription>
               </Alert>
             )}
-            {notice === undefined ? null : (
+            {notice === undefined || notice.tone === "info" ? null : (
               <Alert
                 variant={notice.tone === "problem" ? "destructive" : "default"}
                 role={notice.tone === "problem" ? "alert" : "status"}
@@ -2807,6 +2815,7 @@ function ApplicationPageViewContent({
       </div>
       </ApplicationAccountActionsProvider>
       {intentHostElement}
+      <Toaster position="bottom-right" />
       <Dialog
         open={leavePromptOpen}
         disablePointerDismissal

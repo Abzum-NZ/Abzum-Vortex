@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState } from "react";
 import type { DefinitionReleaseMetadata } from "@vortex/contracts";
@@ -160,7 +161,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
         Open workspace in a new tab
       </a>
     </header>
-    {page !== null && <section aria-label="Saved application context" className="space-y-2 rounded border p-4">
+    {page !== null && <section aria-label="Saved application context" className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
       <dl className="space-y-2">
         <div><dt className="font-semibold">Application</dt><dd>{displayedSnapshot.definitionKey}</dd></div>
         <div><dt className="font-semibold">Organization</dt><dd className="break-all">{displayedSnapshot.organizationId}</dd></div>
@@ -171,14 +172,14 @@ export function ApplicationReleaseHistory({ initialPage }: {
       </dl>
     </section>}
     <div className="flex flex-wrap gap-3">
-      <button type="button" name="application.release_history.reload" disabled={pending !== null}
-        className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run("reload")}>
+      <Button type="button" variant="outline" size="sm" name="application.release_history.reload" disabled={pending !== null}
+        onClick={() => void run("reload")}>
         Reload history
-      </button>
-      <button type="button" name="application.release_history.next" disabled={blocked || page?.nextAfterReleaseRevision == null}
-        className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => void run("next")}>
+      </Button>
+      <Button type="button" variant="outline" size="sm" name="application.release_history.next" disabled={blocked || page?.nextAfterReleaseRevision == null}
+        onClick={() => void run("next")}>
         Next 20 releases
-      </button>
+      </Button>
     </div>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
     {page !== null && (pending !== null || failure === "temporarily_unavailable") &&
@@ -189,17 +190,17 @@ export function ApplicationReleaseHistory({ initialPage }: {
         ? <p>No published releases. Saving a draft does not publish a release.</p>
         : <>
           <ol className="space-y-3">
-            {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded border p-4">
+            {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
               <p className="font-semibold">Version {entry.releaseVersion} · revision {entry.releaseRevision}
                 {entry.isCurrent && <span> · Current release</span>}</p>
               <p>Published <time dateTime={entry.publishedAt}>{entry.publishedAt}</time></p>
               <p className="break-all">Published by {entry.publishedBy}</p>
               <p className="whitespace-pre-wrap break-words">{entry.releaseNote}</p>
-              <button type="button" name="application.release_history.inspect" aria-pressed={selectedRevision === entry.releaseRevision}
-                disabled={blocked} className="rounded border px-3 py-2 disabled:opacity-50"
+              <Button type="button" variant="outline" size="sm" name="application.release_history.inspect" aria-pressed={selectedRevision === entry.releaseRevision}
+                disabled={blocked}
                 onClick={() => void run("inspect", entry.releaseRevision)}>
                 Inspect version {entry.releaseVersion}, revision {entry.releaseRevision}
-              </button>
+              </Button>
             </li>)}
           </ol>
           {page.nextAfterReleaseRevision === null && <p>End of release history.</p>}
@@ -207,7 +208,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
     </section>
     <section aria-labelledby="release-inspect-heading" aria-busy={pending === "inspect"} className="space-y-3">
       <h2 id="release-inspect-heading" className="text-xl font-semibold">Exact selected release</h2>
-      {metadata !== null && failure !== "conflict" ? <dl className="space-y-2 rounded border p-4">
+      {metadata !== null && failure !== "conflict" ? <dl className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
         <div><dt className="font-semibold">Version and revision</dt><dd>{metadata.releaseVersion} · revision {metadata.releaseRevision}</dd></div>
         <div><dt className="font-semibold">Current release</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
         <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
@@ -217,12 +218,12 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
         {selectedRevision === metadata.releaseRevision && <div className="pt-2">
           <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">
-            <a className="inline-flex rounded border px-3 py-2 underline"
+            <a className="inline-flex rounded-lg border px-3 py-2 underline"
               href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
               target="_blank" rel="noopener noreferrer">
               Review upgrade to version {metadata.releaseVersion}, revision {metadata.releaseRevision}
             </a>
-            <a className="inline-flex rounded border px-3 py-2 underline"
+            <a className="inline-flex rounded-lg border px-3 py-2 underline"
               href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/first-install`}
               target="_blank" rel="noopener noreferrer">
               Review first install of version {metadata.releaseVersion}, revision {metadata.releaseRevision}
@@ -230,7 +231,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
             {pending === null && page !== null && failure !== "refused" &&
               page.entries.some((entry) => entry.releaseRevision === metadata.releaseRevision) &&
               metadata.isCurrent === (metadata.releaseRevision === page.snapshot.anchorReleaseRevision) &&
-              <a className="inline-flex rounded border px-3 py-2 underline"
+              <a className="inline-flex rounded-lg border px-3 py-2 underline"
                 data-command="application.release_history.restore.open"
                 href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/restore`}
                 target="_blank" rel="noopener noreferrer">
@@ -241,10 +242,10 @@ export function ApplicationReleaseHistory({ initialPage }: {
         </div>}
       </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
-    <section aria-label="Unavailable release commands" className="space-y-3 rounded border p-4">
+    <section aria-label="Unavailable release commands" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
       <p id="history-unavailable-commands">To restore a release, inspect it and open its separate restore review page. Publish is unavailable here; installation never runs from the history list.</p>
       <div className="flex flex-wrap gap-3">
-        <button type="button" disabled aria-describedby="history-unavailable-commands" className="rounded border px-3 py-2 opacity-50">Publish unavailable</button>
+        <Button type="button" variant="outline" size="sm" disabled aria-describedby="history-unavailable-commands">Publish unavailable</Button>
       </div>
     </section>
   </main>;

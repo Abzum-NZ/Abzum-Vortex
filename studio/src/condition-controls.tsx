@@ -1,4 +1,8 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { Textarea } from "@vortex/ui/components/textarea";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useState } from "react";
 import {
@@ -961,7 +965,7 @@ function LiteralEditor({
     return (
       <label>
         {label}
-        <textarea
+        <Textarea
           key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
           aria-invalid={error !== undefined}
           defaultValue={JSON.stringify(Array.isArray(operand.value) ? operand.value : [], null, 2)}
@@ -991,14 +995,14 @@ function LiteralEditor({
     return (
       <label>
         {label}
-        <select
+        <NativeSelect
           aria-invalid={error !== undefined}
           value={operand.value === true ? "true" : "false"}
           onChange={(event) => onCommit(event.currentTarget.value === "true")}
         >
           <option value="true">True</option>
           <option value="false">False</option>
-        </select>
+        </NativeSelect>
         {error && <span role="alert">{error}</span>}
       </label>
     );
@@ -1007,7 +1011,7 @@ function LiteralEditor({
     return (
       <label>
         {label}
-        <input
+        <Input
           key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
           aria-invalid={error !== undefined}
           type="text"
@@ -1044,7 +1048,7 @@ function LiteralEditor({
     return (
       <label>
         {label}
-        <input
+        <Input
           aria-invalid={error !== undefined}
           inputMode="decimal"
           type="text"
@@ -1059,7 +1063,7 @@ function LiteralEditor({
     return (
       <label>
         {label}
-        <input
+        <Input
           aria-invalid={error !== undefined}
           type="date"
           value={typeof operand.value === "string" ? operand.value : ""}
@@ -1075,7 +1079,7 @@ function LiteralEditor({
         <legend>{label}</legend>
         <label>
           Local date and time (whole seconds)
-          <input
+          <Input
             aria-invalid={error !== undefined}
             type="datetime-local"
             step={1}
@@ -1097,7 +1101,7 @@ function LiteralEditor({
         </label>
         <label>
           Exact instant (ISO 8601 with offset)
-          <input
+          <Input
             aria-invalid={error !== undefined}
             type="text"
             value={literalInputValue(operand.value)}
@@ -1117,7 +1121,7 @@ function LiteralEditor({
         <legend>{label}</legend>
         <label>
           Amount
-          <input
+          <Input
             aria-invalid={error !== undefined}
             inputMode="decimal"
             type="text"
@@ -1127,7 +1131,7 @@ function LiteralEditor({
         </label>
         <label>
           Currency
-          <input
+          <Input
             aria-invalid={error !== undefined}
             maxLength={3}
             type="text"
@@ -1144,7 +1148,7 @@ function LiteralEditor({
     return (
       <label>
         {label} (one item per line)
-        <textarea
+        <Textarea
           aria-invalid={error !== undefined}
           value={Array.isArray(operand.value) ? operand.value.map(String).join("\n") : ""}
           onChange={(event) => onCommit(event.currentTarget.value.split("\n"))}
@@ -1157,7 +1161,7 @@ function LiteralEditor({
     return (
       <label>
         {label} (JSON value)
-        <textarea
+        <Textarea
           key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
           aria-invalid={error !== undefined}
           defaultValue={JSON.stringify(operand.value)}
@@ -1182,7 +1186,7 @@ function LiteralEditor({
   return (
     <label>
       {label}
-      <input
+      <Input
         aria-invalid={error !== undefined}
         type="text"
         value={typeof operand.value === "string" ? operand.value : ""}
@@ -1241,7 +1245,7 @@ function TreeEditor({
         <legend>{condition.kind === "all" ? "All conditions" : "Any condition"}</legend>
         <label>
           Group logic
-          <select
+          <NativeSelect
             value={condition.kind}
             onChange={(event) => {
               const kind = event.currentTarget.value === "any" ? "any" : "all";
@@ -1250,7 +1254,7 @@ function TreeEditor({
           >
             <option value="all">All must match</option>
             <option value="any">Any may match</option>
-          </select>
+          </NativeSelect>
         </label>
         {condition.conditions.map((child, index) => {
           const childPath = [...path, "conditions", index];
@@ -1279,22 +1283,22 @@ function TreeEditor({
           );
         })}
         <div>
-          <button type="button" disabled={!canAddComparison || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("comparison")}>
+          <Button type="button" variant="outline" size="sm" disabled={!canAddComparison || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("comparison")}>
             Add condition
-          </button>
-          <button type="button" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("all")}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("all")}>
             Add all group
-          </button>
-          <button type="button" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("any")}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("any")}>
             Add any group
-          </button>
-          <button type="button" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("not")}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("not")}>
             Add not group
-          </button>
+          </Button>
           {onRemove && (
-            <button type="button" onClick={onRemove}>
+            <Button type="button" variant="outline" size="sm" onClick={onRemove}>
               Remove group
-            </button>
+            </Button>
           )}
         </div>
       </fieldset>
@@ -1314,13 +1318,13 @@ function TreeEditor({
           onReplace={(next, resolvedPath) => onReplace({ kind: "not", condition: next }, resolvedPath)}
           onInvalid={onInvalid}
         />
-        <button type="button" onClick={() => onReplace(condition.condition, path)}>
+        <Button type="button" variant="outline" size="sm" onClick={() => onReplace(condition.condition, path)}>
           Remove not
-        </button>
+        </Button>
         {onRemove && (
-          <button type="button" onClick={onRemove}>
+          <Button type="button" variant="outline" size="sm" onClick={onRemove}>
             Remove group
-          </button>
+          </Button>
         )}
       </fieldset>
     );
@@ -1405,14 +1409,14 @@ function TreeEditor({
             : ""
         : initial ?? "";
       return (
-        <button type="button" onClick={() => commitLiteral(editableValue)}>
+        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(editableValue)}>
           Set literal value (currently null)
-        </button>
+        </Button>
       );
     }
     return (
       <>
-        <button type="button" onClick={() => commitLiteral(null)}>Use null literal</button>
+        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>Use null literal</Button>
         <LiteralEditor
           operand={operand}
           semanticType={type}
@@ -1447,7 +1451,7 @@ function TreeEditor({
         <legend>{side === "left" ? "Left operand" : "Right operand"}</legend>
         <label>
           Operand source
-        <select
+        <NativeSelect
           aria-invalid={operandError !== undefined}
           value={operandToken(operand)}
           onChange={(event) => changeOperand(side, event.currentTarget.value)}
@@ -1463,7 +1467,7 @@ function TreeEditor({
             </option>
           ))}
           {selectableLiteral && <option value="value">Literal value</option>}
-        </select>
+        </NativeSelect>
         </label>
         {operandError && <span role="alert">{operandError}</span>}
         {literalEditor(operand, other, side)}
@@ -1481,7 +1485,7 @@ function TreeEditor({
       {operandSelector("left")}
       <label>
         Operator
-        <select
+        <NativeSelect
           aria-invalid={operatorIssue !== undefined || !currentOperatorAvailable}
           value={condition.operator}
           onChange={(event) => {
@@ -1510,7 +1514,7 @@ function TreeEditor({
               {option.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {operatorIssue && <span role="alert">{operatorIssue}</span>}
       </label>
       {!unaryOperators.has(condition.operator) && (
@@ -1519,12 +1523,12 @@ function TreeEditor({
         </>
       )}
       {onRemove && (
-        <button type="button" onClick={onRemove}>
+        <Button type="button" variant="outline" size="sm" onClick={onRemove}>
           Remove condition
-        </button>
+        </Button>
       )}
-      <button
-        type="button"
+      <Button
+        type="button" variant="outline" size="sm"
         disabled={createInitialStudioCondition(context) === undefined}
         onClick={() => {
           const replacement = createInitialStudioCondition(context);
@@ -1532,7 +1536,7 @@ function TreeEditor({
         }}
       >
         Reset comparison
-      </button>
+      </Button>
     </fieldset>
   );
 }
@@ -1586,9 +1590,9 @@ export function StudioConditionControls({
       ) : !current ? (
         <div>
           <p>No condition has been configured.</p>
-          <button type="button" disabled={!initial} onClick={() => emit(initial)}>
+          <Button type="button" variant="outline" size="sm" disabled={!initial} onClick={() => emit(initial)}>
             Start with a condition
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -1612,48 +1616,48 @@ export function StudioConditionControls({
             }}
           />
           <div>
-            <button
-              type="button"
+            <Button
+              type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "all", conditions: [current] })}
             >
               Wrap in all group
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "any", conditions: [current] })}
             >
               Wrap in any group
-            </button>
+            </Button>
             {current.kind !== "not" && (
-              <button
-                type="button"
+              <Button
+                type="button" variant="outline" size="sm"
                 disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
                 onClick={() => emit({ kind: "not", condition: current })}
               >
                 Negate condition
-              </button>
+              </Button>
             )}
             {current.kind === "not" && (
-              <button type="button" onClick={() => emit(current.condition)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => emit(current.condition)}>
                 Remove not
-              </button>
+              </Button>
             )}
             {(current.kind === "all" || current.kind === "any") && current.conditions.length === 1 && (
-              <button
-                type="button"
+              <Button
+                type="button" variant="outline" size="sm"
                 onClick={() => {
                   const onlyChild = current.conditions[0];
                   if (onlyChild) emit(onlyChild);
                 }}
               >
                 Remove group
-              </button>
+              </Button>
             )}
-            <button type="button" onClick={() => emit(undefined)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => emit(undefined)}>
               Clear condition
-            </button>
+            </Button>
           </div>
         </>
       )}

@@ -1,4 +1,8 @@
 "use client";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { platformIdSchema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
@@ -18,8 +22,8 @@ type Props = Readonly<{
   onPendingChange: (pending: boolean) => void;
   onApply: (expected: ApplicationSourceDocumentV2, next: ApplicationSourceDocumentV2) => boolean;
 }>;
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "w-full";
+const buttonClass = "";
 
 function TokenControls({ value, disabled, colors, assets, change }: {
   value: StudioThemeTokenValue; disabled: boolean; colors: readonly string[];
@@ -27,18 +31,18 @@ function TokenControls({ value, disabled, colors, assets, change }: {
 }) {
   const text = (label: string, current: string, update: (next: string) => void) =>
     <label className="block space-y-1"><span>{label}</span>
-      <input className={inputClass} value={current} disabled={disabled} onChange={(event) => update(event.target.value)} /></label>;
+      <Input className={inputClass} value={current} disabled={disabled} onChange={(event) => update(event.target.value)} /></label>;
   const number = (label: string, current: number, minimum: number, step: string,
     update: (next: number) => void, maximum?: number) =>
     <label className="block space-y-1"><span>{label}</span>
-      <input className={inputClass} type="number" value={Number.isFinite(current) ? current : ""}
+      <Input className={inputClass} type="number" value={Number.isFinite(current) ? current : ""}
         min={minimum} max={maximum} step={step} required disabled={disabled}
         onChange={(event) => update(event.target.valueAsNumber)} /></label>;
   const color = (current: string, update: (next: string) => void) =>
     <label className="block space-y-1"><span>Colour token</span>
-      <select className={inputClass} value={current} disabled={disabled} onChange={(event) => update(event.target.value)}>
+      <NativeSelect className={inputClass} value={current} disabled={disabled} onChange={(event) => update(event.target.value)}>
         {colors.map((key) => <option key={key} value={key}>{key}</option>)}
-      </select></label>;
+      </NativeSelect></label>;
   switch (value.kind) {
     case "color_pair": return <>
       {text("Light colour", value.light, (light) => change({ ...value, light }))}
@@ -57,10 +61,10 @@ function TokenControls({ value, disabled, colors, assets, change }: {
     case "border": return <>
       {number("Width (rem)", value.width_rem, 0, "any", (width_rem) => change({ ...value, width_rem }))}
       <label className="block space-y-1"><span>Style</span>
-        <select className={inputClass} value={value.style} disabled={disabled}
+        <NativeSelect className={inputClass} value={value.style} disabled={disabled}
           onChange={(event) => change({ ...value, style: event.target.value === "dashed" ? "dashed" : "solid" })}>
           <option value="solid">Solid</option><option value="dashed">Dashed</option>
-        </select></label>
+        </NativeSelect></label>
       {color(value.color_token, (color_token) => change({ ...value, color_token }))}
     </>;
     case "elevation": return number("Elevation level", value.level, 0, "1", (level) => change({ ...value, level }));
@@ -70,19 +74,19 @@ function TokenControls({ value, disabled, colors, assets, change }: {
       <p className="text-sm">Focus must remain visible. The server checks width and contrast.</p>
     </>;
     case "asset": return <label className="block space-y-1"><span>Public platform asset</span>
-      <select className={inputClass} value={value.asset_id} disabled={disabled}
+      <NativeSelect className={inputClass} value={value.asset_id} disabled={disabled}
         onChange={(event) => {
           const chosen = assets.find((asset) => asset === event.target.value);
           const parsed = platformIdSchema.safeParse(chosen);
           if (parsed.success) change({ ...value, asset_id: parsed.data });
         }}>
         {assets.map((id, index) => <option key={id} value={id}>Platform asset {index + 1}</option>)}
-      </select></label>;
+      </NativeSelect></label>;
     case "density": return <label className="block space-y-1"><span>Density</span>
-      <select className={inputClass} value={value.value} disabled={disabled}
+      <NativeSelect className={inputClass} value={value.value} disabled={disabled}
         onChange={(event) => change({ ...value, value: event.target.value === "compact" ? "compact" : "comfortable" })}>
         <option value="compact">Compact</option><option value="comfortable">Comfortable</option>
-      </select></label>;
+      </NativeSelect></label>;
   }
 }
 
@@ -232,13 +236,13 @@ export function ApplicationAppearanceEditor(props: Props) {
       const value = values[token.key] ?? token.inherited;
       const errors = failures.filter((failure) => failure.tokenKey === token.key);
       const errorId = `${id}-${index}-errors`;
-      return <fieldset key={token.key} className="space-y-3 rounded border border-border p-4"
+      return <fieldset key={token.key} className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"
         aria-describedby={errors.length === 0 ? undefined : errorId}>
         <legend className="px-1 font-medium">{token.key} ({token.inherited.kind.replaceAll("_", " ")})</legend>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={overridden} disabled={props.disabled}
-          onChange={(event) => {
+        <label className="flex items-center gap-2"><Checkbox checked={overridden} disabled={props.disabled}
+          onCheckedChange={(checked) => {
             const next = { ...values };
-            if (event.target.checked) next[token.key] = structuredClone(token.inherited);
+            if (checked) next[token.key] = structuredClone(token.inherited);
             else delete next[token.key];
             update(next);
           }} />Override this token</label>
@@ -246,21 +250,21 @@ export function ApplicationAppearanceEditor(props: Props) {
           disabled={props.disabled || !overridden} colors={colors} assets={descriptors.publicAssetIds}
           change={(next) => update({ ...values, [token.key]: next })} />
           : <p role="alert">The stored override has an invalid kind. Reset it to the inherited token.</p>}
-        <button className={buttonClass} type="button" disabled={props.disabled || !overridden} onClick={() => {
+        <Button className={buttonClass} type="button" disabled={props.disabled || !overridden} onClick={() => {
           const next = { ...values }; delete next[token.key]; update(next);
-        }}>Reset override</button>
+        }}>Reset override</Button>
         {errors.length > 0 && <ul id={errorId} role="alert" className="list-disc pl-5">
           {errors.map((failure, errorIndex) => <li key={errorIndex}>{describe(failure.code)}.</li>)}
         </ul>}
       </fieldset>;
     })}
     <div className="flex flex-wrap gap-2">
-      <button className={buttonClass} type="button" disabled={props.disabled || busy}
-        onClick={validate}>Validate appearance</button>
-      <button className={buttonClass} type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
-        onClick={apply}>Apply appearance</button>
-      <button className={buttonClass} type="button" disabled={props.disabled || (!changed && !busy)}
-        onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard appearance edits</button>
+      <Button className={buttonClass} type="button" disabled={props.disabled || busy}
+        onClick={validate}>Validate appearance</Button>
+      <Button className={buttonClass} type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
+        onClick={apply}>Apply appearance</Button>
+      <Button className={buttonClass} type="button" disabled={props.disabled || (!changed && !busy)}
+        onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard appearance edits</Button>
     </div>
     <p className="text-sm">Applying affects local history only. Save persists through the current protected writer; publication and installation remain separate.</p>
   </section>;

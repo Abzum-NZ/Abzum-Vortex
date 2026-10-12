@@ -907,6 +907,16 @@ export function PageLayoutRenderer({
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
   };
 
+  // A shell whose root container declares no padding of its own would draw edge to edge; the
+  // application surface gives it the standard page margin so every application reads alike.
+  const surfacePadding =
+    applicationSurface === true &&
+    !Object.values(resolved.slot.placements).some((placement) => "padding" in placement.settings)
+      ? "p-4"
+      : undefined;
+  const rootClassName =
+    surfacePadding === undefined ? className : className === undefined ? surfacePadding : `${className} ${surfacePadding}`;
+
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
   const activeGuidedStepIndex =
@@ -949,7 +959,7 @@ export function PageLayoutRenderer({
                   breakpoint="desktop"
                   responsive
                   {...sharedProps}
-                  {...(className === undefined ? {} : { className })}
+                  {...(rootClassName === undefined ? {} : { className: rootClassName })}
                   {...(style === undefined ? {} : { style })}
                 />
               </LayoutBreakpointProvider>
@@ -960,7 +970,7 @@ export function PageLayoutRenderer({
               slot={resolved.slot}
               breakpoint={breakpoint}
               {...sharedProps}
-              {...(className === undefined ? {} : { className })}
+              {...(rootClassName === undefined ? {} : { className: rootClassName })}
               {...(style === undefined ? {} : { style })}
             />
           )}

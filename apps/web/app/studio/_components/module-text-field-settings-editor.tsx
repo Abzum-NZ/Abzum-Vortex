@@ -1,4 +1,7 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -14,8 +17,8 @@ import type {
 } from "../../_lib/studio-module-text-field-settings";
 import { reopenModuleTextFieldSettings, saveModuleTextFieldSettings } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 
-const inputClass = "w-full rounded border border-border bg-background px-3 py-2 text-foreground";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "w-full";
+const buttonClass = "";
 const selectionKey = (field: StudioModuleTextFieldDescriptor) => JSON.stringify([field.recordAlias, field.fieldAlias]);
 const descriptorsFor = (draft: StoredModuleDefinitionDraft): readonly StudioModuleTextFieldDescriptor[] =>
   draft.source.body.record_types.flatMap((record) => record.fields.flatMap((field) => field.type === "text" ? [{
@@ -251,7 +254,7 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module text field</span>
-        <select className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
+        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
           if (pending.current) return;
           const next = choices.find((field) => selectionKey(field) === event.target.value);
           if (next === undefined || (dirty && !window.confirm("Discard the pending setting and select another field?"))) return;
@@ -266,12 +269,12 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
         }}>
           {choices.map((field) => <option key={selectionKey(field)} value={selectionKey(field)}>
             {field.recordName} / {field.label} ({field.recordAlias}.{field.fieldAlias})</option>)}
-        </select>
+        </NativeSelect>
       </label>
       {selected !== undefined ? <>
         <p className="break-all text-sm">Type: text. Current format: {selected.format ?? "none"}. Authored path: body.record_types[{selected.recordAlias}].fields[{selected.fieldAlias}].settings.max_length</p>
         <label className="block space-y-1"><span>Maximum length</span>
-          <input className={inputClass} type="text" inputMode="numeric" value={maxLength}
+          <Input className={inputClass} type="text" inputMode="numeric" value={maxLength}
             disabled={busy} aria-describedby="module-text-max-length-help" onChange={(event) => {
               if (pending.current) return;
               buffer.current = { ...buffer.current, maxLength: event.target.value };
@@ -284,8 +287,8 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
         <p id="module-text-max-length-help" className="text-sm">Use a whole number supported by the current Module schema. The saved default and format are preserved and validated with this setting.</p>
       </> : <p role="status">No authored text field is available.</p>}
       <div className="flex flex-wrap gap-2">
-        <button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save text setting</button>
-        <button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</button>
+        <Button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save text setting</Button>
+        <Button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</Button>
       </div>
       <p role="status" aria-live="polite">{dirty ? "Pending text setting changes. " : "The setting matches the saved Module draft. "}{message}</p>
       {validation !== null ? <ul className="space-y-2" aria-label="Module validation feedback" role="alert">

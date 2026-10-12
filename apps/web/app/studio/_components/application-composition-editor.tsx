@@ -1,4 +1,9 @@
 "use client";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
+import { Textarea } from "@vortex/ui/components/textarea";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
@@ -78,8 +83,8 @@ const parseScalarInputs = (inputs: ScalarInputs): StudioCompositionScalarSetting
   }
   return settings;
 };
-const fieldClass = "w-full rounded border border-border bg-background px-3 py-2";
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const fieldClass = "w-full";
+const buttonClass = "";
 
 /** Controls edit the native source through the same command for pointer and keyboard. */
 export function ApplicationCompositionEditor(props: Props) {
@@ -119,7 +124,7 @@ function ApplicationCompositionPalette(props: Props) {
     setMessage("");
   }, [props.context, selectionKey, props.onPendingChange]);
 
-  if (model.kind !== "available") return <section className="space-y-2 rounded border border-border p-4">
+  if (model.kind !== "available") return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Add a component</h3>
     <p role="status">{model.kind === "unsupported"
       ? "Adding is supported only in an ordinary private page's main region with known block releases. Its source is preserved."
@@ -159,17 +164,17 @@ function ApplicationCompositionPalette(props: Props) {
         : "No component was added. Use a unique alias and valid declared settings. Your inputs are preserved.");
   };
 
-  return <section className="space-y-4 rounded border border-border p-4" aria-labelledby={titleId}>
+  return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
     <h3 id={titleId} className="font-semibold">Add a component</h3>
     <p className="text-sm">Add an exact released presentation or supported layout component to this page's main region. Existing components and responsive orders are retained.</p>
     <form className="space-y-3" onSubmit={submit} aria-describedby={hintId}>
       <fieldset className="space-y-3" disabled={props.disabled}>
         <legend className="font-medium">Released component palette</legend>
         <label className="block space-y-1"><span>Search components</span>
-          <input className={fieldClass} type="search" value={inputs.search}
+          <Input className={fieldClass} type="search" value={inputs.search}
             onChange={(event) => update({ ...inputs, search: event.target.value })} /></label>
         <label className="block space-y-1"><span>Exact component release</span>
-          <select className={fieldClass} required value={inputs.releaseId} onChange={(event) => {
+          <NativeSelect className={fieldClass} required value={inputs.releaseId} onChange={(event) => {
             const releaseId = event.target.value;
             if (releaseId !== "" && !model.choices.some((choice) => choice.id === releaseId)) return;
             update({ ...inputs, releaseId, settings: {} });
@@ -177,10 +182,10 @@ function ApplicationCompositionPalette(props: Props) {
             {options.map((choice) => <option key={choice.id} value={choice.id}>
               {choice.name} ({choice.key}, {choice.releaseVersion})
             </option>)}
-          </select></label>
+          </NativeSelect></label>
         {choices.length === 0 && <p role="status">No supported releases match this search. Any selected release and its inputs are preserved.</p>}
         <label className="block space-y-1"><span>Placement alias</span>
-          <input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
+          <Input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
             value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
         <p className="text-sm">Enter a unique authored alias beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
         {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
@@ -188,43 +193,43 @@ function ApplicationCompositionPalette(props: Props) {
         </p>}
         {chosen?.properties.map((property) => {
           const supplied = Object.hasOwn(inputs.settings, property.key) ? inputs.settings[property.key] : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
+          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
             <legend>{property.label}</legend>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={supplied !== undefined}
-              onChange={(event) => {
+            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
+              onCheckedChange={(checked) => {
                 const settings = { ...inputs.settings };
-                if (event.target.checked) settings[property.key] = property.kind === "boolean"
+                if (checked) settings[property.key] = property.kind === "boolean"
                   ? { kind: "boolean", value: false } : property.kind === "choice"
                     ? { kind: "choice", value: "" } : { kind: "text", value: "" };
                 else delete settings[property.key];
                 update({ ...inputs, settings });
               }} />{property.kind === "text" ? "Supply this optional text" : "Supply this optional setting"}</label>
             {property.kind === "text" && supplied?.kind === "text" && <label className="block space-y-1"><span>{property.label} text</span>
-              <textarea className={fieldClass} required={property.minLength > 0}
+              <Textarea className={fieldClass} required={property.minLength > 0}
                 minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
                 onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
                   [property.key]: { kind: "text", value: event.target.value } } })} /></label>}
             {property.kind === "boolean" && supplied?.kind === "boolean" &&
-              <label className="flex items-center gap-2"><input type="checkbox" checked={supplied.value}
-                onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
-                  [property.key]: { kind: "boolean", value: event.target.checked } } })} />{property.label} value</label>}
+              <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
+                onCheckedChange={(checked) => update({ ...inputs, settings: { ...inputs.settings,
+                  [property.key]: { kind: "boolean", value: checked } } })} />{property.label} value</label>}
             {property.kind === "choice" && supplied?.kind === "choice" &&
               <label className="block space-y-1"><span>{property.label} value</span>
-                <select className={fieldClass} required value={supplied.value} onChange={(event) => {
+                <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
                   const value = event.target.value;
                   if (value !== "" && !property.options.some((option) => option.key === value)) return;
                   update({ ...inputs, settings: { ...inputs.settings, [property.key]: { kind: "choice", value } } });
                 }}><option value="">Choose a declared value</option>
                   {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-                </select></label>}
+                </NativeSelect></label>}
             {property.help !== undefined && <p className="text-sm">{property.help}</p>}
           </fieldset>;
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={buttonClass} disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</button>
-        <button type="button" className={buttonClass} disabled={props.disabled || !addInputsPending(inputs)}
-          onClick={() => update(emptyAddInputs())}>Discard add inputs</button>
+        <Button type="submit" className={buttonClass} disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || !addInputsPending(inputs)}
+          onClick={() => update(emptyAddInputs())}>Discard add inputs</Button>
       </div>
     </form>
     <p id={hintId} className="text-sm">Optional settings remain omitted until supplied; declared defaults are not written. Enter or the Add button applies the same guarded command. Save persists the draft; adding does not run data or actions.</p>
@@ -301,7 +306,7 @@ function PlacementCompositionEditor(props: Props) {
     props.onPendingChange(pending.current || movePending.current || settingsPending.current);
   }, [scalarModel, props.context, selectionKey, props.onPendingChange]);
 
-  if (model.kind !== "available" || inputs === null) return <section className="space-y-2 rounded border border-border p-4">
+  if (model.kind !== "available" || inputs === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Placement order and size</h3>
     <p role="status">{model.kind === "unsupported"
       ? "This region uses an unsupported block release. Its source is preserved."
@@ -458,18 +463,18 @@ function PlacementCompositionEditor(props: Props) {
         : "No scalar change was applied. Supply valid declared values and required fields. Your inputs are preserved.");
   };
 
-  return <section className="space-y-4 rounded border border-border p-4" aria-labelledby={titleId}>
+  return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
     <h3 id={titleId} className="font-semibold">Placement composition</h3>
     <p className="text-sm">Existing placement: {model.placementAlias}. This edits authored layout without running its data or actions.</p>
     <label className="block space-y-1"><span>Breakpoint</span>
-      <select className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty}
+      <NativeSelect className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty}
         onChange={(event) => {
           if (pending.current || movePending.current || settingsPending.current || scalarPending.current || props.disabled) return;
           const value = event.target.value;
           if (value === "desktop" || value === "tablet" || value === "phone") setBreakpoint(value);
         }}>
         <option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="phone">Phone</option>
-      </select></label>
+      </NativeSelect></label>
     <fieldset className="space-y-2" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !orderEditable} aria-describedby={hintId}>
       <legend className="font-medium">Sibling order</legend>
       <ol className="list-decimal pl-6">{model.order.map((alias) => <li key={alias}
@@ -479,11 +484,11 @@ function PlacementCompositionEditor(props: Props) {
         event.preventDefault();
         move(event.key === "ArrowUp" ? -1 : 1);
       }}>
-        <button type="button" className={buttonClass} disabled={selectedIndex <= 0} onClick={() => move(-1)}>Move earlier</button>
-        <button type="button" className={buttonClass} disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
-          onClick={() => move(1)}>Move later</button>
-        {breakpoint !== "desktop" && <button type="button" className={buttonClass} disabled={!model.explicitOrder}
-          onClick={() => { if (!pending.current) run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</button>}
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={selectedIndex <= 0} onClick={() => move(-1)}>Move earlier</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
+          onClick={() => move(1)}>Move later</Button>
+        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!model.explicitOrder}
+          onClick={() => { if (!pending.current) run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</Button>}
       </div>
     </fieldset>
     <p id={hintId} className="text-sm">Focus an order button and use Alt+Up or Alt+Down, or activate its button. {breakpoint !== "desktop" && !model.responsiveOrder
@@ -491,44 +496,44 @@ function PlacementCompositionEditor(props: Props) {
     <form className="space-y-3" onSubmit={applySize}>
       <fieldset className="space-y-3" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty}>
         <legend className="font-medium">Responsive size</legend>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={inputs.visible}
+        <label className="flex items-center gap-2"><Checkbox checked={inputs.visible}
           disabled={!model.capabilities.responsiveVisibility}
-          onChange={(event) => update({ ...inputs, visible: event.target.checked })} />Visible at this breakpoint</label>
+          onCheckedChange={(checked) => update({ ...inputs, visible: checked })} />Visible at this breakpoint</label>
         <label className="block space-y-1"><span>Width</span>
-          <select className={fieldClass} value={inputs.width} onChange={(event) => {
+          <NativeSelect className={fieldClass} value={inputs.width} onChange={(event) => {
             const width = event.target.value;
             if (width === "content" || width === "fill" || width === "grid") update({ ...inputs, width });
           }}><option value="content">Content</option><option value="fill">Fill</option>
-            {model.capabilities.gridWidth && <option value="grid">Twelve-column grid</option>}</select></label>
+            {model.capabilities.gridWidth && <option value="grid">Twelve-column grid</option>}</NativeSelect></label>
         {inputs.width === "grid" && <div className="grid grid-cols-2 gap-2">
-          <label className="block space-y-1"><span>Start column</span><input className={fieldClass} type="number" required min={1} max={12} step={1}
+          <label className="block space-y-1"><span>Start column</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
             value={inputs.startColumn} onChange={(event) => update({ ...inputs, startColumn: event.target.value })} /></label>
-          <label className="block space-y-1"><span>Column span</span><input className={fieldClass} type="number" required min={1} max={12} step={1}
+          <label className="block space-y-1"><span>Column span</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
             value={inputs.span} onChange={(event) => update({ ...inputs, span: event.target.value })} /></label>
         </div>}
         <label className="block space-y-1"><span>Height</span>
-          <select className={fieldClass} value={inputs.height} onChange={(event) => {
+          <NativeSelect className={fieldClass} value={inputs.height} onChange={(event) => {
             const height = event.target.value;
             if (height === "content" || height === "bounded") update({ ...inputs, height });
           }}><option value="content">Content</option>
-            {model.capabilities.height === "content_or_bounded" && <option value="bounded">Bounded</option>}</select></label>
+            {model.capabilities.height === "content_or_bounded" && <option value="bounded">Bounded</option>}</NativeSelect></label>
         {inputs.height === "bounded" && <label className="block space-y-1"><span>Height units</span>
-          <input className={fieldClass} type="number" required min={0} step="any" value={inputs.units}
+          <Input className={fieldClass} type="number" required min={0} step="any" value={inputs.units}
             onChange={(event) => update({ ...inputs, units: event.target.value })} /></label>}
       </fieldset>
       <p className="text-sm">{model.explicitLayout ? "This layout is explicitly authored." : "This layout inherits from the wider breakpoint."} Applying size records one local history entry; Enter submits this same form.</p>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</button>
-        <button type="button" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</button>
-        {breakpoint !== "desktop" && <button type="button" className={buttonClass} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
-          onClick={() => { if (!pending.current) run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</button>}
+        <Button type="submit" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</Button>
+        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
+          onClick={() => { if (!pending.current) run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</Button>}
       </div>
     </form>
     <form className="space-y-3" onSubmit={applyDestination}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || settingsDirty || scalarDirty || destinations.length === 0}>
         <legend className="font-medium">Move to another slot</legend>
         <label className="block space-y-1"><span>Existing destination in this page region</span>
-          <select className={fieldClass} required value={destinationKey} onChange={(event) => {
+          <NativeSelect className={fieldClass} required value={destinationKey} onChange={(event) => {
             if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
             const key = event.target.value;
             if (key !== "" && !destinations.some((item) => JSON.stringify(item.destination) === key)) return;
@@ -540,15 +545,15 @@ function PlacementCompositionEditor(props: Props) {
             <option value="">Choose a destination</option>
             {destinations.map((item) => <option key={JSON.stringify(item.destination)}
               value={JSON.stringify(item.destination)}>{item.label}</option>)}
-          </select></label>
-        <button type="submit" className={buttonClass} disabled={!moveDirty}>Move placement</button>
-        <button type="button" className={buttonClass} disabled={!moveDirty} onClick={() => {
+          </NativeSelect></label>
+        <Button type="submit" className={buttonClass} disabled={!moveDirty}>Move placement</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!moveDirty} onClick={() => {
           if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
           movePending.current = false;
           setDestinationKey("");
           props.onPendingChange(pending.current || settingsPending.current || scalarPending.current);
           setMessage("");
-        }}>Discard destination</button>
+        }}>Discard destination</Button>
       </fieldset>
       <p className="text-sm">Move the existing placement and its children to the end of an existing compatible slot in this page's main region. Use this select and Enter or the Move button. Required content, nesting limits and slot compatibility are checked before applying.</p>
       {destinations.length === 0 && <p role="status">{moveModel.kind === "unsupported"
@@ -557,9 +562,9 @@ function PlacementCompositionEditor(props: Props) {
     </form>
     <section className="space-y-2" aria-label="Remove presentation placement">
       <p className="text-sm">Remove only an unreferenced released presentation placement. Flows and other source fields are retained. Save remains separate.</p>
-      <button type="button" className={buttonClass}
+      <Button type="button" variant="outline" size="sm" className={buttonClass}
         disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || removalModel.kind !== "available"}
-        onClick={() => run({ kind: "remove" })}>Remove placement</button>
+        onClick={() => run({ kind: "remove" })}>Remove placement</Button>
       {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
         ? "This slot requires its remaining placement."
         : removalModel.reason === "unresolved_target"
@@ -573,17 +578,17 @@ function PlacementCompositionEditor(props: Props) {
         <legend className="font-medium">Declared text settings</legend>
         {settingsModel.properties.map((property) => {
           const supplied = Object.hasOwn(settingsInputs, property.key) ? settingsInputs[property.key] : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
+          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
             <legend>{property.label}</legend>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={supplied !== undefined}
-              onChange={(event) => {
+            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
+              onCheckedChange={(checked) => {
                 const next = { ...settingsInputs };
-                if (event.target.checked) next[property.key] = { kind: "text", value: "" };
+                if (checked) next[property.key] = { kind: "text", value: "" };
                 else delete next[property.key];
                 updateSettings(next);
               }} />Supply this optional text</label>
             {supplied !== undefined && <label className="block space-y-1"><span>{property.label} text</span>
-              <textarea className={fieldClass} required={property.minLength > 0}
+              <Textarea className={fieldClass} required={property.minLength > 0}
                 minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
                 onChange={(event) => updateSettings({ ...settingsInputs,
                   [property.key]: { kind: "text", value: event.target.value } })} /></label>}
@@ -592,9 +597,9 @@ function PlacementCompositionEditor(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply text settings</button>
-        <button type="button" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
-          onClick={() => updateSettings(settingsModel.settings)}>Discard text inputs</button>
+        <Button type="submit" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply text settings</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
+          onClick={() => updateSettings(settingsModel.settings)}>Discard text inputs</Button>
       </div>
       <p className="text-sm">Omitted text stays omitted until supplied. Apply and keyboard submission use one guarded command. Discard changes only these inputs; Save remains explicit.</p>
       {settingsDirty && <p role="status">Apply or discard text inputs before changing layout, destination, order, breakpoint or removing this placement.</p>}
@@ -610,33 +615,33 @@ function PlacementCompositionEditor(props: Props) {
             : defaultValue?.kind === "number" ? String(defaultValue.value)
             : defaultValue?.kind === "choice" && property.kind === "choice"
               ? property.options.find((option) => option.key === defaultValue.value)?.label : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded border border-border p-3">
+          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
             <legend>{property.label}</legend>
             <p className="text-sm">{property.required ? "Required setting." : "Optional setting."} {defaultLabel !== undefined
               ? `Omitting this setting uses the declared default: ${defaultLabel}.`
               : canOmit ? "Omitted until you supply a value." : "Supply a declared value."}</p>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={supplied !== undefined}
-              disabled={!canOmit} onChange={(event) => {
+            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
+              disabled={!canOmit} onCheckedChange={(checked) => {
                 const next = { ...scalarInputs };
-                if (event.target.checked) next[property.key] = property.kind === "boolean"
+                if (checked) next[property.key] = property.kind === "boolean"
                   ? { kind: "boolean", value: false } : property.kind === "number"
                     ? { kind: "number", value: "" } : { kind: "choice", value: "" };
                 else delete next[property.key];
                 updateScalars(next);
               }} />Supply this setting</label>
             {property.kind === "boolean" && supplied?.kind === "boolean" &&
-              <label className="flex items-center gap-2"><input type="checkbox" checked={supplied.value}
-                onChange={(event) => updateScalars({ ...scalarInputs,
-                  [property.key]: { kind: "boolean", value: event.target.checked } })} />{property.label} value</label>}
+              <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
+                onCheckedChange={(checked) => updateScalars({ ...scalarInputs,
+                  [property.key]: { kind: "boolean", value: checked } })} />{property.label} value</label>}
             {property.kind === "choice" && supplied?.kind === "choice" &&
               <label className="block space-y-1"><span>{property.label} value</span>
-                <select className={fieldClass} required value={supplied.value} onChange={(event) => {
+                <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
                   const value = event.target.value;
                   if (value !== "" && !property.options.some((option) => option.key === value)) return;
                   updateScalars({ ...scalarInputs, [property.key]: { kind: "choice", value } });
                 }}><option value="">Choose a declared value</option>
                   {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-                </select></label>}
+                </NativeSelect></label>}
             {property.kind === "number" && <p className="text-sm">
               {property.integer ? "Whole numbers only." : "Fractional numbers are allowed."}
               {property.minimum !== undefined && ` Minimum: ${property.minimum}.`}
@@ -644,7 +649,7 @@ function PlacementCompositionEditor(props: Props) {
             </p>}
             {property.kind === "number" && supplied?.kind === "number" &&
               <label className="block space-y-1"><span>{property.label} value</span>
-                <input className={fieldClass} type="text" inputMode={property.integer ? "numeric" : "decimal"}
+                <Input className={fieldClass} type="text" inputMode={property.integer ? "numeric" : "decimal"}
                   value={supplied.value} onChange={(event) => updateScalars({ ...scalarInputs,
                     [property.key]: { kind: "number", value: event.target.value } })} />
               </label>}
@@ -653,11 +658,11 @@ function PlacementCompositionEditor(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className={buttonClass}
-          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply declared settings</button>
-        <button type="button" className={buttonClass}
+        <Button type="submit" className={buttonClass}
+          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply declared settings</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass}
           disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}
-          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard scalar inputs</button>
+          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard scalar inputs</Button>
       </div>
       <p className="text-sm">Supplied false is an explicit value. Declared defaults are shown without writing them into omitted settings. Apply or Enter uses one guarded command; Save remains explicit.</p>
       {scalarDirty && <p role="status">Apply or discard scalar inputs before changing text, layout, destination, order, breakpoint or removing this placement.</p>}

@@ -26,6 +26,7 @@ catalog:
   tailwindcss: 4.3.3
   tsx: 4.23.15
   ws: 8.21.3
+  sonner: 2.0.8
 
 catalogMode: strict
 

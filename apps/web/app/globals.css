@@ -17,10 +17,8 @@ body {
 
 body {
   font-family: var(--vortex-font-family);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--vortex-text) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--vortex-text) 4%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 @layer base {

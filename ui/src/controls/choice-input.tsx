@@ -13,6 +13,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from "../components/combobox";
+import { Button } from "../components/button";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { RadioGroup, RadioGroupItem } from "../components/radio-group";
 import {
@@ -277,15 +278,17 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                 {remoteLoading ? "Searching choices…" : "No matching options"}
               </ComboboxEmpty>
               {referenceChoices && context.values?.nextContinuationToken !== undefined ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   disabled={remoteLoading}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={loadMoreChoices}
-                  className="w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent disabled:opacity-50"
+                  className="w-full justify-start text-muted-foreground"
                 >
                   {remoteLoading ? "Loading choices…" : "Load more choices"}
-                </button>
+                </Button>
               ) : null}
             </ComboboxContent>
           </Combobox>

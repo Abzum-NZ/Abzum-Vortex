@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { ConditionNode } from "@vortex/contracts";
@@ -27,7 +28,7 @@ type Response = Readonly<{ metadata: StudioApplicationConditionContext;
   snapshot: StudioVisibilityWorkspaceSnapshot; generation: number }>;
 type Buffer = Readonly<{ value: ConditionNode | undefined; validation: StudioConditionValidation;
   response: Response }>;
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const buttonClass = "";
 const sameSnapshot = (left: StudioVisibilityWorkspaceSnapshot, right: StudioVisibilityWorkspaceSnapshot): boolean =>
   left.context.source === right.context.source && left.context.organizationId === right.context.organizationId &&
   left.context.rootId === right.context.rootId && left.context.key === right.context.key &&
@@ -149,14 +150,14 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   const unsupported = model?.kind === "unsupported";
   const value = buffer === null ? model?.kind === "available" ? model.condition : undefined : buffer.value;
   const target = model?.kind === "available" ? model.target : resolveStudioVisibilityTarget(props.context.source, props.selection);
-  return <section className="space-y-3 rounded border border-border p-4" aria-label="Placement visibility condition">
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Placement visibility condition">
     <h3 className="font-semibold">Visibility condition</h3>
     <p className="text-sm">Use fields from this detail page's saved Module release. Visibility controls presentation; permissions remain separate.</p>
     {status && <p role="status">{status}</p>}
     {buffer !== null && !isCurrentResponse() &&
       <p role="status">Your unapplied condition remains visible. Apply is held until its saved context is current.</p>}
-    <button type="button" className={buttonClass} disabled={props.busy}
-      onClick={() => setReload((value) => value + 1)}>Reload field metadata</button>
+    <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.busy}
+      onClick={() => setReload((value) => value + 1)}>Reload field metadata</Button>
     {unsupported && <p role="status">This existing condition or placement is unsupported. Its source is preserved and read-only.</p>}
     {model?.kind === "stale" && <p role="status">The saved page or Module bindings changed. Save and reload field metadata before editing.</p>}
     {model?.kind === "available" && <form onSubmit={apply} className="space-y-3">
@@ -171,9 +172,9 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       }}>
         <StudioConditionControls key={controlsEpoch} {...(value === undefined ? {} : { value })} context={model.controls}
           label="Placement visibility controls" onChange={update} />
-        <button type="button" className={buttonClass} disabled={value === undefined}
-          onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove condition</button>
-        <button type="submit" className={buttonClass} disabled={buffer === null || !buffer.validation.isValid}>Apply visibility condition</button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={value === undefined}
+          onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove condition</Button>
+        <Button type="submit" className={buttonClass} disabled={buffer === null || !buffer.validation.isValid}>Apply visibility condition</Button>
       </fieldset>
     </form>}
     {buffer !== null && <>
@@ -184,7 +185,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
               target?.placement.visibility_condition, buffer.response.metadata)].join("/")}: {issue.message}
         </li>)}
       </ul>}
-      <button type="button" className={buttonClass} disabled={props.busy} onClick={discard}>Discard visibility edits</button>
+      <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.busy} onClick={discard}>Discard visibility edits</Button>
     </>}
     <p role="status" aria-live="polite">{message}</p>
   </section>;

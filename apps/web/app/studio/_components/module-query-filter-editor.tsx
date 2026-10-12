@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@vortex/ui/components/button";
+import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -30,7 +32,7 @@ type Props = Readonly<{
   initial: StudioModuleQueryFilterResult;
 }>;
 
-const buttonClass = "rounded border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50";
+const buttonClass = "";
 const choiceList = (result: StudioModuleQueryFilterResult): readonly ModuleQueryFilterQueryChoice[] =>
   result.kind === "available" || result.kind === "readonly" ? result.queryChoices : [];
 const initialAlias = (result: StudioModuleQueryFilterResult): string =>
@@ -514,10 +516,10 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
             <li key={`${error.code}:${index}`}>
               {query === undefined
                 ? <span>{location}</span>
-                : <button type="button" className="underline" disabled={busy}
+                : <Button type="button" variant="outline" size="sm" className="underline" disabled={busy}
                     onClick={() => focusValidationQuery(query.alias)}>
                     {location}
-                  </button>}
+                  </Button>}
               <span>: {error.message} {error.guidance}</span>
             </li>
           );
@@ -546,7 +548,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
       <section className="space-y-3" aria-label="Query selection">
         <label className="block space-y-1">
           <span>Module Query</span>
-          <select ref={querySelectRef} className="w-full rounded border border-border bg-background px-3 py-2" value={selectedAlias}
+          <NativeSelect ref={querySelectRef} value={selectedAlias}
             onChange={(event) => void chooseQuery(event.target.value)} disabled={busy}>
             <option value="">Choose a Query</option>
             {queryChoices.map((choice) => (
@@ -554,7 +556,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
                 {choice.label ?? choice.key} ({choice.eligible ? "editable" : "read-only"})
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         {selectedChoice !== undefined && !selectedChoice.eligible && (
           <p role="status">This Query is read-only because its target, operands, or retained filter is outside this editor’s supported scope.</p>
@@ -586,16 +588,16 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
           )}
           {renderValidationErrors()}
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass} onClick={apply}
-              disabled={busy || !staged || localValidation?.isValid !== true}>Apply</button>
-            <button type="button" className={buttonClass} onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</button>
-            <button type="button" className={buttonClass} onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</button>
-            <button type="button" className={buttonClass} onClick={clearFilter} disabled={busy || working === null}>Clear filter</button>
-            <button type="button" className={buttonClass} onClick={() => void validate()}
-              disabled={busy || staged || localValidation?.isValid !== true}>Validate</button>
-            <button type="button" className={buttonClass} onClick={() => void save()}
-              disabled={busy || !dirty || staged || localValidation?.isValid !== true}>Save</button>
-            <button type="button" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={apply}
+              disabled={busy || !staged || localValidation?.isValid !== true}>Apply</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={clearFilter} disabled={busy || working === null}>Clear filter</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void validate()}
+              disabled={busy || staged || localValidation?.isValid !== true}>Validate</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void save()}
+              disabled={busy || !dirty || staged || localValidation?.isValid !== true}>Save</Button>
+            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</Button>
           </div>
           <p aria-live="polite" role="status">{message}</p>
           <p className="text-sm">{dirty ? "Applied filter changes are not saved." : "The applied filter matches the saved draft."}</p>
@@ -606,7 +608,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
         <section className="space-y-3" aria-label="Read-only filter status">
           <p role="status">{message}</p>
           {renderValidationErrors()}
-          <button type="button" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</button>
+          <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</Button>
         </section>
       )}
     </main>
