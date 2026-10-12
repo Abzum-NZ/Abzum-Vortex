@@ -816,7 +816,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
           <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
             compiledSource={draft.source}
-            pageAlias={selectedPage.id} compiledSlot={pageCompiledSlots?.[selectedPage.id]}
+            pageAlias={selectedPage.id} compiledSlots={pageCompiledSlots?.[selectedPage.id]}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
               state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
               pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
