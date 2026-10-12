@@ -659,8 +659,12 @@ const preparationContext = (organizationCurrency: string | undefined): Preparati
  */
 export const prepareInitialRecordFieldCandidate = (
   input: PrepareRecordFieldValuesInput,
+  validatedFields?: ReadonlyMap<string, ModuleField>,
 ): PrepareInitialRecordFieldCandidateResult => {
-  const trustedRecordType = recordTypeDefinitionSchema.parse(input.recordType);
+  const trustedRecordType =
+    validatedFields === undefined
+      ? recordTypeDefinitionSchema.parse(input.recordType)
+      : input.recordType;
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.submittedValues)) issue(context, "invalid_input", ["submittedValues"]);
   if (input.operation === "update" && !isValueMap(input.existingValues))
@@ -674,9 +678,9 @@ export const prepareInitialRecordFieldCandidate = (
 
   const submittedValues = input.submittedValues;
   const existingValues = input.existingValues ?? {};
-  const fieldsById = new Map<string, ModuleField>(
-    trustedRecordType.fields.map((field) => [field.fieldId, field]),
-  );
+  const fieldsById =
+    validatedFields ??
+    new Map<string, ModuleField>(trustedRecordType.fields.map((field) => [field.fieldId, field]));
   const candidateValues: Record<string, JsonValue> = {};
   const valueOrigins: Record<string, RecordFieldValueOrigin> = {};
   const submittedFieldIds: string[] = [];
@@ -765,8 +769,12 @@ export const prepareInitialRecordFieldCandidate = (
 const finalizeRecordFieldCandidateInternal = (
   input: FinalizeRecordFieldCandidateInput,
   requiredGeneratedFieldIds: ReadonlySet<string>,
+  validatedFields?: ReadonlyMap<string, ModuleField>,
 ): PrepareRecordFieldValuesResult => {
-  const trustedRecordType = recordTypeDefinitionSchema.parse(input.recordType);
+  const trustedRecordType =
+    validatedFields === undefined
+      ? recordTypeDefinitionSchema.parse(input.recordType)
+      : input.recordType;
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.candidateValues)) issue(context, "invalid_input", ["candidateValues"]);
   if (input.initialCandidate.recordTypeId !== trustedRecordType.recordTypeId)
@@ -778,9 +786,9 @@ const finalizeRecordFieldCandidateInternal = (
     issue(context, "invalid_input", ["organizationCurrency"]);
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 
-  const fieldsById = new Map<string, ModuleField>(
-    trustedRecordType.fields.map((field) => [field.fieldId, field]),
-  );
+  const fieldsById =
+    validatedFields ??
+    new Map<string, ModuleField>(trustedRecordType.fields.map((field) => [field.fieldId, field]));
   for (const fieldId of requiredGeneratedFieldIds) {
     const field = fieldsById.get(fieldId);
     if (field === undefined || !generatedFieldTypes.has(field.type))
@@ -891,13 +899,18 @@ const finalizeRecordFieldCandidateInternal = (
 
 export const finalizeRecordFieldCandidate = (
   input: FinalizeRecordFieldCandidateInput,
+  validatedFields?: ReadonlyMap<string, ModuleField>,
 ): PrepareRecordFieldValuesResult => {
   const requiredGeneratedFieldIds =
     input.requiredGeneratedFieldIds ??
     input.recordType.fields
       .filter((field) => generatedFieldTypes.has(field.type))
       .map((field) => field.fieldId);
-  return finalizeRecordFieldCandidateInternal(input, new Set(requiredGeneratedFieldIds));
+  return finalizeRecordFieldCandidateInternal(
+    input,
+    new Set(requiredGeneratedFieldIds),
+    validatedFields,
+  );
 };
 
 export const prepareRecordFieldValues = (

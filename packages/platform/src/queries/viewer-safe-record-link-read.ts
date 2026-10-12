@@ -17,6 +17,8 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { protectedQueryRowCapabilitiesSchema } from "./protected-query-contracts";
 
 const unavailable = { outcome: "unavailable" } as const;
+const contractError = (code: string, cause?: unknown): Error =>
+  Object.assign(new Error(code, { cause }), { code });
 
 const viewerSafeRecordLinkReadCommandSchema = z
   .object({
@@ -62,6 +64,7 @@ const readableRecordSchema = z
     values: z.record(fieldIdSchema, jsonValueSchema),
   })
   .strict();
+const refusedRecordSchema = z.object({ outcome: z.literal("refused") }).strict();
 
 type RecordLinkReadRow = DatabaseRow & {
   readonly active_installation: unknown;
@@ -69,8 +72,9 @@ type RecordLinkReadRow = DatabaseRow & {
   readonly capabilities: unknown;
 };
 
-const viewerSafeRecordLinkFieldValuesSchema = z.record(fieldIdSchema, jsonValueSchema).superRefine(
-  (values, context) => {
+const viewerSafeRecordLinkFieldValuesSchema = z
+  .record(fieldIdSchema, jsonValueSchema)
+  .superRefine((values, context) => {
     const fieldIds = Object.keys(values);
     if (fieldIds.length < 1 || fieldIds.length > 20)
       context.addIssue({
@@ -83,8 +87,7 @@ const viewerSafeRecordLinkFieldValuesSchema = z.record(fieldIdSchema, jsonValueS
         code: "custom",
         message: "A selected-record read returns each field ID once",
       });
-  },
-);
+  });
 
 export const viewerSafeRecordLinkTitleReadResultSchema = z.discriminatedUnion("outcome", [
   z.object({ outcome: z.literal("read"), title: viewerSafeRecordLinkTitleSchema }).strict(),
@@ -116,6 +119,8 @@ const currentInstallationMatches = (
   applicationReleaseRevision: number,
 ): boolean => {
   const installation = activeApplicationInstallationEvidenceSchema.safeParse(candidate);
+  if (!installation.success)
+    throw contractError("RECORD_LINK_INSTALLATION_INVALID", installation.error);
   return (
     installation.success &&
     sameId(scope.organizationId, identity.organizationId) &&
@@ -201,45 +206,43 @@ const read = async (
   )
     return unavailable;
 
-  try {
-    // The installation predicate gates both protected reads in one statement. The Record
-    // functions make the current row and field decision; they expose no direct table data.
-    const rows = await readProtectedRecord(
-      transaction,
+  // The installation predicate gates both protected reads in one statement. The Record
+  // functions make the current row and field decision; they expose no direct table data.
+  const rows = await readProtectedRecord(
+    transaction,
+    command.data.identity,
+    command.data.applicationReleaseRevision,
+  );
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
+
+  const row = rows[0];
+  if (
+    !currentInstallationMatches(
+      row.active_installation,
+      scope.data,
       command.data.identity,
       command.data.applicationReleaseRevision,
-    );
-    if (rows.length !== 1 || rows[0] === undefined) return unavailable;
-
-    const row = rows[0];
-    if (
-      !currentInstallationMatches(
-        row.active_installation,
-        scope.data,
-        command.data.identity,
-        command.data.applicationReleaseRevision,
-      )
     )
-      return unavailable;
-
-    const record = readableRecordSchema.safeParse(row.result);
-    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(row.capabilities);
-    if (
-      !record.success ||
-      !capabilities.success ||
-      !sameId(record.data.recordId, command.data.identity.recordId)
-    )
-      return unavailable;
-
-    const titleEntries = Object.entries(record.data.values).filter(([fieldId]) =>
-      sameId(fieldId, command.data.titleFieldId),
-    );
-    if (titleEntries.length !== 1) return unavailable;
-    const title = viewerSafeRecordLinkTitleSchema.safeParse(titleEntries[0]?.[1]);
-    return title.success ? { outcome: "read", title: title.data } : unavailable;
-  } catch {
+  )
     return unavailable;
-  }
+
+  if (refusedRecordSchema.safeParse(row.result).success) return unavailable;
+  const record = readableRecordSchema.safeParse(row.result);
+  const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(row.capabilities);
+  if (!record.success) throw contractError("RECORD_LINK_READ_RESULT_INVALID", record.error);
+  if (!capabilities.success)
+    throw contractError("RECORD_LINK_READ_CAPABILITIES_INVALID", capabilities.error);
+  if (!sameId(record.data.recordId, command.data.identity.recordId))
+    throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
+
+  const titleEntries = Object.entries(record.data.values).filter(([fieldId]) =>
+    sameId(fieldId, command.data.titleFieldId),
+  );
+  if (titleEntries.length !== 1) return unavailable;
+  const title = viewerSafeRecordLinkTitleSchema.safeParse(titleEntries[0]?.[1]);
+  if (!title.success) throw contractError("RECORD_LINK_READ_TITLE_INVALID", title.error);
+  return { outcome: "read", title: title.data };
 };
 
 /**
@@ -264,49 +267,46 @@ const readFields = async (
   )
     return unavailable;
 
-  try {
-    const rows = await readProtectedRecord(
-      transaction,
+  const rows = await readProtectedRecord(
+    transaction,
+    command.data.identity,
+    command.data.applicationReleaseRevision,
+  );
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
+
+  const row = rows[0];
+  if (
+    !currentInstallationMatches(
+      row.active_installation,
+      scope.data,
       command.data.identity,
       command.data.applicationReleaseRevision,
-    );
-    if (rows.length !== 1 || rows[0] === undefined) return unavailable;
-
-    const row = rows[0];
-    if (
-      !currentInstallationMatches(
-        row.active_installation,
-        scope.data,
-        command.data.identity,
-        command.data.applicationReleaseRevision,
-      )
     )
-      return unavailable;
-
-    const record = readableRecordSchema.safeParse(row.result);
-    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(row.capabilities);
-    if (
-      !record.success ||
-      !capabilities.success ||
-      !sameId(record.data.recordId, command.data.identity.recordId)
-    )
-      return unavailable;
-
-    const values: Record<string, z.infer<typeof jsonValueSchema>> = {};
-    for (const fieldId of command.data.fieldIds) {
-      const matchingEntries = Object.entries(record.data.values).filter(([candidateFieldId]) =>
-        sameId(candidateFieldId, fieldId),
-      );
-      if (matchingEntries.length !== 1) return unavailable;
-      const matchingEntry = matchingEntries[0];
-      if (matchingEntry === undefined) return unavailable;
-      values[fieldId] = matchingEntry[1];
-    }
-
-    return viewerSafeRecordLinkFieldsReadResultSchema.parse({ outcome: "read", values });
-  } catch {
+  )
     return unavailable;
+
+  if (refusedRecordSchema.safeParse(row.result).success) return unavailable;
+  const record = readableRecordSchema.safeParse(row.result);
+  const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(row.capabilities);
+  if (!record.success) throw contractError("RECORD_LINK_READ_RESULT_INVALID", record.error);
+  if (!capabilities.success)
+    throw contractError("RECORD_LINK_READ_CAPABILITIES_INVALID", capabilities.error);
+  if (!sameId(record.data.recordId, command.data.identity.recordId))
+    throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
+
+  const values: Record<string, z.infer<typeof jsonValueSchema>> = {};
+  for (const fieldId of command.data.fieldIds) {
+    const matchingEntries = Object.entries(record.data.values).filter(([candidateFieldId]) =>
+      sameId(candidateFieldId, fieldId),
+    );
+    if (matchingEntries.length !== 1) return unavailable;
+    const matchingEntry = matchingEntries[0];
+    if (matchingEntry === undefined) throw contractError("RECORD_LINK_READ_FIELD_INVALID");
+    values[fieldId] = matchingEntry[1];
   }
+
+  return viewerSafeRecordLinkFieldsReadResultSchema.parse({ outcome: "read", values });
 };
 
 /** One uncached protected Query reader for a target record's title or selected fields. */

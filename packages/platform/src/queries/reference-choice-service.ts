@@ -159,15 +159,27 @@ const recordChoice = (
   row: ProtectedQueryRow,
   recordTypeId: RecordTypeId,
   labelFieldId: FieldId,
+  search: string | undefined,
 ): ReferenceChoiceOption => {
   // A withheld label field is absent from the row, so the fallback names only
   // the record the viewer may already read.
   const labelValue: JsonValue | undefined = row.values[labelFieldId];
   const labelText =
     typeof labelValue === "number" && Number.isFinite(labelValue) ? String(labelValue) : labelValue;
+  const matchingText =
+    Array.isArray(labelText) && search !== undefined
+      ? labelText.find(
+          (member): member is string => typeof member === "string" && matchesSearch(member, search),
+        )
+      : labelText;
   const label =
-    typeof labelText === "string" && labelText.trim().length > 0
-      ? boundedLabel(labelText)
+    typeof matchingText === "string" && matchingText.trim().length > 0
+      ? (() => {
+          const first = boundedLabel(matchingText);
+          if (search === undefined || matchesSearch(first, search)) return first;
+          const matchAt = matchingText.toLowerCase().indexOf(search.toLowerCase());
+          return matchAt < 0 ? first : boundedLabel(matchingText.slice(matchAt));
+        })()
       : `Record ${row.recordId.slice(0, 8).toLowerCase()}`;
   return {
     key: choiceKey("r", row.recordId),
@@ -186,10 +198,13 @@ const recordChoices = async (
   const target = source.query.recordType;
   const bound = command.boundInput;
   const input = source.query.inputs[0];
-  const validInputs = bound === undefined
-    ? !source.query.inputs.some((declaration) => declaration.required)
-    : source.query.inputs.length === 1 && input?.required === true &&
-      input.type === "text" && input.key === bound.key;
+  const validInputs =
+    bound === undefined
+      ? !source.query.inputs.some((declaration) => declaration.required)
+      : source.query.inputs.length === 1 &&
+        input?.required === true &&
+        input.type === "text" &&
+        input.key === bound.key;
   if (
     !allowsRecordType(command.allowedRecordTypes, target) ||
     !source.query.selectedFieldIds.some((fieldId) => sameId(fieldId, command.labelFieldId)) ||
@@ -233,9 +248,11 @@ const recordChoices = async (
   )
     return { kind: "available", value: refusal("source_stale") };
 
-  const choices = page.rows
-    .map((row) => recordChoice(row, target.recordTypeId, command.labelFieldId))
-    .filter((choice) => matchesSearch(choice.label, command.search));
+  // The protected query applies search before pagination. A matching suffix is
+  // shown when the match lies beyond the normal 200-character label boundary.
+  const choices = page.rows.map((row) =>
+    recordChoice(row, target.recordTypeId, command.labelFieldId, command.search),
+  );
   return {
     kind: "available",
     value: {

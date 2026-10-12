@@ -14,6 +14,9 @@ volatile
 security definer
 set search_path = ''
 as $function$
+declare
+  result_value jsonb;
+  correlation_id_value uuid;
 begin
   -- The request role reaches the one record-change operation's terminal delete,
   -- restore and ownership-transfer writes only through this closed entry. It
@@ -28,11 +31,25 @@ begin
     );
   end if;
 
-  return vortex_record.apply_record_changes(
+  result_value := vortex_record.apply_record_changes(
     p_command_id, p_operation, p_record_type_id, p_record_id,
     p_expected_concurrency_number, '{}'::jsonb, null,
     p_mutations, p_activity_id, p_occurrence_id
   );
+  if p_operation <> 'transfer_ownership' then
+    return result_value;
+  end if;
+
+  if result_value ->> 'outcome' = 'saved' then
+    return result_value - array['values', 'backgroundDelivery']::text[]
+      || pg_catalog.jsonb_build_object('outcome', 'transferred');
+  end if;
+  if result_value ->> 'outcome' in ('conflict', 'refused') then
+    correlation_id_value :=
+      (vortex_access.validated_human_request_context() ->> 'correlationId')::uuid;
+    return result_value || pg_catalog.jsonb_build_object('correlationId', correlation_id_value);
+  end if;
+  return result_value;
 end
 $function$;
 
