@@ -7,6 +7,22 @@ import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
 type Finding = { rule: string; file: string; line: number; detail: string; id: string };
 const root = resolve(import.meta.dirname, "../..");
 const baselinePath = resolve(import.meta.dirname, "baseline.json");
+const remoteRefs = spawnSync("git", ["for-each-ref", "--format=%(refname)", "refs/remotes"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (remoteRefs.status !== 0)
+  throw new Error(`Cannot list fetched remote refs: ${remoteRefs.stderr}`);
+const mainRefs = remoteRefs.stdout
+  .split("\n")
+  .map((ref) => ref.trim())
+  .filter((ref) => /^refs\/remotes\/.+\/main$/.test(ref));
+const mainRef = mainRefs.includes("refs/remotes/origin/main")
+  ? "refs/remotes/origin/main"
+  : mainRefs.sort()[0];
+if (!mainRef)
+  throw new Error("Guard requires a fetched remote main ref for safe baseline comparison.");
+const mainRefLabel = mainRef.replace(/^refs\/remotes\//, "");
 const hasBaseline = existsSync(baselinePath);
 const ruleTier = (rule: string) =>
   (guardRules as Record<string, { tier: "blocking" | "warning" }>)[rule]?.tier ?? "warning";
@@ -23,7 +39,7 @@ const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
-const renamed = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", "origin/main"], {
+const renamed = spawnSync("git", ["diff", "--find-renames=90%", "--name-status", mainRef], {
   cwd: root,
   encoding: "utf8",
 });
@@ -35,12 +51,12 @@ if (renamed.status === 0) {
   }
 }
 // Preserve rename identity from the move commit when later import rewrites lower similarity.
-const commits = spawnSync("git", ["rev-list", "--reverse", "origin/main..HEAD"], {
+const commits = spawnSync("git", ["rev-list", "--reverse", `${mainRef}..HEAD`], {
   cwd: root,
   encoding: "utf8",
 });
 if (commits.status === 0) {
-  let previous = "origin/main";
+  let previous = mainRef;
   for (const commit of commits.stdout.trim().split("\n").filter(Boolean)) {
     const step = spawnSync(
       "git",
@@ -532,16 +548,15 @@ const unique = [
     findings.filter((finding) => !waived.has(finding.id)).map((finding) => [finding.id, finding]),
   ).values(),
 ].sort((a, b) => a.id.localeCompare(b.id));
-const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseline.json"], {
+const mainBaseline = spawnSync("git", ["show", `${mainRef}:tooling/guard/baseline.json`], {
   cwd: root,
   encoding: "utf8",
 });
-const hasMainSnapshot = mainBaseline.status === 0;
-const allowed = hasMainSnapshot
-  ? new Set(
-      (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
-    )
-  : new Set(baseline);
+if (mainBaseline.status !== 0)
+  throw new Error(`Cannot read blocking baseline from ${mainRefLabel}: ${mainBaseline.stderr}`);
+const allowed = new Set(
+  (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
+);
 const historicalPaths = new Map<string, Set<string>>();
 function pathsForFile(file: string): Set<string> {
   const cached = historicalPaths.get(file);
@@ -584,7 +599,7 @@ const mainFiles = new Map<string, boolean>();
 const mainSourceCache = new Map<string, string | undefined>();
 function sourceFromMain(file: string): string | undefined {
   if (mainSourceCache.has(file)) return mainSourceCache.get(file);
-  const previous = spawnSync("git", ["show", `origin/main:${file}`], {
+  const previous = spawnSync("git", ["show", `${mainRef}:${file}`], {
     cwd: root,
     encoding: "utf8",
   });
@@ -605,17 +620,17 @@ function mainNames(): Set<string> {
   const result = new Set<string>();
   const listing = spawnSync(
     "git",
-    ["ls-tree", "-r", "--name-only", "origin/main", "--", paths.applicationSources],
+    ["ls-tree", "-r", "--name-only", mainRef, "--", paths.applicationSources],
     { cwd: root, encoding: "utf8" },
   );
   if (listing.status !== 0)
-    throw new Error(`Cannot list origin/main application definitions: ${listing.stderr}`);
+    throw new Error(`Cannot list ${mainRefLabel} application definitions: ${listing.stderr}`);
   for (const file of listing.stdout
     .split("\n")
     .filter((entry) => /\/application\.json$/.test(entry))) {
     const content = sourceFromMain(file);
     if (content === undefined)
-      throw new Error(`Cannot read origin/main application definition: ${file}`);
+      throw new Error(`Cannot read ${mainRefLabel} application definition: ${file}`);
     const source = JSON.parse(content) as { key?: string; body?: { name?: string } };
     if (source.key) result.add(source.key);
     if (source.body?.name) result.add(source.body.name);
@@ -641,18 +656,18 @@ function latestFunctionsOnMain(): Map<string, { definition: string; file: string
   if (mainLatestFunctions) return mainLatestFunctions;
   const listing = spawnSync(
     "git",
-    ["ls-tree", "-r", "--name-only", "origin/main", "--", paths.migrations],
+    ["ls-tree", "-r", "--name-only", mainRef, "--", paths.migrations],
     { cwd: root, encoding: "utf8" },
   );
   if (listing.status !== 0)
-    throw new Error(`Cannot list origin/main migrations: ${listing.stderr}`);
+    throw new Error(`Cannot list ${mainRefLabel} migrations: ${listing.stderr}`);
   mainLatestFunctions = new Map();
   for (const file of listing.stdout
     .split("\n")
     .filter((entry) => entry.endsWith(".sql"))
     .sort()) {
     const content = sourceFromMain(file);
-    if (content === undefined) throw new Error(`Cannot read origin/main migration: ${file}`);
+    if (content === undefined) throw new Error(`Cannot read ${mainRefLabel} migration: ${file}`);
     for (const [key, value] of functions(content))
       mainLatestFunctions.set(key, { definition: value.definition, file });
   }
@@ -750,7 +765,6 @@ function mainFindingCount(rule: string, file: string, detail: string): number {
   return 0;
 }
 function presentOnMain(id: string, sourceFile: string): boolean {
-  if (!hasMainSnapshot) return true;
   const last = id.lastIndexOf("|");
   const occurrence = Number(id.slice(last + 1));
   const first = id.indexOf("|");
@@ -760,10 +774,7 @@ function presentOnMain(id: string, sourceFile: string): boolean {
   const detail = id.slice(second + 1, last);
   return mainFindingCount(rule, sourceFile, detail) >= occurrence;
 }
-function mainBaselineEntry(
-  id: string,
-  currentFile: string,
-): { id: string; sourceFile: string } | undefined {
+function mainBaselineEntry(id: string): { id: string; sourceFile: string } | undefined {
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return undefined;
@@ -771,7 +782,6 @@ function mainBaselineEntry(
   for (const path of pathsForFile(file)) {
     const candidate = `${id.slice(0, first + 1)}${path}${id.slice(second)}`;
     if (!allowed.has(candidate)) continue;
-    if (!hasMainSnapshot) return { id: candidate, sourceFile: currentFile };
     const sourceFile = sourceFromMain(file) !== undefined ? file : path;
     if (sourceFromMain(sourceFile) !== undefined) return { id: candidate, sourceFile };
   }
@@ -805,7 +815,7 @@ const growth = baseline.filter(
 );
 const added = unique.filter((finding) => {
   if (!isBlocking(finding.rule) || unchangedFromMain(finding.file)) return false;
-  const baselineEntry = mainBaselineEntry(finding.id, finding.file);
+  const baselineEntry = mainBaselineEntry(finding.id);
   return !baselineEntry || !presentOnMain(baselineEntry.id, baselineEntry.sourceFile);
 });
 const warnings = unique.filter((finding) => !isBlocking(finding.rule));
@@ -881,11 +891,11 @@ else console.log(summaryText);
 if (process.argv.includes("--refresh-from-main")) {
   const diff = spawnSync(
     "git",
-    ["diff", "--quiet", "origin/main", "--", ".", ":(exclude)tooling/guard"],
+    ["diff", "--quiet", mainRef, "--", ".", ":(exclude)tooling/guard"],
     { cwd: root },
   );
   if (diff.status !== 0)
-    throw new Error("--refresh-from-main requires a tree identical to origin/main");
+    throw new Error(`--refresh-from-main requires a tree identical to ${mainRefLabel}`);
   const blockingFindings = unique.filter((finding) => isBlocking(finding.rule));
   writeFileSync(
     baselinePath,
