@@ -6,6 +6,7 @@ import {
 } from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { mapWebError } from "./web-error-mapper";
 
 const writeApplicationDraft = async (
   organizationId: string,
@@ -22,8 +23,13 @@ const writeApplicationDraft = async (
     return mode === "create"
       ? await writer.createRoot(resolved.session, organizationId, candidate)
       : await writer.saveDraft(resolved.session, organizationId, candidate);
-  } catch {
-    return { kind: "temporarily_unavailable" };
+  } catch (error) {
+    return mapWebError(error, {
+      route: "definition-draft-write",
+      operation: mode === "create" ? "create" : "save",
+      code: mode === "create" ? "DEFINITION_DRAFT_CREATE_FAILED" : "DEFINITION_DRAFT_SAVE_FAILED",
+      fallback: { kind: "temporarily_unavailable" },
+    });
   }
 };
 
