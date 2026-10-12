@@ -508,7 +508,11 @@ begin
   preview_mode := prepared_plan ? 'preview';
   physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
   storage_scope := prepared_plan #>> '{storage,storageScope}';
-  access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
+  access_sql := prepared_plan #>> '{access,predicate}';
+  if access_sql is null then
+    raise exception using errcode = '55000',
+      message = 'Prepared record query has no access predicate';
+  end if;
   access_parameters := coalesce(prepared_plan #> '{access,parameters}', '[]'::jsonb);
   access_owner_account_id := nullif(prepared_plan #>> '{access,ownerAccountId}', '')::uuid;
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])

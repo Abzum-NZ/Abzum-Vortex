@@ -10,6 +10,8 @@ as $function$
 declare
   decision record;
   operation_value constant text := 'platform.organization.connections.manage';
+  failure_sqlstate text;
+  failure_message text;
 begin
   select evaluated.* into strict decision
   from vortex_access.evaluate_organization_permission_eligibility(
@@ -19,7 +21,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
         'permissionId', 'ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -39,10 +43,18 @@ begin
       message = 'Connection administration is unavailable';
   end if;
 exception
-  when others then
+  -- Only a refused permission decision is the safe denial; any other failure
+  -- is a defect and keeps its SQLSTATE and message.
+  when sqlstate '42501' then
     raise exception using
       errcode = '42501',
       message = 'Connection administration is unavailable';
+  when others then
+    get stacked diagnostics failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise warning 'Connection administration authority check failed: SQLSTATE %, %',
+      failure_sqlstate, failure_message;
+    raise;
 end
 $function$;
 

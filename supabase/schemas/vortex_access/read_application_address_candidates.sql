@@ -99,12 +99,14 @@ begin
         continue;
     end;
 
+    -- Published release data is platform-produced: a malformed field is a
+    -- defect of that application's release, so it fails loudly with the
+    -- application named instead of dropping the application from the list.
     page_values := application_row.compilation_output #> '{canonical,content,pages}';
     if pg_catalog.jsonb_typeof(page_values) is distinct from 'array' then
-      continue;
-    end if;
-    if pg_catalog.jsonb_array_length(page_values) = 0 then
-      continue;
+      raise exception using errcode = 'XX001',
+        message = pg_catalog.format(
+          'Published application %s has malformed pages', application_row.application_key);
     end if;
 
     select page.value ->> 'key'
@@ -114,20 +116,30 @@ begin
       application_row.compilation_output #>> '{canonical,content,homePageId}';
 
     if home_page_key is null then
-      continue;
+      raise exception using errcode = 'XX001',
+        message = pg_catalog.format(
+          'Published application %s has no home page among its pages',
+          application_row.application_key);
     end if;
 
     -- Declared experience pages are resolved to their exact compiled page definitions here, so
     -- App can render an application's own not-found, unavailable and error surfaces. A refused
-    -- page and a missing page both resolve to the same not_found experience.
+    -- page and a missing page both resolve to the same not_found experience. Experiences are an
+    -- optional release field: an absent one declares none, a present one must be an array.
     experience_values := application_row.compilation_output #> '{canonical,content,experiences}';
-    if pg_catalog.jsonb_typeof(experience_values) is distinct from 'array' then
+    if experience_values is null then
       experience_values := '[]'::jsonb;
+    elsif pg_catalog.jsonb_typeof(experience_values) is distinct from 'array' then
+      raise exception using errcode = 'XX001',
+        message = pg_catalog.format(
+          'Published application %s has malformed experiences', application_row.application_key);
     end if;
 
     role_values := application_row.compilation_output #> '{canonical,content,roles}';
     if pg_catalog.jsonb_typeof(role_values) is distinct from 'array' then
-      continue;
+      raise exception using errcode = 'XX001',
+        message = pg_catalog.format(
+          'Published application %s has malformed roles', application_row.application_key);
     end if;
 
     select pg_catalog.jsonb_agg(
