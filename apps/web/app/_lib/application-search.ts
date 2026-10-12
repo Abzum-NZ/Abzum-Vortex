@@ -13,7 +13,7 @@ import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";
 import { humanOrganizationRequestDependencies, humanOrganizationRequestsFor } from "./server-composition";
 
-export type ApplicationSearchView =
+type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "available"; expression: string; results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[]; more: boolean }>;
