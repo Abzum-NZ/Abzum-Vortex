@@ -61,7 +61,13 @@ begin
   from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
   where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
   if root_type is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
-  if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements_text(
+      coalesce(catalogue -> 'ruleSubjectRecordTypeIds', '[]'::jsonb)
+    ) subject(record_type_id)
+    where pg_catalog.lower(subject.record_type_id) = pg_catalog.lower(p_record_type_id::text)
+  ) then
     return pg_catalog.jsonb_build_object('outcome', 'defer');
   end if;
   if not exists (
@@ -104,6 +110,19 @@ begin
     catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
   );
   if before_closure is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
+  -- A generated parent update must not bypass a rule on that parent. Rules on
+  -- unrelated installed record types do not prevent this closure from saving.
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(before_closure -> 'records') record(value)
+    join pg_catalog.jsonb_array_elements_text(
+      coalesce(catalogue -> 'ruleSubjectRecordTypeIds', '[]'::jsonb)
+    ) subject(record_type_id)
+      on pg_catalog.lower(subject.record_type_id) =
+        pg_catalog.lower(record.value ->> 'recordTypeId')
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
 
   -- Dynamic physical rows are locked in one canonical concrete identity order.
   for record_value in
