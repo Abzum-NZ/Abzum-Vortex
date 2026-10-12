@@ -23,192 +23,198 @@ INSERT INTO vortex_access.validation_reference_values (reference_list, reference
 INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('private_invalidation_change_kind', 'deleted', 3);
 INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('private_invalidation_change_kind', 'restored', 4);
 INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('private_invalidation_change_kind', 'access_changed', 5);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AED', 1);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AFN', 2);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ALL', 3);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AMD', 4);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AOA', 5);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ARS', 6);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AUD', 7);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AWG', 8);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'AZN', 9);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BAM', 10);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BBD', 11);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BDT', 12);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BHD', 13);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BIF', 14);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BMD', 15);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BND', 16);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BOB', 17);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BOV', 18);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BRL', 19);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BSD', 20);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BTN', 21);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BWP', 22);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BYN', 23);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'BZD', 24);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CAD', 25);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CDF', 26);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CHE', 27);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CHF', 28);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CHW', 29);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CLF', 30);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CLP', 31);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CNY', 32);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'COP', 33);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'COU', 34);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CRC', 35);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CUP', 36);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CVE', 37);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'CZK', 38);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'DJF', 39);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'DKK', 40);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'DOP', 41);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'DZD', 42);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'EGP', 43);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ERN', 44);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ETB', 45);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'EUR', 46);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'FJD', 47);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'FKP', 48);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GBP', 49);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GEL', 50);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GHS', 51);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GIP', 52);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GMD', 53);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GNF', 54);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GTQ', 55);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'GYD', 56);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'HKD', 57);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'HNL', 58);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'HTG', 59);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'HUF', 60);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'IDR', 61);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ILS', 62);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'INR', 63);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'IQD', 64);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'IRR', 65);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ISK', 66);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'JMD', 67);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'JOD', 68);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'JPY', 69);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KES', 70);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KGS', 71);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KHR', 72);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KMF', 73);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KPW', 74);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KRW', 75);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KWD', 76);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KYD', 77);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'KZT', 78);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LAK', 79);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LBP', 80);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LKR', 81);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LRD', 82);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LSL', 83);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'LYD', 84);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MAD', 85);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MDL', 86);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MGA', 87);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MKD', 88);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MMK', 89);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MNT', 90);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MOP', 91);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MRU', 92);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MUR', 93);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MVR', 94);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MWK', 95);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MXN', 96);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MXV', 97);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MYR', 98);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'MZN', 99);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NAD', 100);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NGN', 101);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NIO', 102);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NOK', 103);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NPR', 104);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'NZD', 105);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'OMR', 106);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PAB', 107);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PEN', 108);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PGK', 109);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PHP', 110);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PKR', 111);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PLN', 112);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'PYG', 113);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'QAR', 114);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'RON', 115);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'RSD', 116);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'RUB', 117);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'RWF', 118);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SAR', 119);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SBD', 120);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SCR', 121);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SDG', 122);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SEK', 123);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SGD', 124);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SHP', 125);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SLE', 126);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SOS', 127);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SRD', 128);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SSP', 129);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'STN', 130);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SVC', 131);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SYP', 132);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'SZL', 133);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'THB', 134);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TJS', 135);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TMT', 136);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TND', 137);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TOP', 138);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TRY', 139);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TTD', 140);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TWD', 141);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'TZS', 142);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UAH', 143);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UGX', 144);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'USD', 145);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'USN', 146);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UYI', 147);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UYU', 148);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UYW', 149);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'UZS', 150);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'VED', 151);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'VES', 152);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'VND', 153);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'VUV', 154);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'WST', 155);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XAD', 156);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XAF', 157);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XAG', 158);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XAU', 159);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XBA', 160);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XBB', 161);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XBC', 162);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XBD', 163);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XCD', 164);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XCG', 165);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XDR', 166);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XOF', 167);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XPD', 168);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XPF', 169);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XPT', 170);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XSU', 171);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XTS', 172);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XUA', 173);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'XXX', 174);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'YER', 175);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ZAR', 176);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ZMW', 177);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_currency', 'ZWG', 178);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_date_format', 'short', 1);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_date_format', 'medium', 2);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_date_format', 'long', 3);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_date_format', 'full', 4);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_number_format', 'auto', 1);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_number_format', 'always', 2);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_number_format', 'min2', 3);
-INSERT INTO vortex_access.validation_reference_values (reference_list, reference_value, reference_ordinal) VALUES ('organization_runtime_settings_number_format', 'never', 4);
+-- BEGIN GENERATED: organization settings reference seed
+insert into vortex_access.validation_reference_values (
+  reference_list, reference_value, reference_ordinal
+) values
+  ('organization_runtime_settings_currency', 'AED', 1),
+  ('organization_runtime_settings_currency', 'AFN', 2),
+  ('organization_runtime_settings_currency', 'ALL', 3),
+  ('organization_runtime_settings_currency', 'AMD', 4),
+  ('organization_runtime_settings_currency', 'AOA', 5),
+  ('organization_runtime_settings_currency', 'ARS', 6),
+  ('organization_runtime_settings_currency', 'AUD', 7),
+  ('organization_runtime_settings_currency', 'AWG', 8),
+  ('organization_runtime_settings_currency', 'AZN', 9),
+  ('organization_runtime_settings_currency', 'BAM', 10),
+  ('organization_runtime_settings_currency', 'BBD', 11),
+  ('organization_runtime_settings_currency', 'BDT', 12),
+  ('organization_runtime_settings_currency', 'BHD', 13),
+  ('organization_runtime_settings_currency', 'BIF', 14),
+  ('organization_runtime_settings_currency', 'BMD', 15),
+  ('organization_runtime_settings_currency', 'BND', 16),
+  ('organization_runtime_settings_currency', 'BOB', 17),
+  ('organization_runtime_settings_currency', 'BOV', 18),
+  ('organization_runtime_settings_currency', 'BRL', 19),
+  ('organization_runtime_settings_currency', 'BSD', 20),
+  ('organization_runtime_settings_currency', 'BTN', 21),
+  ('organization_runtime_settings_currency', 'BWP', 22),
+  ('organization_runtime_settings_currency', 'BYN', 23),
+  ('organization_runtime_settings_currency', 'BZD', 24),
+  ('organization_runtime_settings_currency', 'CAD', 25),
+  ('organization_runtime_settings_currency', 'CDF', 26),
+  ('organization_runtime_settings_currency', 'CHE', 27),
+  ('organization_runtime_settings_currency', 'CHF', 28),
+  ('organization_runtime_settings_currency', 'CHW', 29),
+  ('organization_runtime_settings_currency', 'CLF', 30),
+  ('organization_runtime_settings_currency', 'CLP', 31),
+  ('organization_runtime_settings_currency', 'CNY', 32),
+  ('organization_runtime_settings_currency', 'COP', 33),
+  ('organization_runtime_settings_currency', 'COU', 34),
+  ('organization_runtime_settings_currency', 'CRC', 35),
+  ('organization_runtime_settings_currency', 'CUP', 36),
+  ('organization_runtime_settings_currency', 'CVE', 37),
+  ('organization_runtime_settings_currency', 'CZK', 38),
+  ('organization_runtime_settings_currency', 'DJF', 39),
+  ('organization_runtime_settings_currency', 'DKK', 40),
+  ('organization_runtime_settings_currency', 'DOP', 41),
+  ('organization_runtime_settings_currency', 'DZD', 42),
+  ('organization_runtime_settings_currency', 'EGP', 43),
+  ('organization_runtime_settings_currency', 'ERN', 44),
+  ('organization_runtime_settings_currency', 'ETB', 45),
+  ('organization_runtime_settings_currency', 'EUR', 46),
+  ('organization_runtime_settings_currency', 'FJD', 47),
+  ('organization_runtime_settings_currency', 'FKP', 48),
+  ('organization_runtime_settings_currency', 'GBP', 49),
+  ('organization_runtime_settings_currency', 'GEL', 50),
+  ('organization_runtime_settings_currency', 'GHS', 51),
+  ('organization_runtime_settings_currency', 'GIP', 52),
+  ('organization_runtime_settings_currency', 'GMD', 53),
+  ('organization_runtime_settings_currency', 'GNF', 54),
+  ('organization_runtime_settings_currency', 'GTQ', 55),
+  ('organization_runtime_settings_currency', 'GYD', 56),
+  ('organization_runtime_settings_currency', 'HKD', 57),
+  ('organization_runtime_settings_currency', 'HNL', 58),
+  ('organization_runtime_settings_currency', 'HTG', 59),
+  ('organization_runtime_settings_currency', 'HUF', 60),
+  ('organization_runtime_settings_currency', 'IDR', 61),
+  ('organization_runtime_settings_currency', 'ILS', 62),
+  ('organization_runtime_settings_currency', 'INR', 63),
+  ('organization_runtime_settings_currency', 'IQD', 64),
+  ('organization_runtime_settings_currency', 'IRR', 65),
+  ('organization_runtime_settings_currency', 'ISK', 66),
+  ('organization_runtime_settings_currency', 'JMD', 67),
+  ('organization_runtime_settings_currency', 'JOD', 68),
+  ('organization_runtime_settings_currency', 'JPY', 69),
+  ('organization_runtime_settings_currency', 'KES', 70),
+  ('organization_runtime_settings_currency', 'KGS', 71),
+  ('organization_runtime_settings_currency', 'KHR', 72),
+  ('organization_runtime_settings_currency', 'KMF', 73),
+  ('organization_runtime_settings_currency', 'KPW', 74),
+  ('organization_runtime_settings_currency', 'KRW', 75),
+  ('organization_runtime_settings_currency', 'KWD', 76),
+  ('organization_runtime_settings_currency', 'KYD', 77),
+  ('organization_runtime_settings_currency', 'KZT', 78),
+  ('organization_runtime_settings_currency', 'LAK', 79),
+  ('organization_runtime_settings_currency', 'LBP', 80),
+  ('organization_runtime_settings_currency', 'LKR', 81),
+  ('organization_runtime_settings_currency', 'LRD', 82),
+  ('organization_runtime_settings_currency', 'LSL', 83),
+  ('organization_runtime_settings_currency', 'LYD', 84),
+  ('organization_runtime_settings_currency', 'MAD', 85),
+  ('organization_runtime_settings_currency', 'MDL', 86),
+  ('organization_runtime_settings_currency', 'MGA', 87),
+  ('organization_runtime_settings_currency', 'MKD', 88),
+  ('organization_runtime_settings_currency', 'MMK', 89),
+  ('organization_runtime_settings_currency', 'MNT', 90),
+  ('organization_runtime_settings_currency', 'MOP', 91),
+  ('organization_runtime_settings_currency', 'MRU', 92),
+  ('organization_runtime_settings_currency', 'MUR', 93),
+  ('organization_runtime_settings_currency', 'MVR', 94),
+  ('organization_runtime_settings_currency', 'MWK', 95),
+  ('organization_runtime_settings_currency', 'MXN', 96),
+  ('organization_runtime_settings_currency', 'MXV', 97),
+  ('organization_runtime_settings_currency', 'MYR', 98),
+  ('organization_runtime_settings_currency', 'MZN', 99),
+  ('organization_runtime_settings_currency', 'NAD', 100),
+  ('organization_runtime_settings_currency', 'NGN', 101),
+  ('organization_runtime_settings_currency', 'NIO', 102),
+  ('organization_runtime_settings_currency', 'NOK', 103),
+  ('organization_runtime_settings_currency', 'NPR', 104),
+  ('organization_runtime_settings_currency', 'NZD', 105),
+  ('organization_runtime_settings_currency', 'OMR', 106),
+  ('organization_runtime_settings_currency', 'PAB', 107),
+  ('organization_runtime_settings_currency', 'PEN', 108),
+  ('organization_runtime_settings_currency', 'PGK', 109),
+  ('organization_runtime_settings_currency', 'PHP', 110),
+  ('organization_runtime_settings_currency', 'PKR', 111),
+  ('organization_runtime_settings_currency', 'PLN', 112),
+  ('organization_runtime_settings_currency', 'PYG', 113),
+  ('organization_runtime_settings_currency', 'QAR', 114),
+  ('organization_runtime_settings_currency', 'RON', 115),
+  ('organization_runtime_settings_currency', 'RSD', 116),
+  ('organization_runtime_settings_currency', 'RUB', 117),
+  ('organization_runtime_settings_currency', 'RWF', 118),
+  ('organization_runtime_settings_currency', 'SAR', 119),
+  ('organization_runtime_settings_currency', 'SBD', 120),
+  ('organization_runtime_settings_currency', 'SCR', 121),
+  ('organization_runtime_settings_currency', 'SDG', 122),
+  ('organization_runtime_settings_currency', 'SEK', 123),
+  ('organization_runtime_settings_currency', 'SGD', 124),
+  ('organization_runtime_settings_currency', 'SHP', 125),
+  ('organization_runtime_settings_currency', 'SLE', 126),
+  ('organization_runtime_settings_currency', 'SOS', 127),
+  ('organization_runtime_settings_currency', 'SRD', 128),
+  ('organization_runtime_settings_currency', 'SSP', 129),
+  ('organization_runtime_settings_currency', 'STN', 130),
+  ('organization_runtime_settings_currency', 'SVC', 131),
+  ('organization_runtime_settings_currency', 'SYP', 132),
+  ('organization_runtime_settings_currency', 'SZL', 133),
+  ('organization_runtime_settings_currency', 'THB', 134),
+  ('organization_runtime_settings_currency', 'TJS', 135),
+  ('organization_runtime_settings_currency', 'TMT', 136),
+  ('organization_runtime_settings_currency', 'TND', 137),
+  ('organization_runtime_settings_currency', 'TOP', 138),
+  ('organization_runtime_settings_currency', 'TRY', 139),
+  ('organization_runtime_settings_currency', 'TTD', 140),
+  ('organization_runtime_settings_currency', 'TWD', 141),
+  ('organization_runtime_settings_currency', 'TZS', 142),
+  ('organization_runtime_settings_currency', 'UAH', 143),
+  ('organization_runtime_settings_currency', 'UGX', 144),
+  ('organization_runtime_settings_currency', 'USD', 145),
+  ('organization_runtime_settings_currency', 'USN', 146),
+  ('organization_runtime_settings_currency', 'UYI', 147),
+  ('organization_runtime_settings_currency', 'UYU', 148),
+  ('organization_runtime_settings_currency', 'UYW', 149),
+  ('organization_runtime_settings_currency', 'UZS', 150),
+  ('organization_runtime_settings_currency', 'VED', 151),
+  ('organization_runtime_settings_currency', 'VES', 152),
+  ('organization_runtime_settings_currency', 'VND', 153),
+  ('organization_runtime_settings_currency', 'VUV', 154),
+  ('organization_runtime_settings_currency', 'WST', 155),
+  ('organization_runtime_settings_currency', 'XAD', 156),
+  ('organization_runtime_settings_currency', 'XAF', 157),
+  ('organization_runtime_settings_currency', 'XAG', 158),
+  ('organization_runtime_settings_currency', 'XAU', 159),
+  ('organization_runtime_settings_currency', 'XBA', 160),
+  ('organization_runtime_settings_currency', 'XBB', 161),
+  ('organization_runtime_settings_currency', 'XBC', 162),
+  ('organization_runtime_settings_currency', 'XBD', 163),
+  ('organization_runtime_settings_currency', 'XCD', 164),
+  ('organization_runtime_settings_currency', 'XCG', 165),
+  ('organization_runtime_settings_currency', 'XDR', 166),
+  ('organization_runtime_settings_currency', 'XOF', 167),
+  ('organization_runtime_settings_currency', 'XPD', 168),
+  ('organization_runtime_settings_currency', 'XPF', 169),
+  ('organization_runtime_settings_currency', 'XPT', 170),
+  ('organization_runtime_settings_currency', 'XSU', 171),
+  ('organization_runtime_settings_currency', 'XTS', 172),
+  ('organization_runtime_settings_currency', 'XUA', 173),
+  ('organization_runtime_settings_currency', 'XXX', 174),
+  ('organization_runtime_settings_currency', 'YER', 175),
+  ('organization_runtime_settings_currency', 'ZAR', 176),
+  ('organization_runtime_settings_currency', 'ZMW', 177),
+  ('organization_runtime_settings_currency', 'ZWG', 178),
+  ('organization_runtime_settings_date_format', 'short', 1),
+  ('organization_runtime_settings_date_format', 'medium', 2),
+  ('organization_runtime_settings_date_format', 'long', 3),
+  ('organization_runtime_settings_date_format', 'full', 4),
+  ('organization_runtime_settings_number_format', 'auto', 1),
+  ('organization_runtime_settings_number_format', 'always', 2),
+  ('organization_runtime_settings_number_format', 'min2', 3),
+  ('organization_runtime_settings_number_format', 'never', 4)
+;
+-- END GENERATED: organization settings reference seed
 
 -- vortex_access.platform_permission_declarations: 22 rows
 INSERT INTO vortex_access.platform_permission_declarations (owner_kind, owner_id, permission_id, permission_key, action_kind, label, description, meaning_fingerprint, source_module_key, steward_minimum, first_revision) VALUES ('platform', 'cabe121e-0baf-4084-9471-cce915d460a8', '687d5649-62ee-43dd-b684-b8af3a5394c1', 'platform.organization.permissions.read', 'read', 'View available permissions', 'View the selected organisation''s registered permission catalogue without receiving use or assignment authority.', 'sha256:be47b7066dd31f8797452f035cadcb18ef6ead6ff06bec6d3ec54ff769812567', 'organisation-administration', true, 1);
