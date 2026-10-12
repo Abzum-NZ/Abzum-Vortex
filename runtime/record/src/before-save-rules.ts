@@ -29,7 +29,7 @@ export const beforeSaveRuleUnavailableIssueCode = "before_save_rule_unavailable"
  * immutable release row the save already resolved, so no caller input can
  * supply or replace them.
  */
-export type BeforeSaveRuleSet = Readonly<{
+type BeforeSaveRuleSet = Readonly<{
   moduleRootId: string;
   releaseRevision: number;
   rules: readonly RuleGraph[];
@@ -49,7 +49,7 @@ export const beginBeforeSaveRuleExecution = (ruleSet: BeforeSaveRuleSet): Before
   warnings: [],
 });
 
-export type BeforeSaveRuleApplication =
+type BeforeSaveRuleApplication =
   | Readonly<{
       success: true;
       candidateValues: Readonly<Record<string, JsonValue>>;

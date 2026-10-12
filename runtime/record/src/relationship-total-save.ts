@@ -14,7 +14,7 @@ import {
 } from "./field-values";
 import { evaluateRecordTotals } from "./totals";
 
-export type LockedRelationshipTotalRecord = Readonly<{
+type LockedRelationshipTotalRecord = Readonly<{
   recordKey: string;
   recordId?: string;
   recordType: RecordTypeDefinitionV3;
@@ -37,7 +37,7 @@ export type LockedRelationshipTotalPreparation = Readonly<{
   records: readonly LockedRelationshipTotalRecord[];
 }>;
 
-export type RelationshipTotalCalculationIssue = Readonly<{
+type RelationshipTotalCalculationIssue = Readonly<{
   code: string;
   recordKey: string;
   fieldId?: string;
@@ -52,7 +52,7 @@ export type RelationshipTotalParentMutation = Readonly<{
 }>;
 
 /** One composed creation evaluated as its own root inside the merged closure. */
-export type RelationshipTotalCreationRoot = Readonly<{
+type RelationshipTotalCreationRoot = Readonly<{
   ordinal: number;
   values: Readonly<Record<string, JsonValue | null>>;
 }>;
@@ -73,7 +73,7 @@ export type CalculateRelationshipTotalSaveResult =
   | Readonly<{ success: false; issues: readonly RelationshipTotalCalculationIssue[] }>;
 
 /** Record key of creation `ordinal` inside one merged command closure. */
-export const creationRecordKey = (ordinal: number) => `create:${ordinal}`;
+const creationRecordKey = (ordinal: number) => `create:${ordinal}`;
 
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
