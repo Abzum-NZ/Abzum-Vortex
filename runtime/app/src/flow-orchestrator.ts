@@ -150,20 +150,20 @@ export type FlowRelease = Readonly<{
 }>;
 
 /** One compiler-typed field in a release's selected-record read projection. */
-export type FlowSelectedRecordReadField = Readonly<{
+type FlowSelectedRecordReadField = Readonly<{
   alias: string;
   fieldId: string;
   type: FlowReadFieldsScalarType;
 }>;
 
 /** Trusted immutable projection of one compiled record.read_fields task. */
-export type FlowSelectedRecordReadProjection = Readonly<{
+type FlowSelectedRecordReadProjection = Readonly<{
   recordTypeId: string;
   fields: readonly FlowSelectedRecordReadField[];
 }>;
 
 /** Exact installation and compiled-flow release identity retained on a committed start intent. */
-export const flowReleaseIdentitySchema = z
+const flowReleaseIdentitySchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -176,10 +176,10 @@ export const flowReleaseIdentitySchema = z
     flowReleaseFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   })
   .strict();
-export type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
+type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
 
 /** Trusted read shape of one committed Event start; callers supply only its intent identifier. */
-export const committedFlowStartIntentSchema = z
+const committedFlowStartIntentSchema = z
   .object({
     intentId: z.uuid(),
     organizationId: organizationIdSchema,
@@ -229,7 +229,7 @@ export const committedFlowStartIntentSchema = z
         message: "Application flow release differs from the installation",
       });
   });
-export type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
+type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
 
 const releaseIdentityForIntent = (intent: CommittedFlowStartIntent): FlowReleaseIdentity => ({
   organizationId: intent.organizationId,
@@ -284,7 +284,7 @@ export type RecordSaveTaskPort = Readonly<{
 }>;
 
 /** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
-export type FlowSubjectReadPort = Readonly<{
+type FlowSubjectReadPort = Readonly<{
   read(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -293,12 +293,12 @@ export type FlowSubjectReadPort = Readonly<{
 }>;
 
 /** The current protected read result; unavailable is intentionally indistinguishable. */
-export type FlowSelectedRecordReadResult =
+type FlowSelectedRecordReadResult =
   | Readonly<{ outcome: "read"; values: Readonly<Record<string, JsonValue>> }>
   | Readonly<{ outcome: "unavailable" }>;
 
 /** Fresh protected read for the current person and one selected record. */
-export type FlowSelectedRecordReadPort = Readonly<{
+type FlowSelectedRecordReadPort = Readonly<{
   readFields(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,

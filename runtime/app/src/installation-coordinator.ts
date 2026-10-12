@@ -163,7 +163,7 @@ export const applicationInstallationWithdrawalRequestSchema = z
   .strict();
 
 /** Begin the uninstall of exactly the named active installation by draining it. */
-export const applicationInstallationDrainRequestSchema = z
+const applicationInstallationDrainRequestSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -180,7 +180,7 @@ export type ApplicationInstallationActivationRequest = z.infer<
 export type ApplicationInstallationWithdrawalRequest = z.infer<
   typeof applicationInstallationWithdrawalRequestSchema
 >;
-export type ApplicationInstallationDrainRequest = z.infer<
+type ApplicationInstallationDrainRequest = z.infer<
   typeof applicationInstallationDrainRequestSchema
 >;
 
@@ -221,7 +221,7 @@ export type ApplicationInstallationWithdrawalResult = Readonly<{
   runtimeBundles: InstallationRuntimeBundleRemovalReport;
 }>;
 
-export type ApplicationInstallationDrainResult = Readonly<{
+type ApplicationInstallationDrainResult = Readonly<{
   outcome: "draining" | "unchanged";
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
