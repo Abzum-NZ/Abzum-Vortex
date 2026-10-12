@@ -112,3 +112,5 @@ export {
   type SearchRebuildRefusal,
   type SearchRebuildStored,
 } from "./event-consumer";
+
+export { createSearchIndexDependencies } from "./index-dependencies";

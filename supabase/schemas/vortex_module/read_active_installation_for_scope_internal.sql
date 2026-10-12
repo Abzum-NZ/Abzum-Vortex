@@ -119,11 +119,15 @@ alter function vortex_module.read_active_installation_for_scope_internal(uuid,uu
 revoke all on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
     vortex_record_owner, vortex_record_adapter;
--- This fixed reader serves Definition and PostgreSQL callers; the Record adapter
--- never receives direct Module table authority.
+-- This fixed reader serves Definition and PostgreSQL callers, and the Record
+-- adapter's system-only search snapshot read, which passes only the Application
+-- of its validated system context. The adapter never receives direct Module
+-- table authority.
 grant execute on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
   to postgres;
 grant execute on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
   to vortex_definition_owner;
+grant execute on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid)
+  to vortex_record_adapter;
 comment on function vortex_module.read_active_installation_for_scope_internal(uuid, uuid) is
   'Resolves the complete exact active Module binding set for one already-validated organisation/Application scope.';

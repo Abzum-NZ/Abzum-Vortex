@@ -35,6 +35,7 @@ import {
 import { loadSetupState } from "./state";
 import { seedDemoRecords } from "../demo-setup/seed-demo-records";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
+import { createLocalEventDispatcher } from "../../app/_lib/local-event-dispatch";
 
 /**
  * The development-only setup provisions the disposable organisation, publishes and installs the
@@ -372,6 +373,8 @@ export const runDevelopmentSetup = async (
       tenantShortName: manifest.provisioning.tenant.shortName,
       organizationShortName: manifest.provisioning.rootOrganization.shortName,
     });
+  // Index every record committed so far (the outbox holds each record's history) before the first sign-in.
+  log(`delivered ${await createLocalEventDispatcher().drain()} event occurrences to the consumers`);
   log("done. Sign in with the nominated account and open the organisation.");
   return { organizationId: provisioned.rootOrganizationId, stewardIdentityId };
 };

@@ -100,11 +100,17 @@ export type SearchIndexOccurrenceDependencies = Readonly<{
   loadRecordSnapshot: (
     occurrence: EventOccurrenceEnvelope,
   ) => Promise<SearchRecordSnapshot | undefined>;
-  storeDocument: (command: SearchDocumentStoreCommand) => Promise<SearchDocumentStoreOutcome>;
+  storeDocument: (
+    command: SearchDocumentStoreCommand,
+    occurrence: EventOccurrenceEnvelope,
+  ) => Promise<SearchDocumentStoreOutcome>;
 }>;
 
 export type SearchOccurrenceSkipReason =
-  "not_indexable_event" | "record_type_unavailable" | "record_unavailable";
+  | "not_indexable_event"
+  | "record_type_not_searchable"
+  | "record_type_unavailable"
+  | "record_unavailable";
 
 export type SearchIndexOccurrenceOutcome =
   | Readonly<{ kind: "skipped"; reason: SearchOccurrenceSkipReason }>
@@ -382,6 +388,8 @@ const indexOccurrence = async (
 
   const policy = await dependencies.loadPolicy(occurrence);
   const configuration = searchableFieldConfigurationFor(recordType, policy);
+  if (configuration.fields.length === 0)
+    return occurrenceResult(occurrence, { kind: "skipped", reason: "record_type_not_searchable" });
 
   const snapshot = await dependencies.loadRecordSnapshot(occurrence);
   if (snapshot === undefined)
@@ -397,7 +405,7 @@ const indexOccurrence = async (
   if (!built.success) return occurrenceResult(occurrence, { kind: "refused", code: built.code });
 
   const command = searchDocumentStoreCommand(built.output);
-  const storeOutcome = await dependencies.storeDocument(command);
+  const storeOutcome = await dependencies.storeDocument(command, occurrence);
   return occurrenceResult(occurrence, { kind: "indexed", command, storeOutcome });
 };
 
@@ -628,10 +636,19 @@ export const createSearchEventConsumer = (
         case "indexed":
           return { outcome: "completed" };
         case "skipped":
-          return result.outcome.reason === "record_unavailable" ||
+          if (
+            result.outcome.reason === "record_unavailable" ||
             result.outcome.reason === "record_type_unavailable"
-            ? { outcome: "retryable_failure", failureCode: "transient_dependency_unavailable" }
-            : { outcome: "completed" };
+          ) {
+            console.error(
+              `[search] occurrence ${result.occurrenceId} not indexed yet: ${result.outcome.reason}`,
+            );
+            return {
+              outcome: "retryable_failure",
+              failureCode: "transient_dependency_unavailable",
+            };
+          }
+          return { outcome: "completed" };
         case "refused":
           return result.outcome.code === "shared_source_record"
             ? { outcome: "terminal_failure", failureCode: "authorization_denied" }
