@@ -35,7 +35,7 @@ const REMOVAL_STAGES: readonly FileRemovalStage[] = Object.freeze([
 
 const STAGE_CLAIM_MILLISECONDS = 5 * 60 * 1_000;
 
-export type FileRemovalIntent = Readonly<{
+type FileRemovalIntent = Readonly<{
   intentFingerprint: Fingerprint;
   deletionKey: string;
   correlationId: CorrelationId;
@@ -51,13 +51,13 @@ export type FileRemovalIntent = Readonly<{
   startedAt: string;
 }>;
 
-export type FileRemovalStageClaim = Readonly<{
+type FileRemovalStageClaim = Readonly<{
   claimId: PlatformId;
   operationKey: string;
   expiresAt: string;
 }>;
 
-export type FileRemovalProgressRecord = Readonly<{
+type FileRemovalProgressRecord = Readonly<{
   kind: "progress";
   intent: FileRemovalIntent;
   version: number;
@@ -68,23 +68,23 @@ export type FileRemovalProgressRecord = Readonly<{
   updatedAt: string;
 }>;
 
-export type FileRemovalTerminalRecord = Readonly<{
+type FileRemovalTerminalRecord = Readonly<{
   kind: "terminal";
   intent: FileRemovalIntent;
   version: number;
   receipt: FileObjectRemovalReceipt;
 }>;
 
-export type FileRemovalPersistedRecord =
+type FileRemovalPersistedRecord =
   | FileRemovalProgressRecord
   | FileRemovalTerminalRecord;
 
-export type FileRemovalFileSnapshot = Readonly<{
+type FileRemovalFileSnapshot = Readonly<{
   revision: Revision;
   fileRecord: FileRecord;
 }>;
 
-export type FileRemovalStageClaimResult =
+type FileRemovalStageClaimResult =
   | Readonly<{
       outcome: "claimed";
       record: FileRemovalProgressRecord;
@@ -149,7 +149,7 @@ export type FileRemovalRepository = Readonly<{
   }>): Promise<FileRemovalTerminalRecord>;
 }>;
 
-export type FileRemovalEffectResult = Readonly<{
+type FileRemovalEffectResult = Readonly<{
   outcome: "removed" | "already_absent";
 }>;
 
