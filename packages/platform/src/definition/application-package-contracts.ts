@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { applicationRoleSchema } from "./application-contracts";
 import {
-  applicationCompilationOutputV2Schema,
+  applicationCompilationOutputSchema,
   applicationToolBundleSchema,
-  definitionResolutionSnapshotV2Schema,
-  definitionResolutionSnapshotV3Schema,
-  moduleCompilationOutputV3Schema,
+  definitionResolutionSnapshotSchema,
+  moduleCompilationOutputSchema,
 } from "./definition-compilation-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
@@ -24,20 +23,20 @@ import {
   revisionSchema,
   storageContractIdSchema,
 } from "../catalogue/identifiers";
-import { moduleSystemProjectionV3Schema } from "./module-contracts-v3";
+import { moduleSystemProjectionSchema } from "./module-contracts";
 import {
   permissionDeclarationSchema,
   permissionRecordScopeSchema,
   permissionSavedConditionRestrictionSchema,
 } from "../access/permissions";
 import {
-  customComponentDataContractV2Schema,
-  customComponentEventV2Schema,
-  customComponentOwnerV2Schema,
-  customComponentBundleV2Schema,
-  platformBlockReleaseV2Schema,
-  platformThemeReleaseV2Schema,
-} from "./application-composition-v2";
+  customComponentDataContractSchema,
+  customComponentEventSchema,
+  customComponentOwnerSchema,
+  customComponentBundleSchema,
+  platformBlockReleaseSchema,
+  platformThemeReleaseSchema,
+} from "./application-composition";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const applicationReleaseIdentitySchema = z
@@ -67,8 +66,8 @@ const moduleReleaseIdentitySchema = z
 export const applicationPackageApplicationEvidenceSchema = z
   .object({
     release: applicationReleaseIdentitySchema,
-    compilationOutput: applicationCompilationOutputV2Schema,
-    resolutionSnapshot: definitionResolutionSnapshotV2Schema,
+    compilationOutput: applicationCompilationOutputSchema,
+    resolutionSnapshot: definitionResolutionSnapshotSchema,
     dependencyManifest: z.array(exactDefinitionDependencySchema).max(10_000),
   })
   .strict();
@@ -76,8 +75,8 @@ export const applicationPackageApplicationEvidenceSchema = z
 export const applicationPackageModuleEvidenceSchema = z
   .object({
     release: moduleReleaseIdentitySchema,
-    compilationOutput: moduleCompilationOutputV3Schema,
-    resolutionSnapshot: definitionResolutionSnapshotV3Schema,
+    compilationOutput: moduleCompilationOutputSchema,
+    resolutionSnapshot: definitionResolutionSnapshotSchema,
     dependencyManifest: z.array(exactDefinitionDependencySchema).max(10_000),
   })
   .strict();
@@ -87,8 +86,8 @@ export const applicationPackageManifestInputSchema = z
   .object({
     application: applicationPackageApplicationEvidenceSchema,
     modules: z.array(applicationPackageModuleEvidenceSchema).max(10_000),
-    selectedBlockReleases: z.array(platformBlockReleaseV2Schema).max(10_000),
-    selectedThemeRelease: platformThemeReleaseV2Schema,
+    selectedBlockReleases: z.array(platformBlockReleaseSchema).max(10_000),
+    selectedThemeRelease: platformThemeReleaseSchema,
   })
   .strict();
 
@@ -103,10 +102,16 @@ const roleDeclarationSchema = z
   .superRefine((value, context) => {
     if (
       value.declaration.permissionKeys.some(
-        (key, index) => index > 0 && compareCanonicalStrings(value.declaration.permissionKeys[index - 1]!, key) >= 0,
+        (key, index) =>
+          index > 0 &&
+          compareCanonicalStrings(value.declaration.permissionKeys[index - 1]!, key) >= 0,
       )
     )
-      context.addIssue({ code: "custom", path: ["declaration", "permissionKeys"], message: "Role permissions must use canonical order" });
+      context.addIssue({
+        code: "custom",
+        path: ["declaration", "permissionKeys"],
+        message: "Role permissions must use canonical order",
+      });
   });
 
 /**
@@ -127,12 +132,16 @@ export const applicationPackagePermissionDeclarationSchema = z.intersection(
           savedCondition: z
             .object({
               ...permissionSavedConditionRestrictionSchema.shape,
-              parameterBindings: z.array(
-                z.object({
-                  key: builderKeySchema,
-                  source: z.literal("current_organization_account_id"),
-                }).strict(),
-              ).max(10_000),
+              parameterBindings: z
+                .array(
+                  z
+                    .object({
+                      key: builderKeySchema,
+                      source: z.literal("current_organization_account_id"),
+                    })
+                    .strict(),
+                )
+                .max(10_000),
             })
             .strict()
             .optional(),
@@ -163,19 +172,28 @@ const storageDeclarationSchema = z
     storageContractId: storageContractIdSchema,
     storageScope: z.enum(["organization_shared", "application_contained"]),
     storageKind: z.enum(["generated", "system_projection"]),
-    systemProjection: moduleSystemProjectionV3Schema.optional(),
+    systemProjection: moduleSystemProjectionSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
     if ((value.storageKind === "system_projection") !== (value.systemProjection !== undefined))
-      context.addIssue({ code: "custom", path: ["systemProjection"], message: "Storage meaning must match its projection declaration" });
+      context.addIssue({
+        code: "custom",
+        path: ["systemProjection"],
+        message: "Storage meaning must match its projection declaration",
+      });
     if (
       value.systemProjection !== undefined &&
-      [value.systemProjection.filterableFieldIds, value.systemProjection.sortableFieldIds].some((ids) =>
-        ids.some((id, index) => index > 0 && compareCanonicalStrings(ids[index - 1]!, id) >= 0),
+      [value.systemProjection.filterableFieldIds, value.systemProjection.sortableFieldIds].some(
+        (ids) =>
+          ids.some((id, index) => index > 0 && compareCanonicalStrings(ids[index - 1]!, id) >= 0),
       )
     )
-      context.addIssue({ code: "custom", path: ["systemProjection"], message: "Projection field sets must use canonical order" });
+      context.addIssue({
+        code: "custom",
+        path: ["systemProjection"],
+        message: "Projection field sets must use canonical order",
+      });
   });
 
 const blockDeclarationSchema = z
@@ -187,11 +205,11 @@ const blockDeclarationSchema = z
     catalogueFingerprint: fingerprintSchema,
     customComponent: z
       .object({
-        owner: customComponentOwnerV2Schema,
-        events: z.array(customComponentEventV2Schema).max(50),
-        dataContract: customComponentDataContractV2Schema,
+        owner: customComponentOwnerSchema,
+        events: z.array(customComponentEventSchema).max(50),
+        dataContract: customComponentDataContractSchema,
         textAlternative: z.string().min(1).max(200),
-        bundle: customComponentBundleV2Schema,
+        bundle: customComponentBundleSchema,
       })
       .strict()
       .optional(),
@@ -199,8 +217,16 @@ const blockDeclarationSchema = z
   .strict()
   .superRefine((value, context) => {
     const hosts = value.customComponent?.bundle.allowedHosts;
-    if (hosts?.some((host, index) => index > 0 && compareCanonicalStrings(hosts[index - 1]!, host) >= 0))
-      context.addIssue({ code: "custom", path: ["customComponent", "bundle", "allowedHosts"], message: "Component hosts must use canonical order" });
+    if (
+      hosts?.some(
+        (host, index) => index > 0 && compareCanonicalStrings(hosts[index - 1]!, host) >= 0,
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["customComponent", "bundle", "allowedHosts"],
+        message: "Component hosts must use canonical order",
+      });
   });
 
 const themeDeclarationSchema = z
@@ -221,7 +247,10 @@ export const applicationPackageDependencySubject = (dependency: PackageDependenc
     return `platform_theme:${entry.catalogueThemeId.toLowerCase()}`;
   if (entry.kind === "platform_block" && typeof entry.blockId === "string")
     return `platform_block:${entry.blockId.toLowerCase()}@${String(entry.releaseVersion)}`;
-  if ((entry.kind === "module" || entry.kind === "connection_type") && typeof entry.rootId === "string")
+  if (
+    (entry.kind === "module" || entry.kind === "connection_type") &&
+    typeof entry.rootId === "string"
+  )
     return `${String(entry.kind)}:${entry.rootId.toLowerCase()}`;
   if (typeof entry.applicationRootId === "string") {
     const target =
@@ -242,7 +271,11 @@ export const applicationPackageDependencySubject = (dependency: PackageDependenc
   }
   if (typeof entry.moduleRootId === "string")
     return `${String(entry.kind)}:${entry.moduleRootId.toLowerCase()}:${String(entry.queryId ?? entry.key).toLowerCase()}`;
-  if (entry.kind === "protected_operation" && typeof entry.operation === "object" && entry.operation !== null) {
+  if (
+    entry.kind === "protected_operation" &&
+    typeof entry.operation === "object" &&
+    entry.operation !== null
+  ) {
     const operation = entry.operation as Record<string, unknown>;
     const owner = operation.owner as Record<string, unknown> | undefined;
     const ownerId = owner?.applicationRootId ?? owner?.moduleRootId ?? owner?.serviceId;
@@ -263,19 +296,13 @@ export const applicationPackageManifestSchema = z
     permissions: z.array(permissionDeclarationEntrySchema).max(10_000),
     storage: z.array(storageDeclarationSchema).max(10_000),
     flows: z.array(flowDeclarationSchema).max(10_000),
-    tools: z
-      .object({ bundle: applicationToolBundleSchema, checksum: fingerprintSchema })
-      .strict(),
+    tools: z.object({ bundle: applicationToolBundleSchema, checksum: fingerprintSchema }).strict(),
     blocks: z.array(blockDeclarationSchema).max(10_000),
     componentHosts: z.array(z.string().min(1).max(253)).max(10_000),
     componentsPresent: z.boolean(),
     theme: themeDeclarationSchema,
-    assets: z
-      .object({ support: z.literal("unsupported"), referenceCount: z.literal(0) })
-      .strict(),
-    seeds: z
-      .object({ support: z.literal("unsupported"), recordCount: z.literal(0) })
-      .strict(),
+    assets: z.object({ support: z.literal("unsupported"), referenceCount: z.literal(0) }).strict(),
+    seeds: z.object({ support: z.literal("unsupported"), recordCount: z.literal(0) }).strict(),
     scripts: z
       .object({
         support: z.literal("unsupported"),
@@ -294,9 +321,19 @@ export const applicationPackageManifestSchema = z
     ) => {
       const keys = values.map(keyOf);
       if (new Set(keys).size !== keys.length)
-        context.addIssue({ code: "custom", path: [path], message: "Manifest subjects must be unique" });
-      if (keys.some((key, index) => index > 0 && compareCanonicalStrings(keys[index - 1]!, key) >= 0))
-        context.addIssue({ code: "custom", path: [path], message: "Manifest subjects must use canonical order" });
+        context.addIssue({
+          code: "custom",
+          path: [path],
+          message: "Manifest subjects must be unique",
+        });
+      if (
+        keys.some((key, index) => index > 0 && compareCanonicalStrings(keys[index - 1]!, key) >= 0)
+      )
+        context.addIssue({
+          code: "custom",
+          path: [path],
+          message: "Manifest subjects must use canonical order",
+        });
     };
     checkUniqueCanonical(manifest.modules, (module) => module.rootId.toLowerCase(), "modules");
     checkUniqueCanonical(
@@ -306,7 +343,8 @@ export const applicationPackageManifestSchema = z
     );
     checkUniqueCanonical(
       manifest.permissions,
-      (entry) => `${entry.owner.rootId.toLowerCase()}:${entry.declaration.permissionId.toLowerCase()}`,
+      (entry) =>
+        `${entry.owner.rootId.toLowerCase()}:${entry.declaration.permissionId.toLowerCase()}`,
       "permissions",
     );
     checkUniqueCanonical(
@@ -325,78 +363,159 @@ export const applicationPackageManifestSchema = z
       "blocks",
     );
     checkUniqueCanonical(manifest.componentHosts, (host) => host, "componentHosts");
-    checkUniqueCanonical(manifest.dependencies, applicationPackageDependencySubject, "dependencies");
-    if (manifest.componentsPresent !== manifest.blocks.some((block) => block.customComponent !== undefined))
-      context.addIssue({ code: "custom", path: ["componentsPresent"], message: "Component presence must match selected block evidence" });
-
-    const moduleDependencies = manifest.dependencies.filter(
-      (dependency): dependency is Extract<PackageDependency, { kind: "module" }> => dependency.kind === "module",
-    );
-    const moduleByIdentity = new Map<string, z.infer<typeof moduleReleaseIdentitySchema>>(
-      manifest.modules.map((module) => [`${module.rootId.toLowerCase()}@${module.releaseVersion}`, module] as const),
+    checkUniqueCanonical(
+      manifest.dependencies,
+      applicationPackageDependencySubject,
+      "dependencies",
     );
     if (
-      manifest.modules.some((module) => module.organizationId.toLowerCase() !== manifest.application.organizationId.toLowerCase()) ||
+      manifest.componentsPresent !==
+      manifest.blocks.some((block) => block.customComponent !== undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["componentsPresent"],
+        message: "Component presence must match selected block evidence",
+      });
+
+    const moduleDependencies = manifest.dependencies.filter(
+      (dependency): dependency is Extract<PackageDependency, { kind: "module" }> =>
+        dependency.kind === "module",
+    );
+    const moduleByIdentity = new Map<string, z.infer<typeof moduleReleaseIdentitySchema>>(
+      manifest.modules.map(
+        (module) => [`${module.rootId.toLowerCase()}@${module.releaseVersion}`, module] as const,
+      ),
+    );
+    if (
+      manifest.modules.some(
+        (module) =>
+          module.organizationId.toLowerCase() !== manifest.application.organizationId.toLowerCase(),
+      ) ||
       moduleDependencies.length !== manifest.modules.length ||
       moduleDependencies.some((dependency) => {
-        const module = moduleByIdentity.get(`${dependency.rootId.toLowerCase()}@${dependency.releaseVersion}`);
-        return module === undefined ||
-          module.organizationId.toLowerCase() !== manifest.application.organizationId.toLowerCase() ||
+        const module = moduleByIdentity.get(
+          `${dependency.rootId.toLowerCase()}@${dependency.releaseVersion}`,
+        );
+        return (
+          module === undefined ||
+          module.organizationId.toLowerCase() !==
+            manifest.application.organizationId.toLowerCase() ||
           module.rootId.toLowerCase() !== dependency.rootId.toLowerCase() ||
           module.releaseRevision !== dependency.releaseRevision ||
           module.releaseVersion !== dependency.releaseVersion ||
           module.contentFingerprint !== dependency.contentFingerprint ||
-          module.resolutionFingerprint !== dependency.resolutionFingerprint;
+          module.resolutionFingerprint !== dependency.resolutionFingerprint
+        );
       })
     )
-      context.addIssue({ code: "custom", path: ["modules"], message: "Module closure must match exact dependency evidence" });
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "Module closure must match exact dependency evidence",
+      });
 
     const ownerIsPresent = (owner: z.infer<typeof ownerSchema>): boolean =>
       owner.kind === "application"
         ? canonicalJson(owner) === canonicalJson(manifest.application)
         : manifest.modules.some((module) => canonicalJson(owner) === canonicalJson(module));
-    if (manifest.roles.some((entry) => canonicalJson(entry.owner) !== canonicalJson(manifest.application)))
-      context.addIssue({ code: "custom", path: ["roles"], message: "Application roles must retain their exact owner" });
+    if (
+      manifest.roles.some(
+        (entry) => canonicalJson(entry.owner) !== canonicalJson(manifest.application),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["roles"],
+        message: "Application roles must retain their exact owner",
+      });
     if (manifest.permissions.some((entry) => !ownerIsPresent(entry.owner)))
-      context.addIssue({ code: "custom", path: ["permissions"], message: "Permissions must retain an exact package owner" });
+      context.addIssue({
+        code: "custom",
+        path: ["permissions"],
+        message: "Permissions must retain an exact package owner",
+      });
     if (manifest.flows.some((entry) => !ownerIsPresent(entry.owner)))
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flows must retain an exact package owner" });
-    if (manifest.storage.some((entry) => entry.owner.kind !== "module" || !ownerIsPresent(entry.owner)))
-      context.addIssue({ code: "custom", path: ["storage"], message: "Storage declarations must retain an exact Module owner" });
+      context.addIssue({
+        code: "custom",
+        path: ["flows"],
+        message: "Flows must retain an exact package owner",
+      });
+    if (
+      manifest.storage.some(
+        (entry) => entry.owner.kind !== "module" || !ownerIsPresent(entry.owner),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["storage"],
+        message: "Storage declarations must retain an exact Module owner",
+      });
     const permissionKeys = new Set(manifest.permissions.map((entry) => entry.declaration.key));
-    if (manifest.roles.some((entry) => entry.declaration.permissionKeys.some((key) => !permissionKeys.has(key))))
-      context.addIssue({ code: "custom", path: ["roles"], message: "Role selections must name declared package permissions" });
+    if (
+      manifest.roles.some((entry) =>
+        entry.declaration.permissionKeys.some((key) => !permissionKeys.has(key)),
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["roles"],
+        message: "Role selections must name declared package permissions",
+      });
 
     const blockDependencies = manifest.dependencies.filter(
-      (dependency): dependency is Extract<PackageDependency, { kind: "platform_block" }> => dependency.kind === "platform_block",
+      (dependency): dependency is Extract<PackageDependency, { kind: "platform_block" }> =>
+        dependency.kind === "platform_block",
     );
     if (
       blockDependencies.length !== manifest.blocks.length ||
-      blockDependencies.some((dependency) => !manifest.blocks.some((block) =>
-        block.blockId.toLowerCase() === dependency.blockId.toLowerCase() &&
-        block.releaseVersion === dependency.releaseVersion &&
-        block.contentFingerprint === dependency.contentFingerprint &&
-        block.catalogueFingerprint === dependency.catalogueFingerprint,
-      ))
+      blockDependencies.some(
+        (dependency) =>
+          !manifest.blocks.some(
+            (block) =>
+              block.blockId.toLowerCase() === dependency.blockId.toLowerCase() &&
+              block.releaseVersion === dependency.releaseVersion &&
+              block.contentFingerprint === dependency.contentFingerprint &&
+              block.catalogueFingerprint === dependency.catalogueFingerprint,
+          ),
+      )
     )
-      context.addIssue({ code: "custom", path: ["blocks"], message: "Block declarations must match exact selected releases" });
-    const themeDependencies = manifest.dependencies.filter((dependency) => dependency.kind === "platform_theme");
+      context.addIssue({
+        code: "custom",
+        path: ["blocks"],
+        message: "Block declarations must match exact selected releases",
+      });
+    const themeDependencies = manifest.dependencies.filter(
+      (dependency) => dependency.kind === "platform_theme",
+    );
     if (
       themeDependencies.length !== 1 ||
-      themeDependencies[0]!.catalogueThemeId.toLowerCase() !== manifest.theme.catalogueThemeId.toLowerCase() ||
+      themeDependencies[0]!.catalogueThemeId.toLowerCase() !==
+        manifest.theme.catalogueThemeId.toLowerCase() ||
       themeDependencies[0]!.releaseVersion !== manifest.theme.releaseVersion ||
       themeDependencies[0]!.contentFingerprint !== manifest.theme.contentFingerprint ||
       themeDependencies[0]!.catalogueFingerprint !== manifest.theme.catalogueFingerprint
     )
-      context.addIssue({ code: "custom", path: ["theme"], message: "Theme declaration must match exact selected release evidence" });
-    const declaredHosts = [...new Set(manifest.blocks.flatMap((block) => block.customComponent?.bundle.allowedHosts ?? []))]
-      .sort(compareCanonicalStrings);
+      context.addIssue({
+        code: "custom",
+        path: ["theme"],
+        message: "Theme declaration must match exact selected release evidence",
+      });
+    const declaredHosts = [
+      ...new Set(
+        manifest.blocks.flatMap((block) => block.customComponent?.bundle.allowedHosts ?? []),
+      ),
+    ].sort(compareCanonicalStrings);
     if (canonicalJson(declaredHosts) !== canonicalJson(manifest.componentHosts))
-      context.addIssue({ code: "custom", path: ["componentHosts"], message: "Component hosts must be the canonical selected-release union" });
+      context.addIssue({
+        code: "custom",
+        path: ["componentHosts"],
+        message: "Component hosts must be the canonical selected-release union",
+      });
   });
 
 export type ApplicationPackageManifestInput = z.infer<typeof applicationPackageManifestInputSchema>;
 export type ApplicationPackageManifest = z.infer<typeof applicationPackageManifestSchema>;
 
 // Keep these imported declarations anchored to the exact canonical storage and block contracts.
-export type ApplicationPackageSystemProjection = z.infer<typeof moduleSystemProjectionV3Schema>;
+export type ApplicationPackageSystemProjection = z.infer<typeof moduleSystemProjectionSchema>;

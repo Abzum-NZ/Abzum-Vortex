@@ -1,6 +1,6 @@
 "use client";
 
-import type { BlockPropertyValueV2Contract } from "@vortex/platform/schema";
+import type { BlockPropertyValueContract } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
@@ -17,7 +17,7 @@ export type ApplicationSearchRuntime =
       more: boolean;
     }>;
 
-type Settings = Readonly<Record<string, BlockPropertyValueV2Contract>>;
+type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
 
 const textSetting = (settings: Settings, key: string): string => {
   const value = settings[key];

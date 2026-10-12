@@ -2,17 +2,17 @@
 
 import { randomUUID } from "node:crypto";
 import {
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
   PLATFORM_THEME_RELEASE_2_0_0,
   PLATFORM_THEME_RELEASE_3_0_0,
-  sourceThemeTokenValueV2Schema,
+  sourceThemeTokenValueSchema,
   translateDefinitionRuleFailures,
-  type ApplicationContentV2,
+  type ApplicationContent,
 } from "@vortex/platform/schema";
-import { fingerprintCanonicalValue, materialiseApplicationThemeV2, validateDefinitionSource } from "@web/platform-server";
+import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
 import {
   parseStudioAppearanceRequest,
   studioAppearanceFailureCodes,
@@ -95,7 +95,7 @@ export async function resolveStudioApplicationConditionContext(
 
 /** A browser document is authored input, never authority or evidence of an installed Module. */
 export async function createStudioApplication(organizationId: string, candidate: unknown) {
-  const source = applicationSourceDocumentV2Schema.safeParse(candidate);
+  const source = applicationSourceDocumentSchema.safeParse(candidate);
   if (!source.success || !validateDefinitionSource(source.data).valid)
     return { kind: "refused" } as const;
   return createHumanApplicationDraft(organizationId, { source: source.data });
@@ -132,9 +132,9 @@ export async function validateStudioApplicationAppearance(
       item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version &&
       item.contentFingerprint === pin.content_fingerprint && item.catalogueFingerprint === pin.catalogue_fingerprint);
     if (release === undefined) return { kind: "refused" };
-    const inherited = materialiseApplicationThemeV2({ ...authored, token_overrides: {} }, draft.key, release);
+    const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
     if (!inherited.valid) return { kind: "refused" };
-    const sourceValue = (value: ApplicationContentV2["theme"]["tokens"][string]): StudioThemeTokenValue => {
+    const sourceValue = (value: ApplicationContent["theme"]["tokens"][string]): StudioThemeTokenValue => {
       switch (value.kind) {
         case "color_pair": return { kind: value.kind, light: value.light, dark: value.dark };
         case "typography": return { kind: value.kind, family: value.family, size_rem: value.sizeRem,
@@ -147,10 +147,10 @@ export async function validateStudioApplicationAppearance(
       }
     };
     const tokens = Object.entries(inherited.theme.tokens).sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, value]) => ({ key, inherited: sourceThemeTokenValueV2Schema.parse(sourceValue(value)) }));
+      .map(([key, value]) => ({ key, inherited: sourceThemeTokenValueSchema.parse(sourceValue(value)) }));
     const keys = new Set(tokens.map((token) => token.key));
     const theme = { ...authored, token_overrides: request.tokenOverrides };
-    const result = materialiseApplicationThemeV2(theme, draft.key, release);
+    const result = materialiseApplicationTheme(theme, draft.key, release);
     const failures: StudioAppearanceFailure[] = [];
     if (!result.valid) {
       // The finite registered token set bounds every engine pair and per-token check. Refuse an

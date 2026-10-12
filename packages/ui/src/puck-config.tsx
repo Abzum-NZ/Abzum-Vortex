@@ -63,13 +63,13 @@ import {
   TEXT_INPUT_BLOCK_RELEASE,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   VIEW_FILTER_BLOCK_RELEASE,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
-  type BlockPlacementV2Contract,
-  type BlockPropertySchemaV2Contract,
-  type BlockPropertyValueV2Contract,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  type BlockPlacementContract,
+  type BlockPropertySchemaContract,
+  type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
   type ProjectedNavigation,
 } from "@vortex/platform/schema";
 import { Checkbox } from "./components/checkbox";
@@ -85,7 +85,7 @@ import {
   LAYOUT_CLASS_NAMES,
   RESPONSIVE_BREAKPOINT_ORDER,
   slotGapLength,
-  type ResponsivePlacementLayoutsV2,
+  type ResponsivePlacementLayouts,
   type SlotGapName,
 } from "./layout-styles";
 import { projectedAvailability } from "./placement-availability";
@@ -181,9 +181,9 @@ export type VortexPuckMetadata = Readonly<{
  * adapter writes, so a definition placement round-trips through Puck data without loss.
  */
 export type VortexPlacementMeta = Readonly<{
-  block: BlockPlacementV2Contract["block"];
-  responsive: BlockPlacementV2Contract["responsive"];
-  themeOverrides: BlockPlacementV2Contract["themeOverrides"];
+  block: BlockPlacementContract["block"];
+  responsive: BlockPlacementContract["responsive"];
+  themeOverrides: BlockPlacementContract["themeOverrides"];
   /** Authored slot order retained for editing; preview Puck arrays use the selected breakpoint. */
   order?: Readonly<{
     desktop: readonly string[];
@@ -194,7 +194,7 @@ export type VortexPlacementMeta = Readonly<{
   unavailableReason?: "operation_unavailable";
 }>;
 
-type PlacementSettings = Readonly<Record<string, BlockPropertyValueV2Contract>>;
+type PlacementSettings = Readonly<Record<string, BlockPropertyValueContract>>;
 
 /** Props every component of the config receives. Slot props are `SlotComponent` functions. */
 export type VortexPuckComponentProps = Readonly<{
@@ -272,7 +272,7 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   [VIEW_FILTER_BLOCK_RELEASE.rendererKey, ViewFilter],
 ]);
 
-const implementationFor = (release: PlatformBlockReleaseV2): PlatformComponentRenderer => {
+const implementationFor = (release: PlatformBlockRelease): PlatformComponentRenderer => {
   if (release.customComponent !== undefined) return CustomComponentHost;
   const implementation = IMPLEMENTATIONS.get(release.rendererKey);
   if (implementation === undefined)
@@ -288,7 +288,7 @@ const implementationFor = (release: PlatformBlockReleaseV2): PlatformComponentRe
 // Explicit layout and spacing
 // ---------------------------------------------------------------------------------------------
 
-const choice = (value: string): BlockPropertyValueV2Contract => ({ kind: "choice", value });
+const choice = (value: string): BlockPropertyValueContract => ({ kind: "choice", value });
 
 /**
  * The layout and spacing a placement receives when it is inserted, and when a stored placement
@@ -317,8 +317,8 @@ const isSlotGapName = (value: string): value is SlotGapName =>
   value === "none" || value === "small" || value === "medium" || value === "large";
 
 /** The explicit layout settings a release declares, as a placement's default settings. */
-const defaultSettingsFor = (release: PlatformBlockReleaseV2): PlacementSettings => {
-  const defaults: Record<string, BlockPropertyValueV2Contract> = {};
+const defaultSettingsFor = (release: PlatformBlockRelease): PlacementSettings => {
+  const defaults: Record<string, BlockPropertyValueContract> = {};
   const layout = LAYOUT_DEFAULTS.get(release.rendererKey) ?? {};
   for (const property of release.properties) {
     if (property.defaultValue !== undefined) defaults[property.key] = property.defaultValue;
@@ -335,10 +335,10 @@ const defaultSettingsFor = (release: PlatformBlockReleaseV2): PlacementSettings 
 
 /** A placement's settings with the config's explicit defaults beneath the authored values. */
 export const resolveEffectiveSettings = (
-  release: PlatformBlockReleaseV2,
+  release: PlatformBlockRelease,
   settings: PlacementSettings,
 ): PlacementSettings => {
-  const effective: Record<string, BlockPropertyValueV2Contract> = {
+  const effective: Record<string, BlockPropertyValueContract> = {
     ...defaultSettingsFor(release),
   };
   // The editor lists every declared property, so an unset one can arrive as an explicit undefined.
@@ -352,7 +352,7 @@ export const resolveEffectiveSettings = (
  * `gap` setting, or the config's constant for blocks that declare none.
  */
 export const resolveSlotGap = (
-  release: PlatformBlockReleaseV2,
+  release: PlatformBlockRelease,
   settings: PlacementSettings,
 ): SlotGapName => {
   if (!release.properties.some((property) => property.key === "gap")) return UNDECLARED_SLOT_GAP;
@@ -365,7 +365,7 @@ export const resolveSlotGap = (
 // Fields
 // ---------------------------------------------------------------------------------------------
 
-type TaggedValue = BlockPropertyValueV2Contract | undefined;
+type TaggedValue = BlockPropertyValueContract | undefined;
 
 const jsonText = (value: TaggedValue): string =>
   value === undefined ? "" : JSON.stringify(value, null, 2);
@@ -390,7 +390,7 @@ function JsonValueEditor(props: {
         const text = event.currentTarget.value.trim();
         if (text.length === 0) return props.onChange(undefined);
         try {
-          props.onChange(JSON.parse(text) as BlockPropertyValueV2Contract);
+          props.onChange(JSON.parse(text) as BlockPropertyValueContract);
         } catch {
           event.currentTarget.value = jsonText(props.value);
         }
@@ -400,7 +400,7 @@ function JsonValueEditor(props: {
 }
 
 /** One property's Puck field: an editor for exactly that property's kind-tagged value. */
-const propertyField = (property: BlockPropertySchemaV2Contract): Field => ({
+const propertyField = (property: BlockPropertySchemaContract): Field => ({
   type: "custom",
   label: property.label,
   render: ({ id, name, value, onChange, readOnly }): ReactElement => (
@@ -413,7 +413,7 @@ const propertyField = (property: BlockPropertySchemaV2Contract): Field => ({
 
 /** The control that edits one property's kind-tagged value. */
 const renderPropertyEditor = (
-  property: BlockPropertySchemaV2Contract,
+  property: BlockPropertySchemaContract,
   {
     id,
     name,
@@ -531,14 +531,14 @@ const renderPropertyEditor = (
 
 /** The names of the slot fields a placement of this release has, given its settings. */
 const declaredSlotKeys = (
-  release: PlatformBlockReleaseV2,
+  release: PlatformBlockRelease,
   settings: PlacementSettings,
 ): readonly string[] =>
   release.slots.flatMap((slot) =>
     slot.repeats === undefined
       ? [slot.key]
-      : repeatableSlotItemIdentitiesV2(slot, settings).map((identity) =>
-          repeatableSlotKeyV2(slot.key, identity),
+      : repeatableSlotItemIdentities(slot, settings).map((identity) =>
+          repeatableSlotKey(slot.key, identity),
         ),
   );
 
@@ -595,7 +595,7 @@ function PlacementBlock(props: {
       ...(vortex.availability === undefined
         ? {}
         : { availability: vortex.availability, unavailableReason: vortex.unavailableReason }),
-    } as unknown as BlockPlacementV2Contract,
+    } as unknown as BlockPlacementContract,
     location,
   );
   const suppliedInputs = ownEntry(metadataIn.runtimeInputs, placementId);
@@ -651,7 +651,7 @@ function PlacementBlock(props: {
     responsive && !pageEmitsCss
       ? computeResponsiveSelectorCss(
           `[data-vortex-wrapper-scope="${wrapperScope}"]`,
-          vortex.responsive as ResponsivePlacementLayoutsV2,
+          vortex.responsive as ResponsivePlacementLayouts,
           true,
         )
       : undefined;
@@ -750,7 +750,7 @@ type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
  * the placement's own `vortex.block` selects the exact release at render time.
  */
 export function createVortexPuckConfig(registry: PlatformComponentRegistry): Config {
-  const newestByKey = new Map<string, PlatformBlockReleaseV2>();
+  const newestByKey = new Map<string, PlatformBlockRelease>();
   for (const { metadata } of registry.list()) {
     const current = newestByKey.get(metadata.rendererKey);
     if (
@@ -767,7 +767,7 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
     keysByCategory.set(release.paletteGroup, keys);
   }
 
-  const buildFields = (release: PlatformBlockReleaseV2, settings: PlacementSettings) => {
+  const buildFields = (release: PlatformBlockRelease, settings: PlacementSettings) => {
     const fields: Record<string, Field> = {
       settings: {
         type: "object",
@@ -784,8 +784,8 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
       const keys =
         slot.repeats === undefined
           ? [slot.key]
-          : repeatableSlotItemIdentitiesV2(slot, settings).map((identity) =>
-              repeatableSlotKeyV2(slot.key, identity),
+          : repeatableSlotItemIdentities(slot, settings).map((identity) =>
+              repeatableSlotKey(slot.key, identity),
             );
       for (const key of keys) fields[key] = { type: "slot", label: slot.label, allow };
     }

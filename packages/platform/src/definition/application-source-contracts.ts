@@ -23,13 +23,13 @@ import {
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "../access/permissions";
 import {
-  sourceGuidedFormPageCompositionV2Schema,
-  sourceApplicationShellV2Schema,
-  sourceApplicationThemeV2Schema,
-  sourcePageCompositionV2Schema,
-  sourcePlacementEntriesV2,
-  sourcePlatformBlockDependenciesV2Schema,
-} from "./application-composition-v2";
+  sourceGuidedFormPageCompositionSchema,
+  sourceApplicationShellSchema,
+  sourceApplicationThemeSchema,
+  sourcePageCompositionSchema,
+  sourcePlacementEntries,
+  sourcePlatformBlockDependenciesSchema,
+} from "./application-composition";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
@@ -195,35 +195,35 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
 );
 // Retired page settings (#1011): accepted as opaque, unused JSON so stored authored
 // sources keep their fingerprints and older sources still parse; never compiled.
-const retiredSourcePageSettingV2Schema = jsonValueSchema.optional();
+const retiredSourcePageSettingSchema = jsonValueSchema.optional();
 
-const sourcePageV2Common = {
+const sourcePageCommon = {
   id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
   key: sourceProvenanceUnchanged(builderKeySchema),
   name: sourceProvenanceUnchanged(labelSchema),
   replaces_page: sourceProvenanceTarget(sourceAliasSchema.optional(), ["replacementOfPageId"]),
-  states: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
-  standard_page_replacement: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
+  states: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
+  standard_page_replacement: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
 };
 
-const sourcePageV2Base = {
-  ...sourcePageV2Common,
-  composition: sourceProvenanceUnchanged(sourcePageCompositionV2Schema),
+const sourcePageBase = {
+  ...sourcePageCommon,
+  composition: sourceProvenanceUnchanged(sourcePageCompositionSchema),
 };
 
-const sourceListPageV2Schema = z
+const sourceListPageSchema = z
   .object({
-    ...sourcePageV2Base,
+    ...sourcePageBase,
     type: sourceProvenanceUnchanged(z.literal("list")),
     record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
     permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
-    arrangements: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
-    calendar_mapping: sourceProvenanceUnchanged(retiredSourcePageSettingV2Schema),
+    arrangements: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
+    calendar_mapping: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
   })
   .strict();
 
-const sourceGuidedFormStepV2Schema = z
+const sourceGuidedFormStepSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
     name: sourceProvenanceUnchanged(z.string().min(1).max(60)),
@@ -231,11 +231,11 @@ const sourceGuidedFormStepV2Schema = z
   })
   .strict();
 
-export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
-  sourceListPageV2Schema,
+export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
+  sourceListPageSchema,
   z
     .object({
-      ...sourcePageV2Base,
+      ...sourcePageBase,
       type: sourceProvenanceUnchanged(z.literal("detail")),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
@@ -243,14 +243,14 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      ...sourcePageV2Base,
+      ...sourcePageBase,
       type: sourceProvenanceUnchanged(z.literal("dashboard")),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     })
     .strict(),
   z
     .object({
-      ...sourcePageV2Base,
+      ...sourcePageBase,
       type: sourceProvenanceUnchanged(z.literal("form")),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
@@ -258,12 +258,12 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      ...sourcePageV2Common,
+      ...sourcePageCommon,
       type: sourceProvenanceUnchanged(z.literal("guided_form")),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
-      steps: sourceProvenanceUnchanged(z.array(sourceGuidedFormStepV2Schema).min(2).max(20)),
-      composition: sourceProvenanceUnchanged(sourceGuidedFormPageCompositionV2Schema),
+      steps: sourceProvenanceUnchanged(z.array(sourceGuidedFormStepSchema).min(2).max(20)),
+      composition: sourceProvenanceUnchanged(sourceGuidedFormPageCompositionSchema),
     })
     .strict()
     .superRefine((value, context) => {
@@ -293,7 +293,7 @@ export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
     }),
   z
     .object({
-      ...sourcePageV2Base,
+      ...sourcePageBase,
       type: sourceProvenanceUnchanged(z.literal("public")),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
@@ -509,7 +509,7 @@ const sourceApplicationSearchSchema = z
     }
   });
 
-export const sourceApplicationBodyV2Schema = z
+export const sourceApplicationBodySchema = z
   .object({
     name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
     description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
@@ -868,13 +868,13 @@ export const sourceApplicationBodyV2Schema = z
         )
         .max(100),
     ),
-    platform_block_dependencies: sourceProvenanceUnchanged(sourcePlatformBlockDependenciesV2Schema),
-    shells: sourceProvenanceUnchanged(z.array(sourceApplicationShellV2Schema).max(100)),
-    pages: sourceProvenanceUnchanged(z.array(sourcePageDefinitionV2Schema).min(1).max(100)),
+    platform_block_dependencies: sourceProvenanceUnchanged(sourcePlatformBlockDependenciesSchema),
+    shells: sourceProvenanceUnchanged(z.array(sourceApplicationShellSchema).max(100)),
+    pages: sourceProvenanceUnchanged(z.array(sourcePageDefinitionSchema).min(1).max(100)),
     experiences: sourceProvenanceUnchanged(
       z.array(sourceApplicationExperienceSchema).max(3).optional(),
     ),
-    theme: sourceProvenanceUnchanged(sourceApplicationThemeV2Schema),
+    theme: sourceProvenanceUnchanged(sourceApplicationThemeSchema),
     /** Every flow this Application owns (architecture decision 1); each has one owner. */
     flows: sourceProvenanceUnchanged(sourceFlowCollectionSchema, true),
     flow_bindings: sourceProvenanceUnchanged(
@@ -953,7 +953,7 @@ export const sourceApplicationBodyV2Schema = z
       });
 
     const placementEntries = value.shells.flatMap((shell) =>
-      sourcePlacementEntriesV2(shell.layout),
+      sourcePlacementEntries(shell.layout),
     );
     const shellsByAlias = new Map(value.shells.map((shell) => [shell.id, shell]));
     const validateShellContent = (
@@ -987,7 +987,7 @@ export const sourceApplicationBodyV2Schema = z
       if ("step_content" in composition) {
         if (composition.shell_kind === "default") {
           for (const slot of Object.values(composition.step_content))
-            placementEntries.push(...sourcePlacementEntriesV2(slot));
+            placementEntries.push(...sourcePlacementEntries(slot));
           continue;
         }
         const shell = shellsByAlias.get(composition.shell);
@@ -1007,12 +1007,12 @@ export const sourceApplicationBodyV2Schema = z
               stepId,
             ]);
           for (const slot of Object.values(content))
-            placementEntries.push(...sourcePlacementEntriesV2(slot));
+            placementEntries.push(...sourcePlacementEntries(slot));
         }
         continue;
       }
       if (composition.shell_kind === "default")
-        placementEntries.push(...sourcePlacementEntriesV2(composition.main));
+        placementEntries.push(...sourcePlacementEntries(composition.main));
       else {
         const shell = shellsByAlias.get(composition.shell);
         if (shell === undefined)
@@ -1029,7 +1029,7 @@ export const sourceApplicationBodyV2Schema = z
             "content",
           ]);
         for (const slot of Object.values(composition.content))
-          placementEntries.push(...sourcePlacementEntriesV2(slot));
+          placementEntries.push(...sourcePlacementEntries(slot));
       }
     }
 
@@ -1099,18 +1099,18 @@ export const sourceApplicationBodyV2Schema = z
     }
   });
 
-export const applicationSourceDocumentV2Schema = z
+export const applicationSourceDocumentSchema = z
   .object({
     source_contract_version: sourceProvenanceUnchanged(z.literal(applicationSourceContractVersion)),
     root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
     key: sourceProvenanceUnchanged(namespacedKeySchema),
     kind: sourceProvenanceUnchanged(z.literal("application")),
     body: sourceProvenanceUnchanged(
-      z.preprocess(inspectSourceBounds, sourceApplicationBodyV2Schema),
+      z.preprocess(inspectSourceBounds, sourceApplicationBodySchema),
     ),
   })
   .strict();
 
-export type ApplicationSourceDocumentV2 = z.infer<typeof applicationSourceDocumentV2Schema>;
-export type SourceApplicationBodyV2 = z.infer<typeof sourceApplicationBodyV2Schema>;
-export type SourcePageDefinitionV2 = z.infer<typeof sourcePageDefinitionV2Schema>;
+export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
+export type SourceApplicationBody = z.infer<typeof sourceApplicationBodySchema>;
+export type SourcePageDefinition = z.infer<typeof sourcePageDefinitionSchema>;

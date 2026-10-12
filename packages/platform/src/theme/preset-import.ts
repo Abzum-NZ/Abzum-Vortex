@@ -6,9 +6,9 @@ import {
   findShadcnThemeCatalogueOption,
   isShadcnIconLibrary,
   shadcnThemeCatalogueDimensionKeys,
-  sourceApplicationThemeSelectionV2Schema,
+  sourceApplicationThemeSelectionSchema,
   type ShadcnThemeCatalogueDimensionKey,
-  type SourceApplicationThemeSelectionV2,
+  type SourceApplicationThemeSelection,
 } from "../schema";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import {
@@ -69,7 +69,7 @@ export type ShadcnPresetImportDraft =
       source: PresetSourceKind;
       presetCode: string;
       version: "a" | "b";
-      selection: SourceApplicationThemeSelectionV2;
+      selection: SourceApplicationThemeSelection;
       notYetImportable: readonly ShadcnPresetDimensionNotYetImportable[];
     }>
   | Readonly<{
@@ -280,7 +280,7 @@ export const draftShadcnPresetImport = (input: unknown): ShadcnPresetImportDraft
     };
   }
 
-  const parsedSelection = sourceApplicationThemeSelectionV2Schema.safeParse({
+  const parsedSelection = sourceApplicationThemeSelectionSchema.safeParse({
     style: selectedOptions.style,
     base_color: selectedOptions.baseColor,
     theme: selectedOptions.theme,

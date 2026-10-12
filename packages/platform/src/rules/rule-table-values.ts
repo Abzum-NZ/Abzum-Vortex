@@ -1,16 +1,16 @@
 import { z } from "zod";
 import { builderKeySchema } from "../catalogue/identifiers";
 import {
-  moduleFieldValueV2Schemas,
-  sourceModuleFieldValueV2Schemas,
-  tableCellTypeKeysV2,
-} from "../records/module-field-values-v2";
+  moduleFieldValueSchemas,
+  sourceModuleFieldValueSchemas,
+  tableCellTypeKeys,
+} from "../records/module-field-values";
 
 /** A data shape, not storage settings or permission to write a table field. */
 export const ruleTableColumnSchema = z
   .object({
     key: builderKeySchema,
-    type: z.enum(tableCellTypeKeysV2),
+    type: z.enum(tableCellTypeKeys),
     required: z.boolean(),
   })
   .strict();
@@ -64,7 +64,7 @@ export const validateRuleTableRows = (
   context: z.RefinementCtx,
   source: boolean,
 ): void => {
-  const codecs = source ? sourceModuleFieldValueV2Schemas : moduleFieldValueV2Schemas;
+  const codecs = source ? sourceModuleFieldValueSchemas : moduleFieldValueSchemas;
   const declared = new Map(columns.map((column) => [column.key, column]));
   for (const [index, row] of rows.entries()) {
     for (const key of Object.keys(row))

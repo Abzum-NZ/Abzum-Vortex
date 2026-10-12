@@ -1,28 +1,28 @@
 import {
-  recordTypeDefinitionV3Schema,
+  recordTypeDefinitionSchema,
   type JsonValue,
-  type ModuleFieldV3,
-  type RecordTypeDefinitionV3,
-  type SaveRecordCommandV2,
+  type ModuleField,
+  type RecordTypeDefinition,
+  type SaveRecordCommand,
 } from "../schema";
 import { evaluateRecordCalculations } from "./calculations";
 import {
-  finalizeRecordFieldCandidateV2,
-  prepareInitialRecordFieldCandidateV2,
+  finalizeRecordFieldCandidate,
+  prepareInitialRecordFieldCandidate,
   type RecordFieldValuePendingCheck,
-  type PrepareRecordFieldValuesV2Result,
+  type PrepareRecordFieldValuesResult,
 } from "./field-values";
 import { evaluateRecordTotals } from "./totals";
 
 type LockedRelationshipTotalRecord = Readonly<{
   recordKey: string;
   recordId?: string;
-  recordType: RecordTypeDefinitionV3;
+  recordType: RecordTypeDefinition;
   concurrencyNumber?: number;
   existingValues: Readonly<Record<string, unknown>>;
   relationshipSources: readonly Readonly<{
     relationshipId: string;
-    sourceRecordType: RecordTypeDefinitionV3;
+    sourceRecordType: RecordTypeDefinition;
     records: readonly Readonly<{
       recordKey?: string;
       fieldValues: Readonly<Record<string, unknown>>;
@@ -64,7 +64,7 @@ export type CalculateRelationshipTotalSaveResult =
       creationFinalValues: Readonly<Record<number, Readonly<Record<string, JsonValue | null>>>>;
       creationPendingChecks: Readonly<Record<number, readonly RecordFieldValuePendingCheck[]>>;
       parentMutations: readonly RelationshipTotalParentMutation[];
-      pendingChecks: PrepareRecordFieldValuesV2Result extends infer Result
+      pendingChecks: PrepareRecordFieldValuesResult extends infer Result
         ? Result extends { success: true; pendingChecks: infer Checks }
           ? Checks
           : never
@@ -94,7 +94,7 @@ const dependencyFieldIds = (candidate: unknown): readonly string[] => {
   return [...found];
 };
 
-const totalDependencies = (field: Extract<ModuleFieldV3, { type: "total" }>) => [
+const totalDependencies = (field: Extract<ModuleField, { type: "total" }>) => [
   ...(field.settings.fieldId === undefined ? [] : [field.settings.fieldId]),
   ...dependencyFieldIds(field.settings.filter),
 ];
@@ -102,17 +102,17 @@ const totalDependencies = (field: Extract<ModuleFieldV3, { type: "total" }>) => 
 const nodeKey = (recordKey: string, fieldId: string) => `${recordKey}:${fieldId}`;
 
 type DerivedField =
-  Extract<ModuleFieldV3, { type: "calculation" }> | Extract<ModuleFieldV3, { type: "total" }>;
+  Extract<ModuleField, { type: "calculation" }> | Extract<ModuleField, { type: "total" }>;
 
-const derivedFields = (recordType: RecordTypeDefinitionV3) =>
+const derivedFields = (recordType: RecordTypeDefinition) =>
   recordType.fields.filter(
     (field): field is DerivedField => field.type === "calculation" || field.type === "total",
   );
 
 const calculationRecordType = (
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   targetFieldId: string,
-): RecordTypeDefinitionV3 => {
+): RecordTypeDefinition => {
   const included = new Set<string>([targetFieldId]);
   let changed = true;
   while (changed) {
@@ -130,7 +130,7 @@ const calculationRecordType = (
       }
     }
   }
-  return recordTypeDefinitionV3Schema.parse({
+  return recordTypeDefinitionSchema.parse({
     ...recordType,
     fields: recordType.fields.filter(
       (field) => field.type !== "calculation" || included.has(field.fieldId),
@@ -139,10 +139,10 @@ const calculationRecordType = (
 };
 
 const totalRecordType = (
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   targetFieldId: string,
-): RecordTypeDefinitionV3 =>
-  recordTypeDefinitionV3Schema.parse({
+): RecordTypeDefinition =>
+  recordTypeDefinitionSchema.parse({
     ...recordType,
     fields: recordType.fields.filter(
       (field) => field.type !== "total" || field.fieldId === targetFieldId,
@@ -166,7 +166,7 @@ const issue = (
  */
 export const calculateLockedRelationshipTotalSave = (
   input: Readonly<{
-    command: Pick<SaveRecordCommandV2, "operation" | "submittedValues">;
+    command: Pick<SaveRecordCommand, "operation" | "submittedValues">;
     preparation: LockedRelationshipTotalPreparation;
     creations?: readonly RelationshipTotalCreationRoot[];
     organizationCurrency?: string;
@@ -189,7 +189,7 @@ export const calculateLockedRelationshipTotalSave = (
 
   const initialByRecord = new Map<
     string,
-    Extract<ReturnType<typeof prepareInitialRecordFieldCandidateV2>, { success: true }>["candidate"]
+    Extract<ReturnType<typeof prepareInitialRecordFieldCandidate>, { success: true }>["candidate"]
   >();
   const valuesByRecord = new Map<string, Record<string, JsonValue>>();
   for (const record of records.values()) {
@@ -200,7 +200,7 @@ export const calculateLockedRelationshipTotalSave = (
         : creationRoot !== undefined
           ? ("create" as const)
           : ("update" as const);
-    const initial = prepareInitialRecordFieldCandidateV2({
+    const initial = prepareInitialRecordFieldCandidate({
       operation,
       recordType: record.recordType,
       submittedValues:
@@ -330,9 +330,9 @@ export const calculateLockedRelationshipTotalSave = (
     }
   }
 
-  const finalized = new Map<string, Extract<PrepareRecordFieldValuesV2Result, { success: true }>>();
+  const finalized = new Map<string, Extract<PrepareRecordFieldValuesResult, { success: true }>>();
   for (const record of records.values()) {
-    const result = finalizeRecordFieldCandidateV2({
+    const result = finalizeRecordFieldCandidate({
       recordType: record.recordType,
       initialCandidate: initialByRecord.get(record.recordKey)!,
       candidateValues: valuesByRecord.get(record.recordKey)!,

@@ -11,13 +11,13 @@ import {
   groupIdSchema,
   identitySessionSchema,
   jsonValueSchema,
-  moduleDefinitionConsumerReadResultV3Schema,
+  moduleDefinitionConsumerReadResultSchema,
   organizationAccountIdSchema,
   organizationSelectionCandidateSchema,
   previewInstallationAddressSchema,
   previewRecordReadCommandV1Schema,
   recordTypeIdSchema,
-  saveRecordCommandV2Schema,
+  saveRecordCommandSchema,
   type FlowDefinition,
   type FlowTask,
   type FlowTestRunFailure,
@@ -31,8 +31,8 @@ import {
   type PreviewInstallation,
   type PreviewInstallationAddress,
   type PreviewRecordReadResultV1,
-  type SaveRecordCommandV2,
-  type SaveRecordResultV2,
+  type SaveRecordCommand,
+  type SaveRecordResult,
 } from "../schema";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
@@ -59,8 +59,8 @@ type PreviewRecordTaskPort = Readonly<{
   save(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    command: SaveRecordCommandV2,
-  ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
+    command: SaveRecordCommand,
+  ): Promise<HumanOrganizationRequestResult<SaveRecordResult>>;
 }>;
 
 type PreviewInstallationReader = Readonly<{
@@ -265,7 +265,7 @@ const previewFieldIds = async (
       identity.moduleRootId,
       identity.moduleReleaseRevision,
     );
-    const parsed = moduleDefinitionConsumerReadResultV3Schema.safeParse(candidate);
+    const parsed = moduleDefinitionConsumerReadResultSchema.safeParse(candidate);
     if (
       !parsed.success ||
       !sameId(parsed.data.organizationId, previewInstallation.organizationId) ||
@@ -426,7 +426,7 @@ const runRecordTask = async (
       ? { recordId: recordValue, expectedConcurrencyNumber }
       : selectedOwnerGroup === undefined ? {} : { selectedOwnerGroupId: selectedOwnerGroup }),
   };
-  const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
+  const command = saveRecordCommandSchema.safeParse(commandCandidate);
   if (!command.success)
     return {
       outcome: "validation",

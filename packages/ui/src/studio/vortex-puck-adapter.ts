@@ -1,7 +1,7 @@
-export { createVortexAuthoredPuckAdapterV2 } from "./vortex-authored-puck-adapter";
+export { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
 export {
-  createVortexPuckAdapterV2,
+  createVortexPuckAdapter,
   VortexPuckAdapterError,
-  type VortexPuckContentV2,
-  type VortexPuckDataV2,
+  type VortexPuckContent,
+  type VortexPuckData,
 } from "@vortex/ui";

@@ -1,6 +1,6 @@
 import type {
-  ModuleContentV3,
-  ModuleContributionV3,
+  ModuleContent,
+  ModuleContribution,
 } from "../schema";
 import {
   canonicalJson,
@@ -18,7 +18,7 @@ export type InstalledModuleContributionRelease = Readonly<{
   moduleRootId: string;
   definitionKey: string;
   releaseVersion: string;
-  content: ModuleContentV3;
+  content: ModuleContent;
 }>;
 
 /**
@@ -84,7 +84,7 @@ export type ModuleContributionResolution = Readonly<{
   fingerprint: `sha256:${string}`;
 }>;
 
-type AnyModuleContent = ModuleContentV3;
+type AnyModuleContent = ModuleContent;
 
 /** Only the exact fields the resolver reads; the contract schema already guarantees their shapes. */
 type ModuleContentView = Readonly<{
@@ -100,12 +100,12 @@ type ModuleContentView = Readonly<{
     recordTypeId: string;
     accepts: readonly string[];
   }>[];
-  contributions?: readonly ModuleContributionV3[];
+  contributions?: readonly ModuleContribution[];
 }>;
 
 type ContributionSource = Readonly<{
   release: InstalledModuleContributionRelease;
-  contribution: ModuleContributionV3;
+  contribution: ModuleContribution;
 }>;
 
 const viewOf = (content: AnyModuleContent): ModuleContentView =>

@@ -1,14 +1,14 @@
 import "server-only";
 
 import {
-  applicationContentV2Schema,
+  applicationContentSchema,
   applicationRootIdSchema,
-  canonicalPlacementEntriesV2,
+  canonicalPlacementEntries,
   flowTaskChildLists,
   flowTaskRegistry,
   revisionSchema,
   sessionContextSchema,
-  type ApplicationContentV2,
+  type ApplicationContent,
   type ComponentFlowBinding,
   type ComponentSemanticEventKind,
   type FlowDefinition,
@@ -79,23 +79,23 @@ export type ApplicationPreviewDraft = Readonly<{
   rootId: string;
   draftRevision: number;
   /** The compiled canonical content, exactly as Definition compilation produced it. */
-  content: ApplicationContentV2;
+  content: ApplicationContent;
   /** The root's current published release revision, echoed only to label what preview ignores. */
   currentReleaseRevision: number | null;
 }>;
 
 type ApplicationPreviewPage = Readonly<{
   pageId: string;
-  composition: ApplicationContentV2["pages"][number]["composition"];
+  composition: ApplicationContent["pages"][number]["composition"];
   steps?: readonly Readonly<{ id: string; name: string; summary: boolean }>[];
 }>;
 
 /** The renderer input for #580: the requested page of the compiled draft, with its shells. */
 export type ApplicationPreviewComposition = Readonly<{
-  platformBlockDependencies: ApplicationContentV2["platformBlockDependencies"];
-  shells: ApplicationContentV2["shells"];
+  platformBlockDependencies: ApplicationContent["platformBlockDependencies"];
+  shells: ApplicationContent["shells"];
   pages: readonly ApplicationPreviewPage[];
-  theme: ApplicationContentV2["theme"];
+  theme: ApplicationContent["theme"];
 }>;
 
 /** The simulated effect a substituted flow task would have performed in live rendering. */
@@ -269,7 +269,7 @@ const buildInteraction = (
  * When `controlIds` is given, only bindings on those placements are considered.
  */
 export const substituteApplicationPreviewInteractions = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   controlIds?: ReadonlySet<string>,
 ): Readonly<{
   interactions: readonly ApplicationPreviewInteraction[];
@@ -295,21 +295,21 @@ export const substituteApplicationPreviewInteractions = (
   };
 };
 
-type ApplicationPageV2 = ApplicationContentV2["pages"][number];
-type PlacementSlotV2 = ApplicationContentV2["shells"][number]["layout"];
+type ApplicationPage = ApplicationContent["pages"][number];
+type PlacementSlot = ApplicationContent["shells"][number]["layout"];
 
 /**
  * Every placement identity the requested page renders: its application shell's layout, if any,
  * and the page content, or for a guided form only the active step's content.
  */
 const pagePlacementIds = (
-  content: ApplicationContentV2,
-  page: ApplicationPageV2,
+  content: ApplicationContent,
+  page: ApplicationPage,
   activeStepId: string | undefined,
 ): ReadonlySet<string> => {
   const ids = new Set<string>();
-  const addSlot = (slot: PlacementSlotV2): void => {
-    for (const [placementId] of canonicalPlacementEntriesV2(slot)) ids.add(placementId);
+  const addSlot = (slot: PlacementSlot): void => {
+    for (const [placementId] of canonicalPlacementEntries(slot)) ids.add(placementId);
   };
   const composition = page.composition;
   if (composition.shellKind === "application") {
@@ -336,7 +336,7 @@ const pagePlacementIds = (
   return ids;
 };
 
-const previewPage = (page: ApplicationPageV2): ApplicationPreviewPage => ({
+const previewPage = (page: ApplicationPage): ApplicationPreviewPage => ({
   pageId: String(page.pageId),
   composition: page.composition,
   ...(page.type === "guided_form"
@@ -389,7 +389,7 @@ export const materialiseApplicationPreview = (
       addressed,
     );
 
-  const parsedContent = applicationContentV2Schema.safeParse(draft.content);
+  const parsedContent = applicationContentSchema.safeParse(draft.content);
   if (!parsedContent.success)
     return refuse(
       "content_invalid",

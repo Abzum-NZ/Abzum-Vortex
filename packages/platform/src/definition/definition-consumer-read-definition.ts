@@ -6,8 +6,6 @@ import {
   definitionConsumerReadDependencyManifestSchema,
   definitionConsumerReadResultSchema,
   definitionResolutionSnapshotSchema,
-  definitionResolutionSnapshotV2Schema,
-  definitionResolutionSnapshotV3Schema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -75,11 +73,7 @@ export const storedConsumerReleaseEvidenceSchema = z
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: storedDefinitionCompilationOutputSchema,
-    resolutionSnapshot: z.union([
-      definitionResolutionSnapshotSchema,
-      definitionResolutionSnapshotV2Schema,
-      definitionResolutionSnapshotV3Schema,
-    ]),
+    resolutionSnapshot: definitionResolutionSnapshotSchema,
     dependencyManifest: definitionConsumerReadDependencyManifestSchema,
     moduleDependencyTargets: z.array(moduleDependencyTargetSchema).max(10_000),
   })
@@ -179,7 +173,7 @@ export const verifyDefinitionCatalogueDependencies = async (
     }
     if (dependency.kind === "platform_block") {
       if (validationContractVersion !== "2.0.0") return "invalid";
-      const release = await catalogue.readPlatformBlockReleaseV2(
+      const release = await catalogue.readPlatformBlockRelease(
         dependency.blockId,
         dependency.releaseVersion,
       );
@@ -233,7 +227,7 @@ export const verifyDefinitionCatalogueDependencies = async (
     if (validationContractVersion !== "2.0.0") return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";
-    const release = await catalogue.readPlatformThemeReleaseV2(
+    const release = await catalogue.readPlatformThemeRelease(
       catalogueThemeId.data,
       dependency.releaseVersion,
     );
@@ -359,9 +353,7 @@ export const projectStoredConsumerRelease = async (
       ? { toolBundle: output.toolBundle }
       : {}),
     dependencyManifest: release.dependencyManifest,
-    ...(platformCompatibilityVersion !== undefined
-      ? { platformCompatibilityVersion }
-      : {}),
+    ...(platformCompatibilityVersion !== undefined ? { platformCompatibilityVersion } : {}),
     correlationId,
   });
   if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");

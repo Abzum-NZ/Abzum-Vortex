@@ -2,7 +2,7 @@ export {
   createThemeRootProps,
   resolvePlacementTheme,
   resolveThemeFonts,
-  type ApplicationThemeV2,
+  type ApplicationTheme,
   type PlacementThemeScope,
   type ThemeMode,
   type ThemeRootProps,

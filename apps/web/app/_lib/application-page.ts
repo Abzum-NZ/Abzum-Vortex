@@ -69,19 +69,19 @@ import {
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,
-  exactDecimalTextV2Schema,
+  exactDecimalTextSchema,
   jsonValueSchema,
   readRecordDetailContract,
   fieldIdSchema,
   fileIdSchema,
   recordIdSchema,
   readRecordsTableContract,
-  richTextDocumentV2Schema,
-  moneyValueV2Schema,
+  richTextDocumentSchema,
+  moneyValueSchema,
   timestampSchema,
   organizationRuntimeSettingsSchema,
-  type ApplicationShellV2,
-  type BlockPropertyValueV2Contract,
+  type ApplicationShell,
+  type BlockPropertyValueContract,
   type BoardColumnContinuationRequest,
   type CalendarMapping,
   type FlowTask,
@@ -89,9 +89,9 @@ import {
   type JsonValue,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
+  type PageDefinition,
   type ReferenceChoiceSelectionEvidence,
-  recordLinkValueV2Schema,
+  recordLinkValueSchema,
 } from "@vortex/platform/schema";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createSqlFileReadRepository, decideFileRead } from "@web/platform-server";
@@ -160,8 +160,8 @@ export type ApplicationPageModel = Readonly<{
   page: Readonly<Record<string, unknown>>;
   pageId: string;
   pageName: string;
-  shells: readonly ApplicationShellV2[];
-  applicationShell?: ApplicationShellV2;
+  shells: readonly ApplicationShell[];
+  applicationShell?: ApplicationShell;
   applicationName: string;
   applicationHomePageKey: string;
   availableApplications: readonly Readonly<{ key: string; name: string; homePageKey: string }>[];
@@ -281,11 +281,11 @@ const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
 
 /** Reads only the projected body; shell chrome and permission reasons do not count as content. */
 const projectedBodyContentAvailable = (
-  definition: Exclude<PageDefinitionV2, { type: "guided_form" }>,
-  shells: readonly ApplicationShellV2[],
+  definition: Exclude<PageDefinition, { type: "guided_form" }>,
+  shells: readonly ApplicationShell[],
   projected: Readonly<Record<string, unknown>>,
 ): boolean => {
-  type Slot = ApplicationShellV2["layout"];
+  type Slot = ApplicationShell["layout"];
   const breakpoints = ["desktop", "tablet", "phone"] as const;
   type Visibility = Record<(typeof breakpoints)[number], boolean>;
   // The stored Page service has already parsed and projected this canonical composition.
@@ -638,7 +638,7 @@ const projectEditField = (
       if (
         displayed !== null &&
         !(typeof displayed === "number" && Number.isFinite(displayed)) &&
-        !(typeof displayed === "string" && exactDecimalTextV2Schema.safeParse(displayed).success)
+        !(typeof displayed === "string" && exactDecimalTextSchema.safeParse(displayed).success)
       )
         return undefined;
       if (
@@ -761,7 +761,7 @@ const projectEditField = (
       kind = "link_input";
       break;
     case "rich_text":
-      if (stored !== null && !richTextDocumentV2Schema.safeParse(stored).success) return undefined;
+      if (stored !== null && !richTextDocumentSchema.safeParse(stored).success) return undefined;
       kind = "rich_text_input";
       break;
     default:
@@ -844,7 +844,7 @@ const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
       },
     };
   }
-  const storedLink = recordLinkValueV2Schema.safeParse(args.stored);
+  const storedLink = recordLinkValueSchema.safeParse(args.stored);
   if (!storedLink.success) return undefined;
   const storedValue = storedLink.data;
   const fieldTarget = resolvedFieldTargets.find((target) =>
@@ -1144,15 +1144,15 @@ const summaryAggregateCellValue = (
     case "whole_number": {
       if (typeof result.value === "number" && Number.isSafeInteger(result.value))
         return { kind: "number", value: result.value };
-      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      const exactValue = exactDecimalTextSchema.safeParse(result.value);
       return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
     }
     case "decimal_number": {
-      const exactValue = exactDecimalTextV2Schema.safeParse(result.value);
+      const exactValue = exactDecimalTextSchema.safeParse(result.value);
       return exactValue.success ? { kind: "text", text: exactValue.data } : undefined;
     }
     case "money": {
-      const moneyValue = moneyValueV2Schema.safeParse(result.value);
+      const moneyValue = moneyValueSchema.safeParse(result.value);
       return moneyValue.success
         ? { kind: "text", text: `${moneyValue.data.currency} ${moneyValue.data.amount}` }
         : undefined;
@@ -1204,7 +1204,7 @@ const isApplicationLauncherPlacement = (placement: unknown): boolean => {
 };
 
 const launcherCellKey = (
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
+  settings: Readonly<Record<string, BlockPropertyValueContract>>,
   settingKey: string,
   fallback: string,
 ): string => {
@@ -1308,15 +1308,15 @@ type CalendarPlacementContract = Readonly<{
   defaultView: CalendarView;
 }>;
 
-const calendarFieldReference = (value: BlockPropertyValueV2Contract | undefined): string | undefined =>
+const calendarFieldReference = (value: BlockPropertyValueContract | undefined): string | undefined =>
   value?.kind === "field_reference" ? value.fieldId : undefined;
 
-const calendarChoice = (value: BlockPropertyValueV2Contract | undefined): string | undefined =>
+const calendarChoice = (value: BlockPropertyValueContract | undefined): string | undefined =>
   value?.kind === "choice" ? value.value : undefined;
 
 /** Reads the one calendar placement's declared field mapping from its validated settings. */
 const readCalendarPlacementContract = (
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
+  settings: Readonly<Record<string, BlockPropertyValueContract>>,
 ): CalendarPlacementContract | undefined => {
   const group = settings.calendar_mapping;
   if (group?.kind !== "group") return undefined;
@@ -1559,7 +1559,7 @@ type LocalCompositionSnapshot = Readonly<{
 /** Structural observations only: no settings, records, authority decisions or exact counts. */
 const localPageCompositionMetrics = (
   installed: unknown,
-  shells: readonly ApplicationShellV2[],
+  shells: readonly ApplicationShell[],
   projected?: unknown,
   data?: Readonly<Record<string, PageDataState>>,
   capture?: (snapshot: LocalCompositionSnapshot) => void,
@@ -1758,7 +1758,7 @@ const localPageCompositionMetrics = (
 
 const localPageCompositionObserver = (
   installed: unknown,
-  shells: readonly ApplicationShellV2[],
+  shells: readonly ApplicationShell[],
 ) => {
   try {
     const attempted = new Set<LocalPageCompositionStage>();
@@ -1904,7 +1904,7 @@ const localPageBundleObservation = () => {
 
 const localPageProjectionDecisionObserver = (
   installed: unknown,
-  shells: readonly ApplicationShellV2[],
+  shells: readonly ApplicationShell[],
 ) => {
   try {
     if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
@@ -2197,7 +2197,7 @@ const loadApplicationPageInternal = async (
     allPlacements.flatMap(({ placement }) => {
       const settings = placement.settings;
       if (!isRecord(settings)) return [];
-      const contractSettings = settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+      const contractSettings = settings as Readonly<Record<string, BlockPropertyValueContract>>;
       const detail = readRecordDetailContract(contractSettings);
       const table = readRecordsTableContract(contractSettings);
       return [
@@ -2480,7 +2480,7 @@ const loadApplicationPageInternal = async (
     )
       recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
 
-    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
@@ -2724,7 +2724,7 @@ const loadApplicationPageInternal = async (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
-    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+    const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
     if (isLinkTilesBlock && (
       !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
         block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&

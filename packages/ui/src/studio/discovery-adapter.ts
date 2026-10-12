@@ -1,18 +1,18 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
-  isRepeatableSlotIdentityV2,
-  platformBlockReleaseIdentityV2,
-  projectPlatformCatalogueDiscoveryV2,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+  isRepeatableSlotIdentity,
+  platformBlockReleaseIdentity,
+  projectPlatformCatalogueDiscovery,
   type BlockPaletteGroup,
-  type BlockPropertySchemaV2Contract,
-  type BlockReferencePropertyKindV2,
-  type ComponentDiscoveryV2,
-  type ComponentPropertyControlV2,
+  type BlockPropertySchemaContract,
+  type BlockReferencePropertyKind,
+  type ComponentDiscovery,
+  type ComponentPropertyControl,
   type ComponentSemanticEventKind,
   type ComponentStateOperationKind,
-  type ImmutablePlatformBlockCatalogueV2,
-  type PlatformBlockReleaseSummaryV2,
-  type PlatformCatalogueDiscoveryV2,
+  type ImmutablePlatformBlockCatalogue,
+  type PlatformBlockReleaseSummary,
+  type PlatformCatalogueDiscovery,
 } from "@vortex/platform/schema";
 
 /**
@@ -23,7 +23,7 @@ import {
  * that draft and grant nothing; validation remains the authority on save and publish.
  */
 
-type ThemeTokenKind = Extract<BlockPropertySchemaV2Contract, { kind: "theme_token" }>["tokenKind"];
+type ThemeTokenKind = Extract<BlockPropertySchemaContract, { kind: "theme_token" }>["tokenKind"];
 
 export type StudioReferenceOption = Readonly<{ id: string; key: string; label: string }>;
 
@@ -86,7 +86,7 @@ export type StudioPlacementTarget =
     }>;
 
 export type InspectorPropertyChoice = Readonly<{
-  control: ComponentPropertyControlV2;
+  control: ComponentPropertyControl;
   /**
    * Targets the author may choose for a reference property. Absent for a record reference: a
    * record is runtime data found through a governed record search, not a draft definition.
@@ -101,7 +101,7 @@ export type InspectorPropertyChoice = Readonly<{
 }>;
 
 export type ComponentInspectorChoices = Readonly<{
-  component: ComponentDiscoveryV2;
+  component: ComponentDiscovery;
   /** Only properties validation can accept on this surface. */
   properties: readonly InspectorPropertyChoice[];
 }>;
@@ -109,13 +109,13 @@ export type ComponentInspectorChoices = Readonly<{
 export interface StudioDiscoveryAdapter {
   readonly surface: StudioPageSurface;
   readonly context: StudioDiscoveryContext;
-  readonly projection: PlatformCatalogueDiscoveryV2;
+  readonly projection: PlatformCatalogueDiscovery;
   /** Every component offered on this surface, in catalogue order. */
-  getComponents(): readonly ComponentDiscoveryV2[];
+  getComponents(): readonly ComponentDiscovery[];
   /** The exact release a placement names, when it is offered on this surface. */
   getComponent(
     block: Readonly<{ blockId: string; releaseVersion: string }>,
-  ): ComponentDiscoveryV2 | undefined;
+  ): ComponentDiscovery | undefined;
   /**
    * Semantic events the catalogue declares for one placed release; a flow binding to any other
    * event is refused. Empty when the release is not offered on this surface.
@@ -128,7 +128,7 @@ export interface StudioDiscoveryAdapter {
     block: Readonly<{ blockId: string; releaseVersion: string }>,
   ): readonly ComponentStateOperationKind[];
   /** Exact releases that validation admits at a placement target. */
-  getPlacementChoices(target: StudioPlacementTarget): readonly PlatformBlockReleaseSummaryV2[];
+  getPlacementChoices(target: StudioPlacementTarget): readonly PlatformBlockReleaseSummary[];
   /** Inspector choices for one placed release; `recordTypeId` narrows fields and relationships. */
   getInspectorChoices(
     block: Readonly<{ blockId: string; releaseVersion: string }>,
@@ -136,7 +136,7 @@ export interface StudioDiscoveryAdapter {
   ): ComponentInspectorChoices | undefined;
   /** Draft targets offered for one reference kind on this surface. */
   getReferenceChoices(
-    kind: Exclude<BlockReferencePropertyKindV2, "record_reference">,
+    kind: Exclude<BlockReferencePropertyKind, "record_reference">,
     options?: Readonly<{ recordTypeId?: string }>,
   ): readonly StudioReferenceOption[];
   withContext(context: StudioDiscoveryContext): StudioDiscoveryAdapter;
@@ -146,8 +146,8 @@ export interface StudioDiscoveryAdapter {
  * Reference kinds the public-surface rule (`vortex.definition.application_public_surface`)
  * refuses in every public placement, whatever the draft contains.
  */
-const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKindV2> = new Set<
-  BlockReferencePropertyKindV2
+const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKind> = new Set<
+  BlockReferencePropertyKind
 >([
   "relationship_reference",
   "record_reference",
@@ -160,19 +160,19 @@ const option = (id: string, key: string, name: string): StudioReferenceOption =>
 /** Creates discovery over the server-owned catalogue for one page surface and draft context. */
 export function createStudioDiscoveryAdapter(
   options: Readonly<{
-    catalogue?: ImmutablePlatformBlockCatalogueV2;
+    catalogue?: ImmutablePlatformBlockCatalogue;
     surface?: StudioPageSurface;
     context?: StudioDiscoveryContext;
   }> = {},
 ): StudioDiscoveryAdapter {
-  const catalogue = options.catalogue ?? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
+  const catalogue = options.catalogue ?? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
   const surface: StudioPageSurface = options.surface ?? Object.freeze({ kind: "authenticated" });
   const context: StudioDiscoveryContext = Object.freeze({ ...options.context });
   const isPublic = surface.kind === "public";
-  const projection = projectPlatformCatalogueDiscoveryV2(catalogue, surface.kind);
+  const projection = projectPlatformCatalogueDiscovery(catalogue, surface.kind);
 
   const getReferenceChoices = (
-    kind: Exclude<BlockReferencePropertyKindV2, "record_reference">,
+    kind: Exclude<BlockReferencePropertyKind, "record_reference">,
     referenceOptions: Readonly<{ recordTypeId?: string }> = {},
   ): readonly StudioReferenceOption[] => {
     if (publicRefusedReferenceKinds.has(kind) && isPublic) return Object.freeze([]);
@@ -229,7 +229,7 @@ export function createStudioDiscoveryAdapter(
    * group that needs one of those values cannot be offered at all.
    */
   const propertyChoices = (
-    controls: readonly ComponentPropertyControlV2[],
+    controls: readonly ComponentPropertyControl[],
     recordTypeId: string | undefined,
   ): readonly InspectorPropertyChoice[] | undefined => {
     const choices: InspectorPropertyChoice[] = [];
@@ -242,7 +242,7 @@ export function createStudioDiscoveryAdapter(
   };
 
   const propertyChoice = (
-    control: ComponentPropertyControlV2,
+    control: ComponentPropertyControl,
     recordTypeId: string | undefined,
   ): InspectorPropertyChoice | undefined => {
     const kind = control.referenceKind;
@@ -284,16 +284,16 @@ export function createStudioDiscoveryAdapter(
   };
 
   /** Components validation can accept on this surface, keyed by exact release identity. */
-  const offered = new Map<string, ComponentDiscoveryV2>();
+  const offered = new Map<string, ComponentDiscovery>();
   for (const component of projection.components)
     if (propertyChoices(component.properties, undefined) !== undefined)
-      offered.set(platformBlockReleaseIdentityV2(component.release), component);
+      offered.set(platformBlockReleaseIdentity(component.release), component);
   const components = Object.freeze([...offered.values()]);
   const summaries = components.map((component) => component.release);
 
   const getComponent = (
     block: Readonly<{ blockId: string; releaseVersion: string }>,
-  ): ComponentDiscoveryV2 | undefined => offered.get(platformBlockReleaseIdentityV2(block));
+  ): ComponentDiscovery | undefined => offered.get(platformBlockReleaseIdentity(block));
 
   const getSupportedEvents = (
     block: Readonly<{ blockId: string; releaseVersion: string }>,
@@ -305,7 +305,7 @@ export function createStudioDiscoveryAdapter(
 
   const getPlacementChoices = (
     target: StudioPlacementTarget,
-  ): readonly PlatformBlockReleaseSummaryV2[] => {
+  ): readonly PlatformBlockReleaseSummary[] => {
     switch (target.kind) {
       case "page":
         return Object.freeze(summaries);
@@ -327,11 +327,11 @@ export function createStudioDiscoveryAdapter(
             (entry) =>
               entry.repeats !== undefined &&
               target.slotKey.startsWith(`${entry.key}_`) &&
-              isRepeatableSlotIdentityV2(entry.key, target.slotKey.slice(entry.key.length + 1)),
+              isRepeatableSlotIdentity(entry.key, target.slotKey.slice(entry.key.length + 1)),
           );
         return Object.freeze(
           (slot?.allowedChildren ?? []).filter((release) =>
-            offered.has(platformBlockReleaseIdentityV2(release)),
+            offered.has(platformBlockReleaseIdentity(release)),
           ),
         );
       }

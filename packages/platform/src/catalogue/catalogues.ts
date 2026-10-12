@@ -78,7 +78,7 @@ export const workflowValueTypeKeys = [
   "json",
 ] as const satisfies readonly ValueType[];
 
-/** Action-input value types: the view of the catalogue shared by the V1 and V2 module contracts. */
+/** Action-input value types: the view of the catalogue shared by the V1 and  module contracts. */
 export const actionInputValueTypes = {
   text: "text",
   formatted_text: "formatted_text",
@@ -98,10 +98,7 @@ export const actionInputValueTypeKeys = Object.values(
 ) as unknown as readonly [ActionInputValueType, ...ActionInputValueType[]];
 export const actionInputValueTypeSchema = z.enum(actionInputValueTypeKeys);
 
-/**
- * Sharing-parameter value types: the view of the catalogue used by V1 saved sharing conditions.
- * The V1 typed-condition evaluator refuses any other parameter type, so this view stays exact.
- */
+/** Sharing-parameter value types accepted by the current condition contract. */
 export const sharingParameterValueTypeKeys = [
   "text",
   "number",
@@ -109,16 +106,10 @@ export const sharingParameterValueTypeKeys = [
   "date",
   "date_time",
   "organization_account_reference",
-] as const satisfies readonly ValueType[];
-export const sharingParameterValueTypeSchema = z.enum(sharingParameterValueTypeKeys);
-
-/** V2 sharing-parameter value types: the V1 view plus the exact decimal_number and money types. */
-export const sharingParameterValueTypeV2Keys = [
-  ...sharingParameterValueTypeKeys,
   "decimal_number",
   "money",
 ] as const satisfies readonly ValueType[];
-export const sharingParameterValueTypeV2Schema = z.enum(sharingParameterValueTypeV2Keys);
+export const sharingParameterValueTypeSchema = z.enum(sharingParameterValueTypeKeys);
 
 export const pageTypeKeys = [
   "list",
@@ -198,12 +189,7 @@ export function canonicalWorkflowValueType(type: string): string {
 }
 
 export type ValueTypeCompatibilityContext =
-  | "value"
-  | "flow"
-  | "exact"
-  | "condition"
-  | "mapping"
-  | "cross_format";
+  "value" | "flow" | "exact" | "condition" | "mapping" | "cross_format";
 
 const numericValueTypes: ReadonlySet<string> = new Set([
   "number",
@@ -230,7 +216,9 @@ export function valueTypesCompatible(
   if (actual === undefined || expected === undefined) return false;
   switch (context) {
     case "condition":
-      return actual === expected || (numericValueTypes.has(actual) && numericValueTypes.has(expected));
+      return (
+        actual === expected || (numericValueTypes.has(actual) && numericValueTypes.has(expected))
+      );
     case "mapping":
       if (
         actual === "decimal_number" ||
@@ -247,7 +235,8 @@ export function valueTypesCompatible(
       return valueTypesCompatible(actual, expected, "exact");
     case "exact":
       return (
-        actual === expected || (expected === "text" && (actual === "date" || actual === "date_time"))
+        actual === expected ||
+        (expected === "text" && (actual === "date" || actual === "date_time"))
       );
     case "cross_format":
       return actual === expected && crossFormatValueTypes.has(actual);

@@ -22,12 +22,12 @@ import {
   builderPreviewSaveRecordResultSchema,
   flowTestRunResponseSchema,
   identitySessionSchema,
-  moduleDefinitionConsumerReadResultV3Schema,
+  moduleDefinitionConsumerReadResultSchema,
   moduleRootIdSchema,
   organizationSelectionCandidateSchema,
   revisionSchema,
-  saveRecordCommandV2Schema,
-  saveRecordResultV2Schema,
+  saveRecordCommandSchema,
+  saveRecordResultSchema,
   sessionContextSchema,
   type ApplicationRootId,
   type BuilderPreviewOperationLocation,
@@ -384,7 +384,7 @@ const flowTestRunner = () => {
         );
         if (release === undefined || release.compilationOutput.kind !== "module") return undefined;
         const output = release.compilationOutput;
-        const projected = moduleDefinitionConsumerReadResultV3Schema.safeParse({
+        const projected = moduleDefinitionConsumerReadResultSchema.safeParse({
           kind: "module",
           organizationId: release.organizationId,
           definitionKey: release.key,
@@ -595,7 +595,7 @@ export const builderPreviewOperations = Object.freeze({
         organizationId: request.data.organizationId,
         applicationRootId: request.data.applicationRootId,
       });
-      const command = saveRecordCommandV2Schema.parse({
+      const command = saveRecordCommandSchema.parse({
         ...request.data.command,
         previewInstallationId: request.data.previewInstallationId,
       });
@@ -608,7 +608,7 @@ export const builderPreviewOperations = Object.freeze({
         return builderPreviewSaveRecordResultSchema.parse(
           operationRefusal("record_refused", location),
         );
-      const result = saveRecordResultV2Schema.safeParse(saved.value);
+      const result = saveRecordResultSchema.safeParse(saved.value);
       if (!result.success)
         return builderPreviewSaveRecordResultSchema.parse(
           operationRefusal("operation_failed", location),

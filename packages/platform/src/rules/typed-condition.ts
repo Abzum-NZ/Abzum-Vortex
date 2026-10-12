@@ -4,25 +4,25 @@ import {
   conditionNodeSchema,
   fieldIdSchema,
   jsonValueSchema,
-  moduleFieldV3Schema,
+  moduleFieldSchema,
   organizationAccountIdSchema,
   type ConditionNode,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
 } from "../schema";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,
 } from "./typed-condition-error";
 import {
-  evaluateResolvedTypedConditionV2,
-  semanticTypeForFieldV2,
-  valueMatchesFieldV2,
-  valueMatchesSemanticTypeV2,
-  type ResolvedTypedConditionOperandV2,
-} from "./typed-condition-v2-semantics";
+  evaluateResolvedTypedCondition,
+  semanticTypeForField,
+  valueMatchesField,
+  valueMatchesSemanticType,
+  type ResolvedTypedConditionOperand,
+} from "./typed-condition-semantics";
 
-export type TypedConditionParameterDeclarationV2 = Readonly<{
+export type TypedConditionParameterDeclaration = Readonly<{
   key: string;
   type:
     | "text"
@@ -35,16 +35,16 @@ export type TypedConditionParameterDeclarationV2 = Readonly<{
     | "organization_account_reference";
 }>;
 
-export type TypedConditionEvaluationInputV2 = Readonly<{
+export type TypedConditionEvaluationInput = Readonly<{
   condition: ConditionNode;
-  sourceRecordFields: readonly ModuleFieldV3[];
+  sourceRecordFields: readonly ModuleField[];
   declaredFieldIds: readonly string[];
-  parameterDeclarations: readonly TypedConditionParameterDeclarationV2[];
+  parameterDeclarations: readonly TypedConditionParameterDeclaration[];
   fieldValues: Readonly<Record<string, unknown>>;
   parameterValues: Readonly<Record<string, unknown>>;
 }>;
 
-const parameterTypesV2 = new Set<TypedConditionParameterDeclarationV2["type"]>([
+const parameterTypes = new Set<TypedConditionParameterDeclaration["type"]>([
   "text",
   "number",
   "decimal_number",
@@ -91,14 +91,14 @@ const containsUnsupportedOperator = (value: unknown): boolean => {
 
 const valueMatchesParameter = (
   value: JsonValue,
-  type: TypedConditionParameterDeclarationV2["type"],
+  type: TypedConditionParameterDeclaration["type"],
 ): boolean =>
   type === "organization_account_reference"
     ? organizationAccountIdSchema.safeParse(value).success
-    : valueMatchesSemanticTypeV2(value, type);
+    : valueMatchesSemanticType(value, type);
 
-/** Evaluates canonical Module V2 conditions without coercing exact values through Number. */
-export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2): boolean {
+/** Evaluates canonical Module  conditions without coercing exact values through Number. */
+export function evaluateTypedCondition(input: TypedConditionEvaluationInput): boolean {
   const candidateInput = input as unknown;
   if (
     !isRecord(candidateInput) ||
@@ -109,23 +109,23 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
     !isRecord(candidateInput.parameterValues)
   )
     refuse("input_refused");
-  const safeInput = candidateInput as unknown as TypedConditionEvaluationInputV2;
+  const safeInput = candidateInput as unknown as TypedConditionEvaluationInput;
   const parsedCondition = conditionNodeSchema.safeParse(safeInput.condition);
   if (!parsedCondition.success)
     refuse(containsUnsupportedOperator(safeInput.condition) ? "operator_refused" : "input_refused");
 
   const parsedFields = safeInput.sourceRecordFields.map((field) =>
-    moduleFieldV3Schema.safeParse(field),
+    moduleFieldSchema.safeParse(field),
   );
   if (parsedFields.some((field) => !field.success)) refuse("input_refused");
-  const fields: ModuleFieldV3[] = [];
+  const fields: ModuleField[] = [];
   for (const parsedField of parsedFields) {
     if (!parsedField.success) refuse("input_refused");
     fields.push(parsedField.data!);
   }
   const fieldIds = fields.map((field) => field.fieldId);
   if (new Set(fieldIds).size !== fieldIds.length) refuse("input_refused");
-  const fieldsById = new Map<string, ModuleFieldV3>(fields.map((field) => [field.fieldId, field]));
+  const fieldsById = new Map<string, ModuleField>(fields.map((field) => [field.fieldId, field]));
 
   const declaredFieldIds = safeInput.declaredFieldIds.map((fieldId) => {
     const parsed = fieldIdSchema.safeParse(fieldId);
@@ -147,13 +147,13 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
   )
     refuse("parameter_refused");
   const parameterDeclarations =
-    safeInput.parameterDeclarations as readonly TypedConditionParameterDeclarationV2[];
+    safeInput.parameterDeclarations as readonly TypedConditionParameterDeclaration[];
   const parameterKeys = parameterDeclarations.map((parameter) => parameter.key);
   if (
     new Set(parameterKeys).size !== parameterKeys.length ||
     parameterDeclarations.some(
       (parameter) =>
-        !builderKeySchema.safeParse(parameter.key).success || !parameterTypesV2.has(parameter.type),
+        !builderKeySchema.safeParse(parameter.key).success || !parameterTypes.has(parameter.type),
     )
   )
     refuse("parameter_refused");
@@ -170,7 +170,7 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
       !declaredFields.has(fieldId) ||
       !field ||
       !jsonValueSchema.safeParse(value).success ||
-      !valueMatchesFieldV2(value as JsonValue, field)
+      !valueMatchesField(value as JsonValue, field)
     )
       refuse("input_refused");
     canonicalFieldValues.set(fieldId, value as JsonValue);
@@ -189,7 +189,7 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
       refuse("input_refused");
   }
 
-  const operand = (entry: unknown): ResolvedTypedConditionOperandV2 => {
+  const operand = (entry: unknown): ResolvedTypedConditionOperand => {
     const value = entry as { source: string; fieldId?: string; key?: string; value?: JsonValue };
     if (value.source === "field") {
       const fieldId = String(value.fieldId);
@@ -198,7 +198,7 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
         refuse("field_refused");
       const declaredField = field ?? refuse("field_refused");
       return {
-        type: semanticTypeForFieldV2(declaredField),
+        type: semanticTypeForField(declaredField),
         value: canonicalFieldValues.get(fieldId)!,
       };
     }
@@ -214,5 +214,5 @@ export function evaluateTypedConditionV2(input: TypedConditionEvaluationInputV2)
     return { literal: value.value as JsonValue, value: value.value as JsonValue };
   };
 
-  return evaluateResolvedTypedConditionV2(parsedCondition.data!, operand);
+  return evaluateResolvedTypedCondition(parsedCondition.data!, operand);
 }

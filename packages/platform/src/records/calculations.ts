@@ -1,19 +1,19 @@
 import {
   formatExactDecimal,
   jsonValueSchema,
-  moneyValueV2Schema,
+  moneyValueSchema,
   parseExactDecimal,
-  recordTypeDefinitionV3Schema,
+  recordTypeDefinitionSchema,
   timestampSchema,
   type FlowFormula,
   type JsonValue,
-  type ModuleFieldV3,
-  type RecordTypeDefinitionV3,
+  type ModuleField,
+  type RecordTypeDefinition,
 } from "../schema";
-import { evaluateFlowFormula, evaluateTypedConditionV2, type FlowFormulaScope } from "../rules/index";
+import { evaluateFlowFormula, evaluateTypedCondition, type FlowFormulaScope } from "../rules/index";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
-type CalculationField = Extract<ModuleFieldV3, { type: "calculation" }>;
+type CalculationField = Extract<ModuleField, { type: "calculation" }>;
 type CalculationExpression = CalculationField["settings"]["expression"];
 type CalculationNumberValue = Extract<CalculationExpression, { kind: "numeric" }>["operands"][number];
 type DateOffsetAmount = Extract<CalculationExpression, { kind: "date_offset" }>["amount"];
@@ -24,7 +24,7 @@ export type RecordCalculationClock = Readonly<{
 }>;
 
 export type EvaluateRecordCalculationsInput = Readonly<{
-  recordType: RecordTypeDefinitionV3;
+  recordType: RecordTypeDefinition;
   authoritativeFieldValues: Readonly<Record<string, unknown>>;
   clock: RecordCalculationClock;
 }>;
@@ -116,10 +116,10 @@ const calculationDependencies = (expression: CalculationExpression): string[] =>
   return dependencies;
 };
 
-const resultTypeOf = (field: ModuleFieldV3): string =>
+const resultTypeOf = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
-const formulaTypeOf = (field: ModuleFieldV3): string => {
+const formulaTypeOf = (field: ModuleField): string => {
   const type = resultTypeOf(field);
   switch (type) {
     case "yes_no":
@@ -148,7 +148,7 @@ const literal = (type: string, value: JsonValue): FlowFormula =>
 
 const fieldFormula = (
   fieldId: string,
-  fields: ReadonlyMap<string, ModuleFieldV3>,
+  fields: ReadonlyMap<string, ModuleField>,
 ): FlowFormula | undefined => {
   const field = fields.get(fieldId);
   if (field === undefined) return undefined;
@@ -183,7 +183,7 @@ const numericOperation = (
 
 const numberFormula = (
   operand: CalculationNumberValue,
-  fields: ReadonlyMap<string, ModuleFieldV3>,
+  fields: ReadonlyMap<string, ModuleField>,
 ): FlowFormula | undefined => {
   if (operand.source === "literal") return literal("decimal_number", operand.value);
   if (operand.source === "field") return fieldFormula(operand.fieldId, fields);
@@ -194,7 +194,7 @@ const numberFormula = (
 
 const dateAmountFormula = (
   amount: DateOffsetAmount,
-  fields: ReadonlyMap<string, ModuleFieldV3>,
+  fields: ReadonlyMap<string, ModuleField>,
   values: ReadonlyMap<string, JsonValue>,
 ): FlowFormula | undefined => {
   if (amount.source === "literal") {
@@ -214,7 +214,7 @@ const dateAmountFormula = (
 
 const deadlineFormula = (
   field: CalculationField,
-  fields: ReadonlyMap<string, ModuleFieldV3>,
+  fields: ReadonlyMap<string, ModuleField>,
 ): FlowFormula | undefined => {
   const expression = field.settings.expression;
   if (expression.kind !== "deadline_passed") return undefined;
@@ -255,7 +255,7 @@ const deadlineFormula = (
 
 const calculationFormula = (
   field: CalculationField,
-  fields: ReadonlyMap<string, ModuleFieldV3>,
+  fields: ReadonlyMap<string, ModuleField>,
   values: ReadonlyMap<string, JsonValue>,
 ): FlowFormula | undefined => {
   const expression = field.settings.expression;
@@ -292,7 +292,7 @@ const issue = (
 ): RecordCalculationIssue => ({ code, ...(fieldId === undefined ? {} : { fieldId }), path });
 
 const currencyOf = (candidate: JsonValue): string | undefined => {
-  const parsed = moneyValueV2Schema.safeParse(candidate);
+  const parsed = moneyValueSchema.safeParse(candidate);
   return parsed.success ? parsed.data.currency : undefined;
 };
 
@@ -363,14 +363,14 @@ const calculationInputsPresent = (
 
 const evaluateCondition = (
   field: CalculationField,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   values: ReadonlyMap<string, JsonValue>,
 ): boolean | undefined => {
   const expression = field.settings.expression;
   if (expression.kind !== "condition") return undefined;
   const dependencies = calculationDependencies(expression);
   try {
-    return evaluateTypedConditionV2({
+    return evaluateTypedCondition({
       condition: expression.condition,
       sourceRecordFields: recordType.fields,
       declaredFieldIds: dependencies,
@@ -392,7 +392,7 @@ const evaluateCondition = (
 export const evaluateRecordCalculations = (
   input: EvaluateRecordCalculationsInput,
 ): EvaluateRecordCalculationsResult => {
-  const parsedRecordType = recordTypeDefinitionV3Schema.safeParse(input.recordType);
+  const parsedRecordType = recordTypeDefinitionSchema.safeParse(input.recordType);
   if (
     !parsedRecordType.success ||
     !isValueMap(input.authoritativeFieldValues) ||
@@ -404,7 +404,7 @@ export const evaluateRecordCalculations = (
     return { success: false, issues: [issue("invalid_input")] };
 
   const recordType = parsedRecordType.data;
-  const fields = new Map<string, ModuleFieldV3>(
+  const fields = new Map<string, ModuleField>(
     recordType.fields.map((field) => [field.fieldId, field]),
   );
   const calculations = recordType.fields.filter(
@@ -577,7 +577,7 @@ const isReadTimeCalculationField = (field: CalculationField): boolean =>
   field.settings.evaluation === "read_time" || field.settings.expression.kind === "deadline_passed";
 
 /** Returns calculation fields that are worked out whenever their record is read. */
-export const readTimeCalculationFieldIds = (recordType: RecordTypeDefinitionV3): readonly string[] => {
+export const readTimeCalculationFieldIds = (recordType: RecordTypeDefinition): readonly string[] => {
   const calculations = recordType.fields.filter(
     (field): field is CalculationField => field.type === "calculation",
   );
@@ -614,7 +614,7 @@ export type EvaluateReadTimeCalculationsResult =
 export const evaluateReadTimeCalculations = (
   input: EvaluateRecordCalculationsInput,
 ): EvaluateReadTimeCalculationsResult => {
-  const parsed = recordTypeDefinitionV3Schema.safeParse(input.recordType);
+  const parsed = recordTypeDefinitionSchema.safeParse(input.recordType);
   if (!parsed.success) return { success: false, issues: [issue("invalid_input")] };
   const readTimeIds = new Set(readTimeCalculationFieldIds(parsed.data));
   const evaluated = evaluateRecordCalculations({

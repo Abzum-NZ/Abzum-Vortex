@@ -2,14 +2,14 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  attachmentListPayloadV2Schema,
-  attachmentValueV2Schema,
+  attachmentListPayloadSchema,
+  attachmentValueSchema,
   fieldIdSchema,
   fileIdSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  type AttachmentListPayloadV2,
+  type AttachmentListPayload,
 } from "../schema";
 
 export type ReadOnlyAttachmentOwner = Readonly<{
@@ -53,7 +53,7 @@ export type ReadOnlyAttachmentFileEvidence =
   | Readonly<{ kind: "unavailable" }>;
 
 export type ReadOnlyAttachmentListProjection =
-  | Readonly<{ kind: "ready"; values: AttachmentListPayloadV2 }>
+  | Readonly<{ kind: "ready"; values: AttachmentListPayload }>
   | Readonly<{ kind: "empty" }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
@@ -91,14 +91,14 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
 
   if (!isRecord(input.subjectValues) || !Object.hasOwn(input.subjectValues, fieldId.data))
     return { kind: "refused" };
-  const attachmentIds = attachmentValueV2Schema.safeParse(input.subjectValues[fieldId.data]);
+  const attachmentIds = attachmentValueSchema.safeParse(input.subjectValues[fieldId.data]);
   if (!attachmentIds.success) return { kind: "refused" };
   const maximumFiles = Math.min(100, input.maximumFiles);
   if (attachmentIds.data.length > maximumFiles) return { kind: "refused" };
   if (attachmentIds.data.length === 0) return { kind: "empty" };
 
   const seen = new Set<string>();
-  const files: Array<AttachmentListPayloadV2["files"][number]> = [];
+  const files: Array<AttachmentListPayload["files"][number]> = [];
   try {
     for (const candidate of attachmentIds.data) {
       const parsedId = fileIdSchema.safeParse(candidate);
@@ -141,7 +141,7 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
     return { kind: "unavailable" };
   }
 
-  const payload = attachmentListPayloadV2Schema.safeParse({ kind: "attachment_list", files });
+  const payload = attachmentListPayloadSchema.safeParse({ kind: "attachment_list", files });
   if (!payload.success) return { kind: "refused" };
   return { kind: "ready", values: payload.data };
 };

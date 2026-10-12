@@ -1,33 +1,33 @@
 import "server-only";
 
 import {
-  applicationCompositionCatalogueSnapshotV2Schema,
-  applicationCompositionPolicyV2Schema,
+  applicationCompositionCatalogueSnapshotSchema,
+  applicationCompositionPolicySchema,
   connectionTypeIdSchema,
   connectionTypeSourceDocumentSchema,
-  customComponentPlacementAllowedV2,
-  customComponentReleaseV2Schema,
+  customComponentPlacementAllowed,
+  customComponentReleaseSchema,
   namespacedKeySchema,
-  platformBlockReferenceV2Schema,
-  platformBlockReleaseV2Schema,
-  platformThemeTokenRolesV2,
+  platformBlockReferenceSchema,
+  platformBlockReleaseSchema,
+  platformThemeTokenRoles,
   PLATFORM_SERVICE_OPERATION_RELEASES,
   PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
-  platformThemeReleaseV2Schema,
+  platformThemeReleaseSchema,
   platformServiceOperationReleaseSchema,
   stableDefinitionReleaseVersionSchema,
-  type ApplicationCompositionCatalogueSnapshotV2,
-  type ApplicationCompositionPolicyV2,
+  type ApplicationCompositionCatalogueSnapshot,
+  type ApplicationCompositionPolicy,
   type BlockId,
   type ConnectionTypeId,
   type ConnectionTypeSourceDocument,
-  type CustomComponentPlacementContextV2,
-  type CustomComponentReleaseV2,
+  type CustomComponentPlacementContext,
+  type CustomComponentRelease,
   type PlatformId,
-  type PlatformBlockReleaseV2,
-  type PlatformThemeReleaseV2,
-  type PlatformThemeTokenRoleV2,
+  type PlatformBlockRelease,
+  type PlatformThemeRelease,
+  type PlatformThemeTokenRole,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
 } from "../schema";
@@ -56,36 +56,36 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
-  applicationCompositionV2?: ApplicationCompositionCatalogueDefinitionV2;
+  applicationComposition?: ApplicationCompositionCatalogueDefinition;
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
-export type PlatformBlockReleaseDefinitionV2 = Omit<
-  PlatformBlockReleaseV2,
+export type PlatformBlockReleaseDefinition = Omit<
+  PlatformBlockRelease,
   "contentFingerprint" | "catalogueFingerprint" | "customComponent"
 >;
 
-export type PlatformThemeReleaseDefinitionV2 = Omit<
-  PlatformThemeReleaseV2,
+export type PlatformThemeReleaseDefinition = Omit<
+  PlatformThemeRelease,
   "contentFingerprint" | "catalogueFingerprint"
 >;
 
-export type CustomComponentReleaseDefinitionV2 = PlatformBlockReleaseDefinitionV2 &
-  Readonly<{ customComponent: CustomComponentReleaseV2 }>;
+export type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
+  Readonly<{ customComponent: CustomComponentRelease }>;
 
-export type ApplicationCompositionCatalogueDefinitionV2 = Readonly<{
-  compositionPolicy: ApplicationCompositionPolicyV2;
-  platformBlockReleases: readonly PlatformBlockReleaseDefinitionV2[];
-  platformThemeReleases: readonly PlatformThemeReleaseDefinitionV2[];
+export type ApplicationCompositionCatalogueDefinition = Readonly<{
+  compositionPolicy: ApplicationCompositionPolicy;
+  platformBlockReleases: readonly PlatformBlockReleaseDefinition[];
+  platformThemeReleases: readonly PlatformThemeReleaseDefinition[];
   /**
    * Custom component releases owned by a customer application or module release. They are joined
    * with the platform block releases at materialisation and carry the same placement identity
    * shape, with the custom-component payload on top.
    */
-  customComponentReleases?: readonly CustomComponentReleaseDefinitionV2[] | undefined;
+  customComponentReleases?: readonly CustomComponentReleaseDefinition[] | undefined;
 }>;
 
-export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
+export type ApplicationCompositionCatalogueSelection = Readonly<{
   platformBlocks: readonly Readonly<{
     blockId: BlockId;
     releaseVersion: SemanticVersion;
@@ -99,67 +99,73 @@ export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
    * release is returned only when this context may place it, so an unrelated application never
    * receives a custom component it does not own or bind.
    */
-  customComponentPlacement?: CustomComponentPlacementContextV2;
+  customComponentPlacement?: CustomComponentPlacementContext;
 }>;
 
-export interface ApplicationCompositionCatalogueV2 {
-  readPlatformBlockReleaseV2(
+export interface ApplicationCompositionCatalogue {
+  readPlatformBlockRelease(
     blockId: BlockId,
     releaseVersion: string,
-  ): Promise<PlatformBlockReleaseV2 | undefined>;
-  readPlatformThemeReleaseV2(
+  ): Promise<PlatformBlockRelease | undefined>;
+  readPlatformThemeRelease(
     catalogueThemeId: PlatformId,
     releaseVersion: string,
-  ): Promise<PlatformThemeReleaseV2 | undefined>;
-  readApplicationCompositionCatalogueSnapshotV2(
-    selection: ApplicationCompositionCatalogueSelectionV2,
-  ): Promise<ApplicationCompositionCatalogueSnapshotV2 | undefined>;
+  ): Promise<PlatformThemeRelease | undefined>;
+  readApplicationCompositionCatalogueSnapshot(
+    selection: ApplicationCompositionCatalogueSelection,
+  ): Promise<ApplicationCompositionCatalogueSnapshot | undefined>;
 }
 
 export type ImmutableDefinitionPublicationCatalogue = DefinitionPublicationCatalogue &
-  ApplicationCompositionCatalogueV2;
+  ApplicationCompositionCatalogue;
 
 const connectionTypeReleaseDefinitionSchema = z
   .object({
     source: connectionTypeSourceDocumentSchema,
     rootId: connectionTypeIdSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
-    contentFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
-    catalogueFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+    contentFingerprint: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .optional(),
+    catalogueFingerprint: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .optional(),
   })
   .strict();
 
 // A platform block release never carries a custom component payload; custom component releases
 // arrive only through `customComponentReleases`, where their ownership and bundle rules apply.
-const platformBlockReleaseDefinitionV2Schema = z
-  .object(platformBlockReleaseV2Schema.shape)
+const platformBlockReleaseDefinitionSchema = z
+  .object(platformBlockReleaseSchema.shape)
   .omit({ contentFingerprint: true, catalogueFingerprint: true, customComponent: true })
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
-const platformThemeReleaseDefinitionV2Schema = z
-  .object(platformThemeReleaseV2Schema.shape)
+const platformThemeReleaseDefinitionSchema = z
+  .object(platformThemeReleaseSchema.shape)
   .omit({ contentFingerprint: true, catalogueFingerprint: true })
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
-const customComponentReleaseDefinitionV2Schema = platformBlockReleaseDefinitionV2Schema
-  .extend({ customComponent: customComponentReleaseV2Schema })
+const customComponentReleaseDefinitionSchema = platformBlockReleaseDefinitionSchema
+  .extend({ customComponent: customComponentReleaseSchema })
   .strict();
 
-const applicationCompositionCatalogueDefinitionV2Schema = z
+const applicationCompositionCatalogueDefinitionSchema = z
   .object({
-    compositionPolicy: applicationCompositionPolicyV2Schema,
-    platformBlockReleases: z.array(platformBlockReleaseDefinitionV2Schema),
-    platformThemeReleases: z.array(platformThemeReleaseDefinitionV2Schema),
-    customComponentReleases: z.array(customComponentReleaseDefinitionV2Schema).max(10_000).optional(),
+    compositionPolicy: applicationCompositionPolicySchema,
+    platformBlockReleases: z.array(platformBlockReleaseDefinitionSchema),
+    platformThemeReleases: z.array(platformThemeReleaseDefinitionSchema),
+    customComponentReleases: z.array(customComponentReleaseDefinitionSchema).max(10_000).optional(),
   })
   .strict();
 
 const catalogueDefinitionSchema = z
   .object({
     connectionTypeReleases: z.array(connectionTypeReleaseDefinitionSchema).max(10_000),
-    applicationCompositionV2: applicationCompositionCatalogueDefinitionV2Schema.optional(),
+    applicationComposition: applicationCompositionCatalogueDefinitionSchema.optional(),
     platformServiceOperationReleases: z
       .array(platformServiceOperationReleaseSchema)
       .max(10_000)
@@ -202,7 +208,7 @@ const ensureUniqueConnectionTypeReleases = (
 };
 
 const ensureUniqueApplicationCompositionReleases = (
-  definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
+  definition: ApplicationCompositionCatalogueDefinition | undefined,
 ): void => {
   if (definition === undefined) return;
   const blockVersions = new Set<string>();
@@ -273,10 +279,10 @@ const ensureUniqueApplicationCompositionReleases = (
  * leave the renderer or the readability checks on another convention.
  */
 const ensurePlatformThemeReleasesCoverEveryRole = (
-  definition: ApplicationCompositionCatalogueDefinitionV2 | undefined,
+  definition: ApplicationCompositionCatalogueDefinition | undefined,
 ): void => {
   if (definition === undefined) return;
-  const roles: readonly PlatformThemeTokenRoleV2[] = platformThemeTokenRolesV2;
+  const roles: readonly PlatformThemeTokenRole[] = platformThemeTokenRoles;
   for (const release of definition.platformThemeReleases) {
     for (const role of roles) {
       const token = release.tokens[role.key];
@@ -323,7 +329,7 @@ const compileConnectionTypeRelease = (
     },
   ];
   const resolutionEvidence = {
-    contractVersion: "1.0.0" as const,
+    contractVersion: "3.0.0" as const,
     definitions,
     identities: [],
   };
@@ -360,22 +366,22 @@ const compileConnectionTypeRelease = (
   });
 };
 
-const materialisePlatformBlockReleaseV2 = (
-  definition: PlatformBlockReleaseDefinitionV2,
-): PlatformBlockReleaseV2 => {
+const materialisePlatformBlockRelease = (
+  definition: PlatformBlockReleaseDefinition,
+): PlatformBlockRelease => {
   return deepFreeze(
-    platformBlockReleaseV2Schema.parse({
+    platformBlockReleaseSchema.parse({
       ...definition,
       ...platformBlockReleaseFingerprints(definition),
     }),
   );
 };
 
-const materialisePlatformThemeReleaseV2 = (
-  definition: PlatformThemeReleaseDefinitionV2,
-): PlatformThemeReleaseV2 => {
+const materialisePlatformThemeRelease = (
+  definition: PlatformThemeReleaseDefinition,
+): PlatformThemeRelease => {
   return deepFreeze(
-    platformThemeReleaseV2Schema.parse({
+    platformThemeReleaseSchema.parse({
       ...definition,
       ...platformThemeReleaseFingerprints(definition),
     }),
@@ -394,8 +400,8 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const parsed = catalogueDefinitionSchema.safeParse(input);
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
-  ensureUniqueApplicationCompositionReleases(definition.applicationCompositionV2);
-  ensurePlatformThemeReleasesCoverEveryRole(definition.applicationCompositionV2);
+  ensureUniqueApplicationCompositionReleases(definition.applicationComposition);
+  ensurePlatformThemeReleasesCoverEveryRole(definition.applicationComposition);
   ensureRegisteredPlatformServiceOperationsAuthentic();
   const operationReleases = [
     ...PLATFORM_SERVICE_OPERATION_RELEASES,
@@ -422,19 +428,19 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const connectionsByIdentity = new Map(
     connectionTypes.map((release) => [`${release.rootId}:${release.releaseVersion}`, release]),
   );
-  const composition = definition.applicationCompositionV2;
-  const blockReleasesV2 = [
-    ...(composition?.platformBlockReleases ?? []).map(materialisePlatformBlockReleaseV2),
-    ...(composition?.customComponentReleases ?? []).map(materialisePlatformBlockReleaseV2),
+  const composition = definition.applicationComposition;
+  const blockReleases = [
+    ...(composition?.platformBlockReleases ?? []).map(materialisePlatformBlockRelease),
+    ...(composition?.customComponentReleases ?? []).map(materialisePlatformBlockRelease),
   ];
-  const themeReleasesV2 = (composition?.platformThemeReleases ?? []).map(
-    materialisePlatformThemeReleaseV2,
+  const themeReleases = (composition?.platformThemeReleases ?? []).map(
+    materialisePlatformThemeRelease,
   );
-  const blocksV2ByIdentity = new Map(
-    blockReleasesV2.map((release) => [`${release.blockId}:${release.releaseVersion}`, release]),
+  const blocksByIdentity = new Map(
+    blockReleases.map((release) => [`${release.blockId}:${release.releaseVersion}`, release]),
   );
-  const themesV2ByIdentity = new Map(
-    themeReleasesV2.map((release) => [
+  const themesByIdentity = new Map(
+    themeReleases.map((release) => [
       `${release.catalogueThemeId}:${release.releaseVersion}`,
       release,
     ]),
@@ -446,29 +452,29 @@ export const createImmutableDefinitionPublicationCatalogue = (
     ]),
   );
 
-  const readPlatformBlockReleaseV2 = async (blockId: BlockId, releaseVersion: string) =>
-    blocksV2ByIdentity.get(`${blockId}:${releaseVersion}`);
-  const readPlatformThemeReleaseV2 = async (catalogueThemeId: PlatformId, releaseVersion: string) =>
-    themesV2ByIdentity.get(`${catalogueThemeId}:${releaseVersion}`);
+  const readPlatformBlockRelease = async (blockId: BlockId, releaseVersion: string) =>
+    blocksByIdentity.get(`${blockId}:${releaseVersion}`);
+  const readPlatformThemeRelease = async (catalogueThemeId: PlatformId, releaseVersion: string) =>
+    themesByIdentity.get(`${catalogueThemeId}:${releaseVersion}`);
 
   return Object.freeze({
     listConnectionTypeReleases: async (key: string) => connectionsByKey.get(key) ?? [],
     readConnectionTypeRelease: async (rootId: ConnectionTypeId, releaseVersion: string) =>
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),
-    readPlatformBlockReleaseV2,
-    readPlatformThemeReleaseV2,
+    readPlatformBlockRelease,
+    readPlatformThemeRelease,
     readPlatformServiceOperationRelease: async (
       serviceId: string,
       operationId: string,
       releaseVersion: string,
     ) => operationsByIdentity.get(`${serviceId}:${operationId}:${releaseVersion}`),
-    readApplicationCompositionCatalogueSnapshotV2: async (
-      selection: ApplicationCompositionCatalogueSelectionV2,
+    readApplicationCompositionCatalogueSnapshot: async (
+      selection: ApplicationCompositionCatalogueSelection,
     ) => {
       if (composition === undefined) return undefined;
       const parsedSelection = z
         .object({
-          platformBlocks: z.array(platformBlockReferenceV2Schema),
+          platformBlocks: z.array(platformBlockReferenceSchema),
           platformTheme: z
             .object({
               catalogueThemeId: platformIdSchema,
@@ -502,26 +508,26 @@ export const createImmutableDefinitionPublicationCatalogue = (
         return undefined;
       const selectedBlocks = await Promise.all(
         parsedSelection.data.platformBlocks.map((reference) =>
-          readPlatformBlockReleaseV2(reference.blockId, reference.releaseVersion),
+          readPlatformBlockRelease(reference.blockId, reference.releaseVersion),
         ),
       );
       if (selectedBlocks.some((release) => release === undefined)) return undefined;
       // A custom component is returned only to the application that owns it or that binds the
       // exact owning module release; any other application never receives it, so its placement is
       // refused rather than silently allowed.
-      for (const release of selectedBlocks as PlatformBlockReleaseV2[]) {
+      for (const release of selectedBlocks as PlatformBlockRelease[]) {
         const custom = release.customComponent;
         if (custom === undefined) continue;
         const context = parsedSelection.data.customComponentPlacement;
-        if (context === undefined || !customComponentPlacementAllowedV2(custom.owner, context))
+        if (context === undefined || !customComponentPlacementAllowed(custom.owner, context))
           return undefined;
       }
-      const selectedTheme = await readPlatformThemeReleaseV2(
+      const selectedTheme = await readPlatformThemeRelease(
         parsedSelection.data.platformTheme.catalogueThemeId,
         parsedSelection.data.platformTheme.releaseVersion,
       );
       if (selectedTheme === undefined) return undefined;
-      const releases = (selectedBlocks as PlatformBlockReleaseV2[]).sort((left, right) =>
+      const releases = (selectedBlocks as PlatformBlockRelease[]).sort((left, right) =>
         compareCanonicalStrings(
           `${left.blockId}@${left.releaseVersion}`,
           `${right.blockId}@${right.releaseVersion}`,
@@ -536,7 +542,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
         platformTheme: selectedTheme,
       };
       return deepFreeze(
-        applicationCompositionCatalogueSnapshotV2Schema.parse({
+        applicationCompositionCatalogueSnapshotSchema.parse({
           ...evidence,
           fingerprint: fingerprintCanonicalValue(evidence),
         }),

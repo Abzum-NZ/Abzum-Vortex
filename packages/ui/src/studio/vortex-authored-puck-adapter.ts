@@ -1,22 +1,22 @@
 import type { ComponentData, Content, Data } from "@puckeditor/core";
 import {
   applicationPuckRootShellSchema,
-  immutablePlatformBlockCatalogueV2Schema,
-  isRepeatableSlotIdentityV2,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
-  sourceApplicationShellV2Schema,
-  sourceBlockPropertyValueV2Schema,
-  sourcePlacementSlotV2Schema,
-  sourceResponsivePlacementV2Schema,
-  sourceThemeTokenValueV2Schema,
+  immutablePlatformBlockCatalogueSchema,
+  isRepeatableSlotIdentity,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  sourceApplicationShellSchema,
+  sourceBlockPropertyValueSchema,
+  sourcePlacementSlotSchema,
+  sourceResponsivePlacementSchema,
+  sourceThemeTokenValueSchema,
   validateComponentSettings,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 
-type SourceSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 type SourcePlacement = SourceSlot["placements"][string];
-type SourceShell = ReturnType<typeof sourceApplicationShellV2Schema.parse>;
+type SourceShell = ReturnType<typeof sourceApplicationShellSchema.parse>;
 type SourceOrder = SourceSlot["order"];
 type Reservations = ReadonlyMap<string, ReadonlySet<string>>;
 type SlotIdentity =
@@ -175,7 +175,7 @@ const sourceThemeOverrides = (candidate: unknown): SourcePlacement["theme_overri
     }),
   );
   return Object.fromEntries(
-    Object.entries(source).map(([key, value]) => [key, sourceThemeTokenValueV2Schema.parse(value)]),
+    Object.entries(source).map(([key, value]) => [key, sourceThemeTokenValueSchema.parse(value)]),
   ) as SourcePlacement["theme_overrides"];
 };
 
@@ -190,7 +190,7 @@ const sourceResponsive = (candidate: unknown): SourcePlacement["responsive"] => 
         : { kind: width.kind };
     return { visible: value.visible, width: sourceWidth, height: value.height };
   };
-  return sourceResponsivePlacementV2Schema.parse({
+  return sourceResponsivePlacementSchema.parse({
     desktop: layout(responsive.desktop),
     tablet: layout(responsive.tablet),
     phone: layout(responsive.phone),
@@ -199,7 +199,7 @@ const sourceResponsive = (candidate: unknown): SourcePlacement["responsive"] => 
 
 const sourcePropertyValue = (candidate: unknown): unknown => {
   const raw = object(candidate);
-  const source = sourceBlockPropertyValueV2Schema.safeParse(raw);
+  const source = sourceBlockPropertyValueSchema.safeParse(raw);
   if (source.success) return source.data;
   switch (raw.kind) {
     case "asset_reference":
@@ -243,7 +243,7 @@ const sourcePropertyValue = (candidate: unknown): unknown => {
       return { kind: raw.kind, items: raw.items.map(sourcePropertyValue) };
     }
     default:
-      return sourceBlockPropertyValueV2Schema.parse(raw);
+      return sourceBlockPropertyValueSchema.parse(raw);
   }
 };
 
@@ -258,7 +258,7 @@ const sourceSettings = (
     if (!allowed.has(key) && Object.hasOwn(compiled, key)) return [];
     if (original?.[key] === undefined && Object.hasOwn(compiled, key) &&
       sameJsonValue(value, compiled[key])) return [];
-    return [[key, sourceBlockPropertyValueV2Schema.parse(sourcePropertyValue(value))]];
+    return [[key, sourceBlockPropertyValueSchema.parse(sourcePropertyValue(value))]];
   }),
 ) as SourcePlacement["settings"];
 
@@ -318,16 +318,16 @@ const sourceOrder = (
  * no reads or writes. A caller applies the returned authored region to its own
  * current, revision-bound document before using ordinary draft history/save.
  */
-export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
+export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
   try {
-    const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(catalogueInput);
+    const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
     const releases = new Map(
       catalogue.releases.map((release) => [
         `${release.blockId}:${release.releaseVersion}`,
         release,
       ]),
     );
-    const releaseFor = (placement: SourcePlacement): PlatformBlockReleaseV2 =>
+    const releaseFor = (placement: SourcePlacement): PlatformBlockRelease =>
       releases.get(`${placement.block.block_id}:${placement.block.release_version}`) ?? refuse();
 
     // Bound the raw placement tree before recursive source parsing or conversion.
@@ -361,12 +361,12 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
 
     const parseSlot = (candidate: unknown): SourceSlot => {
       boundSource(candidate);
-      return sourcePlacementSlotV2Schema.parse(candidate);
+      return sourcePlacementSlotSchema.parse(candidate);
     };
 
     const parseShell = (candidate: unknown): SourceShell => {
       boundSource(object(candidate).layout);
-      return sourceApplicationShellV2Schema.parse(candidate);
+      return sourceApplicationShellSchema.parse(candidate);
     };
 
     const reservationsFor = (shell: SourceShell): Reservations => {
@@ -379,21 +379,21 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       return reservations;
     };
 
-    const slotDeclarations = (placement: SourcePlacement, release: PlatformBlockReleaseV2) => {
-      const declarations = new Map<string, PlatformBlockReleaseV2["slots"][number]>();
+    const slotDeclarations = (placement: SourcePlacement, release: PlatformBlockRelease) => {
+      const declarations = new Map<string, PlatformBlockRelease["slots"][number]>();
       for (const declaration of release.slots) {
         if (declaration.repeats === undefined) {
           declarations.set(declaration.key, declaration);
           continue;
         }
-        const identities = repeatableSlotItemIdentitiesV2(declaration, placement.settings);
+        const identities = repeatableSlotItemIdentities(declaration, placement.settings);
         if (
           new Set(identities).size !== identities.length ||
-          identities.some((identity) => !isRepeatableSlotIdentityV2(declaration.key, identity))
+          identities.some((identity) => !isRepeatableSlotIdentity(declaration.key, identity))
         )
           refuse();
         for (const identity of identities)
-          declarations.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+          declarations.set(repeatableSlotKey(declaration.key, identity), declaration);
       }
       return declarations;
     };
@@ -402,7 +402,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       const seen = new Set<string>();
       const visit = (
         current: SourceSlot,
-        parentDeclaration?: PlatformBlockReleaseV2["slots"][number],
+        parentDeclaration?: PlatformBlockRelease["slots"][number],
         responsiveOrderAllowed = true,
       ): void => {
         const tablet = current.order.tablet ?? current.order.desktop;
@@ -423,7 +423,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
           )
             refuse();
           for (const value of Object.values(placement.settings))
-            sourceBlockPropertyValueV2Schema.parse(value);
+            sourceBlockPropertyValueSchema.parse(value);
           if (validateComponentSettings(placement.settings, release.properties).length > 0)
             refuse();
 
@@ -696,7 +696,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
           ) ?? refuse();
           const compiledSettings = compiledSettingsValue === undefined
             ? {} : object(compiledSettingsValue);
-          const fieldSlot = sourcePlacementSlotV2Schema.parse({
+          const fieldSlot = sourcePlacementSlotSchema.parse({
             placements: {
               [id]: {
                 ...fields,
@@ -740,7 +740,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
           )
             hints.push(editedOrder);
         }
-        return sourcePlacementSlotV2Schema.parse({
+        return sourcePlacementSlotSchema.parse({
           placements,
           order: sourceOrder(desktop, baseline?.order, hints),
         });
@@ -774,7 +774,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       fromPuckShell: (originalSourceShell: unknown, data: unknown): SourceShell =>
         safe(() => {
           const shell = parseShell(originalSourceShell);
-          return sourceApplicationShellV2Schema.parse({
+          return sourceApplicationShellSchema.parse({
             ...shell,
             layout: inverse(shell.layout, data, reservationsFor(shell)),
           });

@@ -49,7 +49,7 @@ import {
   projectedRecordPinTilesSchema,
   projectedApplicationPageLinkTilesSchema,
   mountedRecordPinFrameSchema,
-  responsivePlacementV2Schema,
+  responsivePlacementSchema,
   type BoardColumnSelector,
   CHOICE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
@@ -378,7 +378,7 @@ const formSurfaceComposition = (
   const desktop = sourceResponsive.desktop;
   const tablet = sourceResponsive.tablet;
   const phone = sourceResponsive.phone;
-  const responsive = responsivePlacementV2Schema.safeParse(sourceResponsive);
+  const responsive = responsivePlacementSchema.safeParse(sourceResponsive);
   if (
     !responsive.success ||
     !isRecord(desktop) ||

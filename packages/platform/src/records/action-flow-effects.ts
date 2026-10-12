@@ -1,18 +1,18 @@
 import {
-  type actionDefinitionV3Schema,
+  type actionDefinitionSchema,
   compileTextInputPattern,
-  currencyCodeV2Schema,
-  dateValueV2Schema,
-  exactDecimalWithinBoundsV2,
-  inspectRecordRichTextV2,
+  currencyCodeSchema,
+  dateValueSchema,
+  exactDecimalWithinBounds,
+  inspectRecordRichText,
   jsonValueSchema,
-  moneyValueV2Schema,
+  moneyValueSchema,
   normalizeExactDecimal,
   organizationAccountIdSchema,
   parseExactDecimal,
-  recordLinkValueV2Schema,
-  type recordTypeDefinitionV3Schema,
-  recordRichTextDocumentV2Schema,
+  recordLinkValueSchema,
+  type recordTypeDefinitionSchema,
+  recordRichTextDocumentSchema,
   timestampSchema,
   type JsonValue,
 } from "../schema";
@@ -33,8 +33,8 @@ import {
  * here is a verified statement of intent, never an authority the database trusts.
  */
 
-type NamedActionDefinition = ReturnType<typeof actionDefinitionV3Schema.parse>;
-type RecordTypeDefinition = ReturnType<typeof recordTypeDefinitionV3Schema.parse>;
+type NamedActionDefinition = ReturnType<typeof actionDefinitionSchema.parse>;
+type RecordTypeDefinition = ReturnType<typeof recordTypeDefinitionSchema.parse>;
 
 /**
  * One `create_record` target resolved by the database from the published resolved record-type
@@ -111,7 +111,7 @@ const exactWithin = (
 ): boolean => {
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
-  return exactDecimalWithinBoundsV2(
+  return exactDecimalWithinBounds(
     parsed,
     validation?.minimum === undefined ? undefined : parseExactDecimal(validation.minimum),
     validation?.maximum === undefined ? undefined : parseExactDecimal(validation.maximum),
@@ -138,9 +138,9 @@ const inputValue = (
     return candidate;
   }
   if (input.type === "formatted_text") {
-    const parsed = recordRichTextDocumentV2Schema.safeParse(candidate);
+    const parsed = recordRichTextDocumentSchema.safeParse(candidate);
     if (!parsed.success) return undefined;
-    const inspected = inspectRecordRichTextV2(parsed.data);
+    const inspected = inspectRecordRichText(parsed.data);
     if (
       (input.validation?.maximumLength !== undefined &&
         inspected.visibleTextLength > input.validation.maximumLength) ||
@@ -167,8 +167,8 @@ const inputValue = (
       : undefined;
   }
   if (input.type === "money") {
-    const parsed = moneyValueV2Schema.safeParse(candidate);
-    if (!parsed.success || !currencyCodeV2Schema.safeParse(parsed.data.currency).success)
+    const parsed = moneyValueSchema.safeParse(candidate);
+    if (!parsed.success || !currencyCodeSchema.safeParse(parsed.data.currency).success)
       return undefined;
     const validation =
       typeof input.validation?.minimum === "string" || typeof input.validation?.maximum === "string"
@@ -185,7 +185,7 @@ const inputValue = (
   }
   if (input.type === "boolean") return typeof candidate === "boolean" ? candidate : undefined;
   if (input.type === "date") {
-    const parsed = dateValueV2Schema.safeParse(candidate);
+    const parsed = dateValueSchema.safeParse(candidate);
     if (!parsed.success) return undefined;
     return (input.validation?.earliest === undefined || parsed.data >= input.validation.earliest) &&
       (input.validation?.latest === undefined || parsed.data <= input.validation.latest)
@@ -206,7 +206,7 @@ const inputValue = (
       ? (candidate as string)
       : undefined;
   if (input.type === "record_reference") {
-    const parsed = recordLinkValueV2Schema.safeParse(candidate);
+    const parsed = recordLinkValueSchema.safeParse(candidate);
     if (!parsed.success) return undefined;
     return input.recordTypes.some(
       (target) =>
@@ -378,7 +378,7 @@ const relationshipCopy = (
   earlierSetFieldIds: ReadonlySet<string>,
 ): NamedActionRelationshipCopy | undefined => {
   if (!hasOwn(normalizedInputs, authored.targetInputKey)) return undefined;
-  const target = recordLinkValueV2Schema.safeParse(normalizedInputs[authored.targetInputKey]);
+  const target = recordLinkValueSchema.safeParse(normalizedInputs[authored.targetInputKey]);
   if (
     !target.success ||
     target.data.recordTypeId.toLowerCase() !== prepared.recordType.recordTypeId.toLowerCase() ||

@@ -4,19 +4,19 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useState } from "react";
-import { applicationSourceDocumentV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
+import { applicationSourceDocumentSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 
-type SearchSource = NonNullable<ApplicationSourceDocumentV2["body"]["search"]>;
+type SearchSource = NonNullable<ApplicationSourceDocument["body"]["search"]>;
 type SearchEntry = SearchSource["record_types"][number];
 
 /** A local buffer commits once to immutable draft history; choices never become authored metadata. */
 export function ApplicationSearchEditor({ source, metadata, disabled, onPendingChange, onApply, onRefresh }: {
-  source: ApplicationSourceDocumentV2;
+  source: ApplicationSourceDocument;
   metadata: StudioApplicationSearchMetadata | null;
   disabled: boolean;
   onPendingChange(pending: boolean): void;
-  onApply(expected: ApplicationSourceDocumentV2, search: SearchSource | undefined): boolean;
+  onApply(expected: ApplicationSourceDocument, search: SearchSource | undefined): boolean;
   onRefresh(): void;
 }) {
   const [buffer, setBuffer] = useState<SearchSource | undefined>(() => structuredClone(source.body.search));
@@ -47,7 +47,7 @@ export function ApplicationSearchEditor({ source, metadata, disabled, onPendingC
     const candidate = structuredClone(source);
     if (buffer === undefined) delete candidate.body.search;
     else candidate.body.search = buffer;
-    const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
     if (!parsed.success) { setMessage("Choose searchable fields, a title and a compatible Page before applying."); return; }
     if (!onApply(source, parsed.data.body.search)) { setMessage("The draft or choices changed. Refresh before applying."); return; }
     setPending(false); onPendingChange(false); setMessage("Search applied to local history. Save and publish explicitly to use it.");

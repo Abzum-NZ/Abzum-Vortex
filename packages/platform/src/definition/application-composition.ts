@@ -20,7 +20,7 @@ import {
   type ComponentSemanticEventKind,
 } from "./application-flow-bindings";
 import { recordTypeReferenceSchema } from "./definitions";
-import { conditionNodeSchema } from "./module-contracts";
+import { conditionNodeSchema } from "./module-foundation-contracts";
 import {
   blockIdSchema,
   builderKeySchema,
@@ -37,16 +37,16 @@ import {
   shellIdSchema,
 } from "../catalogue/identifiers";
 import {
-  richTextDocumentV2Schema,
-  richTextElementKindV2Schema,
-  type RichTextInlineV2,
+  richTextDocumentSchema,
+  richTextElementKindSchema,
+  type RichTextInline,
 } from "../records/rich-text";
 import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
 
 export {
-  richTextBlockV2Schema,
-  richTextDocumentV2Schema,
-  richTextElementKindV2Schema,
+  richTextBlockSchema,
+  richTextDocumentSchema,
+  richTextElementKindSchema,
 } from "../records/rich-text";
 
 const iconKeySchema = z
@@ -58,12 +58,12 @@ const iconKeySchema = z
 const nonNegativeFiniteSchema = z.number().finite().nonnegative();
 const positiveFiniteSchema = z.number().finite().positive();
 
-export type BlockPropertyValueV2Contract =
+export type BlockPropertyValueContract =
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }
   | { kind: "boolean"; value: boolean }
   | { kind: "choice"; value: string }
-  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentV2Schema> }
+  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentSchema> }
   | { kind: "url"; value: string }
   | { kind: "asset_reference"; assetId: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; iconKey: string }
@@ -83,11 +83,11 @@ export type BlockPropertyValueV2Contract =
       recordType: z.infer<typeof recordTypeReferenceSchema>;
       recordId: z.infer<typeof recordIdSchema>;
     }
-  | { kind: "group"; properties: Record<string, BlockPropertyValueV2Contract> }
-  | { kind: "list"; items: BlockPropertyValueV2Contract[] };
+  | { kind: "group"; properties: Record<string, BlockPropertyValueContract> }
+  | { kind: "list"; items: BlockPropertyValueContract[] };
 
-/** Canonical V2 values are closed and kind-discriminated; there is no arbitrary JSON branch. */
-export const blockPropertyValueV2Schema: z.ZodType<BlockPropertyValueV2Contract> = z.lazy(() =>
+/** Canonical  values are closed and kind-discriminated; there is no arbitrary JSON branch. */
+export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z.lazy(() =>
   z.discriminatedUnion("kind", [
     z
       .object({
@@ -116,7 +116,7 @@ export const blockPropertyValueV2Schema: z.ZodType<BlockPropertyValueV2Contract>
     z
       .object({
         kind: sourceProvenanceUnchanged(z.literal("rich_text")),
-        value: sourceProvenanceUnchanged(richTextDocumentV2Schema, true),
+        value: sourceProvenanceUnchanged(richTextDocumentSchema, true),
       })
       .strict(),
     z
@@ -195,26 +195,24 @@ export const blockPropertyValueV2Schema: z.ZodType<BlockPropertyValueV2Contract>
     z
       .object({
         kind: sourceProvenanceUnchanged(z.literal("group")),
-        properties: sourceProvenanceUnchanged(
-          z.record(builderKeySchema, blockPropertyValueV2Schema),
-        ),
+        properties: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueSchema)),
       })
       .strict(),
     z
       .object({
         kind: sourceProvenanceUnchanged(z.literal("list")),
-        items: sourceProvenanceUnchanged(z.array(blockPropertyValueV2Schema)),
+        items: sourceProvenanceUnchanged(z.array(blockPropertyValueSchema)),
       })
       .strict(),
   ]),
 );
 
-export type SourceBlockPropertyValueV2Contract =
+export type SourceBlockPropertyValueContract =
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }
   | { kind: "boolean"; value: boolean }
   | { kind: "choice"; value: string }
-  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentV2Schema> }
+  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentSchema> }
   | { kind: "url"; value: string }
   | { kind: "asset_reference"; asset_id: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; icon_key: string }
@@ -233,12 +231,12 @@ export type SourceBlockPropertyValueV2Contract =
       record_type: z.infer<typeof sourceQualifiedRecordTypeSchema>;
     }
   | { kind: "record_reference"; record_type: string; record_id: string }
-  | { kind: "group"; properties: Record<string, SourceBlockPropertyValueV2Contract> }
-  | { kind: "list"; items: SourceBlockPropertyValueV2Contract[] };
+  | { kind: "group"; properties: Record<string, SourceBlockPropertyValueContract> }
+  | { kind: "list"; items: SourceBlockPropertyValueContract[] };
 
-/** Authored V2 values retain portable aliases while preserving the same closed value kinds. */
-export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValueV2Contract> =
-  z.lazy(() =>
+/** Authored  values retain portable aliases while preserving the same closed value kinds. */
+export const sourceBlockPropertyValueSchema: z.ZodType<SourceBlockPropertyValueContract> = z.lazy(
+  () =>
     z.discriminatedUnion("kind", [
       z
         .object({
@@ -267,7 +265,7 @@ export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValu
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("rich_text")),
-          value: sourceProvenanceUnchanged(richTextDocumentV2Schema, true),
+          value: sourceProvenanceUnchanged(richTextDocumentSchema, true),
         })
         .strict(),
       z
@@ -349,18 +347,18 @@ export const sourceBlockPropertyValueV2Schema: z.ZodType<SourceBlockPropertyValu
         .object({
           kind: sourceProvenanceUnchanged(z.literal("group")),
           properties: sourceProvenanceUnchanged(
-            z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
+            z.record(builderKeySchema, sourceBlockPropertyValueSchema),
           ),
         })
         .strict(),
       z
         .object({
           kind: sourceProvenanceUnchanged(z.literal("list")),
-          items: sourceProvenanceUnchanged(z.array(sourceBlockPropertyValueV2Schema)),
+          items: sourceProvenanceUnchanged(z.array(sourceBlockPropertyValueSchema)),
         })
         .strict(),
     ]),
-  );
+);
 
 /**
  * The control an automatic field input renders, chosen from its referenced module field type by the
@@ -379,12 +377,12 @@ export const fieldInputControlKeys = [
 ] as const;
 export type FieldInputControlKey = (typeof fieldInputControlKeys)[number];
 
-type BlockPropertySchemaV2Base = {
+type BlockPropertySchemaBase = {
   key: string;
   label: string;
   help?: string | undefined;
   required: boolean;
-  defaultValue?: BlockPropertyValueV2Contract | undefined;
+  defaultValue?: BlockPropertyValueContract | undefined;
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler then derives that input's name, label, requirement, choices and control from
@@ -393,29 +391,29 @@ type BlockPropertySchemaV2Base = {
   derivesFieldInput?: boolean | undefined;
 };
 
-export type BlockPropertySchemaV2Contract =
-  | (BlockPropertySchemaV2Base & { kind: "text"; minLength: number; maxLength: number })
-  | (BlockPropertySchemaV2Base & {
+export type BlockPropertySchemaContract =
+  | (BlockPropertySchemaBase & { kind: "text"; minLength: number; maxLength: number })
+  | (BlockPropertySchemaBase & {
       kind: "number";
       integer: boolean;
       minimum?: number | undefined;
       maximum?: number | undefined;
     })
-  | (BlockPropertySchemaV2Base & { kind: "boolean" })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & { kind: "boolean" })
+  | (BlockPropertySchemaBase & {
       kind: "choice";
       options: { key: string; label: string }[];
     })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & {
       kind: "rich_text";
-      allowedElements: z.infer<typeof richTextElementKindV2Schema>[];
+      allowedElements: z.infer<typeof richTextElementKindSchema>[];
     })
-  | (BlockPropertySchemaV2Base & { kind: "url" | "asset_reference" | "icon" })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & { kind: "url" | "asset_reference" | "icon" })
+  | (BlockPropertySchemaBase & {
       kind: "theme_token";
-      tokenKind: z.infer<typeof themeTokenKindV2Schema>;
+      tokenKind: z.infer<typeof themeTokenKindSchema>;
     })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & {
       kind:
         | "field_reference"
         | "relationship_reference"
@@ -426,15 +424,15 @@ export type BlockPropertySchemaV2Contract =
         | "record_type_reference"
         | "record_reference";
     })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & {
       kind: "group";
-      properties: BlockPropertySchemaV2Contract[];
+      properties: BlockPropertySchemaContract[];
     })
-  | (BlockPropertySchemaV2Base & {
+  | (BlockPropertySchemaBase & {
       kind: "list";
       minimumItems: number;
       maximumItems: number;
-      item: BlockPropertySchemaV2Contract;
+      item: BlockPropertySchemaContract;
     });
 
 const propertySchemaBase = {
@@ -442,7 +440,7 @@ const propertySchemaBase = {
   label: sourceProvenanceUnchanged(labelSchema),
   help: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
   required: sourceProvenanceUnchanged(z.boolean()),
-  defaultValue: sourceProvenanceUnchanged(blockPropertyValueV2Schema.optional()),
+  defaultValue: sourceProvenanceUnchanged(blockPropertyValueSchema.optional()),
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler derives that input's name, label, requirement, choices and control from the
@@ -531,14 +529,14 @@ const unsafeSettingTextPatterns: readonly RegExp[] = Object.freeze([
 export const isUnsafeComponentSettingText = (text: string): boolean =>
   unsafeSettingTextPatterns.some((pattern) => pattern.test(text));
 
-type RichTextSettingDocument = z.infer<typeof richTextDocumentV2Schema>;
+type RichTextSettingDocument = z.infer<typeof richTextDocumentSchema>;
 
 const richTextSettingViolations = (
   document: RichTextSettingDocument,
 ): Readonly<{ kinds: ReadonlySet<string>; unsafe: boolean }> => {
   const kinds = new Set<string>();
   let unsafe = false;
-  const visitInline = (inline: RichTextInlineV2): void => {
+  const visitInline = (inline: RichTextInline): void => {
     if (inline.kind === "text") {
       if (isUnsafeComponentSettingText(inline.text)) unsafe = true;
       return;
@@ -575,8 +573,7 @@ export type ComponentSettingFailure = Readonly<{
 }>;
 
 /** Any authored or canonical value a component setting may hold. */
-export type ComponentSettingValue =
-  BlockPropertyValueV2Contract | SourceBlockPropertyValueV2Contract;
+export type ComponentSettingValue = BlockPropertyValueContract | SourceBlockPropertyValueContract;
 
 /**
  * The one component-setting validator: it judges a supplied setting value against its exact
@@ -585,7 +582,7 @@ export type ComponentSettingValue =
  */
 export const validateComponentSettingValue = (
   value: ComponentSettingValue,
-  declaration: BlockPropertySchemaV2Contract,
+  declaration: BlockPropertySchemaContract,
   path: readonly (string | number)[] = [],
 ): ComponentSettingFailure[] => {
   const failures: ComponentSettingFailure[] = [];
@@ -677,7 +674,7 @@ export const validateComponentSettingValue = (
  */
 export const validateComponentSettings = (
   settings: Readonly<Record<string, ComponentSettingValue>>,
-  declarations: readonly BlockPropertySchemaV2Contract[],
+  declarations: readonly BlockPropertySchemaContract[],
 ): ComponentSettingFailure[] => {
   const failures: ComponentSettingFailure[] = [];
   const byKey = new Set(declarations.map((declaration) => declaration.key));
@@ -1012,12 +1009,12 @@ const authorityReferenceKinds: ReadonlySet<string> = new Set([
  * defaults, so a grouped default must also spell every nested setting that is required or
  * declares its own default.
  */
-const defaultMatchesProperty = (schema: BlockPropertySchemaV2Contract): boolean => {
+const defaultMatchesProperty = (schema: BlockPropertySchemaContract): boolean => {
   const value = schema.defaultValue;
   if (value === undefined) return true;
   const complete = (
-    nested: BlockPropertyValueV2Contract,
-    declaration: BlockPropertySchemaV2Contract,
+    nested: BlockPropertyValueContract,
+    declaration: BlockPropertySchemaContract,
   ): boolean => {
     if (authorityReferenceKinds.has(nested.kind)) return false;
     if (nested.kind === "group" && declaration.kind === "group")
@@ -1035,7 +1032,7 @@ const defaultMatchesProperty = (schema: BlockPropertySchemaV2Contract): boolean 
 };
 
 /** Recursive platform-owned property declaration, including only closed safe value kinds. */
-export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contract> = z.lazy(() =>
+export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.lazy(() =>
   z
     .discriminatedUnion("kind", [
       z
@@ -1096,7 +1093,7 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
         .object({
           ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(z.literal("rich_text")),
-          allowedElements: sourceProvenanceUnchanged(z.array(richTextElementKindV2Schema).min(1)),
+          allowedElements: sourceProvenanceUnchanged(z.array(richTextElementKindSchema).min(1)),
         })
         .strict()
         .refine((value) => new Set(value.allowedElements).size === value.allowedElements.length, {
@@ -1155,7 +1152,7 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
         .object({
           ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(z.literal("group")),
-          properties: sourceProvenanceUnchanged(z.array(blockPropertySchemaV2Schema)),
+          properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
         })
         .strict()
         .refine(
@@ -1170,7 +1167,7 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
           kind: sourceProvenanceUnchanged(z.literal("list")),
           minimumItems: sourceProvenanceUnchanged(z.number().int().nonnegative()),
           maximumItems: sourceProvenanceUnchanged(z.number().int().positive()),
-          item: sourceProvenanceUnchanged(blockPropertySchemaV2Schema),
+          item: sourceProvenanceUnchanged(blockPropertySchema),
         })
         .strict()
         .refine((value) => value.maximumItems >= value.minimumItems, {
@@ -1200,13 +1197,13 @@ export const blockPropertySchemaV2Schema: z.ZodType<BlockPropertySchemaV2Contrac
  * choices and control from the referenced module field.
  */
 export const findFieldInputBinding = (
-  properties: readonly BlockPropertySchemaV2Contract[],
-): BlockPropertySchemaV2Contract | undefined =>
+  properties: readonly BlockPropertySchemaContract[],
+): BlockPropertySchemaContract | undefined =>
   properties.find(
     (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
   );
 
-export const blockSlotDeclarationV2Schema = z
+export const blockSlotDeclarationSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
@@ -1234,7 +1231,7 @@ export const blockSlotDeclarationV2Schema = z
  * the repeatable slot declaration's key, so every slot the release declares stays a valid builder
  * key and two repeatable slot families on one release never collide.
  */
-export const repeatableSlotKeyV2 = (family: string, identity: string): string =>
+export const repeatableSlotKey = (family: string, identity: string): string =>
   `${family}_${identity}`;
 
 /**
@@ -1242,10 +1239,10 @@ export const repeatableSlotKeyV2 = (family: string, identity: string): string =>
  * settings. An absent or wrong-kind list owns none. Every item of the list contributes exactly
  * one identity, returned verbatim in item order and including duplicates: an item that is not a
  * group or whose identity is not text contributes the empty identity. Callers therefore judge
- * every item with `isRepeatableSlotIdentityV2` and refuse a duplicate, rather than silently
+ * every item with `isRepeatableSlotIdentity` and refuse a duplicate, rather than silently
  * dropping a malformed item or collapsing two items onto one slot.
  */
-export const repeatableSlotItemIdentitiesV2 = (
+export const repeatableSlotItemIdentities = (
   declaration: Readonly<{
     key: string;
     repeats?: Readonly<{ items: string; identity: string }> | undefined;
@@ -1269,11 +1266,11 @@ export const repeatableSlotItemIdentitiesV2 = (
  * names under `family` must both be builder keys, so an identity never needs trimming or escaping
  * and the renderer, designer and publication all key the item's slot identically.
  */
-export const isRepeatableSlotIdentityV2 = (family: string, identity: string): boolean =>
+export const isRepeatableSlotIdentity = (family: string, identity: string): boolean =>
   builderKeySchema.safeParse(identity).success &&
-  builderKeySchema.safeParse(repeatableSlotKeyV2(family, identity)).success;
+  builderKeySchema.safeParse(repeatableSlotKey(family, identity)).success;
 
-const blockCapabilitiesV2Base = {
+const blockCapabilitiesBase = {
   responsiveVisibility: sourceProvenanceUnchanged(z.boolean()),
   responsiveOrder: sourceProvenanceUnchanged(z.boolean()),
   gridWidth: sourceProvenanceUnchanged(z.boolean()),
@@ -1281,16 +1278,16 @@ const blockCapabilitiesV2Base = {
   publicSurface: sourceProvenanceUnchanged(z.enum(["refused", "allowed"])),
 };
 
-const blockCapabilitiesV2Schema = z.discriminatedUnion("accessibleName", [
+const blockCapabilitiesSchema = z.discriminatedUnion("accessibleName", [
   z
     .object({
-      ...blockCapabilitiesV2Base,
+      ...blockCapabilitiesBase,
       accessibleName: sourceProvenanceUnchanged(z.literal("not_applicable")),
     })
     .strict(),
   z
     .object({
-      ...blockCapabilitiesV2Base,
+      ...blockCapabilitiesBase,
       accessibleName: sourceProvenanceUnchanged(z.enum(["required", "optional"])),
       accessibleNamePropertyPath: sourceProvenanceUnchanged(z.array(builderKeySchema).min(1)),
     })
@@ -1315,7 +1312,7 @@ export const componentStateOperationKindSchema = z.enum([
  * application that binds the owning module, may place it (application packages appendix,
  * "Custom components").
  */
-export const customComponentOwnerV2Schema = z
+export const customComponentOwnerSchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.enum(["application", "module"])),
     definitionKey: sourceProvenanceUnchanged(namespacedKeySchema),
@@ -1324,7 +1321,7 @@ export const customComponentOwnerV2Schema = z
   .strict();
 
 /** One typed value a custom component event carries. A payload field always declares a type. */
-export const customComponentEventPayloadFieldV2Schema = z
+export const customComponentEventPayloadFieldSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
@@ -1338,11 +1335,11 @@ export const customComponentEventPayloadFieldV2Schema = z
  * payload field is refused, because the renderer validates every incoming message against this
  * declaration and drops anything else (it never trusts the component's origin).
  */
-export const customComponentEventV2Schema = z
+export const customComponentEventSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
-    payload: sourceProvenanceUnchanged(z.array(customComponentEventPayloadFieldV2Schema).max(50)),
+    payload: sourceProvenanceUnchanged(z.array(customComponentEventPayloadFieldSchema).max(50)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1359,7 +1356,7 @@ export const customComponentEventV2Schema = z
  * with a declared value type. Every value is treated as disclosed to the package's publisher, so
  * the contract is closed and typed rather than free-form.
  */
-export const customComponentDataContractV2Schema = z
+export const customComponentDataContractSchema = z
   .object({
     values: sourceProvenanceUnchanged(
       z
@@ -1417,7 +1414,7 @@ const customComponentHostSchema = z
  * may reach. The digest is the release's immutable content address (application packages
  * appendix, "Custom components").
  */
-export const customComponentBundleV2Schema = z
+export const customComponentBundleSchema = z
   .object({
     digest: sourceProvenanceUnchanged(
       z
@@ -1443,13 +1440,13 @@ export const customComponentBundleV2Schema = z
  * manifest. The release's own `properties`, `capabilities.accessibleName` and
  * `supportedStateOperations` carry the rest of the component contract.
  */
-export const customComponentReleaseV2Schema = z
+export const customComponentReleaseSchema = z
   .object({
-    owner: sourceProvenanceUnchanged(customComponentOwnerV2Schema),
-    events: sourceProvenanceUnchanged(z.array(customComponentEventV2Schema).max(50)),
-    dataContract: sourceProvenanceUnchanged(customComponentDataContractV2Schema),
+    owner: sourceProvenanceUnchanged(customComponentOwnerSchema),
+    events: sourceProvenanceUnchanged(z.array(customComponentEventSchema).max(50)),
+    dataContract: sourceProvenanceUnchanged(customComponentDataContractSchema),
     textAlternative: sourceProvenanceUnchanged(labelSchema),
-    bundle: sourceProvenanceUnchanged(customComponentBundleV2Schema),
+    bundle: sourceProvenanceUnchanged(customComponentBundleSchema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1461,15 +1458,15 @@ export const customComponentReleaseV2Schema = z
       });
   });
 
-export type CustomComponentOwnerV2 = z.infer<typeof customComponentOwnerV2Schema>;
-export type CustomComponentReleaseV2 = z.infer<typeof customComponentReleaseV2Schema>;
+export type CustomComponentOwner = z.infer<typeof customComponentOwnerSchema>;
+export type CustomComponentRelease = z.infer<typeof customComponentReleaseSchema>;
 
 /**
  * The context in which one application release places custom components: the placing application's
  * key and the exact module releases it binds. A custom component is placeable only by its owning
  * application, or by an application that binds the owning module release.
  */
-export type CustomComponentPlacementContextV2 = Readonly<{
+export type CustomComponentPlacementContext = Readonly<{
   applicationKey: string;
   boundModuleReleases: readonly Readonly<{ moduleKey: string; releaseVersion: string }>[];
 }>;
@@ -1479,9 +1476,9 @@ export type CustomComponentPlacementContextV2 = Readonly<{
  * or it binds the exact module release that owns it. Any other application is refused, so a custom
  * component never leaks into an unrelated application.
  */
-export const customComponentPlacementAllowedV2 = (
-  owner: CustomComponentOwnerV2,
-  context: CustomComponentPlacementContextV2,
+export const customComponentPlacementAllowed = (
+  owner: CustomComponentOwner,
+  context: CustomComponentPlacementContext,
 ): boolean =>
   owner.kind === "application"
     ? owner.definitionKey === context.applicationKey
@@ -1495,12 +1492,12 @@ export const customComponentPlacementAllowedV2 = (
  * True when any of the releases is a custom component release. Installation uses this on the exact
  * resolved releases so a package carrying custom components also requires `custom_code.manage`.
  */
-export const containsCustomComponentReleasesV2 = (
-  releases: readonly Readonly<{ customComponent?: CustomComponentReleaseV2 | undefined }>[],
+export const containsCustomComponentReleases = (
+  releases: readonly Readonly<{ customComponent?: CustomComponentRelease | undefined }>[],
 ): boolean => releases.some((release) => release.customComponent !== undefined);
 
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
-export const platformBlockReleaseV2Schema = z
+export const platformBlockReleaseSchema = z
   .object({
     blockId: sourceProvenanceUnchanged(blockIdSchema),
     key: sourceProvenanceUnchanged(namespacedKeySchema),
@@ -1511,9 +1508,9 @@ export const platformBlockReleaseV2Schema = z
     icon: sourceProvenanceUnchanged(iconKeySchema),
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
     rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),
-    properties: sourceProvenanceUnchanged(z.array(blockPropertySchemaV2Schema)),
-    slots: sourceProvenanceUnchanged(z.array(blockSlotDeclarationV2Schema)),
-    capabilities: sourceProvenanceUnchanged(blockCapabilitiesV2Schema),
+    properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
+    slots: sourceProvenanceUnchanged(z.array(blockSlotDeclarationSchema)),
+    capabilities: sourceProvenanceUnchanged(blockCapabilitiesSchema),
     /** Semantic events the component emits: the only events a flow binding may name for it. */
     supportedEvents: sourceProvenanceUnchanged(z.array(componentSemanticEventKindSchema)),
     /** State operations a flow may apply to the component. */
@@ -1523,7 +1520,7 @@ export const platformBlockReleaseV2Schema = z
      * typed declared events, data contract, text alternative and bundle manifest. A platform block
      * release carries none, and a custom component release carries no built-in semantic events.
      */
-    customComponent: sourceProvenanceUnchanged(customComponentReleaseV2Schema.optional()),
+    customComponent: sourceProvenanceUnchanged(customComponentReleaseSchema.optional()),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1620,17 +1617,17 @@ export const platformBlockReleaseV2Schema = z
     }
   });
 
-export const applicationCompositionPolicyV2Schema = z
+export const applicationCompositionPolicySchema = z
   .object({
     maximumDepth: sourceProvenanceUnchanged(z.number().int().positive()),
     maximumPlacements: sourceProvenanceUnchanged(z.number().int().positive()),
   })
   .strict();
 
-export const immutablePlatformBlockCatalogueV2Schema = z
+export const immutablePlatformBlockCatalogueSchema = z
   .object({
-    compositionPolicy: sourceProvenanceUnchanged(applicationCompositionPolicyV2Schema),
-    releases: sourceProvenanceUnchanged(z.array(platformBlockReleaseV2Schema)),
+    compositionPolicy: sourceProvenanceUnchanged(applicationCompositionPolicySchema),
+    releases: sourceProvenanceUnchanged(z.array(platformBlockReleaseSchema)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1661,15 +1658,15 @@ export const immutablePlatformBlockCatalogueV2Schema = z
     }
   });
 
-export const platformBlockDependenciesV2SchemaForCatalogue = (catalogueInput: unknown) => {
-  const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(catalogueInput);
+export const platformBlockDependenciesSchemaForCatalogue = (catalogueInput: unknown) => {
+  const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
   const releases = new Map(
     catalogue.releases.map((release) => [
       `${release.blockId}:${release.releaseVersion}`,
       `${release.contentFingerprint}:${release.catalogueFingerprint}`,
     ]),
   );
-  return platformBlockDependenciesV2Schema.superRefine((dependencies, context) => {
+  return platformBlockDependenciesSchema.superRefine((dependencies, context) => {
     for (const [index, dependency] of dependencies.entries()) {
       const expected = releases.get(`${dependency.blockId}:${dependency.releaseVersion}`);
       const actual = `${dependency.contentFingerprint}:${dependency.catalogueFingerprint}`;
@@ -1683,7 +1680,7 @@ export const platformBlockDependenciesV2SchemaForCatalogue = (catalogueInput: un
   });
 };
 
-export const platformBlockDependencyV2Schema = z
+export const platformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     blockId: sourceProvenanceUnchanged(blockIdSchema),
@@ -1693,7 +1690,7 @@ export const platformBlockDependencyV2Schema = z
   })
   .strict();
 
-export const sourcePlatformBlockDependencyV2Schema = z
+export const sourcePlatformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
@@ -1715,8 +1712,8 @@ const deterministicDependencyList = <Entry extends { blockId: string; releaseVer
     return previous.releaseVersion < entry.releaseVersion;
   });
 
-export const platformBlockDependenciesV2Schema = z
-  .array(platformBlockDependencyV2Schema)
+export const platformBlockDependenciesSchema = z
+  .array(platformBlockDependencySchema)
   .superRefine((entries, context) => {
     const identities = entries.map((entry) => `${entry.blockId}@${entry.releaseVersion}`);
     if (new Set(identities).size !== identities.length)
@@ -1731,8 +1728,8 @@ export const platformBlockDependenciesV2Schema = z
       });
   });
 
-export const sourcePlatformBlockDependenciesV2Schema = z
-  .array(sourcePlatformBlockDependencyV2Schema)
+export const sourcePlatformBlockDependenciesSchema = z
+  .array(sourcePlatformBlockDependencySchema)
   .superRefine((entries, context) => {
     const normalized = entries.map((entry) => ({
       blockId: String(entry.block_id),
@@ -1752,21 +1749,21 @@ export const sourcePlatformBlockDependenciesV2Schema = z
   });
 
 /** Placements name only their immutable block identity/version; fingerprints live in the manifest. */
-export const platformBlockReferenceV2Schema = z
+export const platformBlockReferenceSchema = z
   .object({
     blockId: sourceProvenanceUnchanged(blockIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
   })
   .strict();
 
-export const sourcePlatformBlockReferenceV2Schema = z
+export const sourcePlatformBlockReferenceSchema = z
   .object({
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
     release_version: sourceProvenanceUnchanged(semanticVersionSchema),
   })
   .strict();
 
-const widthV2Schema = z.discriminatedUnion("kind", [
+const widthSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("fill")) }).strict(),
   z
@@ -1782,7 +1779,7 @@ const widthV2Schema = z.discriminatedUnion("kind", [
     }),
 ]);
 
-const sourceWidthV2Schema = z.discriminatedUnion("kind", [
+const sourceWidthSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("fill")) }).strict(),
   z
@@ -1798,7 +1795,7 @@ const sourceWidthV2Schema = z.discriminatedUnion("kind", [
     }),
 ]);
 
-const heightV2Schema = z.discriminatedUnion("kind", [
+const heightSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
   z
     .object({
@@ -1808,40 +1805,40 @@ const heightV2Schema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const placementLayoutV2Schema = z
+export const placementLayoutSchema = z
   .object({
     visible: sourceProvenanceUnchanged(z.boolean()),
-    width: sourceProvenanceUnchanged(widthV2Schema),
-    height: sourceProvenanceUnchanged(heightV2Schema),
+    width: sourceProvenanceUnchanged(widthSchema),
+    height: sourceProvenanceUnchanged(heightSchema),
   })
   .strict();
 
-export const sourcePlacementLayoutV2Schema = z
+export const sourcePlacementLayoutSchema = z
   .object({
     visible: sourceProvenanceUnchanged(z.boolean()),
-    width: sourceProvenanceUnchanged(sourceWidthV2Schema),
-    height: sourceProvenanceUnchanged(heightV2Schema),
+    width: sourceProvenanceUnchanged(sourceWidthSchema),
+    height: sourceProvenanceUnchanged(heightSchema),
   })
   .strict();
 
-export const responsivePlacementV2Schema = z
+export const responsivePlacementSchema = z
   .object({
-    desktop: sourceProvenanceUnchanged(placementLayoutV2Schema),
-    tablet: sourceProvenanceUnchanged(placementLayoutV2Schema),
-    phone: sourceProvenanceUnchanged(placementLayoutV2Schema),
+    desktop: sourceProvenanceUnchanged(placementLayoutSchema),
+    tablet: sourceProvenanceUnchanged(placementLayoutSchema),
+    phone: sourceProvenanceUnchanged(placementLayoutSchema),
   })
   .strict();
 
 /** Missing authored tablet/phone entries inherit from the next wider breakpoint. */
-export const sourceResponsivePlacementV2Schema = z
+export const sourceResponsivePlacementSchema = z
   .object({
-    desktop: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema),
-    tablet: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema.optional()),
-    phone: sourceProvenanceUnchanged(sourcePlacementLayoutV2Schema.optional()),
+    desktop: sourceProvenanceUnchanged(sourcePlacementLayoutSchema),
+    tablet: sourceProvenanceUnchanged(sourcePlacementLayoutSchema.optional()),
+    phone: sourceProvenanceUnchanged(sourcePlacementLayoutSchema.optional()),
   })
   .strict();
 
-export const themeTokenKindV2Schema = z.enum([
+export const themeTokenKindSchema = z.enum([
   "color_pair",
   "typography",
   "spacing",
@@ -1874,7 +1871,7 @@ const colorSchema = z
 export const themeColorRoleSchema = z.enum(["foreground", "background"]);
 export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
 
-export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
+export const themeTokenValueSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("color_pair")),
@@ -1939,7 +1936,7 @@ export const themeTokenValueV2Schema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const sourceThemeTokenValueV2Schema = z.discriminatedUnion("kind", [
+export const sourceThemeTokenValueSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("color_pair")),
@@ -2003,7 +2000,7 @@ export const sourceThemeTokenValueV2Schema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const exactPlatformThemeDependencyV2Schema = z
+export const exactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
@@ -2013,7 +2010,7 @@ export const exactPlatformThemeDependencyV2Schema = z
   })
   .strict();
 
-export const sourceExactPlatformThemeDependencyV2Schema = z
+export const sourceExactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogue_theme_id: sourceProvenanceUnchanged(platformIdSchema),
@@ -2050,7 +2047,7 @@ export const themeCatalogueOptionIdSchema = z
  * headings in the body font. They are optional so selections recorded before the font catalogue
  * keep their meaning: an absent font is the catalogue's default.
  */
-export const applicationThemeSelectionV2Schema = z
+export const applicationThemeSelectionSchema = z
   .object({
     style: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     baseColor: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
@@ -2064,13 +2061,13 @@ export const applicationThemeSelectionV2Schema = z
     headingFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
   })
   .strict();
-export type ApplicationThemeSelectionV2 = z.infer<typeof applicationThemeSelectionV2Schema>;
+export type ApplicationThemeSelection = z.infer<typeof applicationThemeSelectionSchema>;
 
 /**
  * The authored form of the catalogue selection, with the snake_case keys every source document
  * uses. Compilation maps it one to one onto the canonical selection above.
  */
-export const sourceApplicationThemeSelectionV2Schema = z
+export const sourceApplicationThemeSelectionSchema = z
   .object({
     style: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     base_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
@@ -2084,14 +2081,12 @@ export const sourceApplicationThemeSelectionV2Schema = z
     heading_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
   })
   .strict();
-export type SourceApplicationThemeSelectionV2 = z.infer<
-  typeof sourceApplicationThemeSelectionV2Schema
->;
+export type SourceApplicationThemeSelection = z.infer<typeof sourceApplicationThemeSelectionSchema>;
 
 /** Maps an authored selection onto its canonical form. */
-export const canonicalApplicationThemeSelectionV2 = (
-  source: SourceApplicationThemeSelectionV2,
-): ApplicationThemeSelectionV2 => ({
+export const canonicalApplicationThemeSelection = (
+  source: SourceApplicationThemeSelection,
+): ApplicationThemeSelection => ({
   style: source.style,
   baseColor: source.base_color,
   theme: source.theme,
@@ -2105,44 +2100,44 @@ export const canonicalApplicationThemeSelectionV2 = (
 });
 
 /**
- * Canonical V2 themes contain the complete resolved application token set plus the catalogue
+ * Canonical  themes contain the complete resolved application token set plus the catalogue
  * selection they were materialised from. Catalogue options are releases of the catalogue's base
  * platform theme release, so a theme pinned to that release always records its effective
  * selection. A theme pinned to an earlier release (for example 2.0.0) records none and keeps that
  * release's exact tokens.
  */
-export const applicationThemeV2Schema = z
+export const applicationThemeSchema = z
   .object({
-    base: sourceProvenanceUnchanged(exactPlatformThemeDependencyV2Schema),
-    selection: sourceProvenanceUnchanged(applicationThemeSelectionV2Schema.optional()),
-    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueV2Schema)),
+    base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
+    selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema.optional()),
+    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
   })
   .strict();
 
 /**
- * Authored V2 themes carry the catalogue selection and may omit overrides; compilation resolves
+ * Authored  themes carry the catalogue selection and may omit overrides; compilation resolves
  * the selection into the full token set. On the catalogue's base release an absent selection means
  * the platform default (nova, neutral base colour, neutral theme); on an earlier release a
  * selection is refused and an absent one keeps that release's exact tokens.
  */
-export const sourceApplicationThemeV2Schema = z
+export const sourceApplicationThemeSchema = z
   .object({
-    base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencyV2Schema),
-    selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionV2Schema.optional()),
+    base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencySchema),
+    selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionSchema.optional()),
     token_overrides: sourceProvenanceUnchanged(
-      z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
+      z.record(builderKeySchema, sourceThemeTokenValueSchema),
     ),
   })
   .strict();
 
-/** Complete immutable platform-theme content needed to materialise one V2 Application theme. */
-export const platformThemeReleaseV2Schema = z
+/** Complete immutable platform-theme content needed to materialise one  Application theme. */
+export const platformThemeReleaseSchema = z
   .object({
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueV2Schema)),
+    tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
   })
   .strict();
 
@@ -2156,16 +2151,16 @@ export const platformThemeReleaseV2Schema = z
  * is complete only when it maps every role below; application and placement overrides inherit
  * the kind and declared colour role.
  */
-export const platformThemeTokenRoleV2Schema = z
+export const platformThemeTokenRoleSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
-    kind: sourceProvenanceUnchanged(themeTokenKindV2Schema),
+    kind: sourceProvenanceUnchanged(themeTokenKindSchema),
     colorRole: sourceProvenanceUnchanged(themeColorRoleSchema.optional()),
   })
   .strict();
-export type PlatformThemeTokenRoleV2 = z.infer<typeof platformThemeTokenRoleV2Schema>;
+export type PlatformThemeTokenRole = z.infer<typeof platformThemeTokenRoleSchema>;
 
-export const platformThemeTokenRolesV2 = [
+export const platformThemeTokenRoles = [
   { key: "background", kind: "color_pair", colorRole: "background" },
   { key: "surface", kind: "color_pair", colorRole: "background" },
   { key: "text", kind: "color_pair", colorRole: "foreground" },
@@ -2219,21 +2214,21 @@ export const platformThemeTokenRolesV2 = [
   { key: "elevation_low", kind: "elevation" },
   { key: "elevation_high", kind: "elevation" },
   { key: "density", kind: "density" },
-] as const satisfies readonly PlatformThemeTokenRoleV2[];
+] as const satisfies readonly PlatformThemeTokenRole[];
 
 /** Every token-role key a complete platform theme release must map. */
-export type PlatformThemeTokenRoleKeyV2 = (typeof platformThemeTokenRolesV2)[number]["key"];
+export type PlatformThemeTokenRoleKey = (typeof platformThemeTokenRoles)[number]["key"];
 
 /**
- * Exact catalogue evidence locked by a trusted caller before pure V2 compilation.
+ * Exact catalogue evidence locked by a trusted caller before pure  compilation.
  * Its fingerprint covers every field except the fingerprint itself.
  */
-export const applicationCompositionCatalogueSnapshotV2Schema = z
+export const applicationCompositionCatalogueSnapshotSchema = z
   .object({
     contractVersion: sourceProvenanceUnchanged(z.literal("2.0.0")),
     fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    platformBlocks: sourceProvenanceUnchanged(immutablePlatformBlockCatalogueV2Schema),
-    platformTheme: sourceProvenanceUnchanged(platformThemeReleaseV2Schema),
+    platformBlocks: sourceProvenanceUnchanged(immutablePlatformBlockCatalogueSchema),
+    platformTheme: sourceProvenanceUnchanged(platformThemeReleaseSchema),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2397,10 +2392,10 @@ export const protectedReadModelDeclarations = Object.freeze({
 >);
 
 /** A placement's binding names one declared read model and nothing else. */
-export const protectedReadModelBindingV2Schema = z
+export const protectedReadModelBindingSchema = z
   .object({ key: sourceProvenanceUnchanged(protectedReadModelKeySchema) })
   .strict();
-export type ProtectedReadModelBindingV2 = z.infer<typeof protectedReadModelBindingV2Schema>;
+export type ProtectedReadModelBinding = z.infer<typeof protectedReadModelBindingSchema>;
 
 /** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
 export const protectedReadModelPageRequestSchema = z
@@ -2412,37 +2407,37 @@ export const protectedReadModelPageRequestSchema = z
   .strict();
 export type ProtectedReadModelPageRequest = z.infer<typeof protectedReadModelPageRequestSchema>;
 
-type BlockPlacementV2 = {
-  block: z.infer<typeof platformBlockReferenceV2Schema>;
+type BlockPlacement = {
+  block: z.infer<typeof platformBlockReferenceSchema>;
   viewPermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   queryId?: z.infer<typeof queryIdSchema> | undefined;
-  readModel?: ProtectedReadModelBindingV2 | undefined;
-  settings: Record<string, BlockPropertyValueV2Contract>;
-  themeOverrides: Record<string, z.infer<typeof themeTokenValueV2Schema>>;
-  responsive: z.infer<typeof responsivePlacementV2Schema>;
-  slots: Record<string, PlacementSlotV2>;
+  readModel?: ProtectedReadModelBinding | undefined;
+  settings: Record<string, BlockPropertyValueContract>;
+  themeOverrides: Record<string, z.infer<typeof themeTokenValueSchema>>;
+  responsive: z.infer<typeof responsivePlacementSchema>;
+  slots: Record<string, PlacementSlot>;
 };
-type PlacementSlotV2 = {
-  placements: Record<string, BlockPlacementV2>;
+type PlacementSlot = {
+  placements: Record<string, BlockPlacement>;
   order: { desktop: string[]; tablet: string[]; phone: string[] };
 };
 
-type SourceBlockPlacementV2 = {
-  block: z.infer<typeof sourcePlatformBlockReferenceV2Schema>;
+type SourceBlockPlacement = {
+  block: z.infer<typeof sourcePlatformBlockReferenceSchema>;
   view_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: z.infer<typeof builderKeySchema> | undefined;
   read_model?: ProtectedReadModelKey | undefined;
-  settings: Record<string, SourceBlockPropertyValueV2Contract>;
-  theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueV2Schema>>;
-  responsive: z.infer<typeof sourceResponsivePlacementV2Schema>;
-  slots: Record<string, SourcePlacementSlotV2>;
+  settings: Record<string, SourceBlockPropertyValueContract>;
+  theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueSchema>>;
+  responsive: z.infer<typeof sourceResponsivePlacementSchema>;
+  slots: Record<string, SourcePlacementSlot>;
 };
-type SourcePlacementSlotV2 = {
-  placements: Record<string, SourceBlockPlacementV2>;
+type SourcePlacementSlot = {
+  placements: Record<string, SourceBlockPlacement>;
   order: { desktop: string[]; tablet?: string[] | undefined; phone?: string[] | undefined };
 };
 
@@ -2451,30 +2446,28 @@ const sameMembers = (actual: readonly string[], expected: readonly string[]): bo
   new Set(actual).size === actual.length &&
   actual.every((entry) => expected.includes(entry));
 
-export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
+export const blockPlacementSchema: z.ZodType<BlockPlacement> = z.lazy(() =>
   z
     .object({
-      block: sourceProvenanceUnchanged(platformBlockReferenceV2Schema),
+      block: sourceProvenanceUnchanged(platformBlockReferenceSchema),
       viewPermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
       usePermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
       visibilityCondition: sourceProvenanceUnchanged(conditionNodeSchema.optional()),
       queryId: sourceProvenanceUnchanged(queryIdSchema.optional()),
-      readModel: sourceProvenanceUnchanged(protectedReadModelBindingV2Schema.optional()),
-      settings: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueV2Schema)),
-      themeOverrides: sourceProvenanceUnchanged(
-        z.record(builderKeySchema, themeTokenValueV2Schema),
-      ),
-      responsive: sourceProvenanceUnchanged(responsivePlacementV2Schema),
-      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, placementSlotV2Schema)),
+      readModel: sourceProvenanceUnchanged(protectedReadModelBindingSchema.optional()),
+      settings: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueSchema)),
+      themeOverrides: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
+      responsive: sourceProvenanceUnchanged(responsivePlacementSchema),
+      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, placementSlotSchema)),
     })
     .strict(),
 );
 
-export const placementSlotV2Schema: z.ZodType<PlacementSlotV2> = z.lazy(() =>
+export const placementSlotSchema: z.ZodType<PlacementSlot> = z.lazy(() =>
   z
     .object({
       placements: sourceProvenanceUnchanged(
-        z.record(containedComponentIdSchema, blockPlacementV2Schema),
+        z.record(containedComponentIdSchema, blockPlacementSchema),
       ),
       order: sourceProvenanceUnchanged(
         z
@@ -2499,10 +2492,10 @@ export const placementSlotV2Schema: z.ZodType<PlacementSlotV2> = z.lazy(() =>
     }),
 );
 
-export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z.lazy(() =>
+export const sourceBlockPlacementSchema: z.ZodType<SourceBlockPlacement> = z.lazy(() =>
   z
     .object({
-      block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceV2Schema),
+      block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceSchema),
       view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
         "viewPermissionKey",
       ]),
@@ -2511,22 +2504,22 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
       query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
       read_model: sourceProvenanceUnchanged(protectedReadModelKeySchema.optional()),
       settings: sourceProvenanceUnchanged(
-        z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
+        z.record(builderKeySchema, sourceBlockPropertyValueSchema),
       ),
       theme_overrides: sourceProvenanceUnchanged(
-        z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
+        z.record(builderKeySchema, sourceThemeTokenValueSchema),
       ),
-      responsive: sourceProvenanceUnchanged(sourceResponsivePlacementV2Schema),
-      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, sourcePlacementSlotV2Schema)),
+      responsive: sourceProvenanceUnchanged(sourceResponsivePlacementSchema),
+      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, sourcePlacementSlotSchema)),
     })
     .strict(),
 );
 
-export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.lazy(() =>
+export const sourcePlacementSlotSchema: z.ZodType<SourcePlacementSlot> = z.lazy(() =>
   z
     .object({
       placements: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, sourceBlockPlacementV2Schema),
+        z.record(sourceAliasSchema, sourceBlockPlacementSchema),
       ),
       order: sourceProvenanceUnchanged(
         z
@@ -2569,7 +2562,7 @@ export const sourcePlacementSlotV2Schema: z.ZodType<SourcePlacementSlotV2> = z.l
     }),
 );
 
-export const shellContentSlotV2Schema = z
+export const shellContentSlotSchema = z
   .object({
     slotId: sourceProvenanceUnchanged(containedComponentIdSchema),
     key: sourceProvenanceUnchanged(builderKeySchema),
@@ -2581,7 +2574,7 @@ export const shellContentSlotV2Schema = z
   })
   .strict();
 
-export const sourceShellContentSlotV2Schema = z
+export const sourceShellContentSlotSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["slotId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
@@ -2649,9 +2642,9 @@ const sourceApplicationShellPresentationSchema = z
   .strict();
 
 const collectCanonicalPlacementSlots = (
-  slot: PlacementSlotV2,
-  result = new Map<string, Record<string, PlacementSlotV2>>(),
-): Map<string, Record<string, PlacementSlotV2>> => {
+  slot: PlacementSlot,
+  result = new Map<string, Record<string, PlacementSlot>>(),
+): Map<string, Record<string, PlacementSlot>> => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     result.set(placementId, placement.slots);
     for (const child of Object.values(placement.slots))
@@ -2661,9 +2654,9 @@ const collectCanonicalPlacementSlots = (
 };
 
 const collectSourcePlacementSlots = (
-  slot: SourcePlacementSlotV2,
-  result = new Map<string, Record<string, SourcePlacementSlotV2>>(),
-): Map<string, Record<string, SourcePlacementSlotV2>> => {
+  slot: SourcePlacementSlot,
+  result = new Map<string, Record<string, SourcePlacementSlot>>(),
+): Map<string, Record<string, SourcePlacementSlot>> => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     result.set(placementId, placement.slots);
     for (const child of Object.values(placement.slots)) collectSourcePlacementSlots(child, result);
@@ -2671,36 +2664,36 @@ const collectSourcePlacementSlots = (
   return result;
 };
 
-export const canonicalPlacementEntriesV2 = (
-  slot: PlacementSlotV2,
-  result: [string, BlockPlacementV2][] = [],
-): [string, BlockPlacementV2][] => {
+export const canonicalPlacementEntries = (
+  slot: PlacementSlot,
+  result: [string, BlockPlacement][] = [],
+): [string, BlockPlacement][] => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     result.push([placementId, placement]);
-    for (const child of Object.values(placement.slots)) canonicalPlacementEntriesV2(child, result);
+    for (const child of Object.values(placement.slots)) canonicalPlacementEntries(child, result);
   }
   return result;
 };
 
-export const sourcePlacementEntriesV2 = (
-  slot: SourcePlacementSlotV2,
-  result: [string, SourceBlockPlacementV2][] = [],
-): [string, SourceBlockPlacementV2][] => {
+export const sourcePlacementEntries = (
+  slot: SourcePlacementSlot,
+  result: [string, SourceBlockPlacement][] = [],
+): [string, SourceBlockPlacement][] => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     result.push([placementId, placement]);
-    for (const child of Object.values(placement.slots)) sourcePlacementEntriesV2(child, result);
+    for (const child of Object.values(placement.slots)) sourcePlacementEntries(child, result);
   }
   return result;
 };
 
-export const applicationShellV2Schema = z
+export const applicationShellSchema = z
   .object({
     shellId: sourceProvenanceUnchanged(shellIdSchema),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
     presentation: sourceProvenanceUnchanged(applicationShellPresentationSchema),
-    layout: sourceProvenanceUnchanged(placementSlotV2Schema),
-    contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotV2Schema).min(1)),
+    layout: sourceProvenanceUnchanged(placementSlotSchema),
+    contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotSchema).min(1)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2750,14 +2743,14 @@ export const applicationShellV2Schema = z
     }
   });
 
-export const sourceApplicationShellV2Schema = z
+export const sourceApplicationShellSchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
     key: sourceProvenanceUnchanged(builderKeySchema),
     name: sourceProvenanceUnchanged(labelSchema),
     presentation: sourceProvenanceUnchanged(sourceApplicationShellPresentationSchema),
-    layout: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
-    content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotV2Schema).min(1)),
+    layout: sourceProvenanceUnchanged(sourcePlacementSlotSchema),
+    content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotSchema).min(1)),
   })
   .strict()
   .superRefine((value, context) => {
@@ -2807,47 +2800,45 @@ export const sourceApplicationShellV2Schema = z
     }
   });
 
-export const pageCompositionV2Schema = z.discriminatedUnion("shellKind", [
+export const pageCompositionSchema = z.discriminatedUnion("shellKind", [
   z
     .object({
       shellKind: sourceProvenanceUnchanged(z.literal("default")),
-      main: sourceProvenanceUnchanged(placementSlotV2Schema),
+      main: sourceProvenanceUnchanged(placementSlotSchema),
     })
     .strict(),
   z
     .object({
       shellKind: sourceProvenanceUnchanged(z.literal("application")),
       shellId: sourceProvenanceUnchanged(shellIdSchema),
-      content: sourceProvenanceUnchanged(
-        z.record(containedComponentIdSchema, placementSlotV2Schema),
-      ),
+      content: sourceProvenanceUnchanged(z.record(containedComponentIdSchema, placementSlotSchema)),
     })
     .strict(),
 ]);
 
-export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", [
+export const sourcePageCompositionSchema = z.discriminatedUnion("shell_kind", [
   z
     .object({
       shell_kind: sourceProvenanceUnchanged(z.literal("default")),
-      main: sourceProvenanceUnchanged(sourcePlacementSlotV2Schema),
+      main: sourceProvenanceUnchanged(sourcePlacementSlotSchema),
     })
     .strict(),
   z
     .object({
       shell_kind: sourceProvenanceUnchanged(z.literal("application")),
       shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-      content: sourceProvenanceUnchanged(z.record(sourceAliasSchema, sourcePlacementSlotV2Schema)),
+      content: sourceProvenanceUnchanged(z.record(sourceAliasSchema, sourcePlacementSlotSchema)),
     })
     .strict(),
 ]);
 
 /** One page shell with an exact, separately ordered content tree for every guided step. */
-export const guidedFormPageCompositionV2Schema = z.discriminatedUnion("shellKind", [
+export const guidedFormPageCompositionSchema = z.discriminatedUnion("shellKind", [
   z
     .object({
       shellKind: sourceProvenanceUnchanged(z.literal("default")),
       stepContent: sourceProvenanceUnchanged(
-        z.record(containedComponentIdSchema, placementSlotV2Schema),
+        z.record(containedComponentIdSchema, placementSlotSchema),
       ),
     })
     .strict(),
@@ -2858,19 +2849,19 @@ export const guidedFormPageCompositionV2Schema = z.discriminatedUnion("shellKind
       stepContent: sourceProvenanceUnchanged(
         z.record(
           containedComponentIdSchema,
-          z.record(containedComponentIdSchema, placementSlotV2Schema),
+          z.record(containedComponentIdSchema, placementSlotSchema),
         ),
       ),
     })
     .strict(),
 ]);
 
-export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("shell_kind", [
+export const sourceGuidedFormPageCompositionSchema = z.discriminatedUnion("shell_kind", [
   z
     .object({
       shell_kind: sourceProvenanceUnchanged(z.literal("default")),
       step_content: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+        z.record(sourceAliasSchema, sourcePlacementSlotSchema),
       ),
     })
     .strict(),
@@ -2879,28 +2870,26 @@ export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("she
       shell_kind: sourceProvenanceUnchanged(z.literal("application")),
       shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
       step_content: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, z.record(sourceAliasSchema, sourcePlacementSlotV2Schema)),
+        z.record(sourceAliasSchema, z.record(sourceAliasSchema, sourcePlacementSlotSchema)),
       ),
     })
     .strict(),
 ]);
 
-export type PlatformBlockReleaseV2 = z.infer<typeof platformBlockReleaseV2Schema>;
+export type PlatformBlockRelease = z.infer<typeof platformBlockReleaseSchema>;
 export type ComponentStateOperationKind = z.infer<typeof componentStateOperationKindSchema>;
-export type PlatformBlockDependencyV2 = z.infer<typeof platformBlockDependencyV2Schema>;
-export type PlatformThemeReleaseV2 = z.infer<typeof platformThemeReleaseV2Schema>;
-export type ApplicationCompositionPolicyV2 = z.infer<typeof applicationCompositionPolicyV2Schema>;
-export type ImmutablePlatformBlockCatalogueV2 = z.infer<
-  typeof immutablePlatformBlockCatalogueV2Schema
+export type PlatformBlockDependency = z.infer<typeof platformBlockDependencySchema>;
+export type PlatformThemeRelease = z.infer<typeof platformThemeReleaseSchema>;
+export type ApplicationCompositionPolicy = z.infer<typeof applicationCompositionPolicySchema>;
+export type ImmutablePlatformBlockCatalogue = z.infer<typeof immutablePlatformBlockCatalogueSchema>;
+export type ApplicationCompositionCatalogueSnapshot = z.infer<
+  typeof applicationCompositionCatalogueSnapshotSchema
 >;
-export type ApplicationCompositionCatalogueSnapshotV2 = z.infer<
-  typeof applicationCompositionCatalogueSnapshotV2Schema
->;
-export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
-export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
+export type BlockPlacementContract = z.infer<typeof blockPlacementSchema>;
+export type ApplicationShell = z.infer<typeof applicationShellSchema>;
 export type ApplicationPuckRootShell = z.infer<typeof applicationPuckRootShellSchema>;
-export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
-export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
+export type PageComposition = z.infer<typeof pageCompositionSchema>;
+export type GuidedFormPageComposition = z.infer<typeof guidedFormPageCompositionSchema>;
 
 /*
  * Studio discovery projection. It republishes the declarations of one immutable platform block
@@ -2911,7 +2900,7 @@ export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositi
  */
 
 /** Property kinds whose value names an application-scoped or stored target. */
-export const blockReferencePropertyKindsV2 = [
+export const blockReferencePropertyKinds = [
   "field_reference",
   "relationship_reference",
   "action_reference",
@@ -2921,22 +2910,22 @@ export const blockReferencePropertyKindsV2 = [
   "record_type_reference",
   "record_reference",
   "asset_reference",
-] as const satisfies readonly BlockPropertySchemaV2Contract["kind"][];
-export type BlockReferencePropertyKindV2 = (typeof blockReferencePropertyKindsV2)[number];
+] as const satisfies readonly BlockPropertySchemaContract["kind"][];
+export type BlockReferencePropertyKind = (typeof blockReferencePropertyKinds)[number];
 
-const blockReferencePropertyKinds: ReadonlySet<string> = new Set(blockReferencePropertyKindsV2);
+const blockReferencePropertyKindSet: ReadonlySet<string> = new Set(blockReferencePropertyKinds);
 
-export const isBlockReferencePropertyKindV2 = (
-  kind: BlockPropertySchemaV2Contract["kind"],
-): kind is BlockReferencePropertyKindV2 => blockReferencePropertyKinds.has(kind);
+export const isBlockReferencePropertyKind = (
+  kind: BlockPropertySchemaContract["kind"],
+): kind is BlockReferencePropertyKind => blockReferencePropertyKindSet.has(kind);
 
 /** A public page admits only releases whose capabilities allow the public surface. */
-export type CompositionSurfaceV2 = "authenticated" | "public";
+export type CompositionSurface = "authenticated" | "public";
 
 /** Exact release identity and palette metadata; its fingerprints fill a dependency manifest. */
-export type PlatformBlockReleaseSummaryV2 = Readonly<
+export type PlatformBlockReleaseSummary = Readonly<
   Pick<
-    PlatformBlockReleaseV2,
+    PlatformBlockRelease,
     | "blockId"
     | "key"
     | "releaseVersion"
@@ -2946,25 +2935,25 @@ export type PlatformBlockReleaseSummaryV2 = Readonly<
     | "icon"
     | "paletteGroup"
     | "rendererKey"
-  > & { publicSurface: PlatformBlockReleaseV2["capabilities"]["publicSurface"] }
+  > & { publicSurface: PlatformBlockRelease["capabilities"]["publicSurface"] }
 >;
 
-export type ComponentPropertyControlV2 = Readonly<{
+export type ComponentPropertyControl = Readonly<{
   /** The exact catalogue declaration, including every constraint validation applies to it. */
-  declaration: BlockPropertySchemaV2Contract;
+  declaration: BlockPropertySchemaContract;
   /** Validation refuses the placement when the author leaves this value unset. */
   valueRequired: boolean;
   /** This text property supplies the component's accessible name. */
   accessibleName: boolean;
-  referenceKind?: BlockReferencePropertyKindV2;
+  referenceKind?: BlockReferencePropertyKind;
   /** Controls of a group declaration, in declaration order. */
-  properties?: readonly ComponentPropertyControlV2[];
+  properties?: readonly ComponentPropertyControl[];
   /** Control for each item of a list declaration. */
-  item?: ComponentPropertyControlV2;
+  item?: ComponentPropertyControl;
 }>;
 
 /** Placement layout choices; content width, fill width and content height are always available. */
-export type ComponentLayoutOperationsV2 = Readonly<{
+export type ComponentLayoutOperations = Readonly<{
   /** Visibility may differ between desktop, tablet and phone. */
   responsiveVisibility: boolean;
   /** Placements inside this component's slots may use a different order per breakpoint. */
@@ -2975,7 +2964,7 @@ export type ComponentLayoutOperationsV2 = Readonly<{
   boundedHeight: boolean;
 }>;
 
-export type ComponentDiscoverySlotV2 = Readonly<{
+export type ComponentDiscoverySlot = Readonly<{
   key: string;
   label: string;
   required: boolean;
@@ -2986,39 +2975,39 @@ export type ComponentDiscoverySlotV2 = Readonly<{
    */
   repeats?: Readonly<{ items: string; identity: string }>;
   /** Exact releases validation admits in this slot on the projected surface. */
-  allowedChildren: readonly PlatformBlockReleaseSummaryV2[];
+  allowedChildren: readonly PlatformBlockReleaseSummary[];
 }>;
 
-export type ComponentDiscoveryV2 = Readonly<{
-  release: PlatformBlockReleaseSummaryV2;
+export type ComponentDiscovery = Readonly<{
+  release: PlatformBlockReleaseSummary;
   /** Semantic events a flow binding may name for this release, as the catalogue declares them. */
   supportedEvents: readonly ComponentSemanticEventKind[];
   /** State operations a flow may apply to this release, as the catalogue declares them. */
   supportedStateOperations: readonly ComponentStateOperationKind[];
-  accessibleName: PlatformBlockReleaseV2["capabilities"]["accessibleName"];
-  properties: readonly ComponentPropertyControlV2[];
+  accessibleName: PlatformBlockRelease["capabilities"]["accessibleName"];
+  properties: readonly ComponentPropertyControl[];
   /** Distinct reference kinds declared anywhere in the component's properties. */
-  referenceKinds: readonly BlockReferencePropertyKindV2[];
-  slots: readonly ComponentDiscoverySlotV2[];
-  layoutOperations: ComponentLayoutOperationsV2;
+  referenceKinds: readonly BlockReferencePropertyKind[];
+  slots: readonly ComponentDiscoverySlot[];
+  layoutOperations: ComponentLayoutOperations;
 }>;
 
-export type PlatformCatalogueDiscoveryV2 = Readonly<{
-  surface: CompositionSurfaceV2;
-  compositionPolicy: ApplicationCompositionPolicyV2;
+export type PlatformCatalogueDiscovery = Readonly<{
+  surface: CompositionSurface;
+  compositionPolicy: ApplicationCompositionPolicy;
   /** Every release offered on the surface, in catalogue order. */
-  components: readonly ComponentDiscoveryV2[];
-  /** Keyed by platformBlockReleaseIdentityV2, the exact identity a placement names. */
-  componentsByRelease: ReadonlyMap<string, ComponentDiscoveryV2>;
+  components: readonly ComponentDiscovery[];
+  /** Keyed by platformBlockReleaseIdentity, the exact identity a placement names. */
+  componentsByRelease: ReadonlyMap<string, ComponentDiscovery>;
 }>;
 
-export const platformBlockReleaseIdentityV2 = (
+export const platformBlockReleaseIdentity = (
   block: Readonly<{ blockId: string; releaseVersion: string }>,
 ): string => `${block.blockId}:${block.releaseVersion}`;
 
-const summarisePlatformBlockReleaseV2 = (
-  release: PlatformBlockReleaseV2,
-): PlatformBlockReleaseSummaryV2 =>
+const summarisePlatformBlockRelease = (
+  release: PlatformBlockRelease,
+): PlatformBlockReleaseSummary =>
   Object.freeze({
     blockId: release.blockId,
     key: release.key,
@@ -3037,13 +3026,13 @@ const summarisePlatformBlockReleaseV2 = (
  * required without a default, and a required accessible name must be reachable after defaults
  * along its property path.
  */
-const projectPropertyControlsV2 = (
-  declarations: readonly BlockPropertySchemaV2Contract[],
+const projectPropertyControls = (
+  declarations: readonly BlockPropertySchemaContract[],
   namePath: readonly string[] | undefined,
   nameRequired: boolean,
-): readonly ComponentPropertyControlV2[] =>
+): readonly ComponentPropertyControl[] =>
   Object.freeze(
-    declarations.map((declaration): ComponentPropertyControlV2 => {
+    declarations.map((declaration): ComponentPropertyControl => {
       const rest =
         namePath !== undefined && namePath[0] === declaration.key ? namePath.slice(1) : undefined;
       const nameValueRequired =
@@ -3053,12 +3042,12 @@ const projectPropertyControlsV2 = (
         valueRequired:
           (declaration.required && declaration.defaultValue === undefined) || nameValueRequired,
         accessibleName: rest !== undefined && rest.length === 0,
-        ...(isBlockReferencePropertyKindV2(declaration.kind)
+        ...(isBlockReferencePropertyKind(declaration.kind)
           ? { referenceKind: declaration.kind }
           : {}),
         ...(declaration.kind === "group"
           ? {
-              properties: projectPropertyControlsV2(
+              properties: projectPropertyControls(
                 declaration.properties,
                 rest !== undefined && rest.length > 0 ? rest : undefined,
                 nameValueRequired,
@@ -3066,37 +3055,37 @@ const projectPropertyControlsV2 = (
             }
           : {}),
         ...(declaration.kind === "list"
-          ? { item: projectPropertyControlsV2([declaration.item], undefined, false)[0]! }
+          ? { item: projectPropertyControls([declaration.item], undefined, false)[0]! }
           : {}),
       });
     }),
   );
 
-const collectReferenceKindsV2 = (
-  controls: readonly ComponentPropertyControlV2[],
-  kinds: Set<BlockReferencePropertyKindV2>,
-): Set<BlockReferencePropertyKindV2> => {
+const collectReferenceKinds = (
+  controls: readonly ComponentPropertyControl[],
+  kinds: Set<BlockReferencePropertyKind>,
+): Set<BlockReferencePropertyKind> => {
   for (const control of controls) {
     if (control.referenceKind !== undefined) kinds.add(control.referenceKind);
-    if (control.properties !== undefined) collectReferenceKindsV2(control.properties, kinds);
-    if (control.item !== undefined) collectReferenceKindsV2([control.item], kinds);
+    if (control.properties !== undefined) collectReferenceKinds(control.properties, kinds);
+    if (control.item !== undefined) collectReferenceKinds([control.item], kinds);
   }
   return kinds;
 };
 
 /** Projects the releases, property controls, slot children and layout operations of one surface. */
-export const projectPlatformCatalogueDiscoveryV2 = (
-  catalogue: ImmutablePlatformBlockCatalogueV2,
-  surface: CompositionSurfaceV2 = "authenticated",
-): PlatformCatalogueDiscoveryV2 => {
+export const projectPlatformCatalogueDiscovery = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  surface: CompositionSurface = "authenticated",
+): PlatformCatalogueDiscovery => {
   const offered = catalogue.releases.filter(
     (release) => surface === "authenticated" || release.capabilities.publicSurface === "allowed",
   );
-  const summaries = offered.map(summarisePlatformBlockReleaseV2);
+  const summaries = offered.map(summarisePlatformBlockRelease);
   const components = Object.freeze(
-    offered.map((release, index): ComponentDiscoveryV2 => {
+    offered.map((release, index): ComponentDiscovery => {
       const capabilities = release.capabilities;
-      const properties = projectPropertyControlsV2(
+      const properties = projectPropertyControls(
         release.properties,
         capabilities.accessibleName === "not_applicable"
           ? undefined
@@ -3109,9 +3098,9 @@ export const projectPlatformCatalogueDiscoveryV2 = (
         supportedStateOperations: Object.freeze([...release.supportedStateOperations]),
         accessibleName: capabilities.accessibleName,
         properties,
-        referenceKinds: Object.freeze([...collectReferenceKindsV2(properties, new Set())]),
+        referenceKinds: Object.freeze([...collectReferenceKinds(properties, new Set())]),
         slots: Object.freeze(
-          release.slots.map((slot): ComponentDiscoverySlotV2 => {
+          release.slots.map((slot): ComponentDiscoverySlot => {
             const categories = new Set<BlockPaletteGroup>(slot.allowedChildCategories);
             return Object.freeze({
               key: slot.key,
@@ -3141,7 +3130,7 @@ export const projectPlatformCatalogueDiscoveryV2 = (
     compositionPolicy: catalogue.compositionPolicy,
     components,
     componentsByRelease: new Map(
-      components.map((component) => [platformBlockReleaseIdentityV2(component.release), component]),
+      components.map((component) => [platformBlockReleaseIdentity(component.release), component]),
     ),
   });
 };

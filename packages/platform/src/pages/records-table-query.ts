@@ -3,7 +3,7 @@ import "server-only";
 import {
   unavailableResult,
   readRecordsTableContract,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type IdentitySession,
   type JsonValue,
   type ModuleRootId,
@@ -48,7 +48,7 @@ export type RecordsTableQueryRunner = Readonly<{
 export type RecordsTableQueryRequest = Readonly<{
   moduleRootId: ModuleRootId;
   queryId: QueryId;
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
+  settings: Readonly<Record<string, BlockPropertyValueContract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
   page?: number;
   continuationToken?: string;

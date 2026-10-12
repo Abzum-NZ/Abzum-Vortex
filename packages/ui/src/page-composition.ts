@@ -1,38 +1,38 @@
 import type {
-  ApplicationContentV2,
-  ApplicationShellV2,
-  BlockPlacementV2Contract,
-  GuidedFormPageCompositionV2,
-  PageCompositionV2,
-  PageDefinitionV2,
+  ApplicationContent,
+  ApplicationShell,
+  BlockPlacementContract,
+  GuidedFormPageComposition,
+  PageComposition,
+  PageDefinition,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 import { projectedAvailability } from "./placement-availability";
 import type { PlatformComponentRegistry } from "./registry";
-import type { ApplicationThemeV2 } from "./theme";
+import type { ApplicationTheme } from "./theme";
 
-export type PlacementSlotV2 = ApplicationShellV2["layout"];
+export type PlacementSlot = ApplicationShell["layout"];
 
 /**
  * Shape of materialised application composition matching definition compilation output.
  */
-export type MaterialisedApplicationCompositionV2 = Readonly<{
-  platformBlockDependencies: ApplicationContentV2["platformBlockDependencies"];
-  shells: readonly ApplicationShellV2[];
+export type MaterialisedApplicationComposition = Readonly<{
+  platformBlockDependencies: ApplicationContent["platformBlockDependencies"];
+  shells: readonly ApplicationShell[];
   pages: ReadonlyArray<
     Readonly<{
       pageId: string;
-      composition: PageCompositionV2 | GuidedFormPageCompositionV2;
+      composition: PageComposition | GuidedFormPageComposition;
       steps?: readonly Readonly<{ id: string }>[];
     }>
   >;
-  theme: ApplicationThemeV2;
+  theme: ApplicationTheme;
 }>;
 
 /**
  * Guided form composition contract shape.
  */
-export type GuidedFormCompositionV2 = GuidedFormPageCompositionV2;
+export type GuidedFormComposition = GuidedFormPageComposition;
 
 /**
  * Projected page capability shape from runtime/page permission projection.
@@ -52,13 +52,13 @@ export type ProjectedPlacementAvailability = Readonly<{
   unavailableReason?: "operation_unavailable";
 }>;
 
-export type ProjectedPlacementSlot = PlacementSlotV2 &
+export type ProjectedPlacementSlot = PlacementSlot &
   Readonly<{
-    placements: Record<string, BlockPlacementV2Contract & ProjectedPlacementAvailability>;
+    placements: Record<string, BlockPlacementContract & ProjectedPlacementAvailability>;
   }>;
 
 export const validateProjectedAvailabilityTree = (
-  slot: PlacementSlotV2,
+  slot: PlacementSlot,
   location: DefinitionRenderErrorLocation,
 ): void => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
@@ -70,15 +70,15 @@ export const validateProjectedAvailabilityTree = (
 };
 
 export const validatePlacementDependencies = (
-  slot: PlacementSlotV2,
-  dependencies: ApplicationContentV2["platformBlockDependencies"],
+  slot: PlacementSlot,
+  dependencies: ApplicationContent["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
   const releases = new Set(
     dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
   );
   const visit = (
-    current: PlacementSlotV2,
+    current: PlacementSlot,
     currentLocation: DefinitionRenderErrorLocation,
   ): void => {
     for (const [placementId, placement] of Object.entries(current.placements)) {
@@ -102,7 +102,7 @@ export const validatePlacementDependencies = (
   visit(slot, location);
 };
 
-function cloneSlot(slot: PlacementSlotV2): PlacementSlotV2 {
+function cloneSlot(slot: PlacementSlot): PlacementSlot {
   return {
     placements: Object.fromEntries(
       Object.entries(slot.placements).map(([placementId, placement]) => [
@@ -127,10 +127,10 @@ function cloneSlot(slot: PlacementSlotV2): PlacementSlotV2 {
 }
 
 function findPlacementsInSlot(
-  slot: PlacementSlotV2,
+  slot: PlacementSlot,
   placementId: string,
-  matches: BlockPlacementV2Contract[] = [],
-): readonly BlockPlacementV2Contract[] {
+  matches: BlockPlacementContract[] = [],
+): readonly BlockPlacementContract[] {
   const direct = slot.placements[placementId];
   if (direct) matches.push(direct);
   for (const placement of Object.values(slot.placements)) {
@@ -144,11 +144,11 @@ function findPlacementsInSlot(
  * Pure shell resolution: injects page content into the shell's declared content slots.
  */
 export function resolveShellLayout(
-  shell: ApplicationShellV2,
-  content: Readonly<Record<string, PlacementSlotV2>>,
+  shell: ApplicationShell,
+  content: Readonly<Record<string, PlacementSlot>>,
   location: DefinitionRenderErrorLocation = {},
   registry?: PlatformComponentRegistry,
-): PlacementSlotV2 {
+): PlacementSlot {
   const allowedSlotIds = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
   const slotKeys = new Set(shell.contentSlots.map((slot) => slot.key));
   const targetKeys = new Set(
@@ -261,7 +261,7 @@ export function resolveShellLayout(
       );
     }
 
-    const emptySlot: PlacementSlotV2 = {
+    const emptySlot: PlacementSlot = {
       placements: {},
       order: { desktop: [], tablet: [], phone: [] },
     };
@@ -274,55 +274,55 @@ export function resolveShellLayout(
 
 /**
  * Resolves the root placement slot from various composition input formats:
- * - MaterialisedApplicationCompositionV2
+ * - MaterialisedApplicationComposition
  * - ProjectedPageCapability
- * - PageDefinitionV2
- * - PageCompositionV2 | GuidedFormCompositionV2
+ * - PageDefinition
+ * - PageComposition | GuidedFormComposition
  */
 export function resolveRootPlacementSlot(options: {
   composition:
-    | MaterialisedApplicationCompositionV2
-    | PageDefinitionV2
-    | PageCompositionV2
-    | GuidedFormCompositionV2
+    | MaterialisedApplicationComposition
+    | PageDefinition
+    | PageComposition
+    | GuidedFormComposition
     | ProjectedPageCapability;
-  shells?: readonly ApplicationShellV2[];
+  shells?: readonly ApplicationShell[];
   pageId?: string;
   activeStepId?: string;
   registry?: PlatformComponentRegistry;
-}): PlacementSlotV2 {
+}): PlacementSlot {
   return resolveRootPlacementSlotWithContext(options).slot;
 }
 
 type ResolvedRootPlacementSlot = Readonly<{
-  slot: PlacementSlotV2;
+  slot: PlacementSlot;
   permissionProjected: boolean;
-  shell?: ApplicationShellV2;
+  shell?: ApplicationShell;
 }>;
 
 const hasCanonicalShellKind = (
   value: unknown,
-): value is PageCompositionV2 | GuidedFormPageCompositionV2 =>
+): value is PageComposition | GuidedFormPageComposition =>
   typeof value === "object" && value !== null && "shellKind" in value;
 
 const isCanonicalPageDefinition = (
   value:
-    | MaterialisedApplicationCompositionV2
-    | PageDefinitionV2
-    | PageCompositionV2
-    | GuidedFormCompositionV2
+    | MaterialisedApplicationComposition
+    | PageDefinition
+    | PageComposition
+    | GuidedFormComposition
     | ProjectedPageCapability,
-): value is PageDefinitionV2 =>
+): value is PageDefinition =>
   "type" in value &&
   "name" in value &&
   "composition" in value &&
   hasCanonicalShellKind(value.composition);
 
 const requireUniqueShell = (
-  shells: readonly ApplicationShellV2[],
+  shells: readonly ApplicationShell[],
   shellId: string,
   pageId?: string,
-): ApplicationShellV2 => {
+): ApplicationShell => {
   const matches = shells.filter((candidate) => candidate.shellId === shellId);
   if (matches.length !== 1 || matches[0] === undefined) {
     throw new DefinitionRenderError(
@@ -335,10 +335,10 @@ const requireUniqueShell = (
 };
 
 const shellForComposition = (
-  composition: PageCompositionV2 | GuidedFormPageCompositionV2,
-  shells: readonly ApplicationShellV2[],
+  composition: PageComposition | GuidedFormPageComposition,
+  shells: readonly ApplicationShell[],
   pageId?: string,
-): ApplicationShellV2 | undefined =>
+): ApplicationShell | undefined =>
   composition.shellKind === "application"
     ? requireUniqueShell(shells, composition.shellId, pageId)
     : undefined;
@@ -391,7 +391,7 @@ const resolveGuidedStepId = (
 };
 
 const validateMaterialisedDependencies = (
-  composition: MaterialisedApplicationCompositionV2,
+  composition: MaterialisedApplicationComposition,
   registry: PlatformComponentRegistry,
 ): void => {
   const seenBlockReleases = new Set<string>();
@@ -428,12 +428,12 @@ const validateMaterialisedDependencies = (
 
 export const resolveRootPlacementSlotWithContext = (options: {
   composition:
-    | MaterialisedApplicationCompositionV2
-    | PageDefinitionV2
-    | PageCompositionV2
-    | GuidedFormCompositionV2
+    | MaterialisedApplicationComposition
+    | PageDefinition
+    | PageComposition
+    | GuidedFormComposition
     | ProjectedPageCapability;
-  shells?: readonly ApplicationShellV2[];
+  shells?: readonly ApplicationShell[];
   pageId?: string;
   activeStepId?: string;
   registry?: PlatformComponentRegistry;
@@ -441,7 +441,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
   const { composition, pageId, activeStepId, registry } = options;
   const availableShells = [...(options.shells ?? [])];
 
-  // Case 1: MaterialisedApplicationCompositionV2
+  // Case 1: MaterialisedApplicationComposition
   if ("pages" in composition && Array.isArray(composition.pages)) {
     if (registry !== undefined) validateMaterialisedDependencies(composition, registry);
     const pageMatches = pageId
@@ -473,7 +473,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
     };
   }
 
-  // Case 2: PageDefinitionV2
+  // Case 2: PageDefinition
   if (isCanonicalPageDefinition(composition)) {
     const shell = shellForComposition(composition.composition, availableShells, composition.pageId);
     return {
@@ -528,7 +528,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
     }
   }
 
-  // Case 4: Direct PageCompositionV2 | GuidedFormCompositionV2
+  // Case 4: Direct PageComposition | GuidedFormComposition
   if (!hasCanonicalShellKind(composition))
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -550,13 +550,13 @@ export const resolveRootPlacementSlotWithContext = (options: {
 };
 
 function resolvePageCompositionSlot(options: {
-  composition: PageCompositionV2 | GuidedFormPageCompositionV2;
-  shells: readonly ApplicationShellV2[];
+  composition: PageComposition | GuidedFormPageComposition;
+  shells: readonly ApplicationShell[];
   pageId?: string;
   activeStepId?: string;
   orderedSteps?: readonly Readonly<{ id: string }>[];
   registry?: PlatformComponentRegistry;
-}): PlacementSlotV2 {
+}): PlacementSlot {
   const { composition, shells, pageId, activeStepId, orderedSteps, registry } = options;
 
   // Standard Page with default shell

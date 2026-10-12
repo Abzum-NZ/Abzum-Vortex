@@ -3,8 +3,8 @@ import "server-only";
 import {
   ruleGraphSchema,
   type JsonValue,
-  type ModuleDefinitionConsumerReadResultV3,
-  type RecordTypeDefinitionV3,
+  type ModuleDefinitionConsumerReadResult,
+  type RecordTypeDefinition,
   type RuleGraph,
 } from "../schema";
 import {
@@ -14,8 +14,8 @@ import {
   type BeforeSaveRuleWarning,
 } from "../rules/index";
 import {
-  prepareInitialRecordFieldCandidateV2,
-  type InitialRecordFieldCandidateV2,
+  prepareInitialRecordFieldCandidate,
+  type InitialRecordFieldCandidate,
 } from "./field-values";
 
 /** Code of the correction issue a deliberate rule refusal raises (located on a field when it names one). */
@@ -99,8 +99,8 @@ export const parseBeforeSaveRuleSet = (
  */
 export const applyBeforeSaveRules = (input: {
   execution: BeforeSaveRuleExecution;
-  recordType: RecordTypeDefinitionV3;
-  initialCandidate: InitialRecordFieldCandidateV2;
+  recordType: RecordTypeDefinition;
+  initialCandidate: InitialRecordFieldCandidate;
   organizationCurrency?: string;
 }): BeforeSaveRuleApplication => {
   const { execution, recordType, initialCandidate } = input;
@@ -111,7 +111,7 @@ export const applyBeforeSaveRules = (input: {
   let previousValues: Readonly<Record<string, JsonValue>> | undefined;
   if (initialCandidate.operation === "update") {
     // The stored values normalized exactly as the candidate's own existing values are.
-    const previous = prepareInitialRecordFieldCandidateV2({
+    const previous = prepareInitialRecordFieldCandidate({
       operation: "update",
       recordType,
       submittedValues: {},
@@ -131,7 +131,7 @@ export const applyBeforeSaveRules = (input: {
     rootId: execution.ruleSet.moduleRootId,
     releaseRevision: execution.ruleSet.releaseRevision,
     content: { recordTypes: [recordType], rules: execution.ruleSet.rules },
-  } as unknown as ModuleDefinitionConsumerReadResultV3;
+  } as unknown as ModuleDefinitionConsumerReadResult;
 
   let result;
   try {

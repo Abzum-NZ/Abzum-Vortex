@@ -3,7 +3,7 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { fingerprintSchema, pageCompositionV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
+import { fingerprintSchema, pageCompositionSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import {
   ApplicationPreview,
   createFullPlatformComponentRegistry,
@@ -19,7 +19,7 @@ export type SavedHomepagePreviewContext = Readonly<{
   key: string;
   draftRevision: number;
   sourceFingerprint: string;
-  source: Readonly<ApplicationSourceDocumentV2>;
+  source: Readonly<ApplicationSourceDocument>;
   localLifetime: number;
   generation: number;
 }>;
@@ -190,7 +190,7 @@ export function ApplicationDraftPreview({ context, readContext }: {
           page.steps?.length !== sourcePage.steps.length || !("stepContent" in page.composition) ||
           !Object.hasOwn(page.composition.stepContent, artifact.activeStepId)
           : artifact.activeStepId !== undefined || page.steps !== undefined ||
-            !pageCompositionV2Schema.safeParse(page.composition).success)) {
+            !pageCompositionSchema.safeParse(page.composition).success)) {
         setState({ kind: "unavailable", request, message: "The preview did not match the requested saved page, step, revision and size." });
         return;
       }

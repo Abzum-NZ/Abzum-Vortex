@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { isRepeatableSlotIdentityV2, repeatableSlotKeyV2 } from "@vortex/platform/schema";
+import { isRepeatableSlotIdentity, repeatableSlotKey } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
 import type { TabsPayload } from "./projected-data";
@@ -48,7 +48,7 @@ export function Tabs(props: TabsProps): ReactElement {
     tabs = settings.groups(repeats.items).map((item): Tab => {
       const identityValue = item[repeats.identity];
       const identity = identityValue?.kind === "text" ? identityValue.value : "";
-      if (!isRepeatableSlotIdentityV2(repeatableSlot.key, identity) || seen.has(identity))
+      if (!isRepeatableSlotIdentity(repeatableSlot.key, identity) || seen.has(identity))
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
           "Every tab needs its own stable key of lowercase words separated by underscores",
@@ -60,7 +60,7 @@ export function Tabs(props: TabsProps): ReactElement {
         labelValue?.kind === "text" && labelValue.value.trim().length > 0
           ? labelValue.value
           : identity;
-      return { key: identity, label, slotKey: repeatableSlotKeyV2(repeatableSlot.key, identity) };
+      return { key: identity, label, slotKey: repeatableSlotKey(repeatableSlot.key, identity) };
     });
     if (tabs.length === 0)
       throw new DefinitionRenderError(

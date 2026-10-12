@@ -2,17 +2,17 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  actionDefinitionV3Schema,
+  actionDefinitionSchema,
   activityIdSchema,
   eventOccurrenceIdSchema,
-  executeNamedActionCommandV2Schema,
-  executeNamedActionResultV2Schema,
-  moduleValidationContractVersionV3,
+  executeNamedActionCommandSchema,
+  executeNamedActionResultSchema,
+  moduleValidationContractVersion,
   permissionIdSchema,
-  recordTypeDefinitionV3Schema,
-  saveRecordCommandV2Schema,
-  type ExecuteNamedActionCommandV2,
-  type ExecuteNamedActionResultV2,
+  recordTypeDefinitionSchema,
+  saveRecordCommandSchema,
+  type ExecuteNamedActionCommand,
+  type ExecuteNamedActionResult,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -75,12 +75,12 @@ type PreparedAction = PreparedNamedAction &
  * The named-action result plus any before-save rule warnings of a completed
  * attempt. The closed result contract has no warning field, so they travel beside it.
  */
-export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResultV2> &
+export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
 type ActionPreparation =
   | PreparedAction
-  | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResultV2 }>
+  | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResult }>
   | Readonly<{
       outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
       correlationId?: string;
@@ -97,8 +97,8 @@ const one = <Row>(rows: readonly Row[]): Row => {
 const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
-): ExecuteNamedActionResultV2 =>
-  executeNamedActionResultV2Schema.parse({
+): ExecuteNamedActionResult =>
+  executeNamedActionResultSchema.parse({
     contractVersion: "2.0.0",
     outcome: "refused",
     error: { code, messageKey: `errors.${code}`, correlationId },
@@ -107,7 +107,7 @@ const safeRefusal = (
 const completedResult = (candidate: Record<string, unknown>) => {
   const parsedRevision = revision(candidate.concurrencyNumber);
   if (parsedRevision === undefined) return undefined;
-  const result = executeNamedActionResultV2Schema.safeParse({
+  const result = executeNamedActionResultSchema.safeParse({
     contractVersion: "2.0.0",
     outcome: "completed",
     recordId: candidate.recordId,
@@ -125,7 +125,7 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
   for (const entry of candidate) {
     if (typeof entry !== "object" || entry === null) return undefined;
     const value = entry as Record<string, unknown>;
-    const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
+    const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
     if (
       !recordType.success ||
       recordType.data.systemProjection !== undefined ||
@@ -175,19 +175,19 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
       : permissionIdSchema.safeParse(value.singleRequiredPermissionId);
   if (singleRequiredPermissionId !== undefined && !singleRequiredPermissionId.success)
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
-  const actionV2 = actionDefinitionV3Schema.safeParse(value.action);
-  const recordType = recordTypeDefinitionV3Schema.safeParse(value.recordType);
+  const action = actionDefinitionSchema.safeParse(value.action);
+  const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
   // An action that targets a registered protected operation, and every action of a system
   // projection record type, runs through that operation's owning service, never through ordered
   // record tasks.
   if (
-    !actionV2.success ||
-    actionV2.data.protectedOperation !== undefined ||
+    !action.success ||
+    action.data.protectedOperation !== undefined ||
     !recordType.success ||
     recordType.data.systemProjection !== undefined ||
     createTargets === undefined ||
-    value.validationContractVersion !== moduleValidationContractVersionV3 ||
+    value.validationContractVersion !== moduleValidationContractVersion ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
@@ -214,8 +214,8 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   }
   return {
     outcome: value.outcome,
-    validationContractVersion: moduleValidationContractVersionV3,
-    action: actionV2.data,
+    validationContractVersion: moduleValidationContractVersion,
+    action: action.data,
     recordType: recordType.data,
     recordId: value.recordId,
     existingValues,
@@ -264,7 +264,7 @@ const creationFinalValues = (
   for (const creation of creations) {
     const target = targets.get(creation.ordinal);
     if (target === undefined) return undefined;
-    const command = saveRecordCommandV2Schema.safeParse({
+    const command = saveRecordCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId: randomUUID(),
       operation: "create",
@@ -296,7 +296,7 @@ const creationFinalValues = (
 
 const validateReferenceInputs = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommandV2,
+  command: ExecuteNamedActionCommand,
   normalizedInputs: Readonly<Record<string, unknown>>,
 ): Promise<boolean> => {
   const rows = await transaction.query<ResultRow>`
@@ -312,7 +312,7 @@ const validateReferenceInputs = async (
 
 const prepare = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommandV2,
+  command: ExecuteNamedActionCommand,
   activityId: string,
   preview: boolean,
 ): Promise<ActionPreparation> => {
@@ -341,7 +341,7 @@ const prepare = async (
 
 const prepareTotals = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommandV2,
+  command: ExecuteNamedActionCommand,
   submittedValues: Readonly<Record<string, unknown>>,
   creations: readonly NamedActionCreation[],
   activityId: string,
@@ -362,7 +362,7 @@ const prepareTotals = async (
 
 const refusePrecondition = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommandV2,
+  command: ExecuteNamedActionCommand,
   activityId: string,
 ) => {
   const rows = await transaction.query<ResultRow>`
@@ -387,7 +387,7 @@ const refusePrecondition = async (
  */
 const applyChanges = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommandV2,
+  command: ExecuteNamedActionCommand,
   composition: NamedActionComposition,
   finalValues: Readonly<Record<string, unknown>>,
   creations: readonly Readonly<{
@@ -495,7 +495,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       commandCandidate: unknown,
       run: ActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
-      const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
+      const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
       let activityId: string;
@@ -641,7 +641,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
               Object.keys(composition.submittedValues).length > 0 ||
               composition.creations.length > 0
             ) {
-              const saveCommand = saveRecordCommandV2Schema.parse({
+              const saveCommand = saveRecordCommandSchema.parse({
                 contractVersion: "2.0.0",
                 commandId: command.data.commandId,
                 operation: "update",
@@ -844,7 +844,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
         if (result.value === recordedRefusal) return { kind: "unavailable" };
-        const value = result.value as ExecuteNamedActionResultV2;
+        const value = result.value as ExecuteNamedActionResult;
         return value.outcome === "completed" &&
           attempted.rules !== undefined &&
           attempted.rules.warnings.length > 0

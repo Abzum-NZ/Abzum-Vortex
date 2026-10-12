@@ -8,7 +8,7 @@ import {
   parseExactDecimal,
   readRecordsTableContract,
   recordIdSchema,
-  recordRichTextDocumentV2Schema,
+  recordRichTextDocumentSchema,
   recordsTableActionCapabilities,
   recordTypeIdSchema,
   revisionSchema,
@@ -17,7 +17,7 @@ import {
   type ComponentSettingValue,
   type FlowDefinition,
   type FlowInputDeclaration,
-  type ModuleQueryDefinitionV3,
+  type ModuleQueryDefinition,
 } from "../schema";
 import { z } from "zod";
 import {
@@ -435,8 +435,8 @@ export function resolveComponentFlowInputs(
   return { kind: "resolved", flowId: String(flow.id), context, inputs };
 }
 
-type ModuleQueryMatch = Readonly<{ moduleRootId: string; query: ModuleQueryDefinitionV3 }>;
-type QueryInputDeclaration = ModuleQueryDefinitionV3["inputs"][number];
+type ModuleQueryMatch = Readonly<{ moduleRootId: string; query: ModuleQueryDefinition }>;
+type QueryInputDeclaration = ModuleQueryDefinition["inputs"][number];
 
 const findModuleQueries = (
   installed: InstalledRuntimeContext,
@@ -480,7 +480,7 @@ const queryValueFits = (value: unknown, declaration: QueryInputDeclaration): boo
     case "text":
       return typeof value === "string";
     case "formatted_text":
-      return recordRichTextDocumentV2Schema.safeParse(value).success;
+      return recordRichTextDocumentSchema.safeParse(value).success;
     case "number":
       return typeof value === "number" && Number.isFinite(value);
     case "decimal_number":

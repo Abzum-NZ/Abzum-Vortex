@@ -1,30 +1,30 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   organizationIdSchema,
   flowTaskRegistry,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
-  sourcePlacementLayoutV2Schema,
-  sourcePlacementSlotV2Schema,
+  sourcePlacementLayoutSchema,
+  sourcePlacementSlotSchema,
   validateComponentSettings,
   type ApplicationRootId,
-  type ApplicationSourceDocumentV2,
-  type PlatformBlockReleaseV2,
-  type BlockPropertySchemaV2Contract,
+  type ApplicationSourceDocument,
+  type PlatformBlockRelease,
+  type BlockPropertySchemaContract,
 } from "@vortex/platform/schema";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { getStudioContextualPaletteGroups } from "./contextual-palette";
-import { createVortexAuthoredPuckAdapterV2 } from "./vortex-authored-puck-adapter";
+import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 export type StudioCompositionBreakpoint = "desktop" | "tablet" | "phone";
-export type StudioCompositionLayout = ReturnType<typeof sourcePlacementLayoutV2Schema.parse>;
-type SourceSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+export type StudioCompositionLayout = ReturnType<typeof sourcePlacementLayoutSchema.parse>;
+type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 type SourcePlacement = SourceSlot["placements"][string];
-type SourceShell = ApplicationSourceDocumentV2["body"]["shells"][number];
+type SourceShell = ApplicationSourceDocument["body"]["shells"][number];
 
 /** Local identity only: a command does not grant authority or perform a write. */
 export type StudioCompositionContext = Readonly<{
@@ -33,7 +33,7 @@ export type StudioCompositionContext = Readonly<{
   key: string;
   draftRevision: number;
   localLifetime: number;
-  source: Readonly<ApplicationSourceDocumentV2>;
+  source: Readonly<ApplicationSourceDocument>;
 }>;
 
 export type StudioCompositionCommand =
@@ -53,14 +53,14 @@ export type StudioCompositionAddSettings = Readonly<Record<string,
 export type StudioCompositionScalarSettings = Readonly<Record<string,
   Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
   Readonly<{ kind: "number"; value: number }>>>;
-type ScalarProperty = Extract<BlockPropertySchemaV2Contract, { kind: "boolean" | "choice" | "number" }>;
+type ScalarProperty = Extract<BlockPropertySchemaContract, { kind: "boolean" | "choice" | "number" }>;
 export type StudioCompositionScalarSettingsModel =
   | Readonly<{ kind: "available"; placementAlias: string; properties: readonly ScalarProperty[];
       settings: StudioCompositionScalarSettings }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 export type StudioCompositionPaletteChoice = Readonly<{
   id: string; blockId: string; releaseVersion: string; key: string; name: string;
-  properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" | "boolean" | "choice" }>[];
+  properties: readonly Extract<BlockPropertySchemaContract, { kind: "text" | "boolean" | "choice" }>[];
   slots: readonly Readonly<{ key: string; label: string }>[];
 }>;
 export type StudioCompositionPaletteModel =
@@ -69,7 +69,7 @@ export type StudioCompositionPaletteModel =
 
 export type StudioCompositionSettingsModel =
   | Readonly<{ kind: "available"; placementAlias: string;
-      properties: readonly Extract<BlockPropertySchemaV2Contract, { kind: "text" }>[];
+      properties: readonly Extract<BlockPropertySchemaContract, { kind: "text" }>[];
       settings: StudioCompositionTextSettings }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 
@@ -84,7 +84,7 @@ export type StudioCompositionDestinationModel =
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionCommandResult =
-  | Readonly<{ kind: "applied"; source: ApplicationSourceDocumentV2 }>
+  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "invalid" | "stale" | "unsupported" }>;
 
 export type StudioCompositionRemovalReason =
@@ -103,7 +103,7 @@ export type StudioCompositionEditorModel =
       responsiveOrder: boolean;
       layout: StudioCompositionLayout;
       explicitLayout: boolean;
-      capabilities: Readonly<Pick<PlatformBlockReleaseV2["capabilities"],
+      capabilities: Readonly<Pick<PlatformBlockRelease["capabilities"],
         "gridWidth" | "height" | "responsiveVisibility">>;
     }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
@@ -119,8 +119,8 @@ type SlotStep = Readonly<{ parentAlias: string; slotKey: string }>;
 type Target = { region: Region; slot: SourceSlot; placement: SourcePlacement;
   steps: readonly SlotStep[]; responsiveOrder: boolean };
 
-const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
-const bridge = createVortexAuthoredPuckAdapterV2(catalogue);
+const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
+const bridge = createVortexAuthoredPuckAdapter(catalogue);
 const releases = new Map(catalogue.releases.map((release) =>
   [`${release.blockId}:${release.releaseVersion}`, release]));
 const refuse = (): never => { throw new TypeError("Composition edit refused"); };
@@ -159,7 +159,7 @@ const sameContext = (expected: StudioCompositionContext, current: StudioComposit
   expected.localLifetime === current.localLifetime && expected.source === current.source;
 
 /** Enumerate native regions; a caller cannot supply a JSON pointer or a guessed step id. */
-const regions = (source: ApplicationSourceDocumentV2): Region[] => {
+const regions = (source: ApplicationSourceDocument): Region[] => {
   const result: Region[] = source.body.shells.map((shell) => ({
     slot: shell.layout, shell, replace: (slot: SourceSlot, replacement?: SourceShell) => {
       shell.layout = replacement?.layout ?? slot;
@@ -208,10 +208,10 @@ const regions = (source: ApplicationSourceDocumentV2): Region[] => {
   return result;
 };
 
-const releaseFor = (placement: SourcePlacement): PlatformBlockReleaseV2 | undefined =>
+const releaseFor = (placement: SourcePlacement): PlatformBlockRelease | undefined =>
   releases.get(`${placement.block.block_id}:${placement.block.release_version}`);
 
-const targetFor = (source: ApplicationSourceDocumentV2, alias: string): Target | undefined => {
+const targetFor = (source: ApplicationSourceDocument, alias: string): Target | undefined => {
   const matches: Target[] = [];
   for (const region of regions(source)) {
     let count = 0;
@@ -233,14 +233,14 @@ const targetFor = (source: ApplicationSourceDocumentV2, alias: string): Target |
 };
 
 /** Only the selected region needs supported releases; unrelated regions remain untouched. */
-const pinnedRelease = (source: ApplicationSourceDocumentV2, placement: SourcePlacement): boolean => {
+const pinnedRelease = (source: ApplicationSourceDocument, placement: SourcePlacement): boolean => {
   const release = releaseFor(placement);
   return release !== undefined && source.body.platform_block_dependencies.some((dependency) =>
     dependency.block_id === release.blockId && dependency.release_version === release.releaseVersion &&
     dependency.content_fingerprint === release.contentFingerprint &&
     dependency.catalogue_fingerprint === release.catalogueFingerprint);
 };
-const manifestMatches = (source: ApplicationSourceDocumentV2, slot: SourceSlot): boolean => {
+const manifestMatches = (source: ApplicationSourceDocument, slot: SourceSlot): boolean => {
   for (const placement of Object.values(slot.placements)) {
     if (!pinnedRelease(source, placement)) return false;
     for (const child of Object.values(placement.slots))
@@ -251,7 +251,7 @@ const manifestMatches = (source: ApplicationSourceDocumentV2, slot: SourceSlot):
 
 const resolve = (context: StudioCompositionContext, selection: StudioSemanticSelection | null) => {
   if (!validContext(context) || selection?.kind !== "placement") return undefined;
-  const source = applicationSourceDocumentV2Schema.parse(context.source);
+  const source = applicationSourceDocumentSchema.parse(context.source);
   if (resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !== "resolved")
     return undefined;
   const target = targetFor(source, selection.placementAlias);
@@ -370,14 +370,14 @@ const plainSource = (source: unknown): void => {
   }
 };
 
-const eligibleAddRelease = (release: PlatformBlockReleaseV2): boolean =>
+const eligibleAddRelease = (release: PlatformBlockRelease): boolean =>
   release.paletteGroup === "content" && release.slots.length === 0 &&
   release.properties.every((property) => property.kind === "text" && !property.required) &&
   release.capabilities.accessibleName === "optional" && release.supportedStateOperations.length === 0 &&
   release.supportedEvents.every((event) => event === "refresh");
 
 /** Empty fixed slots need no child identity, reference resolution or required seed content. */
-const eligibleLayoutAddRelease = (release: PlatformBlockReleaseV2): boolean =>
+const eligibleLayoutAddRelease = (release: PlatformBlockRelease): boolean =>
   release.paletteGroup === "layout" && release.slots.length > 0 &&
   release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
   release.properties.every((property) => !property.required &&
@@ -386,7 +386,7 @@ const eligibleLayoutAddRelease = (release: PlatformBlockReleaseV2): boolean =>
   release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
 
 /** Existing fixed-slot layouts retain their children when editing declared scalar settings. */
-const eligibleLayoutSettingsRelease = (release: PlatformBlockReleaseV2): boolean =>
+const eligibleLayoutSettingsRelease = (release: PlatformBlockRelease): boolean =>
   release.paletteGroup === "layout" && release.slots.length > 0 &&
   release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
   release.properties.every((property) => !property.required &&
@@ -395,7 +395,7 @@ const eligibleLayoutSettingsRelease = (release: PlatformBlockReleaseV2): boolean
   release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
 
 type AddTarget =
-  | { kind: "available"; source: ApplicationSourceDocumentV2; main: SourceSlot;
+  | { kind: "available"; source: ApplicationSourceDocument; main: SourceSlot;
       layoutAllowed: boolean; replace: (slot: SourceSlot) => void }
   | { kind: "invalid" | "unsupported" };
 const resolveAdd = (context: StudioCompositionContext, selection: StudioSemanticSelection | null): AddTarget => {
@@ -412,7 +412,7 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   if (rawPage.type === "public" || rawPage.type === "guided_form" || rawComposition.shell_kind !== "default")
     return { kind: "unsupported" };
   bridge.toPuckData(rawComposition.main);
-  const source = applicationSourceDocumentV2Schema.parse(context.source);
+  const source = applicationSourceDocumentSchema.parse(context.source);
   if (resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !== "resolved")
     return { kind: "invalid" };
   const pages = source.body.pages.filter((page) => page.id === selection.pageAlias);
@@ -451,7 +451,7 @@ const addChoices = (searchText: string, authoredAlias: string, layoutAllowed: bo
     });
 };
 
-const seedSlot = (release: PlatformBlockReleaseV2, alias: string,
+const seedSlot = (release: PlatformBlockRelease, alias: string,
   settings: StudioCompositionAddSettings): SourceSlot => ({
   placements: { [alias]: {
     block: { block_id: release.blockId, release_version: release.releaseVersion },
@@ -478,7 +478,7 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   if (input.kind !== "add" || typeof input.blockId !== "string" || typeof input.releaseVersion !== "string")
     return { kind: "invalid" };
   // The public source document exposes the same portable source-alias schema.
-  const alias = applicationSourceDocumentV2Schema.shape.root_alias.parse(input.alias);
+  const alias = applicationSourceDocumentSchema.shape.root_alias.parse(input.alias);
   const target = resolveAdd(current, selection);
   if (target.kind !== "available") return target;
   const release = releases.get(`${input.blockId}:${input.releaseVersion}`);
@@ -532,14 +532,14 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
     dependencies.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
       : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
   }
-  const source = applicationSourceDocumentV2Schema.parse(target.source);
+  const source = applicationSourceDocumentSchema.parse(target.source);
   return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
 /** Named content settings require the actual shell reservation and fixed-slot ancestry. */
-const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: Target,
+const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Target,
   optionalLayoutAncestry = false) => {
-  const matches: { page: ApplicationSourceDocumentV2["body"]["pages"][number];
+  const matches: { page: ApplicationSourceDocument["body"]["pages"][number];
     shellAlias: string; slotAlias: string }[] = [];
   for (const page of source.body.pages) {
     if (page.type === "guided_form" || page.composition.shell_kind !== "application") continue;
@@ -611,7 +611,7 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocumentV2, target: 
 
 /** Setting changes retain identity, so Flow references and required content do not block them. */
 const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
-  eligible: (release: PlatformBlockReleaseV2) => boolean = eligibleAddRelease) => {
+  eligible: (release: PlatformBlockRelease) => boolean = eligibleAddRelease) => {
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
@@ -659,7 +659,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   return { kind: "available", ...resolved, release } as const;
 };
 
-const textSettings = (value: unknown, release: PlatformBlockReleaseV2): StudioCompositionTextSettings => {
+const textSettings = (value: unknown, release: PlatformBlockRelease): StudioCompositionTextSettings => {
   const raw = object(value);
   const keys = Reflect.ownKeys(raw);
   if (keys.some((key) => typeof key !== "string" || !release.properties.some((property) => property.key === key)))
@@ -704,15 +704,15 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   object(object(matches[0]).props).settings = structuredClone(settings);
   // Original source-order and breakpoint provenance remain the inverse's baseline.
   target.region.replace(bridge.fromPuckData(target.region.slot, data));
-  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
-const scalarProperties = (release: PlatformBlockReleaseV2): readonly ScalarProperty[] =>
+const scalarProperties = (release: PlatformBlockRelease): readonly ScalarProperty[] =>
   release.properties.filter((property): property is ScalarProperty =>
     property.kind === "boolean" || property.kind === "choice" ||
     (release.paletteGroup === "layout" && property.kind === "number"));
-const eligibleScalarRelease = (release: PlatformBlockReleaseV2): boolean =>
+const eligibleScalarRelease = (release: PlatformBlockRelease): boolean =>
   scalarProperties(release).length > 0 &&
   ((release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
     release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutSettingsRelease(release));
@@ -778,12 +778,12 @@ const applyScalarSettings = (current: StudioCompositionContext, selection: Studi
   if (matches.length !== 1) return { kind: "invalid" };
   object(object(matches[0]).props).settings = structuredClone(settings);
   target.region.replace(bridge.fromPuckData(target.region.slot, data));
-  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
 /** Read only declared placement identity positions, never arbitrary literal data. */
-const removalReference = (source: ApplicationSourceDocumentV2, alias: string,
+const removalReference = (source: ApplicationSourceDocument, alias: string,
   aliases: ReadonlySet<string>): StudioCompositionRemovalReason | undefined => {
   if (source.body.flow_bindings.some((binding) => binding.control === alias)) return "flow_control";
   const target = (value: unknown, qualified: boolean,
@@ -793,7 +793,7 @@ const removalReference = (source: ApplicationSourceDocumentV2, alias: string,
     if (separator !== -1 && (!qualified || separator < 1 || value.slice(0, separator) !== source.key))
       return "unresolved_target";
     const local = value.slice(separator + 1);
-    if (!applicationSourceDocumentV2Schema.shape.root_alias.safeParse(local).success || !aliases.has(local))
+    if (!applicationSourceDocumentSchema.shape.root_alias.safeParse(local).success || !aliases.has(local))
       return "unresolved_target";
     return local === alias ? reason : undefined;
   };
@@ -864,7 +864,7 @@ const removalReference = (source: ApplicationSourceDocumentV2, alias: string,
 };
 
 type Removal = {
-  source: ApplicationSourceDocumentV2; target: Target; alias: string;
+  source: ApplicationSourceDocument; target: Target; alias: string;
   willRemoveUnusedRelease: boolean;
 };
 type ResolvedRemoval = { kind: "available"; removal: Removal }
@@ -939,7 +939,7 @@ const applyRemoval = (current: StudioCompositionContext, selection: StudioSemant
   if (willRemoveUnusedRelease) source.body.platform_block_dependencies = source.body.platform_block_dependencies
     .filter((dependency) => dependency.block_id !== target.placement.block.block_id ||
       dependency.release_version !== target.placement.block.release_version);
-  const parsed = applicationSourceDocumentV2Schema.parse(source);
+  const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
@@ -1019,7 +1019,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       if (moved === undefined) return refuse();
       to.push(moved);
       target.region.replace(bridge.fromPuckData(target.region.slot, data));
-      const parsed = applicationSourceDocumentV2Schema.parse(source);
+      const parsed = applicationSourceDocumentSchema.parse(source);
       return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
     }
     if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
@@ -1043,7 +1043,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
         delete order[command.breakpoint];
       } else {
         if (!Array.isArray(command.order)) return { kind: "invalid" };
-        const checked = sourcePlacementSlotV2Schema.safeParse({ placements: target.slot.placements,
+        const checked = sourcePlacementSlotSchema.safeParse({ placements: target.slot.placements,
           order: { desktop: [...command.order] } });
         if (!checked.success) return { kind: "invalid" };
         order[command.breakpoint] = [...command.order];
@@ -1071,7 +1071,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
         if (command.breakpoint === "desktop") return { kind: "invalid" };
         delete responsive[command.breakpoint];
       } else {
-        const checked = sourcePlacementLayoutV2Schema.safeParse(command.layout);
+        const checked = sourcePlacementLayoutSchema.safeParse(command.layout);
         if (!checked.success) return { kind: "invalid" };
         responsive[command.breakpoint] = checked.data;
       }
@@ -1088,7 +1088,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       const shell = bridge.fromPuckShell(target.region.shell, data);
       target.region.replace(shell.layout, shell);
     } else target.region.replace(bridge.fromPuckData(target.region.slot, data));
-    const parsed = applicationSourceDocumentV2Schema.parse(source);
+    const parsed = applicationSourceDocumentSchema.parse(source);
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
   } catch { return { kind: "invalid" }; }
