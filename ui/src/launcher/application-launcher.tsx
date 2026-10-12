@@ -36,7 +36,8 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const settings = readLauncherSettings(props, context.location);
   const nameKey = settings.cellKey("name_key", "name");
   const iconKey = settings.cellKey("icon_key", "icon");
-  const descriptionKey = settings.cellKey("description_key", "description");
+  // The launcher bindings write an optional fixed `description` cell; it is not a declared setting.
+  const descriptionKey = "description";
   const values = context.values;
   const rows = values === undefined ? [] : filterLauncherRows(values.rows, filter, nameKey);
   const sidePanel = props.slots.side_panel ?? null;
