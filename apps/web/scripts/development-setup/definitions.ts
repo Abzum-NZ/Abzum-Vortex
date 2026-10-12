@@ -32,6 +32,8 @@ import {
   serviceDeskApplication,
   serviceDeskModuleSources,
   systemDirectoryModule,
+  tasksApplication,
+  tasksModule,
   tenantAdministrationApplication,
   tenantAdministrationModule,
 } from "@vortex/modules";
@@ -59,21 +61,26 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
   applicationCompositionV2: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
-      ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => definition,
+      ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => {
+        void contentFingerprint;
+        void catalogueFingerprint;
+        void customComponent;
+        return definition;
+      },
     ),
     platformThemeReleases: [
-      (({ contentFingerprint, catalogueFingerprint, ...definition }) => definition)(
-        DEFAULT_PLATFORM_THEME_RELEASE_V2,
-      ),
+      (({ contentFingerprint, catalogueFingerprint, ...definition }) => {
+        void contentFingerprint;
+        void catalogueFingerprint;
+        return definition;
+      })(DEFAULT_PLATFORM_THEME_RELEASE_V2),
     ],
   },
 };
 
 /**
- * Every module source available to the development setup. `modulesInDependencyOrder` publishes
- * only the modules reached through shipped application bindings and their dependencies. The
- * System Directory source is available for the administration bindings delivered by #1356;
- * until those bindings exist, the setup does not publish or install this module.
+ * Every module source available to the development setup. Publishing each shipped Module also
+ * validates independently reusable Modules that no Application currently binds.
  */
 const moduleSources = [
   iamModule,
@@ -86,6 +93,7 @@ const moduleSources = [
   ...serviceDeskModuleSources,
   ...operationsModuleSources,
   ...hrModuleSources,
+  tasksModule,
 ] as readonly StoredDefinitionSource[];
 
 type TrustedApplicationDescriptor = Readonly<{
@@ -103,6 +111,7 @@ const applicationDescriptors: readonly TrustedApplicationDescriptor[] = [
   { source: operationsApplication, applicationOriginKind: "ordinary" },
   { source: crmApplication, applicationOriginKind: "ordinary" },
   { source: hrApplication, applicationOriginKind: "ordinary" },
+  { source: tasksApplication, applicationOriginKind: "ordinary" },
   { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
   { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
 ];
@@ -178,7 +187,7 @@ export const verifyRecordedShippedApplicationRoots = async (
 type ModuleBody = Readonly<{ dependencies?: readonly Readonly<{ module: string }>[] }>;
 type ApplicationBody = Readonly<{ module_bindings?: readonly Readonly<{ module: string }>[] }>;
 
-/** The modules the named applications bind, and their module dependencies, in publish order. */
+/** All shipped Modules and their dependencies, in publish order. */
 const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDefinitionSource[] => {
   const byKey = new Map(moduleSources.map((source) => [source.key, source] as const));
   const needed = new Set<string>();
@@ -190,6 +199,7 @@ const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDef
     for (const dependency of (source.body as ModuleBody).dependencies ?? [])
       visit(dependency.module);
   };
+  for (const source of moduleSources) visit(source.key);
   for (const key of applicationKeys)
     for (const binding of (shippedApplicationSource(key).body as ApplicationBody).module_bindings ??
       [])

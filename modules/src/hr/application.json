@@ -87,28 +87,28 @@
         "type": "page",
         "label": "Departments",
         "page": "hr_departments",
-        "permission": "vortex.hr.department.read"
+        "permission": "application.hr.open"
       },
       {
         "id": "nav_hr_positions",
         "type": "page",
         "label": "Positions",
         "page": "hr_positions",
-        "permission": "vortex.hr.position.read"
+        "permission": "application.hr.open"
       },
       {
         "id": "nav_hr_employees",
         "type": "page",
         "label": "Employees",
         "page": "hr_employees",
-        "permission": "vortex.hr.employee.read"
+        "permission": "application.hr.open"
       },
       {
         "id": "nav_hr_leave_requests",
         "type": "page",
         "label": "Leave requests",
         "page": "hr_leave_requests",
-        "permission": "vortex.hr.leave_request.read"
+        "permission": "application.hr.open"
       }
     ],
     "queries": [],
@@ -466,7 +466,7 @@
         "name": "Departments",
         "type": "list",
         "record_type": "vortex.hr:department",
-        "permission": "vortex.hr.department.read",
+        "permission": "application.hr.open",
         "query": "vortex.hr:hr_departments",
         "composition": {
           "shell_kind": "application",
@@ -591,7 +591,7 @@
         "name": "Department",
         "type": "detail",
         "record_type": "vortex.hr:department",
-        "permission": "vortex.hr.department.read",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -705,7 +705,7 @@
         "name": "New department",
         "type": "form",
         "record_type": "vortex.hr:department",
-        "permission": "vortex.hr.department.create",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -856,7 +856,7 @@
         "name": "Edit department",
         "type": "form",
         "record_type": "vortex.hr:department",
-        "permission": "vortex.hr.department.update",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -1007,7 +1007,7 @@
         "name": "Positions",
         "type": "list",
         "record_type": "vortex.hr:position",
-        "permission": "vortex.hr.position.read",
+        "permission": "application.hr.open",
         "query": "vortex.hr:hr_positions",
         "composition": {
           "shell_kind": "application",
@@ -1132,7 +1132,7 @@
         "name": "Position",
         "type": "detail",
         "record_type": "vortex.hr:position",
-        "permission": "vortex.hr.position.read",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -1246,7 +1246,7 @@
         "name": "New position",
         "type": "form",
         "record_type": "vortex.hr:position",
-        "permission": "vortex.hr.position.create",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -1444,7 +1444,7 @@
         "name": "Edit position",
         "type": "form",
         "record_type": "vortex.hr:position",
-        "permission": "vortex.hr.position.update",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -1642,7 +1642,7 @@
         "name": "Employees",
         "type": "list",
         "record_type": "vortex.hr:employee",
-        "permission": "vortex.hr.employee.read",
+        "permission": "application.hr.open",
         "query": "vortex.hr:hr_employees",
         "composition": {
           "shell_kind": "application",
@@ -1780,7 +1780,7 @@
         "name": "Employee",
         "type": "detail",
         "record_type": "vortex.hr:employee",
-        "permission": "vortex.hr.employee.read",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -1907,7 +1907,7 @@
         "name": "New employee",
         "type": "form",
         "record_type": "vortex.hr:employee",
-        "permission": "vortex.hr.employee.create",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -2182,7 +2182,7 @@
         "name": "Edit employee",
         "type": "form",
         "record_type": "vortex.hr:employee",
-        "permission": "vortex.hr.employee.update",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",
@@ -2457,7 +2457,7 @@
         "name": "Leave requests",
         "type": "list",
         "record_type": "vortex.hr:leave_request",
-        "permission": "vortex.hr.leave_request.read",
+        "permission": "application.hr.open",
         "query": "vortex.hr:hr_leave_requests",
         "composition": {
           "shell_kind": "application",
@@ -2560,7 +2560,7 @@
         "name": "Leave request",
         "type": "detail",
         "record_type": "vortex.hr:leave_request",
-        "permission": "vortex.hr.leave_request.read",
+        "permission": "application.hr.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_hr",

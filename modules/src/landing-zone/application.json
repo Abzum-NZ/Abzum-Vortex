@@ -829,7 +829,7 @@
         "name": "Favourite status",
         "type": "form",
         "record_type": "vortex.landing_zone:tile",
-        "permission": "vortex.landing_zone.tile.update",
+        "permission": "application.landing_zone.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_landing_zone",
@@ -876,7 +876,7 @@
         "name": "Remove tile",
         "type": "form",
         "record_type": "vortex.landing_zone:tile",
-        "permission": "vortex.landing_zone.tile.delete",
+        "permission": "application.landing_zone.open",
         "composition": {
           "shell_kind": "application",
           "shell": "shell_landing_zone",
