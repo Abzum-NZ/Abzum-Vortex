@@ -9,10 +9,12 @@ const root = resolve(import.meta.dirname, "../..");
 const baselinePath = resolve(import.meta.dirname, "baseline.json");
 const hasBaseline = existsSync(baselinePath);
 const baseline = hasBaseline ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]) : [];
+const baselineIds = new Set(baseline);
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".sql"]);
 const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
+const unchangedOnMain = new Map<string, boolean>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const lineAt = (content: string, offset: number) => content.slice(0, offset).split("\n").length;
@@ -21,6 +23,17 @@ function add(rule: string, file: string, line: number, detail: string): void {
   const count = (occurrences.get(base) ?? 0) + 1;
   occurrences.set(base, count);
   const id = `${base}|${count}`;
+  if (rule === "function-uuid" && !baselineIds.has(id)) {
+    if (!unchangedOnMain.has(file)) {
+      const previous = spawnSync("git", ["show", `origin/main:${file}`],
+        { cwd: root, encoding: "utf8" });
+      unchangedOnMain.set(file,
+        previous.status === 0 && previous.stdout.replaceAll("\r\n", "\n") === read(file));
+    }
+    // A migration merged into main after the first baseline is already part of
+    // the PR base; changing that file still reports every hard-coded UUID.
+    if (unchangedOnMain.get(file)) return;
+  }
   findings.push({ rule, file, line, detail, id });
 }
 const files = execFileSync(
