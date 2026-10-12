@@ -9,12 +9,10 @@ const root = resolve(import.meta.dirname, "../..");
 const baselinePath = resolve(import.meta.dirname, "baseline.json");
 const hasBaseline = existsSync(baselinePath);
 const baseline = hasBaseline ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]) : [];
-const baselineIds = new Set(baseline);
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".sql"]);
 const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
-const unchangedOnMain = new Map<string, boolean>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const lineAt = (content: string, offset: number) => content.slice(0, offset).split("\n").length;
@@ -23,17 +21,6 @@ function add(rule: string, file: string, line: number, detail: string): void {
   const count = (occurrences.get(base) ?? 0) + 1;
   occurrences.set(base, count);
   const id = `${base}|${count}`;
-  if (rule === "function-uuid" && !baselineIds.has(id)) {
-    if (!unchangedOnMain.has(file)) {
-      const previous = spawnSync("git", ["show", `origin/main:${file}`],
-        { cwd: root, encoding: "utf8" });
-      unchangedOnMain.set(file,
-        previous.status === 0 && previous.stdout.replaceAll("\r\n", "\n") === read(file));
-    }
-    // A migration merged into main after the first baseline is already part of
-    // the PR base; changing that file still reports every hard-coded UUID.
-    if (unchangedOnMain.get(file)) return;
-  }
   findings.push({ rule, file, line, detail, id });
 }
 const files = execFileSync(
@@ -481,8 +468,24 @@ const allowed =
 const growth = allowed ? baseline.filter((id) => !allowed.has(id)) : [];
 const current = new Set(unique.map((finding) => finding.id));
 const old = new Set(baseline);
-const added = unique.filter((finding) => !old.has(finding.id));
-const stale = baseline.filter((id) => !current.has(id));
+const mainFiles = new Map<string, boolean>();
+function unchangedFromMain(file: string): boolean {
+  const cached = mainFiles.get(file);
+  if (cached !== undefined) return cached;
+  const present = existsSync(resolve(root, file));
+  const previous = spawnSync("git", ["show", `origin/main:${file}`],
+    { cwd: root, encoding: "utf8" });
+  const unchanged = previous.status === 0
+    ? present && previous.stdout.replaceAll("\r\n", "\n") === read(file)
+    : !present;
+  mainFiles.set(file, unchanged);
+  return unchanged;
+}
+// Main can advance while this PR is open. A finding on a file identical to the
+// PR base belongs to main; a changed or newly added file is still checked here.
+const added = unique.filter((finding) => !old.has(finding.id) && !unchangedFromMain(finding.file));
+const resolved = baseline.filter((id) => !current.has(id));
+const stale = resolved.filter((id) => !unchangedFromMain(id.split("|")[1]));
 if (process.argv.includes("--update-baseline")) {
   if (growth.length) throw new Error(`Baseline cannot grow: ${growth[0]}`);
   if (hasBaseline && added.length)
@@ -494,7 +497,7 @@ if (process.argv.includes("--update-baseline")) {
     `${JSON.stringify(hasBaseline ? baseline.filter((id) => current.has(id)) : unique.map((finding) => finding.id), null, 2)}\n`,
   );
   console.log(
-    `Baseline contains ${baseline.length ? baseline.length - stale.length : unique.length} findings.`,
+    `Baseline contains ${baseline.length ? baseline.length - resolved.length : unique.length} findings.`,
   );
 } else {
   for (const id of growth) console.error(`baseline.json:1: baseline grew: ${id}`);
@@ -502,5 +505,5 @@ if (process.argv.includes("--update-baseline")) {
     console.error(`${finding.file}:${finding.line}: ${finding.rule}: ${finding.detail}`);
   for (const id of stale) console.error(`baseline.json:1: stale baseline entry: ${id}`);
   if (added.length || stale.length || growth.length) process.exitCode = 1;
-  else console.log(`Guard passed (${unique.length} existing findings).`);
+  else console.log(`Guard passed (${baseline.length} baseline entries).`);
 }
