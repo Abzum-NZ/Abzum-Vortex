@@ -505,6 +505,16 @@ export default async function ApplicationAddressPage({
           organizationShortName,
         )
       : undefined;
+  if (applicationSwitcherRead?.kind === "temporarily_unavailable")
+    console.error(
+      `[application-shell] permitted applications unavailable: cause=${applicationSwitcherRead.cause ?? "cause_not_provided"}`,
+    );
+  const applicationSwitcherState =
+    applicationSwitcherRead === undefined || applicationSwitcherRead.kind === "available"
+      ? "available"
+      : applicationSwitcherRead.kind === "temporarily_unavailable"
+        ? "temporarily_unavailable"
+        : "unavailable";
   const applicationSwitcherApplications =
     applicationSwitcherRead?.kind === "available"
       ? applicationSwitcherRead.applications.map((candidate) => ({
@@ -512,7 +522,9 @@ export default async function ApplicationAddressPage({
           name: candidate.name,
           homePageKey: candidate.homePageKey,
         }))
-      : page.model.availableApplications;
+      : applicationSwitcherRead === undefined
+        ? page.model.availableApplications
+        : [];
   const applicationModel = {
     ...page.model,
     availableApplications: applicationSwitcherApplications,
@@ -537,6 +549,7 @@ export default async function ApplicationAddressPage({
     <ApplicationPageView
       model={applicationModel}
       onOpenApplication={openApplication}
+      applicationSwitcherState={applicationSwitcherState}
       applicationToolbar={
         <ApplicationSearch
           view={search}

@@ -27,6 +27,7 @@ export type ApplicationShellRuntime = Readonly<{
   applicationHref: string;
   organizationName: string;
   pageName: string;
+  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
   applications: readonly Readonly<{ key: string; name: string; href: string }>[];
   toolbarContent?: ReactNode;
 }>;
@@ -125,6 +126,28 @@ function ApplicationSwitcher({
   runtime,
 }: Readonly<{ shellName: string; runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const actions = useApplicationAccountActions();
+  if (runtime?.applicationSwitcherState === "temporarily_unavailable")
+    return (
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+      >
+        <Icon name="grid" aria-hidden="true" />
+        <span className="truncate">Applications temporarily unavailable</span>
+      </span>
+    );
+  if (runtime?.applicationSwitcherState === "unavailable")
+    return (
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+      >
+        <Icon name="grid" aria-hidden="true" />
+        <span className="truncate">Applications unavailable</span>
+      </span>
+    );
   const applicationName = runtime?.applicationName ?? shellName;
   return (
     <DropdownMenu>

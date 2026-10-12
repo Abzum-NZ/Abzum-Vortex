@@ -364,7 +364,6 @@ export {
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,
 } from "./navigation";
-export type { ApplicationShellRuntime } from "./navigation/application-shell";
 
 // Full Platform Component Registry (Display + Controls + Launcher + Layout + Navigation)
 export {

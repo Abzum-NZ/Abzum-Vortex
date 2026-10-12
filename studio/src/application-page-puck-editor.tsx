@@ -106,7 +106,7 @@ export function ApplicationPagePuckEditor({
   const runtimeSettings = useMemo(() => {
     if (originalSlot === undefined || compiledSlot === undefined) return undefined;
     const authoredData = adapter.toPuckData(originalSlot);
-    const compiledData = runtimeAdapter.toPuckData(compiledSlot);
+    const compiledData = runtimeAdapter.toPuckData(compiledSlot, undefined, { kind: "default" });
     return compiledSettingsFor(authoredData, compiledData);
   }, [compiledSlot, originalSlot]);
   const data = useMemo(() => {

@@ -41,7 +41,7 @@ type ChangePreparation = (
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
   | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
+  | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
 
 export type OrganizationScopeResolutionResult =
   | HumanOrganizationRequestResult<SelectedOrganizationScope>
@@ -165,8 +165,8 @@ export const createHumanOrganizationRequestService = (
       startedAtMs = now.valueOf();
       issuedAt = now.toISOString();
       correlationId = correlationIdSchema.parse(newCorrelationId());
-    } catch {
-      return { kind: "temporarily_unavailable" };
+    } catch (error) {
+      return { kind: "temporarily_unavailable", cause: describeFailure(error) };
     }
     if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
       appendTelemetry(correlationId, "refused", startedAtMs);
@@ -285,10 +285,10 @@ export const createHumanOrganizationRequestService = (
         return suspendedAccountResult();
       }
       const refused = databaseCode(error) === "42501";
-      if (!refused)
-        console.error(`[access] human organisation request failed: ${describeFailure(error)}`);
+      const cause = describeFailure(error);
+      if (!refused) console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
-      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
+      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
     }
   };
 

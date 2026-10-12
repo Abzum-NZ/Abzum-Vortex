@@ -1,5 +1,6 @@
 import type { ComponentData, Content, Data } from "@puckeditor/core";
 import {
+  applicationPuckRootShellSchema,
   immutablePlatformBlockCatalogueV2Schema,
   isRepeatableSlotIdentityV2,
   repeatableSlotItemIdentitiesV2,
@@ -501,7 +502,11 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       validateTree(slot, reservations);
       return {
         root: {
-          props: { gap: "medium", padding: "medium" },
+          props: {
+            gap: "medium",
+            padding: "medium",
+            applicationShell: { kind: "default" },
+          },
           readOnly: { gap: true, padding: true },
         } as unknown as Data["root"],
         content: toContent(slot, { kind: "root" }, runtimeSettings),
@@ -527,7 +532,9 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       const data = closed(candidate, ["root", "content", "zones"]);
       const root = closed(data.root, ["props", "readOnly"]);
       if (root.props !== undefined) {
-        const props = closed(root.props, ["gap", "padding"]);
+        const props = closed(root.props, ["gap", "padding", "applicationShell"]);
+        const shell = applicationPuckRootShellSchema.parse(props.applicationShell);
+        if (shell.kind !== "default") refuse();
         for (const key of ["gap", "padding"])
           if (
             props[key] !== undefined &&

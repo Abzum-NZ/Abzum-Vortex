@@ -178,12 +178,27 @@ export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
-  z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
+  z
+    .object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() })
+    .strict(),
 ]);
 
 export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
 export type PermittedApplicationsRead = z.infer<typeof permittedApplicationsReadSchema>;
 export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
+
+type TemporarilyUnavailableApplicationRead = Readonly<{
+  kind: "temporarily_unavailable";
+  cause?: string;
+}>;
+
+const isTemporarilyUnavailableApplicationRead = (
+  result: unknown,
+): result is TemporarilyUnavailableApplicationRead =>
+  result !== null &&
+  typeof result === "object" &&
+  "kind" in result &&
+  result.kind === "temporarily_unavailable";
 
 /**
  * An addressed read: the permitted-applications read for one application key, plus the
@@ -202,6 +217,21 @@ export type AddressedApplicationBundleRead = Readonly<{
   context?: InstalledRuntimeContext;
   identity?: AddressedActiveApplicationIdentity;
 }>;
+
+const describeApplicationAddressFailure = (error: unknown): string => {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    const name = current instanceof Error ? current.name : typeof current;
+    const code =
+      typeof current === "object" && "code" in current
+        ? String((current as { readonly code?: unknown }).code)
+        : undefined;
+    parts.push(code === undefined ? name : `${name}(${code})`);
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return parts.join(" <- ");
+};
 
 export type AddressedBundleDefinitionReaderFactory = (
   transaction: RequestDatabaseTransaction,
@@ -300,7 +330,7 @@ const permittedApplication = async (
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
-  | "temporarily_unavailable"
+  | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>
 > => {
   const result = await requests.run(
     session,
@@ -492,7 +522,11 @@ const permittedApplication = async (
       };
     },
   );
-  if (result.kind === "temporarily_unavailable") return "temporarily_unavailable";
+  if (result.kind === "temporarily_unavailable")
+    return {
+      kind: "temporarily_unavailable",
+      ...(result.cause === undefined ? {} : { cause: result.cause }),
+    };
   if (result.kind === "unavailable") return null;
   return result.value;
 };
@@ -554,8 +588,11 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     read: { kind: "unavailable" },
     experiences: [],
   });
-  const temporarilyUnavailable = (): AddressedApplicationBundleRead => ({
-    read: { kind: "temporarily_unavailable" },
+  const temporarilyUnavailable = (cause?: string): AddressedApplicationBundleRead => ({
+    read: {
+      kind: "temporarily_unavailable",
+      ...(cause === undefined ? {} : { cause }),
+    },
     experiences: [],
   });
   const session = identitySessionSchema.safeParse(sessionCandidate);
@@ -605,7 +642,8 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
         return context;
       },
     );
-    if (contextResult.kind === "temporarily_unavailable") return temporarilyUnavailable();
+    if (contextResult.kind === "temporarily_unavailable")
+      return temporarilyUnavailable(contextResult.cause);
     if (contextResult.kind !== "available" || contextResult.value === undefined)
       return unavailable();
 
@@ -618,7 +656,8 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       candidate,
       context,
     );
-    if (permitted === "temporarily_unavailable") return temporarilyUnavailable();
+    if (isTemporarilyUnavailableApplicationRead(permitted))
+      return temporarilyUnavailable(permitted.cause);
     if (permitted === null) return unavailable();
     const read = permittedApplicationsReadSchema.parse({
       kind: "available",
@@ -634,8 +673,8 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       context,
       identity: addressedIdentity.identity,
     };
-  } catch {
-    return temporarilyUnavailable();
+  } catch (error) {
+    return temporarilyUnavailable(describeApplicationAddressFailure(error));
   }
 };
 
@@ -793,7 +832,8 @@ const readPermittedApplications = async (
     isReservedTenantSegment(tenantShortNameCandidate)
   )
     return { kind: "unavailable" };
-  if (!authorityId.success) return { kind: "temporarily_unavailable" };
+  if (!authorityId.success)
+    return { kind: "temporarily_unavailable", cause: "identity_authority_id_invalid" };
   if (Date.parse(parsedSession.data.accessTokenExpiresAt) <= Date.now())
     return { kind: "unavailable" };
 
@@ -834,7 +874,8 @@ const readPermittedApplications = async (
         read.organizationId,
         candidate,
       );
-      if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      if (isTemporarilyUnavailableApplicationRead(permitted))
+        return permittedApplicationsReadSchema.parse(permitted);
       if (permitted !== null) receiveExperiences(permitted.experiences);
       return permittedApplicationsReadSchema.parse({
         kind: "available",
@@ -861,7 +902,8 @@ const readPermittedApplications = async (
         read.organizationId,
         candidate,
       );
-      if (permitted === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      if (isTemporarilyUnavailableApplicationRead(permitted))
+        return permittedApplicationsReadSchema.parse(permitted);
       if (permitted !== null) applications.push(permitted.application);
     }
     const configuredDefault = defaultRead.value;
@@ -878,8 +920,8 @@ const readPermittedApplications = async (
       defaultApplicationRootId,
       applications,
     });
-  } catch {
-    return { kind: "temporarily_unavailable" };
+  } catch (error) {
+    return { kind: "temporarily_unavailable", cause: describeApplicationAddressFailure(error) };
   }
 };
 

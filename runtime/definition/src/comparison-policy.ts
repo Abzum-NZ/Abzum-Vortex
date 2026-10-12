@@ -1506,6 +1506,16 @@ const compareNavigation = (
       "name",
       id,
     );
+    pushChange(
+      reasons,
+      left.icon,
+      right.icon,
+      "patch",
+      "presentation_changed",
+      "navigation_item",
+      "icon",
+      id,
+    );
     for (const key of ["type", "pageId", "address", "permissionKey"])
       pushChange(
         reasons,
@@ -2538,6 +2548,16 @@ const compareShellsV2 = (
         "presentation_changed",
         "shell",
         "name",
+        id,
+      );
+      pushChange(
+        reasons,
+        before.presentation,
+        after.presentation,
+        "patch",
+        "presentation_changed",
+        "shell",
+        "presentation",
         id,
       );
       pushChange(

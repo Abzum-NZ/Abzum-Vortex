@@ -1,7 +1,11 @@
 import {
   assertModuleContractPair,
   selectApplicationContractPair,
-  type DefinitionCompilationOutput,
+  projectStoredApplicationDraftBeforeShellPresentation,
+  storedApplicationCompilationOutputBeforeShellPresentationSchema,
+  storedApplicationCompilationOutputSchema,
+  type StoredDefinitionCompilationOutput,
+  type ApplicationDraftV2,
   type DefinitionResolutionSnapshot,
   type DefinitionResolutionSnapshotV2,
   type DefinitionResolutionSnapshotV3,
@@ -17,9 +21,22 @@ import {
   platformOperationsCalledBy,
 } from "./flow-operation-calls";
 
-type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+type CustomerDefinitionOutput = Exclude<StoredDefinitionCompilationOutput, { kind: "connection_type" }>;
 type CustomerDefinitionResolution =
   DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+
+export const applicationDraftFromStoredRelease = (
+  output: Extract<StoredDefinitionCompilationOutput, { kind: "application" }>,
+): ApplicationDraftV2 => {
+  const current = storedApplicationCompilationOutputSchema.safeParse(output);
+  if (current.success) return current.data.canonical;
+  const historical = storedApplicationCompilationOutputBeforeShellPresentationSchema.safeParse(
+    output,
+  );
+  if (historical.success)
+    return projectStoredApplicationDraftBeforeShellPresentation(historical.data.canonical);
+  throw new TypeError("Stored Application compilation output has no supported stored shape");
+};
 
 export type StoredCustomerDefinitionReleaseEvidence = Readonly<{
   organizationId: OrganizationId;

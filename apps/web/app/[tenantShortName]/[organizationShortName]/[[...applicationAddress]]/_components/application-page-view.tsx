@@ -22,12 +22,12 @@ import {
   parseBoardPayload,
   FORM_CONTAINER_BLOCK_RELEASE,
   PagePuckRenderer,
+  type PagePuckRendererProps,
   UnsavedWorkProvider,
   useFlowIntentHost,
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,
   type ApplicationAccountActions,
-  type ApplicationShellRuntime,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
@@ -59,6 +59,7 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/contracts";
+
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Toaster, toast } from "@vortex/ui/components/sonner";
@@ -96,6 +97,8 @@ import type {
   GuidedFormStepActionResult,
   GuidedFormStepRequest,
 } from "../../../../_lib/guided-form-steps";
+
+type ApplicationShellRuntime = NonNullable<PagePuckRendererProps["applicationShellRuntime"]>;
 
 type GuidedFormActions = Readonly<{
   advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;
@@ -768,12 +771,14 @@ export function ApplicationPageView({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationSwitcherState,
   applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
   applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
@@ -783,6 +788,7 @@ export function ApplicationPageView({
         model={model}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}
+        applicationSwitcherState={applicationSwitcherState}
         applicationToolbar={applicationToolbar}
         pageFeedback={pageFeedback}
       />
@@ -794,12 +800,14 @@ function ApplicationPageViewContent({
   model,
   guidedFormActions,
   onOpenApplication,
+  applicationSwitcherState,
   applicationToolbar,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
   applicationToolbar?: ReactNode;
   pageFeedback?: ReactNode;
 }>): ReactElement {
@@ -2770,6 +2778,7 @@ function ApplicationPageViewContent({
     applicationHref: `${basePath}/${encodeURIComponent(model.applicationHomePageKey)}`,
     organizationName: application.organizationShortName,
     pageName: model.pageName,
+    applicationSwitcherState,
     ...(applicationToolbar === undefined ? {} : { toolbarContent: applicationToolbar }),
     applications: model.availableApplications.map((candidate) => ({
       key: candidate.key,

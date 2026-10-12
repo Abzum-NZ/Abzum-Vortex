@@ -29,6 +29,7 @@ import {
   timestampSchema,
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
+  type ApplicationDraftV2,
   type ApplicationSourceDocumentV2,
   type DefinitionResolutionSnapshotV2,
   type DefinitionResolutionSnapshotV3,
@@ -41,6 +42,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
+  applicationDraftFromStoredRelease,
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
   sameCanonicalJson,
@@ -255,6 +257,10 @@ type StoredApplicationCompilationOutput = Extract<
   z.infer<typeof storedDefinitionCompilationOutputSchema>,
   { kind: "application" }
 >;
+type ProjectedApplicationCompilationOutput = Omit<
+  StoredApplicationCompilationOutput,
+  "canonical"
+> & { canonical: ApplicationDraftV2 };
 
 /** Authenticated immutable Application evidence for one ordinary same-root comparison. */
 export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
@@ -264,7 +270,7 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   publication: z.infer<typeof publishedApplicationReferenceSchema>;
   authoredSource: ApplicationSourceDocumentV2;
   authoredSourceFingerprint: string;
-  compilationOutput: StoredApplicationCompilationOutput;
+  compilationOutput: ProjectedApplicationCompilationOutput;
   resolutionSnapshot: DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
   identities: readonly SourceIdentityAssignmentV3[];
   comparisonFingerprint: string;
@@ -604,6 +610,12 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       evidence.resolutionSnapshot.contractVersion !== "2.0.0"
     )
       return invalidStorage();
+    const storedOutput = storedDefinitionCompilationOutputSchema.safeParse(
+      evidence.compilationOutput,
+    );
+    if (!storedOutput.success || storedOutput.data.kind !== "application")
+      return invalidStorage();
+    const canonical = applicationDraftFromStoredRelease(storedOutput.data);
     return Object.freeze({
       organizationId: candidate.draft.organizationId,
       rootId: String(candidate.draft.rootId),
@@ -611,7 +623,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       publication: publishedApplicationReferenceSchema.parse(selected.publication),
       authoredSource: evidence.authoredSource,
       authoredSourceFingerprint: evidence.authoredSourceFingerprint,
-      compilationOutput: evidence.compilationOutput,
+      compilationOutput: {
+        ...storedOutput.data,
+        canonical,
+      },
       resolutionSnapshot: evidence.resolutionSnapshot,
       identities: evidence.resolutionSnapshot.identities,
       comparisonFingerprint: evidence.comparisonFingerprint,
@@ -715,18 +730,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-          ? moduleVersionImpactHistoryEntryV3Schema.safeParse({
+            ? moduleVersionImpactHistoryEntryV3Schema.safeParse({
               publication: release.publication,
               content: output.canonical.content,
               dependencyManifest: release.dependencyManifest,
               releaseNote: release.releaseNote,
             })
-          : kind === "application" &&
+            : kind === "application" &&
               output.kind === "application" &&
               release.publication.kind === "application"
             ? publishedApplicationDefinitionSchema.safeParse({
-                publication: release.publication,
-                content: output.canonical.content,
+              publication: release.publication,
+              content: applicationDraftFromStoredRelease(output).content,
                 dependencyManifest: release.dependencyManifest.filter(
                   (dependency) => dependency.kind === "module",
                 ),

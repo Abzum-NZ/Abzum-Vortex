@@ -1188,6 +1188,127 @@ export const applicationDraftV2Schema = z
   .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV2Schema })
   .strict();
 
+type NavigationItemBeforeShellPresentation =
+  | {
+      id: z.output<typeof containedComponentIdSchema>;
+      type: "heading";
+      label: string;
+      children: NavigationItemBeforeShellPresentation[];
+    }
+  | {
+      id: z.output<typeof containedComponentIdSchema>;
+      type: "page";
+      label: string;
+      pageId: z.output<typeof pageIdSchema>;
+      permissionKey: string;
+    }
+  | {
+      id: z.output<typeof containedComponentIdSchema>;
+      type: "external";
+      label: string;
+      address: string;
+      permissionKey: string;
+    };
+
+const navigationItemBeforeShellPresentationSchema: z.ZodType<NavigationItemBeforeShellPresentation> =
+  z.lazy(() =>
+    z.discriminatedUnion("type", [
+      z
+        .object({
+          id: containedComponentIdSchema,
+          type: z.literal("heading"),
+          label: labelSchema,
+          children: z.array(navigationItemBeforeShellPresentationSchema).min(1),
+        })
+        .strict(),
+      z
+        .object({
+          id: containedComponentIdSchema,
+          type: z.literal("page"),
+          label: labelSchema,
+          pageId: pageIdSchema,
+          permissionKey: namespacedKeySchema,
+        })
+        .strict(),
+      z
+        .object({
+          id: containedComponentIdSchema,
+          type: z.literal("external"),
+          label: labelSchema,
+          address: safeHttpsUrlSchema,
+          permissionKey: namespacedKeySchema,
+        })
+        .strict(),
+    ]),
+  );
+
+const applicationShellBeforeShellPresentationSchema = applicationShellV2Schema.omit({
+  presentation: true,
+});
+
+const applicationContentBeforeShellPresentationSchema = applicationSharedContentSchema
+  .extend({
+    navigation: z.array(navigationItemBeforeShellPresentationSchema),
+    platformBlockDependencies: platformBlockDependenciesV2Schema,
+    shells: z.array(applicationShellBeforeShellPresentationSchema),
+    pages: z.array(pageDefinitionV2Schema).min(1),
+    theme: applicationThemeV2Schema,
+  })
+  .strict();
+
+/** Exact Application draft shape stored before shell presentation and navigation icons existed. */
+export const storedApplicationDraftBeforeShellPresentationSchema = z
+  .object({
+    envelope: applicationDefinitionEnvelopeSchema,
+    content: applicationContentBeforeShellPresentationSchema,
+  })
+  .strict();
+
+type StoredApplicationDraftBeforeShellPresentation = z.infer<
+  typeof storedApplicationDraftBeforeShellPresentationSchema
+>;
+
+const navigationWithStoredIcon = (
+  items: readonly NavigationItemBeforeShellPresentation[],
+): NavigationItemValue[] =>
+  items.map((item) =>
+    item.type === "heading"
+      ? {
+          ...item,
+          icon: "circle",
+          children: navigationWithStoredIcon(item.children),
+        }
+      : { ...item, icon: "circle" },
+  );
+
+/**
+ * Projects only authenticated historical releases into the current render contract. The generic
+ * icon and visible shell settings are explicit compatibility values for data that predates those
+ * authored fields; live drafts still require both fields.
+ */
+export const projectStoredApplicationDraftBeforeShellPresentation = (
+  draft: StoredApplicationDraftBeforeShellPresentation,
+): z.infer<typeof applicationDraftV2Schema> =>
+  applicationDraftV2Schema.parse({
+    ...draft,
+    content: {
+      ...draft.content,
+      navigation: navigationWithStoredIcon(draft.content.navigation),
+      shells: draft.content.shells.map((shell) => ({
+        ...shell,
+        presentation: {
+          sidebar: { collapsible: "icon", defaultCollapsed: false },
+          topBar: {
+            breadcrumbs: true,
+            organizationSwitcher: true,
+            applicationSwitcher: true,
+            accountMenu: true,
+          },
+        },
+      })),
+    },
+  });
+
 /** Standalone V2 canonical content is decoded only with its explicit validation version. */
 export const applicationCanonicalDocumentV2Schema = z
   .object({
