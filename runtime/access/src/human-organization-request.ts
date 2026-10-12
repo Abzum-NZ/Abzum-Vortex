@@ -103,7 +103,10 @@ const describeFailure = (error: unknown): string => {
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
     const name = current instanceof Error ? current.name : typeof current;
     const code = databaseCode(current);
-    parts.push(code === undefined ? name : `${name}(${code})`);
+    // A database error's message is its stable cause code (never row data), so it stays in the log.
+    const detail =
+      current instanceof Error && name === "VortexDatabaseError" ? `:${current.message}` : "";
+    parts.push(code === undefined ? `${name}${detail}` : `${name}${detail}(${code})`);
     current = current instanceof Error ? current.cause : undefined;
   }
   return parts.join(" <- ");
@@ -285,7 +288,15 @@ export const createHumanOrganizationRequestService = (
         return suspendedAccountResult();
       }
       const refused = databaseCode(error) === "42501";
-      if (!refused)
+      // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
+      // not a failure of the platform. Every other cause is logged in full.
+      const abandoned =
+        error instanceof Error &&
+        error.name === "VortexDatabaseError" &&
+        error.message === "DATABASE_REQUEST_STOPPED";
+      if (abandoned)
+        console.info(`[access] human organisation request stopped: ${describeFailure(error)}`);
+      else if (!refused)
         console.error(`[access] human organisation request failed: ${describeFailure(error)}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };

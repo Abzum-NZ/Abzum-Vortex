@@ -3061,8 +3061,8 @@
             "placements":  {
                 "input_crm_company_merge_duplicate":  {
                     "block":  {
-                        "block_id":  "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
-                        "release_version":  "1.0.0"
+                        "block_id":  "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                        "release_version":  "1.1.0"
                     },
                     "settings":  {
                         "name":  {
@@ -3081,14 +3081,18 @@
                             "kind":  "boolean",
                             "value":  true
                         },
-                        "record_types":  {
-                            "kind":  "list",
-                            "items":  [
-                                {
-                                    "kind":  "record_type_reference",
-                                    "record_type":  "vortex.crm.organisations:company"
+                        "choice_source":  {
+                            "kind":  "group",
+                            "properties":  {
+                                "query":  {
+                                    "kind":  "query_reference",
+                                    "query":  "vortex.crm.organisations:crm_companies"
+                                },
+                                "label_field":  {
+                                    "kind":  "field_reference",
+                                    "field":  "vortex.crm.organisations:company.name"
                                 }
-                            ]
+                            }
                         }
                     },
                     "theme_overrides":  {
@@ -3997,13 +4001,34 @@
                                                  },
                                                  "input_crm_opportunity_edit_company": {
                                                    "block": {
-                                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                     "release_version": "1.0.0"
+                                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                     "release_version": "1.1.0"
                                                    },
                                                    "settings": {
-                                                     "field": {
-                                                       "kind": "field_reference",
-                                                       "field": "vortex.crm.opportunities:opportunity.company"
+                                                     "name": {
+                                                       "kind": "text",
+                                                       "value": "company"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Company"
+                                                     },
+                                                     "required": {
+                                                       "kind": "boolean",
+                                                       "value": true
+                                                     },
+                                                     "choice_source": {
+                                                       "kind": "group",
+                                                       "properties": {
+                                                         "query": {
+                                                           "kind": "query_reference",
+                                                           "query": "vortex.crm.organisations:crm_companies"
+                                                         },
+                                                         "label_field": {
+                                                           "kind": "field_reference",
+                                                           "field": "vortex.crm.organisations:company.name"
+                                                         }
+                                                       }
                                                      }
                                                    },
                                                    "theme_overrides": {},
@@ -4022,13 +4047,34 @@
                                                  },
                                                  "input_crm_opportunity_edit_primary_contact": {
                                                    "block": {
-                                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                     "release_version": "1.0.0"
+                                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                     "release_version": "1.1.0"
                                                    },
                                                    "settings": {
-                                                     "field": {
-                                                       "kind": "field_reference",
-                                                       "field": "vortex.crm.opportunities:opportunity.primary_contact"
+                                                     "name": {
+                                                       "kind": "text",
+                                                       "value": "primary_contact"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Primary contact"
+                                                     },
+                                                     "required": {
+                                                       "kind": "boolean",
+                                                       "value": false
+                                                     },
+                                                     "choice_source": {
+                                                       "kind": "group",
+                                                       "properties": {
+                                                         "query": {
+                                                           "kind": "query_reference",
+                                                           "query": "vortex.crm.people:crm_contacts"
+                                                         },
+                                                         "label_field": {
+                                                           "kind": "field_reference",
+                                                           "field": "vortex.crm.people:contact.full_name"
+                                                         }
+                                                       }
                                                      }
                                                    },
                                                    "theme_overrides": {},
@@ -4261,13 +4307,34 @@
                                                },
                                                "input_crm_opportunity_create_company": {
                                                  "block": {
-                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                   "release_version": "1.0.0"
+                                                   "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                   "release_version": "1.1.0"
                                                  },
                                                  "settings": {
-                                                   "field": {
-                                                     "kind": "field_reference",
-                                                     "field": "vortex.crm.opportunities:opportunity.company"
+                                                   "name": {
+                                                     "kind": "text",
+                                                     "value": "company"
+                                                   },
+                                                   "label": {
+                                                     "kind": "text",
+                                                     "value": "Company"
+                                                   },
+                                                   "required": {
+                                                     "kind": "boolean",
+                                                     "value": true
+                                                   },
+                                                   "choice_source": {
+                                                     "kind": "group",
+                                                     "properties": {
+                                                       "query": {
+                                                         "kind": "query_reference",
+                                                         "query": "vortex.crm.organisations:crm_companies"
+                                                       },
+                                                       "label_field": {
+                                                         "kind": "field_reference",
+                                                         "field": "vortex.crm.organisations:company.name"
+                                                       }
+                                                     }
                                                    }
                                                  },
                                                  "theme_overrides": {},
@@ -4311,13 +4378,34 @@
                                                },
                                                "input_crm_opportunity_create_primary_contact": {
                                                  "block": {
-                                                   "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                                                   "release_version": "1.0.0"
+                                                   "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                                   "release_version": "1.1.0"
                                                  },
                                                  "settings": {
-                                                   "field": {
-                                                     "kind": "field_reference",
-                                                     "field": "vortex.crm.opportunities:opportunity.primary_contact"
+                                                   "name": {
+                                                     "kind": "text",
+                                                     "value": "primary_contact"
+                                                   },
+                                                   "label": {
+                                                     "kind": "text",
+                                                     "value": "Primary contact"
+                                                   },
+                                                   "required": {
+                                                     "kind": "boolean",
+                                                     "value": false
+                                                   },
+                                                   "choice_source": {
+                                                     "kind": "group",
+                                                     "properties": {
+                                                       "query": {
+                                                         "kind": "query_reference",
+                                                         "query": "vortex.crm.people:crm_contacts"
+                                                       },
+                                                       "label_field": {
+                                                         "kind": "field_reference",
+                                                         "field": "vortex.crm.people:contact.full_name"
+                                                       }
+                                                     }
                                                    }
                                                  },
                                                  "theme_overrides": {},

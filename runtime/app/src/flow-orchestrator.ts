@@ -1007,6 +1007,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       }
       // A task that names a record changes it; one that names none creates a record.
       if (!Object.hasOwn(call.properties, "record")) {
+        // A new record has nothing to clear, so a field the person left empty is simply not set.
+        for (const [fieldId, value] of Object.entries(submittedValues))
+          if (value === null) delete submittedValues[fieldId];
         const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
         const selectedGroup = selectedOwnerGroupId === undefined
           ? undefined

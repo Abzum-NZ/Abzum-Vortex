@@ -233,6 +233,18 @@ const collectChoicePermission = (
     });
 };
 
+/**
+ * A number control submits a JavaScript number; exact decimal and money fields hold exact text. A
+ * finite number becomes its plain decimal text so no precision is invented, and anything else is
+ * left for the field's own schema to refuse.
+ */
+const submittedDecimalText = (value: unknown): unknown => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return value;
+  const text = String(value);
+  if (!/e/i.test(text)) return text;
+  return value.toFixed(20).replace(/\.?0+$/, "");
+};
+
 const normalizeMoney = (
   field: Extract<ModuleFieldV3, { type: "money" }>,
   value: unknown,
@@ -254,6 +266,17 @@ const normalizeMoney = (
     return { amount: amount.data, currency };
   }
 
+  if (origin === "submitted" && (typeof value === "number" || typeof value === "string")) {
+    // An amount submitted without a currency is in the field's fixed currency or the
+    // organisation's currency, as a default amount is.
+    const currency =
+      field.settings.currencyMode === "fixed"
+        ? field.settings.currency
+        : context.organizationCurrency;
+    if (currency === undefined)
+      return issue(context, "organization_currency_required", path, field.fieldId);
+    value = { amount: submittedDecimalText(value), currency };
+  }
   const parsed =
     origin === "submitted"
       ? sourceMoneyValueV2Schema.safeParse(value)
@@ -468,7 +491,7 @@ const normalizeValue = (
   if (field.type === "decimal_number") {
     const parsed =
       origin === "submitted"
-        ? sourceExactDecimalTextV2Schema.safeParse(value)
+        ? sourceExactDecimalTextV2Schema.safeParse(submittedDecimalText(value))
         : exactDecimalTextV2Schema.safeParse(value);
     if (!parsed.success)
       return issue(
@@ -493,6 +516,16 @@ const normalizeValue = (
       field.fieldId,
     );
   const normalized = leaf.data as JsonValue;
+  // A required text-valued field is satisfied by a value, not by an empty answer. A stored blank
+  // that is not being changed stays as it is.
+  if (
+    policy === "final" &&
+    field.required &&
+    origin !== "existing" &&
+    typeof normalized === "string" &&
+    normalized.trim() === ""
+  )
+    return issue(context, "required_field_missing", path, field.fieldId);
   if (
     policy === "final" &&
     field.type === "several_choices" &&
